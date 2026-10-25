@@ -39,6 +39,8 @@ jobs:
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --script res://tests/rules_test.gd
+      - name: Run KROLL Signal Sweep runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --script res://tests/game_smoke_test.gd
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
