@@ -1,0 +1,78 @@
+--- a/scripts/world.gd
++++ b/scripts/world.gd
+@@
+ 	var data: Dictionary = parsed
+-	var save_version := int(data.get("version", 0))
+-	if save_version < 1 or save_version > 2:
+-		last_message = "讀檔失敗：不支援的存檔版本。"
++	if not _validate_save_data(data):
++		last_message = "讀檔失敗：存檔欄位或數值不合法，未套用任何資料。"
+ 		return
+ 	var saved_inventory: Variant = data.get("inventory", {})
+@@
++func _is_valid_save_number(value: Variant) -> bool:
++	# JSON may contain ints or floats; the bound also rejects NaN/infinity.
++	return (value is int or value is float) and absf(float(value)) < 1000000000000.0
++
++func _validate_save_data(data: Dictionary) -> bool:
++	var version: Variant = data.get("version", null)
++	if not _is_valid_save_number(version):
++		return false
++	var save_version := int(version)
++	if save_version < 1 or save_version > 2:
++		return false
++	var saved_inventory: Variant = data.get("inventory", null)
++	if not (saved_inventory is Dictionary):
++		return false
++	for id in saved_inventory.keys():
++		var amount: Variant = saved_inventory[id]
++		if not _is_valid_save_number(amount) or float(amount) < 0.0 or float(amount) != floorf(float(amount)):
++			return false
++	var day: Variant = data.get("game_day", 1)
++	var saved_stamina: Variant = data.get("stamina", 100.0)
++	var selected: Variant = data.get("selected_hotbar", 0)
++	if not _is_valid_save_number(day) or int(day) < 1:
++		return false
++	if not _is_valid_save_number(saved_stamina) or float(saved_stamina) < 0.0 or float(saved_stamina) > 100.0:
++		return false
++	if not _is_valid_save_number(selected) or int(selected) < 0 or int(selected) > 9:
++		return false
++	var slots: Variant = data.get("hotbar_slots", hotbar_slots)
++	if not (slots is Array) or slots.size() != 10:
++		return false
++	for slot in slots:
++		if not (slot is String):
++			return false
++	var position_data: Variant = data.get("player_position", [])
++	if not (position_data is Array) or position_data.size() != 3:
++		return false
++	for coordinate in position_data:
++		if not _is_valid_save_number(coordinate):
++			return false
++	var world_state: Variant = data.get("world_state", {})
++	if not (world_state is Dictionary):
++		return false
++	for field in ["harvested_world_crop_ids", "planted_crops", "crop_respawns", "dynamic_wild_crops"]:
++		if world_state.has(field) and not (world_state[field] is Array):
++			return false
++	if world_state.has("harvested_world_crop_ids"):
++		for crop_id in world_state["harvested_world_crop_ids"]:
++			if not (crop_id is String):
++				return false
++	for field in ["planted_crops", "crop_respawns", "dynamic_wild_crops"]:
++		if world_state.has(field):
++			for record in world_state[field]:
++				if not (record is Dictionary):
++					return false
++				if record.has("position"):
++					var pos: Variant = record["position"]
++					if not (pos is Array) or pos.size() != 3:
++						return false
++					for coordinate in pos:
++						if not _is_valid_save_number(coordinate):
++							return false
++				for numeric_field in ["remaining", "remaining_growth"]:
++					if record.has(numeric_field) and (not _is_valid_save_number(record[numeric_field]) or float(record[numeric_field]) < 0.0):
++					return false
++	return true
++
