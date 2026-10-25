@@ -5,8 +5,8 @@
 - New arcade navigation loop: recover six cargo cells within 75 seconds while avoiding moving asteroids; three hull points.
 - Controls: WASD/arrows; mouse or touch sets a glide target; R restarts.
 - Project path: daily_games/KROLL_Orbital_Convoy. No external assets or add-ons.
-- Automated rule tests and runtime smoke test are included in the Godot 4.3 CI workflow. The new feature branch CI result must be checked before claiming engine validation.
-- The local environment has no Godot executable. Only static checks and ZIP integrity checks were run locally.
+- Godot 4.3 headless CI run #15 passed project import/parser, rules tests, and runtime smoke test on 2026-10-25T23:01:53Z (UTC).
+- The local environment has no Godot executable; local checks were static only. Manual desktop/iPhone checks remain outstanding.
 
 ## 2126 Survival: BackroomsPortalDirector M0.1
 
@@ -19,9 +19,9 @@
 
 ## Integration and test status
 
-- The Godot 4.3 CI workflow now imports and tests the new mini-game and runs the portal-director tests.
-- Existing KROLL Signal Sweep documentation PR #12 passed Godot 4.3 CI run #14 and was merged to main at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
-- New code is isolated on a feature branch; do not merge to main until the PR's CI is green.
+- Godot 4.3 CI run #15 succeeded: Signal Sweep import/rules/runtime smoke, Orbital Convoy import/rules/runtime smoke, portal director tests, inventory save validation, and inventory adapter regression tests all passed.
+- Existing KROLL Signal Sweep documentation PR #12 passed CI run #14 and was merged to main at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
+- New code remains on feature branch and PR #13; CI is green, but the PR has not been merged to main. Review and integration decision remain explicit.
 
 ## Known limitations
 

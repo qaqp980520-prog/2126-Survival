@@ -27,7 +27,7 @@ No external assets or add-ons are required. The game uses procedural shapes and 
     godot --headless --path daily_games/KROLL_Orbital_Convoy --script res://tests/rules_test.gd
     godot --headless --path daily_games/KROLL_Orbital_Convoy --script res://tests/game_smoke_test.gd
 
-Local build environment has no Godot executable, so no local engine run is claimed. CI status is tracked in the associated GitHub pull request. ZIP integrity or static checks are not substitutes for an engine test.
+Godot 4.3 headless CI run #15 passed on 2026-10-25T23:01:53Z (UTC): project import/parser, rules tests, and runtime smoke test. The local build environment still has no Godot executable. Manual desktop play, iPhone layout/touch, and device performance checks remain outstanding. ZIP integrity and static checks are not substitutes for device testing.
 
 ## Known limits
 

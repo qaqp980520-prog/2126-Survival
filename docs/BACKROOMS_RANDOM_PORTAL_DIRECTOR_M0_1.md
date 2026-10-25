@@ -24,8 +24,7 @@ Provide a testable, isolated rules module for the confirmed world rule: natural 
 
 ## Test status
 
-- Automated Godot 4 headless test: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd.
-- The current local environment has no Godot executable. Static review is possible locally; engine/parser/runtime results must come from GitHub Actions on the feature PR. No test is claimed passed until the workflow reports success.
+Godot 4.3 headless CI run #15 passed on 2026-10-25T23:01:53Z (UTC), including the portal-director regression script. The local environment still has no Godot executable. The test covers scheduling, safe bounds/distance, retry, one-time consumption, save round-trip, and atomic rejection of invalid saves; it does not cover 3D scene integration or iPhone behavior.
 
 ## Compatibility and limitations
 

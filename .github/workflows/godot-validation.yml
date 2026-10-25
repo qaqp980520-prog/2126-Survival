@@ -9,6 +9,7 @@ on:
       - 'systems/**'
       - 'tests/**'
       - 'daily_games/**'
+      - 'docs/**'
       - '.github/workflows/godot-validation.yml'
   workflow_dispatch:
 
