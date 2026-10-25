@@ -107,6 +107,30 @@ func _build_backrooms_room(level_name: String) -> void:
         _add_box(backrooms_room, "ServerAisleA", Vector3(-12, 2, 0), Vector3(1.2, 4, 24), wall_color)
         _add_box(backrooms_room, "ServerAisleB", Vector3(12, 2, 0), Vector3(1.2, 4, 24), wall_color)
 
+    _set_collision_enabled(backrooms_room, true)
+
+func _set_collision_enabled(root_node: Node, enabled: bool) -> void:
+    for child in root_node.get_children():
+        if child is CollisionObject3D:
+            var collision_object: CollisionObject3D = child
+            collision_object.collision_layer = 1 if enabled else 0
+            collision_object.collision_mask = 1 if enabled else 0
+        _set_collision_enabled(child, enabled)
+
+func _contains_enabled_collision(root_node: Node) -> bool:
+    for child in root_node.get_children():
+        if child is CollisionObject3D and child.collision_layer > 0:
+            return true
+        if _contains_enabled_collision(child):
+            return true
+    return false
+
+func is_surface_collision_enabled() -> bool:
+    return _contains_enabled_collision(main_world)
+
+func is_backrooms_collision_enabled() -> bool:
+    return backrooms_room != null and is_instance_valid(backrooms_room) and _contains_enabled_collision(backrooms_room)
+
 func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, color: Color) -> void:
     var material := StandardMaterial3D.new()
     material.albedo_color = color
@@ -155,6 +179,7 @@ func _on_portal_entered(body: Node3D, portal_id: int) -> void:
     current_level = str(result["destination_level"])
     in_backrooms = true
     main_world.visible = false
+    _set_collision_enabled(main_world, false)
     backrooms_world.visible = true
     _build_backrooms_room(current_level)
     player.global_position = Vector3.ZERO
@@ -187,6 +212,8 @@ func debug_return_to_surface() -> void:
     backrooms_room = null
     backrooms_world.visible = false
     main_world.visible = true
+    _set_collision_enabled(main_world, true)
+    _set_collision_enabled(backrooms_world, false)
     player.global_position = Vector3.ZERO
     player.velocity = Vector3.ZERO
     _update_hud()
@@ -276,12 +303,15 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
     player.global_position = restored_position
     player.velocity = Vector3.ZERO
     main_world.visible = not in_backrooms
+    _set_collision_enabled(main_world, not in_backrooms)
     backrooms_world.visible = in_backrooms
     if in_backrooms:
         _build_backrooms_room(current_level)
-    elif backrooms_room != null and is_instance_valid(backrooms_room):
-        backrooms_room.queue_free()
-        backrooms_room = null
+    else:
+        _set_collision_enabled(backrooms_world, false)
+        if backrooms_room != null and is_instance_valid(backrooms_room):
+            backrooms_room.queue_free()
+            backrooms_room = null
     _remove_portal_visual()
     if not director.active_portal.is_empty():
         var active: Dictionary = director.active_portal
