@@ -29,11 +29,18 @@ var counts: Dictionary = {}
 var game_day: int = 1
 
 func _init(initial_counts: Dictionary = {}, initial_day: int = 1) -> void:
-	counts = initial_counts.duplicate(true)
-	game_day = maxi(1, initial_day)
+	# Only registered items with valid integer counts may enter the model.
+	# This prevents constructor-based imports from bypassing weight validation.
+	counts = {}
 	for item_id in ITEM_WEIGHTS.keys():
-		if not counts.has(item_id):
-			counts[item_id] = 0
+		counts[item_id] = 0
+	for item_id in initial_counts.keys():
+		if not (item_id is String) or not ITEM_WEIGHTS.has(item_id):
+			continue
+		var amount: Variant = initial_counts[item_id]
+		if _is_integer_in_range(amount, 0, MAX_SAVED_COUNT):
+			counts[item_id] = int(amount)
+	game_day = clampi(initial_day, 1, MAX_SAVED_GAME_DAY)
 
 func carry_limit_kg() -> float:
 	return BASE_LIMIT_KG + float(maxi(0, game_day - 1)) * LIMIT_GAIN_PER_DAY_KG
@@ -64,7 +71,10 @@ func add_item(item_id: String, amount: int = 1) -> int:
 		return 0
 	if not counts.has(item_id):
 		counts[item_id] = 0
-	counts[item_id] = maxi(0, int(counts[item_id])) + amount
+	var current_amount := maxi(0, int(counts[item_id]))
+	if amount > MAX_SAVED_COUNT - current_amount:
+		return 0
+	counts[item_id] = current_amount + amount
 	return amount
 
 func remove_item(item_id: String, amount: int = 1) -> int:
