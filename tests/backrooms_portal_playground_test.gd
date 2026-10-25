@@ -18,21 +18,21 @@ func _run_integration_test() -> void:
     var world = PlaygroundScene.instantiate()
     root.add_child(world)
     await process_frame
-    _expect(world.get_current_level() == "Surface", "starts in surface world")
-    _expect(world.debug_collect_berries(2), "collects items through shared world bridge")
-    _expect(world.debug_spawn_portal(), "test shortcut spawns portal through director")
+    _expect(str(world.call("get_current_level")) == "Surface", "starts in surface world")
+    _expect(bool(world.call("debug_collect_berries", 2)), "collects items through shared world bridge")
+    _expect(bool(world.call("debug_spawn_portal")), "test shortcut spawns portal through director")
     await process_frame
-    _expect(world.has_active_portal(), "portal director and visual stay synchronized")
-    _expect(world.debug_enter_active_portal(), "entering portal changes world")
+    _expect(bool(world.call("has_active_portal")), "portal director and visual stay synchronized")
+    _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = world.get_current_level()
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
 
-    var saved: Dictionary = world.serialize_world_state()
+    var saved: Dictionary = world.call("serialize_world_state")
     _expect(not saved.is_empty(), "serializes world envelope with portal state")
-    _expect(world.debug_collect_berries(3), "collects another stack after entering")
-    _expect(world.get_inventory_count("berries") == 5, "inventory reflects bridge changes")
-    _expect(world.load_world_state_from_dictionary(saved), "restores valid world envelope")
+    _expect(bool(world.call("debug_collect_berries", 3)), "collects another stack after entering")
+    _expect(int(world.call("get_inventory_count", "berries")) == 5, "inventory reflects bridge changes")
+    _expect(bool(world.call("load_world_state_from_dictionary", saved)), "restores valid world envelope")
     _expect(world.get_inventory_count("berries") == 2, "load restores prior inventory count")
     _expect(world.get_current_level() == entered_level, "load restores current Backrooms level")
 
@@ -40,7 +40,7 @@ func _run_integration_test() -> void:
     var before_level: String = world.get_current_level()
     var invalid_save: Dictionary = saved.duplicate(true)
     invalid_save["backrooms_portal_state"]["schema_version"] = 99
-    _expect(not world.load_world_state_from_dictionary(invalid_save), "rejects invalid portal schema")
+    _expect(not bool(world.call("load_world_state_from_dictionary", invalid_save)), "rejects invalid portal schema")
     _expect(world.get_inventory_count("berries") == before_count, "invalid restore leaves inventory unchanged")
     _expect(world.get_current_level() == before_level, "invalid restore leaves current level unchanged")
 
