@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Fetch candidate mini-game, inventory model, and adapter
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch origin feature/daily-kroll-signal-sweep-2026-10-25
           git checkout FETCH_HEAD -- daily_games/KROLL_Signal_Sweep
           git fetch origin fix/inventory-save-validation-2026-10-25
