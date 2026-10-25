@@ -17,9 +17,7 @@
 
 ## Validation
 
-- New test: tests/world_bridge_save_adapter_integration.gd.
-- CI runs all existing Signal Sweep, Orbital Convoy, portal, inventory validation, and adapter tests plus the new bridge integration test.
-- Local environment has no Godot executable; wait for the feature PR's Godot 4.3 CI before claiming the new integration test passed.
+Godot 4.3 CI run #24 passed on 2026-10-25T23:18:11Z (UTC), including all existing Signal Sweep, Orbital Convoy, portal, inventory validation, and adapter tests plus the new bridge integration test. The local environment has no Godot executable; the engine-level evidence comes from CI, not a local run.
 
 ## Known limits
 
