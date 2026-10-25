@@ -1,0 +1,60 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://systems/BackroomsPortalVisual.gd" id="1_portal_script"]
+
+[sub_resource type="StandardMaterial3D" id="PortalRingMaterial"]
+albedo_color = Color(0.03, 0.22, 0.34, 0.9)
+emission_enabled = true
+emission = Color(0.06, 0.72, 1, 1)
+emission_energy_multiplier = 3.0
+transparency = 1
+
+[sub_resource type="StandardMaterial3D" id="PortalFieldMaterial"]
+albedo_color = Color(0.02, 0.18, 0.28, 0.48)
+emission_enabled = true
+emission = Color(0.02, 0.28, 0.48, 1)
+emission_energy_multiplier = 1.4
+transparency = 1
+
+[sub_resource type="TorusMesh" id="PortalRingMesh"]
+inner_radius = 0.55
+outer_radius = 0.78
+
+[sub_resource type="QuadMesh" id="PortalFieldMesh"]
+size = Vector2(1.1, 1.7)
+
+[sub_resource type="SphereShape3D" id="PortalTriggerShape"]
+radius = 1.25
+
+[node name="BackroomsPortalVisual" type="Area3D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_portal_script")
+
+[node name="PortalRing" type="MeshInstance3D" parent="."]
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("PortalRingMesh")
+surface_material_override/0 = SubResource("PortalRingMaterial")
+
+[node name="PortalFieldFront" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.0, 0.01)
+mesh = SubResource("PortalFieldMesh")
+surface_material_override/0 = SubResource("PortalFieldMaterial")
+
+[node name="PortalFieldBack" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.0, -0.01)
+rotation = Vector3(0, 3.14159, 0)
+mesh = SubResource("PortalFieldMesh")
+surface_material_override/0 = SubResource("PortalFieldMaterial")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("PortalTriggerShape")
+
+[node name="InteractPrompt" type="Label3D" parent="."]
+position = Vector3(0, 1.25, 0)
+visible = false
+text = "E  /  ENTER"
+font_size = 32
+pixel_size = 0.01
+billboard = 1
+modulate = Color(0.35, 0.95, 1, 1)
