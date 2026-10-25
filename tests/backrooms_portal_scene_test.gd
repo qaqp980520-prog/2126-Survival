@@ -17,7 +17,8 @@ func _run_scene_test() -> void:
     assert(portal.get_node("InteractPrompt") is Label3D)
     assert(portal.configure_from_director({"id": 7, "position": Vector2(12.0, 34.0)}, 2.0))
     assert(portal.portal_id == 7)
-    assert(is_zero_approx(portal.get_node("PortalRing").rotation.x))
+    var portal_ring: MeshInstance3D = portal.get_node("PortalRing") as MeshInstance3D
+    assert(is_zero_approx(portal_ring.rotation.x))
     assert(portal.global_position.is_equal_approx(Vector3(12.0, 3.0, 34.0)))
     var before: Vector3 = portal.global_position
     assert(not portal.configure_from_director({"id": -1, "position": Vector2.ZERO}, 0.0))
