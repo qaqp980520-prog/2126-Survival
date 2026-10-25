@@ -16,8 +16,13 @@
 
 ## 上傳狀態
 - 已提交：專案索引與歷史資產目錄。
-- 尚未完成：工作區中所有原始 ZIP 與模型的二進位檔上傳。目錄中的檔名只代表工作區存在，不代表檔案已進入 GitHub。
+- 已上傳原始 ZIP（提交已核對）：
+  - [KROLL Circuit Relay（2026-10-21）](releases/mini-games/KROLL_Circuit_Relay_Godot4_2026-10-21.zip)
+  - [KROLL Drone Rescue（2026-10-24）](releases/mini-games/KROLL_Drone_Rescue_MiniGame_Godot4_2026-10-24.zip)
+- 尚未完成：工作區中其餘原始 ZIP 與模型的二進位檔上傳。歷史目錄中的其他檔名不代表已進入 GitHub。
 - 測試狀態：現有原型不能一概視為已在 Godot 4 實測。
 
 ## 版本索引
-新版本完成並實際提交後，才在此新增對應路徑與提交資訊。
+- KROLL Circuit Relay：提交 `6b46c1e5e6549e0ae5f827f3b1580281c55fb12a`；ZIP 已上傳，尚未在 Godot 4 實測。
+- KROLL Drone Rescue：提交 `50ff5dac1eed12c16612f64eb416ad8d5e9951b4`；ZIP 已上傳，尚未在 Godot 4 實測。
+- 新版本完成並實際提交後，繼續新增對應路徑與提交資訊。
