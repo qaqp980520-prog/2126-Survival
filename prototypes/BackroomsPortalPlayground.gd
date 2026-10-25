@@ -131,12 +131,12 @@ func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_si
 
 func _spawn_portal(portal_data: Dictionary) -> bool:
     _remove_portal_visual()
-    var portal = PortalScene.instantiate()
+    var portal: Area3D = PortalScene.instantiate() as Area3D
     add_child(portal)
-    if not portal.configure_from_director(portal_data, 0.0):
+    if not bool(portal.call("configure_from_director", portal_data, 0.0)):
         portal.queue_free()
         return false
-    portal.portal_entered.connect(_on_portal_entered)
+    portal.connect("portal_entered", Callable(self, "_on_portal_entered"))
     active_portal_visual = portal
     return true
 
