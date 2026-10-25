@@ -27,6 +27,8 @@ func _run_integration_test() -> void:
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
+    _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
     var saved: Dictionary = world.call("serialize_world_state")
     _expect(not saved.is_empty(), "serializes world envelope with portal state")
@@ -43,6 +45,10 @@ func _run_integration_test() -> void:
     _expect(not bool(world.call("load_world_state_from_dictionary", invalid_save)), "rejects invalid portal schema")
     _expect(int(world.call("get_inventory_count", "berries")) == before_count, "invalid restore leaves inventory unchanged")
     _expect(str(world.call("get_current_level")) == before_level, "invalid restore leaves current level unchanged")
+    world.call("debug_return_to_surface")
+    await process_frame
+    _expect(bool(world.call("is_surface_collision_enabled")), "surface collisions re-enable on return")
+    _expect(not bool(world.call("is_backrooms_collision_enabled")), "Backrooms collisions disable on return")
 
     if failures.is_empty():
         print("Backrooms portal playground integration test passed.")
