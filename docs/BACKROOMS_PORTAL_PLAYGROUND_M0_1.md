@@ -27,7 +27,7 @@ The first portal appears after two seconds in this sandbox only. The production 
 - Reuses SurvivalWorldBridge for inventory changes and the existing save adapter for inventory payload validation.
 - Save envelopes preserve existing legacy fields and add portal state, current level, in-Backrooms flag, and player position.
 - Invalid portal state is validated before inventory or scene state is changed.
-- Fixes portal visual alignment: the torus ring is vertical to match the portal plane, and the portal center sits one metre above the ground.
+- Preserves the existing 90-degree X rotation that places the torus in the portal's vertical plane; moves the portal center one metre above the ground to avoid clipping the lower half into the floor.
 
 ## Dependencies and import
 
