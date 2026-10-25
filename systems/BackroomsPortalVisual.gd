@@ -24,7 +24,7 @@ func configure_from_director(portal_data: Dictionary, ground_y: float = 0.0) -> 
     if not (saved_position is Vector2) or not is_finite(ground_y):
         return false
     portal_id = int(numeric_id)
-    global_position = Vector3(saved_position.x, ground_y, saved_position.y)
+    global_position = Vector3(saved_position.x, ground_y + 1.0, saved_position.y)
     return true
 
 func _on_body_entered(body: Node3D) -> void:
