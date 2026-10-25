@@ -74,3 +74,5 @@ func _test_rejects_unregistered_runtime_items() -> void:
 	assert(is_equal_approx(imported.total_weight_kg(), 7.5))
 	assert(inventory.add_item("meat", Inventory.MAX_SAVED_COUNT) == Inventory.MAX_SAVED_COUNT)
 	assert(inventory.add_item("meat", 1) == 0)
+	inventory.set_game_day(2000000000)
+	assert(inventory.game_day == Inventory.MAX_SAVED_GAME_DAY)
