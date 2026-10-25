@@ -32,7 +32,7 @@ collision_mask = 1
 script = ExtResource("1_portal_script")
 
 [node name="PortalRing" type="MeshInstance3D" parent="."]
-rotation = Vector3(0, 0, 0)
+rotation = Vector3(1.5708, 0, 0)
 mesh = SubResource("PortalRingMesh")
 surface_material_override/0 = SubResource("PortalRingMaterial")
 
