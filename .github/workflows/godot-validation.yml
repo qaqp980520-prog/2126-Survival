@@ -17,8 +17,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Print engine version
-        run: godot --version
+      - name: Print engine version and inspect checkout
+        run: |
+          godot --version
+          pwd
+          ls -la
+          find daily_games -maxdepth 3 -type f -print || true
       - name: Import and parse daily mini-game project
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run inventory save validation tests
