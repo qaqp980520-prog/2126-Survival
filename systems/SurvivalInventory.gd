@@ -7,6 +7,9 @@ class_name SurvivalInventory
 const BASE_LIMIT_KG: float = 65.0
 const LIMIT_GAIN_PER_DAY_KG: float = 0.2
 const SUPER_HEAVY_KG: float = 90.0
+const MAX_SAVED_COUNT: int = 1000000000
+const MAX_SAVED_GAME_DAY: int = 1000000000
+const SAVE_SCHEMA_VERSION: int = 1
 const ITEM_WEIGHTS: Dictionary = {
 	"credits": 0.0,
 	"meat": 0.75,
@@ -26,11 +29,18 @@ var counts: Dictionary = {}
 var game_day: int = 1
 
 func _init(initial_counts: Dictionary = {}, initial_day: int = 1) -> void:
-	counts = initial_counts.duplicate(true)
-	game_day = maxi(1, initial_day)
+	# Only registered items with valid integer counts may enter the model.
+	# This prevents constructor-based imports from bypassing weight validation.
+	counts = {}
 	for item_id in ITEM_WEIGHTS.keys():
-		if not counts.has(item_id):
-			counts[item_id] = 0
+		counts[item_id] = 0
+	for item_id in initial_counts.keys():
+		if not (item_id is String) or not ITEM_WEIGHTS.has(item_id):
+			continue
+		var amount: Variant = initial_counts[item_id]
+		if _is_integer_in_range(amount, 0, MAX_SAVED_COUNT):
+			counts[item_id] = int(amount)
+	game_day = clampi(initial_day, 1, MAX_SAVED_GAME_DAY)
 
 func carry_limit_kg() -> float:
 	return BASE_LIMIT_KG + float(maxi(0, game_day - 1)) * LIMIT_GAIN_PER_DAY_KG
@@ -57,42 +67,72 @@ func can_jump() -> bool:
 	return not is_super_heavy()
 
 func add_item(item_id: String, amount: int = 1) -> int:
-	if amount <= 0:
+	if amount <= 0 or not ITEM_WEIGHTS.has(item_id):
 		return 0
 	if not counts.has(item_id):
 		counts[item_id] = 0
-	counts[item_id] = maxi(0, int(counts[item_id])) + amount
+	var current_amount := maxi(0, int(counts[item_id]))
+	if amount > MAX_SAVED_COUNT - current_amount:
+		return 0
+	counts[item_id] = current_amount + amount
 	return amount
 
 func remove_item(item_id: String, amount: int = 1) -> int:
-	if amount <= 0 or not counts.has(item_id):
+	if amount <= 0 or not counts.has(item_id) or not ITEM_WEIGHTS.has(item_id):
 		return 0
 	var removed := mini(amount, maxi(0, int(counts[item_id])))
 	counts[item_id] = int(counts[item_id]) - removed
 	return removed
 
 func set_game_day(day: int) -> void:
-	game_day = maxi(1, day)
+	game_day = clampi(day, 1, MAX_SAVED_GAME_DAY)
 
 func to_save_dict() -> Dictionary:
 	return {
-		"schema_version": 1,
+		"schema_version": SAVE_SCHEMA_VERSION,
 		"game_day": game_day,
 		"inventory": counts.duplicate(true)
 	}
 
 func load_save_dict(data: Dictionary) -> bool:
-	if not data.has("inventory") or not (data["inventory"] is Dictionary):
+	# Validate the entire payload into local variables first. Failure must not
+	# partially replace the live inventory or game day.
+	var schema_version: Variant = data.get("schema_version", null)
+	if not _is_integer_in_range(schema_version, SAVE_SCHEMA_VERSION, SAVE_SCHEMA_VERSION):
 		return false
-	var restored: Dictionary = data["inventory"].duplicate(true)
-	for item_id in restored.keys():
-		if not (restored[item_id] is int or restored[item_id] is float):
+
+	var saved_day: Variant = data.get("game_day", null)
+	if not _is_integer_in_range(saved_day, 1, MAX_SAVED_GAME_DAY):
+		return false
+
+	var saved_inventory: Variant = data.get("inventory", null)
+	if not (saved_inventory is Dictionary):
+		return false
+
+	var restored: Dictionary = {}
+	for item_id in saved_inventory.keys():
+		if not (item_id is String) or not ITEM_WEIGHTS.has(item_id):
 			return false
-		if int(restored[item_id]) < 0:
+		var amount: Variant = saved_inventory[item_id]
+		if not _is_integer_in_range(amount, 0, MAX_SAVED_COUNT):
 			return false
-	counts = restored
+		restored[item_id] = int(amount)
+
+	# Missing registered items are backward-compatible and default to zero.
 	for item_id in ITEM_WEIGHTS.keys():
-		if not counts.has(item_id):
-			counts[item_id] = 0
-	game_day = maxi(1, int(data.get("game_day", 1)))
+		if not restored.has(item_id):
+			restored[item_id] = 0
+
+	counts = restored
+	game_day = int(saved_day)
 	return true
+
+func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number := float(value)
+	if not is_finite(number):
+		return false
+	if number < float(minimum) or number > float(maximum):
+		return false
+	return floorf(number) == number
