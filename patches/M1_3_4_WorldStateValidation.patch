@@ -1,0 +1,32 @@
+--- a/scripts/world.gd
++++ b/scripts/world.gd
+@@
+ 	for field in ["planted_crops", "crop_respawns", "dynamic_wild_crops"]:
+ 		if world_state.has(field):
+ 			for record in world_state[field]:
+ 				if not (record is Dictionary):
+ 					return false
+-				if record.has("position"):
+-					var pos: Variant = record["position"]
+-					if not (pos is Array) or pos.size() != 3:
+-						return false
+-					for coordinate in pos:
+-						if not _is_valid_save_number(coordinate):
+-							return false
++				# All world-state records must have a 3D position.
++				var pos: Variant = record.get("position", null)
++				if not (pos is Array) or pos.size() != 3:
++					return false
++				for coordinate in pos:
++					if not _is_valid_save_number(coordinate):
++						return false
++				# Reject malformed optional fields instead of silently coercing them.
++				for text_field in ["label", "yield_type", "seed_type"]:
++					if record.has(text_field) and not (record[text_field] is String):
++						return false
++				if record.has("mature") and not (record["mature"] is bool):
++					return false
+ 				for numeric_field in ["remaining", "remaining_growth"]:
+ 					if record.has(numeric_field) and (not _is_valid_save_number(record[numeric_field]) or float(record[numeric_field]) < 0.0):
+ 						return false
+ 	return true
