@@ -85,7 +85,7 @@ func remove_item(item_id: String, amount: int = 1) -> int:
 	return removed
 
 func set_game_day(day: int) -> void:
-	game_day = maxi(1, day)
+	game_day = clampi(day, 1, MAX_SAVED_GAME_DAY)
 
 func to_save_dict() -> Dictionary:
 	return {
