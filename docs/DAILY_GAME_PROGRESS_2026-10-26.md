@@ -15,17 +15,18 @@
 - If no safe position is available, retry after five seconds; only one active portal; portal ID is single-use.
 - On interaction, choose a destination from the Level 0–3 prototype pool without requiring a fixed next-level exit door.
 - Added versioned save payload and atomic validation to avoid overwriting unrelated M1.3 world-save fields.
-- Added headless tests for timer, bounds/safe distance, retry, one-time consumption, save round-trip, and atomic rejection of invalid saves.
+- Added a reusable 3D portal visual scene: emissive ring, translucent portal field, Area3D trigger, and E interaction prompt; it emits an entry signal but leaves level switching to the world controller.
+- Added headless tests for timer, bounds/safe distance, retry, one-time consumption, save round-trip, and atomic rejection of invalid saves, plus a scene smoke test for node structure and coordinate mapping.
 
 ## Integration and test status
 
-- Godot 4.3 CI run #15 succeeded: Signal Sweep import/rules/runtime smoke, Orbital Convoy import/rules/runtime smoke, portal director tests, inventory save validation, and inventory adapter regression tests all passed.
+- Godot 4.3 CI run #15 succeeded for Signal Sweep, Orbital Convoy, portal director logic, and both inventory save suites. The new 3D portal scene and its smoke test were added after run #16 and are pending the next CI run.
 - Existing KROLL Signal Sweep documentation PR #12 passed CI run #14 and was merged to main at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
-- New code remains on feature branch and PR #13; CI is green, but the PR has not been merged to main. Review and integration decision remain explicit.
+- New code remains on feature branch and PR #13; do not merge until the latest CI run passes and the diff is reviewed.
 
 ## Known limitations
 
-- The portal director is not yet wired to M1.3 world.gd, 3D portal nodes/colliders, or level transitions.
+- The 3D portal scene is not yet wired to M1.3 world.gd or level transitions; the world controller must consume the portal ID and own scene switching.
 - Portals persist until consumed; no unconfirmed auto-despawn rule was added.
 - RNG internal state is not saved, so future random outcomes after loading will not exactly replay.
 - Destination pool is only Level 0–3; iPhone layout/touch and manual gameplay tests remain.

@@ -38,7 +38,7 @@ jobs:
           fi
           if [ ! -f daily_games/KROLL_Orbital_Convoy/project.godot ] || [ ! -f systems/BackroomsPortalDirector.gd ] || [ ! -f tests/backrooms_portal_director_test.gd ]; then
             git fetch origin feature/kroll-orbital-convoy-backrooms-portals-2026-10-26
-            git checkout FETCH_HEAD -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md
+            git checkout FETCH_HEAD -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd tests/backrooms_portal_scene_test.gd systems/BackroomsPortalVisual.gd systems/BackroomsPortalVisual.tscn docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md
           fi
       - name: Print engine version and verify test inputs
         run: |
@@ -48,6 +48,7 @@ jobs:
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
+          test -f tests/backrooms_portal_scene_test.gd
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
@@ -62,6 +63,8 @@ jobs:
         run: godot --headless --path daily_games/KROLL_Orbital_Convoy --script res://tests/game_smoke_test.gd
       - name: Run Backrooms portal director tests
         run: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd
+      - name: Run Backrooms portal visual scene smoke test
+        run: godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
