@@ -37,6 +37,8 @@ jobs:
           test -f tests/inventory_save_adapter.gd
       - name: Import and parse daily mini-game project
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
+      - name: Run KROLL Signal Sweep rules tests
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --script res://tests/rules_test.gd
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
