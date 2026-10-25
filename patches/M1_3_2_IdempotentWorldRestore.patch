@@ -1,0 +1,66 @@
+--- a/scripts/world.gd
++++ b/scripts/world.gd
+@@ -705,7 +705,7 @@
+ 	fruit.material_override = mats["berry"] if yield_type == "berries" else mats["crop"]
+ 	fruit.position = Vector3(0, 1.0, 0)
+ 	crop.add_child(fruit)
+-	_add_label(label, pos + Vector3(0, 1.8, 0), 0.9)
++	_add_child_label(crop, label, Vector3(0, 1.8, 0), 0.9)
+ 	interactables.append(crop)
+ 	return crop
+@@ -751,7 +751,7 @@
+ 	stalk.mesh = stalkmesh
+ 	stalk.material_override = mats["crop"]
+ 	plant.add_child(stalk)
+-	_add_label("GROWING", plant.position + Vector3(0, 1.6, 0), 0.7)
++	_add_child_label(plant, "GROWING", Vector3(0, 1.6, 0), 0.7)
+ 	var record := {"node": plant, "ready_at": world_time + 25.0}
+ 	plant.set_meta("crop_record", record)
+ 	planted_crops.append(record)
+@@ -770,7 +770,7 @@
+ 			for child in node.get_children():
+ 				if child is MeshInstance3D:
+ 					child.scale = Vector3(1.5, 1.7, 1.5)
+-			_add_label("READY - E TO HARVEST", node.position + Vector3(0, 2.0, 0), 0.7)
++			_add_child_label(node, "READY - E TO HARVEST", Vector3(0, 2.0, 0), 0.7)
+ 			last_message = "作物成熟了！靠近種植位置按 E 採收。"
+@@ -785,6 +785,16 @@
+ 
+ func _help_message() -> void:
+ 	last_message = "目標：探索道路與野區、滑鼠左鍵攻擊動物、Space 跳躍、E 採集或拾取、回設施出售、P 種植、成熟後 E 採收。快捷欄按 1–9／0 選擇，F 使用所選食物。"
++
++func _add_child_label(parent: Node3D, text: String, local_pos: Vector3, size: float = 2.0) -> void:
++	var label := Label3D.new()
++	label.text = text
++	label.position = local_pos
++	label.font_size = int(24 * size)
++	label.pixel_size = 0.01
++	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
++	label.modulate = Color(1, 1, 0.88)
++	parent.add_child(label)
+ 
+ func _world_crop_id(label: String, pos: Vector3) -> String:
+ 	return "%s|%.2f|%.2f|%.2f" % [label, pos.x, pos.y, pos.z]
+@@ -819,6 +829,17 @@
+ 	return {"harvested_world_crop_ids": harvested_world_crop_ids.duplicate(), "planted_crops": planted, "crop_respawns": respawns, "dynamic_wild_crops": dynamic_crops}
+ 
+ func _restore_world_state(state: Dictionary) -> void:
++	# Make repeated loads idempotent: remove prior restored dynamic crops and player plants first.
++	for node in interactables.duplicate():
++		if not is_instance_valid(node):
++			interactables.erase(node)
++			continue
++		var kind := str(node.get_meta("kind", ""))
++		if kind == "plant" or (kind == "crop" and bool(node.get_meta("dynamic_respawn", false))):
++			interactables.erase(node)
++			node.queue_free()
++	planted_crops.clear()
++	crop_respawns.clear()
+ 	# The static world is built before loading. Remove harvested static plants so they do not respawn instantly.
+ 	harvested_world_crop_ids.clear()
+@@ -862,7 +883,7 @@
+ 			if mature:
+ 				stalk.scale = Vector3(1.5, 1.7, 1.5)
+ 			plant.add_child(stalk)
+-			_add_label("READY - E TO HARVEST" if mature else "GROWING", pos + Vector3(0, 1.6, 0), 0.7)
++			_add_child_label(plant, "READY - E TO HARVEST" if mature else "GROWING", Vector3(0, 1.6, 0), 0.7)
