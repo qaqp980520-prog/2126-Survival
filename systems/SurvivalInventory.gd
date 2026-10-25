@@ -7,6 +7,7 @@ class_name SurvivalInventory
 const BASE_LIMIT_KG: float = 65.0
 const LIMIT_GAIN_PER_DAY_KG: float = 0.2
 const SUPER_HEAVY_KG: float = 90.0
+const UNKNOWN_ITEM_WEIGHT_KG: float = 1.0
 const ITEM_WEIGHTS: Dictionary = {
 	"credits": 0.0,
 	"meat": 0.75,
@@ -39,7 +40,9 @@ func total_weight_kg() -> float:
 	var total := 0.0
 	for item_id in counts.keys():
 		var amount := maxi(0, int(counts[item_id]))
-		total += float(ITEM_WEIGHTS.get(item_id, 0.0)) * float(amount)
+		# Unknown item IDs must not silently become weightless.
+		var unit_weight := float(ITEM_WEIGHTS.get(item_id, UNKNOWN_ITEM_WEIGHT_KG))
+		total += unit_weight * float(amount)
 	return total
 
 func is_overweight() -> bool:
@@ -82,17 +85,33 @@ func to_save_dict() -> Dictionary:
 	}
 
 func load_save_dict(data: Dictionary) -> bool:
+	# Validate the entire payload before mutating live inventory state.
+	if not data.has("schema_version") or not _is_finite_number(data["schema_version"]):
+		return false
+	if int(data["schema_version"]) != 1 or float(data["schema_version"]) != 1.0:
+		return false
 	if not data.has("inventory") or not (data["inventory"] is Dictionary):
+		return false
+	var day_value: Variant = data.get("game_day", 1)
+	if not _is_finite_number(day_value) or float(day_value) < 1.0 or float(day_value) != floorf(float(day_value)):
 		return false
 	var restored: Dictionary = data["inventory"].duplicate(true)
 	for item_id in restored.keys():
-		if not (restored[item_id] is int or restored[item_id] is float):
+		if not (item_id is String) or item_id.strip_edges().is_empty():
 			return false
-		if int(restored[item_id]) < 0:
+		var amount: Variant = restored[item_id]
+		if not _is_finite_number(amount) or float(amount) < 0.0 or float(amount) != floorf(float(amount)):
 			return false
+	# Commit only after all fields have passed validation.
 	counts = restored
 	for item_id in ITEM_WEIGHTS.keys():
 		if not counts.has(item_id):
 			counts[item_id] = 0
-	game_day = maxi(1, int(data.get("game_day", 1)))
+	game_day = int(day_value)
 	return true
+
+func _is_finite_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number := float(value)
+	return number == number and absf(number) < 1000000000000.0
