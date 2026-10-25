@@ -18,11 +18,19 @@
 - Added a reusable 3D portal visual scene: emissive ring, translucent portal field, Area3D trigger, and E interaction prompt; it emits an entry signal but leaves level switching to the world controller.
 - Added headless tests for timer, bounds/safe distance, retry, one-time consumption, save round-trip, and atomic rejection of invalid saves, plus a scene smoke test for node structure and coordinate mapping.
 
-## Integration and test status
+## M1.3 save bridge integration PR #14
 
-- Godot 4.3 CI run #15 succeeded for the initial mini-game and portal logic suite; run #16 passed again after recording results; run #17 passed after adding the 3D portal scene and its smoke test. All workflow steps passed: Signal Sweep import/rules/runtime, Orbital Convoy import/rules/runtime, portal director logic, portal visual scene smoke, inventory save validation, and inventory adapter regression.
-- Existing KROLL Signal Sweep documentation PR #12 passed CI run #14 and was merged to main at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
-- New code remains on feature branch and PR #13; do not merge until the latest CI run passes and the diff is reviewed.
+- Added serialize_world_save and restore_world_save to SurvivalWorldBridge, preserving stamina, hotbar, player position, crops, world seed, and world state.
+- Added a bridge integration test for legacy world-save round-trip, input immutability, and atomic rejection of invalid data.
+- Runs #20–#23 remain in progress from earlier assert-only/frame-wait drafts; they are not counted as passes.
+- Godot 4.3 CI run #24 passed on 2026-10-25T23:18:11Z (UTC), including the corrected bridge integration test, explicit inventory preload, portal tests, both mini-game tests, and inventory save/adapter regressions.
+- PR #14 remains open pending final review and documentation sync; production M1.3 world.gd is not present in this repository.
+
+## Integration and merge status
+
+- PR #13 (KROLL Orbital Convoy + Backrooms portal director/visual) passed CI runs #15–#19 and merged to main at commit 02ed72e151d6d70339ec4048bf1c149f107908f2.
+- PR #7 (inventory save validation) passed the combined CI suite and merged to main at commit 67c3bf20c70f926aab87cf6d075b83ebcfd0792a.
+- KROLL Signal Sweep documentation PR #12 passed CI run #14 and merged at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
 
 ## Known limitations
 

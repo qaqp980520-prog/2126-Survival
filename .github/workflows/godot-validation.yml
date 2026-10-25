@@ -49,6 +49,7 @@ jobs:
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
           test -f tests/backrooms_portal_scene_test.gd
+          test -f tests/world_bridge_save_adapter_integration.gd
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
@@ -69,3 +70,5 @@ jobs:
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
         run: godot --headless --path . --script res://tests/inventory_save_adapter.gd
+      - name: Run world bridge save adapter integration test
+        run: godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd
