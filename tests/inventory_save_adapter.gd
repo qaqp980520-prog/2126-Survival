@@ -4,6 +4,7 @@ const Adapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 
 func _initialize() -> void:
 	_test_round_trip_preserves_world_fields()
+	_test_accepts_legacy_m1_3_inventory_shape()
 	_test_rejects_unknown_item_atomically()
 	_test_rejects_unsupported_world_version()
 	print("Inventory save adapter tests passed.")
@@ -31,6 +32,45 @@ func _test_round_trip_preserves_world_fields() -> void:
 	assert(updated["world_seed"] == 12345)
 	assert(updated["crops"] == old_world["crops"])
 	assert(updated["inventory"]["rock"] == 3)
+
+func _test_accepts_legacy_m1_3_inventory_shape() -> void:
+	# Mirrors the M1.3.4 source's actual top-level save keys and inventory IDs.
+	var old_world := {
+		"version": 2,
+		"inventory": {
+			"credits": 100,
+			"meat": 2,
+			"hide": 1,
+			"bone": 3,
+			"berries": 4,
+			"seeds": 5,
+			"herbs": 6,
+			"food": 7
+		},
+		"game_day": 8,
+		"stamina": 75.0,
+		"selected_hotbar_slot": 2,
+		"hotbar_slots": ["", "meat", "", "food", "", "", "", "", "", ""],
+		"world_state": {
+			"harvested_world_crop_ids": ["crop_1"],
+			"planted_crops": [{"position": [1.0, 0.0, 2.0], "seed_type": "berries"}]
+		}
+	}
+	var converted: Dictionary = Adapter.world_save_to_inventory_payload(old_world)
+	assert(converted.get("ok", false))
+	var payload: Dictionary = converted["payload"]
+	assert(payload["game_day"] == 8)
+	assert(payload["inventory"]["credits"] == 100)
+	assert(payload["inventory"]["food"] == 7)
+
+	var restored: Dictionary = Adapter.apply_inventory_payload_to_world_save(old_world, payload)
+	assert(restored.get("ok", false))
+	var updated: Dictionary = restored["world_save"]
+	assert(updated["stamina"] == 75.0)
+	assert(updated["selected_hotbar_slot"] == 2)
+	assert(updated["hotbar_slots"] == old_world["hotbar_slots"])
+	assert(updated["world_state"] == old_world["world_state"])
+	assert(updated["inventory"]["herbs"] == 6)
 
 func _test_rejects_unknown_item_atomically() -> void:
 	var old_world := {"version": 1, "game_day": 3, "inventory": {"mystery_item": 9}}
