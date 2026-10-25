@@ -1,0 +1,70 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://prototypes/BackroomsPortalPlayground.gd" id="1_world"]
+[ext_resource type="Script" path="res://prototypes/BackroomsPlayerController.gd" id="2_player"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="Environment" id="Environment_world"]
+background_mode = 1
+background_color = Color(0.018, 0.03, 0.045, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.36, 0.43, 0.48, 1)
+ambient_light_energy = 0.45
+
+[node name="BackroomsPortalPlayground" type="Node3D"]
+script = ExtResource("1_world")
+
+[node name="MainWorld" type="Node3D" parent="."]
+
+[node name="BackroomsWorld" type="Node3D" parent="."]
+visible = false
+
+[node name="Player" type="CharacterBody3D" parent="."]
+script = ExtResource("2_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+position = Vector3(0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_player")
+
+[node name="BodyMesh" type="MeshInstance3D" parent="Player"]
+position = Vector3(0, 0.9, 0)
+mesh = SubResource("CapsuleMesh_player")
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+position = Vector3(0, 2.8, 6.0)
+rotation = Vector3(-0.25, 0, 0)
+current = true
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.8, 0.4, 0)
+light_energy = 1.2
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_world")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Status" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 1000.0
+offset_bottom = 116.0
+theme_override_colors/font_color = Color(0.63, 0.94, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "2126 SURVIVAL // PORTAL PLAYGROUND"
+
+[node name="Help" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 650.0
+offset_right = 1250.0
+offset_bottom = 710.0
+theme_override_colors/font_color = Color(0.82, 0.88, 0.91, 1)
+theme_override_font_sizes/font_size = 14
+text = "WASD move | Space jump | E enter portal | T test-spawn portal | B debug return | G collect berries | H drop berries | F5 save | F9 load"
