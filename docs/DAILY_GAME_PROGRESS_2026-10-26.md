@@ -20,7 +20,7 @@
 
 ## Integration and test status
 
-- Godot 4.3 CI run #15 succeeded for Signal Sweep, Orbital Convoy, portal director logic, and both inventory save suites. The new 3D portal scene and its smoke test were added after run #16 and are pending the next CI run.
+- Godot 4.3 CI run #15 succeeded for the initial mini-game and portal logic suite; run #16 passed again after recording results; run #17 passed after adding the 3D portal scene and its smoke test. All workflow steps passed: Signal Sweep import/rules/runtime, Orbital Convoy import/rules/runtime, portal director logic, portal visual scene smoke, inventory save validation, and inventory adapter regression.
 - Existing KROLL Signal Sweep documentation PR #12 passed CI run #14 and was merged to main at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
 - New code remains on feature branch and PR #13; do not merge until the latest CI run passes and the diff is reviewed.
 

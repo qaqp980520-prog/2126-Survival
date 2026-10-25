@@ -22,8 +22,7 @@
 
 ## Test status
 
-- A headless scene smoke test checks the Area3D, torus, two portal field meshes, trigger shape, prompt, position mapping, and rejection of invalid portal data.
-- The test was added after Godot CI run #16; the next CI run is pending. Local environment has no Godot executable, so no local scene-parser/runtime claim is made.
+Godot 4.3 headless CI run #17 passed on 2026-10-25T23:07:19Z (UTC), including this scene smoke test. The local environment has no Godot executable, so the engine-level evidence is from CI; manual visual inspection and device testing remain outstanding.
 
 ## Limitations and next step
 

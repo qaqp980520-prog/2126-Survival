@@ -15,9 +15,9 @@ Provide a testable, isolated rules module for the confirmed world rule: natural 
 
 ## 3D visual shell and test status
 
-A separate reusable scene now exists at systems/BackroomsPortalVisual.tscn with BackroomsPortalVisual.gd: emissive torus, translucent front/back field quads, Area3D trigger, E interaction prompt, and a configure_from_director() coordinate adapter. It emits portal_entered(body, portal_id); the world controller still owns director consumption and level switching.
+A separate reusable scene exists at systems/BackroomsPortalVisual.tscn with BackroomsPortalVisual.gd: emissive torus, translucent front/back field quads, Area3D trigger, E interaction prompt, and a configure_from_director() coordinate adapter. It emits portal_entered(body, portal_id); the world controller still owns director consumption and level switching.
 
-Godot 4.3 headless CI run #15 passed the director logic tests on 2026-10-25T23:01:53Z (UTC). A new scene smoke test has been added after that run and is awaiting the next CI run. The local environment still has no Godot executable. The scene test checks resource parsing, required nodes, coordinate mapping, and invalid configuration rejection; it does not prove the visual is polished or the world transition is integrated.
+Godot 4.3 headless CI run #15 passed the director logic tests on 2026-10-25T23:01:53Z (UTC). CI run #17 passed on 2026-10-25T23:07:19Z (UTC), including the new 3D portal scene smoke test. The local environment still has no Godot executable. The scene test checks resource parsing, required nodes, coordinate mapping, and invalid configuration rejection; it does not prove the visual is polished or the world transition is integrated.
 
 ## Dependencies and import
 
