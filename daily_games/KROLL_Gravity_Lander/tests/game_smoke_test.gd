@@ -16,25 +16,25 @@ func _run_smoke_test() -> void:
     var game = MainScene.instantiate()
     root.add_child(game)
     await process_frame
-    _expect(game.get_round_state() == "playing", "new round starts")
+    _expect(str(game.call("get_round_state")) == "playing", "new round starts")
     _expect(is_equal_approx(float(game.get("fuel")), 100.0), "fuel starts full")
 
     game.set("lander_position", Vector2(480.0, 550.0))
     game.set("lander_velocity", Vector2(0.0, 70.0))
     game.call("resolve_landing")
-    _expect(game.get_round_state() == "won", "safe landing succeeds")
+    _expect(str(game.call("get_round_state")) == "won", "safe landing succeeds")
 
     game.call("restart_round")
     game.set("lander_position", Vector2(100.0, 550.0))
     game.set("lander_velocity", Vector2(0.0, 20.0))
     game.call("resolve_landing")
-    _expect(game.get_round_state() == "lost", "landing outside pad fails")
+    _expect(str(game.call("get_round_state")) == "lost", "landing outside pad fails")
 
     game.call("restart_round")
     game.set("lander_position", Vector2(480.0, 550.0))
     game.set("lander_velocity", Vector2(0.0, 120.0))
     game.call("resolve_landing")
-    _expect(game.get_round_state() == "lost", "excessive descent speed fails")
+    _expect(str(game.call("get_round_state")) == "lost", "excessive descent speed fails")
 
     if failures.is_empty():
         print("KROLL Gravity Lander runtime smoke test passed.")
