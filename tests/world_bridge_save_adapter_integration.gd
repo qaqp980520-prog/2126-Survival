@@ -15,10 +15,10 @@ func _initialize() -> void:
     call_deferred("_run_integration_test")
 
 func _run_integration_test() -> void:
+    print("Starting SurvivalWorldBridge save adapter integration test.")
     var bridge = BridgeScript.new()
     bridge.set("inventory_script", InventoryScript)
     root.add_child(bridge)
-    await process_frame
 
     var legacy_world := {
         "version": 2,
