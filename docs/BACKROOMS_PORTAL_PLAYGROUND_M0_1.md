@@ -35,9 +35,9 @@ Godot 4.3+, no external assets or plug-ins. Open the repository root in Godot Pr
 
 ## Validation status
 
-- Static review: pending CI for this branch.
+- Godot 4.3 CI run #32 passed on PR #16 head `85fd6345029a2aef9a8e0d7236eae586c6a001cd`; all 20 validation steps completed successfully, including Gravity Lander rules/runtime smoke tests, portal visual scene smoke test, portal playground save/restore and collision-isolation integration test, and the existing inventory/bridge regression suites.
+- PR #16 was merged to main as `9f2ff2e03d972f067125d1fe7129200cd1913452`.
 - Local Godot executable is unavailable in this environment, so no local engine run is claimed.
-- The PR workflow is expected to run the existing portal, inventory, bridge, mini-game, and new end-to-end integration suites.
 - Manual visual inspection, collision feel, and iPhone touch/UI checks remain outstanding.
 
 ## Known limitations and next steps
