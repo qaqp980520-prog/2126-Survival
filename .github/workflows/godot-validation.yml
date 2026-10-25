@@ -1,0 +1,53 @@
+name: Godot headless validation
+
+on:
+  push:
+    branches:
+      - 'ci/godot-headless-validation-2026-10-25'
+  pull_request:
+    paths:
+      - 'systems/**'
+      - 'tests/**'
+      - 'daily_games/**'
+      - '.github/workflows/godot-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare candidate files when not yet merged
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ ! -f daily_games/KROLL_Signal_Sweep/project.godot ]; then
+            git fetch origin feature/daily-kroll-signal-sweep-2026-10-25
+            git checkout FETCH_HEAD -- daily_games/KROLL_Signal_Sweep
+          fi
+          if [ ! -f systems/SurvivalInventory.gd ] || [ ! -f tests/inventory_save_validation.gd ]; then
+            git fetch origin fix/inventory-save-validation-2026-10-25
+            git checkout FETCH_HEAD -- systems/SurvivalInventory.gd tests/inventory_save_validation.gd
+          fi
+          if [ ! -f systems/SurvivalInventorySaveAdapter.gd ] || [ ! -f tests/inventory_save_adapter.gd ]; then
+            git fetch origin feature/m1-3-inventory-save-adapter-2026-10-25
+            git checkout FETCH_HEAD -- systems/SurvivalInventorySaveAdapter.gd tests/inventory_save_adapter.gd
+          fi
+      - name: Print engine version and verify test inputs
+        run: |
+          godot --version
+          test -f daily_games/KROLL_Signal_Sweep/project.godot
+          test -f tests/inventory_save_validation.gd
+          test -f tests/inventory_save_adapter.gd
+      - name: Import and parse daily mini-game project
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
+      - name: Run KROLL Signal Sweep rules tests
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --script res://tests/rules_test.gd
+      - name: Run KROLL Signal Sweep runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --script res://tests/game_smoke_test.gd
+      - name: Run inventory save validation tests
+        run: godot --headless --path . --script res://tests/inventory_save_validation.gd
+      - name: Run inventory save adapter tests
+        run: godot --headless --path . --script res://tests/inventory_save_adapter.gd
