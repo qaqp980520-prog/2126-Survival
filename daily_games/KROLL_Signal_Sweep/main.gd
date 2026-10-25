@@ -1,11 +1,7 @@
 extends Control
 
-const GRID_SIZE := 8
-const DIFFICULTIES := [
-	{"name": "簡單", "cores": 2, "scans": 30},
-	{"name": "標準", "cores": 3, "scans": 22},
-	{"name": "困難", "cores": 4, "scans": 18}
-]
+const Rules = preload("res://rules.gd")
+const GRID_SIZE := Rules.GRID_SIZE
 
 var target_count := 3
 var scan_limit := 22
@@ -69,7 +65,7 @@ func _build_ui() -> void:
 
 	difficulty_picker = OptionButton.new()
 	difficulty_picker.custom_minimum_size = Vector2(130, 36)
-	for difficulty in DIFFICULTIES:
+	for difficulty in Rules.DIFFICULTIES:
 		difficulty_picker.add_item("%s（%d 核心／%d 次）" % [difficulty.name, difficulty.cores, difficulty.scans])
 	difficulty_picker.select(1)
 	difficulty_picker.item_selected.connect(_on_difficulty_selected)
@@ -114,15 +110,15 @@ func _build_ui() -> void:
 	layout.add_child(instructions)
 
 func _on_difficulty_selected(index: int) -> void:
-	if index < 0 or index >= DIFFICULTIES.size():
+	if index < 0 or index >= Rules.DIFFICULTIES.size():
 		return
-	target_count = int(DIFFICULTIES[index].cores)
-	scan_limit = int(DIFFICULTIES[index].scans)
+	target_count = int(Rules.difficulty(index).cores)
+	scan_limit = int(Rules.difficulty(index).scans)
 	_start_game()
 
 func _start_game() -> void:
 	if difficulty_picker != null and difficulty_picker.selected >= 0:
-		var selected: Dictionary = DIFFICULTIES[difficulty_picker.selected]
+		var selected: Dictionary = Rules.difficulty(difficulty_picker.selected)
 		target_count = int(selected.cores)
 		scan_limit = int(selected.scans)
 	cache_cells.clear()
@@ -169,9 +165,7 @@ func _scan_cell(cell: Vector2i, button: Button) -> void:
 		button.add_theme_color_override("font_disabled_color", Color("#7dffb3"))
 		status_label.text = "資料核心回收成功！還剩 %d 個。" % (target_count - found_cells.size())
 	else:
-		var nearest := GRID_SIZE * 2
-		for cache in cache_cells:
-			nearest = mini(nearest, absi(cell.x - cache.x) + absi(cell.y - cache.y))
+		var nearest := Rules.nearest_core_distance(cell, cache_cells)
 		button.text = str(nearest)
 		button.add_theme_color_override("font_disabled_color", Color("#9eb2cc"))
 		status_label.text = "掃描完成：依照數字推理核心位置。"
