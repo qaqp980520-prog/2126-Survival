@@ -4,6 +4,7 @@ class_name SurvivalWorldBridge
 ## Thin adapter between world pickups/mining outputs and SurvivalInventory.
 ## It does not replace existing M1.x scenes; integrate it deliberately with the active world controller.
 
+const InventoryModel = preload("res://systems/SurvivalInventory.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 
 signal inventory_changed(summary: Dictionary)
@@ -17,8 +18,7 @@ func _ready() -> void:
     if inventory_script != null:
         inventory = inventory_script.new()
     else:
-        # class_name lookup is available after Godot's script class scan.
-        inventory = SurvivalInventory.new()
+        inventory = InventoryModel.new()
     _emit_inventory_changed()
 
 func collect_world_item(item_id: String, amount: int = 1) -> bool:
@@ -32,7 +32,6 @@ func collect_world_item(item_id: String, amount: int = 1) -> bool:
     return true
 
 func collect_mined_ore(ore_id: String, amount: int) -> bool:
-    # Mining is deliberately routed through the same item-count API as world pickups.
     return collect_world_item(ore_id, amount)
 
 func drop_item(item_id: String, amount: int = 1) -> bool:
@@ -42,7 +41,6 @@ func drop_item(item_id: String, amount: int = 1) -> bool:
     if removed <= 0:
         return false
     item_dropped.emit(item_id, removed)
-    # Weight and penalties are recalculated immediately by the inventory model.
     _emit_inventory_changed()
     return true
 
