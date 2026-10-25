@@ -71,6 +71,7 @@ func _build_surface() -> void:
 
 func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
+        _set_collision_enabled(backrooms_room, false)
         backrooms_room.queue_free()
     backrooms_room = Node3D.new()
     backrooms_room.name = "Room_" + level_name.replace(" ", "")
