@@ -36,7 +36,7 @@ func _test_round_trip_preserves_world_fields() -> void:
 	assert(updated["inventory"]["rock"] == 3)
 
 func _test_accepts_legacy_m1_3_inventory_shape() -> void:
-	# Mirrors the M1.3.4 source's actual top-level save keys and inventory IDs.
+	# Mirrors actual M1.3.4 top-level keys from scripts/world.gd.
 	var old_world := {
 		"version": 2,
 		"inventory": {
@@ -45,8 +45,9 @@ func _test_accepts_legacy_m1_3_inventory_shape() -> void:
 		},
 		"game_day": 8,
 		"stamina": 75.0,
-		"selected_hotbar_slot": 2,
 		"hotbar_slots": ["", "meat", "", "food", "", "", "", "", "", ""],
+		"selected_hotbar": 2,
+		"player_position": [1.5, 2.0, -3.5],
 		"world_state": {
 			"harvested_world_crop_ids": ["crop_1"],
 			"planted_crops": [{"position": [1.0, 0.0, 2.0], "seed_type": "berries"}]
@@ -63,8 +64,9 @@ func _test_accepts_legacy_m1_3_inventory_shape() -> void:
 	assert(restored.get("ok", false))
 	var updated: Dictionary = restored["world_save"]
 	assert(updated["stamina"] == 75.0)
-	assert(updated["selected_hotbar_slot"] == 2)
+	assert(updated["selected_hotbar"] == 2)
 	assert(updated["hotbar_slots"] == old_world["hotbar_slots"])
+	assert(updated["player_position"] == old_world["player_position"])
 	assert(updated["world_state"] == old_world["world_state"])
 	assert(updated["inventory"]["herbs"] == 6)
 
