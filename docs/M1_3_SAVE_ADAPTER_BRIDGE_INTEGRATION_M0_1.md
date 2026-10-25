@@ -15,9 +15,12 @@
 - The adapter supports legacy world-save versions 1 and 2; item IDs must be registered in SurvivalInventory.ITEM_WEIGHTS.
 - The active M1.3 world controller is still not present in the repository, so this integrates the adapter with the reusable bridge API rather than claiming the production controller is wired.
 
-## Validation
+## Validation and merge status
 
-Godot 4.3 CI run #24 passed on 2026-10-25T23:18:11Z (UTC), including all existing Signal Sweep, Orbital Convoy, portal, inventory validation, and adapter tests plus the new bridge integration test. The local environment has no Godot executable; the engine-level evidence comes from CI, not a local run.
+- Godot 4.3 CI run #24 passed on the tested code head, including all existing Signal Sweep, Orbital Convoy, portal, inventory validation, and adapter tests plus the new bridge integration test.
+- PR #14 merged to main at commit 3509c33777a3eecd68e48bcd49744718fc1b8264.
+- Run #25 is a documentation-only revalidation and remains in progress; no code/test behavior changed after run #24.
+- The local environment has no Godot executable; engine-level evidence comes from CI, not a local run.
 
 ## Known limits
 

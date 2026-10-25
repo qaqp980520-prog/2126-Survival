@@ -23,14 +23,15 @@
 - Added serialize_world_save and restore_world_save to SurvivalWorldBridge, preserving stamina, hotbar, player position, crops, world seed, and world state.
 - Added a bridge integration test for legacy world-save round-trip, input immutability, and atomic rejection of invalid data.
 - Runs #20–#23 remain in progress from earlier assert-only/frame-wait drafts; they are not counted as passes.
-- Godot 4.3 CI run #24 passed on 2026-10-25T23:18:11Z (UTC), including the corrected bridge integration test, explicit inventory preload, portal tests, both mini-game tests, and inventory save/adapter regressions.
-- PR #14 remains open pending final review and documentation sync; production M1.3 world.gd is not present in this repository.
+- Godot 4.3 CI run #24 passed on 2026-10-25T23:18:11Z (UTC), including the corrected bridge integration test, explicit inventory preload, all portal tests, both mini-game tests, and inventory save/adapter regressions.
+- PR #14 merged to main at commit 3509c33777a3eecd68e48bcd49744718fc1b8264. Run #25 is a documentation-only revalidation and remains in progress.
 
 ## Integration and merge status
 
 - PR #13 (KROLL Orbital Convoy + Backrooms portal director/visual) passed CI runs #15–#19 and merged to main at commit 02ed72e151d6d70339ec4048bf1c149f107908f2.
 - PR #7 (inventory save validation) passed the combined CI suite and merged to main at commit 67c3bf20c70f926aab87cf6d075b83ebcfd0792a.
 - KROLL Signal Sweep documentation PR #12 passed CI run #14 and merged at commit 3cbdd84893d3645b073cf2701c192a3a699ee622.
+- PR #9 was closed as superseded by PR #14 to avoid duplicate adapter changes.
 
 ## Known limitations
 
@@ -38,3 +39,4 @@
 - Portals persist until consumed; no unconfirmed auto-despawn rule was added.
 - RNG internal state is not saved, so future random outcomes after loading will not exactly replay.
 - Destination pool is only Level 0–3; iPhone layout/touch and manual gameplay tests remain.
+- The production M1.3 world.gd is not present in this repository; bridge-level save methods still need to be called by the actual world controller.
