@@ -25,7 +25,7 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("has_active_portal")), "portal director and visual stay synchronized")
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
-    var entered_level: String = world.get_current_level()
+    var entered_level: String = str(world.call("get_current_level"))
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
 
     var saved: Dictionary = world.call("serialize_world_state")
@@ -33,16 +33,16 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_collect_berries", 3)), "collects another stack after entering")
     _expect(int(world.call("get_inventory_count", "berries")) == 5, "inventory reflects bridge changes")
     _expect(bool(world.call("load_world_state_from_dictionary", saved)), "restores valid world envelope")
-    _expect(world.get_inventory_count("berries") == 2, "load restores prior inventory count")
-    _expect(world.get_current_level() == entered_level, "load restores current Backrooms level")
+    _expect(int(world.call("get_inventory_count", "berries")) == 2, "load restores prior inventory count")
+    _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
 
-    var before_count: int = world.get_inventory_count("berries")
-    var before_level: String = world.get_current_level()
+    var before_count: int = int(world.call("get_inventory_count", "berries"))
+    var before_level: String = str(world.call("get_current_level"))
     var invalid_save: Dictionary = saved.duplicate(true)
     invalid_save["backrooms_portal_state"]["schema_version"] = 99
     _expect(not bool(world.call("load_world_state_from_dictionary", invalid_save)), "rejects invalid portal schema")
-    _expect(world.get_inventory_count("berries") == before_count, "invalid restore leaves inventory unchanged")
-    _expect(world.get_current_level() == before_level, "invalid restore leaves current level unchanged")
+    _expect(int(world.call("get_inventory_count", "berries")) == before_count, "invalid restore leaves inventory unchanged")
+    _expect(str(world.call("get_current_level")) == before_level, "invalid restore leaves current level unchanged")
 
     if failures.is_empty():
         print("Backrooms portal playground integration test passed.")
