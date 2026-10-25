@@ -1,4 +1,4 @@
-# M1.3 Inventory Save Adapter｜Prototype M0.2｜2026-10-25
+# M1.3 Inventory Save Adapter｜Prototype M0.3｜2026-10-25
 
 ## Purpose
 Introduce a narrow, testable conversion boundary between the legacy M1.3 world-save envelope and the shared `SurvivalInventory` payload. This is a standalone prototype and is not connected to the active world controller.
@@ -18,7 +18,7 @@ Introduce a narrow, testable conversion boundary between the legacy M1.3 world-s
 - Returns `{ok: false, error: ...}` on failure and never mutates the supplied world-save dictionary.
 
 ## M1.3.4 source comparison
-Static inspection of the available local M1.3.4 prototype confirms the save envelope includes `version`, `inventory`, `game_day`, `stamina`, `selected_hotbar_slot`, `hotbar_slots`, `player_position`, and `world_state`. The inventory dictionary uses eight IDs: `credits`, `meat`, `hide`, `bone`, `berries`, `seeds`, `herbs`, and `food`; all eight are registered in the shared inventory weight table. Hotbar empty-string slots are separate from inventory item IDs. The test fixture asserts preservation of stamina, hotbar, and world state.
+Direct inspection of `scripts/world.gd` in the available M1.3.4 prototype shows the actual save keys are `version`, `inventory`, `game_day`, `stamina`, `hotbar_slots`, `selected_hotbar`, `player_position`, and `world_state`. Note the field is `selected_hotbar`, not `selected_hotbar_slot`. The inventory dictionary uses eight IDs: `credits`, `meat`, `hide`, `bone`, `berries`, `seeds`, `herbs`, and `food`; all eight are registered in the shared inventory weight table. The updated test fixture now uses the real field names and asserts preservation of player position, stamina, hotbar, and world state.
 
 ## Important dependency finding
 The current `main` version of `SurvivalInventory.load_save_dict()` does not itself validate `schema_version`, fractional values, known item IDs, or upper bounds. Therefore the adapter now performs strict validation independently before calling that model. Do not assume the adapter is protected by the inventory model alone. The separate inventory validation PR remains unmerged and untested.
