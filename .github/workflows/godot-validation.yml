@@ -50,10 +50,12 @@ jobs:
           godot --version
           test -f daily_games/KROLL_Signal_Sweep/project.godot
           test -f daily_games/KROLL_Orbital_Convoy/project.godot
+          test -f daily_games/KROLL_Gravity_Lander/project.godot
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
           test -f tests/backrooms_portal_scene_test.gd
+          test -f tests/backrooms_portal_playground_test.gd
           test -f tests/world_bridge_save_adapter_integration.gd
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
@@ -67,10 +69,18 @@ jobs:
         run: godot --headless --path daily_games/KROLL_Orbital_Convoy --script res://tests/rules_test.gd
       - name: Run KROLL Orbital Convoy runtime smoke test
         run: godot --headless --path daily_games/KROLL_Orbital_Convoy --script res://tests/game_smoke_test.gd
+      - name: Import and parse KROLL Gravity Lander
+        run: godot --headless --path daily_games/KROLL_Gravity_Lander --editor --quit
+      - name: Run KROLL Gravity Lander rules tests
+        run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/rules_test.gd
+      - name: Run KROLL Gravity Lander runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/game_smoke_test.gd
       - name: Run Backrooms portal director tests
         run: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd
       - name: Run Backrooms portal visual scene smoke test
         run: godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd
+      - name: Run Backrooms portal playground integration test
+        run: godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
