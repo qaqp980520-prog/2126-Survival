@@ -1,0 +1,27 @@
+name: Godot headless validation
+
+on:
+  pull_request:
+    paths:
+      - 'systems/**'
+      - 'tests/**'
+      - 'daily_games/**'
+      - '.github/workflows/godot-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Print engine version
+        run: godot --version
+      - name: Import and parse daily mini-game project
+        run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
+      - name: Run inventory save validation tests
+        run: godot --headless --path . --script res://tests/inventory_save_validation.gd
+      - name: Run inventory save adapter tests
+        run: godot --headless --path . --script res://tests/inventory_save_adapter.gd
