@@ -20,9 +20,12 @@
 - tests/backrooms_portal_scene_test.gd
 - docs/BACKROOMS_PORTAL_PLAYGROUND_M0_1.md
 
-## 測試計畫
+## 實際測試結果
 
-Godot 4.3 CI 應執行 Gravity Lander 匯入、規則測試與場景 smoke test；後室端到端測試應驗證入口生成、單次消耗、Level 切換、共用背包物品變化、存檔往返，以及無效 portal schema 的原子拒絕。CI 完成前一律標記待驗證。
+- GitHub Actions Godot 4.3 run #32：成功，PR head `85fd6345029a2aef9a8e0d7236eae586c6a001cd`。
+- 通過項目：Signal Sweep／Orbital Convoy／Gravity Lander 匯入、規則與 smoke tests；portal director、visual scene、playground 端到端存讀檔與碰撞隔離；既有 inventory save validation、save adapter 與 world bridge 整合回歸。
+- PR #16 已合併，main commit `9f2ff2e03d972f067125d1fe7129200cd1913452`。
+- 本機沒有 Godot 執行檔，未聲稱本機引擎測試通過；手動視覺、碰撞手感、iPhone 實機仍未驗證。
 
 ## 狀態規則
 
