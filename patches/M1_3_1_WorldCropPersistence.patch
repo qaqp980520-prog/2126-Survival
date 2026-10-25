@@ -1,0 +1,153 @@
+--- a/scripts/world.gd
++++ b/scripts/world.gd
+@@ -18,6 +18,7 @@
+ var interactables: Array[Node3D] = []
+ var planted_crops: Array[Dictionary] = []
+ var crop_respawns: Array[Dictionary] = []
++var harvested_world_crop_ids: Array[String] = []
+ var world_time := 0.0
+@@ -453,13 +454,14 @@
+ func _save_game(show_message: bool = true) -> void:
+ 	var data := {
+-		"version": 1,
++		"version": 2,
+ 		"inventory": inventory,
+ 		"game_day": game_day,
+ 		"stamina": stamina,
+ 		"hotbar_slots": hotbar_slots,
+ 		"selected_hotbar": selected_hotbar,
+-		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z] if is_instance_valid(player) else [0.0, 0.0, 0.0]
++		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z] if is_instance_valid(player) else [0.0, 0.0, 0.0],
++		"world_state": _serialize_world_state()
+ 	}
+@@ -483,6 +485,10 @@
+ 		last_message = "讀檔失敗：存檔格式不正確。"
+ 		return
+ 	var data: Dictionary = parsed
++	var save_version := int(data.get("version", 0))
++	if save_version < 1 or save_version > 2:
++		last_message = "讀檔失敗：不支援的存檔版本。"
++		return
+ 	var saved_inventory: Variant = data.get("inventory", {})
+@@ -496,6 +502,9 @@
+ 	var pos_data: Variant = data.get("player_position", [])
+ 	if is_instance_valid(player) and pos_data is Array and pos_data.size() == 3:
+ 		player.global_position = Vector3(float(pos_data[0]), maxf(1.0, float(pos_data[1])), float(pos_data[2]))
++	var saved_world_state: Variant = data.get("world_state", {})
++	if saved_world_state is Dictionary:
++		_restore_world_state(saved_world_state)
+@@ -579,7 +588,10 @@
+ 			inventory[yield_type] += 1
+ 			inventory[seed_type] += 1
+ 			last_message = "採集 %s：取得 1 份 %s 與 1 份種植材料。野生作物會在一段時間後於附近重新生成。" % [n.get_meta("display_name", "野生作物"), yield_type]
+-			crop_respawns.append({"label": str(n.get_meta("display_name", "野生作物")), "pos": n.global_position, "yield_type": yield_type, "seed_type": seed_type, "ready_at": world_time + randf_range(35.0, 60.0)})
++			var crop_id := str(n.get_meta("world_crop_id", ""))
++			if not crop_id.is_empty() and not harvested_world_crop_ids.has(crop_id):
++				harvested_world_crop_ids.append(crop_id)
++			crop_respawns.append({"label": str(n.get_meta("display_name", "野生作物")), "pos": n.global_position - Vector3(0, 0.2, 0), "yield_type": yield_type, "seed_type": seed_type, "ready_at": world_time + randf_range(35.0, 60.0)})
+@@ -671,7 +683,7 @@
+-func _spawn_crop(label: String, pos: Vector3, yield_type: String, seed_type: String) -> void:
++func _spawn_crop(label: String, pos: Vector3, yield_type: String, seed_type: String) -> Node3D:
+@@ -679,6 +691,7 @@
+ 	crop.set_meta("display_name", label)
+ 	crop.set_meta("yield_type", yield_type)
+ 	crop.set_meta("seed_type", seed_type)
++	crop.set_meta("world_crop_id", _world_crop_id(label, pos))
+@@ -694,6 +707,7 @@
+ 	_add_label(label, pos + Vector3(0, 1.8, 0), 0.9)
+ 	interactables.append(crop)
++	return crop
+@@ -772,11 +786,120 @@
+ func _help_message() -> void:
+ 	last_message = "目標：探索道路與野區、滑鼠左鍵攻擊動物、Space 跳躍、E 採集或拾取、回設施出售、P 種植、成熟後 E 採收。快捷欄按 1–9／0 選擇，F 使用所選食物。"
+ 
++func _world_crop_id(label: String, pos: Vector3) -> String:
++	return "%s|%.2f|%.2f|%.2f" % [label, pos.x, pos.y, pos.z]
++
++func _serialize_world_state() -> Dictionary:
++	var planted: Array[Dictionary] = []
++	for record in planted_crops:
++		var node: Node3D = record.get("node")
++		if not is_instance_valid(node):
++			continue
++		planted.append({"position": [node.position.x, node.position.y, node.position.z], "mature": bool(node.get_meta("mature", false)), "remaining_growth": maxf(0.0, float(record.get("ready_at", world_time)) - world_time)})
++	var dynamic_crops: Array[Dictionary] = []
++	for node in interactables:
++		if not is_instance_valid(node) or str(node.get_meta("kind", "")) != "crop" or not bool(node.get_meta("dynamic_respawn", false)):
++			continue
++		var p: Vector3 = node.global_position - Vector3(0, 0.2, 0)
++		dynamic_crops.append({"label": str(node.get_meta("display_name", "野生作物")), "position": [p.x, p.y, p.z], "yield_type": str(node.get_meta("yield_type", "berries")), "seed_type": str(node.get_meta("seed_type", "seeds"))})
++	var respawns: Array[Dictionary] = []
++	for record in crop_respawns:
++		var pos: Vector3 = record.get("pos", Vector3.ZERO)
++		respawns.append({"label": str(record.get("label", "野生作物")), "position": [pos.x, pos.y, pos.z], "yield_type": str(record.get("yield_type", "berries")), "seed_type": str(record.get("seed_type", "seeds")), "remaining": maxf(0.0, float(record.get("ready_at", world_time)) - world_time)})
++	return {"harvested_world_crop_ids": harvested_world_crop_ids.duplicate(), "planted_crops": planted, "crop_respawns": respawns, "dynamic_wild_crops": dynamic_crops}
++
++func _restore_world_state(state: Dictionary) -> void:
++	harvested_world_crop_ids.clear()
++	var harvested: Variant = state.get("harvested_world_crop_ids", [])
++	if harvested is Array:
++		for crop_id in harvested:
++			if crop_id is String and not harvested_world_crop_ids.has(crop_id):
++				harvested_world_crop_ids.append(crop_id)
++	for node in interactables.duplicate():
++		if not is_instance_valid(node) or str(node.get_meta("kind", "")) != "crop":
++			continue
++		if harvested_world_crop_ids.has(str(node.get_meta("world_crop_id", ""))):
++			interactables.erase(node)
++			node.queue_free()
++	planted_crops.clear()
++	crop_respawns.clear()
++	var planted: Variant = state.get("planted_crops", [])
++	if planted is Array:
++		for record in planted:
++			if not (record is Dictionary): continue
++			var p: Variant = record.get("position", [])
++			if not (p is Array) or p.size() != 3: continue
++			var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
++			var plant := Node3D.new()
++			plant.name = "PlayerPlantedCrop"
++			plant.position = pos
++			plant.set_meta("kind", "plant")
++			plant.set_meta("display_name", "玩家種植作物")
++			var mature := bool(record.get("mature", false))
++			plant.set_meta("mature", mature)
++			add_child(plant)
++			var stalk := MeshInstance3D.new()
++			var stalkmesh := CylinderMesh.new()
++			stalkmesh.top_radius = 0.08
++			stalkmesh.bottom_radius = 0.14
++			stalkmesh.height = 0.7
++			stalk.mesh = stalkmesh
++			stalk.material_override = mats["crop"]
++			if mature: stalk.scale = Vector3(1.5, 1.7, 1.5)
++			plant.add_child(stalk)
++			_add_label("READY - E TO HARVEST" if mature else "GROWING", pos + Vector3(0, 1.6, 0), 0.7)
++			var plant_record := {"node": plant, "ready_at": world_time + maxf(0.0, float(record.get("remaining_growth", 0.0)))}
++			plant.set_meta("crop_record", plant_record)
++			planted_crops.append(plant_record)
++			interactables.append(plant)
++	var dynamic_crops: Variant = state.get("dynamic_wild_crops", [])
++	if dynamic_crops is Array:
++		for record in dynamic_crops:
++			if not (record is Dictionary): continue
++			var p: Variant = record.get("position", [])
++			if not (p is Array) or p.size() != 3: continue
++			var restored_crop := _spawn_crop(str(record.get("label", "野生作物")), Vector3(float(p[0]), float(p[1]), float(p[2])), str(record.get("yield_type", "berries")), str(record.get("seed_type", "seeds")))
++			restored_crop.set_meta("dynamic_respawn", true)
++	var respawns: Variant = state.get("crop_respawns", [])
++	if respawns is Array:
++		for record in respawns:
++			if not (record is Dictionary): continue
++			var p: Variant = record.get("position", [])
++			if not (p is Array) or p.size() != 3: continue
++			crop_respawns.append({"label": str(record.get("label", "野生作物")), "pos": Vector3(float(p[0]), float(p[1]), float(p[2])), "yield_type": str(record.get("yield_type", "berries")), "seed_type": str(record.get("seed_type", "seeds")), "ready_at": world_time + maxf(0.0, float(record.get("remaining", 0.0)))})
++
+ func _update_wild_crop_respawns() -> void:
+@@ -784,7 +905,8 @@
+ 		var base: Vector3 = record.get("pos", Vector3.ZERO)
+ 		var offset := Vector3(randf_range(-5.0, 5.0), 0.0, randf_range(-5.0, 5.0))
+-		_spawn_crop(str(record.get("label", "野生作物")), base + offset, str(record.get("yield_type", "berries")), str(record.get("seed_type", "seeds")))
++		var respawned_crop := _spawn_crop(str(record.get("label", "野生作物")), base + offset, str(record.get("yield_type", "berries")), str(record.get("seed_type", "seeds")))
++		respawned_crop.set_meta("dynamic_respawn", true)
+ 		crop_respawns.erase(record)
