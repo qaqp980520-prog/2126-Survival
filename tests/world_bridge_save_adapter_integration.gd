@@ -58,9 +58,10 @@ func _run_integration_test() -> void:
 
     var unsupported_world: Dictionary = legacy_world.duplicate(true)
     unsupported_world["version"] = 3
+    var unsupported_before: Dictionary = unsupported_world.duplicate(true)
     var rejected_export: Dictionary = bridge.call("serialize_world_save", unsupported_world)
     assert(not rejected_export.get("ok", false))
-    assert(unsupported_world == legacy_world)
+    assert(unsupported_world == unsupported_before)
 
     print("SurvivalWorldBridge save adapter integration tests passed.")
     quit()
