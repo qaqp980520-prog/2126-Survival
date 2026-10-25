@@ -60,8 +60,8 @@ func _build_ui() -> void:
 	grid.columns = GRID_SIZE
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
 	layout.add_child(grid)
 
 	status_label = Label.new()
@@ -100,7 +100,7 @@ func _rebuild_grid() -> void:
 		for x in range(GRID_SIZE):
 			var cell := Vector2i(x, y)
 			var button := Button.new()
-			button.custom_minimum_size = Vector2(72, 48)
+			button.custom_minimum_size = Vector2(64, 38)
 			button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			button.text = "?"
