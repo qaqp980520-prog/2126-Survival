@@ -12,12 +12,29 @@ signal item_dropped(item_id: String, amount: int)
 var inventory: RefCounted
 
 func _ready() -> void:
-	if inventory_script != null:
-		inventory = inventory_script.new()
-	else:
-		# class_name lookup is available after Godot's script class scan.
-		inventory = SurvivalInventory.new()
+	if inventory == null:
+		if inventory_script != null:
+			inventory = inventory_script.new()
+		else:
+			# class_name lookup is available after Godot's script class scan.
+			inventory = SurvivalInventory.new()
 	_emit_inventory_changed()
+
+## Allows an existing world controller or save loader to inject the single
+## inventory instance instead of creating a second independent source of truth.
+## Call before the world begins handling pickups/mining.
+func bind_inventory(shared_inventory: RefCounted) -> bool:
+	if shared_inventory == null:
+		return false
+	for required_method in ["add_item", "remove_item", "total_weight_kg", "carry_limit_kg", "movement_multiplier", "can_jump", "to_save_dict", "load_save_dict"]:
+		if not shared_inventory.has_method(required_method):
+			return false
+	inventory = shared_inventory
+	_emit_inventory_changed()
+	return true
+
+func has_bound_inventory() -> bool:
+	return inventory != null
 
 func collect_world_item(item_id: String, amount: int = 1) -> bool:
 	if not _is_valid_amount(item_id, amount):
