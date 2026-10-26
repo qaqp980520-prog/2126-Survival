@@ -90,13 +90,15 @@
 
 
 ## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (PR #34 candidate)
-- Main baseline verified before this PR: \`619930ad56f9d5b8b3462bc1cb25b16d53601523\`; PR #32's latest pre-merge head passed Godot 4.3 CI Run #74 (40274143623), 32 steps.
-- PR #34: \`https://github.com/qaqp980520-prog/2126-Survival/pull/34\`, branch \`feature/mineral-vein-stream-persistence-2026-10-26\`; current head recorded separately in GitHub. Not merged until the current head passes full shared CI.
-- Extends \`systems/MineralVeinRegistry.gd\` to retain records for unloaded chunk IDs, save state before unregister, restore the same stable ID on reload, and apply offline regeneration. Re-registering the same live node is idempotent and cannot overwrite live stock from a stale snapshot.
-- Tests: \`tests/mineral_catalog_test.gd\` now covers unloaded stable IDs, duplicate same-node registration, and the disabled-regeneration clock reset; \`tests/mineral_vein_chunk_stream_test.gd\` covers unload/save/free/reload/offline regen and atomic rejection of invalid records.
-- CI: \`.github/workflows/godot-validation.yml\` runs the dedicated chunk-stream test and rejects \`SCRIPT ERROR\`, \`ERROR:\`, and \`FAIL:\` output. Latest head needs a fresh run after the final code/doc commits; no earlier cancelled run counts as evidence.
-- Design note: \`docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md\`.
-- Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister using deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
+- Main baseline before PR #34 was 619930ad56f9d5b8b3462bc1cb25b16d53601523. PR #32's latest pre-merge head passed Godot 4.3 CI Run #74 (40274143623), 32 steps.
+- PR #34: https://github.com/qaqp980520-prog/2126-Survival/pull/34; branch feature/mineral-vein-stream-persistence-2026-10-26. Candidate remains Draft and must not merge until the latest head passes the full shared regression.
+- systems/MineralVeinRegistry.gd now retains records for unloaded chunk IDs, captures state before unregister, restores the same stable ID on reload, and applies offline regeneration. Re-registering the same live node is idempotent and cannot overwrite live stock from a stale snapshot.
+- Tests: tests/mineral_catalog_test.gd covers unloaded stable IDs, duplicate same-node registration, and the disabled-regeneration clock reset; tests/mineral_vein_chunk_stream_test.gd covers unload/save/free/reload/offline regen and atomic invalid-data rejection.
+- CI: .github/workflows/godot-validation.yml runs the dedicated chunk-stream test and rejects SCRIPT ERROR, ERROR:, and FAIL: output. Run 40275422315 failed on an unavailable global class annotation; the registry now uses Variant after validating the preloaded script instance. Because the index changed in this commit, the exact resulting head needs a fresh CI run.
+- Design note: docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md.
+- Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
 
-## Run 7 — Pinball baseline correction
-- KROLL Magnetic Pinball M0.1 remains a Draft PR #33 until a clean shared CI is run against the current main after PR #34. Its latest previous shared run had stale base metadata and is not accepted as final integration evidence.
+## Run 7 — KROLL Magnetic Pinball M0.1
+- PR #36 merged to main as abe695c08adc26b699033d9d500dadd98fcb8b64 after dedicated CI Run 40275642300 and shared Godot 4.3 CI Run 40275642253 both succeeded. Shared run base SHA was 619930ad56f9d5b8b3462bc1cb25b16d53601523 and guarded logs had no actual SCRIPT ERROR, ERROR:, or FAIL output.
+- PR #33 was closed without merge because its shared run metadata retained the older base. PR #36 was the clean current-main replacement and includes touch-drag control-transfer regression coverage.
+- No manual GUI playtest or iPhone device validation is claimed.
