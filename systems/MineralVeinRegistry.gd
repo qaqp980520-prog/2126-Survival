@@ -55,12 +55,12 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 			return false
 		var probe = MiningNode.new()
 		probe.mineral_id = _veins[key].mineral_id
-		var valid: bool = probe.load_save_dict(record, now_unix)
+		var valid: bool = probe.load_save_dict(record, now_unix, false)
 		probe.free()
 		if not valid:
 			return false
 	for key in records.keys():
-		if not _veins[key].load_save_dict(records[key], now_unix):
+		if not _veins[key].load_save_dict(records[key], now_unix, false):
 			return false
 		if auto_apply_elapsed_time_on_restore:
 			_veins[key].apply_elapsed_regeneration(now_unix)
