@@ -12,8 +12,10 @@ func _run() -> void:
     var initial_time: float = float(game.get("_time_left"))
     _expect(initial_time <= 45.0 and initial_time > 44.0, "game timer initializes near 45 seconds after first frame")
     # Isolate the keyboard-dash path from random spawns so this smoke test is deterministic.
-    (game.get("_cells") as Array).clear()
-    (game.get("_enemies") as Array).clear()
+    var initial_cells: Array = game.get("_cells")
+    initial_cells.clear()
+    var initial_enemies: Array = game.get("_enemies")
+    initial_enemies.clear()
     game.set("_spawn_timer", 999.0)
     game.set("_cell_spawn_timer", 999.0)
     var dash_key := InputEventKey.new()
