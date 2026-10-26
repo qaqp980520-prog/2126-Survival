@@ -151,3 +151,15 @@
 - Current status: changes committed to main; latest Godot headless CI result must be checked before claiming engine validation passed. Graphical manual playtest and iPhone test remain outstanding.
 
 - Camera/avatar follow-up: root prototype now has a visible primitive humanoid in third-person mode and `V` toggles first-person mode; first-person hides the avatar to prevent camera clipping. Headless camera-toggle regression coverage is included in `tests/backrooms_portal_playground_test.gd`.
+
+
+## 2026-10-26 Run 11 — Sentinel Escape + persistent shadow settings + mineral streaming reconciliation
+- Current implementation branch merged: PR #49; merge commit `2cca29d30481a3943e07600cf4b73a757f7ea976`. Parent/main base before merge: `2d7f346f1d7d199278f4e5896c1fdb506d850a55`.
+- Exact implementation head `d4dc2fa58274e30d82d48cf647aa9124fc014aae` passed Godot 4.3 CI Run #181 (`40316093821`) before merge. Verified success markers include settings profile/integration, MineralGridStreamingDirector, Signal Siphon rules/runtime, and Sentinel Escape rules/runtime tests.
+- KROLL Sentinel Escape: `daily_games/KROLL_Sentinel_Protocol/`; collect 8 energy cells, avoid security drones, short nonviolent dash; keyboard/touch paths; no external assets.
+- KROLL Signal Siphon remains included at `daily_games/KROLL_Signal_Siphon/`.
+- Backrooms settings persistence now saves camera mode, mouse sensitivity, and shadow/graphics quality. Fluorescent flicker is automatic (no user toggle); legacy `flicker_enabled` config keys are ignored. The shadow-quality toggle controls deterministic local shadows and procedural detail.
+- MineralGridStreamingDirector and its explicit CI test are included; still synchronous/factory-driven and not wired to the production world generator.
+- Superseded PR #46, #47, #48 are closed without merge. PR #49 is merged.
+- Main push CI Run #182 (`40316354828`) was still in progress at index-update start; the merged code head already passed exact-head PR CI Run #181. The index-sync PR must also pass its own CI before merge.
+- Local GUI/manual play, GPU shader compilation check, and iPhone device test remain unverified.
