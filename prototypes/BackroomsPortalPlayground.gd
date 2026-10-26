@@ -39,6 +39,7 @@ func _ready() -> void:
     bridge = BridgeScript.new()
     bridge.name = "SurvivalWorldBridge"
     add_child(bridge)
+    player.bind_world_bridge(bridge)
     _build_surface()
     _prepare_maze_materials()
     backrooms_world.visible = false
