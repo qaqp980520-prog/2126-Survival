@@ -53,6 +53,7 @@ func _test_super_heavy_jump_boundary_and_recovery() -> void:
 	assert(bridge.drop_item("rock", 1))
 	assert(not inventory.is_super_heavy())
 	assert(bridge.call("can_player_jump"))
+	bridge.free()
 
 func _test_invalid_item_and_amount() -> void:
 	var inventory = InventoryScript.new()

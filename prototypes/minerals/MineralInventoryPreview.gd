@@ -8,9 +8,13 @@ const OreVisual = preload("res://prototypes/minerals/MineralOreVisual.gd")
 @export var random_seed: int = 2126
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	refresh_preview()
 
 func refresh_preview() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()

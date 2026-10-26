@@ -9,6 +9,9 @@ func _ready() -> void:
 	_rng.randomize()
 
 func play_hit(mineral_id: String, impact_position: Vector3) -> void:
+	# Dedicated/headless runs validate mining logic, not GPU particle rendering.
+	if DisplayServer.get_name() == "headless":
+		return
 	var data: Dictionary = Catalog.get_mineral(mineral_id)
 	if data.is_empty():
 		return
@@ -50,6 +53,9 @@ func _spawn_burst(at_position: Vector3, tint: Color, amount: int) -> void:
 	draw_mesh.material = mat
 	particles.draw_pass_1 = draw_mesh
 	add_child(particles)
-	particles.global_position = at_position
+	if particles.is_inside_tree():
+		particles.global_position = at_position
+	else:
+		particles.position = at_position
 	particles.emitting = true
 	particles.finished.connect(particles.queue_free)

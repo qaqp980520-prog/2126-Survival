@@ -85,7 +85,16 @@ jobs:
       - name: Run KROLL Gravity Lander rules tests
         run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/rules_test.gd
       - name: Run KROLL Gravity Lander runtime smoke test
-        run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/game_smoke_test.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Gravity Lander smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Gravity Lander runtime smoke test passed.'
       - name: Import and parse KROLL Core Defense
         run: godot --headless --path daily_games/KROLL_Core_Defense --editor --quit
       - name: Run KROLL Core Defense rules tests
@@ -95,21 +104,66 @@ jobs:
       - name: Run Backrooms portal director tests
         run: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd
       - name: Run Backrooms portal visual scene smoke test
-        run: godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during portal scene tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms portal visual scene smoke test passed.'
       - name: Run Backrooms portal playground integration test
-        run: godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during portal playground integration tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms portal playground integration test passed.'
       - name: Run inventory weight boundary regression tests
-        run: godot --headless --path . --script res://tests/inventory_weight_boundaries.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/inventory_weight_boundaries.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during inventory weight tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Inventory weight boundary regression tests passed.'
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
         run: godot --headless --path . --script res://tests/inventory_save_adapter.gd
       - name: Run world bridge save adapter integration test
-        run: godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during world bridge integration tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'SurvivalWorldBridge save adapter integration tests passed.'
       - name: Run world bridge binding lifecycle regression test
         run: godot --headless --path . --script res://tests/world_bridge_binding_test.gd
       - name: Run mineral catalog and inventory compatibility tests
-        run: godot --headless --path . --script res://tests/mineral_catalog_test.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_catalog_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Godot reported script/runtime errors during mineral regression tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral catalog regression tests passed.'
       - name: Import and parse KROLL Freight Sorter
         run: godot --headless --path daily_games/KROLL_Freight_Sorter --editor --quit
       - name: Run KROLL Freight Sorter rules tests

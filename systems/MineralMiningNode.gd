@@ -30,18 +30,21 @@ func _ready() -> void:
 		return
 	if last_regen_unix <= 0:
 		last_regen_unix = Time.get_unix_time_from_system()
-	var vfx := get_node_or_null(vfx_path)
-	if vfx == null:
-		var created_vfx := MiningVFX.new()
-		created_vfx.name = "MineralMiningVFX"
-		add_child(created_vfx)
-		vfx_path = get_path_to(created_vfx)
-	var visual := get_node_or_null("MineralOreVisual")
-	if visual == null:
-		var created_visual := OreVisual.new()
-		created_visual.name = "MineralOreVisual"
-		created_visual.mineral_id = mineral_id
-		add_child(created_visual)
+	# Dedicated/headless servers do not need renderer resources. Keep gameplay and
+	# persistence logic active while avoiding dummy-renderer mesh errors in CI.
+	if DisplayServer.get_name() != "headless":
+		var vfx := get_node_or_null(vfx_path)
+		if vfx == null:
+			var created_vfx := MiningVFX.new()
+			created_vfx.name = "MineralMiningVFX"
+			add_child(created_vfx)
+			vfx_path = get_path_to(created_vfx)
+		var visual := get_node_or_null("MineralOreVisual")
+		if visual == null:
+			var created_visual := OreVisual.new()
+			created_visual.name = "MineralOreVisual"
+			created_visual.mineral_id = mineral_id
+			add_child(created_visual)
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
 	apply_elapsed_regeneration()
@@ -52,7 +55,7 @@ func _process(_delta: float) -> void:
 ## Regenerates from elapsed wall-clock seconds, including time while the game was closed.
 ## Supplying now_unix makes deterministic tests possible. Returns units restored.
 func apply_elapsed_regeneration(now_unix: int = -1) -> int:
-	var now := now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	if now < 0:
 		return 0
 	if last_regen_unix <= 0:
@@ -133,7 +136,7 @@ func to_save_dict() -> Dictionary:
 
 ## Older schema-v1 saves without regeneration fields remain valid.
 ## Invalid data is rejected before any live state changes.
-func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
+func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = true) -> bool:
 	var schema_value: Variant = data.get("schema_version", null)
 	if not _is_integer_in_range(schema_value, 1, 2):
 		return false
@@ -165,13 +168,13 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 		if not _is_integer_in_range(interval_value, 1, 86400):
 			return false
 		saved_interval = int(interval_value)
-	var now := now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
-	var saved_timestamp := now
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	var saved_timestamp: int = now
 	if schema == 2 and not data.has("last_regen_unix"):
 		return false
 	if data.has("last_regen_unix"):
 		var timestamp_value: Variant = data["last_regen_unix"]
-		var minimum_timestamp := 1 if schema == 2 else 0
+		var minimum_timestamp: int = 1 if schema == 2 else 0
 		if not _is_integer_in_range(timestamp_value, minimum_timestamp, 4000000000):
 			return false
 		saved_timestamp = int(timestamp_value)
@@ -182,7 +185,8 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 	last_regen_unix = saved_timestamp
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
-	apply_elapsed_regeneration(now)
+	if apply_elapsed:
+		apply_elapsed_regeneration(now)
 	return true
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
