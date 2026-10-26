@@ -109,7 +109,16 @@ jobs:
       - name: Run world bridge binding lifecycle regression test
         run: godot --headless --path . --script res://tests/world_bridge_binding_test.gd
       - name: Run mineral catalog and inventory compatibility tests
-        run: godot --headless --path . --script res://tests/mineral_catalog_test.gd
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_catalog_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Godot reported script/runtime errors during mineral regression tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral catalog regression tests passed.'
       - name: Import and parse KROLL Freight Sorter
         run: godot --headless --path daily_games/KROLL_Freight_Sorter --editor --quit
       - name: Run KROLL Freight Sorter rules tests
