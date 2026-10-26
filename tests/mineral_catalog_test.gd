@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_test_inventory_preview_builds_single_model()
 	_test_vein_save_load_validation()
 	_test_vein_depletion_restore_and_signal()
+	_test_offline_regeneration_and_schema_compatibility()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -155,3 +156,42 @@ func _test_vein_depletion_restore_and_signal() -> void:
 	assert(mining.remaining_units == 10000, "Vein stock must respect the upper cap")
 	mining.queue_free()
 	bridge.queue_free()
+
+func _test_offline_regeneration_and_schema_compatibility() -> void:
+	var mining = MiningNode.new()
+	mining.mineral_id = "copper_ore"
+	mining.remaining_units = 2
+	mining.max_vein_units = 5
+	mining.regen_seconds_per_unit = 60
+	root.add_child(mining)
+	mining.last_regen_unix_time = 1000
+	assert(mining.apply_elapsed_regeneration(1059) == 0, "Partial interval must not regenerate")
+	assert(mining.remaining_units == 2)
+	assert(mining.apply_elapsed_regeneration(1120) == 2, "Two full intervals should restore two units")
+	assert(mining.remaining_units == 4)
+	assert(mining.last_regen_unix_time == 1120, "Only complete intervals should advance the timestamp")
+	assert(mining.apply_elapsed_regeneration(1090) == 0, "Clock rollback must not remove stock")
+	assert(mining.remaining_units == 4)
+	assert(mining.apply_elapsed_regeneration(1300) == 1, "Regeneration must stop at the configured cap")
+	assert(mining.remaining_units == 5)
+	var saved: Dictionary = mining.to_save_dict()
+	assert(int(saved["schema_version"]) == 2)
+	var restored = MiningNode.new()
+	restored.mineral_id = "copper_ore"
+	root.add_child(restored)
+	assert(restored.load_save_dict(saved))
+	assert(restored.remaining_units == 5)
+	assert(restored.max_vein_units == 5)
+	assert(restored.regen_seconds_per_unit == 60)
+	assert(restored.last_regen_unix_time == 1300)
+	var legacy = MiningNode.new()
+	legacy.mineral_id = "copper_ore"
+	root.add_child(legacy)
+	assert(legacy.load_save_dict({"schema_version": 1, "mineral_id": "copper_ore", "remaining_units": 3}))
+	assert(legacy.remaining_units == 3, "Schema v1 saves must remain readable")
+	assert(legacy.last_regen_unix_time > 0, "Legacy saves start tracking regen at load time")
+	assert(not restored.load_save_dict({"schema_version": 2, "mineral_id": "copper_ore", "remaining_units": 1, "max_vein_units": 5, "regen_seconds_per_unit": 60, "last_regen_unix_time": -1}))
+	assert(restored.remaining_units == 5, "Invalid regen metadata must not mutate state")
+	mining.queue_free()
+	restored.queue_free()
+	legacy.queue_free()
