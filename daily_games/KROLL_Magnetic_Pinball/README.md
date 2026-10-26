@@ -12,6 +12,7 @@ A self-contained Godot 4.3+ arcade pinball prototype. All visuals are drawn by G
 - A or Left Arrow: left flipper.
 - D or Right Arrow: right flipper.
 - R: restart the table.
+- Touch: tap the shooter lane to launch; hold the left/right lower pads to operate each flipper.
 
 ## Gameplay
 Score 100 points for each bumper hit. The table starts with three balls. Letting a ball drain consumes one ball; the table ends at zero. The ball uses a deterministic custom 2D physics loop to keep the prototype and its rules tests simple and reproducible.
@@ -22,5 +23,5 @@ Score 100 points for each bumper hit. The table starts with three balls. Letting
 - The repository's Godot 4.3 CI is the engine validation source. A passing headless run is not a substitute for manual visual playtesting or iPhone device testing.
 
 ## Known limits
-- Single-screen table, one ball at a time, no saved high score, sound, multiball, or touch controls.
+- Single-screen table, one ball at a time, no saved high score, sound, or multiball.
 - Collision/physics are custom approximations rather than Godot rigid-body simulation.
