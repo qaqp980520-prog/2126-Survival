@@ -42,6 +42,7 @@ func _run_tests() -> void:
 	_check(str(game.state) == "showing", "Restart should begin a new sequence")
 	_check(int(game.round_number) == 1 and int(game.lives) == 3 and int(game.score) == 0, "Restart must reset round, lives and score")
 	game.queue_free()
+	await process_frame
 	_finish()
 
 func _check(condition: bool, message: String) -> void:
