@@ -176,3 +176,12 @@
 - PR #51 keyboard dash fix merged as `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; exact-head Godot 4.3 CI Run #185 (`40316901157`) succeeded with explicit dash timer/cooldown assertions.
 - Current main after the documentation consolidation is `f6732519736697725a612e4c3a1a8836591c7aaa`. Main push CI Run #188 (`40317515975`) is pending at the time of this index update; the PR-level exact-head CI Run #187 succeeded before the docs merge.
 - GitHub open PR list was empty after closing superseded drafts #1/#2/#6/#8 and old feature branches #46/#47/#48.
+
+
+## 2026-10-26 Run 12 — Backrooms display/settings follow-up
+- Wall texture source replaced with a fine, low-contrast yellow repeating wallpaper pattern in `assets/textures/backrooms_wallpaper.svg`; engine-rendered appearance remains pending a graphical playtest.
+- Settings profile now persists `resolution_index` and `shadows_enabled`, validates their types/ranges, and keeps procedural geometry quality separate from dynamic shadow toggling.
+- Resolution presets update the window size and viewport base resolution; settings UI scales with the selected preset.
+- Regression coverage expanded in `tests/backrooms_settings_profile_test.gd` and `tests/backrooms_settings_integration_test.gd` for resolution range, save/load round-trip, dropdown restoration, and independent shadows.
+- Key commits: wallpaper `333ed896`; profile `06bd68f3`; display settings `f4452b90`; profile tests `46ef882f`; integration tests `625629ef`; geometry/shadow separation `0daf395b` and `973e25d5`.
+- Exact-head Godot 4.3 CI result must be checked before declaring tests passed. Manual graphical testing and iPhone device testing are still outstanding.
