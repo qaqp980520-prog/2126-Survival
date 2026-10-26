@@ -17,6 +17,9 @@ func _initialize() -> void:
 	_test_inventory_preview_builds_single_model()
 	_test_vein_save_load_validation()
 	_test_vein_depletion_restore_and_signal()
+	_test_offline_regeneration_round_trip()
+	_test_regeneration_caps_and_clock_rollback()
+	_test_legacy_vein_save_without_regen_fields()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -152,6 +155,59 @@ func _test_vein_depletion_restore_and_signal() -> void:
 	assert(mining.remaining_units == 0)
 	assert(depleted_events.size() == 2, "Restored vein should emit depletion once again")
 	mining.restore_vein(20000)
-	assert(mining.remaining_units == 10000, "Vein stock must respect the upper cap")
+	assert(mining.remaining_units == mining.max_units, "Vein stock must respect its configured maximum")
 	mining.queue_free()
 	bridge.queue_free()
+
+func _test_offline_regeneration_round_trip() -> void:
+	var mining = MiningNode.new()
+	mining.mineral_id = "gold_ore"
+	mining.max_units = 5
+	mining.remaining_units = 1
+	mining.regen_interval_seconds = 60
+	root.add_child(mining)
+	mining.last_regen_unix = 1000
+	var saved: Dictionary = mining.to_save_dict()
+	var restored = MiningNode.new()
+	restored.mineral_id = "gold_ore"
+	root.add_child(restored)
+	assert(restored.load_save_dict(saved, 1120))
+	assert(restored.remaining_units == 3, "Two elapsed intervals should restore two units while offline")
+	assert(restored.last_regen_unix == 1120)
+	assert(int(restored.to_save_dict()["max_units"]) == 5)
+	mining.queue_free()
+	restored.queue_free()
+
+func _test_regeneration_caps_and_clock_rollback() -> void:
+	var mining = MiningNode.new()
+	mining.max_units = 5
+	mining.remaining_units = 4
+	mining.regen_interval_seconds = 60
+	root.add_child(mining)
+	mining.last_regen_unix = 1000
+	assert(mining.apply_elapsed_regeneration(1300) == 1)
+	assert(mining.remaining_units == 5 and mining.last_regen_unix == 1300)
+	mining.remaining_units = 4
+	assert(mining.apply_elapsed_regeneration(1359) == 0)
+	assert(mining.apply_elapsed_regeneration(1360) == 1)
+	assert(mining.remaining_units == 5)
+	mining.remaining_units = 1
+	mining.last_regen_unix = 2000
+	assert(mining.apply_elapsed_regeneration(1990) == 0)
+	assert(mining.remaining_units == 1 and mining.last_regen_unix == 2000, "Clock rollback must not change stock or timestamp")
+	mining.queue_free()
+
+func _test_legacy_vein_save_without_regen_fields() -> void:
+	var mining = MiningNode.new()
+	mining.mineral_id = "coal_ore"
+	mining.max_units = 5
+	root.add_child(mining)
+	var legacy := {"schema_version": 1, "mineral_id": "coal_ore", "remaining_units": 2}
+	assert(mining.load_save_dict(legacy, 1200))
+	assert(mining.remaining_units == 2)
+	assert(mining.max_units == 5)
+	assert(mining.last_regen_unix == 1200, "Legacy save should start a fresh regen clock")
+	var before := mining.to_save_dict()
+	assert(not mining.load_save_dict({"schema_version": 1, "mineral_id": "coal_ore", "remaining_units": 6, "max_units": 5}, 1200))
+	assert(mining.remaining_units == int(before["remaining_units"]), "Invalid maximum must not partially mutate the vein")
+	mining.queue_free()
