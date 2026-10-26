@@ -4,7 +4,7 @@ extends RefCounted
 const DEFAULT_PATH: String = "user://2126_backrooms_settings.cfg"
 
 static func defaults() -> Dictionary:
-    return {"camera_mode": 0, "mouse_sensitivity": 2.5, "high_graphics": false, "shadows_enabled": false, "resolution_index": 0}
+    return {"camera_mode": 0, "mouse_sensitivity": 2.5, "high_graphics": true, "shadows_enabled": false, "resolution_index": 0}
 
 static func sanitize(raw: Dictionary) -> Dictionary:
     var result := defaults()
@@ -14,7 +14,7 @@ static func sanitize(raw: Dictionary) -> Dictionary:
     var sensitivity_value: Variant = raw.get("mouse_sensitivity", 2.5)
     if typeof(sensitivity_value) == TYPE_INT or typeof(sensitivity_value) == TYPE_FLOAT:
         result["mouse_sensitivity"] = clampf(float(sensitivity_value), 0.5, 6.0)
-    var graphics_value: Variant = raw.get("high_graphics", false)
+    var graphics_value: Variant = raw.get("high_graphics", true)
     if typeof(graphics_value) == TYPE_BOOL:
         result["high_graphics"] = graphics_value
     var shadows_value: Variant = raw.get("shadows_enabled", false)
@@ -33,7 +33,7 @@ static func load_settings(path: String = DEFAULT_PATH) -> Dictionary:
     return sanitize({
         "camera_mode": config.get_value("controls", "camera_mode", 0),
         "mouse_sensitivity": config.get_value("controls", "mouse_sensitivity", 2.5),
-        "high_graphics": config.get_value("graphics", "high_graphics", false),
+        "high_graphics": config.get_value("graphics", "high_graphics", true),
         "shadows_enabled": config.get_value("graphics", "shadows_enabled", false),
         "resolution_index": config.get_value("display", "resolution_index", 0),
         "flicker_enabled": config.get_value("graphics", "flicker_enabled", true)
