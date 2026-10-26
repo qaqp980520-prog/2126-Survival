@@ -18,6 +18,15 @@ func _run() -> void:
 	assert(game.ball_velocity.y < 0.0)
 	game.step_simulation(0.016)
 	assert(game.ball_position != initial_position, "Launched ball should advance")
+	game.ball_position = Vector2(230.0, 250.0)
+	game.ball_velocity = Vector2(0.0, 100.0)
+	game.step_simulation(0.016)
+	assert(game.score == 100, "Contact with a bumper should score exactly once")
+	game.ball_position = Vector2(400.0, 960.0)
+	game.ball_velocity = Vector2.ZERO
+	game.ball_in_play = true
+	game.step_simulation(0.016)
+	assert(game.lives == 2 and not game.ball_in_play, "A drained ball should consume one life")
 	game.reset_game()
 	assert(game.lives == 3 and game.score == 0 and not game.ball_in_play)
 	game.queue_free()
