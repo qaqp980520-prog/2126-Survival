@@ -29,6 +29,24 @@ func _run() -> void:
 	assert(game.lives == 2 and not game.ball_in_play, "A drained ball should consume one life")
 	game.reset_game()
 	assert(game.lives == 3 and game.score == 0 and not game.ball_in_play)
+	var launch_touch := InputEventScreenTouch.new()
+	launch_touch.index = 0
+	launch_touch.position = Vector2(700.0, 700.0)
+	launch_touch.pressed = true
+	game._input(launch_touch)
+	assert(game.ball_in_play, "Touching the shooter lane should launch the ball")
+	game.reset_game()
+	var flipper_touch := InputEventScreenTouch.new()
+	flipper_touch.index = 1
+	flipper_touch.position = Vector2(200.0, 900.0)
+	flipper_touch.pressed = true
+	game._input(flipper_touch)
+	game._physics_process(0.016)
+	assert(game.left_flipper_active, "Holding the left touch pad should activate the left flipper")
+	flipper_touch.pressed = false
+	game._input(flipper_touch)
+	game._physics_process(0.016)
+	assert(not game.left_flipper_active, "Releasing the touch pad should release the flipper")
 	game.queue_free()
 	print("KROLL Magnetic Pinball game smoke test passed.")
 	quit(0)
