@@ -64,16 +64,17 @@
 - 本機沒有 Godot 執行檔；Run 5 程式碼已合併 main，Godot 4.3 引擎驗證證據為 PR #18 的 CI run #34。
 
 
-## 2026-10-26 Run 6 — KROLL Freight Sorter（待 CI）
+## 2026-10-26 Run 6 — KROLL Freight Sorter M0.1（已驗證／已合併）
 - 小遊戲路徑：daily_games/KROLL_Freight_Sorter/；60 秒貨物分流反應遊戲，原礦／醫療／資料核心分流至對應倉口，危險貨箱必須隔離；無外部素材。
 - 包含 project.godot、main.tscn、main.gd、rules.gd、規則測試、場景 smoke test、README。
-- CI workflow 已新增專案匯入、規則測試與場景 smoke test；新 PR 的 Godot 4.3 CI 尚待執行。
+- PR #25 已合併，commit `8baf8a7653ec8a255c159e6fd1c4b3a24c1afe21`；Godot 4.3 CI Run #44 success，29 個主要步驟全部成功。
 - 本機沒有 Godot 執行檔；尚未進行人工視覺或 iPhone 測試。
 
 
-## 2026-10-26｜離線礦脈再生 M0.1（PR #28，CI 待完成）
+## 2026-10-26｜離線礦脈再生 M0.1（已驗證／已合併）
 - 修改：systems/MineralMiningNode.gd；schema 升至 v2，新增 max_units、regen_interval_seconds、last_regen_unix，支援依 Unix 時間進行線上／離線再生、保留部分間隔、容量上限與時鐘倒退防護。
 - 相容：仍接受舊 schema-v1 存檔；缺少再生欄位時從載入時間開始計時。無效 schema、容量、間隔、時間戳或存量會在改動狀態前拒絕。
 - 測試：tests/mineral_catalog_test.gd 新增離線回補、部分間隔、容量上限、時鐘倒退、schema-v2 往返、舊 schema-v1 相容與無效資料拒絕。
 - 文件：docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md。
-- PR #28：https://github.com/qaqp980520-prog/2126-Survival/pull/28。舊候選 PR #26、#27 已關閉並由 PR #28 取代；Run #45／#50 屬於舊候選，不作為 PR #28 最新 head 的通過證據。
+- PR #28 已合併 main，commit `4990b15700654bbadeac29784662c2e7b9a58bf8`；Godot 4.3 CI Run #55 success，31 個 workflow steps 全部成功。
+- 舊候選 PR #26、#27 已關閉且未合併；Run #45／#50 為舊候選紀錄，Run #53／#54 cancelled，不作為成功證據。

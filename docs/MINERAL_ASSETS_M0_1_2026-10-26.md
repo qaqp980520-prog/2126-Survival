@@ -43,4 +43,4 @@
 - `restore_vein` 現在以礦脈自身最大存量為上限；時鐘倒退不會增加存量或倒退時間戳。
 - 新測試涵蓋離線 120 秒回補、部分間隔、容量上限、時鐘倒退、舊存檔相容與無效欄位拒絕。
 - 文件：`docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md`。
-- 狀態：PR #28 為目前唯一有效候選；PR #26、#27 已關閉為 superseded。Run #45／#50 屬於舊候選，不作為 PR #28 最新 head 的通過證據；需等待 PR #28 的最新 Godot CI。
+- 狀態：PR #28 已合併 main，merge commit `4990b15700654bbadeac29784662c2e7b9a58bf8`；Godot 4.3 CI Run #55 success，31 個 workflow steps 全部成功。PR #26、#27 已關閉為 superseded，沒有合併。
