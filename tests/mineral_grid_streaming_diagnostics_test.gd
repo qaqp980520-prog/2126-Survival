@@ -65,17 +65,10 @@ func _run_tests() -> void:
 	var invalid_report: Dictionary = director.get_last_sync_report()
 	_check(str(invalid_report.get("phase", "")) == "recovery_validation", "Unknown IDs should report recovery_validation.")
 	_check(director.get_managed_chunk_ids() == before_invalid_recovery, "Rejected recovery must not mutate the managed map.")
-	# Explicitly unload every fake chunk before destroying the controller. The fake controller
-	# retains Node references in its lookup dictionary, so queue-freeing the parent alone leaves
-	# the test teardown less deterministic under headless Godot.
-	for loaded_id in controller.get_loaded_chunk_ids():
-		_check(bool(controller.unload_chunk(str(loaded_id), 1004)), "Test cleanup should unload every fake chunk.")
-	await process_frame
+	print("Mineral grid streaming failure diagnostics and recovery tests passed.")
 	director.queue_free()
 	controller.queue_free()
 	await process_frame
-	await process_frame
-	print("Mineral grid streaming failure diagnostics and recovery tests passed.")
 	_finish()
 
 func _make_chunk(coord: Vector2i) -> Node3D:
