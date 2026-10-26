@@ -1,0 +1,53 @@
+name: KROLL Magnetic Pinball validation
+
+on:
+  push:
+    paths:
+      - 'daily_games/KROLL_Magnetic_Pinball/**'
+      - '.github/workflows/kroll-pinball-validation.yml'
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Magnetic_Pinball/**'
+      - '.github/workflows/kroll-pinball-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Godot and project inputs
+        run: |
+          godot --version
+          test -f daily_games/KROLL_Magnetic_Pinball/project.godot
+          test -f daily_games/KROLL_Magnetic_Pinball/main.tscn
+          test -f daily_games/KROLL_Magnetic_Pinball/main.gd
+          test -f daily_games/KROLL_Magnetic_Pinball/rules.gd
+      - name: Import and parse pinball project
+        run: godot --headless --path daily_games/KROLL_Magnetic_Pinball --editor --quit
+      - name: Run pinball rules tests without hidden errors
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Magnetic_Pinball --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|Assertion failed'; then
+            echo "Godot reported script/runtime errors during pinball rules tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Magnetic Pinball rules tests passed.'
+      - name: Run pinball gameplay smoke test without hidden errors
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Magnetic_Pinball --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|Assertion failed'; then
+            echo "Godot reported script/runtime errors during pinball smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Magnetic Pinball game smoke test passed.'
