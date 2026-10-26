@@ -90,15 +90,12 @@
 
 
 ## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (PR #34 candidate)
-- Main baseline before PR #34 was 619930ad56f9d5b8b3462bc1cb25b16d53601523. PR #32's latest pre-merge head passed Godot 4.3 CI Run #74 (40274143623), 32 steps.
-- PR #34: https://github.com/qaqp980520-prog/2126-Survival/pull/34; branch feature/mineral-vein-stream-persistence-2026-10-26. Candidate remains Draft and must not merge until the latest head passes the full shared regression.
-- systems/MineralVeinRegistry.gd now retains records for unloaded chunk IDs, captures state before unregister, restores the same stable ID on reload, and applies offline regeneration. Re-registering the same live node is idempotent and cannot overwrite live stock from a stale snapshot.
-- Tests: tests/mineral_catalog_test.gd covers unloaded stable IDs, duplicate same-node registration, and the disabled-regeneration clock reset; tests/mineral_vein_chunk_stream_test.gd covers unload/save/free/reload/offline regen and atomic invalid-data rejection.
-- CI: .github/workflows/godot-validation.yml runs the dedicated chunk-stream test and rejects SCRIPT ERROR, ERROR:, and FAIL: output. Run 40275422315 failed on an unavailable global class annotation; the registry now uses Variant after validating the preloaded script instance. Because the index changed in this commit, the exact resulting head needs a fresh CI run.
+- Main now includes PR #36 Pinball merge abe695c08adc26b699033d9d500dadd98fcb8b64 and PR #35 strict Variant typing merge 6c6f2779541175b3cc372d3cb73319ceac98f354.
+- PR #34: https://github.com/qaqp980520-prog/2126-Survival/pull/34; branch feature/mineral-vein-stream-persistence-2026-10-26. Current code adds persistence for unloaded chunk IDs, unload-state capture, same-ID reload, deterministic saved-ID ordering, idempotent registration, atomic validation, and a clock reset when offline catch-up is disabled.
+- Tests: tests/mineral_catalog_test.gd covers unloaded stable IDs, idempotent same-node registration, and disabled-regeneration clock reset; tests/mineral_vein_chunk_stream_test.gd covers unload/save/free/reload/offline regeneration and invalid-data rejection.
+- CI guard in .github/workflows/godot-validation.yml runs the dedicated chunk-stream test and rejects SCRIPT ERROR, ERROR:, or FAIL output, requiring explicit success markers.
+- Run 40275877558 passed all 33 steps with clean guarded logs, including “Mineral catalog regression tests passed.” and “Mineral vein chunk-stream persistence tests passed.” Its base was abe695c08adc26b699033d9d500dadd98fcb8b64; main has since advanced to 6c6f2779541175b3cc372d3cb73319ceac98f354, so the updated index/head needs a fresh CI run against the latest base.
+- PR #35 strict Variant typing fix is merged as 6c6f2779541175b3cc372d3cb73319ceac98f354; CI Run 40275478307 passed with clean guarded logs.
+- PR #36 KROLL Magnetic Pinball M0.1 is merged as abe695c08adc26b699033d9d500dadd98fcb8b64; dedicated Run 40275642300 and shared Run 40275642253 passed. PR #33 was closed without merge as superseded.
 - Design note: docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md.
 - Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
-
-## Run 7 — KROLL Magnetic Pinball M0.1
-- PR #36 merged to main as abe695c08adc26b699033d9d500dadd98fcb8b64 after dedicated CI Run 40275642300 and shared Godot 4.3 CI Run 40275642253 both succeeded. Shared run base SHA was 619930ad56f9d5b8b3462bc1cb25b16d53601523 and guarded logs had no actual SCRIPT ERROR, ERROR:, or FAIL output.
-- PR #33 was closed without merge because its shared run metadata retained the older base. PR #36 was the clean current-main replacement and includes touch-drag control-transfer regression coverage.
-- No manual GUI playtest or iPhone device validation is claimed.
