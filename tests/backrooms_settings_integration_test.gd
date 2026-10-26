@@ -36,12 +36,17 @@ func _run() -> void:
     world.call("_toggle_graphics_quality")
     _expect(bool(player.call("is_third_person")), "camera setting updates live player")
     _expect(is_equal_approx(float(player.call("get_mouse_sensitivity")), 0.0042), "sensitivity setting updates live player")
-    _expect(bool(world.get("_high_graphics")), "shadow toggle enables high-quality mode")
+    _expect(bool(world.get("_high_graphics")), "geometry quality remains enabled independently of shadows")
+    _expect(bool(world.get("_shadows_enabled")), "shadow toggle enables dynamic shadows")
+    world.call("_on_resolution_changed", 1)
+    _expect(int(world.get("_settings")["resolution_index"]) == 1, "resolution selection updates active settings")
 
     var saved: Dictionary = SettingsProfile.load_settings(path)
     _expect(int(saved["camera_mode"]) == 1, "camera setting is persisted")
     _expect(is_equal_approx(float(saved["mouse_sensitivity"]), 4.2), "sensitivity setting is persisted")
-    _expect(bool(saved["high_graphics"]), "shadow quality is persisted")
+    _expect(bool(saved["high_graphics"]), "geometry quality is persisted")
+    _expect(bool(saved["shadows_enabled"]), "dynamic shadows are persisted")
+    _expect(int(saved["resolution_index"]) == 1, "resolution selection is persisted")
     _expect(not saved.has("flicker_enabled"), "flicker is not stored as a setting")
 
     world.queue_free()
@@ -53,14 +58,18 @@ func _run() -> void:
     var restored_player: Node = restored_world.get_node("Player")
     _expect(bool(restored_player.call("is_third_person")), "saved camera mode applies after restart")
     _expect(is_equal_approx(float(restored_player.call("get_mouse_sensitivity")), 0.0042), "saved sensitivity applies after restart")
-    _expect(bool(restored_world.get("_high_graphics")), "saved shadow quality applies after restart")
+    _expect(bool(restored_world.get("_high_graphics")), "saved geometry quality applies after restart")
+    _expect(bool(restored_world.get("_shadows_enabled")), "saved shadows apply after restart")
+    _expect(int(restored_world.get("_settings")["resolution_index"]) == 1, "saved resolution applies after restart")
     _expect(bool(restored_world.get("_flicker_enabled")), "fluorescent flicker remains automatic after restart")
     var restored_panel: PanelContainer = restored_world.get("_settings_panel")
     var slider := restored_panel.find_child("SensitivitySlider", true, false) as HSlider
     var graphics_button := restored_panel.find_child("GraphicsButton", true, false) as Button
     _expect(restored_panel.find_child("FlickerButton", true, false) == null, "no flicker toggle appears after restart")
     _expect(slider != null and is_equal_approx(slider.value, 4.2), "slider reflects saved sensitivity")
-    _expect(graphics_button != null and graphics_button.text.contains("光影") and graphics_button.text.contains("開"), "button reflects saved shadow quality")
+    _expect(graphics_button != null and graphics_button.text.contains("光影") and graphics_button.text.contains("開"), "button reflects saved shadow setting")
+    var resolution_option := restored_panel.find_child("ResolutionOption", true, false) as OptionButton
+    _expect(resolution_option != null and resolution_option.selected == 1, "resolution dropdown reflects saved selection")
 
     _expect(bool(restored_world.call("debug_spawn_portal")), "debug portal can be spawned for graphics regression")
     _expect(bool(restored_world.call("debug_enter_active_portal")), "player enters Backrooms for graphics regression")
