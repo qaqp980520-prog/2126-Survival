@@ -56,3 +56,14 @@
 - First-person mode hides the avatar to avoid the camera clipping through the head/body; third-person mode shows it.
 - Camera mode toggle is exposed as a method so headless integration tests can verify the two camera positions; graphical tests also check avatar visibility when a renderer is available.
 - The open draft PR #45 has overlapping older changes and is not being merged blindly; the current main branch now contains the relevant avatar/camera-toggle behavior plus the newer streaming and inventory fixes.
+
+
+## Run 12 follow-up — display, wallpaper, and settings persistence
+
+- Replaced the wall wallpaper SVG with a quieter yellow fine-stripe pattern and repeating low-contrast geometric details. This is a source asset change; final in-engine appearance still requires a graphical run.
+- Added persistent settings fields for the resolution preset and dynamic shadows, with validation and clamping during load.
+- Resolution changes update both the window size and Godot viewport base resolution so the setting is intended to change render resolution rather than merely stretch the same 1280×720 target.
+- Separated dynamic-shadow enablement from procedural geometry quality. Turning shadows off must not accidentally turn off detailed maze geometry.
+- Expanded settings profile tests for defaults, valid shadow state, and out-of-range resolution index; expanded integration tests for saved resolution, restored dropdown selection, and independent shadow state.
+- Latest code commits in this follow-up: `333ed896` wallpaper, `06bd68f3` settings persistence, `f4452b90` display/labels, `406458f6` geometry default, `9db8726a` compatibility, `46ef882f` profile tests, `0daf395b` independent shadow/geometry flags, `625629ef` integration tests.
+- Validation boundary: the commits are present on main, but the updated Godot 4.3 headless workflow must finish before claiming these tests pass. Manual graphical checks (windowed/fullscreen resolution, wallpaper mipmapping, shadows on/off) and iPhone testing remain outstanding.
