@@ -1,20 +1,19 @@
-# KROLL Sentinel Protocol M0.1
+# KROLL Sentinel Escape M0.1
 
-A self-contained top-down arena survival shooter for Godot 4.3+. Hold out for 45 seconds while KROLL security drones pursue the player.
+A self-contained top-down arcade survival game for Godot 4.3+. Collect eight energy cells while avoiding KROLL security drones for 45 seconds.
 
 ## Controls
 - WASD / arrow keys: move.
-- Mouse: aim.
-- Hold left mouse or Space: fire.
-- Mobile: drag on the left half to move; touch/drag on the right half to aim and fire.
-- R: redeploy after victory or defeat.
+- Space: short dash with cooldown.
+- Mobile: drag on the left half to move; tap the right half to dash toward that point.
+- R: redeploy after victory, defeat, or timeout.
 
 ## Rules
-- 3 core integrity.
-- Each drone eliminated gives 10 points.
-- Survive 45 seconds to secure the sector.
-- Three hits end the run.
-- No external assets, fonts, plugins, or third-party libraries.
+- Start with 3 core integrity.
+- Collect 8 energy cells before the 45-second extraction window closes.
+- Contact with a red security drone costs one integrity.
+- Dash grants a brief movement burst and has a 1.4-second cooldown.
+- No external assets, fonts, plugins, weapons, or third-party libraries.
 
 ## Open
 Use Godot Project Manager to open `daily_games/KROLL_Sentinel_Protocol/project.godot`.
@@ -26,4 +25,4 @@ godot --headless --path daily_games/KROLL_Sentinel_Protocol --script res://tests
 godot --headless --path daily_games/KROLL_Sentinel_Protocol --script res://tests/game_smoke_test.gd
 ```
 
-CI validation is the authoritative engine test until manual GUI and iPhone playtests are available.
+CI validation is the engine test source until manual GUI and iPhone playtests are available.
