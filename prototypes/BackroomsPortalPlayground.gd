@@ -176,9 +176,10 @@ func _toggle_flicker() -> void:
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
-        for cell_node in _loaded_cells.values():
-            if is_instance_valid(cell_node):
-                var cell_parent := cell_node.get_parent()
+        for cell_value in _loaded_cells.values():
+            var cell_node := cell_value as Node
+            if cell_node != null and is_instance_valid(cell_node):
+                var cell_parent: Node = cell_node.get_parent()
                 if cell_parent != null:
                     cell_parent.remove_child(cell_node)
                 cell_node.queue_free()
