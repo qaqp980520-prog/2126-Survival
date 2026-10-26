@@ -135,7 +135,7 @@ func _move_bullets(delta: float) -> void:
         for enemy_index in range(_enemies.size() - 1, -1, -1):
             var enemy: Dictionary = _enemies[enemy_index]
             var enemy_position: Vector2 = enemy["position"]
-            if Rules.hit_test(position, enemy_position, BULLET_RADIUS + ENEMY_RADIUS):
+            if Rules.hit_test(bullet_position, enemy_position, BULLET_RADIUS + ENEMY_RADIUS):
                 _enemies.remove_at(enemy_index)
                 _score += Rules.score_for_kill()
                 hit_enemy = true
