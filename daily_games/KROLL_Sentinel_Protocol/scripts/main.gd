@@ -126,10 +126,10 @@ func _move_bullets(delta: float) -> void:
     var size := get_viewport_rect().size
     for bullet_index in range(_bullets.size() - 1, -1, -1):
         var bullet: Dictionary = _bullets[bullet_index]
-        var position: Vector2 = bullet["position"]
+        var bullet_position: Vector2 = bullet["position"]
         var bullet_velocity: Vector2 = bullet["velocity"]
-        position += bullet_velocity * delta
-        bullet["position"] = position
+        bullet_position += bullet_velocity * delta
+        bullet["position"] = bullet_position
         bullet["life"] = float(bullet["life"]) - delta
         var hit_enemy := false
         for enemy_index in range(_enemies.size() - 1, -1, -1):
