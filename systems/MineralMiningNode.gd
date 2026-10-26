@@ -30,18 +30,21 @@ func _ready() -> void:
 		return
 	if last_regen_unix <= 0:
 		last_regen_unix = Time.get_unix_time_from_system()
-	var vfx := get_node_or_null(vfx_path)
-	if vfx == null:
-		var created_vfx := MiningVFX.new()
-		created_vfx.name = "MineralMiningVFX"
-		add_child(created_vfx)
-		vfx_path = get_path_to(created_vfx)
-	var visual := get_node_or_null("MineralOreVisual")
-	if visual == null:
-		var created_visual := OreVisual.new()
-		created_visual.name = "MineralOreVisual"
-		created_visual.mineral_id = mineral_id
-		add_child(created_visual)
+	# Dedicated/headless servers do not need renderer resources. Keep gameplay and
+	# persistence logic active while avoiding dummy-renderer mesh errors in CI.
+	if not OS.has_feature("headless"):
+		var vfx := get_node_or_null(vfx_path)
+		if vfx == null:
+			var created_vfx := MiningVFX.new()
+			created_vfx.name = "MineralMiningVFX"
+			add_child(created_vfx)
+			vfx_path = get_path_to(created_vfx)
+		var visual := get_node_or_null("MineralOreVisual")
+		if visual == null:
+			var created_visual := OreVisual.new()
+			created_visual.name = "MineralOreVisual"
+			created_visual.mineral_id = mineral_id
+			add_child(created_visual)
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
 	apply_elapsed_regeneration()
