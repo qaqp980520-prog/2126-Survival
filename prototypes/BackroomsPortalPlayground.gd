@@ -336,10 +336,11 @@ func _prepare_maze_materials() -> void:
     _cell_material_floor.roughness = 0.94
     _cell_material_wall = StandardMaterial3D.new()
     _cell_material_wall.roughness = 0.88
-    _cell_material_wall.albedo_color = Color.WHITE
+    # Keep the classic warm yellow Backrooms wall visible even in dim cells.
+    _cell_material_wall.albedo_color = Color(1.0, 0.91, 0.58)
     _cell_material_wall.emission_enabled = true
-    _cell_material_wall.emission = Color(0.10, 0.09, 0.04)
-    _cell_material_wall.emission_energy_multiplier = 0.22
+    _cell_material_wall.emission = Color(0.30, 0.23, 0.075)
+    _cell_material_wall.emission_energy_multiplier = 0.55
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
     # Use a preloaded imported texture so the runtime wall material cannot
     # silently remain a flat color when an SVG runtime load fails.
@@ -417,12 +418,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
     ceiling_material.metallic = 0.0
     if _high_graphics:
         _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
-    var trim_material := StandardMaterial3D.new()
-    trim_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.12)
-    trim_material.roughness = 1.0
-    if _high_graphics:
-        _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
-        _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
+    # No bright ceiling-edge trim: it created a distracting grid between streamed cells.
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
