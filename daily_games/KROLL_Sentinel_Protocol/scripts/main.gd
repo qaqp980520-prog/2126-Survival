@@ -93,13 +93,13 @@ func _fire_toward(direction: Vector2) -> void:
 func _spawn_enemy() -> void:
     var size := get_viewport_rect().size
     var side := _rng.randi_range(0, 3)
-    var position := Vector2.ZERO
+    var spawn_position := Vector2.ZERO
     match side:
-        0: position = Vector2(-20.0, _rng.randf_range(30.0, size.y - 30.0))
-        1: position = Vector2(size.x + 20.0, _rng.randf_range(30.0, size.y - 30.0))
-        2: position = Vector2(_rng.randf_range(30.0, size.x - 30.0), -20.0)
-        _: position = Vector2(_rng.randf_range(30.0, size.x - 30.0), size.y + 20.0)
-    _spawn_enemy_at(position, _rng.randf_range(62.0, 92.0))
+        0: spawn_position = Vector2(-20.0, _rng.randf_range(30.0, size.y - 30.0))
+        1: spawn_position = Vector2(size.x + 20.0, _rng.randf_range(30.0, size.y - 30.0))
+        2: spawn_position = Vector2(_rng.randf_range(30.0, size.x - 30.0), -20.0)
+        _: spawn_position = Vector2(_rng.randf_range(30.0, size.x - 30.0), size.y + 20.0)
+    _spawn_enemy_at(spawn_position, _rng.randf_range(62.0, 92.0))
 
 func _spawn_enemy_at(position: Vector2, speed: float) -> void:
     _enemies.append({"position": position, "speed": speed})
