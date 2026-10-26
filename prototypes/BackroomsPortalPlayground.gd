@@ -32,7 +32,7 @@ var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
 var _flicker_clock: float = 0.0
 var _high_graphics: bool = false
-var _flicker_enabled: bool = false
+var _flicker_enabled: bool = true
 var _settings_panel: PanelContainer
 var _settings_button: Button
 var _settings_status: Label
@@ -109,12 +109,6 @@ func _build_settings_ui() -> void:
     graphics_button.pressed.connect(_toggle_graphics_quality)
     layout.add_child(graphics_button)
 
-    var flicker_button := Button.new()
-    flicker_button.name = "FlickerButton"
-    flicker_button.text = "燈光閃爍：關"
-    flicker_button.pressed.connect(_toggle_flicker)
-    layout.add_child(flicker_button)
-
     _settings_status = Label.new()
     _settings_status.text = "低畫質會減少裝飾、動態材質與燈光效果。"
     _settings_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -144,13 +138,7 @@ func _toggle_graphics_quality() -> void:
         button.text = "畫質：高（更多細節）" if _high_graphics else "畫質：低（流暢）"
     _rebuild_maze_for_settings()
     if _settings_status != null:
-        _settings_status.text = "高畫質包含壁紙破損、地毯紋理與更多裝飾。" if _high_graphics else "低畫質減少裝飾和動態材質，優先提升流暢度。"
-
-func _toggle_flicker() -> void:
-    _flicker_enabled = not _flicker_enabled
-    var button := _settings_panel.find_child("FlickerButton", true, false) as Button
-    if button != null:
-        button.text = "燈光閃爍：開" if _flicker_enabled else "燈光閃爍：關"
+        _settings_status.text = "光影開啟：啟用局部動態陰影與較完整材質，效能負擔較高。" if _high_graphics else "光影關閉：關閉動態陰影並減少細節，優先提升流暢度。"
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
@@ -200,7 +188,7 @@ func _add_player_part(parent: Node3D, part_name: String, mesh_resource: Primitiv
     parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
-    if _flicker_enabled and _high_graphics:
+    if _flicker_enabled:
         _update_flickering_lights(delta)
     if director == null:
         return
@@ -385,7 +373,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.light_color = Color(1.0, 0.88, 0.65)
             ceiling_light.light_energy = 1.15
             ceiling_light.omni_range = 8.5
-            ceiling_light.shadow_enabled = false
+            ceiling_light.shadow_enabled = _high_graphics and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
             ceiling_light.light_energy = 1.15 if _high_graphics else 0.85
