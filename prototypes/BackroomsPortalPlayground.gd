@@ -157,19 +157,34 @@ func _create_maze_cell(cell: Vector2i) -> void:
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
     var west_open := _edge_is_open(cell, Vector2i(-1, 0))
-    var east_open := _edge_is_open(cell, Vector2i(1, 0))
-    var south_open := _edge_is_open(cell, Vector2i(0, 1))
+    # Each shared edge has one owner: the cell to its south/east builds it as
+    # its north/west edge. This avoids duplicate collision bodies on every seam.
     if not north_open:
         _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
     if not west_open:
         _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
-    # Shared edges are built once by the cell on their north/west side.
-    if not south_open:
-        _add_maze_wall(root, "SouthWall", Vector3(0, WALL_HEIGHT * 0.5, CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
-    if not east_open:
-        _add_maze_wall(root, "EastWall", Vector3(CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
+
+    # Add deterministic interior baffles so cells feel like winding corridors,
+    # not just empty squares. Both ends stay open for navigation.
+    var partition_style := _hash_value(cell.x, cell.y, 29) % 3
+    if partition_style == 0:
+        var offset_z := -0.7 if _hash_value(cell.x, cell.y, 30) % 2 == 0 else 0.7
+        _add_maze_wall(root, "InteriorBaffle", Vector3(0, WALL_HEIGHT * 0.5, offset_z), Vector3(CELL_SIZE - 2.2, WALL_HEIGHT, 0.18))
+    elif partition_style == 1:
+        var offset_x := -0.7 if _hash_value(cell.x, cell.y, 31) % 2 == 0 else 0.7
+        _add_maze_wall(root, "InteriorBaffle", Vector3(offset_x, WALL_HEIGHT * 0.5, 0), Vector3(0.18, WALL_HEIGHT, CELL_SIZE - 2.2))
+
     if _hash_value(cell.x, cell.y, 71) % 5 == 0:
         _add_box(root, "CeilingLightPanel", Vector3(0, WALL_HEIGHT + 0.08, 0), Vector3(1.8, 0.12, 0.7), Color(0.95, 0.91, 0.72))
+        if DisplayServer.get_name() != "headless":
+            var ceiling_light := OmniLight3D.new()
+            ceiling_light.name = "CeilingOmniLight"
+            ceiling_light.position = Vector3(0, WALL_HEIGHT - 0.18, 0)
+            ceiling_light.light_color = Color(1.0, 0.91, 0.72)
+            ceiling_light.light_energy = 0.65
+            ceiling_light.omni_range = 6.0
+            ceiling_light.shadow_enabled = false
+            root.add_child(ceiling_light)
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
