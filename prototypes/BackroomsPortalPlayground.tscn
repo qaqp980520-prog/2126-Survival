@@ -30,9 +30,9 @@ position = Vector3(0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_player")
 
 [node name="Camera3D" type="Camera3D" parent="Player"]
-position = Vector3(0, 2.8, 6.0)
-rotation = Vector3(-0.25, 0, 0)
+position = Vector3(0, 1.62, 0)
 current = true
+fov = 85.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.8, 0.4, 0)
@@ -46,7 +46,7 @@ environment = SubResource("Environment_world")
 [node name="Status" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 12.0
-offset_right = 1000.0
+offset_right = 1100.0
 offset_bottom = 116.0
 theme_override_colors/font_color = Color(0.63, 0.94, 1, 1)
 theme_override_font_sizes/font_size = 18
@@ -59,4 +59,4 @@ offset_right = 1250.0
 offset_bottom = 710.0
 theme_override_colors/font_color = Color(0.82, 0.88, 0.91, 1)
 theme_override_font_sizes/font_size = 14
-text = "WASD move | Space jump | E enter portal | T test-spawn portal | B debug return | G collect berries | H drop berries | F5 save | F9 load"
+text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | Esc release mouse | T portal test | B return | G collect | H drop | F5 save | F9 load"
