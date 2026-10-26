@@ -61,6 +61,10 @@ jobs:
           test -f tests/backrooms_portal_scene_test.gd
           test -f tests/backrooms_portal_playground_test.gd
           test -f tests/world_bridge_save_adapter_integration.gd
+          test -f tests/mineral_catalog_test.gd
+          test -f systems/MineralCatalog.gd
+          test -f prototypes/minerals/MineralOreVisual.gd
+          test -f prototypes/minerals/MineralMiningVFX.gd
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
@@ -101,3 +105,5 @@ jobs:
         run: godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd
       - name: Run world bridge binding lifecycle regression test
         run: godot --headless --path . --script res://tests/world_bridge_binding_test.gd
+      - name: Run mineral catalog and inventory compatibility tests
+        run: godot --headless --path . --script res://tests/mineral_catalog_test.gd
