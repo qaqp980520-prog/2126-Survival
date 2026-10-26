@@ -444,13 +444,20 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
     material.roughness = 1.0
     material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     material.albedo_color = Color.WHITE
-    material.uv1_triplanar = true
+    # BoxMesh already provides face UVs. Triplanar projection was overriding
+    # the intended wallpaper mapping and made the wall pattern appear flat at
+    # the scale used here. Use the mesh UVs directly so the supplied repeating
+    # wallpaper SVG is actually sampled on every wall face.
+    material.uv1_triplanar = false
     if is_floor:
         material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg") as Texture2D
-        material.uv1_scale = Vector3(0.22, 0.22, 0.22)
+        material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     else:
-        material.albedo_texture = load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
-        material.uv1_scale = Vector3(0.32, 0.32, 0.32)
+        var wallpaper := load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
+        if wallpaper == null:
+            push_error("Wallpaper texture failed to load: res://assets/textures/backrooms_wallpaper.svg")
+        material.albedo_texture = wallpaper
+        material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
