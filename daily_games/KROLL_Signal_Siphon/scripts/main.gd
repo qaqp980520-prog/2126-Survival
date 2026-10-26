@@ -104,7 +104,7 @@ func _draw() -> void:
                 fill = Color(0.07, 0.22, 0.19)
             elif kind == "receiver":
                 fill = Color(0.22, 0.16, 0.06)
-            draw_rect(cell_rect, fill, true, 8.0)
+            draw_rect(cell_rect, fill, true)
             draw_rect(cell_rect, Color(0.22, 0.35, 0.42), false, 1.5, true)
             _draw_pipe(cell_rect, cell)
 
