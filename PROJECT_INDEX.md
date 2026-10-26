@@ -156,12 +156,12 @@
 ## 2026-10-26 Run 11 — Sentinel Escape + persistent shadow settings + mineral streaming reconciliation
 - Current implementation branch merged: PR #49; merge commit `2cca29d30481a3943e07600cf4b73a757f7ea976`. Parent/main base before merge: `2d7f346f1d7d199278f4e5896c1fdb506d850a55`.
 - Exact implementation head `d4dc2fa58274e30d82d48cf647aa9124fc014aae` passed Godot 4.3 CI Run #181 (`40316093821`) before merge. Verified success markers include settings profile/integration, MineralGridStreamingDirector, Signal Siphon rules/runtime, and Sentinel Escape rules/runtime tests.
-- KROLL Sentinel Escape: `daily_games/KROLL_Sentinel_Protocol/`; collect 8 energy cells, avoid security drones, short nonviolent dash; keyboard/touch paths; no external assets.
+- KROLL Sentinel Escape: `daily_games/KROLL_Sentinel_Protocol/`; collect 8 energy cells, avoid security drones, short nonviolent dash; keyboard/touch paths; no external assets. The README-listed Space dash was found missing from the keyboard input path and fixed in PR #51, merge commit `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; exact-head CI Run #185 passed with explicit dash timer/cooldown assertions.
 - KROLL Signal Siphon remains included at `daily_games/KROLL_Signal_Siphon/`.
 - Backrooms settings persistence now saves camera mode, mouse sensitivity, and shadow/graphics quality. Fluorescent flicker is automatic (no user toggle); legacy `flicker_enabled` config keys are ignored. The shadow-quality toggle controls deterministic local shadows and procedural detail.
 - MineralGridStreamingDirector and its explicit CI test are included; still synchronous/factory-driven and not wired to the production world generator.
 - Superseded PR #46, #47, #48 are closed without merge. PR #49 is merged.
-- Main push CI Run #182 (`40316354828`) was still in progress at index-update start; the merged code head already passed exact-head PR CI Run #181. The index-sync PR must also pass its own CI before merge.
+- Main push CI Run #182 (`40316354828`) completed successfully; exact-head PR CI Run #181 also succeeded before PR #49 merge.
 - Local GUI/manual play, GPU shader compilation check, and iPhone device test remain unverified.
 
 
@@ -170,5 +170,7 @@
 - [Cross-version integration regression matrix](docs/INTEGRATION_REGRESSION_MATRIX.md)：更新至目前 main 狀態，區分已通過 CI 的原型與尚未接入的正式 M1.3 世界。
 - [Inventory/save schema compatibility review](docs/INVENTORY_SAVE_SCHEMA_COMPAT_REVIEW_2026-10-25.md)：把舊靜態發現標記為已修正或仍待正式世界整合，附 Run #181 證據。
 - [M1.3 inventory integration boundary](docs/M1_3_INVENTORY_INTEGRATION_BOUNDARY_2026-10-25.md)：保留正式世界控制器缺席與單一資料來源接線的阻斷條件。
-- These four documents were consolidated from stale draft PRs #1/#2/#6/#8 after reviewing their content. They are reference/audit documents, not evidence that the full M1.3 world is integrated.
-- PR #50 is the documentation-only candidate. Its exact-head Godot 4.3 CI must pass before merge; old draft PRs remain open until this consolidation is merged.
+- These four documents were consolidated from stale draft PRs #1/#2/#6/#8 after reviewing and updating their content against current main. They are reference/audit documents, not evidence that the full M1.3 world is integrated.
+- The consolidated documentation is carried by PR #50; after it merges, close PRs #1/#2/#6/#8 as superseded without merge.
+
+- Latest main after PR #51: `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; PR #51 keyboard dash fix was tested by Godot 4.3 CI Run #185 (`40316901157`) before merge. Main push CI after this merge is pending at the time of this index update.
