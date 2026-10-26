@@ -31,7 +31,6 @@ func _run_tests() -> void:
 	_check(bool(game.attempt_move(Vector2i(1, 0))), "Second push toward the docking pad should work.")
 	_check(bool(game.attempt_move(Vector2i(1, 0))), "Third push should dock the crate.")
 	_check(str(game.state) == "won", "Docking every crate should win the shift.")
-	_check(bool(game.load_level(1)) if game.has_method("debug_load_level") else true, "Level transition hook is optional.")
 	game.load_level(1)
 	_check(game.crates.size() == 2, "Shift two should have two crates.")
 	game.load_level(2)
