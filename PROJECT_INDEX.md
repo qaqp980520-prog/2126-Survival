@@ -114,3 +114,11 @@
 - Current PR status: not yet opened at this index update; create/update PR after verifying all changed paths and the diff.
 - Integration limit: this controller owns instantiated chunk roots provided by a world generator, but does not yet perform distance-based spatial selection, asynchronous scene loading, or procedural world generation. It is the first lifecycle owner, not a complete streaming engine.
 - Next: inspect the complete diff, run the new CI, fix any actual failures on this branch, and only merge after the full regression suite passes. Then reconcile the Notion asset index with the resulting PR/commit/test IDs.
+
+## Run 8 validation update — 2026-10-26
+
+- PR #39 is open as a draft: https://github.com/qaqp980520-prog/2126-Survival/pull/39.
+- Initial full CI Run #113 (40284210713) failed at controller compilation because the new script referenced its own global class name in the ID check. Fixed in commit 052ff685d27cd0e7007d36c41ee23c59756f3b09 by calling the preloaded adapter's static ID builder.
+- Full Godot 4.3 CI Run #114 (40284396621) then succeeded. Required steps 1–35 all passed; explicit success markers were present for Pulse Rhythm rules tests, Pulse Rhythm runtime smoke test, and mineral chunk controller integration test. Job logs showed no actual Godot script/runtime error output.
+- The index was updated on the feature branch after Run #114. This documentation change triggers another full CI run; the PR remains unmerged until the latest head's full run passes.
+- Current limitations remain: no local Godot binary, no GUI/iPhone playtest, and no distance-based or asynchronous chunk selection. Controller owns chunk roots supplied by the world generator; integration into the production world generator remains a separate step.
