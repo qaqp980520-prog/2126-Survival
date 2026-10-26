@@ -16,6 +16,7 @@ func _run_tests() -> void:
 
 	var original_root: Node3D = playground.chunk_controller.get_chunk_root("surface/chunk_0_0")
 	assert(original_root != null)
+	var original_position: Vector3 = playground.player.global_position
 	var original_ore: Node = original_root.get_node("Ore_0_0")
 	original_ore.remaining_units = 2
 	var stable_id: String = Adapter.make_stable_id("surface/chunk_0_0", "Chunk_0_0/Ore_0_0")
@@ -33,7 +34,7 @@ func _run_tests() -> void:
 	var restored_root: Node3D = playground.chunk_controller.get_chunk_root("surface/chunk_0_0")
 	var restored_ore: Node = restored_root.get_node("Ore_0_0")
 	assert(restored_ore.remaining_units == 2, "Stable ID must restore the saved vein stock after streaming away and back")
-	assert(playground.player.global_position.is_equal_approx(Vector3(1.0, 2.0, 1.0)))
+	assert(playground.player.global_position.is_equal_approx(original_position), "Restore must return the player to the exact saved position")
 
 	var bad_save := save_payload.duplicate(true)
 	bad_save["schema_version"] = 99
