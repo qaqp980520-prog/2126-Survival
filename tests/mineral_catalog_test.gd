@@ -10,6 +10,11 @@ const Bridge = preload("res://systems/SurvivalWorldBridge.gd")
 const VeinRegistry = preload("res://systems/MineralVeinRegistry.gd")
 
 func _initialize() -> void:
+	# Defer until SceneTree initialization completes so add_child() invokes _ready()
+	# before tests inspect generated visuals, bridge inventory, or mining-node state.
+	call_deferred("_run_tests")
+
+func _run_tests() -> void:
 	_test_all_seven_minerals_registered()
 	_test_inventory_weight_and_save_compatibility()
 	_test_visual_and_vfx_nodes_construct()
