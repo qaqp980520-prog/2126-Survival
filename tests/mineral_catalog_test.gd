@@ -7,6 +7,7 @@ const MiningVFX = preload("res://prototypes/minerals/MineralMiningVFX.gd")
 const InventoryPreview = preload("res://prototypes/minerals/MineralInventoryPreview.gd")
 const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const Bridge = preload("res://systems/SurvivalWorldBridge.gd")
+const VeinRegistry = preload("res://systems/MineralVeinRegistry.gd")
 
 func _initialize() -> void:
 	_test_all_seven_minerals_registered()
@@ -20,6 +21,7 @@ func _initialize() -> void:
 	_test_offline_regeneration_round_trip()
 	_test_regeneration_caps_and_clock_rollback()
 	_test_legacy_vein_save_without_regen_fields()
+	_test_vein_registry_save_restore_and_atomic_rejection()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -212,3 +214,43 @@ func _test_legacy_vein_save_without_regen_fields() -> void:
 	assert(not mining.load_save_dict({"schema_version": 1, "mineral_id": "coal_ore", "remaining_units": 6, "max_units": 5}, 1200))
 	assert(mining.remaining_units == int(before["remaining_units"]), "Invalid maximum must not partially mutate the vein")
 	mining.queue_free()
+
+func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
+	var registry = VeinRegistry.new()
+	root.add_child(registry)
+	var first = MiningNode.new()
+	first.mineral_id = "iron_ore"
+	first.max_units = 8
+	first.remaining_units = 2
+	first.regen_interval_seconds = 60
+	root.add_child(first)
+	first.last_regen_unix = 1000
+	var second = MiningNode.new()
+	second.mineral_id = "copper_ore"
+	second.max_units = 6
+	second.remaining_units = 4
+	root.add_child(second)
+	second.last_regen_unix = 1000
+	assert(registry.register_vein("mine/sector-a/vein-01", first))
+	assert(registry.register_vein("mine/sector-a/vein-02", second))
+	assert(not registry.register_vein("mine/sector-a/vein-01", second), "Stable IDs must not overwrite another live vein")
+	var saved: Dictionary = registry.to_save_dict()
+	assert(registry.get_registered_ids() == PackedStringArray(["mine/sector-a/vein-01", "mine/sector-a/vein-02"]))
+	first.remaining_units = 1
+	second.remaining_units = 1
+	assert(registry.restore_save_dict(saved, 1120))
+	assert(first.remaining_units == 4, "Registry restore should apply offline time to the first vein")
+	assert(second.remaining_units == 6, "Registry restore should cap the second vein at capacity")
+	var before_first := first.to_save_dict()
+	var before_second := second.to_save_dict()
+	var bad := registry.to_save_dict()
+	bad["veins"]["mine/sector-a/vein-02"] = {"schema_version": 2, "mineral_id": "copper_ore", "remaining_units": -1}
+	assert(not registry.restore_save_dict(bad, 1300), "Invalid record must reject the complete registry restore")
+	assert(first.to_save_dict()["remaining_units"] == before_first["remaining_units"], "Invalid batch must not partially mutate earlier records")
+	assert(second.to_save_dict()["remaining_units"] == before_second["remaining_units"])
+	assert(not registry.restore_save_dict({"schema_version": 1, "veins": {"unknown-id": saved["veins"]["mine/sector-a/vein-01"]}}, 1300))
+	assert(registry.unregister_vein("mine/sector-a/vein-01", first))
+	assert(not registry.unregister_vein("mine/sector-a/vein-01", first))
+	registry.queue_free()
+	first.queue_free()
+	second.queue_free()
