@@ -225,7 +225,7 @@ func _add_player_part(parent: Node3D, part_name: String, mesh_resource: Primitiv
     parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
-    if _flicker_enabled and _high_graphics:
+    if _flicker_enabled:
         _update_flickering_lights(delta)
     if director == null:
         return
