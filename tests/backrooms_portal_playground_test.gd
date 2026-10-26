@@ -38,6 +38,7 @@ func _run_integration_test() -> void:
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
     _expect(_maze_edges_are_symmetric(world), "maze edge openings match from both adjacent cells")
     _expect(_maze_region_is_connected(world), "procedural maze region remains connected to the origin")
+    _expect(_maze_streaming_cell_boundaries(world), "streaming cell selection changes at actual half-cell boundaries")
     _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
     _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
@@ -102,6 +103,21 @@ func _maze_region_is_connected(world: Node) -> bool:
                 visited[neighbor] = true
                 queue.append(neighbor)
     return visited.size() == 49
+
+func _maze_streaming_cell_boundaries(world: Node) -> bool:
+    var cases: Array = [
+        [Vector3(3.99, 0.0, 0.0), Vector2i(0, 0)],
+        [Vector3(4.01, 0.0, 0.0), Vector2i(1, 0)],
+        [Vector3(-3.99, 0.0, 0.0), Vector2i(0, 0)],
+        [Vector3(-4.01, 0.0, 0.0), Vector2i(-1, 0)],
+        [Vector3(0.0, 0.0, 4.01), Vector2i(0, 1)],
+        [Vector3(0.0, 0.0, -4.01), Vector2i(0, -1)]
+    ]
+    for entry in cases:
+        var actual: Vector2i = world.call("_maze_cell_for_position", entry[0])
+        if actual != entry[1]:
+            return false
+    return true
 
 func _expect(condition: bool, description: String) -> void:
     if condition:
