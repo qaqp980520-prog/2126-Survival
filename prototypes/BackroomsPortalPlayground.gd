@@ -336,10 +336,10 @@ func _prepare_maze_materials() -> void:
     _cell_material_floor.roughness = 0.94
     _cell_material_wall = StandardMaterial3D.new()
     _cell_material_wall.roughness = 0.88
+    # Preserve the original wallpaper asset and UV scale, but prevent the maze
+    # lighting from turning its yellow surface nearly black.
+    _cell_material_wall.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     _cell_material_wall.albedo_color = Color.WHITE
-    _cell_material_wall.emission_enabled = true
-    _cell_material_wall.emission = Color(0.10, 0.09, 0.04)
-    _cell_material_wall.emission_energy_multiplier = 0.22
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
     _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
     _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
@@ -499,6 +499,8 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
         var wallpaper := load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
         if wallpaper == null:
             push_error("Wallpaper texture failed to load: res://assets/textures/backrooms_wallpaper.svg")
+        material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        material.albedo_color = Color.WHITE
         material.albedo_texture = wallpaper
         material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     return material
