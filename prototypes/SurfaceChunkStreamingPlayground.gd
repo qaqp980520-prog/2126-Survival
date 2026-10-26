@@ -72,16 +72,17 @@ func _build_player() -> void:
 	collision.shape = capsule_shape
 	collision.position = Vector3(0.0, 0.9, 0.0)
 	player.add_child(collision)
-	var body_mesh := MeshInstance3D.new()
-	var capsule_mesh := CapsuleMesh.new()
-	capsule_mesh.radius = 0.35
-	capsule_mesh.height = 1.8
-	body_mesh.mesh = capsule_mesh
-	body_mesh.position = Vector3(0.0, 0.9, 0.0)
-	var body_material := StandardMaterial3D.new()
-	body_material.albedo_color = Color(0.16, 0.78, 0.9)
-	body_mesh.material_override = body_material
-	player.add_child(body_mesh)
+	if DisplayServer.get_name() != "headless":
+		var body_mesh := MeshInstance3D.new()
+		var capsule_mesh := CapsuleMesh.new()
+		capsule_mesh.radius = 0.35
+		capsule_mesh.height = 1.8
+		body_mesh.mesh = capsule_mesh
+		body_mesh.position = Vector3(0.0, 0.9, 0.0)
+		var body_material := StandardMaterial3D.new()
+		body_material.albedo_color = Color(0.16, 0.78, 0.9)
+		body_mesh.material_override = body_material
+		player.add_child(body_mesh)
 	camera = Camera3D.new()
 	camera.name = "PlayerCamera"
 	camera.position = Vector3(0.0, 1.48, 0.0)
@@ -223,15 +224,16 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	collision.shape = box_shape
 	collision.position = Vector3(CHUNK_SIZE * 0.5, -0.25, CHUNK_SIZE * 0.5)
 	ground.add_child(collision)
-	var ground_mesh := MeshInstance3D.new()
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = box_size
-	ground_mesh.mesh = box_mesh
-	ground_mesh.position = collision.position
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.10, 0.15, 0.19) if (coord.x + coord.y) % 2 == 0 else Color(0.13, 0.18, 0.22)
-	ground_mesh.material_override = material
-	ground.add_child(ground_mesh)
+	if DisplayServer.get_name() != "headless":
+		var ground_mesh := MeshInstance3D.new()
+		var box_mesh := BoxMesh.new()
+		box_mesh.size = box_size
+		ground_mesh.mesh = box_mesh
+		ground_mesh.position = collision.position
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color(0.10, 0.15, 0.19) if (coord.x + coord.y) % 2 == 0 else Color(0.13, 0.18, 0.22)
+		ground_mesh.material_override = material
+		ground.add_child(ground_mesh)
 	var ore: Node3D = MiningNodeScript.new()
 	ore.name = "Ore_%d_%d" % [coord.x, coord.y]
 	ore.mineral_id = str(MINERAL_IDS[posmod(coord.x + coord.y, MINERAL_IDS.size())])
