@@ -8,6 +8,7 @@ Add an explicit recovery entry point to MineralGridStreamingDirector for a faile
 
 - systems/MineralGridStreamingDirector.gd
 - tests/mineral_grid_streaming_diagnostics_test.gd
+- tests/mineral_grid_streaming_recovery_test.gd
 - docs/MINERAL_GRID_STREAMING_RECOVERY_M0_2_2026-10-27.md
 - .github/workflows/godot-validation.yml
 - PROJECT_INDEX.md
