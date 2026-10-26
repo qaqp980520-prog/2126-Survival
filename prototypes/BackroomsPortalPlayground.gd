@@ -380,7 +380,7 @@ render_mode cull_disabled;
 uniform vec4 carpet_color : source_color = vec4(0.57, 0.51, 0.31, 1.0);
 uniform vec4 fiber_color : source_color = vec4(0.72, 0.65, 0.42, 1.0);
 void vertex() {
-    VERTEX.y += sin(VERTEX.x * 19.0 + VERTEX.z * 4.0) * cos(VERTEX.z * 17.0) * 0.006;
+    VERTEX.y += sin(VERTEX.x * 19.0 + TIME * 0.7) * cos(VERTEX.z * 17.0 + TIME * 0.45) * 0.009;
 }
 void fragment() {
     float grain = fract(sin(dot(UV * vec2(431.7, 283.1), vec2(12.9898, 78.233))) * 43758.5453);
