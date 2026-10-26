@@ -1,17 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
 <defs>
- <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="3" seed="14"/><feColorMatrix values="0.8 0 0 0 0.12 0 0.72 0 0 0.1 0 0 0.45 0 0.02 0 0 0 .22 0"/></filter>
- <pattern id="stripe" width="64" height="512" patternUnits="userSpaceOnUse">
-  <rect width="64" height="512" fill="#d8d27c"/>
-  <path d="M4 0V512 M8 0V512" stroke="#a8a05c" stroke-width="2" opacity=".42"/>
-  <path d="M16 0V512 M20 0V512" stroke="#f0e89b" stroke-width="2" opacity=".65"/>
-  <path d="M28 0V512 M36 0V512 M44 0V512" stroke="#b9b16b" stroke-width="1" opacity=".5"/>
-  <path d="M22 8l8 8-8 8 8 8-8 8 8 8-8 8 8 8-8 8" fill="none" stroke="#a9a05c" stroke-width="2" opacity=".42"/>
-  <path d="M50 0l-8 12 8 12-8 12 8 12-8 12 8 12" fill="none" stroke="#f4edaa" stroke-width="2" opacity=".45"/>
+ <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="9"/><feColorMatrix values=".55 0 0 0 .25 0 .5 0 0 .23 0 0 .3 0 .12 0 0 0 .12 0"/></filter>
+ <pattern id="wallpaper" width="48" height="256" patternUnits="userSpaceOnUse">
+  <rect width="48" height="256" fill="#d9d47f"/>
+  <path d="M3 0V256 M7 0V256" stroke="#b8b36b" stroke-width="1.5" opacity=".7"/>
+  <path d="M12 0V256 M16 0V256" stroke="#eee7a0" stroke-width="1.5" opacity=".8"/>
+  <path d="M22 0V256 M28 0V256 M42 0V256" stroke="#aaa35d" stroke-width="1" opacity=".5"/>
+  <path d="M20 12l6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7" fill="none" stroke="#b0a75e" stroke-width="1.5" opacity=".55"/>
+  <path d="M36 8l-6 8 6 8-6 8 6 8-6 8 6 8-6 8 6 8-6 8 6 8-6 8" fill="none" stroke="#f2eaa3" stroke-width="1.6" opacity=".65"/>
+  <path d="M0 0H48 M0 128H48" stroke="#c5bd70" stroke-width=".7" opacity=".35"/>
  </pattern>
 </defs>
-<rect width="512" height="512" fill="#d2cb78"/>
-<rect width="512" height="512" fill="url(#stripe)"/>
-<rect width="512" height="512" filter="url(#grain)" opacity=".32"/>
-<g fill="#8f844e" opacity=".16"><ellipse cx="88" cy="160" rx="54" ry="28"/><ellipse cx="364" cy="318" rx="70" ry="35"/><ellipse cx="244" cy="72" rx="42" ry="19"/></g>
+<rect width="512" height="512" fill="#d9d47f"/>
+<rect width="512" height="512" fill="url(#wallpaper)"/>
+<rect width="512" height="512" filter="url(#paperNoise)" opacity=".42"/>
+<g fill="#9d9659" opacity=".07"><ellipse cx="78" cy="80" rx="34" ry="20"/><ellipse cx="390" cy="330" rx="45" ry="28"/><ellipse cx="244" cy="225" rx="27" ry="15"/></g>
 </svg>
