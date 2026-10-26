@@ -14,7 +14,7 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 	var key := stable_id.strip_edges()
 	if key.is_empty() or key != stable_id or vein == null or not (vein is MiningNode):
 		return false
-	var mining_vein: MineralMiningNode = vein as MineralMiningNode
+	var mining_vein: Variant = vein
 	if _veins.has(key) and is_instance_valid(_veins[key]):
 		if _veins[key] != mining_vein:
 			return false
@@ -53,7 +53,7 @@ func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: in
 	var key := stable_id.strip_edges()
 	if not _veins.has(key) or not is_instance_valid(_veins[key]):
 		return false
-	var vein: MineralMiningNode = _veins[key] as MineralMiningNode
+	var vein: Variant = _veins[key]
 	if vein == null or (expected_vein != null and vein != expected_vein):
 		return false
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
