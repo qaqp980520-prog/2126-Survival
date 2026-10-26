@@ -198,9 +198,7 @@ func _on_resolution_changed(index: int) -> void:
 
 func _toggle_shadows() -> void:
     _shadows_enabled = not _shadows_enabled
-    _high_graphics = _shadows_enabled
     _settings["shadows_enabled"] = _shadows_enabled
-    _settings["high_graphics"] = _high_graphics
     var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
         button.text = "光影：開" if _shadows_enabled else "光影：關"
