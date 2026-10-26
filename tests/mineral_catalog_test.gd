@@ -4,6 +4,7 @@ const Catalog = preload("res://systems/MineralCatalog.gd")
 const Inventory = preload("res://systems/SurvivalInventory.gd")
 const OreVisual = preload("res://prototypes/minerals/MineralOreVisual.gd")
 const MiningVFX = preload("res://prototypes/minerals/MineralMiningVFX.gd")
+const InventoryPreview = preload("res://prototypes/minerals/MineralInventoryPreview.gd")
 const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const Bridge = preload("res://systems/SurvivalWorldBridge.gd")
 
@@ -12,6 +13,8 @@ func _initialize() -> void:
 	_test_inventory_weight_and_save_compatibility()
 	_test_visual_and_vfx_nodes_construct()
 	_test_mining_depletes_vein_and_adds_inventory()
+	_test_full_inventory_does_not_consume_vein()
+	_test_inventory_preview_builds_single_model()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -20,6 +23,7 @@ func _test_all_seven_minerals_registered() -> void:
 	for item_id in ["copper_ore", "iron_ore", "gold_ore", "silver_ore", "aluminium_ore", "coal_ore", "uranium_ore"]:
 		assert(Catalog.has_mineral(item_id), "Missing mineral: " + item_id)
 		assert(not Catalog.get_mineral(item_id).is_empty())
+		assert(is_equal_approx(float(Catalog.get_mineral(item_id)["weight_kg"]), float(Inventory.ITEM_WEIGHTS[item_id])))
 
 func _test_inventory_weight_and_save_compatibility() -> void:
 	var inventory = Inventory.new({"iron_ore": 1, "copper_ore": 1}, 1)
@@ -59,6 +63,24 @@ func _test_mining_depletes_vein_and_adds_inventory() -> void:
 	mining.queue_free()
 	bridge.queue_free()
 
+func _test_full_inventory_does_not_consume_vein() -> void:
+	var bridge = Bridge.new()
+	bridge.name = "FullBridge"
+	root.add_child(bridge)
+	assert(bridge.inventory.add_item("copper_ore", Inventory.MAX_SAVED_COUNT) == Inventory.MAX_SAVED_COUNT)
+	var mining = MiningNode.new()
+	mining.name = "FullInventoryVein"
+	mining.mineral_id = "copper_ore"
+	mining.remaining_units = 3
+	mining.units_per_hit = 2
+	mining.inventory_bridge_path = NodePath("../FullBridge")
+	root.add_child(mining)
+	assert(mining.mine_hit(Vector3.ZERO) == 0)
+	assert(mining.remaining_units == 3, "A rejected pickup must not consume vein stock")
+	assert(int(bridge.inventory.counts["copper_ore"]) == Inventory.MAX_SAVED_COUNT)
+	mining.queue_free()
+	bridge.queue_free()
+
 func _test_visual_and_vfx_nodes_construct() -> void:
 	var visual = OreVisual.new()
 	visual.mineral_id = "uranium_ore"
@@ -69,3 +91,13 @@ func _test_visual_and_vfx_nodes_construct() -> void:
 	root.add_child(vfx)
 	vfx.play_hit("uranium_ore", Vector3.ZERO)
 	assert(vfx.get_child_count() > 0)
+
+func _test_inventory_preview_builds_single_model() -> void:
+	var preview = InventoryPreview.new()
+	preview.mineral_id = "gold_ore"
+	root.add_child(preview)
+	assert(preview.get_child_count() == 1)
+	assert(preview.get_child(0).name == "OreIconModel")
+	preview.refresh_preview()
+	assert(preview.get_child_count() == 1, "Refreshing preview must leave only one ore model")
+	preview.queue_free()
