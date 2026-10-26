@@ -146,9 +146,6 @@ func _create_maze_cell(cell: Vector2i) -> void:
     var west_open := _edge_is_open(cell, Vector2i(-1, 0))
     var east_open := _edge_is_open(cell, Vector2i(1, 0))
     var south_open := _edge_is_open(cell, Vector2i(0, 1))
-    # Guarantee at least one passage per cell to keep exploration possible.
-    if not (north_open or west_open or east_open or south_open):
-        north_open = true
     if not north_open:
         _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
     if not west_open:
