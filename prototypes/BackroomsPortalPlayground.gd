@@ -310,7 +310,6 @@ func _build_backrooms_room(level_name: String) -> void:
         backrooms_room.queue_free()
     _loaded_cells.clear()
     _flicker_lights.clear()
-    _light_cells.clear()
     backrooms_room = Node3D.new()
     backrooms_room.name = "EndlessMaze_" + level_name.replace(" ", "")
     backrooms_world.add_child(backrooms_room)
