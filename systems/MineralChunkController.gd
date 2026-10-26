@@ -35,7 +35,7 @@ func bind_registry(candidate: Node) -> bool:
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	if registry == null or adapter == null or not is_instance_valid(chunk_root):
 		return false
-	if MineralChunkController._stable_id_probe(chunk_id).is_empty():
+	if AdapterScript.make_stable_id(chunk_id, "probe").is_empty():
 		return false
 	if _chunk_roots.has(chunk_id) or chunk_root.get_parent() != null:
 		return false
@@ -114,5 +114,3 @@ func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary)
 			return false
 	return true
 
-static func _stable_id_probe(chunk_id: String) -> String:
-	return AdapterScript.make_stable_id(chunk_id, "probe")
