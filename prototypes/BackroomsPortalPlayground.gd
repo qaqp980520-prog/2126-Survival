@@ -359,9 +359,6 @@ func _create_maze_cell(cell: Vector2i) -> void:
     var seam_material := StandardMaterial3D.new()
     seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
     seam_material.roughness = 1.0
-    if _high_graphics:
-        _add_decor_box(root, "FloorSeamX", Vector3(0, 0.006, 0), Vector3(CELL_SIZE, 0.012, 0.035), seam_material)
-        _add_decor_box(root, "FloorSeamZ", Vector3(0, 0.007, 0), Vector3(0.035, 0.012, CELL_SIZE), seam_material)
     var ceiling_material := StandardMaterial3D.new()
     ceiling_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.18)
     ceiling_material.roughness = 0.96
@@ -392,17 +389,6 @@ func _create_maze_cell(cell: Vector2i) -> void:
     if not west_open:
         _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
 
-    # Small deterministic floor scuffs and stains break up the otherwise uniform carpet.
-    for stain_index in range(2 if _high_graphics else 0):
-        var stain_hash := _hash_value(cell.x + stain_index * 7, cell.y - stain_index * 11, 93)
-        var stain_material := StandardMaterial3D.new()
-        stain_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.08 + float(stain_hash % 12) / 100.0)
-        stain_material.roughness = 1.0
-        var stain_x := float((stain_hash % 51) - 25) / 10.0
-        var stain_z := float((_hash_value(cell.x, cell.y, 97 + stain_index) % 51) - 25) / 10.0
-        var stain_size := 0.25 + float(stain_hash % 6) / 10.0
-        _add_decor_box(root, "CarpetWear_%d" % stain_index, Vector3(stain_x, 0.008, stain_z), Vector3(stain_size, 0.012, stain_size * 0.65), stain_material)
-
     # Add deterministic interior baffles so cells feel like winding corridors,
     # not just empty squares. Both ends stay open for navigation.
     var partition_style := _hash_value(cell.x, cell.y, 29) % 3
@@ -429,11 +415,11 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.light_color = Color(1.0, 0.88, 0.65)
             ceiling_light.light_energy = 1.15
             ceiling_light.omni_range = 8.5
-            ceiling_light.shadow_enabled = _should_enable_light_shadows(cell)
+            ceiling_light.shadow_enabled = false
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
-            ceiling_light.light_energy = 1.15 if _high_graphics else 0.85
-            ceiling_light.omni_range = 8.5 if _high_graphics else 5.5
+            ceiling_light.light_energy = 0.9 if _high_graphics else 0.75
+            ceiling_light.omni_range = 7.0 if _high_graphics else 5.5
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
@@ -470,25 +456,8 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> ShaderMateri
         shader.code = """
 shader_type spatial;
 uniform sampler2D carpet_texture : source_color, repeat_enable;
-uniform vec4 base_color : source_color = vec4(0.57, 0.51, 0.31, 1.0);
-float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise21(vec2 p) {
-    vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
-    return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x), mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
-}
 void fragment() {
-    vec2 uv = UV * vec2(65.0, 65.0);
-    float grain = noise21(uv * 2.7);
-    float fibers = sin(uv.x * 24.0 + sin(uv.y * 5.0)) * 0.075 + sin(uv.y * 31.0) * 0.045;
-    float broad_wear = noise21(uv * 0.09);
-    float worn = smoothstep(0.38, 0.77, broad_wear);
-    float traffic_lane = smoothstep(0.0, 0.16, abs(fract(UV.x * 2.0) - 0.5)) * 0.08;
-    float tiny_specks = step(0.91, noise21(uv * 8.0)) * 0.12;
-    vec3 photo_texture = texture(carpet_texture, UV * vec2(4.0, 4.0)).rgb;
-    vec3 color = photo_texture * (0.76 + grain * 0.22 + fibers);
-    color *= 1.0 - worn * 0.32 - traffic_lane;
-    color = mix(color, photo_texture * 0.55, tiny_specks);
-    ALBEDO = color;
+    ALBEDO = texture(carpet_texture, UV * vec2(4.0, 4.0)).rgb;
     ROUGHNESS = 1.0;
 }
 """
