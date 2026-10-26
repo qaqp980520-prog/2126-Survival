@@ -11,7 +11,7 @@ A standalone Godot 4 crop-care arcade game. Maintain three hydroponic beds and h
 ## Rules
 - Each bed starts at 65% moisture.
 - Water adds 28 moisture points, capped at 100.
-- Crops grow at 18 percentage points per second while moisture is at least 12.
+- Crops grow at 12 percentage points per second while moisture is at least 12; a bed can dry before the crop matures, so watering is part of the core loop.
 - Moisture drains at 7 points per second until the crop is ready.
 - Harvesting a ready crop grants 15 credits and replants at 45% moisture.
 - Reach 10 harvests before 90 seconds expire to win.
