@@ -163,3 +163,12 @@
 - Superseded PR #46, #47, #48 are closed without merge. PR #49 is merged.
 - Main push CI Run #182 (`40316354828`) was still in progress at index-update start; the merged code head already passed exact-head PR CI Run #181. The index-sync PR must also pass its own CI before merge.
 - Local GUI/manual play, GPU shader compilation check, and iPhone device test remain unverified.
+
+
+## 2026-10-26 Run 11 — Consolidated integration/audit references
+- [Branch-first integration workflow](docs/BRANCH_AND_INTEGRATION_WORKFLOW.md)：分支、差異審查、測試、合併與 Notion 同步規則。
+- [Cross-version integration regression matrix](docs/INTEGRATION_REGRESSION_MATRIX.md)：更新至目前 main 狀態，區分已通過 CI 的原型與尚未接入的正式 M1.3 世界。
+- [Inventory/save schema compatibility review](docs/INVENTORY_SAVE_SCHEMA_COMPAT_REVIEW_2026-10-25.md)：把舊靜態發現標記為已修正或仍待正式世界整合，附 Run #181 證據。
+- [M1.3 inventory integration boundary](docs/M1_3_INVENTORY_INTEGRATION_BOUNDARY_2026-10-25.md)：保留正式世界控制器缺席與單一資料來源接線的阻斷條件。
+- These four documents were consolidated from stale draft PRs #1/#2/#6/#8 after reviewing their content. They are reference/audit documents, not evidence that the full M1.3 world is integrated.
+- PR #50 is the documentation-only candidate. Its exact-head Godot 4.3 CI must pass before merge; old draft PRs remain open until this consolidation is merged.
