@@ -74,6 +74,7 @@ jobs:
           test -f tests/backrooms_portal_director_test.gd
           test -f tests/backrooms_portal_scene_test.gd
           test -f tests/backrooms_portal_playground_test.gd
+          test -f tests/backrooms_player_input_test.gd
           test -f tests/world_bridge_save_adapter_integration.gd
           test -f tests/mineral_catalog_test.gd
           test -f systems/MineralCatalog.gd
@@ -282,3 +283,15 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'KROLL Signal Siphon runtime smoke test passed.'
+
+      - name: Run Backrooms player mouse-look input regression test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_player_input_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during player input tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms player mouse-look input tests passed.'
