@@ -200,3 +200,10 @@
 - tests/backrooms_settings_integration_test.gd now verifies StandardMaterial3D texture loading and mesh UV mapping instead of stale shader assumptions.
 - Design note: docs/BACKROOMS_SETTINGS_RECONCILIATION_RUN12_2026-10-26.md.
 - These are corrections discovered from actual GitHub main, not claims inferred from the previous chat. The latest PR #53 head must pass the full Godot 4.3 workflow before merge; GUI/GPU/iPhone appearance remains unverified.
+
+
+### Run 12 CI follow-up: root SVG import order
+
+- Run #222 (40332450257) failed at Backrooms settings integration because the root project had not been imported before the test loaded assets/textures/backrooms_carpet.svg and backrooms_wallpaper.svg; Godot reported “No loader found for resource”. The quality toggle and maze refresh assertions themselves passed.
+- Added a guarded “Import and parse root 2126 Survival project” step before root-level integration tests in .github/workflows/godot-validation.yml. The step runs Godot 4.3 editor import and fails on script/runtime ERROR output.
+- Latest candidate head must pass this new import step and all subsequent tests; Run #222 is not passing evidence.
