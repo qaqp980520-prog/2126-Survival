@@ -81,8 +81,12 @@ func _build_settings_ui() -> void:
     _settings_panel = PanelContainer.new()
     _settings_panel.name = "SettingsPanel"
     _settings_panel.set_anchors_preset(Control.PRESET_CENTER)
-    _settings_panel.position = Vector2(-190, -190)
     _settings_panel.custom_minimum_size = Vector2(380, 380)
+    # Keep the settings panel visually readable as render resolution rises.
+    # The 3D viewport uses the selected resolution, so fixed-size UI otherwise
+    # occupies a progressively smaller fraction of the screen.
+    _settings_panel.pivot_offset = Vector2(190, 190)
+    _apply_settings_panel_scale()
     hud.add_child(_settings_panel)
     var layout := VBoxContainer.new()
     layout.add_theme_constant_override("separation", 12)
@@ -143,6 +147,14 @@ func _build_settings_ui() -> void:
     layout.add_child(close_button)
     _settings_panel.visible = false
 
+func _apply_settings_panel_scale() -> void:
+    if _settings_panel == null:
+        return
+    var resolution_index: int = clampi(int(_settings.get("resolution_index", 0)), 0, 2)
+    var scale_factor: float = [1.0, 1.25, 1.5][resolution_index]
+    _settings_panel.scale = Vector2.ONE * scale_factor
+    _settings_panel.position = Vector2(-190.0, -190.0)
+
 func _toggle_settings_panel() -> void:
     if _settings_panel != null:
         _settings_panel.visible = not _settings_panel.visible
@@ -169,6 +181,7 @@ func _on_resolution_changed(index: int) -> void:
     var sizes: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
     var selected: int = clampi(index, 0, sizes.size() - 1)
     _settings["resolution_index"] = selected
+    _apply_settings_panel_scale()
     if DisplayServer.get_name() != "headless":
         var window := get_window()
         # With stretch/mode="viewport", changing only Window.size scales the same
