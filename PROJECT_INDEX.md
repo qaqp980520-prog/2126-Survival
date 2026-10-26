@@ -127,5 +127,5 @@
 
 - PR #39 is merged; mainline merge commit is `1b48e11f1638e56d63263fa3ed6cb37fd9106624`.
 - Validating run on the exact PR head before merge: Godot 4.3 CI Run #115 (`40284605381`) success; all required steps 1–35 passed. The merge commit has the same tree as the validated PR head.
-- This follow-up documentation PR updates the index from the prior pending/draft state to the verified merged state. Because `PROJECT_INDEX.md` triggers the validation workflow, this docs-only change must also pass full CI before merge.
+- This reconciliation was PR #40, merged as `349ff77f2fcd2e2ac136d2dc8432793408c883a7` after Godot 4.3 CI Run #116 (`40284833278`) passed with 38 steps and zero failures.
 - Remaining: connect `MineralChunkController` to the actual production world generator; no distance-based chunk selection, async streaming, GUI playtest, or iPhone test is claimed.
