@@ -308,6 +308,35 @@ func _decorate_wall_face(parent: Node3D, side: String, wall_center: Vector3, hor
     var stain_size := Vector3(0.42, 0.28, 0.014) if horizontal else Vector3(0.014, 0.28, 0.42)
     _add_decor_box(parent, side + "WallpaperWear", stain_position, stain_size, stain_material)
 
+func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: Vector3, wall_size: Vector3) -> void:
+    # Subtle trim and deterministic faded wallpaper patches; decorative meshes only.
+    var baseboard_material := StandardMaterial3D.new()
+    baseboard_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.22)
+    baseboard_material.roughness = 0.98
+    var stain_material := StandardMaterial3D.new()
+    stain_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.12)
+    stain_material.roughness = 1.0
+    var is_north_south_wall := wall_size.x >= wall_size.z
+    var board_size := Vector3(wall_size.x, 0.16, 0.26) if is_north_south_wall else Vector3(0.26, 0.16, wall_size.z)
+    var board_offset := Vector3(0, -WALL_HEIGHT * 0.5 + 0.12, 0)
+    _add_decor_box(parent, object_name + "Baseboard", wall_position + board_offset, board_size, baseboard_material)
+    var stain_seed := _hash_value(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0), 93)
+    if stain_seed % 4 == 0:
+        var stain_size := Vector3(0.45 + float(stain_seed % 5) * 0.12, 0.32 + float(stain_seed % 3) * 0.1, 0.025) if is_north_south_wall else Vector3(0.025, 0.32 + float(stain_seed % 3) * 0.1, 0.45 + float(stain_seed % 5) * 0.12)
+        var face_offset := Vector3(0, 0.15, 0.125) if is_north_south_wall else Vector3(0.125, 0.15, 0)
+        var along := float((stain_seed % 5) - 2) * 0.9
+        if is_north_south_wall:
+            face_offset.x = along
+        else:
+            face_offset.z = along
+        _add_decor_box(parent, object_name + "FadedPatch", wall_position + face_offset, stain_size, stain_material)
+    if stain_seed % 7 == 0:
+        var seam_material := StandardMaterial3D.new()
+        seam_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.06)
+        seam_material.roughness = 0.98
+        var seam_size := Vector3(0.045, WALL_HEIGHT - 0.35, 0.025) if is_north_south_wall else Vector3(0.025, WALL_HEIGHT - 0.35, 0.045)
+        _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
+
 func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
     if DisplayServer.get_name() == "headless":
         return
@@ -334,6 +363,7 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         mesh_instance.material_override = material
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
+        _add_wall_wear_details(parent, object_name, wall_position, wall_size)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = wall_position
