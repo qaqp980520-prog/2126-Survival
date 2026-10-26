@@ -91,15 +91,17 @@ func _tick_with_drift(drift: Array) -> bool:
 	heats = result["heats"]
 	time_left = maxf(0.0, time_left - 1.0)
 	if Rules.is_overheated(heats):
+		# A reactor meltdown always takes priority over a simultaneous stability win.
 		game_state = "meltdown"
-	elif Rules.is_grid_stable(outputs):
-		stable_seconds += 1
 	else:
-		stable_seconds = 0
-	if stable_seconds >= Rules.REQUIRED_STABLE_SECONDS:
-		game_state = "victory"
-	elif time_left <= 0.0:
-		game_state = "timeout"
+		if Rules.is_grid_stable(outputs):
+			stable_seconds += 1
+		else:
+			stable_seconds = 0
+		if stable_seconds >= Rules.REQUIRED_STABLE_SECONDS:
+			game_state = "victory"
+		elif time_left <= 0.0:
+			game_state = "timeout"
 	queue_redraw()
 	return true
 
