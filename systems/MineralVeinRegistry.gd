@@ -14,33 +14,34 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 	var key := stable_id.strip_edges()
 	if key.is_empty() or key != stable_id or vein == null or not (vein is MiningNode):
 		return false
+	var mining_vein: MineralMiningNode = vein as MineralMiningNode
 	if _veins.has(key) and is_instance_valid(_veins[key]):
-		if _veins[key] != vein:
+		if _veins[key] != mining_vein:
 			return false
 		# Idempotent registration of the same live node must not reload a stale snapshot.
 		return true
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
-	if now <= 0 or not Catalog.has_mineral(vein.mineral_id):
+	if now <= 0 or not Catalog.has_mineral(mining_vein.mineral_id):
 		return false
 
 	if _saved_records.has(key):
 		var saved_record: Variant = _saved_records[key]
-		if not (saved_record is Dictionary) or not _validate_record(key, saved_record, vein.mineral_id, now):
+		if not (saved_record is Dictionary) or not _validate_record(key, saved_record, mining_vein.mineral_id, now):
 			return false
-		if not vein.load_save_dict(saved_record, now, false):
+		if not mining_vein.load_save_dict(saved_record, now, false):
 			return false
 		if auto_apply_elapsed_time_on_restore:
-			vein.apply_elapsed_regeneration(now)
+			mining_vein.apply_elapsed_regeneration(now)
 	else:
-		if vein.last_regen_unix <= 0:
-			vein.last_regen_unix = now
-		var initial_record: Dictionary = vein.to_save_dict()
-		if not _validate_record(key, initial_record, vein.mineral_id, now):
+		if mining_vein.last_regen_unix <= 0:
+			mining_vein.last_regen_unix = now
+		var initial_record: Dictionary = mining_vein.to_save_dict()
+		if not _validate_record(key, initial_record, mining_vein.mineral_id, now):
 			return false
 		_saved_records[key] = initial_record.duplicate(true)
 
-	_veins[key] = vein
-	_saved_records[key] = vein.to_save_dict()
+	_veins[key] = mining_vein
+	_saved_records[key] = mining_vein.to_save_dict()
 	return true
 
 ## Capture the final state before a chunk releases its live node. The record remains
@@ -49,8 +50,8 @@ func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: in
 	var key := stable_id.strip_edges()
 	if not _veins.has(key) or not is_instance_valid(_veins[key]):
 		return false
-	var vein = _veins[key]
-	if expected_vein != null and _veins[key] != expected_vein:
+	var vein: MineralMiningNode = _veins[key] as MineralMiningNode
+	if vein == null or (expected_vein != null and vein != expected_vein):
 		return false
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	var current_record: Dictionary = vein.to_save_dict()
