@@ -43,7 +43,7 @@ var _settings: Dictionary = {}
 
 func _ready() -> void:
     _settings = SettingsProfile.load_settings(_settings_path)
-    _high_graphics = bool(_settings.get("high_graphics", false))
+    _high_graphics = bool(_settings.get("high_graphics", true))
     _shadows_enabled = bool(_settings.get("shadows_enabled", false))
     _flicker_enabled = true # Fluorescent flicker is automatic, not a user setting.
     player.set_camera_mode(int(_settings.get("camera_mode", 0)) == 1)
@@ -205,7 +205,10 @@ func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
         get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
         get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
-        get_window().size = Vector2i(1280, 720)
+        var sizes: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+        var resolution_index: int = clampi(int(_settings.get("resolution_index", 0)), 0, sizes.size() - 1)
+        get_window().size = sizes[resolution_index]
+        get_window().move_to_center()
 
 func _build_player_visual() -> void:
     # Readable primitive humanoid placeholder for third-person exploration.
@@ -370,6 +373,14 @@ func _create_maze_cell(cell: Vector2i) -> void:
     if _high_graphics:
         _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
         _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
+    if _high_graphics:
+        var ceiling_seam_material := StandardMaterial3D.new()
+        ceiling_seam_material.albedo_color = Color(0.34, 0.31, 0.22)
+        ceiling_seam_material.roughness = 1.0
+        for tile_index in range(1, 4):
+            var seam_offset := -CELL_SIZE * 0.5 + float(tile_index) * CELL_SIZE / 4.0
+            _add_decor_box(root, "CeilingGridX_%d" % tile_index, Vector3(seam_offset, WALL_HEIGHT + 0.035, 0), Vector3(0.025, 0.018, CELL_SIZE), ceiling_seam_material)
+            _add_decor_box(root, "CeilingGridZ_%d" % tile_index, Vector3(0, WALL_HEIGHT + 0.035, seam_offset), Vector3(CELL_SIZE, 0.018, 0.025), ceiling_seam_material)
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
