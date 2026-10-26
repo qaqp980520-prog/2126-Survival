@@ -4,7 +4,6 @@ const RegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
-const AdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
