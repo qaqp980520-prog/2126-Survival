@@ -5,6 +5,7 @@ const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
+const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
 const WORLD_SEED: int = 20261026
 const SAFE_DISTANCE: float = 7.0
@@ -309,21 +310,14 @@ func _prepare_maze_materials() -> void:
     _cell_material_wall.emission = Color(0.10, 0.09, 0.04)
     _cell_material_wall.emission_energy_multiplier = 0.22
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
-    # Keep the wallpaper on the shared wall material itself. Previously the
-    # main wall material was only a solid color, while a separate per-wall
-    # material attempted to load SVG at runtime; if that import failed the
-    # visible result was exactly the plain-color wall in user screenshots.
-    var wallpaper_path := "res://assets/textures/backrooms_wallpaper.svg"
-    if ResourceLoader.exists(wallpaper_path):
-        var wallpaper_texture := load(wallpaper_path) as Texture2D
-        if wallpaper_texture != null:
-            _cell_material_wall.albedo_texture = wallpaper_texture
-            _cell_material_wall.uv1_triplanar = false
-            _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
-        else:
-            push_error("Backrooms wallpaper exists but did not load as Texture2D: " + wallpaper_path)
-    else:
-        push_error("Backrooms wallpaper resource is missing: " + wallpaper_path)
+    # Use a preloaded imported texture so the runtime wall material cannot
+    # silently remain a flat color when an SVG runtime load fails.
+    _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
+    _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+    _cell_material_wall.uv1_triplanar = false
+    _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
+    if _cell_material_wall.albedo_texture == null:
+        push_error("Backrooms wallpaper preload is null: res://assets/textures/backrooms_wallpaper.svg")
 
 func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
