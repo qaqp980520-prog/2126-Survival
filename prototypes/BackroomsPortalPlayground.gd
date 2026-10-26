@@ -310,6 +310,10 @@ func _create_maze_cell(cell: Vector2i) -> void:
     _loaded_cells[cell] = root
     _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
     if _high_graphics:
+        var floor_mesh := root.get_node_or_null("FloorMesh") as MeshInstance3D
+        if floor_mesh != null:
+            floor_mesh.material_override = _make_surface_material(true, cell)
+    if _high_graphics:
         _add_carpet_texture(root)
     # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
     var seam_material := StandardMaterial3D.new()
@@ -483,6 +487,59 @@ func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: 
         var seam_size := Vector3(0.045, WALL_HEIGHT - 0.35, 0.025) if is_north_south_wall else Vector3(0.025, WALL_HEIGHT - 0.35, 0.045)
         _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0 if is_north_south_wall else 0.13, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
 
+func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> ShaderMaterial:
+    var shader := Shader.new()
+    if is_floor:
+        shader.code = """
+shader_type spatial;
+uniform vec4 base_color : source_color = vec4(0.57, 0.51, 0.31, 1.0);
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise21(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x), mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
+}
+void fragment() {
+    vec2 uv = UV * vec2(65.0, 65.0);
+    float grain = noise21(uv * 2.7);
+    float fibers = sin(uv.x * 8.0 + sin(uv.y * 2.0)) * 0.035 + sin(uv.y * 13.0) * 0.018;
+    float worn = smoothstep(0.45, 0.8, noise21(uv * 0.11));
+    vec3 color = base_color.rgb * (0.90 + grain * 0.16 + fibers);
+    color *= 1.0 - worn * 0.16;
+    ALBEDO = color;
+    ROUGHNESS = 1.0;
+}
+"""
+    else:
+        shader.code = """
+shader_type spatial;
+uniform vec4 base_color : source_color = vec4(0.76, 0.69, 0.42, 1.0);
+uniform float seed_offset = 0.0;
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed_offset) * 43758.5453); }
+float noise21(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x), mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
+}
+void fragment() {
+    vec2 uv = UV * vec2(7.0, 3.0);
+    float cloudy = noise21(uv * 2.2);
+    float stains = smoothstep(0.48, 0.76, noise21(uv * 0.72));
+    float paper_line = 1.0 - smoothstep(0.0, 0.025, abs(fract(UV.x * 7.0) - 0.5));
+    float peel_noise = noise21(uv * 4.5 + vec2(1.7, 3.2));
+    float peel = smoothstep(0.66, 0.78, peel_noise) * step(0.78, noise21(uv * 1.5));
+    vec3 aged = base_color.rgb * (0.88 + cloudy * 0.22);
+    aged *= 1.0 - stains * 0.23;
+    aged = mix(aged, vec3(0.27, 0.22, 0.14), peel * 0.82);
+    aged *= 1.0 - paper_line * 0.08;
+    ALBEDO = aged;
+    ROUGHNESS = 0.98;
+}
+"""
+    var material := ShaderMaterial.new()
+    material.shader = shader
+    material.set_shader_parameter("base_color", _cell_material_floor.albedo_color if is_floor else _cell_material_wall.albedo_color)
+    material.set_shader_parameter("seed_offset", float(abs(seed_cell.x * 31 + seed_cell.y * 17)))
+    return material
+
 func _add_carpet_texture(parent: Node3D) -> void:
     if DisplayServer.get_name() == "headless":
         return
@@ -553,7 +610,7 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         var mesh := BoxMesh.new()
         mesh.size = wall_size
         mesh_instance.mesh = mesh
-        mesh_instance.material_override = material
+        mesh_instance.material_override = _make_surface_material(false, Vector2i(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0))) if _high_graphics else material
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
         if _high_graphics:
