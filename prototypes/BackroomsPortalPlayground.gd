@@ -31,7 +31,6 @@ var _cell_material_floor: StandardMaterial3D
 var _cell_material_wall: StandardMaterial3D
 var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
-var _light_cells: Dictionary = {}
 var _flicker_clock: float = 0.0
 var _high_graphics: bool = true
 var _flicker_enabled: bool = true
@@ -199,8 +198,7 @@ func _rebuild_maze_for_settings() -> void:
                 cell_node.queue_free()
         _loaded_cells.clear()
         _flicker_lights.clear()
-        _light_cells.clear()
-        _stream_maze_cells(true)
+            _stream_maze_cells(true)
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
@@ -409,7 +407,6 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.shadow_enabled = _should_enable_light_shadows(cell)
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
-            _light_cells[ceiling_light.get_instance_id()] = cell
             ceiling_light.light_energy = 0.9 if _high_graphics else 0.75
             ceiling_light.omni_range = 7.0 if _high_graphics else 5.5
 
