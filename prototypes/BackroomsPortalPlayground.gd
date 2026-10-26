@@ -44,7 +44,7 @@ func _ready() -> void:
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
-        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | Esc release mouse | T portal test | B return | G collect | H drop | F5 save | F9 load"
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | Esc release mouse | F11 fullscreen | T portal test | B return | G collect | H drop | F5 save | F9 load"
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
@@ -201,14 +201,15 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
     if material == null:
         material = StandardMaterial3D.new()
         material.albedo_color = Color(0.76, 0.69, 0.42)
-    var mesh_instance := MeshInstance3D.new()
-    mesh_instance.name = object_name + "Mesh"
-    var mesh := BoxMesh.new()
-    mesh.size = wall_size
-    mesh_instance.mesh = mesh
-    mesh_instance.material_override = material
-    mesh_instance.position = wall_position
-    parent.add_child(mesh_instance)
+    if DisplayServer.get_name() != "headless":
+        var mesh_instance := MeshInstance3D.new()
+        mesh_instance.name = object_name + "Mesh"
+        var mesh := BoxMesh.new()
+        mesh.size = wall_size
+        mesh_instance.mesh = mesh
+        mesh_instance.material_override = material
+        mesh_instance.position = wall_position
+        parent.add_child(mesh_instance)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = wall_position
@@ -242,17 +243,18 @@ func is_backrooms_collision_enabled() -> bool:
     return backrooms_room != null and is_instance_valid(backrooms_room) and _contains_enabled_collision(backrooms_room)
 
 func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, color: Color) -> void:
-    var material := StandardMaterial3D.new()
-    material.albedo_color = color
-    material.roughness = 0.82
-    var mesh_instance := MeshInstance3D.new()
-    mesh_instance.name = object_name + "Mesh"
-    var mesh := BoxMesh.new()
-    mesh.size = box_size
-    mesh_instance.mesh = mesh
-    mesh_instance.material_override = material
-    mesh_instance.position = box_position
-    parent.add_child(mesh_instance)
+    if DisplayServer.get_name() != "headless":
+        var material := StandardMaterial3D.new()
+        material.albedo_color = color
+        material.roughness = 0.82
+        var mesh_instance := MeshInstance3D.new()
+        mesh_instance.name = object_name + "Mesh"
+        var mesh := BoxMesh.new()
+        mesh.size = box_size
+        mesh_instance.mesh = mesh
+        mesh_instance.material_override = material
+        mesh_instance.position = box_position
+        parent.add_child(mesh_instance)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = box_position
