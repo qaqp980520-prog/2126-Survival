@@ -70,6 +70,16 @@ func _run_integration_test() -> void:
     _expect(not bool(world.call("load_world_state_from_dictionary", invalid_save)), "rejects invalid portal schema")
     _expect(int(world.call("get_inventory_count", "berries")) == before_count, "invalid restore leaves inventory unchanged")
     _expect(str(world.call("get_current_level")) == before_level, "invalid restore leaves current level unchanged")
+
+    var mismatched_save: Dictionary = world.call("serialize_world_state")
+    var mismatched_portal_state: Dictionary = mismatched_save["backrooms_portal_state"]
+    mismatched_portal_state["active_portal"] = {
+        "id": int(mismatched_portal_state.get("portal_serial", 1)),
+        "position": [0.0, 0.0]
+    }
+    mismatched_save["backrooms_portal_state"] = mismatched_portal_state
+    _expect(not bool(world.call("load_world_state_from_dictionary", mismatched_save)), "rejects a surface portal saved inside Backrooms")
+    _expect(int(world.call("get_inventory_count", "rock")) == 25, "mismatched save rejection preserves inventory state")
     world.call("debug_return_to_surface")
     await process_frame
     _expect(bool(world.call("is_surface_collision_enabled")), "surface collisions re-enable on return")
