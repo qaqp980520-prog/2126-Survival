@@ -67,6 +67,8 @@ jobs:
           test -f daily_games/KROLL_Hydroponics_Shift/tests/game_smoke_test.gd
           test -f systems/MineralChunkController.gd
           test -f tests/mineral_chunk_controller_test.gd
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f tests/mineral_grid_streaming_director_test.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -255,3 +257,28 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'Mineral chunk controller integration tests passed.'
+
+      - name: Import and parse KROLL Signal Siphon
+        run: godot --headless --path daily_games/KROLL_Signal_Siphon --editor --quit
+      - name: Run KROLL Signal Siphon rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Signal_Siphon --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Signal Siphon rules tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Signal Siphon rules tests passed.'
+      - name: Run KROLL Signal Siphon runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Signal_Siphon --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Signal Siphon smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Signal Siphon runtime smoke test passed.'
