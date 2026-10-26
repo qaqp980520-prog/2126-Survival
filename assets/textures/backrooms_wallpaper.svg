@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
   <defs>
     <pattern id="wallpaper" width="32" height="256" patternUnits="userSpaceOnUse">
-      <rect width="32" height="256" fill="#e8df91"/>
-      <rect x="0" width="2" height="256" fill="#b6a94f" opacity=".72"/>
-      <rect x="3" width="1" height="256" fill="#fff5bd" opacity=".95"/>
-      <rect x="7" width="1" height="256" fill="#a99c43" opacity=".82"/>
-      <rect x="10" width="2" height="256" fill="#fff2b0" opacity=".95"/>
-      <rect x="14" width="1" height="256" fill="#a79a42" opacity=".72"/>
-      <rect x="17" width="1" height="256" fill="#fff4bd" opacity=".92"/>
-      <rect x="21" width="2" height="256" fill="#b0a34a" opacity=".75"/>
-      <rect x="25" width="1" height="256" fill="#fff5c5" opacity=".92"/>
-      <rect x="29" width="1" height="256" fill="#a79a42" opacity=".72"/>
-      <g fill="none" stroke="#a79a42" stroke-width="1.5" opacity=".9">
+      <rect width="32" height="256" fill="#e7e59f"/>
+      <rect x="0" width="2" height="256" fill="#c8c477" opacity=".48"/>
+      <rect x="3" width="1" height="256" fill="#f7f3bf" opacity=".9"/>
+      <rect x="7" width="1" height="256" fill="#c3bf73" opacity=".65"/>
+      <rect x="10" width="2" height="256" fill="#f3efb2" opacity=".9"/>
+      <rect x="14" width="1" height="256" fill="#b9b66f" opacity=".55"/>
+      <rect x="17" width="1" height="256" fill="#f6f2bd" opacity=".8"/>
+      <rect x="21" width="2" height="256" fill="#c4c078" opacity=".52"/>
+      <rect x="25" width="1" height="256" fill="#f7f4c2" opacity=".8"/>
+      <rect x="29" width="1" height="256" fill="#bcb871" opacity=".55"/>
+      <g fill="none" stroke="#b8b46c" stroke-width="1.1" opacity=".78">
         <path d="M16 7 L22 14 L16 21 L10 14 Z"/>
         <path d="M16 23 L21 29 L16 35 L11 29 Z"/>
         <path d="M16 39 L22 46 L16 53 L10 46 Z"/>
@@ -28,7 +28,7 @@
         <path d="M16 215 L21 221 L16 227 L11 221 Z"/>
         <path d="M16 231 L22 238 L16 245 L10 238 Z"/>
       </g>
-      <g fill="none" stroke="#fff7c9" stroke-width="1.5" opacity=".95">
+      <g fill="none" stroke="#f8f4c2" stroke-width="1.2" opacity=".82">
         <path d="M1 4 L5 8 L1 12 M31 4 L27 8 L31 12"/>
         <path d="M1 68 L5 72 L1 76 M31 68 L27 72 L31 76"/>
         <path d="M1 132 L5 136 L1 140 M31 132 L27 136 L31 140"/>
