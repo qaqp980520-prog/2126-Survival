@@ -111,14 +111,21 @@
 - New validation: `.github/workflows/godot-validation.yml` now checks the new project files, imports Pulse Rhythm, runs its rules and scene smoke tests, and runs the mineral chunk controller integration test with explicit success markers and runtime-error guards.
 - Documentation: `docs/MINERAL_CHUNK_CONTROLLER_M0_1_2026-10-26.md`.
 - Validation status at branch creation: no local Godot binary is available. Static source review only so far; remote Godot 4.3 CI must pass before merge. No GUI playtest or iPhone device test is claimed.
-- Current PR status: not yet opened at this index update; create/update PR after verifying all changed paths and the diff.
+- At the time of this original feature-branch index commit, PR #39 had not yet been opened; it was subsequently opened, fully validated by Run #115, and merged into main as `1b48e11f1638e56d63263fa3ed6cb37fd9106624`.
 - Integration limit: this controller owns instantiated chunk roots provided by a world generator, but does not yet perform distance-based spatial selection, asynchronous scene loading, or procedural world generation. It is the first lifecycle owner, not a complete streaming engine.
 - Next: inspect the complete diff, run the new CI, fix any actual failures on this branch, and only merge after the full regression suite passes. Then reconcile the Notion asset index with the resulting PR/commit/test IDs.
 
 ## Run 8 validation update — 2026-10-26
 
-- PR #39 is open as a draft: https://github.com/qaqp980520-prog/2126-Survival/pull/39.
+- PR #39 was merged into `main`: https://github.com/qaqp980520-prog/2126-Survival/pull/39. Merge commit: `1b48e11f1638e56d63263fa3ed6cb37fd9106624`.
 - Initial full CI Run #113 (40284210713) failed at controller compilation because the new script referenced its own global class name in the ID check. Fixed in commit 052ff685d27cd0e7007d36c41ee23c59756f3b09 by calling the preloaded adapter's static ID builder.
 - Full Godot 4.3 CI Run #114 (40284396621) then succeeded. Required steps 1–35 all passed; explicit success markers were present for Pulse Rhythm rules tests, Pulse Rhythm runtime smoke test, and mineral chunk controller integration test. Job logs showed no actual Godot script/runtime error output.
-- The index was updated on the feature branch after Run #114. This documentation change triggers another full CI run; the PR remains unmerged until the latest head's full run passes.
+- The feature-branch index update was validated by final-head Godot 4.3 CI Run #115 (`40284605381`) before PR #39 merged. Run #115 passed; required steps 1–35 succeeded, including the new rhythm and chunk-controller tests.
 - Current limitations remain: no local Godot binary, no GUI/iPhone playtest, and no distance-based or asynchronous chunk selection. Controller owns chunk roots supplied by the world generator; integration into the production world generator remains a separate step.
+
+## Run 8 final mainline reconciliation — 2026-10-26
+
+- PR #39 is merged; mainline merge commit is `1b48e11f1638e56d63263fa3ed6cb37fd9106624`.
+- Validating run on the exact PR head before merge: Godot 4.3 CI Run #115 (`40284605381`) success; all required steps 1–35 passed. The merge commit has the same tree as the validated PR head.
+- This follow-up documentation PR updates the index from the prior pending/draft state to the verified merged state. Because `PROJECT_INDEX.md` triggers the validation workflow, this docs-only change must also pass full CI before merge.
+- Remaining: connect `MineralChunkController` to the actual production world generator; no distance-based chunk selection, async streaming, GUI playtest, or iPhone test is claimed.
