@@ -94,6 +94,16 @@ jobs:
           test -f tests/mineral_vein_chunk_stream_test.gd
           test -f prototypes/minerals/MineralOreVisual.gd
           test -f prototypes/minerals/MineralMiningVFX.gd
+      - name: Import and parse root 2126 Survival project
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Godot reported root-project import or parse errors."
+            exit 1
+          fi
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
