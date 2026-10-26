@@ -140,7 +140,7 @@ func _move_bullets(delta: float) -> void:
                 _score += Rules.score_for_kill()
                 hit_enemy = true
                 break
-        if hit_enemy or float(bullet["life"]) <= 0.0 or position.x < -20.0 or position.y < -20.0 or position.x > size.x + 20.0 or position.y > size.y + 20.0:
+        if hit_enemy or float(bullet["life"]) <= 0.0 or bullet_position.x < -20.0 or bullet_position.y < -20.0 or bullet_position.x > size.x + 20.0 or bullet_position.y > size.y + 20.0:
             _bullets.remove_at(bullet_index)
 
 func _draw() -> void:
