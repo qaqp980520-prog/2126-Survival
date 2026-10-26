@@ -13,7 +13,7 @@ Make each mineral vein recover stock according to elapsed real-world seconds, in
 - A system-clock rollback never moves the saved timestamp backwards or creates stock.
 
 ## Save compatibility
-Schema version remains 1. New saves include `max_units`, `regen_interval_seconds`, and `last_regen_unix`. Older schema-v1 saves containing only `schema_version`, `mineral_id`, and `remaining_units` remain accepted; they begin a new regeneration clock at load time. If a legacy save contains more stock than the node's current default maximum, capacity is inferred from the saved stock so old stock is not silently discarded.
+New saves use schema version 2 and remain backward-compatible with schema-v1 saves. New saves include `max_units`, `regen_interval_seconds`, and `last_regen_unix`. Older schema-v1 saves containing only `schema_version`, `mineral_id`, and `remaining_units` remain accepted; they begin a new regeneration clock at load time. If a legacy save contains more stock than the node's current default maximum, capacity is inferred from the saved stock so old stock is not silently discarded.
 
 Invalid schema, mineral ID, stock, capacity, interval, or timestamp is rejected before live state changes.
 
