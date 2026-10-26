@@ -4,6 +4,8 @@ class_name MineralGridStreamingDirector
 ## Spatial streaming coordinator for chunks supplied by a generator callback.
 ## It selects a square grid around a world position and delegates chunk ownership to
 ## MineralChunkController. It does not generate terrain or perform async loading itself.
+signal sync_failed(report: Dictionary)
+
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 
 @export_range(1.0, 4096.0, 1.0) var chunk_size_x: float = 64.0
@@ -13,6 +15,7 @@ const ControllerScript = preload("res://systems/MineralChunkController.gd")
 var chunk_controller: Node3D
 var chunk_factory: Callable
 var _managed_chunk_ids: Dictionary = {} # chunk ID -> Vector2i coordinate
+var _last_sync_report: Dictionary = {}
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null:
@@ -35,8 +38,10 @@ func bind_chunk_factory(factory: Callable) -> bool:
 
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
+		_set_sync_report(false, "validation", "Controller or chunk factory is unavailable.", true)
 		return false
 	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+		_set_sync_report(false, "validation", "Chunk dimensions and load radius must be valid.", true)
 		return false
 
 	var center := Vector2i(
@@ -62,13 +67,25 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		var candidate: Variant = chunk_factory.call(coord)
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
-			if not _rollback_new_loads(newly_loaded, now_unix):
-				push_error("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
+			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+			_set_sync_report(false, "load_factory", "Chunk factory returned an invalid root.", rollback_ok, {
+				"failed_chunk_id": id,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"new_loads_rollback_ok": rollback_ok
+			})
+			if not rollback_ok:
+				push_warning("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
 			return false
 		if not chunk_controller.load_chunk(id, candidate, now_unix):
 			_free_unowned_root(candidate)
-			if not _rollback_new_loads(newly_loaded, now_unix):
-				push_error("Mineral grid streaming rollback was incomplete after chunk registration failure.")
+			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+			_set_sync_report(false, "load_registration", "Chunk controller rejected a new chunk.", rollback_ok, {
+				"failed_chunk_id": id,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"new_loads_rollback_ok": rollback_ok
+			})
+			if not rollback_ok:
+				push_warning("Mineral grid streaming rollback was incomplete after chunk registration failure.")
 			return false
 		_managed_chunk_ids[id] = coord
 		newly_loaded.append(id)
@@ -87,12 +104,34 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 			# Restore the previous active set instead of leaving a half-shifted window.
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
-			if not new_loads_restored or not old_chunks_restored:
-				push_error("Mineral grid streaming rollback was incomplete after stale chunk unload failure.")
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored
+			var unloaded_ids: Array[String] = []
+			for entry in unloaded_stale:
+				unloaded_ids.append(str(entry.get("id", "")))
+			_set_sync_report(false, "stale_unload", "Controller failed to unload a stale chunk.", rollback_complete, {
+				"failed_chunk_id": id,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"unloaded_stale_ids": unloaded_ids,
+				"new_loads_rollback_ok": new_loads_restored,
+				"stale_restore_ok": old_chunks_restored
+			})
+			if not rollback_complete:
+				push_warning("Mineral grid streaming rollback was incomplete after stale chunk unload failure; inspect get_last_sync_report().")
 			return false
 		unloaded_stale.append({"id": id, "coord": stale_coord})
 		_managed_chunk_ids.erase(id)
+
+	_set_sync_report(true, "complete", "", true, {
+		"center": center,
+		"desired_count": desired.size(),
+		"newly_loaded_ids": newly_loaded.duplicate()
+	})
 	return true
+
+## Returns a snapshot of the last sync outcome, including actual active IDs from both owners.
+## On failure, callers can inspect phase/details or subscribe to sync_failed(report).
+func get_last_sync_report() -> Dictionary:
+	return _last_sync_report.duplicate(true)
 
 func get_managed_chunk_ids() -> PackedStringArray:
 	var ids := PackedStringArray()
@@ -102,6 +141,8 @@ func get_managed_chunk_ids() -> PackedStringArray:
 	return ids
 
 func get_grid_coordinate(world_position: Vector3) -> Vector2i:
+	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
+		return Vector2i.ZERO
 	return Vector2i(floori(world_position.x / chunk_size_x), floori(world_position.z / chunk_size_z))
 
 func _chunk_id(coord: Vector2i) -> String:
@@ -140,6 +181,29 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 func _free_unowned_root(candidate: Variant) -> void:
 	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null:
 		candidate.free()
+
+func _set_sync_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
+	_last_sync_report = {
+		"success": success,
+		"phase": phase,
+		"message": message,
+		"rollback_complete": rollback_complete,
+		"details": details.duplicate(true),
+		"managed_chunk_ids": get_managed_chunk_ids(),
+		"controller_chunk_ids": _get_controller_loaded_ids()
+	}
+	if not success:
+		sync_failed.emit(_last_sync_report.duplicate(true))
+
+func _get_controller_loaded_ids() -> PackedStringArray:
+	var ids := PackedStringArray()
+	if chunk_controller != null and is_instance_valid(chunk_controller) and chunk_controller.has_method("get_loaded_chunk_ids"):
+		var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
+		if raw_ids is Array or raw_ids is PackedStringArray:
+			for item in raw_ids:
+				ids.append(str(item))
+	ids.sort()
+	return ids
 
 static func _coordinate_less(a: Vector2i, b: Vector2i) -> bool:
 	if a.y == b.y:
