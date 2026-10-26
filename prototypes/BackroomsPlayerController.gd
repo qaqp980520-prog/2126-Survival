@@ -18,7 +18,7 @@ func _ready() -> void:
     camera.current = true
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
         _look_active = event.pressed
         Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if _look_active else Input.MOUSE_MODE_VISIBLE
@@ -35,6 +35,11 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event is InputEventKey and event.pressed and event.keycode == KEY_F11:
         var window := get_window()
         window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+        _look_active = false
+        Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
     var input_dir := Vector2.ZERO
