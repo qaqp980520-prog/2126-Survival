@@ -129,3 +129,11 @@
 - Validating run on the exact PR head before merge: Godot 4.3 CI Run #115 (`40284605381`) success; all required steps 1–35 passed. The merge commit has the same tree as the validated PR head.
 - This reconciliation was PR #40, merged as `349ff77f2fcd2e2ac136d2dc8432793408c883a7` after Godot 4.3 CI Run #116 (`40284833278`) passed with 38 steps and zero failures.
 - Remaining: connect `MineralChunkController` to the actual production world generator; no distance-based chunk selection, async streaming, GUI playtest, or iPhone test is claimed.
+
+
+## 2026-10-26 Run 9 — validation evidence and status reconciliation
+- KROLL Hydroponics Shift M0.1: standalone Godot 4.3+ crop-care arcade game in daily_games/KROLL_Hydroponics_Shift/; three beds, moisture/growth simulation, ten-harvest target, keyboard and touch controls; no external assets. Rules and runtime smoke tests passed on code head `92568e240abe1bd25149bba5a8da47d41ab451ce` in Godot 4.3 CI Run #123 (`40290454611`).
+- MineralChunkController M0.1.1: failed registration now detaches but does not free the caller-owned root. Integration tests for duplicate stable-ID load preservation and unload rollback passed in Run #123.
+- The prior final-head revision `0a5a6fc903d58bf42b27da7aaba1cb1ac204c9b2` passed Godot 4.3 CI Run #124 (`40290784159`): all 38 required validation steps succeeded, including Hydroponics and MineralChunkController tests; zero failures.
+- This commit refreshes the index and validation wording with that evidence. The final-head CI for this status-only refresh must pass before PR #42 is merged.
+- Candidate PR #42: https://github.com/qaqp980520-prog/2126-Survival/pull/42. Formal world generator integration and distance/asynchronous streaming remain incomplete. Local GUI and iPhone testing remain outstanding.
