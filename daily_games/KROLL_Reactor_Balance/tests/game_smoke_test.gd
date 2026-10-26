@@ -15,6 +15,15 @@ func _run() -> void:
 	var heats: Array = game.get("heats")
 	assert(is_equal_approx(float(outputs[0]), 40.0))
 	assert(is_equal_approx(float(heats[0]), 17.0))
+	var pointer := InputEventMouseButton.new()
+	pointer.button_index = MOUSE_BUTTON_LEFT
+	pointer.pressed = true
+	pointer.position = Vector2(650.0, 420.0)
+	game.call("_input", pointer)
+	outputs = game.get("outputs")
+	heats = game.get("heats")
+	assert(is_equal_approx(float(outputs[2]), 58.0))
+	assert(is_equal_approx(float(heats[2]), 50.0))
 	game.set("outputs", [50.0, 50.0, 50.0])
 	game.set("heats", [30.0, 30.0, 30.0])
 	game.set("stable_seconds", 17)
