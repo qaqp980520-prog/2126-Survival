@@ -11,18 +11,22 @@ func _run() -> void:
     _expect(int(game.get("_player_hp")) == 3, "game starts with three integrity")
     _expect(is_equal_approx(float(game.get("_time_left")), 45.0), "game starts with 45 seconds")
     var enemies: Array = game.get("_enemies")
-    var before: int = enemies.size()
+    var before_enemies: int = enemies.size()
     game.call("debug_spawn_enemy_at", Vector2(90, 90))
     enemies = game.get("_enemies")
-    _expect(enemies.size() == before + 1, "debug enemy spawn reaches game state")
-    game.call("debug_fire_toward", Vector2.RIGHT)
-    var bullets: Array = game.get("_bullets")
-    _expect(bullets.size() == 1, "aim command creates projectile")
+    _expect(enemies.size() == before_enemies + 1, "debug drone spawn reaches game state")
+    var cells: Array = game.get("_cells")
+    var before_cells: int = cells.size()
+    game.call("debug_spawn_cell_at", Vector2(100, 100))
+    cells = game.get("_cells")
+    _expect(cells.size() == before_cells + 1, "energy cell spawn reaches game state")
+    game.call("debug_dash", Vector2.RIGHT)
+    _expect(float(game.get("_dash_timer")) > 0.0, "dash activates for a bounded duration")
     game.queue_free()
     await process_frame
     var exit_code := 0
     if failures.is_empty():
-        print("KROLL Sentinel Protocol runtime smoke test passed.")
+        print("KROLL Sentinel Escape runtime smoke test passed.")
     else:
         for failure in failures:
             push_error("FAIL: " + failure)
