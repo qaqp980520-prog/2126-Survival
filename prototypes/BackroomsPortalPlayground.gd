@@ -64,10 +64,13 @@ func _process(delta: float) -> void:
         return
     if in_backrooms:
         _stream_maze_cells()
-    var player_position := Vector2(player.global_position.x, player.global_position.z)
-    var result: Dictionary = director.tick(delta, player_position)
-    if result.get("event", "none") == "spawned":
-        _spawn_portal(result["portal"])
+    else:
+        # Natural portals belong to the surface world in this prototype.
+        # Pausing the director here prevents portals spawning inside Backrooms.
+        var player_position := Vector2(player.global_position.x, player.global_position.z)
+        var result: Dictionary = director.tick(delta, player_position)
+        if result.get("event", "none") == "spawned":
+            _spawn_portal(result["portal"])
     _hud_elapsed += delta
     if _hud_elapsed >= 0.2:
         _hud_elapsed = 0.0
