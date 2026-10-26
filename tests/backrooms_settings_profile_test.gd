@@ -19,6 +19,7 @@ func _initialize() -> void:
     _expect(SettingsProfile.save_settings(clamped, path), "valid settings save to ConfigFile")
     _expect(SettingsProfile.load_settings(path) == clamped, "settings survive save/load round-trip")
     var config := ConfigFile.new()
+    config.set_value("graphics", "high_graphics", true)
     config.set_value("graphics", "flicker_enabled", false)
     _expect(config.save(path) == OK, "legacy settings fixture saves")
     var loaded_legacy: Dictionary = SettingsProfile.load_settings(path)

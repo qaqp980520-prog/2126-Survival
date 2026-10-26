@@ -86,7 +86,15 @@ func _run() -> void:
     loaded_cells = restored_world.get("_loaded_cells")
     room = restored_world.get("backrooms_room")
     _expect(loaded_cells.size() == 25 and room.get_child_count() == 25, "high-quality refresh rebuilds without duplicate stale cells")
-    _expect(bool(restored_world.call("_should_enable_light_shadows", Vector2i(0, 0))) or has_shadow_cell, "high shadow quality retains deterministic shadow selection")
+    var high_after_refresh := false
+    for z in range(-10, 11):
+        for x in range(-10, 11):
+            if bool(restored_world.call("_should_enable_light_shadows", Vector2i(x, z))):
+                high_after_refresh = true
+                break
+        if high_after_refresh:
+            break
+    _expect(high_after_refresh, "high shadow quality re-enables deterministic shadows after refresh")
 
     restored_world.call("_toggle_settings_panel")
     _expect(restored_panel.visible, "settings panel opens")
