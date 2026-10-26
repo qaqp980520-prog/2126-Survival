@@ -39,6 +39,8 @@ func _run_tests() -> void:
 	await process_frame
 	_test_vein_registry_save_restore_and_atomic_rejection()
 	await process_frame
+	await _test_registry_preserves_unloaded_chunk_veins()
+	await process_frame
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -284,9 +286,54 @@ func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
 	second.remaining_units = 1
 	assert(registry.restore_save_dict(saved, 1120))
 	assert(first.remaining_units == 2 and second.remaining_units == 4, "Disabled auto-regeneration must restore saved stock without adding offline units")
-	assert(not registry.restore_save_dict({"schema_version": 1, "veins": {"unknown-id": saved["veins"]["mine/sector-a/vein-01"]}}, 1300))
+	assert(registry.restore_save_dict({"schema_version": 1, "veins": {"unknown-id": saved["veins"]["mine/sector-a/vein-01"]}}, 1300), "Valid records for currently unloaded stable IDs must be retained")
+	assert(registry.get_saved_ids().has("unknown-id"))
 	assert(registry.unregister_vein("mine/sector-a/vein-01", first))
 	assert(not registry.unregister_vein("mine/sector-a/vein-01", first))
 	registry.queue_free()
 	first.queue_free()
 	second.queue_free()
+
+func _test_registry_preserves_unloaded_chunk_veins() -> void:
+	var registry = VeinRegistry.new()
+	root.add_child(registry)
+	var vein = MiningNode.new()
+	vein.mineral_id = "gold_ore"
+	vein.max_units = 8
+	vein.remaining_units = 1
+	vein.regen_interval_seconds = 60
+	root.add_child(vein)
+	await process_frame
+	vein.last_regen_unix = 1000
+	var stable_id := "chunk/12/-4/vein-gold-01"
+	assert(registry.register_vein(stable_id, vein, 1000))
+	vein.remaining_units = 1
+	vein.last_regen_unix = 1000
+	assert(registry.unregister_vein(stable_id, vein, 1000), "Chunk unload must persist the vein before unregistering it")
+	assert(not registry.get_registered_ids().has(stable_id))
+	assert(registry.get_saved_ids().has(stable_id), "Unloaded vein ID must remain in the save registry")
+	var unloaded_save: Dictionary = registry.to_save_dict()
+	assert(unloaded_save["veins"].has(stable_id), "Saving after chunk unload must keep the vein record")
+	vein.queue_free()
+	await process_frame
+
+	var replacement = MiningNode.new()
+	replacement.mineral_id = "gold_ore"
+	replacement.max_units = 8
+	replacement.remaining_units = 8
+	replacement.regen_interval_seconds = 60
+	root.add_child(replacement)
+	await process_frame
+	assert(registry.register_vein(stable_id, replacement, 1120), "Reloaded chunk must restore by stable ID")
+	assert(replacement.remaining_units == 3, "Reloading must apply two offline regeneration intervals to the stored one-unit vein")
+	assert(registry.get_registered_ids().has(stable_id))
+
+	var before: Dictionary = registry.to_save_dict()
+	var invalid: Dictionary = before.duplicate(true)
+	invalid["veins"][stable_id]["remaining_units"] = -1
+	assert(not registry.restore_save_dict(invalid, 1300), "An invalid unloaded/live record must reject the entire restore")
+	assert(replacement.remaining_units == 3, "Rejected restore must not mutate a live vein")
+	assert(registry.to_save_dict()["veins"][stable_id]["remaining_units"] == before["veins"][stable_id]["remaining_units"])
+	registry.queue_free()
+	replacement.queue_free()
+	await process_frame
