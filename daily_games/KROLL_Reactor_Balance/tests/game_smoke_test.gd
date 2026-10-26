@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var game: Control = GameScene.instantiate() as Control
+	var game: Variant = GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
 	assert(game.get_game_state() == "running")
