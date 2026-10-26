@@ -191,3 +191,12 @@
 - Design note: docs/MINERAL_GRID_STREAMING_ROLLBACK_M0_1_2026-10-26.md.
 - Validation at this index edit: source files have been committed to the candidate branch, but exact-head remote Godot 4.3 CI has not yet completed. Do not merge before all required steps pass. No local Godot binary, GUI playtest, GPU check, or iPhone test is claimed.
 - Known rollback limit: if the chunk factory repeatedly fails while recreating stale chunks, complete restoration cannot be guaranteed; the director reports the rollback failure. This is a synchronous prototype, not production world streaming.
+
+
+## Run 12 additional reconciliation — Backrooms settings and SVG material regression
+
+- During exact-main review, found that current main's settings UI had drifted from the persisted profile and its integration test: the UI wrote a transient shadows_enabled field while BackroomsSettingsProfile persisted high_graphics; the test expected GraphicsButton/_toggle_graphics_quality, but the scene exposed ShadowsButton/_toggle_shadows. The test also expected ShaderMaterial even though the current wall/floor path intentionally returns SVG-backed StandardMaterial3D.
+- PR #53 candidate reconciles the UI around persisted high_graphics, updates the graphics button/status, rebuilds the streamed maze after a quality change, and enables deterministic local shadows on selected non-headless ceiling lights. Fluorescent flicker remains automatic.
+- tests/backrooms_settings_integration_test.gd now verifies StandardMaterial3D texture loading and mesh UV mapping instead of stale shader assumptions.
+- Design note: docs/BACKROOMS_SETTINGS_RECONCILIATION_RUN12_2026-10-26.md.
+- These are corrections discovered from actual GitHub main, not claims inferred from the previous chat. The latest PR #53 head must pass the full Godot 4.3 workflow before merge; GUI/GPU/iPhone appearance remains unverified.
