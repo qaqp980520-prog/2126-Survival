@@ -66,6 +66,8 @@ jobs:
           test -f daily_games/KROLL_Hydroponics_Shift/tests/game_smoke_test.gd
           test -f systems/MineralChunkController.gd
           test -f tests/mineral_chunk_controller_test.gd
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f tests/mineral_grid_streaming_director_test.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -254,3 +256,15 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'Mineral chunk controller integration tests passed.'
+
+      - name: Run mineral grid streaming director tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during mineral grid streaming director tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral grid streaming director tests passed.'
