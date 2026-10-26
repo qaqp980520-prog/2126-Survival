@@ -50,6 +50,15 @@ func _run_integration_test() -> void:
     _expect(int(world.call("get_inventory_count", "berries")) == 2, "load restores prior inventory count")
     _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
 
+    var bridge: Node = world.get("bridge")
+    var player: Node = world.get_node("Player")
+    _expect(bool(bridge.call("collect_world_item", "rock", 40)), "rock pickup updates shared inventory")
+    _expect(is_equal_approx(float(player.call("get_effective_movement_multiplier")), 0.42), "super-heavy inventory slows player movement")
+    _expect(not bool(player.call("can_jump_with_current_load")), "super-heavy inventory disables jumping")
+    _expect(bool(bridge.call("drop_item", "rock", 15)), "dropping rocks updates shared inventory")
+    _expect(is_equal_approx(float(player.call("get_effective_movement_multiplier")), 1.0), "dropping below carry limit immediately restores movement")
+    _expect(bool(player.call("can_jump_with_current_load")), "dropping below super-heavy threshold immediately restores jumping")
+
     var before_count: int = int(world.call("get_inventory_count", "berries"))
     var before_level: String = str(world.call("get_current_level"))
     var invalid_save: Dictionary = saved.duplicate(true)
