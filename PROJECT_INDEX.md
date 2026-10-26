@@ -176,3 +176,18 @@
 - PR #51 keyboard dash fix merged as `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; exact-head Godot 4.3 CI Run #185 (`40316901157`) succeeded with explicit dash timer/cooldown assertions.
 - Current main after the documentation consolidation is `f6732519736697725a612e4c3a1a8836591c7aaa`. Main push CI Run #188 (`40317515975`) is pending at the time of this index update; the PR-level exact-head CI Run #187 succeeded before the docs merge.
 - GitHub open PR list was empty after closing superseded drafts #1/#2/#6/#8 and old feature branches #46/#47/#48.
+
+
+## Run 12 external-state correction and candidate — 2026-10-26
+
+- Cross-chat source check found the previous Run 11 Notion closeout recorded main as f11ec700d57394b79b5ea73df2079e8794fe7a1f, but the actual GitHub main ref now resolves to 45d84ffd3990cbe16f56f4bc06ad3c4c94b78584 (commit message: “Use simple SVG wallpaper pattern compatible with Godot SVG importer”).
+- GitHub compare main...f11ec700 reports main is 18 commits ahead of the previous closeout SHA. The fetched PROJECT_INDEX was not updated to reflect this later main history; this section supersedes prior “current main” statements for present-day state without rewriting their historical context.
+- At run start, GitHub API returned no open PRs. The main commit combined-status endpoint returned an empty status list; this is not treated as a successful CI result.
+- Candidate branch: feature/run12-reactor-balance-streaming-rollback-2026-10-26, created from actual main SHA 45d84ffd3990cbe16f56f4bc06ad3c4c94b78584.
+- New mini-game: daily_games/KROLL_Reactor_Balance/ — three-reactor output/heat balancing game, 60-second round, keyboard and mouse/touch input; no external assets.
+- Survival fix: systems/MineralGridStreamingDirector.gd now records stale chunks unloaded during a sync; if a later stale unload fails, it rolls back newly loaded chunks and attempts to recreate prior stale chunks via the factory with the same stable IDs. An incomplete rollback emits push_error and returns failure.
+- Regression test: tests/mineral_grid_streaming_transaction_test.gd with tests/helpers/FakeMineralChunkController.gd injects failure on the second stale unload and checks the original 3x3 active set is restored.
+- Workflow additions: import + rules + runtime smoke tests for Reactor Balance and an explicit transactional rollback test; all use explicit success markers and error guards.
+- Design note: docs/MINERAL_GRID_STREAMING_ROLLBACK_M0_1_2026-10-26.md.
+- Validation at this index edit: source files have been committed to the candidate branch, but exact-head remote Godot 4.3 CI has not yet completed. Do not merge before all required steps pass. No local Godot binary, GUI playtest, GPU check, or iPhone test is claimed.
+- Known rollback limit: if the chunk factory repeatedly fails while recreating stale chunks, complete restoration cannot be guaranteed; the director reports the rollback failure. This is a synchronous prototype, not production world streaming.
