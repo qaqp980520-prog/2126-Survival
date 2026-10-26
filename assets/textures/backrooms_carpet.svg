@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency=".12" numOctaves="3" seed="27"/><feColorMatrix values=".8 0 0 0 .1 0 .75 0 0 .08 0 0 .55 0 .02 0 0 0 .22 0"/></filter>
+<pattern id="fiber" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#a79b69"/><path d="M1 0L2 12 M5 0L4 12 M9 0L10 12" stroke="#c4b887" stroke-width="1" opacity=".7"/><path d="M0 3H12 M0 9H12" stroke="#8c8055" stroke-width=".7" opacity=".38"/></pattern></defs>
+<rect width="512" height="512" fill="#a79b69"/><rect width="512" height="512" fill="url(#fiber)"/><rect width="512" height="512" filter="url(#noise)" opacity=".42"/>
+<g fill="#665d3e" opacity=".24"><path d="M20 70l76-18 35 23-46 28z"/><path d="M318 210l105-24 30 40-86 27z"/><path d="M170 398l58-17 44 22-68 31z"/></g>
+<g fill="#d0c49a" opacity=".3"><ellipse cx="230" cy="120" rx="70" ry="28"/><ellipse cx="400" cy="430" rx="56" ry="24"/></g></svg>
