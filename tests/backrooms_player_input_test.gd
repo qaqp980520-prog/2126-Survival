@@ -26,7 +26,9 @@ func _run() -> void:
     right_press.button_index = MOUSE_BUTTON_RIGHT
     right_press.pressed = true
     player.call("_input", right_press)
-    _expect(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "right mouse captures pointer")
+    _expect(bool(player.get("_look_active")), "right mouse activates look mode")
+    if DisplayServer.get_name() != "headless":
+        _expect(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "right mouse captures pointer in graphical mode")
 
     var motion := InputEventMouseMotion.new()
     motion.relative = Vector2(40.0, -1000.0)
@@ -40,7 +42,9 @@ func _run() -> void:
     escape.keycode = KEY_ESCAPE
     escape.pressed = true
     player.call("_input", escape)
-    _expect(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Escape releases pointer")
+    _expect(not bool(player.get("_look_active")), "Escape disables look mode")
+    if DisplayServer.get_name() != "headless":
+        _expect(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "Escape releases pointer in graphical mode")
 
     var window: Window = player.get_window()
     _expect(window != null, "player resolves a window")
