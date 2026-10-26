@@ -24,6 +24,19 @@ func _run_integration_test() -> void:
     root.add_child(world)
     await process_frame
     _expect(str(world.call("get_current_level")) == "Surface", "starts in surface world")
+    var player: Node = world.get_node("Player")
+    var camera: Camera3D = player.get_node("Camera3D")
+    _expect(camera.position.is_equal_approx(Vector3(0.0, 2.3, 5.5)), "starts in third-person camera mode")
+    player.call("toggle_camera_mode")
+    _expect(camera.position.is_equal_approx(Vector3(0.0, 1.62, 0.0)), "camera toggle switches to first-person mode")
+    player.call("toggle_camera_mode")
+    _expect(camera.position.is_equal_approx(Vector3(0.0, 2.3, 5.5)), "camera toggle returns to third-person mode")
+    if DisplayServer.get_name() != "headless":
+        var avatar: Node3D = player.get_node("AvatarVisual")
+        _expect(avatar.visible, "third-person avatar is visible")
+        player.call("toggle_camera_mode")
+        _expect(not avatar.visible, "first-person mode hides the avatar to prevent camera clipping")
+        player.call("toggle_camera_mode")
     _expect(bool(world.call("debug_collect_berries", 2)), "collects items through shared world bridge")
     _expect(bool(world.call("debug_spawn_portal")), "test shortcut spawns portal through director")
     await process_frame
