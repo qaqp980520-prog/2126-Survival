@@ -87,3 +87,16 @@
 - PR #30 已合併 main，commit `9e05c47dc91a361aee4e49af7304ca812a802b06`；Godot 4.3 CI Run #57 success，31 個 workflow steps 全部成功。
 - PR #3 已關閉為 superseded；其嚴格存檔驗證已在 main，剩餘未知重量 fallback 由 PR #30 完成。
 - 限制：1.0kg 只作防禦性 fallback；正式物品仍需登錄 ITEM_WEIGHTS。counts 仍是公開字典，長期可考慮封裝存取。
+
+
+## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (PR #34 candidate)
+- Main baseline verified before this PR: \`619930ad56f9d5b8b3462bc1cb25b16d53601523\`; PR #32's latest pre-merge head passed Godot 4.3 CI Run #74 (40274143623), 32 steps.
+- PR #34: \`https://github.com/qaqp980520-prog/2126-Survival/pull/34\`, branch \`feature/mineral-vein-stream-persistence-2026-10-26\`; current head recorded separately in GitHub. Not merged until the current head passes full shared CI.
+- Extends \`systems/MineralVeinRegistry.gd\` to retain records for unloaded chunk IDs, save state before unregister, restore the same stable ID on reload, and apply offline regeneration. Re-registering the same live node is idempotent and cannot overwrite live stock from a stale snapshot.
+- Tests: \`tests/mineral_catalog_test.gd\` now covers unloaded stable IDs, duplicate same-node registration, and the disabled-regeneration clock reset; \`tests/mineral_vein_chunk_stream_test.gd\` covers unload/save/free/reload/offline regen and atomic rejection of invalid records.
+- CI: \`.github/workflows/godot-validation.yml\` runs the dedicated chunk-stream test and rejects \`SCRIPT ERROR\`, \`ERROR:\`, and \`FAIL:\` output. Latest head needs a fresh run after the final code/doc commits; no earlier cancelled run counts as evidence.
+- Design note: \`docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md\`.
+- Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister using deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
+
+## Run 7 — Pinball baseline correction
+- KROLL Magnetic Pinball M0.1 remains a Draft PR #33 until a clean shared CI is run against the current main after PR #34. Its latest previous shared run had stale base metadata and is not accepted as final integration evidence.
