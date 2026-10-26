@@ -31,9 +31,9 @@ var _cell_material_floor: StandardMaterial3D
 var _cell_material_wall: StandardMaterial3D
 var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
+var _light_cells: Dictionary = {}
 var _flicker_clock: float = 0.0
 var _high_graphics: bool = true
-var _shadows_enabled: bool = false
 var _flicker_enabled: bool = true
 var _settings_panel: PanelContainer
 var _settings_button: Button
@@ -44,7 +44,6 @@ var _settings: Dictionary = {}
 func _ready() -> void:
     _settings = SettingsProfile.load_settings(_settings_path)
     _high_graphics = bool(_settings.get("high_graphics", true))
-    _shadows_enabled = bool(_settings.get("shadows_enabled", false))
     _flicker_enabled = true # Fluorescent flicker is automatic, not a user setting.
     player.set_camera_mode(int(_settings.get("camera_mode", 0)) == 1)
     player.set_mouse_sensitivity(float(_settings.get("mouse_sensitivity", 2.5)) * 0.001)
@@ -126,11 +125,11 @@ func _build_settings_ui() -> void:
     resolution_option.item_selected.connect(_on_resolution_changed)
     layout.add_child(resolution_option)
 
-    var shadows_button := Button.new()
-    shadows_button.name = "ShadowsButton"
-    shadows_button.text = "光影：開" if _shadows_enabled else "光影：關"
-    shadows_button.pressed.connect(_toggle_shadows)
-    layout.add_child(shadows_button)
+    var graphics_button := Button.new()
+    graphics_button.name = "GraphicsButton"
+    graphics_button.text = "光影：開" if _high_graphics else "光影：關"
+    graphics_button.pressed.connect(_toggle_graphics_quality)
+    layout.add_child(graphics_button)
 
     _settings_status = Label.new()
     _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
@@ -177,16 +176,17 @@ func _on_resolution_changed(index: int) -> void:
     if _settings_status != null:
         _settings_status.text = "解析度已切換為 %d × %d。" % [sizes[selected].x, sizes[selected].y]
 
-func _toggle_shadows() -> void:
-    _shadows_enabled = not _shadows_enabled
-    _settings["shadows_enabled"] = _shadows_enabled
-    var button := _settings_panel.find_child("ShadowsButton", true, false) as Button
+func _toggle_graphics_quality() -> void:
+    _high_graphics = not _high_graphics
+    _settings["high_graphics"] = _high_graphics
+    var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
-        button.text = "光影：開" if _shadows_enabled else "光影：關"
-    for light in _flicker_lights:
-        if is_instance_valid(light):
-            light.shadow_enabled = _shadows_enabled
+        button.text = "光影：開" if _high_graphics else "光影：關"
+    if _settings_status != null:
+        _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
+    _settings["high_graphics"] = _high_graphics
     _save_settings()
+    _rebuild_maze_for_settings()
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
@@ -199,6 +199,7 @@ func _rebuild_maze_for_settings() -> void:
                 cell_node.queue_free()
         _loaded_cells.clear()
         _flicker_lights.clear()
+        _light_cells.clear()
         _stream_maze_cells(true)
 
 func _configure_display() -> void:
@@ -311,6 +312,7 @@ func _build_backrooms_room(level_name: String) -> void:
         backrooms_room.queue_free()
     _loaded_cells.clear()
     _flicker_lights.clear()
+    _light_cells.clear()
     backrooms_room = Node3D.new()
     backrooms_room.name = "EndlessMaze_" + level_name.replace(" ", "")
     backrooms_world.add_child(backrooms_room)
@@ -404,9 +406,10 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.light_color = Color(1.0, 0.88, 0.65)
             ceiling_light.light_energy = 1.15
             ceiling_light.omni_range = 8.5
-            ceiling_light.shadow_enabled = false
+            ceiling_light.shadow_enabled = _should_enable_light_shadows(cell)
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
+            _light_cells[ceiling_light.get_instance_id()] = cell
             ceiling_light.light_energy = 0.9 if _high_graphics else 0.75
             ceiling_light.omni_range = 7.0 if _high_graphics else 5.5
 
@@ -444,13 +447,20 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
     material.roughness = 1.0
     material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     material.albedo_color = Color.WHITE
-    material.uv1_triplanar = true
+    # BoxMesh already provides face UVs. Triplanar projection was overriding
+    # the intended wallpaper mapping and made the wall pattern appear flat at
+    # the scale used here. Use the mesh UVs directly so the supplied repeating
+    # wallpaper SVG is actually sampled on every wall face.
+    material.uv1_triplanar = false
     if is_floor:
         material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg") as Texture2D
-        material.uv1_scale = Vector3(0.22, 0.22, 0.22)
+        material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     else:
-        material.albedo_texture = load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
-        material.uv1_scale = Vector3(0.32, 0.32, 0.32)
+        var wallpaper := load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
+        if wallpaper == null:
+            push_error("Wallpaper texture failed to load: res://assets/textures/backrooms_wallpaper.svg")
+        material.albedo_texture = wallpaper
+        material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
