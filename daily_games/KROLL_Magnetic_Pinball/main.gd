@@ -23,6 +23,7 @@ var game_over: bool = false
 var left_flipper_active: bool = false
 var right_flipper_active: bool = false
 var _bumper_cooldowns: Dictionary = {}
+var _touch_points: Dictionary = {}
 var _launch_count: int = 0
 
 func _ready() -> void:
@@ -36,9 +37,30 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif event.keycode == KEY_SPACE and not ball_in_play and lives > 0:
 		start_ball()
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_touch_points[event.index] = event.position
+			# The shooter lane is a dedicated touch launch area above the flippers.
+			if not ball_in_play and not game_over and event.position.x >= 675.0 and event.position.y > 600.0 and event.position.y < 820.0:
+				start_ball()
+		else:
+			_touch_points.erase(event.index)
+		queue_redraw()
+	elif event is InputEventScreenDrag:
+		_touch_points[event.index] = event.position
+		queue_redraw()
+
 func _physics_process(delta: float) -> void:
 	left_flipper_active = Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)
 	right_flipper_active = Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)
+	for touch_value in _touch_points.values():
+		var touch_position: Vector2 = touch_value
+		if touch_position.y >= 850.0:
+			if touch_position.x < 400.0:
+				left_flipper_active = true
+			else:
+				right_flipper_active = true
 	if ball_in_play and not game_over:
 		step_simulation(delta)
 	else:
@@ -63,6 +85,7 @@ func reset_game() -> void:
 	left_flipper_active = false
 	right_flipper_active = false
 	_bumper_cooldowns.clear()
+	_touch_points.clear()
 	_launch_count = 0
 	queue_redraw()
 
@@ -173,8 +196,13 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(70.0, 80.0), "KROLL // MAGNETIC PINBALL", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 25, Color("#b9fff5"))
 	draw_string(ThemeDB.fallback_font, Vector2(70.0, 116.0), "SCORE %06d" % score, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color("#ffffff"))
 	draw_string(ThemeDB.fallback_font, Vector2(475.0, 116.0), "BALLS %d" % lives, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color("#f3c969"))
-	draw_string(ThemeDB.fallback_font, Vector2(70.0, 910.0), "A / LEFT  : LEFT FLIPPER", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#8fb8c9"))
-	draw_string(ThemeDB.fallback_font, Vector2(425.0, 910.0), "D / RIGHT : RIGHT FLIPPER", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#8fb8c9"))
+	draw_rect(Rect2(65.0, 850.0, 290.0, 72.0), Color(0.05, 0.15, 0.22, 0.88))
+	draw_rect(Rect2(65.0, 850.0, 290.0, 72.0), Color("#55e3d8"), false, 2.0)
+	draw_rect(Rect2(445.0, 850.0, 290.0, 72.0), Color(0.05, 0.15, 0.22, 0.88))
+	draw_rect(Rect2(445.0, 850.0, 290.0, 72.0), Color("#55e3d8"), false, 2.0)
+	draw_string(ThemeDB.fallback_font, Vector2(82.0, 892.0), "A / LEFT  •  TOUCH", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color("#b9fff5"))
+	draw_string(ThemeDB.fallback_font, Vector2(462.0, 892.0), "D / RIGHT  •  TOUCH", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color("#b9fff5"))
+	draw_string(ThemeDB.fallback_font, Vector2(515.0, 610.0), "TOUCH TO LAUNCH", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#8fb8c9"))
 	if not ball_in_play and not game_over:
 		draw_string(ThemeDB.fallback_font, Vector2(150.0, 600.0), "PRESS SPACE TO LAUNCH", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 28, Color("#ffffff"))
 	if game_over:
