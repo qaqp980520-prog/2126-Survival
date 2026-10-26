@@ -55,6 +55,9 @@ jobs:
           test -f daily_games/KROLL_Orbital_Convoy/project.godot
           test -f daily_games/KROLL_Gravity_Lander/project.godot
           test -f daily_games/KROLL_Core_Defense/project.godot
+          test -f daily_games/KROLL_Freight_Sorter/project.godot
+          test -f daily_games/KROLL_Freight_Sorter/tests/rules_test.gd
+          test -f daily_games/KROLL_Freight_Sorter/tests/game_smoke_test.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -105,3 +108,9 @@ jobs:
         run: godot --headless --path . --script res://tests/world_bridge_binding_test.gd
       - name: Run mineral catalog and inventory compatibility tests
         run: godot --headless --path . --script res://tests/mineral_catalog_test.gd
+      - name: Import and parse KROLL Freight Sorter
+        run: godot --headless --path daily_games/KROLL_Freight_Sorter --editor --quit
+      - name: Run KROLL Freight Sorter rules tests
+        run: godot --headless --path daily_games/KROLL_Freight_Sorter --script res://tests/rules_test.gd
+      - name: Run KROLL Freight Sorter runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Freight_Sorter --script res://tests/game_smoke_test.gd
