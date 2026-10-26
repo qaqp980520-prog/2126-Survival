@@ -113,12 +113,13 @@ func _test_vein_save_load_validation() -> void:
 	mining.remaining_units = 17
 	root.add_child(mining)
 	var saved: Dictionary = mining.to_save_dict()
+	assert(int(saved["schema_version"]) == 2, "Regeneration metadata must be saved under schema v2")
 	var restored = MiningNode.new()
 	restored.mineral_id = "silver_ore"
 	root.add_child(restored)
 	assert(restored.load_save_dict(saved))
 	assert(restored.remaining_units == 17)
-	assert(not restored.load_save_dict({"schema_version": 2, "mineral_id": "silver_ore", "remaining_units": 4}))
+	assert(not restored.load_save_dict({"schema_version": 3, "mineral_id": "silver_ore", "remaining_units": 4}))
 	assert(restored.remaining_units == 17, "Invalid schema must not mutate vein state")
 	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "gold_ore", "remaining_units": 4}))
 	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "silver_ore", "remaining_units": -1}))
