@@ -427,6 +427,10 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
     if bool(raw_backrooms):
         if not Director.TARGET_LEVELS.has(raw_level):
             return false
+        # In this prototype, a live surface portal cannot coexist with a
+        # Backrooms save. Reject mismatched/tampered envelopes before mutation.
+        if not candidate_director.active_portal.is_empty():
+            return false
     elif raw_level != "Surface":
         return false
     var raw_position: Variant = world_save.get("player_position", null)
