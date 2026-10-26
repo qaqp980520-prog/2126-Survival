@@ -130,8 +130,9 @@ func _build_backrooms_room(level_name: String) -> void:
 func _stream_maze_cells(force: bool = false) -> void:
     if backrooms_room == null or not is_instance_valid(backrooms_room):
         return
-    var center_x := floori(player.global_position.x / CELL_SIZE)
-    var center_z := floori(player.global_position.z / CELL_SIZE)
+    var player_cell := _maze_cell_for_position(player.global_position)
+    var center_x: int = player_cell.x
+    var center_z: int = player_cell.y
     var needed: Dictionary = {}
     for z in range(center_z - STREAM_RADIUS, center_z + STREAM_RADIUS + 1):
         for x in range(center_x - STREAM_RADIUS, center_x + STREAM_RADIUS + 1):
@@ -145,6 +146,14 @@ func _stream_maze_cells(force: bool = false) -> void:
             if is_instance_valid(cell):
                 cell.queue_free()
             _loaded_cells.erase(key)
+
+func _maze_cell_for_position(world_position: Vector3) -> Vector2i:
+    # Cells are centered on multiples of CELL_SIZE, so their boundaries are
+    # at half-cell offsets. Plain floor(position / CELL_SIZE) switches late.
+    return Vector2i(
+        floori((world_position.x + CELL_SIZE * 0.5) / CELL_SIZE),
+        floori((world_position.z + CELL_SIZE * 0.5) / CELL_SIZE)
+    )
 
 func _create_maze_cell(cell: Vector2i) -> void:
     var root := Node3D.new()
