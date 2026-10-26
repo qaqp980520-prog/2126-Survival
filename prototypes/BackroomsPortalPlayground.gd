@@ -23,10 +23,8 @@ var current_level: String = "Surface"
 var _hud_elapsed: float = 0.0
 
 func _ready() -> void:
-    if DisplayServer.get_name() == "headless":
-        var body_mesh := get_node_or_null("Player/BodyMesh")
-        if body_mesh != null:
-            body_mesh.free()
+    if DisplayServer.get_name() != "headless":
+        _build_player_visual()
     director = Director.new(WORLD_SEED, WORLD_BOUNDS, SAFE_DISTANCE)
     director.next_spawn_in = 2.0
     bridge = BridgeScript.new()
@@ -35,6 +33,16 @@ func _ready() -> void:
     _build_surface()
     backrooms_world.visible = false
     _update_hud()
+
+func _build_player_visual() -> void:
+    var body_mesh := MeshInstance3D.new()
+    body_mesh.name = "BodyMesh"
+    var capsule_mesh := CapsuleMesh.new()
+    capsule_mesh.radius = 0.35
+    capsule_mesh.height = 1.8
+    body_mesh.mesh = capsule_mesh
+    body_mesh.position = Vector3(0.0, 0.9, 0.0)
+    player.add_child(body_mesh)
 
 func _process(delta: float) -> void:
     if director == null:
