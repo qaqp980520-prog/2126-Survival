@@ -23,6 +23,10 @@ var current_level: String = "Surface"
 var _hud_elapsed: float = 0.0
 
 func _ready() -> void:
+    if DisplayServer.get_name() == "headless":
+        var body_mesh := get_node_or_null("Player/BodyMesh")
+        if body_mesh != null:
+            body_mesh.free()
     director = Director.new(WORLD_SEED, WORLD_BOUNDS, SAFE_DISTANCE)
     director.next_spawn_in = 2.0
     bridge = BridgeScript.new()
@@ -133,17 +137,18 @@ func is_backrooms_collision_enabled() -> bool:
     return backrooms_room != null and is_instance_valid(backrooms_room) and _contains_enabled_collision(backrooms_room)
 
 func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, color: Color) -> void:
-    var material := StandardMaterial3D.new()
-    material.albedo_color = color
-    material.roughness = 0.82
-    var mesh_instance := MeshInstance3D.new()
-    mesh_instance.name = object_name + "Mesh"
-    var mesh := BoxMesh.new()
-    mesh.size = box_size
-    mesh_instance.mesh = mesh
-    mesh_instance.material_override = material
-    mesh_instance.position = box_position
-    parent.add_child(mesh_instance)
+    if DisplayServer.get_name() != "headless":
+        var material := StandardMaterial3D.new()
+        material.albedo_color = color
+        material.roughness = 0.82
+        var mesh_instance := MeshInstance3D.new()
+        mesh_instance.name = object_name + "Mesh"
+        var mesh := BoxMesh.new()
+        mesh.size = box_size
+        mesh_instance.mesh = mesh
+        mesh_instance.material_override = material
+        mesh_instance.position = box_position
+        parent.add_child(mesh_instance)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = box_position
@@ -156,6 +161,10 @@ func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_si
 
 func _spawn_portal(portal_data: Dictionary) -> bool:
     _remove_portal_visual()
+    if DisplayServer.get_name() == "headless":
+        # The director still owns portal state on a server; the client owns visuals.
+        active_portal_visual = null
+        return not portal_data.is_empty()
     var portal: Area3D = PortalScene.instantiate() as Area3D
     add_child(portal)
     if not bool(portal.call("configure_from_director", portal_data, 0.0)):
