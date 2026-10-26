@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="KROLL Sentinel Protocol"
+config/name="KROLL Sentinel Escape"
 run/main_scene="res://main.tscn"
 
 [display]
