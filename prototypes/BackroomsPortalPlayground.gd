@@ -389,12 +389,8 @@ func _create_maze_cell(cell: Vector2i) -> void:
     # its north/west edge. This avoids duplicate collision bodies on every seam.
     if not north_open:
         _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
-        if _high_graphics:
-            _decorate_wall_face(root, "North", Vector3(0, 0, -CELL_SIZE * 0.5 + 0.125), true, cell)
     if not west_open:
         _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
-        if _high_graphics:
-            _decorate_wall_face(root, "West", Vector3(-CELL_SIZE * 0.5 + 0.125, 0, 0), false, cell)
 
     # Small deterministic floor scuffs and stains break up the otherwise uniform carpet.
     for stain_index in range(2 if _high_graphics else 0):
@@ -467,77 +463,6 @@ func _hash_value(x: int, z: int, salt: int) -> int:
 func _should_enable_light_shadows(cell: Vector2i) -> bool:
     # High-quality mode enables deterministic local shadows on a subset of cells.
     return _high_graphics and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
-
-func _decorate_wall_face(parent: Node3D, side: String, wall_center: Vector3, horizontal: bool, cell: Vector2i) -> void:
-    if DisplayServer.get_name() == "headless":
-        return
-    var wallpaper_base := StandardMaterial3D.new()
-    wallpaper_base.albedo_color = _cell_material_wall.albedo_color.lightened(0.035)
-    wallpaper_base.roughness = 0.98
-    var wallpaper_seam := StandardMaterial3D.new()
-    wallpaper_seam.albedo_color = _cell_material_wall.albedo_color.darkened(0.07)
-    wallpaper_seam.roughness = 1.0
-    var stain_material := StandardMaterial3D.new()
-    stain_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.12)
-    stain_material.roughness = 1.0
-    # Subtle broad strips evoke aged wallpaper without adding collision geometry.
-    for strip_index in range(4):
-        var y := 0.42 + float(strip_index) * 0.82
-        var strip_position := wall_center + (Vector3(0, y, 0.116) if horizontal else Vector3(0.116, y, 0))
-        var strip_size := Vector3(CELL_SIZE - 0.18, 0.018, 0.012) if horizontal else Vector3(0.012, 0.018, CELL_SIZE - 0.18)
-        _add_decor_box(parent, side + "WallpaperSeam_%d" % strip_index, strip_position, strip_size, wallpaper_seam)
-    var panel_offset := float(_hash_value(cell.x, cell.y, 103) % 40 - 20) / 10.0
-    var stain_position := wall_center + (Vector3(panel_offset, 2.1, 0.117) if horizontal else Vector3(0.117, 2.1, panel_offset))
-    var stain_size := Vector3(0.42, 0.28, 0.014) if horizontal else Vector3(0.014, 0.28, 0.42)
-    _add_decor_box(parent, side + "WallpaperWear", stain_position, stain_size, stain_material)
-    # Layered irregular patches simulate torn wallpaper and exposed old plaster.
-    for damage_index in range(4):
-        var damage_hash := _hash_value(cell.x + damage_index * 13, cell.y - damage_index * 5, 121)
-        var damage_offset := float(damage_hash % 48 - 24) / 10.0
-        var damage_y := 0.48 + float(_hash_value(cell.x, cell.y, 131 + damage_index) % 24) / 10.0
-        var underlayer := StandardMaterial3D.new()
-        underlayer.albedo_color = Color(0.43, 0.35, 0.23).lerp(_cell_material_wall.albedo_color.darkened(0.32), float(damage_index % 3) / 3.0)
-        underlayer.roughness = 1.0
-        var patch_position := wall_center + (Vector3(damage_offset, damage_y, 0.119) if horizontal else Vector3(0.119, damage_y, damage_offset))
-        var patch_width := 0.22 + float(damage_hash % 6) * 0.13
-        var patch_height := 0.12 + float(damage_hash % 5) * 0.08
-        var patch_size := Vector3(patch_width, patch_height, 0.016) if horizontal else Vector3(0.016, patch_height, patch_width)
-        _add_decor_box(parent, side + "PeeledWallpaper_%d" % damage_index, patch_position, patch_size, underlayer)
-        var edge_material := StandardMaterial3D.new()
-        edge_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.17)
-        edge_material.roughness = 1.0
-        var edge_position := patch_position + (Vector3(0, patch_height * 0.5 + 0.012, 0.002) if horizontal else Vector3(0.002, patch_height * 0.5 + 0.012, 0))
-        var edge_size := Vector3(patch_width * 0.7, 0.022, 0.018) if horizontal else Vector3(0.018, 0.022, patch_width * 0.7)
-        _add_decor_box(parent, side + "TornEdge_%d" % damage_index, edge_position, edge_size, edge_material)
-
-func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: Vector3, wall_size: Vector3) -> void:
-    # Subtle trim and deterministic faded wallpaper patches; decorative meshes only.
-    var baseboard_material := StandardMaterial3D.new()
-    baseboard_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.22)
-    baseboard_material.roughness = 0.98
-    var stain_material := StandardMaterial3D.new()
-    stain_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.12)
-    stain_material.roughness = 1.0
-    var is_north_south_wall := wall_size.x >= wall_size.z
-    var board_size := Vector3(wall_size.x, 0.16, 0.26) if is_north_south_wall else Vector3(0.26, 0.16, wall_size.z)
-    var board_offset := Vector3(0, -WALL_HEIGHT * 0.5 + 0.12, 0)
-    _add_decor_box(parent, object_name + "Baseboard", wall_position + board_offset, board_size, baseboard_material)
-    var stain_seed := _hash_value(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0), 93)
-    if stain_seed % 4 == 0:
-        var stain_size := Vector3(0.45 + float(stain_seed % 5) * 0.12, 0.32 + float(stain_seed % 3) * 0.1, 0.025) if is_north_south_wall else Vector3(0.025, 0.32 + float(stain_seed % 3) * 0.1, 0.45 + float(stain_seed % 5) * 0.12)
-        var face_offset := Vector3(0, 0.15, 0.125) if is_north_south_wall else Vector3(0.125, 0.15, 0)
-        var along := float((stain_seed % 5) - 2) * 0.9
-        if is_north_south_wall:
-            face_offset.x = along
-        else:
-            face_offset.z = along
-        _add_decor_box(parent, object_name + "FadedPatch", wall_position + face_offset, stain_size, stain_material)
-    if stain_seed % 7 == 0:
-        var seam_material := StandardMaterial3D.new()
-        seam_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.06)
-        seam_material.roughness = 0.98
-        var seam_size := Vector3(0.045, WALL_HEIGHT - 0.35, 0.025) if is_north_south_wall else Vector3(0.025, WALL_HEIGHT - 0.35, 0.045)
-        _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0 if is_north_south_wall else 0.13, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
 
 func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> ShaderMaterial:
     var shader := Shader.new()
@@ -672,8 +597,6 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         mesh_instance.material_override = _make_surface_material(false, Vector2i(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0)))
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
-        if _high_graphics:
-            _add_wall_wear_details(parent, object_name, wall_position, wall_size)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = wall_position
