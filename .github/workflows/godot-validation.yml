@@ -98,6 +98,8 @@ jobs:
         run: godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd
       - name: Run Backrooms portal playground integration test
         run: godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd
+      - name: Run inventory weight boundary regression tests
+        run: godot --headless --path . --script res://tests/inventory_weight_boundaries.gd
       - name: Run inventory save validation tests
         run: godot --headless --path . --script res://tests/inventory_save_validation.gd
       - name: Run inventory save adapter tests
