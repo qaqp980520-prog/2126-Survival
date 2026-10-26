@@ -19,6 +19,9 @@ func _run_tests() -> void:
 	root.add_child(game)
 	await process_frame
 	game.start_game()
+	_check(str(game._control_at(Vector2(80.0, 600.0))) == "left", "Touch left button should map to left steering.")
+	_check(str(game._control_at(Vector2(580.0, 600.0))) == "accelerate", "Touch throttle button should map to acceleration.")
+	_check(str(game._control_at(Vector2(400.0, 600.0))).is_empty(), "Gap between touch buttons must not trigger a hidden control.")
 	_check(int(game.lap_count) == 0 and int(game.next_checkpoint) == 1, "Race should start at lap zero with gate 1 next.")
 	_check(not bool(game.finished) and not bool(game.time_up), "Race should start active.")
 	_check(not bool(game.debug_enter_checkpoint(0)), "Start gate must not be accepted out of order.")
