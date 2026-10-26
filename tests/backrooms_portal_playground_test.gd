@@ -36,6 +36,8 @@ func _run_integration_test() -> void:
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    _expect(_maze_edges_are_symmetric(world), "maze edge openings match from both adjacent cells")
+    _expect(_maze_region_is_connected(world), "procedural maze region remains connected to the origin")
     _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
     _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
@@ -72,6 +74,34 @@ func _run_integration_test() -> void:
         watchdog.queue_free()
     await process_frame
     quit(exit_code)
+
+func _maze_edges_are_symmetric(world: Node) -> bool:
+    var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+    for z in range(-3, 4):
+        for x in range(-3, 4):
+            var cell := Vector2i(x, z)
+            for direction in directions:
+                var neighbor := cell + direction
+                var from_cell := bool(world.call("_edge_is_open", cell, direction))
+                var from_neighbor := bool(world.call("_edge_is_open", neighbor, -direction))
+                if from_cell != from_neighbor:
+                    return false
+    return true
+
+func _maze_region_is_connected(world: Node) -> bool:
+    var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+    var visited: Dictionary = {Vector2i.ZERO: true}
+    var queue: Array[Vector2i] = [Vector2i.ZERO]
+    while not queue.is_empty():
+        var cell: Vector2i = queue.pop_front()
+        for direction in directions:
+            var neighbor: Vector2i = cell + direction
+            if abs(neighbor.x) > 3 or abs(neighbor.y) > 3 or visited.has(neighbor):
+                continue
+            if bool(world.call("_edge_is_open", cell, direction)):
+                visited[neighbor] = true
+                queue.append(neighbor)
+    return visited.size() == 49
 
 func _expect(condition: bool, description: String) -> void:
     if condition:
