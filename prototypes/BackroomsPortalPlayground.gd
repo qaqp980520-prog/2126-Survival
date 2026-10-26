@@ -492,8 +492,8 @@ func _hash_value(x: int, z: int, salt: int) -> int:
     return value
 
 func _should_enable_light_shadows(cell: Vector2i) -> bool:
-    # High-quality mode enables deterministic local shadows on a subset of cells.
-    return _high_graphics and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
+    # Dynamic shadows are independent from procedural geometry quality.
+    return _shadows_enabled and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
 
 func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
     var material := StandardMaterial3D.new()
