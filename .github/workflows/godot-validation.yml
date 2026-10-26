@@ -259,6 +259,17 @@ jobs:
           fi
           echo "$output" | grep -q 'Mineral chunk controller integration tests passed.'
 
+      - name: Run mineral grid streaming director tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during mineral grid streaming director tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral grid streaming director tests passed.'
       - name: Import and parse KROLL Signal Siphon
         run: godot --headless --path daily_games/KROLL_Signal_Siphon --editor --quit
       - name: Run KROLL Signal Siphon rules tests
