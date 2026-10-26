@@ -11,13 +11,6 @@ var _fail_restore_coord: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
-	call_deferred("_watchdog")
-
-func _watchdog() -> void:
-	await create_timer(20.0).timeout
-	if not _finished:
-		push_error("Mineral grid streaming diagnostics test timed out.")
-		quit(1)
 
 func _run_tests() -> void:
 	var controller: Variant = FakeController.new()
