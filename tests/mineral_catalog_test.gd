@@ -128,10 +128,15 @@ func _test_inventory_preview_builds_single_model() -> void:
 	var preview = InventoryPreview.new()
 	preview.mineral_id = "gold_ore"
 	root.add_child(preview)
-	assert(preview.get_child_count() == 1)
-	assert(preview.get_child(0).name == "OreIconModel")
-	preview.refresh_preview()
-	assert(preview.get_child_count() == 1, "Refreshing preview must leave only one ore model")
+	if DisplayServer.get_name() == "headless":
+		assert(preview.get_child_count() == 0, "Headless mode should not create render-only preview meshes")
+		preview.refresh_preview()
+		assert(preview.get_child_count() == 0)
+	else:
+		assert(preview.get_child_count() == 1)
+		assert(preview.get_child(0).name == "OreIconModel")
+		preview.refresh_preview()
+		assert(preview.get_child_count() == 1, "Refreshing preview must leave only one ore model")
 	preview.queue_free()
 
 func _test_vein_save_load_validation() -> void:
