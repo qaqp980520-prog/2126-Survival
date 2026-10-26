@@ -94,6 +94,7 @@ jobs:
           test -f tests/surface_chunk_streaming_playground_test.gd
           test -f tests/mineral_grid_streaming_transaction_test.gd
           test -f tests/mineral_grid_streaming_diagnostics_test.gd
+          test -f tests/mineral_grid_streaming_recovery_test.gd
           test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
@@ -348,6 +349,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Mineral grid streaming failure diagnostics tests passed."
+      - name: Run mineral grid streaming recovery tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_recovery_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported errors during mineral streaming recovery tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Mineral grid streaming recovery tests passed."
       - name: Run mineral grid streaming director tests
         shell: bash
         run: |
