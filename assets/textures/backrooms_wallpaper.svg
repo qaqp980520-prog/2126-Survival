@@ -1,18 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" width="447" height="447" viewBox="0 0 447 447">
 <defs>
- <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="9"/><feColorMatrix values=".55 0 0 0 .25 0 .5 0 0 .23 0 0 .3 0 .12 0 0 0 .12 0"/></filter>
- <pattern id="wallpaper" width="48" height="256" patternUnits="userSpaceOnUse">
-  <rect width="48" height="256" fill="#d9d47f"/>
-  <path d="M3 0V256 M7 0V256" stroke="#b8b36b" stroke-width="1.5" opacity=".7"/>
-  <path d="M12 0V256 M16 0V256" stroke="#eee7a0" stroke-width="1.5" opacity=".8"/>
-  <path d="M22 0V256 M28 0V256 M42 0V256" stroke="#aaa35d" stroke-width="1" opacity=".5"/>
-  <path d="M20 12l6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7-6 7 6 7" fill="none" stroke="#b0a75e" stroke-width="1.5" opacity=".55"/>
-  <path d="M36 8l-6 8 6 8-6 8 6 8-6 8 6 8-6 8 6 8-6 8 6 8-6 8" fill="none" stroke="#f2eaa3" stroke-width="1.6" opacity=".65"/>
-  <path d="M0 0H48 M0 128H48" stroke="#c5bd70" stroke-width=".7" opacity=".35"/>
+ <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#e8e69a"/><stop offset="1" stop-color="#d8d581"/></linearGradient>
+ <pattern id="stripe" width="37.25" height="447" patternUnits="userSpaceOnUse">
+  <rect width="37.25" height="447" fill="url(#paper)"/>
+  <path d="M2 0V447 M5 0V447 M31 0V447 M34 0V447" stroke="#bdb96d" stroke-width="1" opacity=".55"/>
+  <path d="M9 0V447 M12 0V447 M25 0V447 M28 0V447" stroke="#f1efb0" stroke-width="1" opacity=".72"/>
+  <path d="M18.5 0V447" stroke="#aaa660" stroke-width=".7" opacity=".55"/>
+  <g fill="none" stroke="#b7b36a" stroke-width="1.5" opacity=".72">
+   <path d="M18.5 8l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+   <path d="M18.5 126l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+   <path d="M18.5 244l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+   <path d="M18.5 362l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+  </g>
+  <g fill="none" stroke="#f4f0b0" stroke-width="1.5" opacity=".8">
+   <path d="M7 10l-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5"/>
+   <path d="M30 10l4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5"/>
+  </g>
+  <path d="M0 0H37.25 M0 223H37.25" stroke="#c8c477" stroke-width="1" opacity=".45"/>
  </pattern>
+ <filter id="softNoise"><feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="2" seed="17"/><feColorMatrix values=".35 0 0 0 .35 0 .35 0 0 .34 0 0 .2 0 .18 0 0 0 .08 0"/></filter>
 </defs>
-<rect width="512" height="512" fill="#d9d47f"/>
-<rect width="512" height="512" fill="url(#wallpaper)"/>
-<rect width="512" height="512" filter="url(#paperNoise)" opacity=".42"/>
-<g fill="#9d9659" opacity=".07"><ellipse cx="78" cy="80" rx="34" ry="20"/><ellipse cx="390" cy="330" rx="45" ry="28"/><ellipse cx="244" cy="225" rx="27" ry="15"/></g>
+<rect width="447" height="447" fill="#e3e197"/>
+<rect width="447" height="447" fill="url(#stripe)"/>
+<rect width="447" height="447" filter="url(#softNoise)" opacity=".18"/>
+<g fill="#8e8952" opacity=".10"><ellipse cx="72" cy="95" rx="23" ry="12"/><ellipse cx="324" cy="285" rx="30" ry="18"/><ellipse cx="208" cy="190" rx="18" ry="10"/></g>
 </svg>
