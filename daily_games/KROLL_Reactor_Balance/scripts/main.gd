@@ -73,6 +73,8 @@ func debug_action(reactor_index: int, action: String) -> bool:
 		return false
 	outputs = result["outputs"]
 	heats = result["heats"]
+	if Rules.is_overheated(heats):
+		game_state = "meltdown"
 	queue_redraw()
 	return true
 
