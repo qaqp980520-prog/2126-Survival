@@ -210,11 +210,12 @@
 - Next: wire the validated factory/controller contract to the real production world generator; add production-scene streaming acceptance tests, then do GUI/iPhone validation.
 
 
-## 2026-10-27 Run 14 candidate — KROLL Cargo Tugs + mineral streaming diagnostics
-- Base main: ecfd40df78633c58935c34fd5d6bf2bc7fc59759. Run #271 (40354557118) verified the Run 13 closeout main push succeeded; GitHub API showed no open PRs before this run.
-- Candidate branch: feature/run14-kroll-cargo-tugs-streaming-diagnostics-2026-10-27.
-- New game: daily_games/KROLL_Cargo_Tugs/ — three-stage warehouse-pushing puzzle with keyboard/touch movement, crates, docking pads, undo and restart; no external assets/addons.
-- Survival diagnostics: systems/MineralGridStreamingDirector.gd now exposes sync_failed(report) and get_last_sync_report(), including failure phase, rollback completeness, failed chunk IDs and snapshots of controller/director active IDs. Added tests/mineral_grid_streaming_diagnostics_test.gd for a stale-unload failure followed by failed restoration.
-- CI adds Cargo Tugs import/rules/runtime smoke tests and the explicit mineral streaming diagnostics test.
-- Candidate validation: pending exact-head Godot 4.3 CI. Do not merge until all workflow steps pass.
-- Limits: local Godot executable unavailable; GUI/iPhone tests not claimed. The streaming director remains synchronous and factory-driven, not connected to the production world generator.
+## 2026-10-27 Run 14 — KROLL Cargo Tugs + mineral streaming diagnostics (merged and validated)
+- Feature PR #58 merged as `d2eef1c4a30c67116f8bc8a1cb9c3df94bacc561`; exact validated feature head `656d3727c41551ef9ef38ecbc8c34213a4afa23f`.
+- Exact-head Godot 4.3 CI Run #272 (`40356509039`) succeeded. Cargo Tugs import/rules/runtime smoke steps #58–#60, mineral streaming failure diagnostics step #44, and surface chunk streaming integration step #61 all succeeded.
+- Main push CI Run #273 (`40356977715`) succeeded on merge commit `d2eef1c4a30c67116f8bc8a1cb9c3df94bacc561`.
+- Mini-game: `daily_games/KROLL_Cargo_Tugs/` — three-stage warehouse-pushing puzzle with keyboard/touch movement, crates, docking pads, undo and restart; no external assets/addons.
+- Survival diagnostics: `systems/MineralGridStreamingDirector.gd` exposes `sync_failed(report)` and `get_last_sync_report()`, including failure phase, rollback completeness, failed chunk IDs and snapshots of controller/director active IDs. `tests/mineral_grid_streaming_diagnostics_test.gd` injects stale-unload failure followed by failed restoration and verifies the incomplete rollback report.
+- CI workflow now runs Cargo Tugs import/rules/runtime tests and the explicit mineral streaming diagnostics regression.
+- Limits: local Godot executable unavailable; GUI/iPhone tests are not claimed. The streaming director remains synchronous and factory-driven, not connected to the production world generator.
+- Next: connect the diagnostics contract to the production world host, define retry/recovery behavior after incomplete rollback, and add production-scene chunk save/restore acceptance tests.
