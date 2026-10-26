@@ -32,7 +32,7 @@ var _cell_material_wall: StandardMaterial3D
 var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
 var _flicker_clock: float = 0.0
-var _high_graphics: bool = false
+var _high_graphics: bool = true
 var _shadows_enabled: bool = false
 var _flicker_enabled: bool = true
 var _settings_panel: PanelContainer
@@ -113,11 +113,18 @@ func _build_settings_ui() -> void:
     sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
     layout.add_child(sensitivity_slider)
 
-    var graphics_button := Button.new()
-    graphics_button.name = "GraphicsButton"
-    graphics_button.text = "畫質：高" if _high_graphics else "畫質：低（流暢）"
-    graphics_button.pressed.connect(_toggle_graphics_quality)
-    layout.add_child(graphics_button)
+    var resolution_label := Label.new()
+    resolution_label.text = "解析度"
+    layout.add_child(resolution_label)
+    var resolution_option := OptionButton.new()
+    resolution_option.name = "ResolutionOption"
+    resolution_option.add_item("1280 × 720（流暢）", 0)
+    resolution_option.add_item("1600 × 900", 1)
+    resolution_option.add_item("1920 × 1080", 2)
+    var saved_resolution: int = clampi(int(_settings.get("resolution_index", 0)), 0, 2)
+    resolution_option.select(saved_resolution)
+    resolution_option.item_selected.connect(_on_resolution_changed)
+    layout.add_child(resolution_option)
 
     var shadows_button := Button.new()
     shadows_button.name = "ShadowsButton"
@@ -157,16 +164,18 @@ func _save_settings() -> void:
     if not SettingsProfile.save_settings(_settings, _settings_path) and _settings_status != null:
         _settings_status.text = "設定儲存失敗；目前值只在本次執行有效。"
 
-func _toggle_graphics_quality() -> void:
-    _high_graphics = not _high_graphics
-    _settings["high_graphics"] = _high_graphics
-    var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
-    if button != null:
-        button.text = "畫質：高" if _high_graphics else "畫質：低（流暢）"
-    _rebuild_maze_for_settings()
-    if _settings_status != null:
-        _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
+func _on_resolution_changed(index: int) -> void:
+    var sizes: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+    var selected: int = clampi(index, 0, sizes.size() - 1)
+    _settings["resolution_index"] = selected
+    if DisplayServer.get_name() != "headless":
+        var window := get_window()
+        window.mode = Window.MODE_WINDOWED
+        window.size = sizes[selected]
+        window.move_to_center()
     _save_settings()
+    if _settings_status != null:
+        _settings_status.text = "解析度已切換為 %d × %d。" % [sizes[selected].x, sizes[selected].y]
 
 func _toggle_shadows() -> void:
     _shadows_enabled = not _shadows_enabled
@@ -176,7 +185,7 @@ func _toggle_shadows() -> void:
         button.text = "光影：開" if _shadows_enabled else "光影：關"
     for light in _flicker_lights:
         if is_instance_valid(light):
-            light.shadow_enabled = _shadows_enabled and _high_graphics
+            light.shadow_enabled = _shadows_enabled
     _save_settings()
 
 func _rebuild_maze_for_settings() -> void:
