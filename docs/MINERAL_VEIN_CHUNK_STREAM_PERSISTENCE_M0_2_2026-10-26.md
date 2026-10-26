@@ -15,6 +15,7 @@ Extend the stable-ID mineral registry so a vein remains represented in world-sav
   - restore_save_dict() validates the entire incoming record map before applying it; valid unloaded IDs are retained for later registration.
   - register_vein(stable_id, node, now_unix) restores an existing saved record before exposing the new live node and applies offline regeneration according to auto_apply_elapsed_time_on_restore.
   - Add get_saved_ids() to distinguish all persisted IDs from currently loaded IDs returned by get_registered_ids().
+  - Re-registering the exact same live node is idempotent; it never reapplies a stale cached record to a node that has changed since registration.
 
 - tests/mineral_catalog_test.gd
   - Update the old unknown-ID expectation: a valid record for an unloaded stable ID is now intentionally accepted and retained.
