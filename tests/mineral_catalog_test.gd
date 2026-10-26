@@ -268,6 +268,9 @@ func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
 	assert(registry.register_vein("mine/sector-a/vein-02", second))
 	assert(not registry.register_vein("mine/sector-a/vein-01", second), "Stable IDs must not overwrite another live vein")
 	var saved: Dictionary = registry.to_save_dict()
+	first.remaining_units = 1
+	assert(registry.register_vein("mine/sector-a/vein-01", first, 1000))
+	assert(first.remaining_units == 1, "Idempotent registration must not reload a stale cached record")
 	assert(registry.get_registered_ids() == PackedStringArray(["mine/sector-a/vein-01", "mine/sector-a/vein-02"]))
 	first.remaining_units = 1
 	second.remaining_units = 1
