@@ -69,7 +69,6 @@ func _build_settings_ui() -> void:
 
     _settings_panel = PanelContainer.new()
     _settings_panel.name = "SettingsPanel"
-    _settings_panel.position = Vector2(0.5, 0.5)
     _settings_panel.set_anchors_preset(Control.PRESET_CENTER)
     _settings_panel.position = Vector2(-190, -190)
     _settings_panel.custom_minimum_size = Vector2(380, 380)
@@ -155,6 +154,11 @@ func _toggle_flicker() -> void:
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
+        for cell_node in _loaded_cells.values():
+            if is_instance_valid(cell_node):
+                cell_node.queue_free()
+        _loaded_cells.clear()
+        _flicker_lights.clear()
         _stream_maze_cells(true)
 
 func _configure_display() -> void:
@@ -552,7 +556,8 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         mesh_instance.material_override = material
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
-        _add_wall_wear_details(parent, object_name, wall_position, wall_size)
+        if _high_graphics:
+            _add_wall_wear_details(parent, object_name, wall_position, wall_size)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = wall_position
