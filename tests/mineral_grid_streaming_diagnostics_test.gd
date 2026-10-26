@@ -4,7 +4,6 @@ const Director = preload("res://systems/MineralGridStreamingDirector.gd")
 const FakeController = preload("res://tests/helpers/FakeMineralChunkController.gd")
 
 var _failed: bool = false
-var _finished: bool = false
 var _failure_signal_count: int = 0
 var _failure_report: Dictionary = {}
 var _fail_restore_coord: Vector2i = Vector2i(999999, 999999)
@@ -65,11 +64,15 @@ func _run_tests() -> void:
 	var invalid_report: Dictionary = director.get_last_sync_report()
 	_check(str(invalid_report.get("phase", "")) == "recovery_validation", "Unknown IDs should report recovery_validation.")
 	_check(director.get_managed_chunk_ids() == before_invalid_recovery, "Rejected recovery must not mutate the managed map.")
-	print("Mineral grid streaming failure diagnostics and recovery tests passed.")
 	director.queue_free()
 	controller.queue_free()
 	await process_frame
-	_finish()
+	if _failed:
+		print("Mineral grid streaming failure diagnostics tests failed.")
+		quit(1)
+	else:
+		print("Mineral grid streaming failure diagnostics and recovery tests passed.")
+		quit(0)
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	if coord == _fail_restore_coord:
@@ -87,10 +90,3 @@ func _check(condition: bool, message: String) -> void:
 		_failed = true
 		push_error(message)
 
-func _finish() -> void:
-	_finished = true
-	if _failed:
-		print("Mineral grid streaming failure diagnostics tests failed.")
-		quit(1)
-	else:
-		quit(0)
