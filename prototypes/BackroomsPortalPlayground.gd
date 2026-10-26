@@ -537,9 +537,13 @@ void fragment() {
     vec2 uv = UV * vec2(65.0, 65.0);
     float grain = noise21(uv * 2.7);
     float fibers = sin(uv.x * 24.0 + sin(uv.y * 5.0)) * 0.075 + sin(uv.y * 31.0) * 0.045;
-    float worn = smoothstep(0.45, 0.8, noise21(uv * 0.11));
-    vec3 color = base_color.rgb * (0.78 + grain * 0.34 + fibers);
-    color *= 1.0 - worn * 0.34;
+    float broad_wear = noise21(uv * 0.09);
+    float worn = smoothstep(0.38, 0.77, broad_wear);
+    float traffic_lane = smoothstep(0.0, 0.16, abs(fract(UV.x * 2.0) - 0.5)) * 0.08;
+    float tiny_specks = step(0.91, noise21(uv * 8.0)) * 0.12;
+    vec3 color = base_color.rgb * (0.72 + grain * 0.40 + fibers);
+    color *= 1.0 - worn * 0.42 - traffic_lane;
+    color = mix(color, base_color.rgb * 0.55, tiny_specks);
     ALBEDO = color;
     ROUGHNESS = 1.0;
 }
@@ -555,16 +559,24 @@ float noise21(vec2 p) {
     return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x), mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
 }
 void fragment() {
-    vec2 uv = UV * vec2(7.0, 3.0);
+    vec2 uv = UV * vec2(8.0, 3.2);
+    float broad_grime = noise21(uv * 0.62);
     float cloudy = noise21(uv * 2.2);
-    float stains = smoothstep(0.38, 0.68, noise21(uv * 0.72));
-    float paper_line = 1.0 - smoothstep(0.0, 0.025, abs(fract(UV.x * 7.0) - 0.5));
-    float peel_noise = noise21(uv * 4.5 + vec2(1.7, 3.2));
-    float peel = smoothstep(0.54, 0.72, peel_noise) * step(0.57, noise21(uv * 1.5));
-    vec3 aged = base_color.rgb * (0.88 + cloudy * 0.22);
-    aged *= 1.0 - stains * 0.38;
-    aged = mix(aged, vec3(0.25, 0.19, 0.11), peel * 0.94);
-    aged *= 1.0 - paper_line * 0.08;
+    float stains = smoothstep(0.34, 0.72, noise21(uv * 0.72));
+    float fine_grain = noise21(uv * 27.0);
+    float paper_line = 1.0 - smoothstep(0.0, 0.018, abs(fract(UV.x * 8.0) - 0.5));
+    float vertical_streaks = smoothstep(0.58, 0.9, noise21(vec2(UV.x * 19.0, UV.y * 2.8))) * (1.0 - UV.y * 0.35);
+    vec2 peel_uv = uv * 3.8 + vec2(1.7, 3.2);
+    float peel_noise = noise21(peel_uv);
+    float peel_mask = noise21(uv * 1.25 + vec2(8.1, 2.4));
+    float peel = smoothstep(0.51, 0.75, peel_noise) * smoothstep(0.43, 0.7, peel_mask);
+    float torn_rim = smoothstep(0.47, 0.54, peel) - smoothstep(0.60, 0.72, peel);
+    vec3 aged = base_color.rgb * (0.72 + cloudy * 0.28 + fine_grain * 0.08);
+    aged *= 1.0 - stains * 0.42 - broad_grime * 0.12;
+    aged *= 1.0 - vertical_streaks * 0.22;
+    aged = mix(aged, vec3(0.24, 0.18, 0.105), peel * 0.96);
+    aged = mix(aged, vec3(0.82, 0.73, 0.47), clamp(torn_rim, 0.0, 0.8) * 0.7);
+    aged *= 1.0 - paper_line * 0.10;
     ALBEDO = aged;
     ROUGHNESS = 0.98;
 }
