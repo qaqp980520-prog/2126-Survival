@@ -9,7 +9,8 @@ func _run() -> void:
     await process_frame
     _expect(str(game.get("_state")) == "playing", "game starts in playing state")
     _expect(int(game.get("_player_hp")) == 3, "game starts with three integrity")
-    _expect(is_equal_approx(float(game.get("_time_left")), 45.0), "game starts with 45 seconds")
+    var initial_time: float = float(game.get("_time_left"))
+    _expect(initial_time <= 45.0 and initial_time > 44.0, "game timer initializes near 45 seconds after first frame")
     var enemies: Array = game.get("_enemies")
     var before_enemies: int = enemies.size()
     game.call("debug_spawn_enemy_at", Vector2(90, 90))
