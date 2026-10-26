@@ -53,7 +53,7 @@ static func make_puzzle(width: int = 5, height: int = 5) -> Array:
     }
     return grid
 
-static func is_connected(grid: Array, width: int, height: int, start: Vector2i, goal: Vector2i) -> bool:
+static func has_signal_path(grid: Array, width: int, height: int, start: Vector2i, goal: Vector2i) -> bool:
     if width <= 0 or height <= 0 or grid.size() != width * height:
         return false
     if not _inside(start, width, height) or not _inside(goal, width, height):
