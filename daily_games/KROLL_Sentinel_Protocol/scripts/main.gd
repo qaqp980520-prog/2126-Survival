@@ -20,6 +20,7 @@ var _touch_move_origin: Vector2 = Vector2.ZERO
 var _touch_move_position: Vector2 = Vector2.ZERO
 var _dash_requested: bool = false
 var _dash_target: Vector2 = Vector2.ZERO
+var _dash_target_valid: bool = false
 var _dash_velocity: Vector2 = Vector2.ZERO
 var _dash_timer: float = 0.0
 var _dash_cooldown: float = 0.0
@@ -43,6 +44,7 @@ func _input(event: InputEvent) -> void:
             else:
                 _dash_requested = true
                 _dash_target = touch.position
+                _dash_target_valid = true
         elif touch.index == _touch_move_id:
             _touch_move_id = -1
     elif event is InputEventScreenDrag:
@@ -68,11 +70,12 @@ func _process(delta: float) -> void:
     var move_direction := _get_move_direction()
     _dash_cooldown = maxf(0.0, _dash_cooldown - delta)
     if _dash_requested and _dash_cooldown <= 0.0:
-        var dash_direction := move_direction
+        var dash_direction := _dash_target - _player_position if _dash_target_valid else move_direction
         if dash_direction.length_squared() < 0.01:
-            dash_direction = _dash_target - _player_position
+            dash_direction = move_direction
         _activate_dash(dash_direction)
     _dash_requested = false
+    _dash_target_valid = false
     var movement_velocity := move_direction * PLAYER_SPEED
     if _dash_timer > 0.0:
         movement_velocity = _dash_velocity
@@ -217,6 +220,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
         if event.keycode == KEY_SPACE:
             _dash_requested = true
             _dash_target = get_global_mouse_position()
+            _dash_target_valid = true
         elif event.keycode == KEY_R and _state != "playing":
             _restart()
 
@@ -233,6 +237,7 @@ func _restart() -> void:
     _dash_timer = 0.0
     _dash_cooldown = 0.0
     _dash_requested = false
+    _dash_target_valid = false
     for index in range(3):
         _spawn_cell()
     queue_redraw()
