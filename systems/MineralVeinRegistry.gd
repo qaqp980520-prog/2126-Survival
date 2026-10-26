@@ -14,8 +14,11 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 	var key := stable_id.strip_edges()
 	if key.is_empty() or key != stable_id or vein == null or not (vein is MiningNode):
 		return false
-	if _veins.has(key) and is_instance_valid(_veins[key]) and _veins[key] != vein:
-		return false
+	if _veins.has(key) and is_instance_valid(_veins[key]):
+		if _veins[key] != vein:
+			return false
+		# Idempotent registration of the same live node must not reload a stale snapshot.
+		return true
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	if now <= 0 or not Catalog.has_mineral(vein.mineral_id):
 		return false
