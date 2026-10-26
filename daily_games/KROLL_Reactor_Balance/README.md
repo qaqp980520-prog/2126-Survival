@@ -9,7 +9,7 @@ A standalone Godot 4.3+ arcade management game. Keep the combined output of thre
 - Mouse/touch: tap the visible VENT panel to vent; tap the visible BOOST panel to boost.
 - R: restart after a round ends.
 
-The simulation ticks once per second. Output drifts slightly each tick. A grid tick outside the target band resets the stability streak. Any reactor at 100 heat triggers a meltdown; 60 seconds without a stable 18-second streak ends the round.
+The simulation ticks once per second. Output drifts slightly each tick. A grid tick outside the target band resets the stability streak. Any reactor reaching 100 heat triggers a meltdown, which takes priority over a simultaneous stability win; 60 seconds without a stable 18-second streak ends the round.
 
 ## Import
 
