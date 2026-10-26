@@ -4,15 +4,20 @@ const PlaygroundScene = preload("res://prototypes/BackroomsPortalPlayground.tscn
 const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3"]
 
 var failures: Array[String] = []
+var watchdog: Timer
 
 func _initialize() -> void:
-    var watchdog := Timer.new()
+    watchdog = Timer.new()
     watchdog.one_shot = true
     watchdog.wait_time = 25.0
     root.add_child(watchdog)
     watchdog.timeout.connect(_on_timeout)
-    watchdog.start()
+    call_deferred("_start_watchdog")
     call_deferred("_run_integration_test")
+
+func _start_watchdog() -> void:
+    if is_instance_valid(watchdog) and watchdog.is_inside_tree():
+        watchdog.start()
 
 func _run_integration_test() -> void:
     var world = PlaygroundScene.instantiate()
@@ -22,7 +27,11 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_collect_berries", 2)), "collects items through shared world bridge")
     _expect(bool(world.call("debug_spawn_portal")), "test shortcut spawns portal through director")
     await process_frame
-    _expect(bool(world.call("has_active_portal")), "portal director and visual stay synchronized")
+    _expect(bool(world.call("has_active_portal")), "portal director has the spawned portal state")
+    if DisplayServer.get_name() == "headless":
+        _expect(world.get("active_portal_visual") == null, "headless mode keeps portal state without render-only visual nodes")
+    else:
+        _expect(world.get("active_portal_visual") != null, "graphical mode creates the portal visual")
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
@@ -50,13 +59,19 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("is_surface_collision_enabled")), "surface collisions re-enable on return")
     _expect(not bool(world.call("is_backrooms_collision_enabled")), "Backrooms collisions disable on return")
 
+    var exit_code: int = 0
     if failures.is_empty():
         print("Backrooms portal playground integration test passed.")
-        quit(0)
     else:
         for failure in failures:
             push_error("FAIL: " + failure)
-        quit(1)
+        exit_code = 1
+    world.queue_free()
+    if is_instance_valid(watchdog):
+        watchdog.stop()
+        watchdog.queue_free()
+    await process_frame
+    quit(exit_code)
 
 func _expect(condition: bool, description: String) -> void:
     if condition:
