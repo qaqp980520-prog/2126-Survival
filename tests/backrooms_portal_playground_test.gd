@@ -36,6 +36,10 @@ func _run_integration_test() -> void:
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    var director: Object = world.get("director")
+    director.set("next_spawn_in", 0.0)
+    await process_frame
+    _expect(not bool(world.call("has_active_portal")), "surface portal director does not spawn portals inside Backrooms")
     _expect(_maze_edges_are_symmetric(world), "maze edge openings match from both adjacent cells")
     _expect(_maze_region_is_connected(world), "procedural maze region remains connected to the origin")
     _expect(_maze_streaming_cell_boundaries(world), "streaming cell selection changes at actual half-cell boundaries")
