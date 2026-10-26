@@ -4,6 +4,7 @@ const Director = preload("res://systems/BackroomsPortalDirector.gd")
 const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
+const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
 const WORLD_SEED: int = 20261026
 const SAFE_DISTANCE: float = 7.0
@@ -36,8 +37,15 @@ var _flicker_enabled: bool = false
 var _settings_panel: PanelContainer
 var _settings_button: Button
 var _settings_status: Label
+var _settings_path: String = SettingsProfile.DEFAULT_PATH
+var _settings: Dictionary = {}
 
 func _ready() -> void:
+    _settings = SettingsProfile.load_settings(_settings_path)
+    _high_graphics = bool(_settings.get("high_graphics", false))
+    _flicker_enabled = bool(_settings.get("flicker_enabled", false))
+    player.set_camera_mode(int(_settings.get("camera_mode", 0)) == 1)
+    player.set_mouse_sensitivity(float(_settings.get("mouse_sensitivity", 2.5)) * 0.001)
     _configure_display()
     if DisplayServer.get_name() != "headless":
         _build_player_visual()
@@ -87,7 +95,7 @@ func _build_settings_ui() -> void:
     var camera_option := OptionButton.new()
     camera_option.add_item("第一人稱", 0)
     camera_option.add_item("第三人稱", 1)
-    camera_option.select(0)
+    camera_option.select(int(_settings.get("camera_mode", 0)))
     camera_option.item_selected.connect(_on_camera_setting_changed)
     layout.add_child(camera_option)
 
@@ -99,24 +107,24 @@ func _build_settings_ui() -> void:
     sensitivity_slider.min_value = 0.5
     sensitivity_slider.max_value = 6.0
     sensitivity_slider.step = 0.1
-    sensitivity_slider.value = 2.5
+    sensitivity_slider.value = float(_settings.get("mouse_sensitivity", 2.5))
     sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
     layout.add_child(sensitivity_slider)
 
     var graphics_button := Button.new()
     graphics_button.name = "GraphicsButton"
-    graphics_button.text = "畫質：低（流暢）"
+    graphics_button.text = "畫質：高（更多細節）" if _high_graphics else "畫質：低（流暢）"
     graphics_button.pressed.connect(_toggle_graphics_quality)
     layout.add_child(graphics_button)
 
     var flicker_button := Button.new()
     flicker_button.name = "FlickerButton"
-    flicker_button.text = "燈光閃爍：關"
+    flicker_button.text = "燈光閃爍：開" if _flicker_enabled else "燈光閃爍：關"
     flicker_button.pressed.connect(_toggle_flicker)
     layout.add_child(flicker_button)
 
     _settings_status = Label.new()
-    _settings_status.text = "低畫質會減少裝飾、動態材質與燈光效果。"
+    _settings_status.text = "高畫質包含壁紙破損、地毯紋理與更多裝飾。" if _high_graphics else "低畫質會減少裝飾、動態材質與燈光效果。"
     _settings_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     layout.add_child(_settings_status)
     var close_button := Button.new()
@@ -132,30 +140,48 @@ func _toggle_settings_panel() -> void:
             Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _on_camera_setting_changed(index: int) -> void:
-    player.set_camera_mode(index == 1)
+    var selected_mode: int = 1 if index == 1 else 0
+    _settings["camera_mode"] = selected_mode
+    player.set_camera_mode(selected_mode == 1)
+    _save_settings()
 
 func _on_sensitivity_changed(value: float) -> void:
-    player.set_mouse_sensitivity(value * 0.001)
+    var selected_sensitivity: float = clampf(value, 0.5, 6.0)
+    _settings["mouse_sensitivity"] = selected_sensitivity
+    player.set_mouse_sensitivity(selected_sensitivity * 0.001)
+    _save_settings()
+
+func _save_settings() -> void:
+    if not SettingsProfile.save_settings(_settings, _settings_path) and _settings_status != null:
+        _settings_status.text = "設定儲存失敗；目前值只在本次執行有效。"
 
 func _toggle_graphics_quality() -> void:
     _high_graphics = not _high_graphics
+    _settings["high_graphics"] = _high_graphics
     var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
         button.text = "畫質：高（更多細節）" if _high_graphics else "畫質：低（流暢）"
     _rebuild_maze_for_settings()
     if _settings_status != null:
         _settings_status.text = "高畫質包含壁紙破損、地毯紋理與更多裝飾。" if _high_graphics else "低畫質減少裝飾和動態材質，優先提升流暢度。"
+    _save_settings()
 
 func _toggle_flicker() -> void:
     _flicker_enabled = not _flicker_enabled
+    _settings["flicker_enabled"] = _flicker_enabled
+    _save_settings()
     var button := _settings_panel.find_child("FlickerButton", true, false) as Button
     if button != null:
         button.text = "燈光閃爍：開" if _flicker_enabled else "燈光閃爍：關"
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
-        for cell_node in _loaded_cells.values():
-            if is_instance_valid(cell_node):
+        for cell_value in _loaded_cells.values():
+            var cell_node := cell_value as Node
+            if cell_node != null and is_instance_valid(cell_node):
+                var cell_parent: Node = cell_node.get_parent()
+                if cell_parent != null:
+                    cell_parent.remove_child(cell_node)
                 cell_node.queue_free()
         _loaded_cells.clear()
         _flicker_lights.clear()
@@ -200,7 +226,7 @@ func _add_player_part(parent: Node3D, part_name: String, mesh_resource: Primitiv
     parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
-    if _flicker_enabled and _high_graphics:
+    if _flicker_enabled:
         _update_flickering_lights(delta)
     if director == null:
         return
@@ -537,7 +563,8 @@ void fragment() {
     var material := ShaderMaterial.new()
     material.shader = shader
     material.set_shader_parameter("base_color", _cell_material_floor.albedo_color if is_floor else _cell_material_wall.albedo_color)
-    material.set_shader_parameter("seed_offset", float(abs(seed_cell.x * 31 + seed_cell.y * 17)))
+    if not is_floor:
+        material.set_shader_parameter("seed_offset", float(abs(seed_cell.x * 31 + seed_cell.y * 17)))
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
