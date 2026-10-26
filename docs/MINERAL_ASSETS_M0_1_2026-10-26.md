@@ -34,3 +34,12 @@
 - 在 CI 完成前狀態為「待驗證」；未通過不得合併。
 - 這一版的 3D 礦塊使用程式化低多邊形網格，不是外部建模軟體製作的高模/貼圖包。
 - 概念展示圖是視覺方向參考，不等於已產出的獨立模型檔、貼圖檔或完整背包 UI。
+
+
+## 2026-10-26 補充｜離線礦脈再生 M0.1（PR 待驗證）
+- 新增 `MineralMiningNode.apply_elapsed_regeneration(now_unix)`，以真實 Unix 時間計算整段經過時間，支援離線再生與部分間隔保留。
+- 新增 `max_units`、`regen_interval_seconds`、`last_regen_unix` 存檔欄位；schema 仍為 v1，舊格式會在載入時啟動新的再生時鐘。
+- 回復數量限制為礦脈自身的 `max_units`，不再使用無條件 10000 上限。
+- 新增測試：離線經過 120 秒且間隔 60 秒時補回 2 單位、滿載上限、部分間隔、系統時鐘倒退、舊存檔相容與無效欄位拒絕。
+- 專門設計文件：`docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md`。
+- 狀態：已推送獨立 feature branch，待 GitHub Actions Godot 4.3 全套測試；尚未合併 main，未聲稱手動遊玩測試通過。
