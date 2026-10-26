@@ -62,7 +62,7 @@ func _handle_point(point: Vector2) -> void:
     cell["rotation"] = (int(cell.get("rotation", 0)) + 1) % 4
     grid[idx] = cell
     moves += 1
-    if Rules.is_connected(grid, GRID_W, GRID_H, SOURCE, RECEIVER):
+    if Rules.has_signal_path(grid, GRID_W, GRID_H, SOURCE, RECEIVER):
         finished = true
         status_text = "SIGNAL RESTORED — press R to replay."
     else:
