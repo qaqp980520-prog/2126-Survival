@@ -10,7 +10,7 @@ extends CharacterBody3D
 @onready var camera: Camera3D = $Camera3D
 var _look_active: bool = false
 var _pitch: float = deg_to_rad(-12.0)
-var _third_person: bool = true
+var _third_person: bool = false
 var avatar_visual: Node3D
 var world_bridge: Node
 var _walk_phase: float = 0.0
@@ -47,8 +47,20 @@ func bind_avatar_visual(candidate: Node3D) -> bool:
     return true
 
 func toggle_camera_mode() -> void:
-    _third_person = not _third_person
+    set_camera_mode(not _third_person)
+
+func set_camera_mode(third_person: bool) -> void:
+    _third_person = third_person
     _apply_camera_mode()
+
+func set_mouse_sensitivity(value: float) -> void:
+    mouse_sensitivity = clampf(value, 0.0005, 0.006)
+
+func get_mouse_sensitivity() -> float:
+    return mouse_sensitivity
+
+func is_third_person() -> bool:
+    return _third_person
 
 func _apply_camera_mode() -> void:
     if camera != null:
