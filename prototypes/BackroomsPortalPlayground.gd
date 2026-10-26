@@ -138,7 +138,7 @@ func _build_settings_ui() -> void:
     layout.add_child(shadows_button)
 
     _settings_status = Label.new()
-    _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
+    _settings_status.text = "光影已開啟：啟用動態陰影，效能負擔較高。" if _shadows_enabled else "光影已關閉：停用動態陰影，優先提升流暢度。"
     _settings_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     layout.add_child(_settings_status)
     var close_button := Button.new()
@@ -188,6 +188,7 @@ func _on_resolution_changed(index: int) -> void:
         # 1280x720 render target. Update the viewport's base size as well so the
         # selected resolution changes the actual 3D render resolution.
         window.content_scale_size = sizes[selected]
+        window.content_scale_factor = 1.0
         window.mode = Window.MODE_WINDOWED
         window.size = sizes[selected]
         window.move_to_center()
@@ -204,6 +205,8 @@ func _toggle_shadows() -> void:
     for light in _flicker_lights:
         if is_instance_valid(light):
             light.shadow_enabled = _shadows_enabled
+    if _settings_status != null:
+        _settings_status.text = "光影已開啟：啟用動態陰影，效能負擔較高。" if _shadows_enabled else "光影已關閉：停用動態陰影，優先提升流暢度。"
     _save_settings()
 
 func _rebuild_maze_for_settings() -> void:
@@ -229,6 +232,7 @@ func _configure_display() -> void:
         # Keep the base viewport resolution in sync with the saved selection;
         # otherwise Godot merely scales the original render target to the window.
         window.content_scale_size = sizes[resolution_index]
+        window.content_scale_factor = 1.0
         window.mode = Window.MODE_WINDOWED
         window.size = sizes[resolution_index]
         window.move_to_center()
