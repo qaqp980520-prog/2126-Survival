@@ -98,11 +98,23 @@ func _build_surface() -> void:
     _add_box(main_world, "EastBoundary", Vector3(35, 2, 0), Vector3(1, 4, 70), wall_color)
 
 func _prepare_maze_materials() -> void:
+    var floor_color := Color(0.57, 0.51, 0.31)
+    var wall_color := Color(0.76, 0.69, 0.42)
+    match current_level:
+        "Level 1":
+            floor_color = Color(0.24, 0.27, 0.28)
+            wall_color = Color(0.42, 0.45, 0.44)
+        "Level 2":
+            floor_color = Color(0.28, 0.16, 0.12)
+            wall_color = Color(0.47, 0.27, 0.19)
+        "Level 3":
+            floor_color = Color(0.12, 0.19, 0.27)
+            wall_color = Color(0.27, 0.37, 0.49)
     _cell_material_floor = StandardMaterial3D.new()
-    _cell_material_floor.albedo_color = Color(0.57, 0.51, 0.31)
+    _cell_material_floor.albedo_color = floor_color
     _cell_material_floor.roughness = 0.94
     _cell_material_wall = StandardMaterial3D.new()
-    _cell_material_wall.albedo_color = Color(0.76, 0.69, 0.42)
+    _cell_material_wall.albedo_color = wall_color
     _cell_material_wall.roughness = 0.88
 
 func _build_backrooms_room(level_name: String) -> void:
@@ -112,6 +124,7 @@ func _build_backrooms_room(level_name: String) -> void:
     backrooms_room = Node3D.new()
     backrooms_room.name = "EndlessMaze_" + level_name.replace(" ", "")
     backrooms_world.add_child(backrooms_room)
+    _prepare_maze_materials()
     _stream_maze_cells(true)
 
 func _stream_maze_cells(force: bool = false) -> void:
@@ -139,7 +152,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
     root.position = Vector3(cell.x * CELL_SIZE, 0.0, cell.y * CELL_SIZE)
     backrooms_room.add_child(root)
     _loaded_cells[cell] = root
-    _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), Color(0.56, 0.52, 0.39))
+    _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
@@ -164,7 +177,20 @@ func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var az := mini(cell.y, neighbor.y)
     var bx := maxi(cell.x, neighbor.x)
     var bz := maxi(cell.y, neighbor.y)
-    return _hash_value(ax * 31 + bx, az * 31 + bz, 13) % 100 < 42
+    # Random extra passages make the maze twisty; a deterministic spanning
+    # tree edge guarantees every generated cell can ultimately reach the origin.
+    if _parent_toward_origin(cell) == direction:
+        return true
+    if _parent_toward_origin(neighbor) == -direction:
+        return true
+    return _hash_value(ax * 31 + bx, az * 31 + bz, 13) % 100 < 34
+
+func _parent_toward_origin(cell: Vector2i) -> Vector2i:
+    if cell == Vector2i.ZERO:
+        return Vector2i.ZERO
+    if absi(cell.x) >= absi(cell.y) and cell.x != 0:
+        return Vector2i(-1 if cell.x > 0 else 1, 0)
+    return Vector2i(0, -1 if cell.y > 0 else 1)
 
 func _hash_value(x: int, z: int, salt: int) -> int:
     var value: int = abs((x * 73856093) ^ (z * 19349663) ^ (salt * 83492791) ^ WORLD_SEED)
@@ -268,9 +294,9 @@ func _on_portal_entered(body: Node3D, portal_id: int) -> void:
     main_world.visible = false
     _set_collision_enabled(main_world, false)
     backrooms_world.visible = true
-    _build_backrooms_room(current_level)
     player.global_position = Vector3.ZERO
     player.velocity = Vector3.ZERO
+    _build_backrooms_room(current_level)
     _update_hud()
 
 func debug_spawn_portal() -> bool:
