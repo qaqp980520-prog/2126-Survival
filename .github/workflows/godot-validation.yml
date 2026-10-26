@@ -77,6 +77,11 @@ jobs:
           test -f daily_games/KROLL_Sentinel_Protocol/project.godot
           test -f daily_games/KROLL_Sentinel_Protocol/tests/rules_test.gd
           test -f daily_games/KROLL_Sentinel_Protocol/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Reactor_Balance/project.godot
+          test -f daily_games/KROLL_Reactor_Balance/tests/rules_test.gd
+          test -f daily_games/KROLL_Reactor_Balance/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_transaction_test.gd
+          test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -89,6 +94,16 @@ jobs:
           test -f tests/mineral_vein_chunk_stream_test.gd
           test -f prototypes/minerals/MineralOreVisual.gd
           test -f prototypes/minerals/MineralMiningVFX.gd
+      - name: Import and parse root 2126 Survival project
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Godot reported root-project import or parse errors."
+            exit 1
+          fi
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
@@ -302,6 +317,13 @@ jobs:
           fi
           echo "$output" | grep -q 'Backrooms settings integration tests passed.'
 
+      - name: Run mineral grid streaming transactional rollback tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_transaction_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          echo "$output" | grep -F "Mineral grid streaming transactional rollback tests passed."
       - name: Run mineral grid streaming director tests
         shell: bash
         run: |
@@ -345,3 +367,9 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'KROLL Sentinel Escape runtime smoke test passed.'
+      - name: Import and parse KROLL Reactor Balance
+        run: godot --headless --path daily_games/KROLL_Reactor_Balance --editor --quit
+      - name: Run KROLL Reactor Balance rules tests
+        run: godot --headless --path daily_games/KROLL_Reactor_Balance --script res://tests/rules_test.gd
+      - name: Run KROLL Reactor Balance runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Reactor_Balance --script res://tests/game_smoke_test.gd
