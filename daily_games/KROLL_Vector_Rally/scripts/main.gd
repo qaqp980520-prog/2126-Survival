@@ -89,13 +89,15 @@ func _read_controls() -> Dictionary:
 func _control_at(position: Vector2) -> String:
 	if position.y < 560.0:
 		return ""
-	if position.x < 150.0:
+	if position.x >= 18.0 and position.x < 150.0:
 		return "left"
-	if position.x < 300.0:
+	if position.x >= 158.0 and position.x < 300.0:
 		return "right"
-	if position.x < 650.0:
+	if position.x >= 520.0 and position.x < 646.0:
 		return "accelerate"
-	return "brake"
+	if position.x >= 654.0 and position.x < 780.0:
+		return "brake"
+	return ""
 
 func step_game(delta: float, steer: float, accelerate: bool, brake: bool) -> void:
 	if finished or time_up or delta <= 0.0:
