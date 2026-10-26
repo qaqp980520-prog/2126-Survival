@@ -10,6 +10,23 @@ extends CharacterBody3D
 @onready var camera: Camera3D = $Camera3D
 var _look_active: bool = false
 var _pitch: float = 0.0
+var world_bridge: Node
+
+func bind_world_bridge(candidate: Node) -> bool:
+    if candidate == null or not candidate.has_method("get_movement_multiplier") or not candidate.has_method("can_player_jump"):
+        return false
+    world_bridge = candidate
+    return true
+
+func get_effective_movement_multiplier() -> float:
+    if world_bridge == null or not is_instance_valid(world_bridge):
+        return 1.0
+    return clampf(float(world_bridge.call("get_movement_multiplier")), 0.1, 1.0)
+
+func can_jump_with_current_load() -> bool:
+    if world_bridge == null or not is_instance_valid(world_bridge):
+        return true
+    return bool(world_bridge.call("can_player_jump"))
 
 func _ready() -> void:
     add_to_group("player")
@@ -48,11 +65,12 @@ func _physics_process(delta: float) -> void:
     if input_dir.length_squared() > 1.0:
         input_dir = input_dir.normalized()
     var direction := (global_transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-    var speed := sprint_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
+    var base_speed := sprint_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
+    var speed: float = base_speed * get_effective_movement_multiplier()
     velocity.x = direction.x * speed
     velocity.z = direction.z * speed
     if not is_on_floor():
         velocity.y -= gravity_strength * delta
-    elif Input.is_key_pressed(KEY_SPACE):
+    elif Input.is_key_pressed(KEY_SPACE) and can_jump_with_current_load():
         velocity.y = jump_velocity
     move_and_slide()
