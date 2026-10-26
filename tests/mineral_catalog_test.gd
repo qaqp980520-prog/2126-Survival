@@ -229,6 +229,7 @@ func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
 	second.mineral_id = "copper_ore"
 	second.max_units = 6
 	second.remaining_units = 4
+	second.regen_interval_seconds = 60
 	root.add_child(second)
 	second.last_regen_unix = 1000
 	assert(registry.register_vein("mine/sector-a/vein-01", first))
