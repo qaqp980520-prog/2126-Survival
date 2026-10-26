@@ -15,6 +15,9 @@ func _run() -> void:
 	assert(bool(boost.get("ok", false)))
 	assert(is_equal_approx(float(boost["outputs"][2]), 58.0))
 	assert(is_equal_approx(float(boost["heats"][2]), 50.0))
+	var hot_boost: Dictionary = Rules.apply_action([50.0, 50.0, 50.0], [95.0, 30.0, 30.0], 0, "boost")
+	assert(bool(hot_boost.get("ok", false)))
+	assert(Rules.is_overheated(hot_boost["heats"]))
 
 	assert(not bool(Rules.apply_action([50.0], [20.0], 0, "vent").get("ok", false)))
 	assert(not bool(Rules.apply_action([50.0, 50.0, 50.0], [20.0, 20.0, 20.0], 3, "vent").get("ok", false)))
