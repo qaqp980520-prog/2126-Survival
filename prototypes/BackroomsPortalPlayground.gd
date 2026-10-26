@@ -580,24 +580,11 @@ float noise21(vec2 p) {
 }
 void fragment() {
     vec2 uv = UV * vec2(8.0, 3.2);
-    float broad_grime = noise21(uv * 0.62);
     float cloudy = noise21(uv * 2.2);
-    float stains = smoothstep(0.34, 0.72, noise21(uv * 0.72));
     float fine_grain = noise21(uv * 27.0);
-    float paper_line = 1.0 - smoothstep(0.0, 0.018, abs(fract(UV.x * 8.0) - 0.5));
-    float vertical_streaks = smoothstep(0.58, 0.9, noise21(vec2(UV.x * 19.0, UV.y * 2.8))) * (1.0 - UV.y * 0.35);
-    vec2 peel_uv = uv * 3.8 + vec2(1.7, 3.2);
-    float peel_noise = noise21(peel_uv);
-    float peel_mask = noise21(uv * 1.25 + vec2(8.1, 2.4));
-    float peel = smoothstep(0.51, 0.75, peel_noise) * smoothstep(0.43, 0.7, peel_mask);
-    float torn_rim = smoothstep(0.47, 0.54, peel) - smoothstep(0.60, 0.72, peel);
-    vec3 photo_texture = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
-    vec3 aged = photo_texture * (0.78 + cloudy * 0.22 + fine_grain * 0.06);
-    aged *= 1.0 - stains * 0.30 - broad_grime * 0.12;
-    aged *= 1.0 - vertical_streaks * 0.18;
-    aged = mix(aged, vec3(0.24, 0.18, 0.105), peel * 0.68);
-    aged = mix(aged, vec3(0.82, 0.73, 0.47), clamp(torn_rim, 0.0, 0.8) * 0.5);
-    aged *= 1.0 - paper_line * 0.06;
+    vec3 wallpaper = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
+    // Keep the reference wallpaper pattern visible; only add very subtle aging.
+    vec3 aged = wallpaper * (0.94 + cloudy * 0.07 + fine_grain * 0.025);
     ALBEDO = aged;
     ROUGHNESS = 0.98;
 }
