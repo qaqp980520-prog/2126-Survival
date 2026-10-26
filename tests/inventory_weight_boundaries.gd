@@ -8,6 +8,7 @@ func _initialize() -> void:
 	_test_overweight_boundary_and_recovery()
 	_test_super_heavy_jump_boundary_and_recovery()
 	_test_invalid_item_and_amount()
+	_test_unknown_count_fallback_weight()
 	print("Inventory weight boundary regression tests passed.")
 	quit(0)
 
@@ -60,3 +61,17 @@ func _test_invalid_item_and_amount() -> void:
 	assert(inventory.remove_item("rock", -1) == 0)
 	assert(inventory.add_item("rock", InventoryScript.MAX_SAVED_COUNT) == InventoryScript.MAX_SAVED_COUNT)
 	assert(inventory.add_item("rock", 1) == 0)
+
+func _test_unknown_count_fallback_weight() -> void:
+	var inventory = InventoryScript.new()
+	assert(is_equal_approx(inventory.total_weight_kg(), 0.0))
+	# Defense in depth for legacy callers that may still write the public counts dictionary directly.
+	inventory.counts["legacy_unregistered_item"] = 2
+	assert(is_equal_approx(inventory.total_weight_kg(), 2.0), "Unknown directly-injected counts must not be weightless")
+	# The public API and save loader must still reject unregistered IDs.
+	assert(inventory.add_item("legacy_unregistered_item", 1) == 0)
+	var payload := inventory.to_save_dict()
+	payload["inventory"]["legacy_unregistered_item"] = 1
+	var previous_counts: Dictionary = inventory.counts.duplicate(true)
+	assert(not inventory.load_save_dict(payload), "Save loader must reject unknown item IDs")
+	assert(inventory.counts == previous_counts, "Rejected save must preserve existing inventory")
