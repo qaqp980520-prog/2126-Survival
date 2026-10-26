@@ -8,11 +8,15 @@ const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
 const WORLD_SEED: int = 20261026
 const SAFE_DISTANCE: float = 7.0
 const SAVE_PATH: String = "user://backrooms_playground_save.json"
+const CELL_SIZE: float = 8.0
+const WALL_HEIGHT: float = 3.4
+const STREAM_RADIUS: int = 4
 
 @onready var player: CharacterBody3D = $Player
 @onready var main_world: Node3D = $MainWorld
 @onready var backrooms_world: Node3D = $BackroomsWorld
 @onready var status_label: Label = $HUD/Status
+@onready var help_label: Label = $HUD/Help
 
 var director
 var bridge
@@ -21,8 +25,13 @@ var backrooms_room: Node3D
 var in_backrooms: bool = false
 var current_level: String = "Surface"
 var _hud_elapsed: float = 0.0
+var _loaded_cells: Dictionary = {}
+var _cell_material_floor: StandardMaterial3D
+var _cell_material_wall: StandardMaterial3D
+var _maze_rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+    _configure_display()
     if DisplayServer.get_name() != "headless":
         _build_player_visual()
     director = Director.new(WORLD_SEED, WORLD_BOUNDS, SAFE_DISTANCE)
@@ -31,22 +40,29 @@ func _ready() -> void:
     bridge.name = "SurvivalWorldBridge"
     add_child(bridge)
     _build_surface()
+    _prepare_maze_materials()
     backrooms_world.visible = false
     _update_hud()
+    if help_label != null:
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | Esc release mouse | T portal test | B return | G collect | H drop | F5 save | F9 load"
+
+func _configure_display() -> void:
+    if DisplayServer.get_name() != "headless":
+        get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+        get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+        get_window().size = Vector2i(1280, 720)
 
 func _build_player_visual() -> void:
-    var body_mesh := MeshInstance3D.new()
-    body_mesh.name = "BodyMesh"
-    var capsule_mesh := CapsuleMesh.new()
-    capsule_mesh.radius = 0.35
-    capsule_mesh.height = 1.8
-    body_mesh.mesh = capsule_mesh
-    body_mesh.position = Vector3(0.0, 0.9, 0.0)
-    player.add_child(body_mesh)
+    # A first-person camera should never show the player's own placeholder body.
+    var old_body := player.get_node_or_null("BodyMesh")
+    if old_body != null:
+        old_body.queue_free()
 
 func _process(delta: float) -> void:
     if director == null:
         return
+    if in_backrooms:
+        _stream_maze_cells()
     var player_position := Vector2(player.global_position.x, player.global_position.z)
     var result: Dictionary = director.tick(delta, player_position)
     if result.get("event", "none") == "spawned":
@@ -81,46 +97,104 @@ func _build_surface() -> void:
     _add_box(main_world, "WestBoundary", Vector3(-35, 2, 0), Vector3(1, 4, 70), wall_color)
     _add_box(main_world, "EastBoundary", Vector3(35, 2, 0), Vector3(1, 4, 70), wall_color)
 
+func _prepare_maze_materials() -> void:
+    _cell_material_floor = StandardMaterial3D.new()
+    _cell_material_floor.albedo_color = Color(0.57, 0.51, 0.31)
+    _cell_material_floor.roughness = 0.94
+    _cell_material_wall = StandardMaterial3D.new()
+    _cell_material_wall.albedo_color = Color(0.76, 0.69, 0.42)
+    _cell_material_wall.roughness = 0.88
+
 func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
-        _set_collision_enabled(backrooms_room, false)
         backrooms_room.queue_free()
+    _loaded_cells.clear()
     backrooms_room = Node3D.new()
-    backrooms_room.name = "Room_" + level_name.replace(" ", "")
+    backrooms_room.name = "EndlessMaze_" + level_name.replace(" ", "")
     backrooms_world.add_child(backrooms_room)
+    _stream_maze_cells(true)
 
-    var floor_color := Color(0.54, 0.47, 0.24)
-    var wall_color := Color(0.76, 0.69, 0.37)
-    match level_name:
-        "Level 1":
-            floor_color = Color(0.19, 0.23, 0.25)
-            wall_color = Color(0.35, 0.39, 0.41)
-        "Level 2":
-            floor_color = Color(0.22, 0.12, 0.09)
-            wall_color = Color(0.39, 0.2, 0.14)
-        "Level 3":
-            floor_color = Color(0.1, 0.16, 0.23)
-            wall_color = Color(0.22, 0.31, 0.42)
+func _stream_maze_cells(force: bool = false) -> void:
+    if backrooms_room == null or not is_instance_valid(backrooms_room):
+        return
+    var center_x := floori(player.global_position.x / CELL_SIZE)
+    var center_z := floori(player.global_position.z / CELL_SIZE)
+    var needed: Dictionary = {}
+    for z in range(center_z - STREAM_RADIUS, center_z + STREAM_RADIUS + 1):
+        for x in range(center_x - STREAM_RADIUS, center_x + STREAM_RADIUS + 1):
+            var key := Vector2i(x, z)
+            needed[key] = true
+            if force or not _loaded_cells.has(key):
+                _create_maze_cell(key)
+    for key in _loaded_cells.keys():
+        if not needed.has(key):
+            var cell: Node = _loaded_cells[key]
+            if is_instance_valid(cell):
+                cell.queue_free()
+            _loaded_cells.erase(key)
 
-    _add_box(backrooms_room, "RoomFloor", Vector3(0, -0.5, 0), Vector3(60, 1, 60), floor_color)
-    _add_box(backrooms_room, "NorthWall", Vector3(0, 2, -30), Vector3(60, 4, 1), wall_color)
-    _add_box(backrooms_room, "SouthWall", Vector3(0, 2, 30), Vector3(60, 4, 1), wall_color)
-    _add_box(backrooms_room, "WestWall", Vector3(-30, 2, 0), Vector3(1, 4, 60), wall_color)
-    _add_box(backrooms_room, "EastWall", Vector3(30, 2, 0), Vector3(1, 4, 60), wall_color)
-    if level_name == "Level 0":
-        _add_box(backrooms_room, "OfficePartitionA", Vector3(-10, 1.8, -7), Vector3(1, 3.6, 24), wall_color)
-        _add_box(backrooms_room, "OfficePartitionB", Vector3(7, 1.8, 8), Vector3(22, 3.6, 1), wall_color)
-    elif level_name == "Level 1":
-        _add_box(backrooms_room, "WarehouseDividerA", Vector3(-12, 2, -4), Vector3(1.5, 4, 22), wall_color)
-        _add_box(backrooms_room, "WarehouseDividerB", Vector3(10, 2, 9), Vector3(20, 4, 1.5), wall_color)
-    elif level_name == "Level 2":
-        _add_box(backrooms_room, "PipeWallA", Vector3(-8, 2, -8), Vector3(1.2, 4, 26), wall_color)
-        _add_box(backrooms_room, "PipeWallB", Vector3(8, 2, 8), Vector3(1.2, 4, 26), wall_color)
-    else:
-        _add_box(backrooms_room, "ServerAisleA", Vector3(-12, 2, 0), Vector3(1.2, 4, 24), wall_color)
-        _add_box(backrooms_room, "ServerAisleB", Vector3(12, 2, 0), Vector3(1.2, 4, 24), wall_color)
+func _create_maze_cell(cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Cell_%d_%d" % [cell.x, cell.y]
+    root.position = Vector3(cell.x * CELL_SIZE, 0.0, cell.y * CELL_SIZE)
+    backrooms_room.add_child(root)
+    _loaded_cells[cell] = root
+    _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), Color(0.56, 0.52, 0.39))
+    # Every cell uses a coordinate-derived random stream, so the maze is stable
+    # as it unloads and reloads while the player explores indefinitely.
+    var north_open := _edge_is_open(cell, Vector2i(0, -1))
+    var west_open := _edge_is_open(cell, Vector2i(-1, 0))
+    var east_open := _edge_is_open(cell, Vector2i(1, 0))
+    var south_open := _edge_is_open(cell, Vector2i(0, 1))
+    # Guarantee at least one passage per cell to keep exploration possible.
+    if not (north_open or west_open or east_open or south_open):
+        north_open = true
+    if not north_open:
+        _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
+    if not west_open:
+        _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
+    # Shared edges are built once by the cell on their north/west side.
+    if not south_open:
+        _add_maze_wall(root, "SouthWall", Vector3(0, WALL_HEIGHT * 0.5, CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
+    if not east_open:
+        _add_maze_wall(root, "EastWall", Vector3(CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
+    if _hash_value(cell.x, cell.y, 71) % 5 == 0:
+        _add_box(root, "CeilingLightPanel", Vector3(0, WALL_HEIGHT + 0.08, 0), Vector3(1.8, 0.12, 0.7), Color(0.95, 0.91, 0.72))
 
-    _set_collision_enabled(backrooms_room, true)
+func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
+    var neighbor := cell + direction
+    var ax := mini(cell.x, neighbor.x)
+    var az := mini(cell.y, neighbor.y)
+    var bx := maxi(cell.x, neighbor.x)
+    var bz := maxi(cell.y, neighbor.y)
+    return _hash_value(ax * 31 + bx, az * 31 + bz, 13) % 100 < 42
+
+func _hash_value(x: int, z: int, salt: int) -> int:
+    var value: int = abs((x * 73856093) ^ (z * 19349663) ^ (salt * 83492791) ^ WORLD_SEED)
+    return value
+
+func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3, wall_size: Vector3) -> void:
+    var material := _cell_material_wall
+    if material == null:
+        material = StandardMaterial3D.new()
+        material.albedo_color = Color(0.76, 0.69, 0.42)
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = object_name + "Mesh"
+    var mesh := BoxMesh.new()
+    mesh.size = wall_size
+    mesh_instance.mesh = mesh
+    mesh_instance.material_override = material
+    mesh_instance.position = wall_position
+    parent.add_child(mesh_instance)
+    var body := StaticBody3D.new()
+    body.name = object_name + "Collision"
+    body.position = wall_position
+    var collision := CollisionShape3D.new()
+    var shape := BoxShape3D.new()
+    shape.size = wall_size
+    collision.shape = shape
+    body.add_child(collision)
+    parent.add_child(body)
 
 func _set_collision_enabled(root_node: Node, enabled: bool) -> void:
     for child in root_node.get_children():
@@ -145,18 +219,17 @@ func is_backrooms_collision_enabled() -> bool:
     return backrooms_room != null and is_instance_valid(backrooms_room) and _contains_enabled_collision(backrooms_room)
 
 func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, color: Color) -> void:
-    if DisplayServer.get_name() != "headless":
-        var material := StandardMaterial3D.new()
-        material.albedo_color = color
-        material.roughness = 0.82
-        var mesh_instance := MeshInstance3D.new()
-        mesh_instance.name = object_name + "Mesh"
-        var mesh := BoxMesh.new()
-        mesh.size = box_size
-        mesh_instance.mesh = mesh
-        mesh_instance.material_override = material
-        mesh_instance.position = box_position
-        parent.add_child(mesh_instance)
+    var material := StandardMaterial3D.new()
+    material.albedo_color = color
+    material.roughness = 0.82
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = object_name + "Mesh"
+    var mesh := BoxMesh.new()
+    mesh.size = box_size
+    mesh_instance.mesh = mesh
+    mesh_instance.material_override = material
+    mesh_instance.position = box_position
+    parent.add_child(mesh_instance)
     var body := StaticBody3D.new()
     body.name = object_name + "Collision"
     body.position = box_position
@@ -170,7 +243,6 @@ func _add_box(parent: Node3D, object_name: String, box_position: Vector3, box_si
 func _spawn_portal(portal_data: Dictionary) -> bool:
     _remove_portal_visual()
     if DisplayServer.get_name() == "headless":
-        # The director still owns portal state on a server; the client owns visuals.
         active_portal_visual = null
         return not portal_data.is_empty()
     var portal: Area3D = PortalScene.instantiate() as Area3D
@@ -228,6 +300,7 @@ func debug_return_to_surface() -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
         backrooms_room.queue_free()
     backrooms_room = null
+    _loaded_cells.clear()
     backrooms_world.visible = false
     main_world.visible = true
     _set_collision_enabled(main_world, true)
@@ -310,7 +383,9 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
         if not (component is int or component is float) or not is_finite(float(component)):
             return false
     var restored_position := Vector3(float(raw_position[0]), float(raw_position[1]), float(raw_position[2]))
-    if not WORLD_BOUNDS.has_point(Vector2(restored_position.x, restored_position.z)) or restored_position.y < -5.0 or restored_position.y > 20.0:
+    if not WORLD_BOUNDS.has_point(Vector2(restored_position.x, restored_position.z)) and not bool(raw_backrooms):
+        return false
+    if restored_position.y < -5.0 or restored_position.y > 20.0:
         return false
     if not bridge.restore_world_save(world_save):
         return false
@@ -330,6 +405,7 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
         if backrooms_room != null and is_instance_valid(backrooms_room):
             backrooms_room.queue_free()
             backrooms_room = null
+            _loaded_cells.clear()
     _remove_portal_visual()
     if not director.active_portal.is_empty():
         var active: Dictionary = director.active_portal
@@ -370,4 +446,5 @@ func _update_hud() -> void:
     var portal_status := "none"
     if director != null and not director.active_portal.is_empty():
         portal_status = "#" + str(director.active_portal.get("id", "?"))
-    status_label.text = "2126 SURVIVAL // KROLL PORTAL LAB\nZone: %s | Portal: %s | Carry: %.1f / %.1f kg\nG collect berries: %d | H drop one | T spawn test portal" % [current_level, portal_status, weight, limit, get_inventory_count("berries")]
+    var maze_status := "ENDLESS MAZE" if in_backrooms else "SURFACE"
+    status_label.text = "2126 SURVIVAL // KROLL PORTAL LAB\nZone: %s | Portal: %s | Carry: %.1f / %.1f kg | %s\nG collect berries: %d | H drop one | T spawn test portal" % [current_level, portal_status, weight, limit, maze_status, get_inventory_count("berries")]
