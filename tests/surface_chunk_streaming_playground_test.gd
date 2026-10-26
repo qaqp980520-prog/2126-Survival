@@ -90,6 +90,7 @@ func _run_tests() -> void:
 	_check(playground.registry.get_saved_ids() == before_saved_ids, "Rejected save must not change registry IDs")
 	_check(int(restored_ore.get("remaining_units")) == before_units, "Rejected save must not change live mineral stock")
 	playground.queue_free()
+	await process_frame
 	_finish()
 
 func _check(condition: bool, message: String) -> void:
