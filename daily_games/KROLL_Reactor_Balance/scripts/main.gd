@@ -60,9 +60,9 @@ func _handle_pointer(position: Vector2) -> void:
 	var reactor_index: int = floori((position.x - 35.0) / 300.0)
 	if reactor_index < 0 or reactor_index >= Rules.REACTOR_COUNT:
 		return
-	if position.y >= 170.0 and position.y < 330.0:
+	if position.y >= 310.0 and position.y < 385.0:
 		debug_action(reactor_index, "vent")
-	elif position.y >= 330.0 and position.y < 500.0:
+	elif position.y >= 398.0 and position.y < 473.0:
 		debug_action(reactor_index, "boost")
 
 func debug_action(reactor_index: int, action: String) -> bool:
