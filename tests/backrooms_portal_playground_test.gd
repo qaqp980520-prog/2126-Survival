@@ -68,7 +68,6 @@ func _run_integration_test() -> void:
     _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
 
     var bridge: Node = world.get("bridge")
-    var player: Node = world.get_node("Player")
     _expect(bool(bridge.call("collect_world_item", "rock", 40)), "rock pickup updates shared inventory")
     _expect(is_equal_approx(float(player.call("get_effective_movement_multiplier")), 0.42), "super-heavy inventory slows player movement")
     _expect(not bool(player.call("can_jump_with_current_load")), "super-heavy inventory disables jumping")
