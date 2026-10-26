@@ -34,3 +34,10 @@ The feature branch must pass the full workflow before merging. No local Godot ex
 - Regeneration is attached to the prototype vein node, not yet wired into a full streamed world/chunk persistence manager.
 - Production tuning of interval duration and per-mineral capacity remains open.
 - No graphical playtest or iPhone test has been performed.
+
+
+## 最終驗證結果｜2026-10-26
+- PR #28 已合併 main，merge commit `4990b15700654bbadeac29784662c2e7b9a58bf8`。
+- Godot 4.3 CI Run #55（run_id 40262617042）success；完整 workflow 的 31 個步驟全部成功，包含本礦脈再生回歸測試與 KROLL Freight Sorter 匯入、規則及 runtime smoke test。
+- Run #53／#54 被取消，不作為成功證據；Run #55 是最新 head 的成功結果。
+- 本機沒有 Godot 執行檔；沒有宣稱人工視覺、手動遊玩或 iPhone 實測完成。
