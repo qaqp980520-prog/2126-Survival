@@ -171,12 +171,16 @@ func _on_resolution_changed(index: int) -> void:
     _settings["resolution_index"] = selected
     if DisplayServer.get_name() != "headless":
         var window := get_window()
+        # With stretch/mode="viewport", changing only Window.size scales the same
+        # 1280x720 render target. Update the viewport's base size as well so the
+        # selected resolution changes the actual 3D render resolution.
+        window.content_scale_size = sizes[selected]
         window.mode = Window.MODE_WINDOWED
         window.size = sizes[selected]
         window.move_to_center()
     _save_settings()
     if _settings_status != null:
-        _settings_status.text = "解析度已切換為 %d × %d。" % [sizes[selected].x, sizes[selected].y]
+        _settings_status.text = "解析度已切換為 %d × %d（視窗模式）。" % [sizes[selected].x, sizes[selected].y]
 
 func _toggle_shadows() -> void:
     _shadows_enabled = not _shadows_enabled
@@ -204,12 +208,17 @@ func _rebuild_maze_for_settings() -> void:
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
-        get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-        get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+        var window := get_window()
+        window.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+        window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
         var sizes: Array[Vector2i] = [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
         var resolution_index: int = clampi(int(_settings.get("resolution_index", 0)), 0, sizes.size() - 1)
-        get_window().size = sizes[resolution_index]
-        get_window().move_to_center()
+        # Keep the base viewport resolution in sync with the saved selection;
+        # otherwise Godot merely scales the original render target to the window.
+        window.content_scale_size = sizes[resolution_index]
+        window.mode = Window.MODE_WINDOWED
+        window.size = sizes[resolution_index]
+        window.move_to_center()
 
 func _build_player_visual() -> void:
     # Readable primitive humanoid placeholder for third-person exploration.
