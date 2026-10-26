@@ -17,8 +17,8 @@ Added integration coverage for:
 Godot 4.3; MineralChunkController, MineralChunkLifecycleAdapter, MineralVeinRegistry, MineralMiningNode, MineralCatalog. The world generator still creates chunk roots and must call load_chunk/unload_chunk explicitly.
 
 ## Validation status
-- Code head `92568e240abe1bd25149bba5a8da47d41ab451ce` passed Godot 4.3 CI Run #123 (`40290454611`) on 2026-10-26. The expanded MineralChunkController integration tests passed, including failed-load ownership preservation and failed-unload rollback.
-- A documentation/index reconciliation commit follows that validated code head; the final-head CI run must succeed before merge.
+- Code head `92568e240abe1bd25149bba5a8da47d41ab451ce` passed Godot 4.3 CI Run #123 (`40290454611`). The expanded MineralChunkController integration tests passed, including failed-load ownership preservation and failed-unload rollback.
+- Prior final-head revision `0a5a6fc903d58bf42b27da7aaba1cb1ac204c9b2` passed Run #124 (`40290784159`), with all 38 required steps successful. This commit refreshes validation records; its final-head CI must pass before merge.
 - No local GUI or iPhone test is claimed.
 
 ## Limitations / next step
