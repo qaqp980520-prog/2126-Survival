@@ -11,8 +11,12 @@ func _initialize() -> void:
     watchdog.wait_time = 30.0
     root.add_child(watchdog)
     watchdog.timeout.connect(_on_watchdog_timeout)
-    watchdog.start()
+    call_deferred("_start_watchdog", watchdog)
     call_deferred("_run_integration_test")
+
+func _start_watchdog(watchdog: Timer) -> void:
+    if is_instance_valid(watchdog) and watchdog.is_inside_tree():
+        watchdog.start()
 
 func _run_integration_test() -> void:
     print("Starting SurvivalWorldBridge save adapter integration test.")
