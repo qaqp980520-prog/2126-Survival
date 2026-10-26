@@ -303,8 +303,23 @@ func _prepare_maze_materials() -> void:
     _cell_material_floor.albedo_color = floor_color
     _cell_material_floor.roughness = 0.94
     _cell_material_wall = StandardMaterial3D.new()
-    _cell_material_wall.albedo_color = wall_color
     _cell_material_wall.roughness = 0.88
+    _cell_material_wall.albedo_color = Color.WHITE
+    # Keep the wallpaper on the shared wall material itself. Previously the
+    # main wall material was only a solid color, while a separate per-wall
+    # material attempted to load SVG at runtime; if that import failed the
+    # visible result was exactly the plain-color wall in user screenshots.
+    var wallpaper_path := "res://assets/textures/backrooms_wallpaper.svg"
+    if ResourceLoader.exists(wallpaper_path):
+        var wallpaper_texture := load(wallpaper_path) as Texture2D
+        if wallpaper_texture != null:
+            _cell_material_wall.albedo_texture = wallpaper_texture
+            _cell_material_wall.uv1_triplanar = false
+            _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
+        else:
+            push_error("Backrooms wallpaper exists but did not load as Texture2D: " + wallpaper_path)
+    else:
+        push_error("Backrooms wallpaper resource is missing: " + wallpaper_path)
 
 func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
@@ -530,7 +545,9 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         var mesh := BoxMesh.new()
         mesh.size = wall_size
         mesh_instance.mesh = mesh
-        mesh_instance.material_override = _make_surface_material(false, Vector2i(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0)))
+        # Assign the same verified wallpaper material used by the maze setup;
+        # avoid a second load path that could silently fall back to a flat wall.
+        mesh_instance.material_override = _cell_material_wall
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
     var body := StaticBody3D.new()
