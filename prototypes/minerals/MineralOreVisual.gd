@@ -11,6 +11,9 @@ func _ready() -> void:
 	build_model()
 
 func build_model() -> void:
+	# A headless/dedicated server should not allocate renderer-backed mesh nodes.
+	if DisplayServer.get_name() == "headless":
+		return
 	for child in get_children():
 		child.queue_free()
 	var data: Dictionary = Catalog.get_mineral(mineral_id)
