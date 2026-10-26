@@ -100,3 +100,17 @@
 - Limit: the formal world/chunk streaming controller is not yet present; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary, graphical manual playtest, or iPhone device test is claimed.
 - Next step: integrate the registry into the actual world/chunk load-unload lifecycle, then add a scene-level integration test covering chunk unload, save/load, and world travel.
 - Old documentation PRs #1, #2, #6, and #8 remain open and are not claimed as merged.
+
+
+## Run 8 update — 2026-10-26 — Mineral Chunk Controller + KROLL Pulse Rhythm
+
+- Working branch: `feature/kroll-pulse-rhythm-mineral-chunk-controller-m0-1-2026-10-26`; base `main` at `9d2554c8e02ff5b4fa2528697d98b1a5a30700d2`.
+- New survival controller: `systems/MineralChunkController.gd` owns instantiated chunk-root lifetime, discovers nested `MineralMiningNode` nodes using stable scene-name paths, connects them through `MineralChunkLifecycleAdapter`, and delegates mineral save/restore to `MineralVeinRegistry`.
+- New regression test: `tests/mineral_chunk_controller_test.gd` covers save -> unload -> registry restore -> reload with elapsed regeneration, empty chunks, and duplicate chunk ID rejection.
+- New mini-game: `daily_games/KROLL_Pulse_Rhythm/` (Godot 4.3, no external assets): four-lane rhythm timing, 32 authored notes, PERFECT/GOOD/MISS scoring, five reactor cores, keyboard and lower-screen touch input.
+- New validation: `.github/workflows/godot-validation.yml` now checks the new project files, imports Pulse Rhythm, runs its rules and scene smoke tests, and runs the mineral chunk controller integration test with explicit success markers and runtime-error guards.
+- Documentation: `docs/MINERAL_CHUNK_CONTROLLER_M0_1_2026-10-26.md`.
+- Validation status at branch creation: no local Godot binary is available. Static source review only so far; remote Godot 4.3 CI must pass before merge. No GUI playtest or iPhone device test is claimed.
+- Current PR status: not yet opened at this index update; create/update PR after verifying all changed paths and the diff.
+- Integration limit: this controller owns instantiated chunk roots provided by a world generator, but does not yet perform distance-based spatial selection, asynchronous scene loading, or procedural world generation. It is the first lifecycle owner, not a complete streaming engine.
+- Next: inspect the complete diff, run the new CI, fix any actual failures on this branch, and only merge after the full regression suite passes. Then reconcile the Notion asset index with the resulting PR/commit/test IDs.
