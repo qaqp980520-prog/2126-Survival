@@ -56,16 +56,19 @@ func _test_generation_failure_preserves_active_set() -> void:
 	assert(controller.bind_registry(registry))
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = 10.0
-	director.load_radius = 0
+	director.load_radius = 1
 	assert(director.bind_controller(controller))
 	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
 	assert(director.sync_to_world_position(Vector3(1, 0, 1), 2000))
 	var previous := director.get_managed_chunk_ids()
-	_fail_coordinate = Vector2i(1, 0)
-	assert(not director.sync_to_world_position(Vector3(11, 0, 1), 2001))
+	# During the move to grid (2, 0), chunk (2, -1) loads before (3, -1) fails.
+	# The director must roll that partial load back and preserve all nine old chunks.
+	_fail_coordinate = Vector2i(3, -1)
+	assert(not director.sync_to_world_position(Vector3(21, 0, 1), 2001))
 	assert(director.get_managed_chunk_ids() == previous)
 	assert(controller.is_chunk_loaded("surface/chunk_0_0"))
-	assert(not controller.is_chunk_loaded("surface/chunk_1_0"))
+	assert(not controller.is_chunk_loaded("surface/chunk_2_-1"))
+	assert(not controller.is_chunk_loaded("surface/chunk_3_-1"))
 	director.queue_free()
 	controller.queue_free()
 	registry.queue_free()
