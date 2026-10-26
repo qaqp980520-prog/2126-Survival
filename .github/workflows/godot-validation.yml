@@ -83,10 +83,14 @@ jobs:
           test -f daily_games/KROLL_Cipher_Recall/project.godot
           test -f daily_games/KROLL_Cipher_Recall/tests/rules_test.gd
           test -f daily_games/KROLL_Cipher_Recall/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Cargo_Tugs/project.godot
+          test -f daily_games/KROLL_Cargo_Tugs/tests/rules_test.gd
+          test -f daily_games/KROLL_Cargo_Tugs/tests/game_smoke_test.gd
           test -f prototypes/SurfaceChunkStreamingPlayground.tscn
           test -f prototypes/SurfaceChunkStreamingPlayground.gd
           test -f tests/surface_chunk_streaming_playground_test.gd
           test -f tests/mineral_grid_streaming_transaction_test.gd
+          test -f tests/mineral_grid_streaming_diagnostics_test.gd
           test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
@@ -330,6 +334,17 @@ jobs:
           output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_transaction_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           echo "$output" | grep -F "Mineral grid streaming transactional rollback tests passed."
+      - name: Run mineral grid streaming failure diagnostics tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E "SCRIPT ERROR|ERROR:|FAIL:"; then
+            echo "Godot reported errors during mineral streaming diagnostics tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Mineral grid streaming failure diagnostics tests passed."
       - name: Run mineral grid streaming director tests
         shell: bash
         run: |
@@ -403,6 +418,30 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'KROLL Cipher Recall runtime smoke test passed.'
+      - name: Import and parse KROLL Cargo Tugs
+        run: godot --headless --path daily_games/KROLL_Cargo_Tugs --editor --quit
+      - name: Run KROLL Cargo Tugs rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Cargo_Tugs --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E "SCRIPT ERROR|ERROR:|FAIL:"; then
+            echo "Godot reported Cargo Tugs rule errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Cargo Tugs rules tests passed."
+      - name: Run KROLL Cargo Tugs runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Cargo_Tugs --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E "SCRIPT ERROR|ERROR:|FAIL:"; then
+            echo "Godot reported Cargo Tugs runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Cargo Tugs runtime smoke test passed."
       - name: Run surface chunk streaming playground integration test
         shell: bash
         run: |
