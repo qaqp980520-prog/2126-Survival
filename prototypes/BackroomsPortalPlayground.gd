@@ -536,10 +536,10 @@ float noise21(vec2 p) {
 void fragment() {
     vec2 uv = UV * vec2(65.0, 65.0);
     float grain = noise21(uv * 2.7);
-    float fibers = sin(uv.x * 8.0 + sin(uv.y * 2.0)) * 0.035 + sin(uv.y * 13.0) * 0.018;
+    float fibers = sin(uv.x * 24.0 + sin(uv.y * 5.0)) * 0.075 + sin(uv.y * 31.0) * 0.045;
     float worn = smoothstep(0.45, 0.8, noise21(uv * 0.11));
-    vec3 color = base_color.rgb * (0.90 + grain * 0.16 + fibers);
-    color *= 1.0 - worn * 0.16;
+    vec3 color = base_color.rgb * (0.78 + grain * 0.34 + fibers);
+    color *= 1.0 - worn * 0.34;
     ALBEDO = color;
     ROUGHNESS = 1.0;
 }
@@ -557,13 +557,13 @@ float noise21(vec2 p) {
 void fragment() {
     vec2 uv = UV * vec2(7.0, 3.0);
     float cloudy = noise21(uv * 2.2);
-    float stains = smoothstep(0.48, 0.76, noise21(uv * 0.72));
+    float stains = smoothstep(0.38, 0.68, noise21(uv * 0.72));
     float paper_line = 1.0 - smoothstep(0.0, 0.025, abs(fract(UV.x * 7.0) - 0.5));
     float peel_noise = noise21(uv * 4.5 + vec2(1.7, 3.2));
-    float peel = smoothstep(0.66, 0.78, peel_noise) * step(0.78, noise21(uv * 1.5));
+    float peel = smoothstep(0.54, 0.72, peel_noise) * step(0.57, noise21(uv * 1.5));
     vec3 aged = base_color.rgb * (0.88 + cloudy * 0.22);
-    aged *= 1.0 - stains * 0.23;
-    aged = mix(aged, vec3(0.27, 0.22, 0.14), peel * 0.82);
+    aged *= 1.0 - stains * 0.38;
+    aged = mix(aged, vec3(0.25, 0.19, 0.11), peel * 0.94);
     aged *= 1.0 - paper_line * 0.08;
     ALBEDO = aged;
     ROUGHNESS = 0.98;
