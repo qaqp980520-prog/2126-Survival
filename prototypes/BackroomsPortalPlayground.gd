@@ -349,12 +349,9 @@ func _create_maze_cell(cell: Vector2i) -> void:
     backrooms_room.add_child(root)
     _loaded_cells[cell] = root
     _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
-    if _high_graphics:
-        var floor_mesh := root.get_node_or_null("FloorMesh") as MeshInstance3D
-        if floor_mesh != null:
-            floor_mesh.material_override = _make_surface_material(true, cell)
-    if _high_graphics:
-        _add_carpet_texture(root)
+    var floor_mesh := root.get_node_or_null("FloorMesh") as MeshInstance3D
+    if floor_mesh != null:
+        floor_mesh.material_override = _make_surface_material(true, cell)
     # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
     var seam_material := StandardMaterial3D.new()
     seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
@@ -536,6 +533,7 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> ShaderMateri
     if is_floor:
         shader.code = """
 shader_type spatial;
+uniform sampler2D carpet_texture : source_color, repeat_enable;
 uniform vec4 base_color : source_color = vec4(0.57, 0.51, 0.31, 1.0);
 float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise21(vec2 p) {
@@ -550,9 +548,10 @@ void fragment() {
     float worn = smoothstep(0.38, 0.77, broad_wear);
     float traffic_lane = smoothstep(0.0, 0.16, abs(fract(UV.x * 2.0) - 0.5)) * 0.08;
     float tiny_specks = step(0.91, noise21(uv * 8.0)) * 0.12;
-    vec3 color = base_color.rgb * (0.72 + grain * 0.40 + fibers);
-    color *= 1.0 - worn * 0.42 - traffic_lane;
-    color = mix(color, base_color.rgb * 0.55, tiny_specks);
+    vec3 photo_texture = texture(carpet_texture, UV * vec2(4.0, 4.0)).rgb;
+    vec3 color = photo_texture * (0.76 + grain * 0.22 + fibers);
+    color *= 1.0 - worn * 0.32 - traffic_lane;
+    color = mix(color, photo_texture * 0.55, tiny_specks);
     ALBEDO = color;
     ROUGHNESS = 1.0;
 }
@@ -560,6 +559,7 @@ void fragment() {
     else:
         shader.code = """
 shader_type spatial;
+uniform sampler2D wallpaper_texture : source_color, repeat_enable;
 uniform vec4 base_color : source_color = vec4(0.76, 0.69, 0.42, 1.0);
 uniform float seed_offset = 0.0;
 float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed_offset) * 43758.5453); }
@@ -580,12 +580,13 @@ void fragment() {
     float peel_mask = noise21(uv * 1.25 + vec2(8.1, 2.4));
     float peel = smoothstep(0.51, 0.75, peel_noise) * smoothstep(0.43, 0.7, peel_mask);
     float torn_rim = smoothstep(0.47, 0.54, peel) - smoothstep(0.60, 0.72, peel);
-    vec3 aged = base_color.rgb * (0.72 + cloudy * 0.28 + fine_grain * 0.08);
-    aged *= 1.0 - stains * 0.42 - broad_grime * 0.12;
-    aged *= 1.0 - vertical_streaks * 0.22;
-    aged = mix(aged, vec3(0.24, 0.18, 0.105), peel * 0.96);
-    aged = mix(aged, vec3(0.82, 0.73, 0.47), clamp(torn_rim, 0.0, 0.8) * 0.7);
-    aged *= 1.0 - paper_line * 0.10;
+    vec3 photo_texture = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
+    vec3 aged = photo_texture * (0.78 + cloudy * 0.22 + fine_grain * 0.06);
+    aged *= 1.0 - stains * 0.30 - broad_grime * 0.12;
+    aged *= 1.0 - vertical_streaks * 0.18;
+    aged = mix(aged, vec3(0.24, 0.18, 0.105), peel * 0.68);
+    aged = mix(aged, vec3(0.82, 0.73, 0.47), clamp(torn_rim, 0.0, 0.8) * 0.5);
+    aged *= 1.0 - paper_line * 0.06;
     ALBEDO = aged;
     ROUGHNESS = 0.98;
 }
@@ -593,7 +594,10 @@ void fragment() {
     var material := ShaderMaterial.new()
     material.shader = shader
     material.set_shader_parameter("base_color", _cell_material_floor.albedo_color if is_floor else _cell_material_wall.albedo_color)
-    if not is_floor:
+    if is_floor:
+        material.set_shader_parameter("carpet_texture", load("res://assets/textures/backrooms_carpet.svg"))
+    else:
+        material.set_shader_parameter("wallpaper_texture", load("res://assets/textures/backrooms_wallpaper.svg"))
         material.set_shader_parameter("seed_offset", float(abs(seed_cell.x * 31 + seed_cell.y * 17)))
     return material
 
@@ -667,7 +671,7 @@ func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3,
         var mesh := BoxMesh.new()
         mesh.size = wall_size
         mesh_instance.mesh = mesh
-        mesh_instance.material_override = _make_surface_material(false, Vector2i(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0))) if _high_graphics else material
+        mesh_instance.material_override = _make_surface_material(false, Vector2i(roundi(wall_position.x * 10.0), roundi(wall_position.z * 10.0)))
         mesh_instance.position = wall_position
         parent.add_child(mesh_instance)
         if _high_graphics:
