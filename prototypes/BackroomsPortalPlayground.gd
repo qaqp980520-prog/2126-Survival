@@ -315,7 +315,10 @@ func _prepare_maze_materials() -> void:
     _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
     _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     _cell_material_wall.uv1_triplanar = false
-    _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
+    # The reference wallpaper is a fine repeating pattern; one full texture
+    # stretched over a whole wall made the chevrons look huge. Tile it several
+    # times in both directions to match the small, subtle original motif.
+    _cell_material_wall.uv1_scale = Vector3(4.0, 3.0, 1.0)
     if _cell_material_wall.albedo_texture == null:
         push_error("Backrooms wallpaper preload is null: res://assets/textures/backrooms_wallpaper.svg")
 
