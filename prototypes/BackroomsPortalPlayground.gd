@@ -305,6 +305,7 @@ func _prepare_maze_materials() -> void:
     _cell_material_wall = StandardMaterial3D.new()
     _cell_material_wall.roughness = 0.88
     _cell_material_wall.albedo_color = Color.WHITE
+    _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
     # Keep the wallpaper on the shared wall material itself. Previously the
     # main wall material was only a solid color, while a separate per-wall
     # material attempted to load SVG at runtime; if that import failed the
@@ -372,8 +373,11 @@ func _create_maze_cell(cell: Vector2i) -> void:
         floor_mesh.material_override = _make_surface_material(true, cell)
     # Flat carpet: no overlay seams, raised wear marks or patches.
     var ceiling_material := StandardMaterial3D.new()
-    ceiling_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.18)
+    # Backrooms ceilings should remain readable even in cells without a light.
+    # Give the ceiling a bright warm tile surface instead of nearly-black flat color.
+    ceiling_material.albedo_color = Color(0.78, 0.75, 0.52)
     ceiling_material.roughness = 1.0
+    ceiling_material.metallic = 0.0
     if _high_graphics:
         _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
     var trim_material := StandardMaterial3D.new()
@@ -519,8 +523,9 @@ func _update_flickering_lights(delta: float) -> void:
             continue
         var seed := float(light.get_instance_id() % 97)
         var pulse := sin(_flicker_clock * (8.0 + seed * 0.07) + seed) * 0.06
-        var glitch := sin(_flicker_clock * (2.1 + seed * 0.013) + seed * 0.3) > 0.985
-        light.light_energy = 1.15 + pulse - (0.72 if glitch else 0.0)
+        # Keep subtle fluorescent variation, but remove deep random blackouts:
+        # they caused nearby walls to suddenly become almost unlit.
+        light.light_energy = 1.05 + pulse
 
 func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
     if DisplayServer.get_name() == "headless":
