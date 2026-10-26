@@ -69,3 +69,11 @@
 - 包含 project.godot、main.tscn、main.gd、rules.gd、規則測試、場景 smoke test、README。
 - CI workflow 已新增專案匯入、規則測試與場景 smoke test；新 PR 的 Godot 4.3 CI 尚待執行。
 - 本機沒有 Godot 執行檔；尚未進行人工視覺或 iPhone 測試。
+
+
+## 2026-10-26｜離線礦脈再生 M0.1（PR #28，CI 待完成）
+- 修改：systems/MineralMiningNode.gd；schema 升至 v2，新增 max_units、regen_interval_seconds、last_regen_unix，支援依 Unix 時間進行線上／離線再生、保留部分間隔、容量上限與時鐘倒退防護。
+- 相容：仍接受舊 schema-v1 存檔；缺少再生欄位時從載入時間開始計時。無效 schema、容量、間隔、時間戳或存量會在改動狀態前拒絕。
+- 測試：tests/mineral_catalog_test.gd 新增離線回補、部分間隔、容量上限、時鐘倒退、schema-v2 往返、舊 schema-v1 相容與無效資料拒絕。
+- 文件：docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md。
+- PR #28：https://github.com/qaqp980520-prog/2126-Survival/pull/28。舊候選 PR #26、#27 已關閉並由 PR #28 取代；Run #45／#50 屬於舊候選，不作為 PR #28 最新 head 的通過證據。

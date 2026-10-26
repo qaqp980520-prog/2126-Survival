@@ -34,3 +34,13 @@
 - 在 CI 完成前狀態為「待驗證」；未通過不得合併。
 - 這一版的 3D 礦塊使用程式化低多邊形網格，不是外部建模軟體製作的高模/貼圖包。
 - 概念展示圖是視覺方向參考，不等於已產出的獨立模型檔、貼圖檔或完整背包 UI。
+
+
+## 2026-10-26 補充｜離線礦脈再生 M0.1
+- PR #21–#23 已合併 main；其 CI Run #41、#42、#43 均成功。
+- 新增 `MineralMiningNode.apply_elapsed_regeneration(now_unix)`，依真實 Unix 時間回補礦脈單位，保留部分間隔並支援離線時間。
+- 新增 `max_units`、`regen_interval_seconds`、`last_regen_unix` 存檔欄位；schema 升至 v2，仍可載入舊 schema-v1 格式；缺少再生欄位的舊存檔會從載入時間開始計算。
+- `restore_vein` 現在以礦脈自身最大存量為上限；時鐘倒退不會增加存量或倒退時間戳。
+- 新測試涵蓋離線 120 秒回補、部分間隔、容量上限、時鐘倒退、舊存檔相容與無效欄位拒絕。
+- 文件：`docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md`。
+- 狀態：PR #28 為目前唯一有效候選；PR #26、#27 已關閉為 superseded。Run #45／#50 屬於舊候選，不作為 PR #28 最新 head 的通過證據；需等待 PR #28 的最新 Godot CI。
