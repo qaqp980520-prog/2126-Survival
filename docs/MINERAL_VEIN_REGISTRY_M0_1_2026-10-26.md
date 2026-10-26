@@ -8,12 +8,12 @@ Provide a stable-ID save/load registry for mineral vein nodes so world/chunk per
 - Duplicate IDs cannot silently replace another live vein.
 - `to_save_dict()` serializes registered live veins in sorted stable-ID order under registry schema v1.
 - `restore_save_dict(data, now_unix)` validates the envelope, every ID, and every vein payload before mutating live nodes; invalid batches are rejected atomically.
-- On restore, each node loads its schema-v2 state and applies elapsed wall-clock regeneration. The node retains its existing schema-v1 compatibility.
+- On restore, each node loads its schema-v2 state and applies elapsed wall-clock regeneration by default. Set `auto_apply_elapsed_time_on_restore = false` to restore the saved stock/timestamp without adding offline units; the node retains its existing schema-v1 compatibility.
 - Unregister a node when its chunk unloads; pass the expected node to avoid unregistering a replacement by mistake.
 
 ## Files
 - `systems/MineralVeinRegistry.gd`: stable-ID registry and save/load validation.
-- `tests/mineral_catalog_test.gd`: registration, duplicate IDs, offline elapsed restore, capacity, invalid batch atomicity, unknown IDs, and unregister behavior.
+- `tests/mineral_catalog_test.gd`: registration, duplicate IDs, offline elapsed restore, capacity, optional regeneration toggle, invalid batch atomicity, unknown IDs, and unregister behavior.
 
 ## Validation status
 This is a candidate implementation on a feature branch. It must pass the full Godot 4.3 headless workflow before merge. No local Godot execution, graphical playtest, or iPhone test is claimed.
