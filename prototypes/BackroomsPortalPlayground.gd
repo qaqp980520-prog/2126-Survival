@@ -48,8 +48,8 @@ func _ready() -> void:
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
-        get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-        get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+        get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+        get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
         get_window().size = Vector2i(1280, 720)
 
 func _build_player_visual() -> void:
