@@ -62,7 +62,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		var candidate: Variant = chunk_factory.call(coord)
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
-			_rollback_new_loads(newly_loaded, now_unix)
+			if not _rollback_new_loads(newly_loaded, now_unix):
+				push_error("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
 			return false
 		if not chunk_controller.load_chunk(id, candidate, now_unix):
 			_free_unowned_root(candidate)
