@@ -158,7 +158,6 @@ func _save_settings() -> void:
 func _toggle_graphics_quality() -> void:
     _high_graphics = not _high_graphics
     _settings["high_graphics"] = _high_graphics
-    _save_settings()
     var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
         button.text = "畫質：高（更多細節）" if _high_graphics else "畫質：低（流暢）"
