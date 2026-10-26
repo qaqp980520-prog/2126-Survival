@@ -166,6 +166,7 @@ func _draw() -> void:
         draw_string(font, Vector2(22, 34), "KROLL // SENTINEL PROTOCOL", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.48, 0.92, 1.0))
         draw_string(font, Vector2(22, 65), "CORE %d/3    SCORE %04d    TIME %02d" % [_player_hp, _score, int(ceil(_time_left))], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.85, 0.94, 0.96))
         draw_string(font, Vector2(22, 92), "WASD/ARROWS MOVE | MOUSE AIM + FIRE | SPACE FIRE | SURVIVE 45s", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.53, 0.72, 0.78))
+        draw_string(font, Vector2(22, 113), "TOUCH: LEFT DRAG MOVE | RIGHT DRAG AIM/FIRE | R REDEPLOY", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.42, 0.67, 0.74))
         if _state == "victory":
             draw_string(font, Vector2(size.x * 0.5 - 105.0, size.y * 0.5), "SECTOR SECURED", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(0.4, 1.0, 0.65))
             draw_string(font, Vector2(size.x * 0.5 - 115.0, size.y * 0.5 + 35.0), "PRESS R TO REDEPLOY", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.8, 0.95, 0.9))
