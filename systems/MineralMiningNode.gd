@@ -136,7 +136,7 @@ func to_save_dict() -> Dictionary:
 
 ## Older schema-v1 saves without regeneration fields remain valid.
 ## Invalid data is rejected before any live state changes.
-func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
+func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = true) -> bool:
 	var schema_value: Variant = data.get("schema_version", null)
 	if not _is_integer_in_range(schema_value, 1, 2):
 		return false
@@ -185,7 +185,8 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 	last_regen_unix = saved_timestamp
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
-	apply_elapsed_regeneration(now)
+	if apply_elapsed:
+		apply_elapsed_regeneration(now)
 	return true
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
