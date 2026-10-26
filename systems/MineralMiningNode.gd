@@ -52,7 +52,7 @@ func _process(_delta: float) -> void:
 ## Regenerates from elapsed wall-clock seconds, including time while the game was closed.
 ## Supplying now_unix makes deterministic tests possible. Returns units restored.
 func apply_elapsed_regeneration(now_unix: int = -1) -> int:
-	var now := now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	if now < 0:
 		return 0
 	if last_regen_unix <= 0:
