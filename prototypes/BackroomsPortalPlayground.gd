@@ -335,7 +335,7 @@ func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: 
         seam_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.06)
         seam_material.roughness = 0.98
         var seam_size := Vector3(0.045, WALL_HEIGHT - 0.35, 0.025) if is_north_south_wall else Vector3(0.025, WALL_HEIGHT - 0.35, 0.045)
-        _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
+        _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0 if is_north_south_wall else 0.13, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
 
 func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
     if DisplayServer.get_name() == "headless":
