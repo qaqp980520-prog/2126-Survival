@@ -69,6 +69,11 @@ jobs:
           test -f tests/mineral_chunk_controller_test.gd
           test -f systems/MineralGridStreamingDirector.gd
           test -f tests/mineral_grid_streaming_director_test.gd
+          test -f tests/mineral_grid_streaming_transaction_test.gd
+          test -f tests/helpers/FakeMineralChunkController.gd
+          test -f daily_games/KROLL_Reactor_Balance/project.godot
+          test -f daily_games/KROLL_Reactor_Balance/tests/rules_test.gd
+          test -f daily_games/KROLL_Reactor_Balance/tests/game_smoke_test.gd
           test -f tests/backrooms_player_input_test.gd
           test -f systems/BackroomsSettingsProfile.gd
           test -f tests/backrooms_settings_profile_test.gd
@@ -345,3 +350,39 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'KROLL Sentinel Escape runtime smoke test passed.'
+
+      - name: Import and parse KROLL Reactor Balance
+        run: godot --headless --path daily_games/KROLL_Reactor_Balance --editor --quit
+      - name: Run KROLL Reactor Balance rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Reactor_Balance --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Reactor Balance rules tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Reactor Balance rules tests passed.'
+      - name: Run KROLL Reactor Balance runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Reactor_Balance --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Reactor Balance smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Reactor Balance runtime smoke test passed.'
+      - name: Run mineral grid streaming transactional rollback tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_transaction_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during mineral grid streaming rollback tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral grid streaming transactional rollback tests passed.'
