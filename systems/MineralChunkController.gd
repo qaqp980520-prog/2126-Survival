@@ -45,8 +45,9 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		return false
 	add_child(chunk_root)
 	if not veins.is_empty() and not bool(adapter.load_chunk(chunk_id, veins, now_unix)):
+		# A failed registration must not consume the caller's scene. Detach it so the
+		# generator can inspect, repair, or retry the same root without reconstructing it.
 		remove_child(chunk_root)
-		chunk_root.free()
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
@@ -113,4 +114,3 @@ func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary)
 		if not _collect_mineral_nodes(child, child_path, output):
 			return false
 	return true
-
