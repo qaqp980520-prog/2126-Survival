@@ -8,6 +8,7 @@ const BASE_LIMIT_KG: float = 65.0
 const LIMIT_GAIN_PER_DAY_KG: float = 0.2
 const SUPER_HEAVY_KG: float = 90.0
 const MAX_SAVED_COUNT: int = 1000000000
+const UNKNOWN_ITEM_WEIGHT_KG: float = 1.0
 const MAX_SAVED_GAME_DAY: int = 1000000000
 const SAVE_SCHEMA_VERSION: int = 1
 const ITEM_WEIGHTS: Dictionary = {
@@ -54,7 +55,7 @@ func total_weight_kg() -> float:
 	var total := 0.0
 	for item_id in counts.keys():
 		var amount := maxi(0, int(counts[item_id]))
-		total += float(ITEM_WEIGHTS.get(item_id, 0.0)) * float(amount)
+		total += float(ITEM_WEIGHTS.get(item_id, UNKNOWN_ITEM_WEIGHT_KG)) * float(amount)
 	return total
 
 func is_overweight() -> bool:
