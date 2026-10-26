@@ -32,6 +32,9 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 			return false
 		if auto_apply_elapsed_time_on_restore:
 			mining_vein.apply_elapsed_regeneration(now)
+		else:
+			# Suppress offline catch-up even after _process() resumes on the next frame.
+			mining_vein.last_regen_unix = now
 	else:
 		if mining_vein.last_regen_unix <= 0:
 			mining_vein.last_regen_unix = now
@@ -138,6 +141,9 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 				return false
 			if auto_apply_elapsed_time_on_restore:
 				_veins[key].apply_elapsed_regeneration(now)
+			else:
+				# Reset the clock so the node's next _process() cannot apply skipped offline time.
+				_veins[key].last_regen_unix = now
 	_saved_records = next_records
 	for key in get_registered_ids():
 		_saved_records[key] = _veins[key].to_save_dict()
