@@ -171,6 +171,8 @@
 - [Inventory/save schema compatibility review](docs/INVENTORY_SAVE_SCHEMA_COMPAT_REVIEW_2026-10-25.md)：把舊靜態發現標記為已修正或仍待正式世界整合，附 Run #181 證據。
 - [M1.3 inventory integration boundary](docs/M1_3_INVENTORY_INTEGRATION_BOUNDARY_2026-10-25.md)：保留正式世界控制器缺席與單一資料來源接線的阻斷條件。
 - These four documents were consolidated from stale draft PRs #1/#2/#6/#8 after reviewing and updating their content against current main. They are reference/audit documents, not evidence that the full M1.3 world is integrated.
-- The consolidated documentation is carried by PR #50; after it merges, close PRs #1/#2/#6/#8 as superseded without merge.
+- PR #50 merged as `f6732519736697725a612e4c3a1a8836591c7aaa`; PRs #1/#2/#6/#8 were closed without merge after their documentation was consolidated and updated here.
 
-- Latest main after PR #51: `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; PR #51 keyboard dash fix was tested by Godot 4.3 CI Run #185 (`40316901157`) before merge. Main push CI after this merge is pending at the time of this index update.
+- PR #51 keyboard dash fix merged as `fb08be72eb0f68be75b352bb73e4ec715030f4c8`; exact-head Godot 4.3 CI Run #185 (`40316901157`) succeeded with explicit dash timer/cooldown assertions.
+- Current main after the documentation consolidation is `f6732519736697725a612e4c3a1a8836591c7aaa`. Main push CI Run #188 (`40317515975`) is pending at the time of this index update; the PR-level exact-head CI Run #187 succeeded before the docs merge.
+- GitHub open PR list was empty after closing superseded drafts #1/#2/#6/#8 and old feature branches #46/#47/#48.
