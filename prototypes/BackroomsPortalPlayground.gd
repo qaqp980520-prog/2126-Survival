@@ -183,7 +183,6 @@ func _toggle_graphics_quality() -> void:
         button.text = "光影：開" if _high_graphics else "光影：關"
     if _settings_status != null:
         _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
-    _settings["high_graphics"] = _high_graphics
     _save_settings()
     _rebuild_maze_for_settings()
 
@@ -198,7 +197,7 @@ func _rebuild_maze_for_settings() -> void:
                 cell_node.queue_free()
         _loaded_cells.clear()
         _flicker_lights.clear()
-            _stream_maze_cells(true)
+        _stream_maze_cells(true)
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
