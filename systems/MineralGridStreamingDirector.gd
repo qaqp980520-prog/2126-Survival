@@ -67,7 +67,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 			return false
 		if not chunk_controller.load_chunk(id, candidate, now_unix):
 			_free_unowned_root(candidate)
-			_rollback_new_loads(newly_loaded, now_unix)
+			if not _rollback_new_loads(newly_loaded, now_unix):
+				push_error("Mineral grid streaming rollback was incomplete after chunk registration failure.")
 			return false
 		_managed_chunk_ids[id] = coord
 		newly_loaded.append(id)
