@@ -35,14 +35,28 @@ func _ready() -> void:
     _update_hud()
 
 func _build_player_visual() -> void:
-    var body_mesh := MeshInstance3D.new()
-    body_mesh.name = "BodyMesh"
-    var capsule_mesh := CapsuleMesh.new()
-    capsule_mesh.radius = 0.35
-    capsule_mesh.height = 1.8
-    body_mesh.mesh = capsule_mesh
-    body_mesh.position = Vector3(0.0, 0.9, 0.0)
-    player.add_child(body_mesh)
+    # Simple readable humanoid placeholder assembled from primitive meshes.
+    _add_player_part("Torso", BoxMesh.new(), Vector3(0.0, 1.12, 0.0), Vector3(0.62, 0.72, 0.34), Color(0.12, 0.48, 0.62))
+    _add_player_part("Head", SphereMesh.new(), Vector3(0.0, 1.72, 0.0), Vector3(0.34, 0.36, 0.32), Color(0.82, 0.68, 0.52))
+    _add_player_part("LeftArm", BoxMesh.new(), Vector3(-0.43, 1.12, 0.0), Vector3(0.2, 0.68, 0.24), Color(0.16, 0.4, 0.52))
+    _add_player_part("RightArm", BoxMesh.new(), Vector3(0.43, 1.12, 0.0), Vector3(0.2, 0.68, 0.24), Color(0.16, 0.4, 0.52))
+    _add_player_part("LeftLeg", BoxMesh.new(), Vector3(-0.17, 0.42, 0.0), Vector3(0.23, 0.72, 0.28), Color(0.12, 0.16, 0.2))
+    _add_player_part("RightLeg", BoxMesh.new(), Vector3(0.17, 0.42, 0.0), Vector3(0.23, 0.72, 0.28), Color(0.12, 0.16, 0.2))
+
+func _add_player_part(part_name: String, mesh_resource: PrimitiveMesh, part_position: Vector3, part_size: Vector3, color: Color) -> void:
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = part_name
+    mesh_resource.size = part_size
+    if mesh_resource is SphereMesh:
+        mesh_resource.radius = 0.18
+        mesh_resource.height = 0.36
+    mesh_instance.mesh = mesh_resource
+    var material := StandardMaterial3D.new()
+    material.albedo_color = color
+    material.roughness = 0.78
+    mesh_instance.material_override = material
+    mesh_instance.position = part_position
+    player.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
     if director == null:
@@ -107,20 +121,33 @@ func _build_backrooms_room(level_name: String) -> void:
     _add_box(backrooms_room, "SouthWall", Vector3(0, 2, 30), Vector3(60, 4, 1), wall_color)
     _add_box(backrooms_room, "WestWall", Vector3(-30, 2, 0), Vector3(1, 4, 60), wall_color)
     _add_box(backrooms_room, "EastWall", Vector3(30, 2, 0), Vector3(1, 4, 60), wall_color)
-    if level_name == "Level 0":
-        _add_box(backrooms_room, "OfficePartitionA", Vector3(-10, 1.8, -7), Vector3(1, 3.6, 24), wall_color)
-        _add_box(backrooms_room, "OfficePartitionB", Vector3(7, 1.8, 8), Vector3(22, 3.6, 1), wall_color)
-    elif level_name == "Level 1":
-        _add_box(backrooms_room, "WarehouseDividerA", Vector3(-12, 2, -4), Vector3(1.5, 4, 22), wall_color)
-        _add_box(backrooms_room, "WarehouseDividerB", Vector3(10, 2, 9), Vector3(20, 4, 1.5), wall_color)
-    elif level_name == "Level 2":
-        _add_box(backrooms_room, "PipeWallA", Vector3(-8, 2, -8), Vector3(1.2, 4, 26), wall_color)
-        _add_box(backrooms_room, "PipeWallB", Vector3(8, 2, 8), Vector3(1.2, 4, 26), wall_color)
-    else:
-        _add_box(backrooms_room, "ServerAisleA", Vector3(-12, 2, 0), Vector3(1.2, 4, 24), wall_color)
-        _add_box(backrooms_room, "ServerAisleB", Vector3(12, 2, 0), Vector3(1.2, 4, 24), wall_color)
+    _build_winding_corridors(backrooms_room, level_name, wall_color)
 
     _set_collision_enabled(backrooms_room, true)
+
+func _build_winding_corridors(parent: Node3D, level_name: String, wall_color: Color) -> void:
+    # Deterministic maze-like interior. Bounded to this room for this iteration.
+    var rng := RandomNumberGenerator.new()
+    rng.seed = WORLD_SEED + abs(level_name.hash())
+    var x := -22.0
+    var z := -20.0
+    for i in range(12):
+        var horizontal_length := rng.randf_range(5.0, 12.0)
+        var vertical_length := rng.randf_range(5.0, 11.0)
+        var x_center := clampf(x + horizontal_length * 0.5, -22.0, 22.0)
+        var z_center := clampf(z + vertical_length * 0.5, -22.0, 22.0)
+        var horizontal_width := minf(horizontal_length, 24.0 - absf(x))
+        var vertical_height := minf(vertical_length, 24.0 - absf(z))
+        if horizontal_width > 2.0:
+            _add_box(parent, "WindingWallH_%02d" % i, Vector3(x_center, 1.8, z), Vector3(horizontal_width, 3.6, 0.8), wall_color)
+        if vertical_height > 2.0:
+            _add_box(parent, "WindingWallV_%02d" % i, Vector3(x, 1.8, z_center), Vector3(0.8, 3.6, vertical_height), wall_color)
+        x += rng.randf_range(-7.0, 7.0)
+        z += rng.randf_range(4.0, 8.0)
+        if x > 20.0:
+            x = -20.0
+        if z > 20.0:
+            z = -20.0
 
 func _set_collision_enabled(root_node: Node, enabled: bool) -> void:
     for child in root_node.get_children():
