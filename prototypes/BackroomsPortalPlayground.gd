@@ -45,7 +45,7 @@ func _ready() -> void:
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
-        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | Esc release mouse | F11 fullscreen | T portal test | B return | G collect | H drop | F5 save | F9 load"
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | T portal test | B return | G collect | H drop | F5 save | F9 load"
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
@@ -54,10 +54,36 @@ func _configure_display() -> void:
         get_window().size = Vector2i(1280, 720)
 
 func _build_player_visual() -> void:
-    # A first-person camera should never show the player's own placeholder body.
-    var old_body := player.get_node_or_null("BodyMesh")
-    if old_body != null:
-        old_body.queue_free()
+    # Readable primitive humanoid placeholder for third-person exploration.
+    var old_avatar := player.get_node_or_null("AvatarVisual")
+    if old_avatar != null:
+        old_avatar.queue_free()
+    var avatar := Node3D.new()
+    avatar.name = "AvatarVisual"
+    player.add_child(avatar)
+    _add_player_part(avatar, "Torso", BoxMesh.new(), Vector3(0.0, 1.12, 0.0), Vector3(0.62, 0.72, 0.34), Color(0.12, 0.48, 0.62))
+    _add_player_part(avatar, "Head", SphereMesh.new(), Vector3(0.0, 1.72, 0.0), Vector3(0.34, 0.36, 0.32), Color(0.82, 0.68, 0.52))
+    _add_player_part(avatar, "LeftArm", BoxMesh.new(), Vector3(-0.43, 1.12, 0.0), Vector3(0.2, 0.68, 0.24), Color(0.16, 0.4, 0.52))
+    _add_player_part(avatar, "RightArm", BoxMesh.new(), Vector3(0.43, 1.12, 0.0), Vector3(0.2, 0.68, 0.24), Color(0.16, 0.4, 0.52))
+    _add_player_part(avatar, "LeftLeg", BoxMesh.new(), Vector3(-0.17, 0.42, 0.0), Vector3(0.23, 0.72, 0.28), Color(0.12, 0.16, 0.2))
+    _add_player_part(avatar, "RightLeg", BoxMesh.new(), Vector3(0.17, 0.42, 0.0), Vector3(0.23, 0.72, 0.28), Color(0.12, 0.16, 0.2))
+    player.bind_avatar_visual(avatar)
+
+func _add_player_part(parent: Node3D, part_name: String, mesh_resource: PrimitiveMesh, part_position: Vector3, part_size: Vector3, color: Color) -> void:
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = part_name
+    if mesh_resource is BoxMesh:
+        (mesh_resource as BoxMesh).size = part_size
+    elif mesh_resource is SphereMesh:
+        (mesh_resource as SphereMesh).radius = part_size.x * 0.5
+        (mesh_resource as SphereMesh).height = part_size.y
+    mesh_instance.mesh = mesh_resource
+    var material := StandardMaterial3D.new()
+    material.albedo_color = color
+    material.roughness = 0.78
+    mesh_instance.material_override = material
+    mesh_instance.position = part_position
+    parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
     if director == null:
