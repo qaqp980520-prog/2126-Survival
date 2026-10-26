@@ -16,8 +16,8 @@ A 90-second crop-care arcade shift with three grow beds. Water with 1/2/3, harve
 Godot 4.3 or later. Open daily_games/KROLL_Hydroponics_Shift/project.godot in Godot Project Manager.
 
 ## Validation
-- Automated Godot 4.3 headless project import, rule tests, and scene smoke test are wired into the shared CI workflow.
-- Status before CI: pending; do not call it tested until the workflow completes successfully.
+- Code head `92568e240abe1bd25149bba5a8da47d41ab451ce` passed Godot 4.3 CI Run #123 (`40290454611`) on 2026-10-26: project import, rules tests, runtime smoke test, and the full shared regression workflow succeeded with zero failed steps.
+- This PR now adds a documentation/index reconciliation commit after that validated code head. The new final-head CI run must also succeed before merge.
 - Manual GUI and iPhone touch testing have not been performed.
 
 ## Limitations / next steps
