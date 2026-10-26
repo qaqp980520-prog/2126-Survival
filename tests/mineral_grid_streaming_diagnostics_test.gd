@@ -69,9 +69,11 @@ func _run_tests() -> void:
 	await process_frame
 	if _failed:
 		print("Mineral grid streaming failure diagnostics tests failed.")
+		OS.set_exit_code(1)
 		quit(1)
 	else:
 		print("Mineral grid streaming failure diagnostics and recovery tests passed.")
+		OS.set_exit_code(0)
 		quit(0)
 
 func _make_chunk(coord: Vector2i) -> Node3D:
