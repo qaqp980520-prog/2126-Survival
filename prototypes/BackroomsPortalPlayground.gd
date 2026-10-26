@@ -29,6 +29,8 @@ var _loaded_cells: Dictionary = {}
 var _cell_material_floor: StandardMaterial3D
 var _cell_material_wall: StandardMaterial3D
 var _maze_rng := RandomNumberGenerator.new()
+var _flicker_lights: Array[OmniLight3D] = []
+var _flicker_clock: float = 0.0
 
 func _ready() -> void:
     _configure_display()
@@ -86,6 +88,7 @@ func _add_player_part(parent: Node3D, part_name: String, mesh_resource: Primitiv
     parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
+    _update_flickering_lights(delta)
     if director == null:
         return
     if in_backrooms:
@@ -151,6 +154,7 @@ func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
         backrooms_room.queue_free()
     _loaded_cells.clear()
+    _flicker_lights.clear()
     backrooms_room = Node3D.new()
     backrooms_room.name = "EndlessMaze_" + level_name.replace(" ", "")
     backrooms_world.add_child(backrooms_room)
@@ -192,6 +196,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
     backrooms_room.add_child(root)
     _loaded_cells[cell] = root
     _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
+    _add_carpet_texture(root)
     # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
     var seam_material := StandardMaterial3D.new()
     seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
@@ -259,6 +264,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.omni_range = 8.5
             ceiling_light.shadow_enabled = false
             root.add_child(ceiling_light)
+            _flicker_lights.append(ceiling_light)
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
@@ -307,6 +313,25 @@ func _decorate_wall_face(parent: Node3D, side: String, wall_center: Vector3, hor
     var stain_position := wall_center + (Vector3(panel_offset, 2.1, 0.117) if horizontal else Vector3(0.117, 2.1, panel_offset))
     var stain_size := Vector3(0.42, 0.28, 0.014) if horizontal else Vector3(0.014, 0.28, 0.42)
     _add_decor_box(parent, side + "WallpaperWear", stain_position, stain_size, stain_material)
+    # Layered irregular patches simulate torn wallpaper and exposed old plaster.
+    for damage_index in range(4):
+        var damage_hash := _hash_value(cell.x + damage_index * 13, cell.y - damage_index * 5, 121)
+        var damage_offset := float(damage_hash % 48 - 24) / 10.0
+        var damage_y := 0.48 + float(_hash_value(cell.x, cell.y, 131 + damage_index) % 24) / 10.0
+        var underlayer := StandardMaterial3D.new()
+        underlayer.albedo_color = Color(0.43, 0.35, 0.23).lerp(_cell_material_wall.albedo_color.darkened(0.32), float(damage_index % 3) / 3.0)
+        underlayer.roughness = 1.0
+        var patch_position := wall_center + (Vector3(damage_offset, damage_y, 0.119) if horizontal else Vector3(0.119, damage_y, damage_offset))
+        var patch_width := 0.22 + float(damage_hash % 6) * 0.13
+        var patch_height := 0.12 + float(damage_hash % 5) * 0.08
+        var patch_size := Vector3(patch_width, patch_height, 0.016) if horizontal else Vector3(0.016, patch_height, patch_width)
+        _add_decor_box(parent, side + "PeeledWallpaper_%d" % damage_index, patch_position, patch_size, underlayer)
+        var edge_material := StandardMaterial3D.new()
+        edge_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.17)
+        edge_material.roughness = 1.0
+        var edge_position := patch_position + (Vector3(0, patch_height * 0.5 + 0.012, 0.002) if horizontal else Vector3(0.002, patch_height * 0.5 + 0.012, 0))
+        var edge_size := Vector3(patch_width * 0.7, 0.022, 0.018) if horizontal else Vector3(0.018, 0.022, patch_width * 0.7)
+        _add_decor_box(parent, side + "TornEdge_%d" % damage_index, edge_position, edge_size, edge_material)
 
 func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: Vector3, wall_size: Vector3) -> void:
     # Subtle trim and deterministic faded wallpaper patches; decorative meshes only.
@@ -336,6 +361,53 @@ func _add_wall_wear_details(parent: Node3D, object_name: String, wall_position: 
         seam_material.roughness = 0.98
         var seam_size := Vector3(0.045, WALL_HEIGHT - 0.35, 0.025) if is_north_south_wall else Vector3(0.025, WALL_HEIGHT - 0.35, 0.045)
         _add_decor_box(parent, object_name + "WallpaperSeam", wall_position + Vector3(0 if is_north_south_wall else 0.13, 0, 0.13 if is_north_south_wall else 0), seam_size, seam_material)
+
+func _add_carpet_texture(parent: Node3D) -> void:
+    if DisplayServer.get_name() == "headless":
+        return
+    var carpet := MeshInstance3D.new()
+    carpet.name = "CarpetFibers"
+    var plane := PlaneMesh.new()
+    plane.size = Vector2(CELL_SIZE - 0.08, CELL_SIZE - 0.08)
+    plane.subdivide_width = 32
+    plane.subdivide_depth = 32
+    carpet.mesh = plane
+    carpet.position = Vector3(0, 0.008, 0)
+    var shader := Shader.new()
+    shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+uniform vec4 carpet_color : source_color = vec4(0.57, 0.51, 0.31, 1.0);
+uniform vec4 fiber_color : source_color = vec4(0.72, 0.65, 0.42, 1.0);
+void vertex() {
+    VERTEX.y += sin(VERTEX.x * 19.0 + VERTEX.z * 4.0) * cos(VERTEX.z * 17.0) * 0.006;
+}
+void fragment() {
+    float grain = fract(sin(dot(UV * vec2(431.7, 283.1), vec2(12.9898, 78.233))) * 43758.5453);
+    float fibers = sin(UV.x * 1100.0 + sin(UV.y * 80.0)) * 0.035;
+    float variation = (grain - 0.5) * 0.12 + fibers;
+    ALBEDO = mix(carpet_color.rgb, fiber_color.rgb, clamp(0.22 + variation, 0.0, 0.45));
+    ROUGHNESS = 1.0;
+}
+"""
+    var material := ShaderMaterial.new()
+    material.shader = shader
+    material.set_shader_parameter("carpet_color", _cell_material_floor.albedo_color)
+    material.set_shader_parameter("fiber_color", _cell_material_floor.albedo_color.lightened(0.18))
+    carpet.material_override = material
+    parent.add_child(carpet)
+
+func _update_flickering_lights(delta: float) -> void:
+    _flicker_clock += delta
+    for index in range(_flicker_lights.size() - 1, -1, -1):
+        var light := _flicker_lights[index]
+        if not is_instance_valid(light):
+            _flicker_lights.remove_at(index)
+            continue
+        var seed := float(light.get_instance_id() % 97)
+        var pulse := sin(_flicker_clock * (8.0 + seed * 0.07) + seed) * 0.06
+        var glitch := sin(_flicker_clock * (2.1 + seed * 0.013) + seed * 0.3) > 0.985
+        light.light_energy = 1.15 + pulse - (0.72 if glitch else 0.0)
 
 func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
     if DisplayServer.get_name() == "headless":
