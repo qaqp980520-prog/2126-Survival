@@ -16,17 +16,29 @@ func _initialize() -> void:
 
 func _run_tests() -> void:
 	_test_all_seven_minerals_registered()
+	await process_frame
 	_test_inventory_weight_and_save_compatibility()
+	await process_frame
 	_test_visual_and_vfx_nodes_construct()
+	await process_frame
 	_test_mining_depletes_vein_and_adds_inventory()
+	await process_frame
 	_test_full_inventory_does_not_consume_vein()
+	await process_frame
 	_test_inventory_preview_builds_single_model()
+	await process_frame
 	_test_vein_save_load_validation()
+	await process_frame
 	_test_vein_depletion_restore_and_signal()
+	await process_frame
 	_test_offline_regeneration_round_trip()
+	await process_frame
 	_test_regeneration_caps_and_clock_rollback()
+	await process_frame
 	_test_legacy_vein_save_without_regen_fields()
+	await process_frame
 	_test_vein_registry_save_restore_and_atomic_rejection()
+	await process_frame
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -103,6 +115,8 @@ func _test_visual_and_vfx_nodes_construct() -> void:
 	root.add_child(vfx)
 	vfx.play_hit("uranium_ore", Vector3.ZERO)
 	assert(vfx.get_child_count() > 0)
+	visual.queue_free()
+	vfx.queue_free()
 
 func _test_inventory_preview_builds_single_model() -> void:
 	var preview = InventoryPreview.new()
