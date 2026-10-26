@@ -33,6 +33,7 @@ var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
 var _flicker_clock: float = 0.0
 var _high_graphics: bool = false
+var _shadows_enabled: bool = false
 var _flicker_enabled: bool = true
 var _settings_panel: PanelContainer
 var _settings_button: Button
@@ -43,6 +44,7 @@ var _settings: Dictionary = {}
 func _ready() -> void:
     _settings = SettingsProfile.load_settings(_settings_path)
     _high_graphics = bool(_settings.get("high_graphics", false))
+    _shadows_enabled = bool(_settings.get("shadows_enabled", false))
     _flicker_enabled = true # Fluorescent flicker is automatic, not a user setting.
     player.set_camera_mode(int(_settings.get("camera_mode", 0)) == 1)
     player.set_mouse_sensitivity(float(_settings.get("mouse_sensitivity", 2.5)) * 0.001)
@@ -113,9 +115,15 @@ func _build_settings_ui() -> void:
 
     var graphics_button := Button.new()
     graphics_button.name = "GraphicsButton"
-    graphics_button.text = "光影：開（動態陰影＋細節）" if _high_graphics else "光影：關（省效能）"
+    graphics_button.text = "畫質：高" if _high_graphics else "畫質：低（流暢）"
     graphics_button.pressed.connect(_toggle_graphics_quality)
     layout.add_child(graphics_button)
+
+    var shadows_button := Button.new()
+    shadows_button.name = "ShadowsButton"
+    shadows_button.text = "光影：開" if _shadows_enabled else "光影：關"
+    shadows_button.pressed.connect(_toggle_shadows)
+    layout.add_child(shadows_button)
 
     _settings_status = Label.new()
     _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
@@ -154,10 +162,21 @@ func _toggle_graphics_quality() -> void:
     _settings["high_graphics"] = _high_graphics
     var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
-        button.text = "光影：開（動態陰影＋細節）" if _high_graphics else "光影：關（省效能）"
+        button.text = "畫質：高" if _high_graphics else "畫質：低（流暢）"
     _rebuild_maze_for_settings()
     if _settings_status != null:
         _settings_status.text = "光影開啟：啟用部分動態陰影與更多材質細節，效能負擔較高。" if _high_graphics else "光影關閉：停用動態陰影並減少細節，優先提升流暢度。"
+    _save_settings()
+
+func _toggle_shadows() -> void:
+    _shadows_enabled = not _shadows_enabled
+    _settings["shadows_enabled"] = _shadows_enabled
+    var button := _settings_panel.find_child("ShadowsButton", true, false) as Button
+    if button != null:
+        button.text = "光影：開" if _shadows_enabled else "光影：關"
+    for light in _flicker_lights:
+        if is_instance_valid(light):
+            light.shadow_enabled = _shadows_enabled and _high_graphics
     _save_settings()
 
 func _rebuild_maze_for_settings() -> void:
