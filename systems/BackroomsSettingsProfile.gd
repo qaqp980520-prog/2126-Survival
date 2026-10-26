@@ -9,7 +9,7 @@ static func sanitize(raw: Dictionary) -> Dictionary:
     var result := defaults()
     var camera_value: Variant = raw.get("camera_mode", 0)
     if typeof(camera_value) == TYPE_INT:
-        result["camera_mode"] = clampi(camera_value, 0, 1)
+        result["camera_mode"] = clampi(int(camera_value), 0, 1)
     var sensitivity_value: Variant = raw.get("mouse_sensitivity", 2.5)
     if typeof(sensitivity_value) == TYPE_INT or typeof(sensitivity_value) == TYPE_FLOAT:
         result["mouse_sensitivity"] = clampf(float(sensitivity_value), 0.5, 6.0)
