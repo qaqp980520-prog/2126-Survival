@@ -140,13 +140,13 @@ func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = 
 	var schema_value: Variant = data.get("schema_version", null)
 	if not _is_integer_in_range(schema_value, 1, 2):
 		return false
-	var schema := int(schema_value)
+	var schema: int = int(schema_value)
 	if not (data.get("mineral_id", null) is String) or str(data["mineral_id"]) != mineral_id:
 		return false
 	var amount_value: Variant = data.get("remaining_units", null)
 	if not _is_integer_in_range(amount_value, 0, 10000):
 		return false
-	var amount := int(amount_value)
+	var amount: int = int(amount_value)
 	var saved_max := max_units
 	if schema == 2 and not data.has("max_units"):
 		return false
@@ -192,7 +192,7 @@ func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
 	if not (value is int or value is float):
 		return false
-	var number := float(value)
+	var number: float = float(value)
 	if not is_finite(number) or number < float(minimum) or number > float(maximum):
 		return false
 	return floorf(number) == number
