@@ -335,25 +335,17 @@ func _prepare_maze_materials() -> void:
     _cell_material_floor.albedo_color = floor_color
     _cell_material_floor.roughness = 0.94
     _cell_material_wall = StandardMaterial3D.new()
-    _cell_material_wall.roughness = 0.88
-    # Keep the classic warm yellow Backrooms wall visible even in dim cells.
-    _cell_material_wall.albedo_color = Color(1.0, 0.91, 0.58)
-    _cell_material_wall.emission_enabled = true
-    _cell_material_wall.emission = Color(0.30, 0.23, 0.075)
-    _cell_material_wall.emission_energy_multiplier = 0.55
+    _cell_material_wall.roughness = 0.95
+    # Unshaded keeps the yellow wallpaper readable even where maze lights do
+    # not reach. The previous lit material rendered almost black in-game.
+    _cell_material_wall.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    _cell_material_wall.albedo_color = Color.WHITE
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
-    # Use a preloaded imported texture so the runtime wall material cannot
-    # silently remain a flat color when an SVG runtime load fails.
     _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
-    # The wallpaper has very fine, low-contrast details. Use nearest-neighbour
-    # sampling only if explicitly desired; linear filtering plus mipmaps keeps
-    # the fine stripes stable at a distance without turning the SVG pattern into
-    # large blurry chevrons. Anisotropic filtering helps at grazing wall angles.
     _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     _cell_material_wall.uv1_triplanar = false
-    # One tile should cover a wall panel at the scale of the reference image;
-    # too many repeats make the zigzags dominate and appear blurry up close.
-    _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
+    # Repeat the wallpaper so its fine pattern remains visible across large walls.
+    _cell_material_wall.uv1_scale = Vector3(4.0, 4.0, 1.0)
     if _cell_material_wall.albedo_texture == null:
         push_error("Backrooms wallpaper preload is null: res://assets/textures/backrooms_wallpaper.svg")
 
@@ -508,8 +500,10 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
         var wallpaper := load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
         if wallpaper == null:
             push_error("Wallpaper texture failed to load: res://assets/textures/backrooms_wallpaper.svg")
+        material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        material.albedo_color = Color.WHITE
         material.albedo_texture = wallpaper
-        material.uv1_scale = Vector3(1.0, 1.0, 1.0)
+        material.uv1_scale = Vector3(4.0, 4.0, 1.0)
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
