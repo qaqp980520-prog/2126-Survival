@@ -289,6 +289,8 @@ func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
 	second.remaining_units = 1
 	assert(registry.restore_save_dict(saved, 1120))
 	assert(first.remaining_units == 2 and second.remaining_units == 4, "Disabled auto-regeneration must restore saved stock without adding offline units")
+	assert(first.last_regen_unix == 1120 and second.last_regen_unix == 1120, "Disabled offline catch-up must reset the regen clock")
+	assert(first.apply_elapsed_regeneration(1121) == 0, "Skipped offline time must not be applied on the next frame")
 	assert(registry.restore_save_dict({"schema_version": 1, "veins": {"unknown-id": saved["veins"]["mine/sector-a/vein-01"]}}, 1300), "Valid records for currently unloaded stable IDs must be retained")
 	assert(registry.get_saved_ids().has("unknown-id"))
 	assert(registry.unregister_vein("mine/sector-a/vein-01", first))
