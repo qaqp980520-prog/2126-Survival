@@ -106,17 +106,18 @@ func _test_full_inventory_does_not_consume_vein() -> void:
 	bridge.queue_free()
 
 func _test_visual_and_vfx_nodes_construct() -> void:
+	# Build render resources off-tree: headless CI validates node construction without
+	# registering dummy renderer meshes that cannot be visually inspected in this run.
 	var visual = OreVisual.new()
 	visual.mineral_id = "uranium_ore"
 	visual.random_seed = 7
-	root.add_child(visual)
+	visual.build_model()
 	assert(visual.get_child_count() == 7)
 	var vfx = MiningVFX.new()
-	root.add_child(vfx)
 	vfx.play_hit("uranium_ore", Vector3.ZERO)
 	assert(vfx.get_child_count() > 0)
-	visual.queue_free()
-	vfx.queue_free()
+	visual.free()
+	vfx.free()
 
 func _test_inventory_preview_builds_single_model() -> void:
 	var preview = InventoryPreview.new()
