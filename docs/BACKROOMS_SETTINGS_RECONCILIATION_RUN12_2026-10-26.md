@@ -22,3 +22,8 @@ The changes are included in PR #53's Godot 4.3 workflow. Exact-head CI must comp
 ## Limits
 
 The UI toggle and material properties are covered by headless integration tests, but real GPU shader/texture appearance and iPhone performance still require graphical/device validation.
+
+
+## CI follow-up
+
+Run #222 reached the settings integration test and exposed a test-environment issue: the root Godot project had not been imported before the test attempted to load SVG resources, producing “No loader found” for the carpet and wallpaper SVG files. The settings/quality assertions themselves ran, but the explicit texture-presence assertions correctly failed. The workflow now imports and parses the root 2126 Survival project before root-level integration tests, with an explicit error guard. This must be verified on the latest PR head; the prior run is a failure, not a pass.
