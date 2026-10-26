@@ -62,11 +62,13 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		var candidate: Variant = chunk_factory.call(coord)
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
-			_rollback_new_loads(newly_loaded, now_unix)
+			if not _rollback_new_loads(newly_loaded, now_unix):
+				push_error("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
 			return false
 		if not chunk_controller.load_chunk(id, candidate, now_unix):
 			_free_unowned_root(candidate)
-			_rollback_new_loads(newly_loaded, now_unix)
+			if not _rollback_new_loads(newly_loaded, now_unix):
+				push_error("Mineral grid streaming rollback was incomplete after chunk registration failure.")
 			return false
 		_managed_chunk_ids[id] = coord
 		newly_loaded.append(id)
@@ -77,9 +79,18 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		if not desired_ids.has(id):
 			stale_ids.append(str(id))
 	stale_ids.sort()
+	var unloaded_stale: Array[Dictionary] = []
 	for id in stale_ids:
+		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		if not chunk_controller.unload_chunk(id, now_unix):
+			# Unloading can fail after earlier stale chunks have already been removed.
+			# Restore the previous active set instead of leaving a half-shifted window.
+			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
+			if not new_loads_restored or not old_chunks_restored:
+				push_error("Mineral grid streaming rollback was incomplete after stale chunk unload failure.")
 			return false
+		unloaded_stale.append({"id": id, "coord": stale_coord})
 		_managed_chunk_ids.erase(id)
 	return true
 
@@ -96,11 +107,35 @@ func get_grid_coordinate(world_position: Vector3) -> Vector2i:
 func _chunk_id(coord: Vector2i) -> String:
 	return "surface/chunk_%d_%d" % [coord.x, coord.y]
 
-func _rollback_new_loads(ids: Array[String], now_unix: int) -> void:
+func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
+	var success := true
 	for i in range(ids.size() - 1, -1, -1):
 		var id: String = ids[i]
-		if chunk_controller.is_chunk_loaded(id) and chunk_controller.unload_chunk(id, now_unix):
+		if not chunk_controller.is_chunk_loaded(id):
 			_managed_chunk_ids.erase(id)
+			continue
+		if chunk_controller.unload_chunk(id, now_unix):
+			_managed_chunk_ids.erase(id)
+		else:
+			success = false
+	return success
+
+func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
+	var success := true
+	for entry in chunks:
+		var id: String = str(entry.get("id", ""))
+		var coord: Vector2i = entry["coord"]
+		var candidate: Variant = chunk_factory.call(coord)
+		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
+			_free_unowned_root(candidate)
+			success = false
+			continue
+		if not chunk_controller.load_chunk(id, candidate, now_unix):
+			_free_unowned_root(candidate)
+			success = false
+			continue
+		_managed_chunk_ids[id] = coord
+	return success
 
 func _free_unowned_root(candidate: Variant) -> void:
 	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null:
