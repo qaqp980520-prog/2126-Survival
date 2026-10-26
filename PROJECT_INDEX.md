@@ -69,3 +69,10 @@
 - 包含 project.godot、main.tscn、main.gd、rules.gd、規則測試、場景 smoke test、README。
 - CI workflow 已新增專案匯入、規則測試與場景 smoke test；新 PR 的 Godot 4.3 CI 尚待執行。
 - 本機沒有 Godot 執行檔；尚未進行人工視覺或 iPhone 測試。
+
+
+## 2026-10-26｜離線礦脈再生 M0.1（CI 待執行）
+- 修改：systems/MineralMiningNode.gd；新增 max_units、regen_interval_seconds、last_regen_unix，支援依 Unix 時間進行線上／離線再生、保留部分間隔、容量上限與時鐘倒退防護。
+- 測試：tests/mineral_catalog_test.gd 新增離線回補、部分間隔、容量上限、時鐘倒退、舊存檔相容與無效資料拒絕。
+- 設計文件：docs/MINERAL_VEIN_OFFLINE_REGENERATION_M0_1_2026-10-26.md。
+- PR #26 的舊 head Run #45 success，但本乾淨分支包含最新 main 的 Freight Sorter／workflow/index，必須等新 PR 的完整 CI 後再考慮合併。
