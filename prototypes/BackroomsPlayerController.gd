@@ -16,7 +16,6 @@ func _ready() -> void:
     camera.position = Vector3(0.0, 1.62, 0.0)
     camera.rotation = Vector3.ZERO
     camera.current = true
-    # Right mouse button is deliberately used for hold-to-look.
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -35,16 +34,12 @@ func _unhandled_input(event: InputEvent) -> void:
         Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
-    var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-    if input_dir == Vector2.ZERO:
-        input_dir = Vector2(
-            float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)),
-            float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP))
-        )
+    var input_dir := Vector2.ZERO
+    input_dir.x = float(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - float(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT))
+    input_dir.y = float(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)) - float(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP))
     if input_dir.length_squared() > 1.0:
         input_dir = input_dir.normalized()
-    var basis := global_transform.basis
-    var direction := (basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
+    var direction := (global_transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
     var speed := sprint_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
     velocity.x = direction.x * speed
     velocity.z = direction.z * speed
