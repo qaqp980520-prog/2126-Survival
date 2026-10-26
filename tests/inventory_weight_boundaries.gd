@@ -39,7 +39,6 @@ func _test_super_heavy_jump_boundary_and_recovery() -> void:
 	assert(is_equal_approx(inventory.total_weight_kg(), 90.0))
 	assert(not inventory.is_super_heavy())
 	assert(inventory.can_jump())
-	bridge.free()
 	assert(inventory.add_item("rock", 1) == 1)
 	assert(inventory.is_super_heavy())
 	assert(not inventory.can_jump())
@@ -54,6 +53,7 @@ func _test_super_heavy_jump_boundary_and_recovery() -> void:
 	assert(bridge.drop_item("rock", 1))
 	assert(not inventory.is_super_heavy())
 	assert(bridge.call("can_player_jump"))
+	bridge.free()
 
 func _test_invalid_item_and_amount() -> void:
 	var inventory = InventoryScript.new()
