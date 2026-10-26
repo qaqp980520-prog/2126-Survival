@@ -185,3 +185,15 @@
 - Regression coverage expanded in `tests/backrooms_settings_profile_test.gd` and `tests/backrooms_settings_integration_test.gd` for resolution range, save/load round-trip, dropdown restoration, and independent shadows.
 - Key commits: wallpaper `333ed896`; profile `06bd68f3`; display settings `f4452b90`; profile tests `46ef882f`; integration tests `625629ef`; geometry/shadow separation `0daf395b` and `973e25d5`.
 - Exact-head Godot 4.3 CI result must be checked before declaring tests passed. Manual graphical testing and iPhone device testing are still outstanding.
+
+## 2026-10-26 Run 12 — Reactor Balance + transactional mineral streaming rollback (clean-main closeout)
+
+- KROLL Reactor Balance M0.1: `daily_games/KROLL_Reactor_Balance/` (Godot 4.3+, no external assets/addons). A three-reactor output/heat management game with vent/boost actions, 60-second round, 135–165 grid band and 18-second stability goal.
+- M0.1.1 regression fix: a meltdown and the 18-second stability threshold could happen on the same tick; meltdown now takes priority over victory. `tests/game_smoke_test.gd` covers the simultaneous condition; README documents precedence.
+- MineralGridStreamingDirector transactional rollback: `systems/MineralGridStreamingDirector.gd`; new `tests/helpers/FakeMineralChunkController.gd` and `tests/mineral_grid_streaming_transaction_test.gd` inject failure on the second stale-chunk unload and assert restoration of the original active IDs.
+- CI reliability: root project import/parse now runs before root-level tests preload SVG resources. `tests/backrooms_settings_integration_test.gd` now checks SVG-backed `StandardMaterial3D` texture/UV properties and preserves the current separate `high_graphics` / `shadows_enabled` settings.
+- PR #54 merged as `4756cee9aef6ccacd95a7752287ab4e65afa7d2b`. Exact PR-head Godot 4.3 CI Run #257 (`40349176376`) passed on `03ae4dfb9d98aad2bede36a6824b9037a5c411f1`: 55/55 steps succeeded, 0 failed.
+- Post-merge main push CI Run #259 (`40349541937`) passed on main HEAD `a1e10a620cb13cb8fd12c3b06511d372c24839d3`: 55/55 steps succeeded, 0 failed. This includes the latest Backrooms wallpaper/material follow-up commit.
+- Reconciliation: PR #53 was closed without merge because its branch diverged 33 ahead / 22 behind; its Run #225 success is historical only. Main Runs #246/#252/#256 failed on the stale SVG import order or were superseded/cancelled; Run #259 is the final successful main-head evidence.
+- Limitations remain: local GUI/GPU/iPhone playtests were not run (no local Godot executable); MineralGridStreamingDirector remains synchronous/factory-driven and is not yet wired into the production world generator.
+- Next: connect the director to the real world generator and add scene-level chunk load/unload/save/restore coverage; schedule graphical and iPhone validation separately.
