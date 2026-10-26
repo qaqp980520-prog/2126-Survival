@@ -69,6 +69,23 @@ func _run() -> void:
 	game._input(second_left_touch)
 	game._physics_process(0.016)
 	assert(not game.left_flipper_active and not game.right_flipper_active)
+	var drag_touch := InputEventScreenTouch.new()
+	drag_touch.index = 4
+	drag_touch.position = Vector2(200.0, 900.0)
+	drag_touch.pressed = true
+	game._input(drag_touch)
+	game._physics_process(0.016)
+	assert(game.left_flipper_active and not game.right_flipper_active)
+	var drag_event := InputEventScreenDrag.new()
+	drag_event.index = 4
+	drag_event.position = Vector2(600.0, 900.0)
+	game._input(drag_event)
+	game._physics_process(0.016)
+	assert(not game.left_flipper_active and game.right_flipper_active, "Dragging a held touch should move control to the right flipper")
+	drag_touch.pressed = false
+	game._input(drag_touch)
+	game._physics_process(0.016)
+	assert(not game.left_flipper_active and not game.right_flipper_active)
 	game.queue_free()
 	await process_frame
 	print("KROLL Magnetic Pinball game smoke test passed.")
