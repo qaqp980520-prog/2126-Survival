@@ -165,13 +165,13 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 		if not _is_integer_in_range(interval_value, 1, 86400):
 			return false
 		saved_interval = int(interval_value)
-	var now := now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
-	var saved_timestamp := now
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	var saved_timestamp: int = now
 	if schema == 2 and not data.has("last_regen_unix"):
 		return false
 	if data.has("last_regen_unix"):
 		var timestamp_value: Variant = data["last_regen_unix"]
-		var minimum_timestamp := 1 if schema == 2 else 0
+		var minimum_timestamp: int = 1 if schema == 2 else 0
 		if not _is_integer_in_range(timestamp_value, minimum_timestamp, 4000000000):
 			return false
 		saved_timestamp = int(timestamp_value)
