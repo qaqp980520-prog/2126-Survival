@@ -116,7 +116,7 @@ func _test_vein_save_load_validation() -> void:
 	root.add_child(restored)
 	assert(restored.load_save_dict(saved))
 	assert(restored.remaining_units == 17)
-	assert(not restored.load_save_dict({"schema_version": 2, "mineral_id": "silver_ore", "remaining_units": 4}))
+	assert(not restored.load_save_dict({"schema_version": 3, "mineral_id": "silver_ore", "remaining_units": 4}))
 	assert(restored.remaining_units == 17, "Invalid schema must not mutate vein state")
 	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "gold_ore", "remaining_units": 4}))
 	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "silver_ore", "remaining_units": -1}))
