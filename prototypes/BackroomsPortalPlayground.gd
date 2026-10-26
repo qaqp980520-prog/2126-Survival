@@ -132,7 +132,7 @@ func _build_settings_ui() -> void:
     layout.add_child(resolution_option)
 
     var shadows_button := Button.new()
-    shadows_button.name = "ShadowsButton"
+    shadows_button.name = "GraphicsButton"
     shadows_button.text = "光影：開" if _shadows_enabled else "光影：關"
     shadows_button.pressed.connect(_toggle_shadows)
     layout.add_child(shadows_button)
@@ -198,8 +198,10 @@ func _on_resolution_changed(index: int) -> void:
 
 func _toggle_shadows() -> void:
     _shadows_enabled = not _shadows_enabled
+    _high_graphics = _shadows_enabled
     _settings["shadows_enabled"] = _shadows_enabled
-    var button := _settings_panel.find_child("ShadowsButton", true, false) as Button
+    _settings["high_graphics"] = _high_graphics
+    var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
     if button != null:
         button.text = "光影：開" if _shadows_enabled else "光影：關"
     for light in _flicker_lights:
@@ -208,6 +210,11 @@ func _toggle_shadows() -> void:
     if _settings_status != null:
         _settings_status.text = "光影已開啟：啟用動態陰影，效能負擔較高。" if _shadows_enabled else "光影已關閉：停用動態陰影，優先提升流暢度。"
     _save_settings()
+
+# Compatibility entry point used by older integration tests and saved workflows.
+func _toggle_graphics_quality() -> void:
+    _toggle_shadows()
+    _rebuild_maze_for_settings()
 
 func _rebuild_maze_for_settings() -> void:
     if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
