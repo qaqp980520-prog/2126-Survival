@@ -89,13 +89,14 @@
 - 限制：1.0kg 只作防禦性 fallback；正式物品仍需登錄 ITEM_WEIGHTS。counts 仍是公開字典，長期可考慮封裝存取。
 
 
-## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (PR #34 candidate)
-- Main now includes PR #36 Pinball merge abe695c08adc26b699033d9d500dadd98fcb8b64 and PR #35 strict Variant typing merge 6c6f2779541175b3cc372d3cb73319ceac98f354.
-- PR #34: https://github.com/qaqp980520-prog/2126-Survival/pull/34; branch feature/mineral-vein-stream-persistence-2026-10-26. Current code adds persistence for unloaded chunk IDs, unload-state capture, same-ID reload, deterministic saved-ID ordering, idempotent registration, atomic validation, and a clock reset when offline catch-up is disabled.
-- Tests: tests/mineral_catalog_test.gd covers unloaded stable IDs, idempotent same-node registration, and disabled-regeneration clock reset; tests/mineral_vein_chunk_stream_test.gd covers unload/save/free/reload/offline regeneration and invalid-data rejection.
-- CI guard in .github/workflows/godot-validation.yml runs the dedicated chunk-stream test and rejects SCRIPT ERROR, ERROR:, or FAIL output, requiring explicit success markers.
-- Run 40275877558 passed all 33 steps with clean guarded logs, including “Mineral catalog regression tests passed.” and “Mineral vein chunk-stream persistence tests passed.” Its base was abe695c08adc26b699033d9d500dadd98fcb8b64; main has since advanced to 6c6f2779541175b3cc372d3cb73319ceac98f354, so the updated index/head needs a fresh CI run against the latest base.
-- PR #35 strict Variant typing fix is merged as 6c6f2779541175b3cc372d3cb73319ceac98f354; CI Run 40275478307 passed with clean guarded logs.
-- PR #36 KROLL Magnetic Pinball M0.1 is merged as abe695c08adc26b699033d9d500dadd98fcb8b64; dedicated Run 40275642300 and shared Run 40275642253 passed. PR #33 was closed without merge as superseded.
+## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (verified and merged)
+- PR #34 is merged to main as 14869cffd543d8d33dec427fb84ddb493e206fc6.
+- Exact merged head e6a55bcec7a160a1ae8fd27a295deae661f9d58e passed Godot 4.3 shared CI Run 40276109216 on base 6c6f2779541175b3cc372d3cb73319ceac98f354. All 33 workflow steps succeeded; guarded logs contained no actual SCRIPT ERROR, ERROR:, or FAIL output.
+- Mineral registry behavior: systems/MineralVeinRegistry.gd retains records for unloaded chunk IDs; unregister captures final state; register restores by stable ID; saved IDs are deterministic; invalid restore payloads are rejected before mutation; same-node registration is idempotent; disabling offline catch-up resets the clock so the next _process() cannot apply skipped time.
+- Regression files: tests/mineral_catalog_test.gd and tests/mineral_vein_chunk_stream_test.gd. The dedicated step printed “Mineral vein chunk-stream persistence tests passed.” and the catalog step printed “Mineral catalog regression tests passed.”
+- Workflow guard: .github/workflows/godot-validation.yml rejects SCRIPT ERROR, ERROR:, and FAIL output and requires explicit success markers.
 - Design note: docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md.
-- Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
+- Related verified changes: PR #35 strict Variant typing fix merged as 6c6f2779541175b3cc372d3cb73319ceac98f354 (Run 40275478307 success); PR #36 KROLL Magnetic Pinball M0.1 merged as abe695c08adc26b699033d9d500dadd98fcb8b64 (dedicated Run 40275642300 and shared Run 40275642253 success). PR #33 was closed without merge as superseded.
+- Limit: the formal world/chunk streaming controller is not yet present; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary, graphical manual playtest, or iPhone device test is claimed.
+- Next step: integrate the registry into the actual world/chunk load-unload lifecycle, then add a scene-level integration test covering chunk unload, save/load, and world travel.
+- Old documentation PRs #1, #2, #6, and #8 remain open and are not claimed as merged.
