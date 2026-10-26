@@ -138,3 +138,14 @@
 - Final pre-merge head `9c519e47b4e77fcf53392647716fcd4db03c04ab` passed Run #126 (`40291085414`); all 38 required validation steps succeeded, zero failures, including Hydroponics import/rules/runtime smoke and MineralChunkController integration tests.
 - PR #42 merged to main as `e0545d7a5bcd7a2bb44e810ca6d56d8fef4b93c0`. Current index reconciliation is a docs-only follow-up PR; do not confuse it with the already merged feature PR.
 - Limits: formal world generator integration, distance/asynchronous streaming, manual GUI play and iPhone testing remain incomplete.
+
+
+## 2026-10-26 Run 9 — Backrooms integration audit
+- Audit report: [docs/BACKROOMS_INTEGRATION_AUDIT_2026-10-26.md](docs/BACKROOMS_INTEGRATION_AUDIT_2026-10-26.md).
+- Fixed maze streaming cell indexing to align with the actual half-cell wall boundaries; added coordinate-boundary regression cases.
+- Natural portal director now ticks only on the Surface; added a regression test to prevent portal spawning inside Backrooms.
+- World-save restore rejects a state that combines a Backrooms location with an active surface portal, before mutating live inventory/world state.
+- Bound the playground player's movement and jump permissions to SurvivalWorldBridge weight calculations; regression tests cover super-heavy movement slowdown and immediate recovery after dropping items.
+- Removed duplicate shared-edge wall collision bodies, added deterministic corridor baffles and ceiling OmniLight3D nodes; topology tests cover edge symmetry and 7×7 connectivity.
+- Enabled Godot headless validation on pushes to `main` so direct commits receive automated checks.
+- Current status: changes committed to main; latest Godot headless CI result must be checked before claiming engine validation passed. Graphical manual playtest and iPhone test remain outstanding.
