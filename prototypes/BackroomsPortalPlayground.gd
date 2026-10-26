@@ -10,7 +10,7 @@ const SAFE_DISTANCE: float = 7.0
 const SAVE_PATH: String = "user://backrooms_playground_save.json"
 const CELL_SIZE: float = 8.0
 const WALL_HEIGHT: float = 3.4
-const STREAM_RADIUS: int = 4
+const STREAM_RADIUS: int = 2
 
 @onready var player: CharacterBody3D = $Player
 @onready var main_world: Node3D = $MainWorld
@@ -31,6 +31,11 @@ var _cell_material_wall: StandardMaterial3D
 var _maze_rng := RandomNumberGenerator.new()
 var _flicker_lights: Array[OmniLight3D] = []
 var _flicker_clock: float = 0.0
+var _high_graphics: bool = false
+var _flicker_enabled: bool = false
+var _settings_panel: PanelContainer
+var _settings_button: Button
+var _settings_status: Label
 
 func _ready() -> void:
     _configure_display()
@@ -44,10 +49,113 @@ func _ready() -> void:
     player.bind_world_bridge(bridge)
     _build_surface()
     _prepare_maze_materials()
+    _build_settings_ui()
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
         help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | T portal test | B return | G collect | H drop | F5 save | F9 load"
+
+func _build_settings_ui() -> void:
+    var hud := get_node_or_null("HUD") as CanvasLayer
+    if hud == null:
+        return
+    _settings_button = Button.new()
+    _settings_button.name = "SettingsButton"
+    _settings_button.text = "設定"
+    _settings_button.position = Vector2(1150, 16)
+    _settings_button.size = Vector2(100, 42)
+    _settings_button.pressed.connect(_toggle_settings_panel)
+    hud.add_child(_settings_button)
+
+    _settings_panel = PanelContainer.new()
+    _settings_panel.name = "SettingsPanel"
+    _settings_panel.position = Vector2(0.5, 0.5)
+    _settings_panel.set_anchors_preset(Control.PRESET_CENTER)
+    _settings_panel.position = Vector2(-190, -190)
+    _settings_panel.custom_minimum_size = Vector2(380, 380)
+    hud.add_child(_settings_panel)
+    var layout := VBoxContainer.new()
+    layout.add_theme_constant_override("separation", 12)
+    _settings_panel.add_child(layout)
+    var title := Label.new()
+    title.text = "遊戲設定"
+    title.add_theme_font_size_override("font_size", 24)
+    layout.add_child(title)
+
+    var camera_label := Label.new()
+    camera_label.text = "視角"
+    layout.add_child(camera_label)
+    var camera_option := OptionButton.new()
+    camera_option.add_item("第一人稱", 0)
+    camera_option.add_item("第三人稱", 1)
+    camera_option.select(0)
+    camera_option.item_selected.connect(_on_camera_setting_changed)
+    layout.add_child(camera_option)
+
+    var sensitivity_label := Label.new()
+    sensitivity_label.text = "滑鼠靈敏度"
+    layout.add_child(sensitivity_label)
+    var sensitivity_slider := HSlider.new()
+    sensitivity_slider.name = "SensitivitySlider"
+    sensitivity_slider.min_value = 0.5
+    sensitivity_slider.max_value = 6.0
+    sensitivity_slider.step = 0.1
+    sensitivity_slider.value = 2.5
+    sensitivity_slider.value_changed.connect(_on_sensitivity_changed)
+    layout.add_child(sensitivity_slider)
+
+    var graphics_button := Button.new()
+    graphics_button.name = "GraphicsButton"
+    graphics_button.text = "畫質：低（流暢）"
+    graphics_button.pressed.connect(_toggle_graphics_quality)
+    layout.add_child(graphics_button)
+
+    var flicker_button := Button.new()
+    flicker_button.name = "FlickerButton"
+    flicker_button.text = "燈光閃爍：關"
+    flicker_button.pressed.connect(_toggle_flicker)
+    layout.add_child(flicker_button)
+
+    _settings_status = Label.new()
+    _settings_status.text = "低畫質會減少裝飾、動態材質與燈光效果。"
+    _settings_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    layout.add_child(_settings_status)
+    var close_button := Button.new()
+    close_button.text = "關閉"
+    close_button.pressed.connect(_toggle_settings_panel)
+    layout.add_child(close_button)
+    _settings_panel.visible = false
+
+func _toggle_settings_panel() -> void:
+    if _settings_panel != null:
+        _settings_panel.visible = not _settings_panel.visible
+        if _settings_panel.visible:
+            Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _on_camera_setting_changed(index: int) -> void:
+    player.set_camera_mode(index == 1)
+
+func _on_sensitivity_changed(value: float) -> void:
+    player.set_mouse_sensitivity(value * 0.001)
+
+func _toggle_graphics_quality() -> void:
+    _high_graphics = not _high_graphics
+    var button := _settings_panel.find_child("GraphicsButton", true, false) as Button
+    if button != null:
+        button.text = "畫質：高（更多細節）" if _high_graphics else "畫質：低（流暢）"
+    _rebuild_maze_for_settings()
+    if _settings_status != null:
+        _settings_status.text = "高畫質包含壁紙破損、地毯紋理與更多裝飾。" if _high_graphics else "低畫質減少裝飾和動態材質，優先提升流暢度。"
+
+func _toggle_flicker() -> void:
+    _flicker_enabled = not _flicker_enabled
+    var button := _settings_panel.find_child("FlickerButton", true, false) as Button
+    if button != null:
+        button.text = "燈光閃爍：開" if _flicker_enabled else "燈光閃爍：關"
+
+func _rebuild_maze_for_settings() -> void:
+    if in_backrooms and backrooms_room != null and is_instance_valid(backrooms_room):
+        _stream_maze_cells(true)
 
 func _configure_display() -> void:
     if DisplayServer.get_name() != "headless":
@@ -88,7 +196,8 @@ func _add_player_part(parent: Node3D, part_name: String, mesh_resource: Primitiv
     parent.add_child(mesh_instance)
 
 func _process(delta: float) -> void:
-    _update_flickering_lights(delta)
+    if _flicker_enabled and _high_graphics:
+        _update_flickering_lights(delta)
     if director == null:
         return
     if in_backrooms:
@@ -196,22 +305,26 @@ func _create_maze_cell(cell: Vector2i) -> void:
     backrooms_room.add_child(root)
     _loaded_cells[cell] = root
     _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
-    _add_carpet_texture(root)
+    if _high_graphics:
+        _add_carpet_texture(root)
     # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
     var seam_material := StandardMaterial3D.new()
     seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
     seam_material.roughness = 1.0
-    _add_decor_box(root, "FloorSeamX", Vector3(0, 0.006, 0), Vector3(CELL_SIZE, 0.012, 0.035), seam_material)
-    _add_decor_box(root, "FloorSeamZ", Vector3(0, 0.007, 0), Vector3(0.035, 0.012, CELL_SIZE), seam_material)
+    if _high_graphics:
+        _add_decor_box(root, "FloorSeamX", Vector3(0, 0.006, 0), Vector3(CELL_SIZE, 0.012, 0.035), seam_material)
+        _add_decor_box(root, "FloorSeamZ", Vector3(0, 0.007, 0), Vector3(0.035, 0.012, CELL_SIZE), seam_material)
     var ceiling_material := StandardMaterial3D.new()
     ceiling_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.18)
     ceiling_material.roughness = 0.96
-    _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
+    if _high_graphics:
+        _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
     var trim_material := StandardMaterial3D.new()
     trim_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.12)
     trim_material.roughness = 0.9
-    _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
-    _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
+    if _high_graphics:
+        _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
+        _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
@@ -220,13 +333,15 @@ func _create_maze_cell(cell: Vector2i) -> void:
     # its north/west edge. This avoids duplicate collision bodies on every seam.
     if not north_open:
         _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
-        _decorate_wall_face(root, "North", Vector3(0, 0, -CELL_SIZE * 0.5 + 0.125), true, cell)
+        if _high_graphics:
+            _decorate_wall_face(root, "North", Vector3(0, 0, -CELL_SIZE * 0.5 + 0.125), true, cell)
     if not west_open:
         _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
-        _decorate_wall_face(root, "West", Vector3(-CELL_SIZE * 0.5 + 0.125, 0, 0), false, cell)
+        if _high_graphics:
+            _decorate_wall_face(root, "West", Vector3(-CELL_SIZE * 0.5 + 0.125, 0, 0), false, cell)
 
     # Small deterministic floor scuffs and stains break up the otherwise uniform carpet.
-    for stain_index in range(2):
+    for stain_index in range(2 if _high_graphics else 0):
         var stain_hash := _hash_value(cell.x + stain_index * 7, cell.y - stain_index * 11, 93)
         var stain_material := StandardMaterial3D.new()
         stain_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.08 + float(stain_hash % 12) / 100.0)
@@ -248,7 +363,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
 
     # More frequent, brighter warm fluorescent fixtures improve readability without
     # turning the Backrooms into a brightly lit office.
-    if _hash_value(cell.x, cell.y, 71) % 3 != 0:
+    if _hash_value(cell.x, cell.y, 71) % (3 if _high_graphics else 5) == 0:
         var panel_material := StandardMaterial3D.new()
         panel_material.albedo_color = Color(1.0, 0.96, 0.78)
         panel_material.emission_enabled = true
@@ -265,6 +380,8 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.shadow_enabled = false
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
+            ceiling_light.light_energy = 1.15 if _high_graphics else 0.85
+            ceiling_light.omni_range = 8.5 if _high_graphics else 5.5
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
