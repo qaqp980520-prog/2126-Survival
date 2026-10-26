@@ -138,3 +138,12 @@
 - Final pre-merge head `9c519e47b4e77fcf53392647716fcd4db03c04ab` passed Run #126 (`40291085414`); all 38 required validation steps succeeded, zero failures, including Hydroponics import/rules/runtime smoke and MineralChunkController integration tests.
 - PR #42 merged to main as `e0545d7a5bcd7a2bb44e810ca6d56d8fef4b93c0`. Current index reconciliation is a docs-only follow-up PR; do not confuse it with the already merged feature PR.
 - Limits: formal world generator integration, distance/asynchronous streaming, manual GUI play and iPhone testing remain incomplete.
+
+
+## Run 10 candidate — Mineral Grid Streaming Director M0.1 (2026-10-26)
+- New system: `systems/MineralGridStreamingDirector.gd`; tests: `tests/mineral_grid_streaming_director_test.gd`; design note: `docs/MINERAL_GRID_STREAMING_DIRECTOR_M0_1_2026-10-26.md`.
+- Adds deterministic grid-coordinate selection around a world position, radius-based desired chunk sets, and delegates chunk root ownership to `MineralChunkController` through a supplied synchronous factory callback.
+- Load-before-unload behavior is intended to preserve the previous active set when generation/registration fails; newly loaded chunks from a failed sync are rolled back.
+- CI workflow adds an explicit required-file check and guarded headless test step.
+- Status: candidate branch `feature/mineral-grid-streaming-director-m0-1-2026-10-26`; remote Godot 4.3 CI has not yet run on this candidate. Do not merge before complete validation.
+- Limits: no terrain generator, biome logic, asynchronous scene loading, player scene wiring, GUI test, or iPhone test is included. A production generator must supply the factory and invoke sync as the player moves.
