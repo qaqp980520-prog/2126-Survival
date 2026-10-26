@@ -11,6 +11,11 @@ func _run() -> void:
     world.set("_settings_path", path)
     root.add_child(world)
     await process_frame
+    var floor_material := world.call("_make_surface_material", true, Vector2i.ZERO) as ShaderMaterial
+    var wall_material := world.call("_make_surface_material", false, Vector2i(2, -3)) as ShaderMaterial
+    _expect(floor_material != null and floor_material.shader.code.contains("base_color"), "high-quality floor shader material is constructed")
+    _expect(floor_material != null and not floor_material.shader.code.contains("seed_offset"), "floor shader does not receive a wall-only parameter")
+    _expect(wall_material != null and wall_material.shader.code.contains("seed_offset"), "wall shader declares its per-cell variation parameter")
     var player: Node = world.get_node("Player")
     _expect(not bool(player.call("is_third_person")), "fresh settings start in first-person")
     _expect(is_equal_approx(float(player.call("get_mouse_sensitivity")), 0.0025), "default sensitivity reaches player controller")
