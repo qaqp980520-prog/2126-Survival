@@ -51,6 +51,11 @@ func _input(event: InputEvent) -> void:
         var drag := event as InputEventScreenDrag
         if drag.index == _touch_move_id:
             _touch_move_position = drag.position
+    elif event is InputEventKey:
+        var key_event := event as InputEventKey
+        if key_event.pressed and not key_event.echo and key_event.keycode == KEY_SPACE:
+            _dash_requested = true
+            _dash_target_valid = false
 
 func _process(delta: float) -> void:
     if _state != "playing":
