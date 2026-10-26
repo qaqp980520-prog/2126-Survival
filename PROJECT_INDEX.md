@@ -131,7 +131,8 @@
 - Remaining: connect `MineralChunkController` to the actual production world generator; no distance-based chunk selection, async streaming, GUI playtest, or iPhone test is claimed.
 
 
-## 2026-10-26 Run 9 — candidate assets (CI pending)
-- KROLL Hydroponics Shift M0.1: standalone Godot 4.3+ crop-care arcade game in daily_games/KROLL_Hydroponics_Shift/; three beds, moisture/growth simulation, ten-harvest target, keyboard and touch controls; no external assets. Rule and scene smoke tests are added to the shared Godot workflow. Status: awaiting CI on PR; not yet validated at this index revision.
-- MineralChunkController M0.1.1: failed chunk registration now detaches but does not free the caller-owned root. Expanded tests cover duplicate stable-ID load preserving the incoming root and unload failure rollback after a prior vein unregister. Formal world generator integration and distance/asynchronous streaming remain incomplete.
-- Candidate branch: feature/kroll-hydroponics-chunk-rollback-2026-10-26. CI must pass before merge. Local GUI and iPhone testing remain outstanding.
+## 2026-10-26 Run 9 — code validated; final index revision pending CI
+- KROLL Hydroponics Shift M0.1: standalone Godot 4.3+ crop-care arcade game in daily_games/KROLL_Hydroponics_Shift/; three beds, moisture/growth simulation, ten-harvest target, keyboard and touch controls; no external assets. Rules and runtime smoke tests passed on code head `92568e240abe1bd25149bba5a8da47d41ab451ce` in Godot 4.3 CI Run #123 (`40290454611`).
+- MineralChunkController M0.1.1: failed registration now detaches but does not free the caller-owned root. Integration tests for duplicate stable-ID load preservation and unload rollback passed in the same Run #123.
+- The current branch adds only the final status reconciliation in this index and the two asset documents after the validated code head. Run #124 must validate the final PR head before merge.
+- Candidate PR #42: https://github.com/qaqp980520-prog/2126-Survival/pull/42. Formal world generator integration and distance/asynchronous streaming remain incomplete. Local GUI and iPhone testing remain outstanding.
