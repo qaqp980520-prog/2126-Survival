@@ -440,16 +440,17 @@ func _should_enable_light_shadows(cell: Vector2i) -> bool:
     return _high_graphics and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
 
 func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
-    # Built-in textured material: reliable UV sampling and lower shader cost.
     var material := StandardMaterial3D.new()
     material.roughness = 1.0
     material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+    material.albedo_color = Color.WHITE
+    material.uv1_triplanar = true
     if is_floor:
-        material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg")
-        material.uv1_scale = Vector3(4.0, 4.0, 1.0)
+        material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg") as Texture2D
+        material.uv1_scale = Vector3(0.22, 0.22, 0.22)
     else:
-        material.albedo_texture = load("res://assets/textures/backrooms_wallpaper.svg")
-        material.uv1_scale = Vector3(2.0, 1.0, 1.0)
+        material.albedo_texture = load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
+        material.uv1_scale = Vector3(0.32, 0.32, 0.32)
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
