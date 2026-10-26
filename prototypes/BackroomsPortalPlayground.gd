@@ -192,6 +192,21 @@ func _create_maze_cell(cell: Vector2i) -> void:
     backrooms_room.add_child(root)
     _loaded_cells[cell] = root
     _add_box(root, "Floor", Vector3(0, -0.12, 0), Vector3(CELL_SIZE, 0.24, CELL_SIZE), _cell_material_floor.albedo_color)
+    # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
+    var seam_material := StandardMaterial3D.new()
+    seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
+    seam_material.roughness = 1.0
+    _add_decor_box(root, "FloorSeamX", Vector3(0, 0.006, 0), Vector3(CELL_SIZE, 0.012, 0.035), seam_material)
+    _add_decor_box(root, "FloorSeamZ", Vector3(0, 0.007, 0), Vector3(0.035, 0.012, CELL_SIZE), seam_material)
+    var ceiling_material := StandardMaterial3D.new()
+    ceiling_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.18)
+    ceiling_material.roughness = 0.96
+    _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
+    var trim_material := StandardMaterial3D.new()
+    trim_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.12)
+    trim_material.roughness = 0.9
+    _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
+    _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
@@ -213,15 +228,22 @@ func _create_maze_cell(cell: Vector2i) -> void:
         var offset_x := -0.7 if _hash_value(cell.x, cell.y, 31) % 2 == 0 else 0.7
         _add_maze_wall(root, "InteriorBaffle", Vector3(offset_x, WALL_HEIGHT * 0.5, 0), Vector3(0.18, WALL_HEIGHT, CELL_SIZE - 2.2))
 
-    if _hash_value(cell.x, cell.y, 71) % 5 == 0:
-        _add_box(root, "CeilingLightPanel", Vector3(0, WALL_HEIGHT + 0.08, 0), Vector3(1.8, 0.12, 0.7), Color(0.95, 0.91, 0.72))
+    # More frequent, brighter warm fluorescent fixtures improve readability without
+    # turning the Backrooms into a brightly lit office.
+    if _hash_value(cell.x, cell.y, 71) % 3 != 0:
+        var panel_material := StandardMaterial3D.new()
+        panel_material.albedo_color = Color(1.0, 0.96, 0.78)
+        panel_material.emission_enabled = true
+        panel_material.emission = Color(1.0, 0.82, 0.48)
+        panel_material.emission_energy_multiplier = 1.35
+        _add_decor_box(root, "CeilingLightPanel", Vector3(0, WALL_HEIGHT + 0.025, 0), Vector3(1.8, 0.045, 0.7), panel_material)
         if DisplayServer.get_name() != "headless":
             var ceiling_light := OmniLight3D.new()
             ceiling_light.name = "CeilingOmniLight"
-            ceiling_light.position = Vector3(0, WALL_HEIGHT - 0.18, 0)
-            ceiling_light.light_color = Color(1.0, 0.91, 0.72)
-            ceiling_light.light_energy = 0.65
-            ceiling_light.omni_range = 6.0
+            ceiling_light.position = Vector3(0, WALL_HEIGHT - 0.2, 0)
+            ceiling_light.light_color = Color(1.0, 0.88, 0.65)
+            ceiling_light.light_energy = 1.15
+            ceiling_light.omni_range = 8.5
             ceiling_light.shadow_enabled = false
             root.add_child(ceiling_light)
 
@@ -249,6 +271,18 @@ func _parent_toward_origin(cell: Vector2i) -> Vector2i:
 func _hash_value(x: int, z: int, salt: int) -> int:
     var value: int = abs((x * 73856093) ^ (z * 19349663) ^ (salt * 83492791) ^ WORLD_SEED)
     return value
+
+func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
+    if DisplayServer.get_name() == "headless":
+        return
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = object_name
+    var mesh := BoxMesh.new()
+    mesh.size = box_size
+    mesh_instance.mesh = mesh
+    mesh_instance.material_override = material
+    mesh_instance.position = box_position
+    parent.add_child(mesh_instance)
 
 func _add_maze_wall(parent: Node3D, object_name: String, wall_position: Vector3, wall_size: Vector3) -> void:
     var material := _cell_material_wall
