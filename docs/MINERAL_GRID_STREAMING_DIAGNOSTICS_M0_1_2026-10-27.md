@@ -21,7 +21,9 @@
 - Open the repository root project.godot in Godot Project Manager; CI imports the root project before running root-level tests.
 
 ## Validation
-- Candidate validation must be performed by the exact-head Godot 4.3 GitHub Actions workflow before merge.
+- Exact-head Godot 4.3 CI Run #272 (`40356509039`) passed on feature head `656d3727c41551ef9ef38ecbc8c34213a4afa23f`. The diagnostics test passed with the expected WARNING for injected incomplete rollback; workflow guards found no SCRIPT ERROR, ERROR, or FAIL output.
+- PR #58 merged as `d2eef1c4a30c67116f8bc8a1cb9c3df94bacc561`.
+- Main push CI Run #273 (`40356977715`) passed on that merge commit.
 - This environment has no local Godot executable; no local engine test or graphical playtest is claimed.
 - No iPhone device test is claimed.
 
