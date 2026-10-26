@@ -151,3 +151,12 @@
 - Current status: changes committed to main; latest Godot headless CI result must be checked before claiming engine validation passed. Graphical manual playtest and iPhone test remain outstanding.
 
 - Camera/avatar follow-up: root prototype now has a visible primitive humanoid in third-person mode and `V` toggles first-person mode; first-person hides the avatar to prevent camera clipping. Headless camera-toggle regression coverage is included in `tests/backrooms_portal_playground_test.gd`.
+
+
+## 2026-10-26 Run 10 candidate — Signal Siphon + Mineral Grid Streaming
+- New mini-game: `daily_games/KROLL_Signal_Siphon/`; deterministic 5x5 pipe-rotation puzzle, 45-second timer, mouse/touch input, no external assets. Tests: `tests/rules_test.gd` and `tests/game_smoke_test.gd`; CI import, rules and runtime smoke steps added.
+- Survival system: `systems/MineralGridStreamingDirector.gd`, `tests/mineral_grid_streaming_director_test.gd`, and `docs/MINERAL_GRID_STREAMING_DIRECTOR_M0_1_2026-10-26.md` added from the previously tested candidate and rebased onto current main commit `ab2e6fbb7fa215e6574068b4ac76e5e9d8eb330a`.
+- Streaming director selects a deterministic square chunk neighborhood around world coordinates, loads desired chunks before unloading stale ones, and rolls back newly loaded chunks when generation/registration fails. It is synchronous and requires a factory callback.
+- Current branch: `feature/run10-signal-siphon-mineral-streaming-2026-10-26`. CI must pass on the latest branch head before merge; no local Godot runtime is available. Do not treat the earlier PR #44 CI pass as proof for this rebased combined candidate.
+- Prior-status reconciliation: PR #43 is already merged (merge commit `bedd02c0fc7f0d3be7e4ac005dc467a85a94aed8`; Run #127 `40291504782` succeeded). PR #44's earlier head passed Run #130 `40294071580`, but is stale/conflicting against newer main and must not be merged as-is. PR #45's older head passed Run #131 `40300631433`, but current main has a newer Backrooms controller with third-person avatar, camera mode toggle, weight-aware movement/jump, F11 fullscreen echo guard, and streaming maze topology tests; PR #45 is superseded and should be closed after verifying current-main CI.
+- Remaining: wait for this branch's full Godot 4.3 CI; formal terrain generation, async loading, local GUI play and iPhone tests remain out of scope.
