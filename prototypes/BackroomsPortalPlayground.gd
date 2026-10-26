@@ -46,10 +46,11 @@ func _build_player_visual() -> void:
 func _add_player_part(part_name: String, mesh_resource: PrimitiveMesh, part_position: Vector3, part_size: Vector3, color: Color) -> void:
     var mesh_instance := MeshInstance3D.new()
     mesh_instance.name = part_name
-    mesh_resource.size = part_size
-    if mesh_resource is SphereMesh:
-        mesh_resource.radius = 0.18
-        mesh_resource.height = 0.36
+    if mesh_resource is BoxMesh:
+        (mesh_resource as BoxMesh).size = part_size
+    elif mesh_resource is SphereMesh:
+        (mesh_resource as SphereMesh).radius = part_size.x * 0.5
+        (mesh_resource as SphereMesh).height = part_size.y
     mesh_instance.mesh = mesh_resource
     var material := StandardMaterial3D.new()
     material.albedo_color = color
