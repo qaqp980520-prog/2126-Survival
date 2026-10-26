@@ -32,4 +32,13 @@ func _run_tests() -> void:
 	Rules.advance_bed(dry_bed, 2.0)
 	assert(is_equal_approx(float(dry_bed["growth"]), 10.0), "Dry crops must stop growing")
 	assert(is_equal_approx(float(dry_bed["moisture"]), 0.0))
+	var thirsty_bed: Dictionary = {"growth": 0.0, "moisture": 15.0, "harvests": 0}
+	Rules.advance_bed(thirsty_bed, 1.0)
+	assert(is_equal_approx(float(thirsty_bed["growth"]), 12.0))
+	assert(is_equal_approx(float(thirsty_bed["moisture"]), 8.0))
+	Rules.advance_bed(thirsty_bed, 2.0)
+	assert(is_equal_approx(float(thirsty_bed["growth"]), 12.0), "Growth must pause below the moisture threshold")
+	assert(Rules.water(thirsty_bed))
+	Rules.advance_bed(thirsty_bed, 1.0)
+	assert(is_equal_approx(float(thirsty_bed["growth"]), 24.0), "Watering must resume growth")
 	print("KROLL Hydroponics Shift rules tests passed.")
