@@ -215,8 +215,21 @@ func _create_maze_cell(cell: Vector2i) -> void:
     # its north/west edge. This avoids duplicate collision bodies on every seam.
     if not north_open:
         _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
+        _decorate_wall_face(root, "North", Vector3(0, 0, -CELL_SIZE * 0.5 + 0.125), true, cell)
     if not west_open:
         _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
+        _decorate_wall_face(root, "West", Vector3(-CELL_SIZE * 0.5 + 0.125, 0, 0), false, cell)
+
+    # Small deterministic floor scuffs and stains break up the otherwise uniform carpet.
+    for stain_index in range(2):
+        var stain_hash := _hash_value(cell.x + stain_index * 7, cell.y - stain_index * 11, 93)
+        var stain_material := StandardMaterial3D.new()
+        stain_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.08 + float(stain_hash % 12) / 100.0)
+        stain_material.roughness = 1.0
+        var stain_x := float((stain_hash % 51) - 25) / 10.0
+        var stain_z := float((_hash_value(cell.x, cell.y, 97 + stain_index) % 51) - 25) / 10.0
+        var stain_size := 0.25 + float(stain_hash % 6) / 10.0
+        _add_decor_box(root, "CarpetWear_%d" % stain_index, Vector3(stain_x, 0.008, stain_z), Vector3(stain_size, 0.012, stain_size * 0.65), stain_material)
 
     # Add deterministic interior baffles so cells feel like winding corridors,
     # not just empty squares. Both ends stay open for navigation.
@@ -271,6 +284,29 @@ func _parent_toward_origin(cell: Vector2i) -> Vector2i:
 func _hash_value(x: int, z: int, salt: int) -> int:
     var value: int = abs((x * 73856093) ^ (z * 19349663) ^ (salt * 83492791) ^ WORLD_SEED)
     return value
+
+func _decorate_wall_face(parent: Node3D, side: String, wall_center: Vector3, horizontal: bool, cell: Vector2i) -> void:
+    if DisplayServer.get_name() == "headless":
+        return
+    var wallpaper_base := StandardMaterial3D.new()
+    wallpaper_base.albedo_color = _cell_material_wall.albedo_color.lightened(0.035)
+    wallpaper_base.roughness = 0.98
+    var wallpaper_seam := StandardMaterial3D.new()
+    wallpaper_seam.albedo_color = _cell_material_wall.albedo_color.darkened(0.07)
+    wallpaper_seam.roughness = 1.0
+    var stain_material := StandardMaterial3D.new()
+    stain_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.12)
+    stain_material.roughness = 1.0
+    # Subtle broad strips evoke aged wallpaper without adding collision geometry.
+    for strip_index in range(4):
+        var y := 0.42 + float(strip_index) * 0.82
+        var strip_position := wall_center + (Vector3(0, y, 0.116) if horizontal else Vector3(0.116, y, 0))
+        var strip_size := Vector3(CELL_SIZE - 0.18, 0.018, 0.012) if horizontal else Vector3(0.012, 0.018, CELL_SIZE - 0.18)
+        _add_decor_box(parent, side + "WallpaperSeam_%d" % strip_index, strip_position, strip_size, wallpaper_seam)
+    var panel_offset := float(_hash_value(cell.x, cell.y, 103) % 40 - 20) / 10.0
+    var stain_position := wall_center + (Vector3(panel_offset, 2.1, 0.117) if horizontal else Vector3(0.117, 2.1, panel_offset))
+    var stain_size := Vector3(0.42, 0.28, 0.014) if horizontal else Vector3(0.014, 0.28, 0.42)
+    _add_decor_box(parent, side + "WallpaperWear", stain_position, stain_size, stain_material)
 
 func _add_decor_box(parent: Node3D, object_name: String, box_position: Vector3, box_size: Vector3, material: StandardMaterial3D) -> void:
     if DisplayServer.get_name() == "headless":
