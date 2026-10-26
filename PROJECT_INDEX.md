@@ -198,13 +198,13 @@
 - Limitations remain: local GUI/GPU/iPhone playtests were not run (no local Godot executable); MineralGridStreamingDirector remains synchronous/factory-driven and is not yet wired into the production world generator.
 - Next: connect the director to the real world generator and add scene-level chunk load/unload/save/restore coverage; schedule graphical and iPhone validation separately.
 
-
-## 2026-10-26 Run 13 — Cipher Recall + playable surface chunk streaming integration (candidate)
-- Branch: `feature/run13-cipher-recall-surface-stream-playground-2026-10-26`; base main `45df50cc7b39edceb86bb2e6ff771b2c70d6c572`.
-- New mini-game: `daily_games/KROLL_Cipher_Recall/` — standalone Godot 4.3+ 3×3 memory sequence game, five rounds (sequence length 3–7), keyboard 1–9 and mouse/touch, three lives, score and replay. No external assets/addons.
-- New executable surface integration playground: `prototypes/SurfaceChunkStreamingPlayground.tscn` and `prototypes/SurfaceChunkStreamingPlayground.gd`. Wires the real MineralVeinRegistry, MineralChunkController and MineralGridStreamingDirector to a movable CharacterBody3D and synchronous primitive chunk factory; includes a versioned save envelope for player position + mineral registry state.
-- New end-to-end regression: `tests/surface_chunk_streaming_playground_test.gd` covers initial 3×3 load, move/unload, saved vein retention, return-to-chunk stable-ID restoration, player position restore and invalid schema rejection.
-- CI workflow now imports/tests Cipher Recall and executes the root-level surface integration test after importing the root project. Exact-head Godot 4.3 CI is required before merge.
-- Design note: `docs/SURFACE_CHUNK_STREAMING_PLAYGROUND_M0_1_2026-10-26.md`.
-- Status at candidate creation: not yet engine-tested on this head; no merge until all exact-head CI steps pass. No local Godot binary, GUI playtest or iPhone device test is claimed.
-- Limits: this is an integration playground, not the production M1.3 world generator. Chunk factory is synchronous, uses primitive ground and one vein per chunk, and has no biome generation, async streaming, network replication or touch movement.
+## 2026-10-26 Run 13 — Cipher Recall + playable surface chunk streaming integration (merged)
+- Final main HEAD at feature merge: `caf825eca2d2c38b72852209a5edf6d8d4996558`.
+- PR #56 merged: feature head `51261d57e6162d469b3ac8be0e765c39bc3d8ab6`; exact-head Godot 4.3 CI Run #268 (`40353202696`) succeeded with 60/60 steps and zero failures.
+- Post-merge main push CI Run #269 (`40353782834`) also succeeded on the exact merge commit `caf825eca2d2c38b72852209a5edf6d8d4996558`.
+- Mini-game: `daily_games/KROLL_Cipher_Recall/` — 3×3 memory sequence, five rounds (length 3–7), three lives, score, keyboard 1–9 and mouse/touch. Files include `project.godot`, `main.tscn`, `scripts/main.gd`, `scripts/rules.gd`, `tests/rules_test.gd`, `tests/game_smoke_test.gd`, and `README.md`. Godot 4.3+, no external assets/addons.
+- Survival integration: `prototypes/SurfaceChunkStreamingPlayground.tscn`, `prototypes/SurfaceChunkStreamingPlayground.gd`, `tests/surface_chunk_streaming_playground_test.gd`, and `docs/SURFACE_CHUNK_STREAMING_PLAYGROUND_M0_1_2026-10-26.md`. Uses the real MineralVeinRegistry, MineralChunkController and MineralGridStreamingDirector with a movable CharacterBody3D and synchronous primitive chunk factory.
+- Regression coverage: initial 3×3 load; negative/exact-positive chunk boundaries; shift/unload; 15 retained stable-ID records; save/restore of player position and mineral stock; invalid schema must leave position, active IDs, registry IDs and live stock unchanged.
+- CI reliability fix: Run #265 failed after assertions passed because the headless dummy renderer emitted null-mesh errors during teardown. The playground now skips renderer-backed mesh creation in headless mode, and new tests wait a frame after queue_free. Exact-head Run #268 and post-merge main Run #269 both pass.
+- Limits: integration playground, not the production M1.3 world generator; chunk creation is synchronous and primitive. No biome generation, async streaming, networking or iPhone touch movement. Local GUI playtest and iPhone device test remain unperformed because no local Godot executable is available.
+- Next: wire the validated factory/controller contract to the real production world generator; add production-scene streaming acceptance tests, then do GUI/iPhone validation.
