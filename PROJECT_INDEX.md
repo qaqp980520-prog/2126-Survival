@@ -197,3 +197,14 @@
 - Reconciliation: PR #53 was closed without merge because its branch diverged 33 ahead / 22 behind; its Run #225 success is historical only. Main Runs #246/#252/#256 failed on the stale SVG import order or were superseded/cancelled; Run #259 is the final successful main-head evidence.
 - Limitations remain: local GUI/GPU/iPhone playtests were not run (no local Godot executable); MineralGridStreamingDirector remains synchronous/factory-driven and is not yet wired into the production world generator.
 - Next: connect the director to the real world generator and add scene-level chunk load/unload/save/restore coverage; schedule graphical and iPhone validation separately.
+
+
+## 2026-10-26 Run 13 — Cipher Recall + playable surface chunk streaming integration (candidate)
+- Branch: `feature/run13-cipher-recall-surface-stream-playground-2026-10-26`; base main `45df50cc7b39edceb86bb2e6ff771b2c70d6c572`.
+- New mini-game: `daily_games/KROLL_Cipher_Recall/` — standalone Godot 4.3+ 3×3 memory sequence game, five rounds (sequence length 3–7), keyboard 1–9 and mouse/touch, three lives, score and replay. No external assets/addons.
+- New executable surface integration playground: `prototypes/SurfaceChunkStreamingPlayground.tscn` and `prototypes/SurfaceChunkStreamingPlayground.gd`. Wires the real MineralVeinRegistry, MineralChunkController and MineralGridStreamingDirector to a movable CharacterBody3D and synchronous primitive chunk factory; includes a versioned save envelope for player position + mineral registry state.
+- New end-to-end regression: `tests/surface_chunk_streaming_playground_test.gd` covers initial 3×3 load, move/unload, saved vein retention, return-to-chunk stable-ID restoration, player position restore and invalid schema rejection.
+- CI workflow now imports/tests Cipher Recall and executes the root-level surface integration test after importing the root project. Exact-head Godot 4.3 CI is required before merge.
+- Design note: `docs/SURFACE_CHUNK_STREAMING_PLAYGROUND_M0_1_2026-10-26.md`.
+- Status at candidate creation: not yet engine-tested on this head; no merge until all exact-head CI steps pass. No local Godot binary, GUI playtest or iPhone device test is claimed.
+- Limits: this is an integration playground, not the production M1.3 world generator. Chunk factory is synchronous, uses primitive ground and one vein per chunk, and has no biome generation, async streaming, network replication or touch movement.
