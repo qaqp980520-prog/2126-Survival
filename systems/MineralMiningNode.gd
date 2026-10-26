@@ -123,7 +123,7 @@ func restore_vein(units: int) -> void:
 
 func to_save_dict() -> Dictionary:
 	return {
-		"schema_version": 1,
+		"schema_version": 2,
 		"mineral_id": mineral_id,
 		"remaining_units": clampi(remaining_units, 0, max_units),
 		"max_units": max_units,
@@ -134,9 +134,10 @@ func to_save_dict() -> Dictionary:
 ## Older schema-v1 saves without regeneration fields remain valid.
 ## Invalid data is rejected before any live state changes.
 func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
-	var schema: Variant = data.get("schema_version", null)
-	if not _is_integer_in_range(schema, 1, 1):
+	var schema_value: Variant = data.get("schema_version", null)
+	if not _is_integer_in_range(schema_value, 1, 2):
 		return false
+	var schema := int(schema_value)
 	if not (data.get("mineral_id", null) is String) or str(data["mineral_id"]) != mineral_id:
 		return false
 	var amount_value: Variant = data.get("remaining_units", null)
@@ -144,17 +145,21 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	var amount := int(amount_value)
 	var saved_max := max_units
+	if schema == 2 and not data.has("max_units"):
+		return false
 	if data.has("max_units"):
 		var max_value: Variant = data["max_units"]
 		if not _is_integer_in_range(max_value, 1, 10000):
 			return false
 		saved_max = int(max_value)
 	elif amount > saved_max:
-		# Legacy saves did not store a vein maximum; infer enough capacity to preserve stock.
+		# Legacy saves did not store a vein maximum; infer capacity to preserve existing stock.
 		saved_max = amount
 	if amount > saved_max:
 		return false
 	var saved_interval := regen_interval_seconds
+	if schema == 2 and not data.has("regen_interval_seconds"):
+		return false
 	if data.has("regen_interval_seconds"):
 		var interval_value: Variant = data["regen_interval_seconds"]
 		if not _is_integer_in_range(interval_value, 1, 86400):
@@ -162,9 +167,12 @@ func load_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 		saved_interval = int(interval_value)
 	var now := now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	var saved_timestamp := now
+	if schema == 2 and not data.has("last_regen_unix"):
+		return false
 	if data.has("last_regen_unix"):
 		var timestamp_value: Variant = data["last_regen_unix"]
-		if not _is_integer_in_range(timestamp_value, 0, 4000000000):
+		var minimum_timestamp := 1 if schema == 2 else 0
+		if not _is_integer_in_range(timestamp_value, minimum_timestamp, 4000000000):
 			return false
 		saved_timestamp = int(timestamp_value)
 
