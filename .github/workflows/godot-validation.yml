@@ -54,6 +54,7 @@ jobs:
           test -f daily_games/KROLL_Signal_Sweep/project.godot
           test -f daily_games/KROLL_Orbital_Convoy/project.godot
           test -f daily_games/KROLL_Gravity_Lander/project.godot
+          test -f daily_games/KROLL_Core_Defense/project.godot
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -78,6 +79,12 @@ jobs:
         run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/rules_test.gd
       - name: Run KROLL Gravity Lander runtime smoke test
         run: godot --headless --path daily_games/KROLL_Gravity_Lander --script res://tests/game_smoke_test.gd
+      - name: Import and parse KROLL Core Defense
+        run: godot --headless --path daily_games/KROLL_Core_Defense --editor --quit
+      - name: Run KROLL Core Defense rules tests
+        run: godot --headless --path daily_games/KROLL_Core_Defense --script res://tests/rules_test.gd
+      - name: Run KROLL Core Defense runtime smoke test
+        run: godot --headless --path daily_games/KROLL_Core_Defense --script res://tests/game_smoke_test.gd
       - name: Run Backrooms portal director tests
         run: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd
       - name: Run Backrooms portal visual scene smoke test
@@ -90,3 +97,5 @@ jobs:
         run: godot --headless --path . --script res://tests/inventory_save_adapter.gd
       - name: Run world bridge save adapter integration test
         run: godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd
+      - name: Run world bridge binding lifecycle regression test
+        run: godot --headless --path . --script res://tests/world_bridge_binding_test.gd
