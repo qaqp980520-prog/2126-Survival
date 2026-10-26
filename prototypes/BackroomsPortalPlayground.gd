@@ -164,6 +164,7 @@ func _toggle_graphics_quality() -> void:
     _rebuild_maze_for_settings()
     if _settings_status != null:
         _settings_status.text = "高畫質包含壁紙破損、地毯紋理與更多裝飾。" if _high_graphics else "低畫質減少裝飾和動態材質，優先提升流暢度。"
+    _save_settings()
 
 func _toggle_flicker() -> void:
     _flicker_enabled = not _flicker_enabled
