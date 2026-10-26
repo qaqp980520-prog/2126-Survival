@@ -6,7 +6,7 @@ A standalone Godot 4.3+ arcade management game. Keep the combined output of thre
 
 - 1 / 2 / 3: vent the matching reactor (output -12, heat -18).
 - Q / W / E: boost the matching reactor (output +10, heat +12).
-- Mouse/touch: tap the upper half of a reactor card to vent; tap the lower half to boost.
+- Mouse/touch: tap the visible VENT panel to vent; tap the visible BOOST panel to boost.
 - R: restart after a round ends.
 
 The simulation ticks once per second. Output drifts slightly each tick. A grid tick outside the target band resets the stability streak. Any reactor at 100 heat triggers a meltdown; 60 seconds without a stable 18-second streak ends the round.
