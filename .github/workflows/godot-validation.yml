@@ -276,7 +276,7 @@ jobs:
             echo "Godot reported script/runtime errors during player input tests."
             exit 1
           fi
-          echo "$output" | grep -q 'Backrooms player input regression tests passed.'
+          echo "$output" | grep -q 'Backrooms player mouse-look input tests passed.'
 
       - name: Run Backrooms settings profile tests
         shell: bash
