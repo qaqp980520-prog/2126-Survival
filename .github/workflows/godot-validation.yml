@@ -67,6 +67,16 @@ jobs:
           test -f daily_games/KROLL_Hydroponics_Shift/tests/game_smoke_test.gd
           test -f systems/MineralChunkController.gd
           test -f tests/mineral_chunk_controller_test.gd
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f tests/mineral_grid_streaming_director_test.gd
+          test -f tests/backrooms_player_input_test.gd
+          test -f systems/BackroomsSettingsProfile.gd
+          test -f tests/backrooms_settings_profile_test.gd
+          test -f tests/backrooms_settings_integration_test.gd
+          test -f daily_games/KROLL_Signal_Siphon/project.godot
+          test -f daily_games/KROLL_Sentinel_Protocol/project.godot
+          test -f daily_games/KROLL_Sentinel_Protocol/tests/rules_test.gd
+          test -f daily_games/KROLL_Sentinel_Protocol/tests/game_smoke_test.gd
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
@@ -255,3 +265,83 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'Mineral chunk controller integration tests passed.'
+
+      - name: Run Backrooms player input regression test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_player_input_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during player input tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms player input regression tests passed.'
+
+      - name: Run Backrooms settings profile tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_settings_profile_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during settings profile tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms settings profile tests passed.'
+
+      - name: Run Backrooms settings integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/backrooms_settings_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during settings integration tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms settings integration tests passed.'
+
+      - name: Run mineral grid streaming director tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during mineral grid streaming director tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral grid streaming director tests passed.'
+
+      - name: Import and parse KROLL Signal Siphon
+        run: godot --headless --path daily_games/KROLL_Signal_Siphon --editor --quit
+      - name: Run KROLL Signal Siphon rules tests
+        run: godot --headless --path daily_games/KROLL_Signal_Siphon --script res://tests/rules_test.gd
+      - name: Run KROLL Signal Siphon runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Signal_Siphon --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Signal Siphon smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Signal Siphon runtime smoke test passed.'
+
+      - name: Import and parse KROLL Sentinel Protocol
+        run: godot --headless --path daily_games/KROLL_Sentinel_Protocol --editor --quit
+      - name: Run KROLL Sentinel Protocol rules tests
+        run: godot --headless --path daily_games/KROLL_Sentinel_Protocol --script res://tests/rules_test.gd
+      - name: Run KROLL Sentinel Protocol runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Sentinel_Protocol --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Sentinel Protocol smoke tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'KROLL Sentinel Protocol runtime smoke test passed.'
