@@ -2,7 +2,7 @@ extends Node3D
 class_name MineralMiningNode
 
 ## Prototype bridge for one finite mineral vein.
-## The owning world system is responsible for persistence and real-time regeneration.
+## Regeneration uses persisted Unix timestamps so elapsed real time counts while offline.
 const Catalog = preload("res://systems/MineralCatalog.gd")
 const OreVisual = preload("res://prototypes/minerals/MineralOreVisual.gd")
 const MiningVFX = preload("res://prototypes/minerals/MineralMiningVFX.gd")
@@ -12,12 +12,17 @@ signal ore_mined(mineral_id: String, amount: int)
 
 @export_enum("copper_ore", "iron_ore", "gold_ore", "silver_ore", "aluminium_ore", "coal_ore", "uranium_ore") var mineral_id: String = "iron_ore"
 @export_range(1, 10000, 1) var remaining_units: int = 24
+@export_range(1, 10000, 1) var max_vein_units: int = 24
+@export_range(1, 86400, 1) var regen_seconds_per_unit: int = 3600
+var last_regen_unix_time: int = 0
 @export_range(1, 20, 1) var units_per_hit: int = 1
 @export var inventory_bridge_path: NodePath
 @export var vfx_path: NodePath
 var _depleted_signal_sent := false
 
 func _ready() -> void:
+	if last_regen_unix_time <= 0:
+		last_regen_unix_time = int(Time.get_unix_time_from_system())
 	if not Catalog.has_mineral(mineral_id):
 		push_error("MineralMiningNode has unknown mineral_id: " + mineral_id)
 		return
@@ -73,11 +78,39 @@ func restore_vein(units: int) -> void:
 		_depleted_signal_sent = false
 		visible = true
 
+## Applies whole elapsed regeneration intervals. Pass now_unix_time for deterministic tests.
+func apply_elapsed_regeneration(now_unix_time: int) -> int:
+	if now_unix_time <= 0:
+		return 0
+	if last_regen_unix_time <= 0:
+		last_regen_unix_time = now_unix_time
+		return 0
+	if now_unix_time <= last_regen_unix_time:
+		return 0
+	var intervals := int((now_unix_time - last_regen_unix_time) / maxi(1, regen_seconds_per_unit))
+	if intervals <= 0:
+		return 0
+	last_regen_unix_time += intervals * maxi(1, regen_seconds_per_unit)
+	var before := remaining_units
+	remaining_units = mini(maxi(1, max_vein_units), remaining_units + intervals)
+	if remaining_units > 0:
+		visible = true
+		_depleted_signal_sent = false
+	return remaining_units - before
+
 func to_save_dict() -> Dictionary:
-	return {"schema_version": 1, "mineral_id": mineral_id, "remaining_units": remaining_units}
+	return {
+		"schema_version": 2,
+		"mineral_id": mineral_id,
+		"remaining_units": remaining_units,
+		"max_vein_units": max_vein_units,
+		"regen_seconds_per_unit": regen_seconds_per_unit,
+		"last_regen_unix_time": last_regen_unix_time
+	}
 
 func load_save_dict(data: Dictionary) -> bool:
-	if int(data.get("schema_version", -1)) != 1:
+	var schema := int(data.get("schema_version", -1))
+	if schema != 1 and schema != 2:
 		return false
 	if str(data.get("mineral_id", "")) != mineral_id:
 		return false
@@ -87,7 +120,21 @@ func load_save_dict(data: Dictionary) -> bool:
 	var amount := float(value)
 	if not is_finite(amount) or floorf(amount) != amount or amount < 0 or amount > 10000:
 		return false
+	var loaded_max := int(data.get("max_vein_units", max_vein_units))
+	var loaded_interval := int(data.get("regen_seconds_per_unit", regen_seconds_per_unit))
+	var loaded_timestamp := int(data.get("last_regen_unix_time", 0))
+	if loaded_max < 1 or loaded_max > 10000 or loaded_interval < 1 or loaded_interval > 86400:
+		return false
+	if schema == 2 and loaded_timestamp <= 0:
+		return false
 	remaining_units = int(amount)
+	max_vein_units = loaded_max
+	regen_seconds_per_unit = loaded_interval
+	if schema == 2:
+		last_regen_unix_time = loaded_timestamp
+	else:
+		# Legacy saves remain readable; they begin tracking regeneration from load time.
+		last_regen_unix_time = int(Time.get_unix_time_from_system())
 	visible = remaining_units > 0
 	_depleted_signal_sent = remaining_units == 0
 	return true
