@@ -11,6 +11,22 @@ func _run() -> void:
     _expect(int(game.get("_player_hp")) == 3, "game starts with three integrity")
     var initial_time: float = float(game.get("_time_left"))
     _expect(initial_time <= 45.0 and initial_time > 44.0, "game timer initializes near 45 seconds after first frame")
+    # Isolate the keyboard-dash path from random spawns so this smoke test is deterministic.
+    var initial_cells: Array = game.get("_cells")
+    initial_cells.clear()
+    var initial_enemies: Array = game.get("_enemies")
+    initial_enemies.clear()
+    game.set("_spawn_timer", 999.0)
+    game.set("_cell_spawn_timer", 999.0)
+    var dash_key := InputEventKey.new()
+    dash_key.keycode = KEY_SPACE
+    dash_key.pressed = true
+    game.call("_input", dash_key)
+    game.call("_process", 0.016)
+    _expect(float(game.get("_dash_timer")) > 0.0, "Space key activates a real dash")
+    _expect(float(game.get("_dash_cooldown")) > 0.0, "keyboard dash starts cooldown")
+    game.set("_dash_timer", 0.0)
+    game.set("_dash_cooldown", 0.0)
     var enemies: Array = game.get("_enemies")
     var before_enemies: int = enemies.size()
     game.call("debug_spawn_enemy_at", Vector2(90, 90))
