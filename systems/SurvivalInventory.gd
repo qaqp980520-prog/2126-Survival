@@ -22,6 +22,11 @@ const ITEM_WEIGHTS: Dictionary = {
 	"rock": 2.5,
 	"iron_ore": 3.0,
 	"copper_ore": 2.8,
+	"gold_ore": 3.2,
+	"silver_ore": 3.1,
+	"aluminium_ore": 2.4,
+	"coal_ore": 1.4,
+	"uranium_ore": 3.4,
 	"crystal": 0.6
 }
 
