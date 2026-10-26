@@ -341,7 +341,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E "SCRIPT ERROR|ERROR:|FAIL:"; then
             echo "Godot reported errors during mineral streaming diagnostics tests."
