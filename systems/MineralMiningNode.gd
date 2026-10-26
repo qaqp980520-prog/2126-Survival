@@ -32,7 +32,7 @@ func _ready() -> void:
 		last_regen_unix = Time.get_unix_time_from_system()
 	# Dedicated/headless servers do not need renderer resources. Keep gameplay and
 	# persistence logic active while avoiding dummy-renderer mesh errors in CI.
-	if not OS.has_feature("headless"):
+	if DisplayServer.get_name() != "headless":
 		var vfx := get_node_or_null(vfx_path)
 		if vfx == null:
 			var created_vfx := MiningVFX.new()
