@@ -6,11 +6,19 @@ func _initialize() -> void:
     call_deferred("_run_scene_test")
 
 func _run_scene_test() -> void:
-    var portal = PortalScene.instantiate()
     var headless: bool = DisplayServer.get_name() == "headless"
-    if not headless:
-        root.add_child(portal)
-        await process_frame
+    if headless:
+        # Loading the PackedScene validates its resources; instantiating MeshInstance3D
+        # nodes in Godot 4.3's dummy renderer emits engine-level null-mesh errors.
+        assert(ResourceLoader.exists("res://systems/BackroomsPortalVisual.tscn"))
+        assert(ResourceLoader.load("res://systems/BackroomsPortalVisual.tscn") is PackedScene)
+        assert(ResourceLoader.load("res://systems/BackroomsPortalVisual.gd") is Script)
+        print("Backrooms portal visual scene smoke test passed.")
+        quit(0)
+        return
+    var portal = PortalScene.instantiate()
+    root.add_child(portal)
+    await process_frame
     assert(portal is Area3D)
     assert(portal.get_node("PortalRing") is MeshInstance3D)
     assert((portal.get_node("PortalRing") as MeshInstance3D).mesh != null)
