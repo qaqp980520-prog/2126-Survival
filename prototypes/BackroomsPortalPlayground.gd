@@ -335,12 +335,15 @@ func _prepare_maze_materials() -> void:
     # Use a preloaded imported texture so the runtime wall material cannot
     # silently remain a flat color when an SVG runtime load fails.
     _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
-    _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+    # The wallpaper has very fine, low-contrast details. Use nearest-neighbour
+    # sampling only if explicitly desired; linear filtering plus mipmaps keeps
+    # the fine stripes stable at a distance without turning the SVG pattern into
+    # large blurry chevrons. Anisotropic filtering helps at grazing wall angles.
+    _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     _cell_material_wall.uv1_triplanar = false
-    # The reference wallpaper is a fine repeating pattern; one full texture
-    # stretched over a whole wall made the chevrons look huge. Tile it several
-    # times in both directions to match the small, subtle original motif.
-    _cell_material_wall.uv1_scale = Vector3(4.0, 3.0, 1.0)
+    # One tile should cover a wall panel at the scale of the reference image;
+    # too many repeats make the zigzags dominate and appear blurry up close.
+    _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
     if _cell_material_wall.albedo_texture == null:
         push_error("Backrooms wallpaper preload is null: res://assets/textures/backrooms_wallpaper.svg")
 
