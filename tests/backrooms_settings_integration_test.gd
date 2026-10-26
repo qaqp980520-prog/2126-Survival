@@ -15,11 +15,12 @@ func _run() -> void:
     root.add_child(world)
     await process_frame
 
-    var floor_material := world.call("_make_surface_material", true, Vector2i.ZERO) as ShaderMaterial
-    var wall_material := world.call("_make_surface_material", false, Vector2i(2, -3)) as ShaderMaterial
-    _expect(floor_material != null and floor_material.shader.code.contains("base_color"), "high-quality floor shader material is constructed")
-    _expect(floor_material != null and not floor_material.shader.code.contains("seed_offset"), "floor shader does not receive a wall-only parameter")
-    _expect(wall_material != null and wall_material.shader.code.contains("seed_offset"), "wall shader declares its per-cell variation parameter")
+    var floor_material := world.call("_make_surface_material", true, Vector2i.ZERO) as StandardMaterial3D
+    var wall_material := world.call("_make_surface_material", false, Vector2i(2, -3)) as StandardMaterial3D
+    _expect(floor_material != null and floor_material.albedo_texture != null, "floor material loads the carpet SVG texture")
+    _expect(floor_material != null and not floor_material.uv1_triplanar, "floor material uses mesh UVs for the carpet pattern")
+    _expect(wall_material != null and wall_material.albedo_texture != null, "wall material loads the wallpaper SVG texture")
+    _expect(wall_material != null and not wall_material.uv1_triplanar, "wall material uses mesh UVs for the wallpaper pattern")
 
     var player: Node = world.get_node("Player")
     _expect(not bool(player.call("is_third_person")), "fresh settings start in first-person")
