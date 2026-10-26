@@ -13,6 +13,11 @@ var _pitch: float = deg_to_rad(-12.0)
 var _third_person: bool = true
 var avatar_visual: Node3D
 var world_bridge: Node
+var _walk_phase: float = 0.0
+var _left_arm: Node3D
+var _right_arm: Node3D
+var _left_leg: Node3D
+var _right_leg: Node3D
 
 func bind_world_bridge(candidate: Node) -> bool:
     if candidate == null or not candidate.has_method("get_movement_multiplier") or not candidate.has_method("can_player_jump"):
@@ -34,6 +39,10 @@ func bind_avatar_visual(candidate: Node3D) -> bool:
     if candidate == null:
         return false
     avatar_visual = candidate
+    _left_arm = candidate.get_node_or_null("LeftArm") as Node3D
+    _right_arm = candidate.get_node_or_null("RightArm") as Node3D
+    _left_leg = candidate.get_node_or_null("LeftLeg") as Node3D
+    _right_leg = candidate.get_node_or_null("RightLeg") as Node3D
     _apply_camera_mode()
     return true
 
@@ -97,3 +106,21 @@ func _physics_process(delta: float) -> void:
     elif Input.is_key_pressed(KEY_SPACE) and can_jump_with_current_load():
         velocity.y = jump_velocity
     move_and_slide()
+    _animate_walk(delta, input_dir.length_squared() > 0.01 and is_on_floor())
+
+func _animate_walk(delta: float, walking: bool) -> void:
+    var swing := 0.0
+    if walking:
+        var walk_rate := 10.0 if Input.is_key_pressed(KEY_SHIFT) else 7.0
+        _walk_phase += delta * walk_rate
+        swing = sin(_walk_phase) * 0.58
+    else:
+        _walk_phase = 0.0
+    if _left_arm != null and is_instance_valid(_left_arm):
+        _left_arm.rotation.x = swing
+    if _right_arm != null and is_instance_valid(_right_arm):
+        _right_arm.rotation.x = -swing
+    if _left_leg != null and is_instance_valid(_left_leg):
+        _left_leg.rotation.x = -swing
+    if _right_leg != null and is_instance_valid(_right_leg):
+        _right_leg.rotation.x = swing
