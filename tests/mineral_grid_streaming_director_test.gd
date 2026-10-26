@@ -60,7 +60,7 @@ func _test_generation_failure_preserves_active_set() -> void:
 	assert(director.bind_controller(controller))
 	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
 	assert(director.sync_to_world_position(Vector3(1, 0, 1), 2000))
-	var previous := director.get_managed_chunk_ids()
+	var previous: PackedStringArray = director.get_managed_chunk_ids()
 	# During the move to grid (2, 0), chunk (2, -1) loads before (3, -1) fails.
 	# The director must roll that partial load back and preserve all nine old chunks.
 	_fail_coordinate = Vector2i(3, -1)
