@@ -66,6 +66,8 @@ jobs:
           test -f tests/world_bridge_save_adapter_integration.gd
           test -f tests/mineral_catalog_test.gd
           test -f systems/MineralCatalog.gd
+          test -f systems/MineralVeinRegistry.gd
+          test -f tests/mineral_vein_chunk_stream_test.gd
           test -f prototypes/minerals/MineralOreVisual.gd
           test -f prototypes/minerals/MineralMiningVFX.gd
       - name: Import and parse KROLL Signal Sweep
@@ -159,11 +161,22 @@ jobs:
           set -o pipefail
           output="$(godot --headless --path . --script res://tests/mineral_catalog_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
-            echo "Godot reported script/runtime errors during mineral regression tests."
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors or failures during mineral regression tests."
             exit 1
           fi
           echo "$output" | grep -q 'Mineral catalog regression tests passed.'
+      - name: Run mineral vein chunk-stream persistence tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/mineral_vein_chunk_stream_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors or failures during mineral chunk-stream tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Mineral vein chunk-stream persistence tests passed.'
       - name: Import and parse KROLL Freight Sorter
         run: godot --headless --path daily_games/KROLL_Freight_Sorter --editor --quit
       - name: Run KROLL Freight Sorter rules tests

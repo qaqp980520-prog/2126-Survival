@@ -87,3 +87,15 @@
 - PR #30 已合併 main，commit `9e05c47dc91a361aee4e49af7304ca812a802b06`；Godot 4.3 CI Run #57 success，31 個 workflow steps 全部成功。
 - PR #3 已關閉為 superseded；其嚴格存檔驗證已在 main，剩餘未知重量 fallback 由 PR #30 完成。
 - 限制：1.0kg 只作防禦性 fallback；正式物品仍需登錄 ITEM_WEIGHTS。counts 仍是公開字典，長期可考慮封裝存取。
+
+
+## 2026-10-26 Run 7 — Mineral registry streamed-chunk persistence M0.2 (PR #34 candidate)
+- Main now includes PR #36 Pinball merge abe695c08adc26b699033d9d500dadd98fcb8b64 and PR #35 strict Variant typing merge 6c6f2779541175b3cc372d3cb73319ceac98f354.
+- PR #34: https://github.com/qaqp980520-prog/2126-Survival/pull/34; branch feature/mineral-vein-stream-persistence-2026-10-26. Current code adds persistence for unloaded chunk IDs, unload-state capture, same-ID reload, deterministic saved-ID ordering, idempotent registration, atomic validation, and a clock reset when offline catch-up is disabled.
+- Tests: tests/mineral_catalog_test.gd covers unloaded stable IDs, idempotent same-node registration, and disabled-regeneration clock reset; tests/mineral_vein_chunk_stream_test.gd covers unload/save/free/reload/offline regeneration and invalid-data rejection.
+- CI guard in .github/workflows/godot-validation.yml runs the dedicated chunk-stream test and rejects SCRIPT ERROR, ERROR:, or FAIL output, requiring explicit success markers.
+- Run 40275877558 passed all 33 steps with clean guarded logs, including “Mineral catalog regression tests passed.” and “Mineral vein chunk-stream persistence tests passed.” Its base was abe695c08adc26b699033d9d500dadd98fcb8b64; main has since advanced to 6c6f2779541175b3cc372d3cb73319ceac98f354, so the updated index/head needs a fresh CI run against the latest base.
+- PR #35 strict Variant typing fix is merged as 6c6f2779541175b3cc372d3cb73319ceac98f354; CI Run 40275478307 passed with clean guarded logs.
+- PR #36 KROLL Magnetic Pinball M0.1 is merged as abe695c08adc26b699033d9d500dadd98fcb8b64; dedicated Run 40275642300 and shared Run 40275642253 passed. PR #33 was closed without merge as superseded.
+- Design note: docs/MINERAL_VEIN_CHUNK_STREAM_PERSISTENCE_M0_2_2026-10-26.md.
+- Limit: the formal world/chunk controller is not in this repository; its lifecycle still needs to call registry register/unregister with deterministic IDs. No local Godot binary or iPhone/graphical playtest is claimed.
