@@ -12,7 +12,7 @@ background_mode = 1
 background_color = Color(0.018, 0.03, 0.045, 1)
 ambient_light_source = 1
 ambient_light_color = Color(0.36, 0.43, 0.48, 1)
-ambient_light_energy = 0.45
+ambient_light_energy = 0.85
 
 [node name="BackroomsPortalPlayground" type="Node3D"]
 script = ExtResource("1_world")
