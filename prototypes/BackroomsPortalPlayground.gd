@@ -305,6 +305,9 @@ func _prepare_maze_materials() -> void:
     _cell_material_wall = StandardMaterial3D.new()
     _cell_material_wall.roughness = 0.88
     _cell_material_wall.albedo_color = Color.WHITE
+    _cell_material_wall.emission_enabled = true
+    _cell_material_wall.emission = Color(0.10, 0.09, 0.04)
+    _cell_material_wall.emission_energy_multiplier = 0.22
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
     # Keep the wallpaper on the shared wall material itself. Previously the
     # main wall material was only a solid color, while a separate per-wall
@@ -375,7 +378,10 @@ func _create_maze_cell(cell: Vector2i) -> void:
     var ceiling_material := StandardMaterial3D.new()
     # Backrooms ceilings should remain readable even in cells without a light.
     # Give the ceiling a bright warm tile surface instead of nearly-black flat color.
-    ceiling_material.albedo_color = Color(0.78, 0.75, 0.52)
+    ceiling_material.albedo_color = Color(0.92, 0.88, 0.68)
+    ceiling_material.emission_enabled = true
+    ceiling_material.emission = Color(0.18, 0.15, 0.08)
+    ceiling_material.emission_energy_multiplier = 0.45
     ceiling_material.roughness = 1.0
     ceiling_material.metallic = 0.0
     if _high_graphics:
@@ -421,13 +427,13 @@ func _create_maze_cell(cell: Vector2i) -> void:
             ceiling_light.name = "CeilingOmniLight"
             ceiling_light.position = Vector3(0, WALL_HEIGHT - 0.2, 0)
             ceiling_light.light_color = Color(1.0, 0.88, 0.65)
-            ceiling_light.light_energy = 1.15
-            ceiling_light.omni_range = 8.5
+            ceiling_light.light_energy = 1.65
+            ceiling_light.omni_range = 11.0
             ceiling_light.shadow_enabled = false
             root.add_child(ceiling_light)
             _flicker_lights.append(ceiling_light)
-            ceiling_light.light_energy = 0.9 if _high_graphics else 0.75
-            ceiling_light.omni_range = 7.0 if _high_graphics else 5.5
+            ceiling_light.light_energy = 1.45 if _high_graphics else 1.2
+            ceiling_light.omni_range = 10.0 if _high_graphics else 8.5
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
