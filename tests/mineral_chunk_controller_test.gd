@@ -13,6 +13,10 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_empty_chunk_and_duplicate_id()
 	await process_frame
+	await _test_failed_load_preserves_caller_root()
+	await process_frame
+	await _test_failed_unload_rolls_back_registration()
+	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
 
@@ -26,7 +30,7 @@ func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
 	assert(controller.bind_registry(registry))
 
 	var chunk_id := "earth/sector-2/chunk--4"
-	var first_chunk: Node3D = _new_mineral_chunk(1, base_time)
+	var first_chunk: Node3D = _new_mineral_chunk(1, base_time + 5)
 	assert(controller.load_chunk(chunk_id, first_chunk, base_time + 5))
 	var stable_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
 	assert(registry.get_registered_ids().has(stable_id))
@@ -82,6 +86,63 @@ func _test_empty_chunk_and_duplicate_id() -> void:
 	registry.queue_free()
 	await process_frame
 
+func _test_failed_load_preserves_caller_root() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	var chunk_id := "earth/conflict"
+	var stable_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
+	var existing: Node3D = MiningNode.new()
+	existing.name = "ExistingGold"
+	existing.mineral_id = "gold_ore"
+	existing.max_units = 8
+	existing.remaining_units = 4
+	existing.regen_interval_seconds = 60
+	existing.last_regen_unix = now
+	assert(registry.register_vein(stable_id, existing, now))
+	var incoming: Node3D = _new_mineral_chunk(2, now)
+	assert(not controller.load_chunk(chunk_id, incoming, now), "Duplicate stable ID must reject the incoming chunk")
+	assert(is_instance_valid(incoming), "Failed load must not free the caller-owned root")
+	assert(incoming.get_parent() == null, "Failed load must detach the root so it can be retried")
+	assert(registry.get_registered_ids().has(stable_id))
+	assert(registry.unregister_vein(stable_id, existing, now))
+	incoming.free()
+	existing.free()
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
+func _test_failed_unload_rolls_back_registration() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	var chunk_id := "earth/rollback"
+	var chunk: Node3D = _new_two_mineral_chunk(now)
+	assert(controller.load_chunk(chunk_id, chunk, now))
+	var first_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
+	var second_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/iron-02")
+	var second: Node = chunk.get_node("iron-02")
+	second.mineral_id = "missing_mineral"
+	assert(not controller.unload_chunk(chunk_id, now), "Invalid second vein must abort unload")
+	assert(controller.is_chunk_loaded(chunk_id), "Failed unload must retain controller ownership")
+	assert(controller.get_chunk_root(chunk_id) == chunk)
+	assert(chunk.get_parent() == controller)
+	assert(registry.get_registered_ids().has(first_id), "Previously unregistered first vein must be restored")
+	assert(registry.get_registered_ids().has(second_id), "Failed vein must remain registered")
+	second.mineral_id = "iron_ore"
+	assert(controller.unload_chunk(chunk_id, now), "Unload should succeed after repairing invalid vein data")
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
 func _new_mineral_chunk(units: int, regen_time: int) -> Node3D:
 	var chunk := Node3D.new()
 	chunk.name = "ChunkRoot"
@@ -93,4 +154,16 @@ func _new_mineral_chunk(units: int, regen_time: int) -> Node3D:
 	vein.regen_interval_seconds = 60
 	vein.last_regen_unix = regen_time
 	chunk.add_child(vein)
+	return chunk
+
+func _new_two_mineral_chunk(now: int) -> Node3D:
+	var chunk: Node3D = _new_mineral_chunk(3, now)
+	var second: Node3D = MiningNode.new()
+	second.name = "iron-02"
+	second.mineral_id = "iron_ore"
+	second.max_units = 8
+	second.remaining_units = 5
+	second.regen_interval_seconds = 60
+	second.last_regen_unix = now
+	chunk.add_child(second)
 	return chunk
