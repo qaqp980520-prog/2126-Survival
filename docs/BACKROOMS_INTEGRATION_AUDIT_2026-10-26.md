@@ -49,3 +49,10 @@
 - `SurvivalWorldBridge` 已接到後室遊玩場景的玩家負重與背包流程。
 - `MineralChunkController`／`MineralVeinRegistry` 是共用礦脈 chunk 生命週期系統，仍需由正式世界生成器呼叫載入／卸載；不應假裝它已自動接入所有獨立小遊戲。
 - `daily_games/*` 的小遊戲保留獨立 Godot 專案，除非明確需要共用核心系統，否則不應把不同玩法硬塞進同一個執行場景。
+
+
+## Camera and avatar integration follow-up
+- Reconciled the first-person survival controls with the still-open third-person prototype direction by adding a visible procedural humanoid in third-person mode and a `V` toggle to first-person mode.
+- First-person mode hides the avatar to avoid the camera clipping through the head/body; third-person mode shows it.
+- Camera mode toggle is exposed as a method so headless integration tests can verify the two camera positions; graphical tests also check avatar visibility when a renderer is available.
+- The open draft PR #45 has overlapping older changes and is not being merged blindly; the current main branch now contains the relevant avatar/camera-toggle behavior plus the newer streaming and inventory fixes.
