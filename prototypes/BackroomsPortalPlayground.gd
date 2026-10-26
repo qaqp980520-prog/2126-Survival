@@ -465,21 +465,8 @@ void fragment() {
         shader.code = """
 shader_type spatial;
 uniform sampler2D wallpaper_texture : source_color, repeat_enable;
-uniform vec4 base_color : source_color = vec4(0.76, 0.69, 0.42, 1.0);
-uniform float seed_offset = 0.0;
-float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed_offset) * 43758.5453); }
-float noise21(vec2 p) {
-    vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
-    return mix(mix(hash21(i), hash21(i+vec2(1.0,0.0)), f.x), mix(hash21(i+vec2(0.0,1.0)), hash21(i+vec2(1.0,1.0)), f.x), f.y);
-}
 void fragment() {
-    vec2 uv = UV * vec2(8.0, 3.2);
-    float cloudy = noise21(uv * 2.2);
-    float fine_grain = noise21(uv * 27.0);
-    vec3 wallpaper = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
-    // Keep the reference wallpaper pattern visible; only add very subtle aging.
-    vec3 aged = wallpaper * (0.94 + cloudy * 0.07 + fine_grain * 0.025);
-    ALBEDO = aged;
+    ALBEDO = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
     ROUGHNESS = 0.98;
 }
 """
