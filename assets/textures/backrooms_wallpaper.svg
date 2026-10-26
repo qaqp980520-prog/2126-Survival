@@ -1,27 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="447" height="447" viewBox="0 0 447 447">
 <defs>
- <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#e8e69a"/><stop offset="1" stop-color="#d8d581"/></linearGradient>
- <pattern id="stripe" width="37.25" height="447" patternUnits="userSpaceOnUse">
-  <rect width="37.25" height="447" fill="url(#paper)"/>
-  <path d="M2 0V447 M5 0V447 M31 0V447 M34 0V447" stroke="#bdb96d" stroke-width="1" opacity=".55"/>
-  <path d="M9 0V447 M12 0V447 M25 0V447 M28 0V447" stroke="#f1efb0" stroke-width="1" opacity=".72"/>
-  <path d="M18.5 0V447" stroke="#aaa660" stroke-width=".7" opacity=".55"/>
-  <g fill="none" stroke="#b7b36a" stroke-width="1.5" opacity=".72">
-   <path d="M18.5 8l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
-   <path d="M18.5 126l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
-   <path d="M18.5 244l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
-   <path d="M18.5 362l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+ <pattern id="paper" width="37.25" height="447" patternUnits="userSpaceOnUse">
+  <rect width="37.25" height="447" fill="#e5e39a"/>
+  <path d="M1 0V447 M4 0V447 M32 0V447 M35 0V447" stroke="#bdb96e" stroke-width="1" opacity=".7"/>
+  <path d="M8 0V447 M11 0V447 M26 0V447 M29 0V447" stroke="#f3f0b4" stroke-width="1.1"/>
+  <path d="M18.6 0V447" stroke="#b1ad65" stroke-width=".8" opacity=".8"/>
+  <g fill="none" stroke="#b2ad64" stroke-width="1.5" opacity=".85">
+   <path d="M18.6 8l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+   <path d="M18.6 126l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6"/>
+   <path d="M18.6 244l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6"/>
+   <path d="M18.6 362l5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6-5 6 5 6"/>
   </g>
-  <g fill="none" stroke="#f4f0b0" stroke-width="1.5" opacity=".8">
-   <path d="M7 10l-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5"/>
-   <path d="M30 10l4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5"/>
+  <g fill="none" stroke="#f5f2b5" stroke-width="1.5" opacity=".95">
+   <path d="M6 10l-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5"/>
+   <path d="M31 10l4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5-4 5 4 5"/>
   </g>
-  <path d="M0 0H37.25 M0 223H37.25" stroke="#c8c477" stroke-width="1" opacity=".45"/>
+  <path d="M0 0H37.25 M0 223H37.25" stroke="#c7c273" stroke-width=".8" opacity=".6"/>
  </pattern>
- <filter id="softNoise"><feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="2" seed="17"/><feColorMatrix values=".35 0 0 0 .35 0 .35 0 0 .34 0 0 .2 0 .18 0 0 0 .08 0"/></filter>
 </defs>
-<rect width="447" height="447" fill="#e3e197"/>
-<rect width="447" height="447" fill="url(#stripe)"/>
-<rect width="447" height="447" filter="url(#softNoise)" opacity=".18"/>
-<g fill="#8e8952" opacity=".10"><ellipse cx="72" cy="95" rx="23" ry="12"/><ellipse cx="324" cy="285" rx="30" ry="18"/><ellipse cx="208" cy="190" rx="18" ry="10"/></g>
+<rect width="447" height="447" fill="#e5e39a"/>
+<rect width="447" height="447" fill="url(#paper)"/>
 </svg>
