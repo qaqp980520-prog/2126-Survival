@@ -269,6 +269,11 @@ func _test_vein_registry_save_restore_and_atomic_rejection() -> void:
 	assert(not registry.restore_save_dict(bad, 1300), "Invalid record must reject the complete registry restore")
 	assert(first.to_save_dict()["remaining_units"] == before_first["remaining_units"], "Invalid batch must not partially mutate earlier records")
 	assert(second.to_save_dict()["remaining_units"] == before_second["remaining_units"])
+	registry.auto_apply_elapsed_time_on_restore = false
+	first.remaining_units = 1
+	second.remaining_units = 1
+	assert(registry.restore_save_dict(saved, 1120))
+	assert(first.remaining_units == 2 and second.remaining_units == 4, "Disabled auto-regeneration must restore saved stock without adding offline units")
 	assert(not registry.restore_save_dict({"schema_version": 1, "veins": {"unknown-id": saved["veins"]["mine/sector-a/vein-01"]}}, 1300))
 	assert(registry.unregister_vein("mine/sector-a/vein-01", first))
 	assert(not registry.unregister_vein("mine/sector-a/vein-01", first))
