@@ -37,6 +37,10 @@ func bind_avatar_visual(candidate: Node3D) -> bool:
     _apply_camera_mode()
     return true
 
+func toggle_camera_mode() -> void:
+    _third_person = not _third_person
+    _apply_camera_mode()
+
 func _apply_camera_mode() -> void:
     if camera != null:
         camera.position = Vector3(0.0, 2.3, 5.5) if _third_person else Vector3(0.0, 1.62, 0.0)
@@ -63,8 +67,7 @@ func _input(event: InputEvent) -> void:
         camera.rotation.x = _pitch
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_V:
-        _third_person = not _third_person
-        _apply_camera_mode()
+        toggle_camera_mode()
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
         _look_active = false
