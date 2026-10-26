@@ -149,3 +149,5 @@
 - Removed duplicate shared-edge wall collision bodies, added deterministic corridor baffles and ceiling OmniLight3D nodes; topology tests cover edge symmetry and 7×7 connectivity.
 - Enabled Godot headless validation on pushes to `main` so direct commits receive automated checks.
 - Current status: changes committed to main; latest Godot headless CI result must be checked before claiming engine validation passed. Graphical manual playtest and iPhone test remain outstanding.
+
+- Camera/avatar follow-up: root prototype now has a visible primitive humanoid in third-person mode and `V` toggles first-person mode; first-person hides the avatar to prevent camera clipping. Headless camera-toggle regression coverage is included in `tests/backrooms_portal_playground_test.gd`.
