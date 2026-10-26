@@ -15,6 +15,8 @@ func _initialize() -> void:
 	_test_mining_depletes_vein_and_adds_inventory()
 	_test_full_inventory_does_not_consume_vein()
 	_test_inventory_preview_builds_single_model()
+	_test_vein_save_load_validation()
+	_test_vein_depletion_restore_and_signal()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -101,3 +103,55 @@ func _test_inventory_preview_builds_single_model() -> void:
 	preview.refresh_preview()
 	assert(preview.get_child_count() == 1, "Refreshing preview must leave only one ore model")
 	preview.queue_free()
+
+func _test_vein_save_load_validation() -> void:
+	var mining = MiningNode.new()
+	mining.mineral_id = "silver_ore"
+	mining.remaining_units = 17
+	root.add_child(mining)
+	var saved: Dictionary = mining.to_save_dict()
+	var restored = MiningNode.new()
+	restored.mineral_id = "silver_ore"
+	root.add_child(restored)
+	assert(restored.load_save_dict(saved))
+	assert(restored.remaining_units == 17)
+	assert(not restored.load_save_dict({"schema_version": 2, "mineral_id": "silver_ore", "remaining_units": 4}))
+	assert(restored.remaining_units == 17, "Invalid schema must not mutate vein state")
+	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "gold_ore", "remaining_units": 4}))
+	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "silver_ore", "remaining_units": -1}))
+	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "silver_ore", "remaining_units": 1.5}))
+	assert(not restored.load_save_dict({"schema_version": 1, "mineral_id": "silver_ore", "remaining_units": 10001}))
+	assert(restored.remaining_units == 17, "Rejected save data must preserve prior state")
+	mining.queue_free()
+	restored.queue_free()
+
+func _test_vein_depletion_restore_and_signal() -> void:
+	var bridge = Bridge.new()
+	bridge.name = "SignalBridge"
+	root.add_child(bridge)
+	var mining = MiningNode.new()
+	mining.name = "SignalVein"
+	mining.mineral_id = "iron_ore"
+	mining.remaining_units = 1
+	mining.inventory_bridge_path = NodePath("../SignalBridge")
+	root.add_child(mining)
+	var depleted_events: Array[String] = []
+	mining.ore_depleted.connect(func(item_id: String) -> void: depleted_events.append(item_id))
+	assert(mining.mine_hit(Vector3.ZERO) == 1)
+	assert(mining.remaining_units == 0)
+	assert(not mining.visible)
+	assert(depleted_events.size() == 1 and depleted_events[0] == "iron_ore")
+	assert(mining.mine_hit(Vector3.ZERO) == 0)
+	assert(depleted_events.size() == 1, "Depletion signal must fire once per depletion cycle")
+	mining.restore_vein(2)
+	assert(mining.remaining_units == 2)
+	assert(mining.visible)
+	assert(mining.mine_hit(Vector3.ZERO) == 1)
+	assert(mining.remaining_units == 1)
+	assert(mining.mine_hit(Vector3.ZERO) == 1)
+	assert(mining.remaining_units == 0)
+	assert(depleted_events.size() == 2, "Restored vein should emit depletion once again")
+	mining.restore_vein(20000)
+	assert(mining.remaining_units == 10000, "Vein stock must respect the upper cap")
+	mining.queue_free()
+	bridge.queue_free()
