@@ -7,7 +7,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var controller: Node3D = FakeController.new()
+	var controller: Variant = FakeController.new()
 	var director: Node = Director.new()
 	root.add_child(controller)
 	root.add_child(director)
