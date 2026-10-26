@@ -131,9 +131,10 @@
 - Remaining: connect `MineralChunkController` to the actual production world generator; no distance-based chunk selection, async streaming, GUI playtest, or iPhone test is claimed.
 
 
-## 2026-10-26 Run 9 — validation evidence and status reconciliation
-- KROLL Hydroponics Shift M0.1: standalone Godot 4.3+ crop-care arcade game in daily_games/KROLL_Hydroponics_Shift/; three beds, moisture/growth simulation, ten-harvest target, keyboard and touch controls; no external assets. Rules and runtime smoke tests passed on code head `92568e240abe1bd25149bba5a8da47d41ab451ce` in Godot 4.3 CI Run #123 (`40290454611`).
-- MineralChunkController M0.1.1: failed registration now detaches but does not free the caller-owned root. Integration tests for duplicate stable-ID load preservation and unload rollback passed in Run #123.
-- The prior final-head revision `0a5a6fc903d58bf42b27da7aaba1cb1ac204c9b2` passed Godot 4.3 CI Run #124 (`40290784159`): all 38 required validation steps succeeded, including Hydroponics and MineralChunkController tests; zero failures.
-- This commit refreshes the index and validation wording with that evidence. The final-head CI for this status-only refresh must pass before PR #42 is merged.
-- Candidate PR #42: https://github.com/qaqp980520-prog/2126-Survival/pull/42. Formal world generator integration and distance/asynchronous streaming remain incomplete. Local GUI and iPhone testing remain outstanding.
+## 2026-10-26 Run 9 — merged and validated
+- KROLL Hydroponics Shift M0.1: standalone Godot 4.3+ crop-care arcade game in daily_games/KROLL_Hydroponics_Shift/; three beds, moisture/growth simulation, ten-harvest target, keyboard and touch controls; no external assets.
+- MineralChunkController M0.1.1: failed registration detaches but preserves the caller-owned root. Integration tests cover duplicate stable-ID load preservation and rollback when a later vein unregister fails.
+- Code head `92568e240abe1bd25149bba5a8da47d41ab451ce` passed Godot 4.3 CI Run #123 (`40290454611`); all 38 required validation steps succeeded, zero failures.
+- Final pre-merge head `9c519e47b4e77fcf53392647716fcd4db03c04ab` passed Run #126 (`40291085414`); all 38 required validation steps succeeded, zero failures, including Hydroponics import/rules/runtime smoke and MineralChunkController integration tests.
+- PR #42 merged to main as `e0545d7a5bcd7a2bb44e810ca6d56d8fef4b93c0`. Current index reconciliation is a docs-only follow-up PR; do not confuse it with the already merged feature PR.
+- Limits: formal world generator integration, distance/asynchronous streaming, manual GUI play and iPhone testing remain incomplete.
