@@ -4,11 +4,14 @@ const Catalog = preload("res://systems/MineralCatalog.gd")
 const Inventory = preload("res://systems/SurvivalInventory.gd")
 const OreVisual = preload("res://prototypes/minerals/MineralOreVisual.gd")
 const MiningVFX = preload("res://prototypes/minerals/MineralMiningVFX.gd")
+const MiningNode = preload("res://systems/MineralMiningNode.gd")
+const Bridge = preload("res://systems/SurvivalWorldBridge.gd")
 
 func _initialize() -> void:
 	_test_all_seven_minerals_registered()
 	_test_inventory_weight_and_save_compatibility()
 	_test_visual_and_vfx_nodes_construct()
+	_test_mining_depletes_vein_and_adds_inventory()
 	print("Mineral catalog regression tests passed.")
 	quit(0)
 
@@ -34,6 +37,27 @@ func _test_inventory_weight_and_save_compatibility() -> void:
 	assert(restored.counts["uranium_ore"] == 1)
 	assert(is_equal_approx(restored.total_weight_kg(), inventory.total_weight_kg()))
 	assert(restored.add_item("unknown_ore", 1) == 0)
+
+func _test_mining_depletes_vein_and_adds_inventory() -> void:
+	var bridge = Bridge.new()
+	bridge.name = "Bridge"
+	root.add_child(bridge)
+	var mining = MiningNode.new()
+	mining.name = "CopperVein"
+	mining.mineral_id = "copper_ore"
+	mining.remaining_units = 2
+	mining.units_per_hit = 1
+	mining.inventory_bridge_path = NodePath("../Bridge")
+	root.add_child(mining)
+	assert(mining.mine_hit(Vector3.ZERO) == 1)
+	assert(mining.remaining_units == 1)
+	assert(int(bridge.inventory.counts["copper_ore"]) == 1)
+	assert(mining.mine_hit(Vector3.ZERO) == 1)
+	assert(mining.remaining_units == 0)
+	assert(int(bridge.inventory.counts["copper_ore"]) == 2)
+	assert(mining.mine_hit(Vector3.ZERO) == 0)
+	mining.queue_free()
+	bridge.queue_free()
 
 func _test_visual_and_vfx_nodes_construct() -> void:
 	var visual = OreVisual.new()
