@@ -24,7 +24,12 @@ func configure_from_director(portal_data: Dictionary, ground_y: float = 0.0) -> 
     if not (saved_position is Vector2) or not is_finite(ground_y):
         return false
     portal_id = int(numeric_id)
-    global_position = Vector3(saved_position.x, ground_y + 1.0, saved_position.y)
+    var target_position := Vector3(saved_position.x, ground_y + 1.0, saved_position.y)
+    # Detached/headless tests can validate configuration without a RenderingServer tree.
+    if is_inside_tree():
+        global_position = target_position
+    else:
+        position = target_position
     return true
 
 func _on_body_entered(body: Node3D) -> void:
