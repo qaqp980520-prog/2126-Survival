@@ -9,7 +9,9 @@ extends CharacterBody3D
 
 @onready var camera: Camera3D = $Camera3D
 var _look_active: bool = false
-var _pitch: float = 0.0
+var _pitch: float = deg_to_rad(-12.0)
+var _third_person: bool = true
+var avatar_visual: Node3D
 var world_bridge: Node
 
 func bind_world_bridge(candidate: Node) -> bool:
@@ -28,11 +30,25 @@ func can_jump_with_current_load() -> bool:
         return true
     return bool(world_bridge.call("can_player_jump"))
 
+func bind_avatar_visual(candidate: Node3D) -> bool:
+    if candidate == null:
+        return false
+    avatar_visual = candidate
+    _apply_camera_mode()
+    return true
+
+func _apply_camera_mode() -> void:
+    if camera != null:
+        camera.position = Vector3(0.0, 2.3, 5.5) if _third_person else Vector3(0.0, 1.62, 0.0)
+        camera.rotation = Vector3(_pitch, 0.0, 0.0)
+        camera.current = true
+    if avatar_visual != null and is_instance_valid(avatar_visual):
+        avatar_visual.visible = _third_person
+
 func _ready() -> void:
     add_to_group("player")
-    camera.position = Vector3(0.0, 1.62, 0.0)
-    camera.rotation = Vector3.ZERO
     camera.current = true
+    _apply_camera_mode()
     Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _input(event: InputEvent) -> void:
@@ -45,6 +61,10 @@ func _input(event: InputEvent) -> void:
         _pitch = clampf(_pitch - event.relative.y * mouse_sensitivity,
             deg_to_rad(-pitch_limit_degrees), deg_to_rad(pitch_limit_degrees))
         camera.rotation.x = _pitch
+        get_viewport().set_input_as_handled()
+    elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_V:
+        _third_person = not _third_person
+        _apply_camera_mode()
         get_viewport().set_input_as_handled()
     elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
         _look_active = false
