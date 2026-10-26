@@ -3,6 +3,7 @@ name: Godot headless validation
 on:
   push:
     branches:
+      - main
       - 'ci/godot-headless-validation-2026-10-25'
   pull_request:
     paths:
