@@ -35,7 +35,8 @@ func _run() -> void:
     _expect(int(game.get("_player_hp")) == 2, "drone contact reduces integrity once")
     game.call("_restart")
     _expect(str(game.get("_state")) == "playing" and int(game.get("_player_hp")) == 3, "restart restores a playable round")
-    _expect(int(game.get("_score")) == 0 and (game.get("_cells") as Array).size() == 3, "restart resets collection progress and seeds three cells")
+    var restarted_cells: Array = game.get("_cells")
+    _expect(int(game.get("_score")) == 0 and restarted_cells.size() == 3, "restart resets collection progress and seeds three cells")
     game.queue_free()
     await process_frame
     var exit_code := 0
