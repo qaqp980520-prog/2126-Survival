@@ -355,29 +355,18 @@ func _create_maze_cell(cell: Vector2i) -> void:
     var floor_mesh := root.get_node_or_null("FloorMesh") as MeshInstance3D
     if floor_mesh != null:
         floor_mesh.material_override = _make_surface_material(true, cell)
-    # Visual-only floor seams and a low ceiling make each streamed cell feel finished.
-    var seam_material := StandardMaterial3D.new()
-    seam_material.albedo_color = _cell_material_floor.albedo_color.darkened(0.13)
-    seam_material.roughness = 1.0
+    # Flat carpet: no overlay seams, raised wear marks or patches.
     var ceiling_material := StandardMaterial3D.new()
     ceiling_material.albedo_color = _cell_material_wall.albedo_color.darkened(0.18)
-    ceiling_material.roughness = 0.96
+    ceiling_material.roughness = 1.0
     if _high_graphics:
         _add_decor_box(root, "Ceiling", Vector3(0, WALL_HEIGHT + 0.18, 0), Vector3(CELL_SIZE, 0.28, CELL_SIZE), ceiling_material)
     var trim_material := StandardMaterial3D.new()
     trim_material.albedo_color = _cell_material_wall.albedo_color.lightened(0.12)
-    trim_material.roughness = 0.9
+    trim_material.roughness = 1.0
     if _high_graphics:
         _add_decor_box(root, "CeilingTrimNorth", Vector3(0, WALL_HEIGHT - 0.08, -CELL_SIZE * 0.5 + 0.12), Vector3(CELL_SIZE, 0.12, 0.12), trim_material)
         _add_decor_box(root, "CeilingTrimWest", Vector3(-CELL_SIZE * 0.5 + 0.12, WALL_HEIGHT - 0.08, 0), Vector3(0.12, 0.12, CELL_SIZE), trim_material)
-    if _high_graphics:
-        var ceiling_seam_material := StandardMaterial3D.new()
-        ceiling_seam_material.albedo_color = Color(0.34, 0.31, 0.22)
-        ceiling_seam_material.roughness = 1.0
-        for tile_index in range(1, 4):
-            var seam_offset := -CELL_SIZE * 0.5 + float(tile_index) * CELL_SIZE / 4.0
-            _add_decor_box(root, "CeilingGridX_%d" % tile_index, Vector3(seam_offset, WALL_HEIGHT + 0.035, 0), Vector3(0.025, 0.018, CELL_SIZE), ceiling_seam_material)
-            _add_decor_box(root, "CeilingGridZ_%d" % tile_index, Vector3(0, WALL_HEIGHT + 0.035, seam_offset), Vector3(CELL_SIZE, 0.018, 0.025), ceiling_seam_material)
     # Every cell uses a coordinate-derived random stream, so the maze is stable
     # as it unloads and reloads while the player explores indefinitely.
     var north_open := _edge_is_open(cell, Vector2i(0, -1))
@@ -450,34 +439,17 @@ func _should_enable_light_shadows(cell: Vector2i) -> bool:
     # High-quality mode enables deterministic local shadows on a subset of cells.
     return _high_graphics and (_hash_value(cell.x, cell.y, 77) % 5 == 0)
 
-func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> ShaderMaterial:
-    var shader := Shader.new()
+func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
+    # Built-in textured material: reliable UV sampling and lower shader cost.
+    var material := StandardMaterial3D.new()
+    material.roughness = 1.0
+    material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     if is_floor:
-        shader.code = """
-shader_type spatial;
-uniform sampler2D carpet_texture : source_color, repeat_enable;
-void fragment() {
-    ALBEDO = texture(carpet_texture, UV * vec2(4.0, 4.0)).rgb;
-    ROUGHNESS = 1.0;
-}
-"""
+        material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg")
+        material.uv1_scale = Vector3(4.0, 4.0, 1.0)
     else:
-        shader.code = """
-shader_type spatial;
-uniform sampler2D wallpaper_texture : source_color, repeat_enable;
-void fragment() {
-    ALBEDO = texture(wallpaper_texture, UV * vec2(2.0, 1.0)).rgb;
-    ROUGHNESS = 0.98;
-}
-"""
-    var material := ShaderMaterial.new()
-    material.shader = shader
-    material.set_shader_parameter("base_color", _cell_material_floor.albedo_color if is_floor else _cell_material_wall.albedo_color)
-    if is_floor:
-        material.set_shader_parameter("carpet_texture", load("res://assets/textures/backrooms_carpet.svg"))
-    else:
-        material.set_shader_parameter("wallpaper_texture", load("res://assets/textures/backrooms_wallpaper.svg"))
-        material.set_shader_parameter("seed_offset", float(abs(seed_cell.x * 31 + seed_cell.y * 17)))
+        material.albedo_texture = load("res://assets/textures/backrooms_wallpaper.svg")
+        material.uv1_scale = Vector3(2.0, 1.0, 1.0)
     return material
 
 func _add_carpet_texture(parent: Node3D) -> void:
