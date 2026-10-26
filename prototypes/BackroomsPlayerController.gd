@@ -72,7 +72,7 @@ func _input(event: InputEvent) -> void:
     elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
         _look_active = false
         Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-    elif event is InputEventKey and event.pressed and event.keycode == KEY_F11:
+    elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
         var window := get_window()
         window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
 
