@@ -37,9 +37,9 @@ func _run() -> void:
 	}]
 	combat["relays"] = [{"cell": Vector2i(1, 2), "scan_cooldown": 0.0, "scan_range": 2.6, "cleanse_power": 1}]
 	Rules.advance(combat, 0.01)
-	_expect(combat["packets"].is_empty(), "relay removes an packet in range")
-	_expect(int(combat["cleaned"]) == 1, "relay kill increments clean counter")
-	_expect(int(combat["credits"]) == 100 + Rules.CLEAN_REWARD, "packet kill awards the documented credits")
+	_expect(combat["packets"].is_empty(), "relay clears a corrupted packet in scan range")
+	_expect(int(combat["cleaned"]) == 1, "clearing a packet increments the cleaned counter")
+	_expect(int(combat["credits"]) == 100 + Rules.CLEAN_REWARD, "clearing a packet awards the documented credits")
 
 	var escape := Rules.create_state()
 	escape["phase"] = "wave"
@@ -50,7 +50,7 @@ func _run() -> void:
 		"checks": 3, "max_checks": 3, "speed": 1.0
 	}]
 	Rules.advance(escape, 0.2)
-	_expect(int(escape["integrity"]) == 9 and int(escape["breaches"]) == 1, "packet reaching the end costs one core life")
+	_expect(int(escape["integrity"]) == 9 and int(escape["breaches"]) == 1, "packet reaching the endpoint reduces core integrity by one")
 	_expect(str(escape["phase"]) == "build", "surviving an empty wave returns to build phase")
 
 	var win := Rules.create_state()
