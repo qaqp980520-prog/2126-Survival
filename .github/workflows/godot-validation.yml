@@ -212,7 +212,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout 35s godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during world bridge integration tests."
@@ -619,14 +619,3 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Echo Diver runtime smoke test passed."
-      - name: Run SurvivalWorldBridge save adapter integration regression
-        shell: bash
-        run: |
-          set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
-          echo "$output"
-          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
-            echo "Godot reported world bridge save adapter integration errors."
-            exit 1
-          fi
-          echo "$output" | grep -q "SurvivalWorldBridge save adapter integration tests passed."
