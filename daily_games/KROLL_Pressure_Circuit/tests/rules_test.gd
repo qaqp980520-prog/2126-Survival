@@ -31,6 +31,20 @@ func _run() -> void:
 	_expect(not Rules.rotate_tile(solved, solved_source), "solved puzzle is terminal and rejects further rotations")
 	_expect(int(solved.get("moves", -1)) == 0, "rejected post-win rotation does not change the move count")
 
+	var solvable: Dictionary = Rules.create_puzzle(2705)
+	var solvable_path: Array = solvable["path"]
+	var solvable_masks: Array = solvable["masks"]
+	var solved_masks: Array = solvable["solution_masks"]
+	for cell_value in solvable_path:
+		var cell: Vector2i = cell_value
+		var index := cell.y * Rules.COLS + cell.x
+		var guard := 0
+		while int(solvable_masks[index]) != int(solved_masks[index]) and not Rules.is_solved(solvable) and guard < 4:
+			_expect(Rules.rotate_tile(solvable, cell), "solution rotation is accepted before terminal state")
+			guard += 1
+	_expect(Rules.is_solved(solvable), "scrambled board can connect IN to OUT within the move limit")
+	_expect(int(solvable.get("moves", Rules.MAX_MOVES + 1)) <= Rules.MAX_MOVES, "solving the puzzle stays within the move limit")
+
 	var invalid_target: Dictionary = Rules.create_puzzle(2703)
 	invalid_target["target"] = Vector2i(6, 1)
 	_expect(not Rules.is_solved(invalid_target), "out-of-board target cannot alias an in-board cell index")
