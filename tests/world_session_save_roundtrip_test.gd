@@ -54,11 +54,53 @@ func _run() -> void:
 	var save_absolute := ProjectSettings.globalize_path(SAVE_PATH)
 	var backup_path := SAVE_PATH + ".bak"
 	var backup_absolute := ProjectSettings.globalize_path(backup_path)
+	var saved_position_data: Array = recovery_snapshot.get("player_position", [])
+	var saved_position := Vector3(float(saved_position_data[0]), float(saved_position_data[1]), float(saved_position_data[2]))
+
+	# Corrupt JSON in the primary file must fall back to the valid backup.
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(save_absolute)
 	if FileAccess.file_exists(backup_path):
 		DirAccess.remove_absolute(backup_absolute)
 	var backup_file := FileAccess.open(backup_path, FileAccess.WRITE)
+	_expect(backup_file != null, "prepare valid backup for corrupt-primary recovery")
+	if backup_file != null:
+		backup_file.store_string(JSON.stringify(recovery_snapshot))
+		backup_file.close()
+	var corrupt_primary := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	_expect(corrupt_primary != null, "prepare corrupt primary save")
+	if corrupt_primary != null:
+		corrupt_primary.store_string("{not-json")
+		corrupt_primary.close()
+	_expect(bool(world.call("debug_collect_berries", 2)), "mutate live inventory before corrupt-primary fallback")
+	player.global_position = Vector3(5.0, 0.0, 6.0)
+	_expect(bool(world.call("load_game")), "load_game falls back when primary JSON is corrupt")
+	_expect(int(world.call("get_inventory_count", "berries")) == 4, "corrupt-primary fallback restores backup inventory")
+	_expect(player.global_position.is_equal_approx(saved_position), "corrupt-primary fallback restores backup player position")
+	_expect(FileAccess.file_exists(backup_path), "corrupt-primary fallback preserves the known-good backup")
+	_expect(FileAccess.get_file_as_string(SAVE_PATH) == "{not-json", "corrupt primary is preserved for diagnosis rather than overwriting the backup")
+
+	# A valid JSON dictionary with an invalid world envelope must also fall back.
+	var semantically_invalid: Dictionary = recovery_snapshot.duplicate(true)
+	semantically_invalid["inventory"] = {"not_registered": 1}
+	var invalid_primary_file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	_expect(invalid_primary_file != null, "prepare semantically invalid primary save")
+	if invalid_primary_file != null:
+		invalid_primary_file.store_string(JSON.stringify(semantically_invalid))
+		invalid_primary_file.close()
+	_expect(bool(world.call("debug_collect_berries", 3)), "mutate inventory before invalid-envelope fallback")
+	player.global_position = Vector3(6.0, 0.0, 7.0)
+	_expect(bool(world.call("load_game")), "load_game falls back when primary envelope validation fails")
+	_expect(int(world.call("get_inventory_count", "berries")) == 4, "invalid-envelope fallback restores backup inventory")
+	_expect(player.global_position.is_equal_approx(saved_position), "invalid-envelope fallback restores backup position")
+	_expect(FileAccess.file_exists(backup_path), "invalid-envelope fallback keeps the valid backup intact")
+
+	# Preserve the existing interrupted-write case where the primary is absent.
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(save_absolute)
+	if FileAccess.file_exists(backup_path):
+		DirAccess.remove_absolute(backup_absolute)
+	backup_file = FileAccess.open(backup_path, FileAccess.WRITE)
 	_expect(backup_file != null, "prepare interrupted-save backup fixture")
 	if backup_file != null:
 		backup_file.store_string(JSON.stringify(recovery_snapshot))
@@ -66,6 +108,7 @@ func _run() -> void:
 	_expect(not FileAccess.file_exists(SAVE_PATH), "simulate interruption after old save moved to backup")
 	_expect(bool(world.call("load_game")), "load_game recovers a valid backup when primary save is missing")
 	_expect(FileAccess.file_exists(SAVE_PATH), "backup is promoted back to the primary save path")
+	_expect(not FileAccess.file_exists(backup_path), "successful missing-primary recovery clears the redundant backup")
 
 	if failures.is_empty():
 		print("Active world save roundtrip integration tests passed.")
