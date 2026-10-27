@@ -44,3 +44,9 @@
 - KROLL Magnetic Salvage import, rules and runtime smoke tests passed; active world save file roundtrip and invalid-save atomicity test passed.
 - Main-push Run #322 (40465398061) targets the exact merge SHA and is still in progress at `Initialize containers` at the time of this update. Do not mark it successful until its conclusion is success.
 - `scripts/world.gd` remains absent; this run validates the active BackroomsPortalPlayground controller, not a separate M1.3 production controller. GUI/iPhone hardware tests remain outstanding.
+
+
+## Run 20 main-push verification closeout｜2026-10-27
+- Main-push Godot 4.3 CI Run #322 (40465398061) completed successfully on main SHA `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`.
+- All 82 numbered validation steps passed, including Magnetic Salvage import/rules/runtime and active world save roundtrip integration. No failed steps.
+- Local GUI/iPhone testing and the separate M1.3 production world controller remain outstanding.
