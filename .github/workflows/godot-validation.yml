@@ -89,6 +89,11 @@ jobs:
           test -f daily_games/KROLL_Vector_Rally/project.godot
           test -f daily_games/KROLL_Vector_Rally/tests/rules_test.gd
           test -f daily_games/KROLL_Vector_Rally/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Star_Chart_Expedition/project.godot
+          test -f daily_games/KROLL_Star_Chart_Expedition/tests/rules_test.gd
+          test -f daily_games/KROLL_Star_Chart_Expedition/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_position_validation_test.gd
+          test -f docs/MINERAL_GRID_STREAMING_POSITION_VALIDATION_M0_1_2026-10-27.md
           test -f prototypes/SurfaceChunkStreamingPlayground.tscn
           test -f prototypes/SurfaceChunkStreamingPlayground.gd
           test -f tests/surface_chunk_streaming_playground_test.gd
@@ -360,6 +365,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Mineral grid streaming recovery tests passed."
+      - name: Run mineral grid streaming position validation tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_position_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported errors during mineral streaming position validation tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Mineral grid streaming position validation tests passed."
       - name: Run mineral grid streaming director tests
         shell: bash
         run: |
@@ -481,6 +497,30 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Vector Rally runtime smoke test passed."
+      - name: Import and parse KROLL Star Chart Expedition
+        run: godot --headless --path daily_games/KROLL_Star_Chart_Expedition --editor --quit
+      - name: Run KROLL Star Chart Expedition rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Star_Chart_Expedition --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Star Chart Expedition rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Star Chart Expedition rules tests passed."
+      - name: Run KROLL Star Chart Expedition runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Star_Chart_Expedition --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Star Chart Expedition runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Star Chart Expedition runtime smoke test passed."
       - name: Run surface chunk streaming playground integration test
         shell: bash
         run: |
