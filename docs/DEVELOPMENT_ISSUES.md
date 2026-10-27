@@ -30,3 +30,10 @@
 - PR #70 merged as 66e18a1350bc81c42ffac86eb440c4eba739e4da. Exact-head Godot 4.3 CI Run #317 (40454156074) passed all 78 validation steps with zero failed steps.
 - The SurvivalWorldBridge save-adapter test owns and frees its watchdog Timer and covers malformed inventory containers, unknown IDs, fractional/negative/out-of-range counts, invalid game day and unsupported schema. Rejected restore must leave live inventory unchanged; rejected export must leave its input envelope unchanged.
 - No local Godot executable, GUI/GPU or iPhone test was available. Production world controller integration remains open.
+
+
+## Run 20 candidate — 2026-10-27
+- [ ] Validate KROLL Magnetic Salvage import, rules and runtime smoke test with exact-head Godot 4.3 CI.
+- [ ] Validate active world save file roundtrip using prototypes/BackroomsPortalPlayground.tscn, including invalid inventory and non-finite position rejection without live-state mutation.
+- Source boundary remains: scripts/world.gd is absent. The active playground test improves coverage but does not complete the missing M1.3 production controller.
+- No local Godot GUI or iPhone hardware test is claimed. Do not merge before full CI succeeds.

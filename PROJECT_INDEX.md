@@ -11,6 +11,15 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 20 — Magnetic Salvage + active world save roundtrip (candidate)
+
+- Base main: 3b20fc9cb5f5ec2532c407e31a3212510e4c7062 (PR #71 merged after exact-head Godot 4.3 CI Run #319 succeeded).
+- New game: daily_games/KROLL_Magnetic_Salvage/; continuous top-down drone movement, magnetic pull pulses, charge regeneration, debris hazards, recover six metal parts and extract at dock before 75 seconds. Godot 4.3+, no external assets/addons. Import, rules and runtime smoke tests added to the workflow; exact-head validation pending.
+- Existing-system integration: tests/world_session_save_roundtrip_test.gd instantiates the active prototypes/BackroomsPortalPlayground.tscn, saves and reloads the real user:// envelope through the existing controller, and verifies inventory/player position roundtrip. Invalid item IDs and non-finite player positions must be rejected without changing live state.
+- Main game script fixed to avoid banking unlimited charge regeneration while charge is already full. Runtime smoke test uses the scene's existing typed scrap array rather than assigning an untyped replacement.
+- Boundary: scripts/world.gd remains absent. This change adds an end-to-end test for the active playground controller; it does not claim a separate M1.3 production world controller or crop persistence patches are integrated.
+- Candidate branch: feature/run20-magnetic-salvage-world-save-roundtrip-2026-10-27. Do not merge until exact-head Godot 4.3 CI completes successfully. Local GUI/iPhone tests are unavailable in this run.
+
 ## 2026-10-27 Run 19 — Echo Diver + WorldBridge save regression hardening (merged / verified)
 
 - PR #70 merged to main as 66e18a1350bc81c42ffac86eb440c4eba739e4da. Feature head cb07165259502bbc390bbe31c501e95f9cf29011 was validated against base 5f961148f8ee25b67309ec88020b5e08bc3e4cad.
