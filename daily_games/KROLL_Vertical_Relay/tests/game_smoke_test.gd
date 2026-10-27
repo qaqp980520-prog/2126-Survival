@@ -5,16 +5,29 @@ const Rules = preload("res://rules.gd")
 
 var _failed: bool = false
 var _finished: bool = false
+var _watchdog_timer: Timer
 
 func _initialize() -> void:
+	_watchdog_timer = Timer.new()
+	_watchdog_timer.one_shot = true
+	_watchdog_timer.wait_time = 20.0
+	root.add_child(_watchdog_timer)
+	_watchdog_timer.timeout.connect(_on_watchdog_timeout)
+	call_deferred("_start_watchdog")
 	call_deferred("_run_tests")
-	call_deferred("_watchdog")
 
-func _watchdog() -> void:
-	await create_timer(20.0).timeout
-	if not _finished:
-		push_error("KROLL Vertical Relay runtime smoke test timed out.")
-		quit(1)
+func _start_watchdog() -> void:
+	if not _finished and is_instance_valid(_watchdog_timer) and _watchdog_timer.is_inside_tree():
+		_watchdog_timer.start()
+
+func _on_watchdog_timeout() -> void:
+	if _finished:
+		return
+	_finished = true
+	push_error("KROLL Vertical Relay runtime smoke test timed out.")
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.queue_free()
+	quit(1)
 
 func _run_tests() -> void:
 	var game: Variant = GameScene.instantiate()
@@ -48,6 +61,9 @@ func _check(condition: bool, message: String) -> void:
 
 func _finish() -> void:
 	_finished = true
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.stop()
+		_watchdog_timer.queue_free()
 	if _failed:
 		print("KROLL Vertical Relay runtime smoke test failed.")
 		quit(1)
