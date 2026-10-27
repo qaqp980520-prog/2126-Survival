@@ -8,20 +8,20 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var state := Rules.new_state()
-	_expect(int(state["lives"]) == 3 and int(state["asteroids_destroyed"]) == 0, "new game initializes lives and target counter")
+	_expect(int(state["lives"]) == 3 and int(state["cells_collected"]) == 0, "new game initializes lives and cell counter")
 	_expect(is_equal_approx(float(state["time_left"]), 75.0), "new game initializes the time limit")
-	for index in range(Rules.TARGET_DESTROYS - 1):
-		_expect(Rules.register_destroy(state), "playing state accepts an asteroid hit")
-	_expect(str(state["status"]) == "playing", "eleven destroys do not finish the sector")
-	_expect(Rules.register_destroy(state), "twelfth destroy is accepted")
-	_expect(str(state["status"]) == "won" and str(state["reason"]) == "sector_cleared", "target count wins the sector")
+	for index in range(Rules.REQUIRED_CELLS - 1):
+		_expect(Rules.collect_cell(state), "playing state accepts an energy cell")
+	_expect(str(state["status"]) == "playing", "five cells do not finish the sector")
+	_expect(Rules.collect_cell(state), "sixth energy cell is accepted")
+	_expect(str(state["status"]) == "won" and str(state["reason"]) == "all_cells_recovered", "required cells win the sector")
 	var score_after_win := int(state["score"])
-	_expect(not Rules.register_destroy(state), "won state rejects additional scoring")
-	_expect(int(state["score"]) == score_after_win, "rejected post-win hit does not alter score")
+	_expect(not Rules.collect_cell(state), "won state rejects additional scoring")
+	_expect(int(state["score"]) == score_after_win, "rejected post-win cell does not alter score")
 
 	var lives_state := Rules.new_state()
 	for index in range(Rules.STARTING_LIVES):
-		_expect(Rules.lose_life(lives_state), "playing state accepts a hull hit")
+		_expect(Rules.lose_life(lives_state), "playing state accepts a hull impact")
 	_expect(int(lives_state["lives"]) == 0 and str(lives_state["status"]) == "lost", "last life ends the run")
 	_expect(not Rules.lose_life(lives_state), "lost state rejects additional life loss")
 	_expect(int(lives_state["lives"]) == 0, "life count never becomes negative")
