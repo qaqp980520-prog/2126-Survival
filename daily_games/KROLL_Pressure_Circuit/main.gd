@@ -12,10 +12,10 @@ func _ready() -> void:
 	_reset_game()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, Vector2(1024.0, 720.0)), Color("#06111d"))
+	draw_rect(Rect2(Vector2.ZERO, Vector2(1024.0, 720.0)), Color8(6, 17, 29))
 	var font: Font = ThemeDB.fallback_font
-	draw_string(font, Vector2(48.0, 52.0), "KROLL // PRESSURE CIRCUIT", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("#5cf3ff"))
-	draw_string(font, Vector2(50.0, 82.0), "ROTATE THE CONDUITS BEFORE PRESSURE RUNS OUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#8aaebb"))
+	draw_string(font, Vector2(48.0, 52.0), "KROLL // PRESSURE CIRCUIT", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color8(92, 243, 255))
+	draw_string(font, Vector2(50.0, 82.0), "ROTATE THE CONDUITS BEFORE PRESSURE RUNS OUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color8(138, 174, 187))
 
 	if state.is_empty():
 		return
@@ -27,18 +27,18 @@ func _draw() -> void:
 		for x in range(Rules.COLS):
 			var cell := Vector2i(x, y)
 			var rect := Rect2(ORIGIN + Vector2(float(x) * CELL_SIZE, float(y) * CELL_SIZE), Vector2(CELL_SIZE - 3.0, CELL_SIZE - 3.0))
-			draw_rect(rect, Color("#102537"))
-			draw_rect(rect, Color("#21485b"), false, 1.0)
+			draw_rect(rect, Color8(16, 37, 55))
+			draw_rect(rect, Color8(33, 72, 91), false, 1.0)
 			if cell == selected_cell:
-				draw_rect(rect, Color("#f6c85f"), false, 3.0)
+				draw_rect(rect, Color8(246, 200, 95), false, 3.0)
 			var mask := Rules.get_mask(state, cell)
 			if mask == 0:
-				draw_circle(rect.position + rect.size * 0.5, 2.0, Color("#1b3545"))
+				draw_circle(rect.position + rect.size * 0.5, 2.0, Color8(27, 53, 69))
 				continue
 			var center: Vector2 = rect.position + rect.size * 0.5
-			var pipe_color := Color("#55e7eb")
+			var pipe_color := Color8(85, 231, 235)
 			if reachability.has(y * Rules.COLS + x):
-				pipe_color = Color("#7dffad")
+				pipe_color = Color8(125, 255, 173)
 			draw_circle(center, 7.0, pipe_color)
 			if (mask & Rules.DIR_N) != 0:
 				draw_line(center, center + Vector2(0.0, -CELL_SIZE * 0.34), pipe_color, 8.0, true)
@@ -49,25 +49,25 @@ func _draw() -> void:
 			if (mask & Rules.DIR_W) != 0:
 				draw_line(center, center + Vector2(-CELL_SIZE * 0.34, 0.0), pipe_color, 8.0, true)
 			if cell == source:
-				draw_circle(center, 11.0, Color("#071b20"))
-				draw_string(font, center + Vector2(-10.0, 5.0), "IN", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#7dffad"))
+				draw_circle(center, 11.0, Color8(7, 27, 32))
+				draw_string(font, center + Vector2(-10.0, 5.0), "IN", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color8(125, 255, 173))
 			elif cell == target:
-				draw_circle(center, 11.0, Color("#30270c"))
-				draw_string(font, center + Vector2(-14.0, 5.0), "OUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#ffd166"))
+				draw_circle(center, 11.0, Color8(48, 39, 12))
+				draw_string(font, center + Vector2(-14.0, 5.0), "OUT", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color8(255, 209, 102))
 
 	var solved := Rules.is_solved(state)
 	var failed := Rules.is_failed(state)
-	var status_color := Color("#d5e7ee")
+	var status_color := Color8(213, 231, 238)
 	var status_text := banner
 	if solved:
-		status_color = Color("#7dffad")
+		status_color = Color8(125, 255, 173)
 		status_text = "FLOW RESTORED"
 	elif failed:
-		status_color = Color("#ff7474")
+		status_color = Color8(255, 116, 116)
 		status_text = "PRESSURE LOST — PRESS R TO RETRY"
 	draw_string(font, Vector2(50.0, 610.0), status_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, status_color)
-	draw_string(font, Vector2(50.0, 644.0), "Moves: %d / %d" % [int(state.get("moves", 0)), Rules.MAX_MOVES], HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#8aaebb"))
-	draw_string(font, Vector2(50.0, 680.0), "Click/tap a pipe or select it with WASD and press SPACE. R resets the puzzle.", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#8aaebb"))
+	draw_string(font, Vector2(50.0, 644.0), "Moves: %d / %d" % [int(state.get("moves", 0)), Rules.MAX_MOVES], HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color8(138, 174, 187))
+	draw_string(font, Vector2(50.0, 680.0), "Click/tap a pipe or select it with WASD and press SPACE. R resets the puzzle.", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color8(138, 174, 187))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
