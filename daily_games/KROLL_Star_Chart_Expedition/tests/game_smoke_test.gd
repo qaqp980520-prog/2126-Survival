@@ -7,7 +7,7 @@ func _initialize() -> void:
 	call_deferred("_run_test")
 
 func _run_test() -> void:
-	var game: Node2D = MainScript.new()
+	var game: Variant = MainScript.new()
 	root.add_child(game)
 	await process_frame
 	_check(game.state["status"] == "playing", "Game should start in playing state.")
@@ -25,7 +25,7 @@ func _run_test() -> void:
 		print("Star Chart Expedition runtime smoke test passed.")
 		quit(0)
 
-func _key_event(code: Key) -> InputEventKey:
+func _key_event(code: int) -> InputEventKey:
 	var event := InputEventKey.new()
 	event.keycode = code
 	event.pressed = true
