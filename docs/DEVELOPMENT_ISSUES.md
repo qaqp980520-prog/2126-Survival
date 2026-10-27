@@ -38,7 +38,15 @@
 - [x] Active world save file roundtrip passed in Run #321 step #82 using `prototypes/BackroomsPortalPlayground.tscn`; valid inventory/player position were restored, while unknown item IDs and non-finite positions were rejected without partial live-state mutation.
 - [x] PR #72 merged as `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`.
 - [x] Post-merge main-push Run #322 (40465398061) passed on that exact main SHA; all 82 numbered validation steps passed with no failed steps.
-- [ ] Complete documentation-only PR #73 after its own exact-head CI passes.
+- [x] Documentation-only PR #73 merged as `31b8038824caf0f368262d243c2052abc4848e8b` after exact-head Godot 4.3 CI Run #325 (`40465789044`) succeeded with all 82 numbered validation steps.
 - Source boundary remains: `scripts/world.gd` is absent. The active playground test improves coverage but does not complete the missing M1.3 production controller; crop persistence patches remain unapplied.
 - No local Godot GUI/GPU or iPhone hardware test is claimed.
-- Next: finish PR #73 documentation sync, then integrate the actual production world controller when its source is added to the repository.
+- Next: integrate the actual production world controller when its source is added to the repository.
+
+## Run 21 candidate checklist — 2026-10-27
+- [ ] Validate KROLL Neon Breaker import, deterministic rules, and runtime smoke test on the exact feature PR head.
+- [ ] Validate atomic world-save replacement: a blocked temporary path must preserve existing save bytes; a complete temporary JSON must replace the old save.
+- [ ] Validate recovery when a prior save exists only as `.bak`, alongside the existing active-world save/load and invalid-payload non-mutation checks.
+- [ ] Merge only after the full Godot 4.3 CI succeeds; then update the final main SHA, PR status, and CI evidence in PROJECT_INDEX and Notion.
+- The change applies to `prototypes/BackroomsPortalPlayground.gd`; `scripts/world.gd` remains absent, so formal M1.3 production-controller integration and crop persistence are still open.
+- No local Godot GUI/GPU or iPhone hardware test is claimed.

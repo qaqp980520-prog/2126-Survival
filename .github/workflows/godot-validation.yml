@@ -107,6 +107,11 @@ jobs:
           test -f daily_games/KROLL_Magnetic_Salvage/rules.gd
           test -f daily_games/KROLL_Magnetic_Salvage/tests/rules_test.gd
           test -f daily_games/KROLL_Magnetic_Salvage/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Neon_Breaker/project.godot
+          test -f daily_games/KROLL_Neon_Breaker/rules.gd
+          test -f daily_games/KROLL_Neon_Breaker/tests/rules_test.gd
+          test -f daily_games/KROLL_Neon_Breaker/tests/game_smoke_test.gd
+          test -f docs/KROLL_NEON_BREAKER_AND_ATOMIC_WORLD_SAVE_M0_1_2026-10-27.md
           test -f tests/world_session_save_roundtrip_test.gd
           test -f docs/KROLL_ECHO_DIVER_AND_WORLD_BRIDGE_TEST_HARDENING_M0_1_2026-10-27.md
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
@@ -649,6 +654,30 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Magnetic Salvage runtime smoke test passed."
+      - name: Import and parse KROLL Neon Breaker
+        run: godot --headless --path daily_games/KROLL_Neon_Breaker --editor --quit
+      - name: Run KROLL Neon Breaker rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Neon_Breaker --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Neon Breaker rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Neon Breaker rules tests passed."
+      - name: Run KROLL Neon Breaker runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Neon_Breaker --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Neon Breaker runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Neon Breaker runtime smoke test passed."
       - name: Run active world save roundtrip integration test
         shell: bash
         run: |

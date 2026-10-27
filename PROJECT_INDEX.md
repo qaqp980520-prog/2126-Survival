@@ -11,6 +11,16 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 21 — Neon Breaker + atomic active-world save (candidate / CI pending)
+
+- Base main after Run 20 documentation merge: `31b8038824caf0f368262d243c2052abc4848e8b`; PR #73 exact-head Godot 4.3 CI Run #325 succeeded with all 82 numbered validation steps.
+- New game candidate: `daily_games/KROLL_Neon_Breaker/`; 8×5 neon brick field, paddle steering, three lives, 60-second timer, keyboard/mouse/touch controls. Godot 4.3+, no external assets or addons.
+- Rules and runtime tests cover paddle bounds, reflection, hit-angle steering, life/timer boundaries, launch, brick collision/scoring, life loss and restart.
+- Existing-system change candidate: `prototypes/BackroomsPortalPlayground.gd` writes a temporary save, flushes and parses it before promotion, retains a backup during replacement, and recovers a backup if the primary save is missing.
+- Integration tests inject a temporary-path obstruction to ensure failed writes preserve the previous save bytes, verify a complete replacement payload, and simulate recovery from a backup. Existing active-world save roundtrip and invalid-payload non-mutation tests remain enabled.
+- Candidate branch: `feature/run21-neon-breaker-atomic-save-2026-10-27`. Exact-head Godot 4.3 CI is required before merge. Local GUI/GPU/iPhone tests are not claimed.
+- Boundary: `scripts/world.gd` remains absent; this work improves the active Backrooms Portal Playground controller and does not claim M1.3 production-world integration.
+
 ## 2026-10-27 Run 20 — Magnetic Salvage + active world save roundtrip (merged / exact-head verified)
 
 - PR #72 merged to main as `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`. Feature head `5d01baf62594834d7d492fffd7a42090e13fa3d1` was validated against base `3b20fc9cb5f5ec2532c407e31a3212510e4c7062`.
@@ -21,7 +31,8 @@
 - Post-merge main-push CI Run #322 (40465398061) completed successfully for exact main SHA `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`; all 82 numbered validation steps passed, with no failed steps. This is the authoritative post-merge main validation.
 - Boundary: `scripts/world.gd` remains absent. This adds an end-to-end test for the active playground controller; it does not claim the separate M1.3 production world controller or crop persistence patches are integrated.
 - Limits: no local Godot executable, GUI/GPU playtest or iPhone hardware test was available.
-- Next: confirm Run #322; then continue with the actual production world controller integration rather than treating the prototype as production.
+- Documentation-only PR #73 merged as `31b8038824caf0f368262d243c2052abc4848e8b` after exact-head Run #325 succeeded (82/82 numbered validation steps). Run #322 remains the verified post-merge code CI for the prior main SHA `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`.
+- Next: continue with the actual production world controller integration rather than treating the prototype as production.
 
 ## 2026-10-27 Run 19 — Echo Diver + WorldBridge save regression hardening (merged / verified)
 
