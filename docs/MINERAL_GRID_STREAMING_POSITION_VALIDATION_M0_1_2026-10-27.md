@@ -17,3 +17,11 @@ Godot 4.3+; uses the existing `MineralChunkController` interface and `tests/help
 
 ## Validation and limits
 Local Godot executable is unavailable. This change is not considered engine-tested until the exact-head GitHub Actions workflow passes. The streaming director remains synchronous and factory-driven and is not yet connected to the production world generator.
+
+
+## Final validation reconciliation｜2026-10-27
+
+- PR #61 merged as `a9c4aec4387818616e1855d4d3775c5d9e243748`; validated feature head `789de09cb9851b39265554bcff84e5a43f37070d`.
+- Exact-head Godot 4.3 CI Run #287 (`40430587483`) succeeded: 72/72 steps passed, 0 failed. The finite-position regression step #46 passed, as did Star Chart import/rules/runtime steps #66–#68.
+- Compare confirms `main` is identical to the merge commit. A separate main-push workflow run was not independently surfaced by the available connector, so only the exact-head CI is claimed.
+- Local Godot, GUI, GPU, and iPhone tests remain unperformed. The director is still synchronous/factory-driven and not connected to the production world generator.
