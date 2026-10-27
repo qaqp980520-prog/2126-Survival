@@ -9,7 +9,7 @@
 1. **地表探索／區塊與礦物串流** — `prototypes/SurfaceChunkStreamingPlayground.tscn`
 2. **後室傳送門實驗場** — `prototypes/BackroomsPortalPlayground.tscn`
 
-地表原型現在可按 **E** 開採身邊 2.8 公尺內的礦脈，產出會進入 `SurvivalWorldBridge` 共用背包並即時更新負重 HUD。`tests/surface_mining_integration_test.gd` 覆蓋礦脈扣量、物品入包與重量變更。
+地表原型只負責地表探索與區塊串流。礦脈資料節點已放在地面以下，不可從地表直接開採；真正的採礦互動應放進地下洞穴／礦坑場景，再接入 `SurvivalWorldBridge` 共用背包。`tests/surface_mining_integration_test.gd` 現在改為驗證礦脈位於地面以下，而且地表原型不會直接把礦石放進背包。
 
 在這兩個原型中按 **F10** 回到選單；按 **Esc** 可釋放滑鼠。
 
