@@ -1,6 +1,6 @@
 # KROLL Orbit Warden M0.1
 
-A compact top-down asteroid-survival arcade game for Godot 4.3+.
+A compact top-down space-navigation arcade game for Godot 4.3+.
 
 ## Play
 
@@ -9,19 +9,19 @@ Open this folder's project.godot in Godot Project Manager and run the project.
 - A / Left Arrow: turn left
 - D / Right Arrow: turn right
 - W / Up Arrow: thrust
-- Space: fire
+- Space: activate a brief deflection shield (five-second cooldown)
 - R: restart
-- Touch controls: hold the four bottom controls to turn or thrust; tap FIRE to shoot and RESET to restart.
+- Touch controls: hold the bottom turn/thrust controls; tap SHIELD or RESET.
 
-Destroy 12 asteroids before time expires or the ship loses all three lives. The ship and asteroids wrap around the playfield. There are no external assets, plugins, or downloaded dependencies.
+Recover all six energy cells before time expires. Avoid drifting asteroids; a shield pulse can deflect an impact, otherwise a collision costs one life. The ship and asteroids wrap around the playfield. There are no external assets, plugins, or downloaded dependencies.
 
 ## Files
 
 - project.godot — standalone project settings
 - main.tscn, main.gd — game scene and procedural visuals/arcade loop
-- rules.gd — deterministic score, life and timer rules
+- rules.gd — deterministic collection, life and timer rules
 - tests/rules_test.gd — rule boundary tests
-- tests/game_smoke_test.gd — scene startup, firing, win and restart smoke test
+- tests/game_smoke_test.gd — scene startup, shield, win and restart smoke test
 
 ## Validation
 
