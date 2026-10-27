@@ -23,6 +23,7 @@ func _draw() -> void:
 	var masks: Array = state.get("masks", [])
 	var source: Vector2i = state.get("source", Vector2i.ZERO)
 	var target: Vector2i = state.get("target", Vector2i.ZERO)
+	var reachability: Dictionary = Rules._reachable_cells(state)
 	for y in range(Rules.ROWS):
 		for x in range(Rules.COLS):
 			var cell := Vector2i(x, y)
@@ -37,7 +38,6 @@ func _draw() -> void:
 				continue
 			var center: Vector2 = rect.position + rect.size * 0.5
 			var pipe_color := Color("#55e7eb")
-			var reachability: Dictionary = Rules._reachable_cells(state)
 			if reachability.has(y * Rules.COLS + x):
 				pipe_color = Color("#7dffad")
 			draw_circle(center, 7.0, pipe_color)
