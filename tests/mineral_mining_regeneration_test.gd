@@ -65,13 +65,22 @@ func _run() -> void:
 	_expect(node.remaining_units == 3 and node.last_regen_unix == 3000, "legacy save receives a deterministic regeneration timestamp")
 
 	node.remaining_units = 0
+	node.max_units = 10
+	node.regen_interval_seconds = 60
 	node.last_regen_unix = 1
-	node.restore_vein(1)
-	var restored_at: int = node.last_regen_unix
-	_expect(node.remaining_units == 1, "manual restore adds the requested stock")
-	_expect(restored_at > 1000000000, "manual restore resets the regeneration timestamp to current wall clock")
-	_expect(node.apply_elapsed_regeneration(restored_at + 59) == 0, "manual restore does not bank the old depleted interval")
-	_expect(node.apply_elapsed_regeneration(restored_at + 60) == 1, "restored vein resumes regeneration after a fresh interval")
+	_expect(node.restore_vein(3, 2000) == 3, "manual restore returns the actual accepted units")
+	_expect(node.remaining_units == 3 and node.last_regen_unix == 2000, "manual restore updates stock and deterministic timestamp")
+	_expect(node.apply_elapsed_regeneration(2059) == 0, "manual restore does not bank the old depleted interval")
+	_expect(node.apply_elapsed_regeneration(2060) == 1, "restored vein resumes regeneration after a fresh interval")
+
+	node.remaining_units = 9
+	node.last_regen_unix = 2060
+	_expect(node.restore_vein(5, 3000) == 1, "manual restore is capped to remaining vein capacity")
+	_expect(node.remaining_units == 10 and node.last_regen_unix == 3000, "capped restore reports one accepted unit and resets the clock")
+	_expect(node.restore_vein(5, 4000) == 0, "full vein rejects additional restoration")
+	_expect(node.last_regen_unix == 3000, "no-op restore does not reset the regeneration clock")
+	_expect(node.restore_vein(0, 5000) == 0 and node.last_regen_unix == 3000, "zero restore is a no-op")
+	_expect(node.restore_vein(-2, 5000) == 0 and node.last_regen_unix == 3000, "negative restore is a no-op")
 
 	node.queue_free()
 	await process_frame
