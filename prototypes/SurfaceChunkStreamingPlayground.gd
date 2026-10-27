@@ -158,8 +158,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-			elif key_event.keycode == KEY_E:
-				_mine_nearest_vein()
 	elif event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_RIGHT:
@@ -171,29 +169,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
 		player.rotation.y = _yaw
 		camera.rotation.x = _pitch
-
-func _mine_nearest_vein() -> void:
-	if player == null or chunk_controller == null:
-		return
-	var nearest: Node3D = null
-	var nearest_distance := 2.8
-	for chunk_id in chunk_controller.get_loaded_chunk_ids():
-		var chunk: Node = chunk_controller.get_chunk_root(str(chunk_id))
-		if chunk == null:
-			continue
-		for child in chunk.get_children():
-			if child is MineralMiningNode:
-				var vein := child as Node3D
-				var distance := player.global_position.distance_to(vein.global_position)
-				if distance < nearest_distance:
-					nearest = vein
-					nearest_distance = distance
-	if nearest == null:
-		return
-	var mined: int = int(nearest.call("mine_hit", nearest.global_position))
-	if mined <= 0:
-		push_warning("Mining failed: inventory full or vein depleted.")
-	_refresh_hud()
 
 func _sync_streaming(now_unix: int = -1) -> bool:
 	if player == null or director == null:
@@ -335,7 +310,7 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	ore.regen_interval_seconds = 60
 	ore.last_regen_unix = _stream_clock_unix if _stream_clock_unix > 0 else int(Time.get_unix_time_from_system())
 	ore.inventory_bridge_path = NodePath("../../../SurvivalWorldBridge")
-	ore.position = Vector3(CHUNK_SIZE * 0.5, 0.2, CHUNK_SIZE * 0.5)
+	ore.position = Vector3(CHUNK_SIZE * 0.5, -3.0, CHUNK_SIZE * 0.5)
 	chunk.add_child(ore)
 	return chunk
 
@@ -348,4 +323,4 @@ func _refresh_hud() -> void:
 	var inventory_summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null else {}
 	var weight := float(inventory_summary.get("weight_kg", 0.0))
 	var limit := float(inventory_summary.get("limit_kg", 65.0))
-	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · E mine nearby ore · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d\nCarry: %.1f / %.1f kg" % [grid_text, active_count, record_count, weight, limit]
+	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d\nCarry: %.1f / %.1f kg" % [grid_text, active_count, record_count, weight, limit]
