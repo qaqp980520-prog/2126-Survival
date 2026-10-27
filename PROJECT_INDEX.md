@@ -18,7 +18,7 @@
 - New underground integration candidate: `prototypes/UndergroundMiningPlayground.tscn` and `prototypes/UndergroundMiningPlayground.gd`. Registers three cave veins under stable chunk ID `underground/cave_0_0`, uses `MineralChunkController`, `MineralVeinRegistry`, `MineralMiningNode`, and `SurvivalWorldBridge`; F mines, G drops one unit, HUD shows immediate weight/encumbrance state.
 - Regression candidate: `tests/underground_mining_playground_test.gd` checks below-surface placement, stable chunk registration, mine-to-inventory transfer, vein snapshot restore, drop weight recalculation, and no surface mining path. Existing surface test remains in place.
 - Hub/CI changes: `prototypes/SurvivalTestHub.gd`, `tests/survival_test_hub_smoke_test.gd`, `.github/workflows/godot-validation.yml`; the hub now exposes a third underground-mine entry and CI imports/tests Command Grid plus the cave integration.
-- Candidate branch: `feature/run22-underground-mine-cargo-crane-2026-10-27`, based on the verified start SHA above. Exact-head Godot 4.3 CI has not yet completed; do not merge until every new and existing test passes.
+- Candidate branch: `feature/run22-underground-mine-cargo-crane-2026-10-27`, based on the verified start SHA above. Initial exact-head Godot 4.3 CI Run #354 failed at step 7 because the hub smoke test searched for an implicit Label node name. The hub now explicitly names StatusLabel and the test looks up that stable name; rerun CI on the updated HEAD before considering merge.
 - Limits: this remains a fixed single-cave prototype, not the missing production M1.3 controller; no local GUI/GPU/iPhone test is claimed.
 
 ## 2026-10-27 Run 21 — Neon Breaker + recoverable active-world save (merged / exact-head verified)
