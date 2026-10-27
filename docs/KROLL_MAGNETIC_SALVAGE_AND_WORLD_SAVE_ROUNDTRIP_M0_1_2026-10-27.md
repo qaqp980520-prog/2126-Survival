@@ -15,6 +15,6 @@ Date: 2026-10-27
 - This improves integration coverage of the active prototype. It does not create or claim the missing `scripts/world.gd` production controller; M1.3 crop persistence patches remain unapplied.
 
 ## Validation / limits
-- Exact-head validation: Run #321 succeeded, including Magnetic Salvage import/rules/runtime tests and active world save roundtrip integration (step #82). Post-merge main-push Run #322 (40465398061) was in progress at `Initialize containers` when this record was updated; its result remains pending.
+- Exact-head validation: Run #321 succeeded, including Magnetic Salvage import/rules/runtime tests and active world save roundtrip integration (step #82). Post-merge main-push Run #322 (40465398061) also completed successfully on main SHA `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`; all 82 numbered validation steps passed.
 - No local Godot GUI, GPU, or iPhone hardware test is claimed.
 - Next: confirm Run #322 and update the final main-push result; then integrate the actual production world controller when its source is added to the repository.
