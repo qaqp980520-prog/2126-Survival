@@ -2,6 +2,7 @@ extends Control
 
 const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
+const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 
 var status_label: Label
 
@@ -56,6 +57,12 @@ func _build_ui() -> void:
 		"地表探索／區塊與礦物串流",
 		"測試第一人稱移動、地表區塊載入與卸載、礦脈資料和串流存檔。",
 		SURFACE_SCENE
+	)
+	_add_scene_button(
+		column,
+		"地下礦坑／採礦與共用背包",
+		"進入地下洞穴，開採銅、鐵與鈾礦，驗證礦脈持久化及負重即時更新。",
+		UNDERGROUND_SCENE
 	)
 	_add_scene_button(
 		column,
