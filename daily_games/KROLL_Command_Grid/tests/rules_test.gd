@@ -59,6 +59,7 @@ func _run() -> void:
 	win_state["player"] = Vector2i(6, 7)
 	win_state["enemies"] = []
 	win_state["data"] = []
+	win_state["collected"] = 4
 	win_state["turns_left"] = 2
 	_expect(Rules.try_move(win_state, Vector2i(1, 0)), "player can enter the exit cell")
 	_expect(str(win_state["status"]) == "won", "exit wins only after all data is collected")
