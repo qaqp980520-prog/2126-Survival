@@ -47,9 +47,10 @@ The failure-diagnostics, Cipher Recall, Cargo Tugs, and Vector Rally smoke tests
 2. Add production-scene load/unload/save/restore acceptance tests and define retry behavior for repeated factory/controller failure.
 3. Perform graphical playtesting and iPhone validation in a suitable environment.
 
+## Final repository reconciliation
 
-
-1. Inspect exact-head CI, including root project import, new mini-golf import/rules/runtime tests, finite-coordinate and canonical-ID regressions, and the full existing suite.
-2. If CI succeeds, merge the feature PR and verify the resulting main SHA and main-push run.
-3. Update `PROJECT_INDEX.md` and the Notion asset index with final commit and test evidence.
-4. Continue integrating the synchronous factory-driven streaming director with the production world generator; asynchronous streaming remains unimplemented.
+- Feature PR #67 merge commit: `408f263648ac88a6097399331cc8fd9398489601`.
+- Documentation PR #68 merge commit and current main SHA at this reconciliation: `1b7a12fe92696f3087ed6d9bb794d5cc97611ab0`.
+- PR #67 exact-head CI Run ID `40445410307`: 78/78 steps successful.
+- PR #68 exact-head CI Run ID `40445774345`: 78/78 steps successful.
+- Local Godot, GUI, GPU, and iPhone testing are not claimed.
