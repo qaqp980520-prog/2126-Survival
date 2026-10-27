@@ -90,6 +90,7 @@ func _handle_pointer(position: Vector2) -> void:
 		return
 	var cell := Vector2i(floori(local.x / CELL_SIZE), floori(local.y / CELL_SIZE))
 	selected_cell = cell
+	queue_redraw()
 	_rotate_selected()
 
 func _move_selection(delta: Vector2i) -> void:
