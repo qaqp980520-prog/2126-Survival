@@ -5,19 +5,33 @@ const FakeController = preload("res://tests/helpers/FakeMineralChunkController.g
 
 var _failed: bool = false
 var _finished: bool = false
+var _watchdog_timer: Timer
 var _failure_signal_count: int = 0
 var _failure_report: Dictionary = {}
 var _fail_restore_coord: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
+	_watchdog_timer = Timer.new()
+	_watchdog_timer.one_shot = true
+	_watchdog_timer.wait_time = 20.0
+	root.add_child(_watchdog_timer)
+	_watchdog_timer.timeout.connect(_on_watchdog_timeout)
+	call_deferred("_start_watchdog")
 	call_deferred("_run_tests")
-	call_deferred("_watchdog")
 
-func _watchdog() -> void:
-	await create_timer(20.0).timeout
-	if not _finished:
-		push_error("Mineral grid streaming diagnostics test timed out.")
-		quit(1)
+func _start_watchdog() -> void:
+	if not _finished and is_instance_valid(_watchdog_timer) and _watchdog_timer.is_inside_tree():
+		_watchdog_timer.start()
+
+func _on_watchdog_timeout() -> void:
+	if _finished:
+		return
+	_finished = true
+	push_error("Mineral grid streaming diagnostics test timed out.")
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.stop()
+		_watchdog_timer.free()
+	quit(1)
 
 func _run_tests() -> void:
 	var controller: Variant = FakeController.new()
@@ -55,7 +69,6 @@ func _run_tests() -> void:
 	_check(not managed_ids.has("surface/chunk_-1_-1"), "Report must expose the stale chunk that could not be restored.")
 	_check(_failure_signal_count == 1, "Exactly one failure signal should be emitted for the failed sync.")
 	_check(str(_failure_report.get("phase", "")) == "stale_unload", "Failure signal should carry the same phase.")
-	print("Mineral grid streaming failure diagnostics tests passed.")
 	director.queue_free()
 	controller.queue_free()
 	await process_frame
@@ -79,8 +92,12 @@ func _check(condition: bool, message: String) -> void:
 
 func _finish() -> void:
 	_finished = true
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.stop()
+		_watchdog_timer.free()
 	if _failed:
 		print("Mineral grid streaming failure diagnostics tests failed.")
 		quit(1)
 	else:
+		print("Mineral grid streaming failure diagnostics tests passed.")
 		quit(0)
