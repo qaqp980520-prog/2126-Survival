@@ -19,12 +19,13 @@ func _start() -> void:
 
 func _run_test() -> void:
 	var main: Node = MainScene.instantiate()
-	root.add_child(main)
-	await process_frame
-	_expect(main != null, "main scene instantiates")
 	if main == null:
+		push_error("FAIL: main scene instantiates")
 		_finish(1)
 		return
+	root.add_child(main)
+	await process_frame
+	_expect(true, "main scene instantiates")
 	_expect(main.get("state") is Dictionary, "game initializes state")
 	var initial_state: Dictionary = main.get("state")
 	_expect(initial_state.get("status") == "playing", "game starts in playing state")
