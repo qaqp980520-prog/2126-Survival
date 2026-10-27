@@ -9,6 +9,8 @@
 1. **地表探索／區塊與礦物串流** — `prototypes/SurfaceChunkStreamingPlayground.tscn`
 2. **後室傳送門實驗場** — `prototypes/BackroomsPortalPlayground.tscn`
 
+地表原型現在可按 **E** 開採身邊 2.8 公尺內的礦脈，產出會進入 `SurvivalWorldBridge` 共用背包並即時更新負重 HUD。`tests/surface_mining_integration_test.gd` 覆蓋礦脈扣量、物品入包與重量變更。
+
 在這兩個原型中按 **F10** 回到選單；按 **Esc** 可釋放滑鼠。
 
 ## 重要界線
