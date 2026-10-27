@@ -15,7 +15,8 @@ func _run() -> void:
 	_expect(bricks.size() == 40, "scene builds a five by eight brick field")
 	_expect(int(game.get("lives")) == 3, "round starts with three lives")
 	_expect(bool(game.call("launch_ball")), "space-equivalent launch starts the ball")
-	_expect(str(game.get("state")) == "playing" and (game.get("ball_velocity") as Vector2).y < 0.0, "launch moves ball upward")
+	var launched_velocity: Vector2 = game.get("ball_velocity")
+	_expect(str(game.get("state")) == "playing" and launched_velocity.y < 0.0, "launch moves ball upward")
 
 	bricks = game.get("bricks")
 	var first_brick: Dictionary = bricks[0]
@@ -39,7 +40,8 @@ func _run() -> void:
 	game.call("restart_game")
 	_expect(str(game.get("state")) == "ready", "restart returns to ready state")
 	_expect(int(game.get("score")) == 0 and int(game.get("lives")) == 3, "restart resets score and lives")
-	_expect((game.get("bricks") as Array).size() == 40, "restart rebuilds all bricks")
+	var restarted_bricks: Array = game.get("bricks")
+	_expect(restarted_bricks.size() == 40, "restart rebuilds all bricks")
 
 	game.queue_free()
 	await process_frame
