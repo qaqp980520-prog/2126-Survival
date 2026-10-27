@@ -87,5 +87,5 @@
 
 ## Run 24 documentation merge SHA reconciliation｜2026-10-27
 
-- Documentation PR #81 merged as `487c9740a9248315fd7f2f3489ef9135b9bc74a6`. GitHub compare confirms current `main` is identical to this commit; the code feature PR #80 merge `29915be423318a4c3be4a2fbceeb2ec78f1e59b9` remains the feature integration point, not the latest main SHA.
-- No separate main-push workflow run was exposed for the documentation merge; exact-head Run #389 (40493657236) passed 98/98 numbered validation steps.
+- Documentation PR #81 merged as `487c9740a9248315fd7f2f3489ef9135b9bc74a6`; at that point, GitHub compare confirmed `main` equalled this commit. Follow-up SHA-correction PR #82 then merged as `ae2a6e443926bc716c582ec0031f2176e83330f2`. These are chronological merge points, not a claim that the earlier SHA remains current after later documentation commits.
+- Exact-head Run #389 (40493657236) for PR #81 and Run #391 (40494066682) for PR #82 each passed 98/98 numbered validation steps. No separate main-push workflow run was exposed for these documentation merges.
