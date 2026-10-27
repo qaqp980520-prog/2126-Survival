@@ -93,7 +93,8 @@ func _draw() -> void:
 	draw_string(font, Vector2(54, 82), "Pulse sonar. Recover three data beacons. Reach the extraction lock.", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#c2d9e6"))
 	var visible_hazards: Array[Vector2i] = []
 	if sonar_remaining > 0.0:
-		visible_hazards = Rules.visible_hazards(state.get("position", Rules.START))
+		var diver_position: Vector2i = state.get("position", Rules.START)
+		visible_hazards = Rules.visible_hazards(diver_position)
 	for y in range(Rules.GRID_HEIGHT):
 		for x in range(Rules.GRID_WIDTH):
 			var cell := Vector2i(x, y)
