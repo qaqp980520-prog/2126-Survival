@@ -123,6 +123,7 @@ jobs:
           test -f tests/survival_test_hub_smoke_test.gd
           test -f prototypes/SurfaceChunkStreamingPlayground.gd
           test -f tests/surface_chunk_streaming_playground_test.gd
+          test -f tests/surface_mining_integration_test.gd
           test -f tests/mineral_grid_streaming_transaction_test.gd
           test -f tests/mineral_grid_streaming_diagnostics_test.gd
           test -f tests/mineral_grid_streaming_recovery_test.gd
@@ -573,6 +574,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Vertical Relay runtime smoke test passed."
+      - name: Run surface mining and shared inventory integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/surface_mining_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported errors during surface mining integration tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Surface mining integration test passed.'
       - name: Run surface chunk streaming playground integration test
         shell: bash
         run: |
