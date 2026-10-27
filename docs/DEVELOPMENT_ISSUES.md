@@ -2,6 +2,13 @@
 
 這份清單是目前的開發追蹤文件，與 GitHub Issues 功能不同；之後可逐項搬成正式 Issues。
 
+## Run 26 verification note — 2026-10-27
+
+- PR #86 is merged as adaf93ab255bff720d3bc70af1221ea4cc58f727. Exact candidate HEAD 453358cfae88a4f62511dd33bb40a807d04a2f6d passed Godot 4.3 CI Run #406 (40527501347), with 108/108 job steps successful; focused Run #11 (40527501336) passed 13/13.
+- KROLL Orbit Warden is a non-combat space-navigation prototype: recover six energy cells, avoid drifting asteroids and use a brief deflection shield. Import/rules/runtime smoke tests are wired into the shared workflow.
+- MineralMiningNode.restore_vein now returns actual accepted units and accepts an injectable timestamp for deterministic testing. Tests cover capacity caps, no-op cases and fresh regeneration timing.
+- This does not close local GUI/GPU/iPhone QA or the production M1.3 world-controller integration. The fixed-cave mining prototype and crop-persistence integration remain open.
+
 ## P0 — 優先處理
 - [ ] 在 Godot 4 實際開啟並測試既有背包／存檔原型，記錄錯誤與執行結果。
 - [ ] 確認 `SurvivalInventory.gd` 與 `SurvivalWorldBridge.gd` 在 Godot 4 的類別掃描、型別與訊號連接沒有解析錯誤。
