@@ -48,7 +48,7 @@ func _run() -> void:
 		var inventory: RefCounted = bridge.get("inventory")
 		var original_inventory: Dictionary = inventory.call("to_save_dict")
 		var overflow_save: Dictionary = original_inventory.duplicate(true)
-		var overflow_counts: Dictionary = (overflow_save.get("inventory", {}) as Dictionary).duplicate(true)
+		var overflow_counts: Dictionary = overflow_save.get("inventory", {}).duplicate(true)
 		overflow_counts["iron_ore"] = MAX_SAVED_COUNT
 		overflow_save["inventory"] = overflow_counts
 		_expect(inventory.call("load_save_dict", overflow_save), "test can install a valid maximum-count inventory fixture")
