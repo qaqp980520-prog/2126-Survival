@@ -33,11 +33,21 @@ Known limits: the physics is an intentionally small custom approximation rather 
 
 The failure-diagnostics, Cipher Recall, Cargo Tugs, and Vector Rally smoke tests now own their watchdog Timer nodes and stop/free them in the finish path instead of using an unowned SceneTreeTimer. The goal is to remove the non-fatal ObjectDB leak warnings previously observed at test exit.
 
-## Validation status
+## Final validation status｜2026-10-27
 
-Candidate only until the exact-head Godot 4.3 workflow passes. The local environment has no Godot executable, so no local engine or GUI test is claimed. Do not merge the feature PR until the complete CI succeeds.
+- PR #67 merged as `408f263648ac88a6097399331cc8fd9398489601`; this is the main SHA confirmed immediately after merge.
+- Exact-head Godot 4.3 CI Run ID `40445410307` succeeded with all 78 job steps completed successfully and zero failed steps.
+- Mini Golf import, rules tests, and runtime smoke test passed. Mineral streaming diagnostics, recovery, position validation, and director tests passed.
+- The exact-head log contains no actual Godot `SCRIPT ERROR:`, `ERROR:`, or `FAIL:` lines and no `ObjectDB instances leaked at exit` warning.
+- Local Godot executable unavailable; no local engine, GUI, GPU, or iPhone test is claimed.
 
-## Next steps
+## Remaining work
+
+1. Connect the synchronous factory-driven streaming director to the production world generator.
+2. Add production-scene load/unload/save/restore acceptance tests and define retry behavior for repeated factory/controller failure.
+3. Perform graphical playtesting and iPhone validation in a suitable environment.
+
+
 
 1. Inspect exact-head CI, including root project import, new mini-golf import/rules/runtime tests, finite-coordinate and canonical-ID regressions, and the full existing suite.
 2. If CI succeeds, merge the feature PR and verify the resulting main SHA and main-push run.
