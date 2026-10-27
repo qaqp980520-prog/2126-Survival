@@ -15,3 +15,9 @@
 ## Validation
 - A dedicated GitHub Actions workflow runs Godot 4.3 import, rules, runtime smoke, and underground integration tests.
 - Local Godot executable is unavailable in this environment; no local GUI/GPU/iPhone test is claimed. Merge is prohibited until exact-head CI passes.
+
+
+## CI workflow note
+- The canonical pre-merge validation is the existing .github/workflows/godot-validation.yml, which imports Network Stabilizer, runs its rules and runtime smoke tests, and runs the underground mining capacity regression on the pull-request head.
+- The temporary focused workflow used during the candidate experiment was removed because a newly introduced workflow file is not guaranteed to run for the same pull request before it exists on the base branch.
+- Merge only after the canonical workflow succeeds on the exact current PR head.
