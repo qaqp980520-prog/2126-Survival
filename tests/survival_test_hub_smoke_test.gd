@@ -27,7 +27,7 @@ func _run() -> void:
 	_expect(labels.has("地表探索／區塊與礦物串流"), "hub labels the surface streaming prototype")
 	_expect(labels.has("後室傳送門實驗場"), "hub labels the Backrooms portal prototype")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
-	_expect(hub.get_node_or_null("StatusLabel") != null or hub.find_child("Label", true, false) != null, "hub creates visible explanatory labels")
+	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	hub.queue_free()
 	await process_frame
