@@ -814,100 +814,100 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
     return true
 
 func _write_save_atomically(destination_path: String, data: Dictionary) -> bool:
-	if destination_path.strip_edges().is_empty():
-		return false
-	var temporary_path := destination_path + ".tmp"
-	var backup_path := destination_path + ".bak"
-	var destination_absolute := ProjectSettings.globalize_path(destination_path)
-	var temporary_absolute := ProjectSettings.globalize_path(temporary_path)
-	var backup_absolute := ProjectSettings.globalize_path(backup_path)
+    if destination_path.strip_edges().is_empty():
+        return false
+    var temporary_path := destination_path + ".tmp"
+    var backup_path := destination_path + ".bak"
+    var destination_absolute := ProjectSettings.globalize_path(destination_path)
+    var temporary_absolute := ProjectSettings.globalize_path(temporary_path)
+    var backup_absolute := ProjectSettings.globalize_path(backup_path)
 
-	# A directory at the temporary path is an obstruction; never touch the current save.
-	if DirAccess.dir_exists_absolute(temporary_absolute):
-		return false
-	if FileAccess.file_exists(temporary_path):
-		if DirAccess.remove_absolute(temporary_absolute) != OK:
-			return false
+    # A directory at the temporary path is an obstruction; never touch the current save.
+    if DirAccess.dir_exists_absolute(temporary_absolute):
+        return false
+    if FileAccess.file_exists(temporary_path):
+        if DirAccess.remove_absolute(temporary_absolute) != OK:
+            return false
 
-	var temporary_file := FileAccess.open(temporary_path, FileAccess.WRITE)
-	if temporary_file == null:
-		return false
-	temporary_file.store_string(JSON.stringify(data))
-	temporary_file.flush()
-	var write_error := temporary_file.get_error()
-	temporary_file.close()
-	if write_error != OK:
-		if FileAccess.file_exists(temporary_path):
-			DirAccess.remove_absolute(temporary_absolute)
-		return false
+    var temporary_file := FileAccess.open(temporary_path, FileAccess.WRITE)
+    if temporary_file == null:
+        return false
+    temporary_file.store_string(JSON.stringify(data))
+    temporary_file.flush()
+    var write_error := temporary_file.get_error()
+    temporary_file.close()
+    if write_error != OK:
+        if FileAccess.file_exists(temporary_path):
+            DirAccess.remove_absolute(temporary_absolute)
+        return false
 
-	# Validate the complete temporary payload before moving the current save.
-	var verification_file := FileAccess.open(temporary_path, FileAccess.READ)
-	if verification_file == null:
-		if FileAccess.file_exists(temporary_path):
-			DirAccess.remove_absolute(temporary_absolute)
-		return false
-	var parsed: Variant = JSON.parse_string(verification_file.get_as_text())
-	verification_file.close()
-	if not (parsed is Dictionary):
-		if FileAccess.file_exists(temporary_path):
-			DirAccess.remove_absolute(temporary_absolute)
-		return false
+    # Validate the complete temporary payload before moving the current save.
+    var verification_file := FileAccess.open(temporary_path, FileAccess.READ)
+    if verification_file == null:
+        if FileAccess.file_exists(temporary_path):
+            DirAccess.remove_absolute(temporary_absolute)
+        return false
+    var parsed: Variant = JSON.parse_string(verification_file.get_as_text())
+    verification_file.close()
+    if not (parsed is Dictionary):
+        if FileAccess.file_exists(temporary_path):
+            DirAccess.remove_absolute(temporary_absolute)
+        return false
 
-	var moved_existing_save := false
-	if FileAccess.file_exists(destination_path):
-		if DirAccess.dir_exists_absolute(backup_absolute):
-			DirAccess.remove_absolute(temporary_absolute)
-			return false
-		if FileAccess.file_exists(backup_path):
-			if DirAccess.remove_absolute(backup_absolute) != OK:
-				DirAccess.remove_absolute(temporary_absolute)
-				return false
-		if DirAccess.rename_absolute(destination_absolute, backup_absolute) != OK:
-			DirAccess.remove_absolute(temporary_absolute)
-			return false
-		moved_existing_save = true
-	elif DirAccess.dir_exists_absolute(destination_absolute):
-		DirAccess.remove_absolute(temporary_absolute)
-		return false
+    var moved_existing_save := false
+    if FileAccess.file_exists(destination_path):
+        if DirAccess.dir_exists_absolute(backup_absolute):
+            DirAccess.remove_absolute(temporary_absolute)
+            return false
+        if FileAccess.file_exists(backup_path):
+            if DirAccess.remove_absolute(backup_absolute) != OK:
+                DirAccess.remove_absolute(temporary_absolute)
+                return false
+        if DirAccess.rename_absolute(destination_absolute, backup_absolute) != OK:
+            DirAccess.remove_absolute(temporary_absolute)
+            return false
+        moved_existing_save = true
+    elif DirAccess.dir_exists_absolute(destination_absolute):
+        DirAccess.remove_absolute(temporary_absolute)
+        return false
 
-	if DirAccess.rename_absolute(temporary_absolute, destination_absolute) != OK:
-		if moved_existing_save:
-			DirAccess.rename_absolute(backup_absolute, destination_absolute)
-		if FileAccess.file_exists(temporary_path):
-			DirAccess.remove_absolute(temporary_absolute)
-		return false
+    if DirAccess.rename_absolute(temporary_absolute, destination_absolute) != OK:
+        if moved_existing_save:
+            DirAccess.rename_absolute(backup_absolute, destination_absolute)
+        if FileAccess.file_exists(temporary_path):
+            DirAccess.remove_absolute(temporary_absolute)
+        return false
 
-	if moved_existing_save and FileAccess.file_exists(backup_path):
-		DirAccess.remove_absolute(backup_absolute)
-	return true
+    if moved_existing_save and FileAccess.file_exists(backup_path):
+        DirAccess.remove_absolute(backup_absolute)
+    return true
 
 func save_game() -> bool:
-	var data := serialize_world_state()
-	if data.is_empty():
-		return false
-	if not _write_save_atomically(SAVE_PATH, data):
-		return false
-	_update_hud()
-	return true
+    var data := serialize_world_state()
+    if data.is_empty():
+        return false
+    if not _write_save_atomically(SAVE_PATH, data):
+        return false
+    _update_hud()
+    return true
 
 func load_game() -> bool:
-	if not FileAccess.file_exists(SAVE_PATH):
-		var backup_path := SAVE_PATH + ".bak"
-		if not FileAccess.file_exists(backup_path):
-			return false
-		if DirAccess.rename_absolute(ProjectSettings.globalize_path(backup_path), ProjectSettings.globalize_path(SAVE_PATH)) != OK:
-			return false
-	if not FileAccess.file_exists(SAVE_PATH):
-		return false
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if file == null:
-		return false
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	file.close()
-	if not (parsed is Dictionary):
-		return false
-	return load_world_state_from_dictionary(parsed)
+    if not FileAccess.file_exists(SAVE_PATH):
+        var backup_path := SAVE_PATH + ".bak"
+        if not FileAccess.file_exists(backup_path):
+            return false
+        if DirAccess.rename_absolute(ProjectSettings.globalize_path(backup_path), ProjectSettings.globalize_path(SAVE_PATH)) != OK:
+            return false
+    if not FileAccess.file_exists(SAVE_PATH):
+        return false
+    var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+    if file == null:
+        return false
+    var parsed: Variant = JSON.parse_string(file.get_as_text())
+    file.close()
+    if not (parsed is Dictionary):
+        return false
+    return load_world_state_from_dictionary(parsed)
 
 func _update_hud() -> void:
     if status_label == null:
