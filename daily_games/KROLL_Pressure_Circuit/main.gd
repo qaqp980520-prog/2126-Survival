@@ -20,7 +20,6 @@ func _draw() -> void:
 	if state.is_empty():
 		return
 
-	var masks: Array = state.get("masks", [])
 	var source: Vector2i = state.get("source", Vector2i.ZERO)
 	var target: Vector2i = state.get("target", Vector2i.ZERO)
 	var reachability: Dictionary = Rules._reachable_cells(state)
@@ -58,8 +57,14 @@ func _draw() -> void:
 
 	var solved := Rules.is_solved(state)
 	var failed := Rules.is_failed(state)
-	var status_color := Color("#7dffad") if solved else Color("#ff7474") if failed else Color("#d5e7ee")
-	var status_text := "FLOW RESTORED" if solved else "PRESSURE LOST — PRESS R TO RETRY" if failed else banner
+	var status_color := Color("#d5e7ee")
+	var status_text := banner
+	if solved:
+		status_color = Color("#7dffad")
+		status_text = "FLOW RESTORED"
+	elif failed:
+		status_color = Color("#ff7474")
+		status_text = "PRESSURE LOST — PRESS R TO RETRY"
 	draw_string(font, Vector2(50.0, 610.0), status_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, status_color)
 	draw_string(font, Vector2(50.0, 644.0), "Moves: %d / %d" % [int(state.get("moves", 0)), Rules.MAX_MOVES], HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#8aaebb"))
 	draw_string(font, Vector2(50.0, 680.0), "Click/tap a pipe or select it with WASD and press SPACE. R resets the puzzle.", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#8aaebb"))
