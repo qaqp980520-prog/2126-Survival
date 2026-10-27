@@ -11,6 +11,17 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 17 — Vertical Relay + atomic surface restore（已合併／已驗證）
+
+- 最終 main：e9d853fe0114e3432b7269f902fd579bbcbe9dcc（PR #64 merge commit）。
+- PR #64：Run 17: Vertical Relay and atomic surface restore；功能分支 HEAD c00be54a008978f2406ea35612d6d02609f1bcf8，已合併。
+- 精確驗證：PR-head Godot 4.3 CI Run #297（40442929654）成功，72/72 個必要驗證步驟通過；main-push CI Run #298（40443291605）亦成功，72/72 個必要驗證步驟通過。
+- KROLL Vertical Relay：daily_games/KROLL_Vertical_Relay/；單關垂直平台跳躍，收集五個資料晶片、避開兩個移動危險區並在 75 秒內抵達出口；鍵盤與觸控按鈕；無外部素材。CI 已通過匯入、規則與 runtime smoke tests。
+- Surface stream restore transaction M0.2：prototypes/SurfaceChunkStreamingPlayground.gd 的 restore_stream_state() 先保存礦脈快照；目標串流失敗時回復舊位置、依 Controller 實際區塊 ID 執行 recovery，再還原舊礦脈狀態。get_last_restore_report() 提供 phase、rollback_complete 與原始目標同步／恢復細節。
+- 故障注入回歸：tests/surface_chunk_streaming_playground_test.gd 使目標窗口在至少一個新區塊載入後失敗，驗證玩家位置、Controller／Director ID、保存礦脈 ID 與 live ore count 復原；保留原始 load_factory 失敗報告。
+- 測試清理：Vertical Relay 與 surface streaming smoke tests 已改用由測試擁有並在結束前停止／釋放的 Timer watchdog。Run #297／#298 的這兩項測試不再輸出 ObjectDB leak warning。其他既有診斷、Cipher Recall、Cargo Tugs、Vector Rally 測試仍有非致命 ObjectDB warning；CI 成功，但這些舊警告尚未全部清理。
+- 限制：本機沒有 Godot 執行檔，GUI／iPhone 實測未完成。SurfaceChunkStreamingPlayground 仍是整合原型，不是正式世界生成器；Director 仍同步、factory-driven，非同步區塊串流未完成。
+
 ## 開發追蹤
 - [M1.3.4 世界狀態欄位驗證補強](patches/M1_3_4_WorldStateValidation.patch)：要求作物記錄具有有效三維座標，驗證文字與成熟狀態型別；尚未經 Godot 4 測試。
 - [M1.3.3 存檔欄位驗證修補](patches/M1_3_3_SaveValidation.patch)：讀檔前驗證版本、背包數量、快捷欄、座標與作物狀態欄位；尚未經 Godot 4 測試。
