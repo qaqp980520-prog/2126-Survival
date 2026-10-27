@@ -11,6 +11,28 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 24 — Frequency Lock + mineral regeneration clock guard (merged / exact-head CI passed)
+
+- Start-of-run reconciliation: Run 23's PR #79 was initially recorded as pending, but the actual exact-head Godot 4.3 Run #384 (40489504444) subsequently completed successfully. PR #79 merged as `6cd7a8bf2372972a7f64064f5c6653145141657e`; this was the Run 24 base.
+- New game: `daily_games/KROLL_Frequency_Lock/`; four unique symbols selected from a six-symbol bank, exact/misplaced feedback, eight attempts, deterministic secret generation, keyboard/mouse/touch input and restart. Godot 4.3+, no external assets/add-ons.
+- Existing-system fix: `systems/MineralMiningNode.gd` now resets `last_regen_unix` when `restore_vein(units)` actually increases stock. This prevents a depleted interval from being banked and converted immediately into extra stock after manual restoration.
+- Tests: `daily_games/KROLL_Frequency_Lock/tests/rules_test.gd`, `tests/game_smoke_test.gd`, and `tests/mineral_mining_regeneration_test.gd`. Coverage includes feedback scoring, invalid/duplicate symbols, win/lockout, interval boundaries, clock rollback, full-stock timer reset, invalid-save non-mutation, legacy schema-v1 loading, manual restore timing, and existing underground mining compatibility.
+- Feature branch `feature/run24-kroll-frequency-lock-mineral-clock-regression-2026-10-27`; PR [#80](https://github.com/qaqp980520-prog/2126-Survival/pull/80) merged as `29915be423318a4c3be4a2fbceeb2ec78f1e59b9`. Exact candidate HEAD: `b6316a60561eb0590021cd086426ca95d8fa80fa`.
+- Exact-head canonical Godot 4.3 CI Run #387 (40493037193) succeeded: 98 numbered validation steps, zero failed steps. Steps 95–97 validated Frequency Lock import/rules/runtime; step 98 validated mineral regeneration. Focused Run 24 workflow Run #2 (40493037265) also succeeded, including root import, game import/rules/runtime, mineral regeneration and underground mining compatibility.
+- Final GitHub compare confirms `main` is identical to `29915be423318a4c3be4a2fbceeb2ec78f1e59b9`; final open-PR search is empty. The connector did not expose a separate main-push workflow record, so this index does not claim post-merge push CI beyond the exact-head PR runs.
+- Limits: no local Godot executable, GUI/GPU playtest or iPhone hardware test. Frequency Lock is a compact puzzle prototype, not an account-security tool. The production M1.3 world controller remains absent; mining remains a fixed-cave prototype and world streaming remains synchronous/factory-driven.
+- Next: connect the tested inventory/mining lifecycle to the production world controller when that controller exists; add production-scene load/unload/save/restore tests and device QA.
+
+## 2026-10-27 Run 23 — Network Stabilizer + underground mining capacity guard (merged / exact-head CI passed)
+
+- Base main: `629f8c79518d46717326ab833d70fc3a2953a843`. Run 23's pending snapshot was later superseded by successful full CI.
+- New game: `daily_games/KROLL_Network_Stabilizer/`; a 10×8 relay-routing/packet-cleaning arcade prototype with three waves, scanning relays, credits and network integrity. Godot 4.3+, no external assets/add-ons.
+- Mining regression: `tests/underground_mining_playground_test.gd` injects maximum valid inventory count, confirms the bridge rejects the next unit and verifies the vein's stock does not decrease.
+- PR [#79](https://github.com/qaqp980520-prog/2126-Survival/pull/79), exact HEAD `8cae8af531ca65140de34404b1b655fbd434258d`, passed full Godot 4.3 CI Run #384 (40489504444), 94 numbered validation steps, zero failures. Steps 91–94 covered underground mining and Network Stabilizer import/rules/runtime. PR #79 merged as `6cd7a8bf2372972a7f64064f5c6653145141657e`.
+- The earlier focused Run #4 (40488678824) validated a pre-rename equivalent candidate; it is historical evidence, not a substitute for Run #384.
+- Limits: local GUI/GPU/iPhone tests not performed; the underground mine is a fixed-cave prototype, not the missing production M1.3 world controller.
+- Next: continue toward production world-controller integration rather than treating the cave prototype as production.
+
 ## 2026-10-27 Run 22 — Command Grid + underground mining entry (merged; exact-head CI passed)
 
 - Start-of-run reconciliation: GitHub main had advanced from Run 21 closeout SHA `d2a9d8a9fef010af49eedbb5b8e231a7bec96209` to `7ee84c5e61a61bd5d30a9d7ebf391e1a6fe887d7` (21 commits ahead, 0 behind). The intervening history adds the Survival Test Hub, surface inventory bridge integration, and a correction that mineral veins remain underground and are not mineable from the surface. Run 21's Notion/index snapshot had not recorded this later history; preserve it and use the actual main SHA as the baseline.
