@@ -219,3 +219,15 @@
 - CI workflow now runs Cargo Tugs import/rules/runtime tests and the explicit mineral streaming diagnostics regression.
 - Limits: local Godot executable unavailable; GUI/iPhone tests are not claimed. The streaming director remains synchronous and factory-driven, not connected to the production world generator.
 - Next: connect the diagnostics contract to the production world host, define retry/recovery behavior after incomplete rollback, and add production-scene chunk save/restore acceptance tests.
+
+## 2026-10-27 Run 15 candidate — Vector Rally + mineral stream recovery
+
+- Candidate branch: feature/run15-vector-rally-mineral-recovery-2026-10-27; based on main 3aedd4676403258ab5a7bfafd604b7c4c899c3de.
+- New game: daily_games/KROLL_Vector_Rally/ — top-down time-trial racer, ordered four checkpoints, three laps, 90-second limit, off-track speed loss, two cooldown-gated boost pads; keyboard and touch controls; no external assets/add-ons.
+- Game tests: tests/rules_test.gd covers checkpoint/lap progression, off-track bounds, boost eligibility and speed clamp; tests/game_smoke_test.gd covers win/time-up/restart, off-track drag and boost activation.
+- Survival change: systems/MineralGridStreamingDirector.gd adds recover_to_world_position(), which validates and reconciles the controller's actual loaded IDs using the surface/chunk_X_Z format, then retries the requested window.
+- Recovery regression is isolated in tests/mineral_grid_streaming_recovery_test.gd: seed eight actual controller grid IDs, recover the missing ninth chunk, then reject unknown IDs without changing the managed map. The existing diagnostics test is restored to the known-good base version and continues to verify incomplete-rollback reporting.
+- Workflow adds Vector Rally import/rules/runtime steps and verifies the new files exist. Design note: docs/MINERAL_GRID_STREAMING_RECOVERY_M0_2_2026-10-27.md.
+- Candidate validation pending; do not merge until exact-head Godot 4.3 CI succeeds. Local Godot/GUI/iPhone tests are not claimed.
+- Limits: recovery remains synchronous and factory-driven; production world generator and asynchronous streaming are not wired. If the factory/controller continues failing, recovery may still return false and callers must inspect get_last_sync_report().
+- Next: validate the exact PR head, merge only after success, run post-merge main CI, then record the final merge SHA and CI evidence.

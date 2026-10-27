@@ -128,6 +128,42 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	})
 	return true
 
+## Reconcile the managed map from the controller's actual IDs, then retry the target window.
+## This is intended for recovery after a previous sync reported an incomplete rollback.
+## Unknown ID formats are rejected before changing the director's current managed map.
+func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("get_loaded_chunk_ids"):
+		_set_sync_report(false, "recovery_validation", "Controller cannot provide its actual loaded chunk IDs.", false)
+		return false
+	var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
+	if not (raw_ids is Array or raw_ids is PackedStringArray):
+		_set_sync_report(false, "recovery_validation", "Controller returned an invalid loaded-ID collection.", false)
+		return false
+	var reconciled: Dictionary = {}
+	var invalid_ids: Array[String] = []
+	for raw_id in raw_ids:
+		var chunk_id: String = str(raw_id)
+		var parsed: Dictionary = _parse_grid_chunk_id(chunk_id)
+		if not bool(parsed.get("valid", false)):
+			invalid_ids.append(chunk_id)
+			continue
+		reconciled[chunk_id] = parsed["coordinate"]
+	if not invalid_ids.is_empty():
+		_set_sync_report(false, "recovery_validation", "Controller contains IDs that cannot be mapped to grid coordinates.", false, {
+			"unrecognized_chunk_ids": invalid_ids
+		})
+		return false
+	_managed_chunk_ids = reconciled
+	return sync_to_world_position(world_position, now_unix)
+
+func _parse_grid_chunk_id(chunk_id: String) -> Dictionary:
+	const prefix: String = "surface/chunk_"
+	if not chunk_id.begins_with(prefix):
+		return {"valid": false, "coordinate": Vector2i.ZERO}
+	var parts: PackedStringArray = chunk_id.substr(prefix.length()).split("_", false)
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return {"valid": false, "coordinate": Vector2i.ZERO}
+	return {"valid": true, "coordinate": Vector2i(parts[0].to_int(), parts[1].to_int())}
 ## Returns a snapshot of the last sync outcome, including actual active IDs from both owners.
 ## On failure, callers can inspect phase/details or subscribe to sync_failed(report).
 func get_last_sync_report() -> Dictionary:
