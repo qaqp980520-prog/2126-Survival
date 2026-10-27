@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	)
 
 	status_label = Label.new()
-	status_label.text = "提示：在子場景按 Esc 可釋放滑鼠；返回此選單請使用場景內返回鍵或重新啟動專案。"
+	status_label.text = "提示：在子場景按 Esc 可釋放滑鼠；按 F10 返回此選單。各場景目前仍是獨立原型，並非完整主遊戲。"
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", Color(0.72, 0.78, 0.82))
 	column.add_child(status_label)
