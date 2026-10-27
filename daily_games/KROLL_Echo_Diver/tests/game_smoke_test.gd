@@ -57,6 +57,8 @@ func _finish(exit_code: int) -> void:
 		root.remove_child(_watchdog)
 		_watchdog.free()
 	var final_code: int = 1 if _failed and exit_code == 0 else exit_code
+	if final_code == 0:
+		print("KROLL Echo Diver runtime smoke test passed.")
 	quit(final_code)
 
 func _on_timeout() -> void:
