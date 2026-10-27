@@ -30,13 +30,13 @@ func _run_tests() -> void:
 	var recovery_report: Dictionary = director.get_last_sync_report()
 	_check(str(recovery_report.get("phase", "")) == "recovery_validation", "NaN recovery should report recovery_validation.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected NaN recovery must not mutate the managed map.")
-	_check(PackedStringArray(controller.call("get_loaded_chunk_ids()")) == actual_before, "Rejected NaN recovery must not mutate controller chunks.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected NaN recovery must not mutate controller chunks.")
 
 	_check(not bool(director.sync_to_world_position(Vector3(INF, 0.0, 0.0), 1002)), "Sync must reject infinite coordinates.")
 	var sync_report: Dictionary = director.get_last_sync_report()
 	_check(str(sync_report.get("phase", "")) == "validation", "Infinite sync should report validation.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected infinite sync must not mutate the managed map.")
-	_check(PackedStringArray(controller.call("get_loaded_chunk_ids()")) == actual_before, "Rejected infinite sync must not mutate controller chunks.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected infinite sync must not mutate controller chunks.")
 	_check(director.get_grid_coordinate(Vector3(NAN, 0.0, 0.0)) == Vector2i.ZERO, "Coordinate helper should safely return zero for non-finite input.")
 
 	director.queue_free()
