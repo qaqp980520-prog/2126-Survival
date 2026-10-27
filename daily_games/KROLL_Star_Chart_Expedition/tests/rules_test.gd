@@ -12,7 +12,7 @@ func _run_tests() -> void:
 	var fuel_before: int = int(state["fuel"])
 	state = Rules.step(state, Vector2i.LEFT)
 	_check(state["last_action"] == "blocked" and int(state["fuel"]) == fuel_before, "Leaving the board must not spend fuel.")
-	state = Rules.step(state, Vector2i.UP)
+	state = Rules.step(state, Vector2i.RIGHT)
 	_check(state["last_action"] == "blocked" and int(state["fuel"]) == fuel_before, "Asteroid collision must not spend fuel.")
 	state = Rules.step(state, Vector2i(1, 1))
 	_check(state["last_action"] == "invalid_direction" and int(state["fuel"]) == fuel_before, "Diagonal movement must be rejected without fuel cost.")
