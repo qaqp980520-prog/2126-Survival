@@ -24,9 +24,7 @@ func _run() -> void:
 		if ore != null:
 			_expect(ore.global_position.y < -0.5, "mineral vein is placed below the surface ground slab")
 			_expect(not playground.has_method("_mine_nearest_vein"), "surface prototype does not expose surface mining")
-			var payload: Dictionary = bridge.call("serialize_inventory")
-			var counts: Dictionary = payload.get("inventory", {})
-			_expect(counts.is_empty(), "surface exploration cannot collect underground ore directly")
+			_expect(is_zero_approx(float(bridge.call("get_weight_kg"))), "surface exploration cannot collect underground ore directly")
 
 	playground.queue_free()
 	await process_frame
