@@ -16,6 +16,11 @@ func _run_tests() -> void:
 	game._launch(Vector2(120.0, 0.0))
 	_check(int(game.shots_this_course) == 1 and int(game.total_shots) == 1, "A valid shot should increment stroke counters.")
 	_check(float(game.ball_velocity.length()) <= Rules.MAX_SHOT_SPEED, "Shot velocity must stay within the configured maximum.")
+	var obstacle := Rect2(200.0, 200.0, 80.0, 40.0)
+	game.ball_position = Vector2(220.0, 220.0)
+	game.ball_velocity = Vector2(0.0, 10.0)
+	game._collide_obstacle(obstacle)
+	_check(not obstacle.has_point(game.ball_position), "A ball starting inside an obstacle must be ejected outside its bounds.")
 	game.ball_position = game.hole_position
 	game.ball_velocity = Vector2.ZERO
 	game.shots_this_course = 1
