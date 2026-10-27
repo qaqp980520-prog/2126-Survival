@@ -147,7 +147,7 @@ func _finish() -> void:
 	_finished = true
 	if is_instance_valid(_watchdog_timer):
 		_watchdog_timer.stop()
-		_watchdog_timer.queue_free()
+		_watchdog_timer.free()
 	if _failed:
 		print("Surface chunk streaming playground integration tests failed.")
 		quit(1)
