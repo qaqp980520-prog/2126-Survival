@@ -33,7 +33,7 @@ func _run_tests() -> void:
 	restart.pressed = true
 	game.call("_unhandled_input", restart)
 	_check(str(game.state.get("status", "")) == "playing", "R should restart a terminal game.")
-	_check(game.player.position.is_equal_approx(game.START_POSITION), "Restart should restore the player start position.")
+	_check(game.player.position.is_equal_approx(Vector2(480.0, 1680.0)), "Restart should restore the player start position.")
 	_check(float(game.state.get("remaining_time", 0.0)) == Rules.TIME_LIMIT, "Restart should reset the timer.")
 	_check(bool(game.pickups["relay_data_01"].visible), "Restart should restore collected pickup visibility.")
 
