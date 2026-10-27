@@ -4,6 +4,7 @@ const PlaygroundScene = preload("res://prototypes/SurfaceChunkStreamingPlaygroun
 const Adapter = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 var _failed: bool = false
 var _finished: bool = false
+var _fail_factory_coordinate: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -116,8 +117,6 @@ func _run_tests() -> void:
 	playground.queue_free()
 	await process_frame
 	_finish()
-
-var _fail_factory_coordinate: Vector2i = Vector2i(999999, 999999)
 
 func _make_fault_injected_chunk(coord: Vector2i) -> Node3D:
 	if coord == _fail_factory_coordinate:
