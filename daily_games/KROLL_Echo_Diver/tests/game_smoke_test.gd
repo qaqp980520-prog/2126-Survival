@@ -2,6 +2,7 @@ extends SceneTree
 
 const MainScene = preload("res://main.tscn")
 var _finished: bool = false
+var _failed: bool = false
 var _watchdog: Timer
 
 func _initialize() -> void:
@@ -38,10 +39,11 @@ func _run_test() -> void:
 	_expect(int(reset_state.get("sonar_charges", -1)) == 4, "restart restores sonar charges")
 	_expect(is_equal_approx(float(main.get("remaining_time")), 75.0), "restart restores timer")
 	main.free()
-	_finish(0 if not _finished else 1)
+	_finish(0)
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
+		_failed = true
 		push_error("FAIL: " + message)
 	else:
 		print("PASS: " + message)
@@ -54,7 +56,8 @@ func _finish(exit_code: int) -> void:
 		_watchdog.stop()
 		root.remove_child(_watchdog)
 		_watchdog.free()
-	quit(exit_code)
+	var final_code: int = 1 if _failed and exit_code == 0 else exit_code
+	quit(final_code)
 
 func _on_timeout() -> void:
 	push_error("KROLL Echo Diver runtime smoke test timed out.")
