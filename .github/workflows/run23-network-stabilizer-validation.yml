@@ -6,11 +6,11 @@ on:
       - 'daily_games/KROLL_Network_Stabilizer/**'
       - 'tests/underground_mining_playground_test.gd'
       - 'prototypes/UndergroundMiningPlayground.gd'
-      - '.github/workflows/run23-bastion-validation.yml'
+      - '.github/workflows/run23-network-stabilizer-validation.yml'
   workflow_dispatch:
 
 concurrency:
-  group: run23-bastion-${{ github.event.pull_request.number || github.ref }}
+  group: run23-network-stabilizer-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
