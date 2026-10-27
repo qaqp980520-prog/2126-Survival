@@ -37,7 +37,22 @@ func _run_tests() -> void:
 	_check(str(sync_report.get("phase", "")) == "validation", "Infinite sync should report validation.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected infinite sync must not mutate the managed map.")
 	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected infinite sync must not mutate controller chunks.")
+	_check(not bool(director.sync_to_world_position(Vector3(1.0e30, 0.0, 0.0), 1003)), "Sync must reject huge but finite coordinates before integer conversion.")
+	var huge_sync_report: Dictionary = director.get_last_sync_report()
+	_check(str(huge_sync_report.get("phase", "")) == "validation", "Huge finite sync should report validation.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected huge sync must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected huge sync must not mutate controller chunks.")
+	_check(not bool(director.recover_to_world_position(Vector3(-1.0e30, 0.0, 0.0), 1004)), "Recovery must reject huge but finite coordinates.")
+	var huge_recovery_report: Dictionary = director.get_last_sync_report()
+	_check(str(huge_recovery_report.get("phase", "")) == "recovery_validation", "Huge finite recovery should report recovery_validation.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected huge recovery must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected huge recovery must not mutate controller chunks.")
 	_check(director.get_grid_coordinate(Vector3(NAN, 0.0, 0.0)) == Vector2i.ZERO, "Coordinate helper should safely return zero for non-finite input.")
+	_check(director.get_grid_coordinate(Vector3(1.0e30, 0.0, 0.0)) == Vector2i.ZERO, "Coordinate helper should safely return zero for out-of-range input.")
+	director.chunk_size_x = NAN
+	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a non-finite chunk size.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Invalid chunk size must not mutate the managed map.")
+	director.chunk_size_x = 10.0
 
 	director.queue_free()
 	controller.queue_free()
