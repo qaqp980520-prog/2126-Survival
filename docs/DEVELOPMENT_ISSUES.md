@@ -32,21 +32,13 @@
 - No local Godot executable, GUI/GPU or iPhone test was available. Production world controller integration remains open.
 
 
-## Run 20 candidate — 2026-10-27
-- [x] Validate KROLL Magnetic Salvage import, rules and runtime smoke test with exact-head Godot 4.3 CI (Run #321, 40465124945).
-- [x] Validate active world save file roundtrip using prototypes/BackroomsPortalPlayground.tscn, including invalid inventory and non-finite position rejection without live-state mutation (Run #321 step #82).
-- Source boundary remains: scripts/world.gd is absent. The active playground test improves coverage but does not complete the missing M1.3 production controller.
-- No local Godot GUI or iPhone hardware test is claimed. Do not merge before full CI succeeds.
+## Run 20 verification checklist｜2026-10-27
 
-
-## Run 20 functional closeout｜2026-10-27
-- PR #72 merged as `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a` after exact-head Godot 4.3 CI Run #321 passed all 82 numbered validation steps.
-- KROLL Magnetic Salvage import, rules and runtime smoke tests passed; active world save file roundtrip and invalid-save atomicity test passed.
-- Main-push Run #322 (40465398061) targets the exact merge SHA and is still in progress at `Initialize containers` at the time of this update. Do not mark it successful until its conclusion is success.
-- `scripts/world.gd` remains absent; this run validates the active BackroomsPortalPlayground controller, not a separate M1.3 production controller. GUI/iPhone hardware tests remain outstanding.
-
-
-## Run 20 main-push verification closeout｜2026-10-27
-- Main-push Godot 4.3 CI Run #322 (40465398061) completed successfully on main SHA `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`.
-- All 82 numbered validation steps passed, including Magnetic Salvage import/rules/runtime and active world save roundtrip integration. No failed steps.
-- Local GUI/iPhone testing and the separate M1.3 production world controller remain outstanding.
+- [x] KROLL Magnetic Salvage import, rules and runtime smoke tests passed exact-head Godot 4.3 CI Run #321 (40465124945).
+- [x] Active world save file roundtrip passed in Run #321 step #82 using `prototypes/BackroomsPortalPlayground.tscn`; valid inventory/player position were restored, while unknown item IDs and non-finite positions were rejected without partial live-state mutation.
+- [x] PR #72 merged as `fa4f680434fe7e961b1d6266a8a7357b9ef0e77a`.
+- [x] Post-merge main-push Run #322 (40465398061) passed on that exact main SHA; all 82 numbered validation steps passed with no failed steps.
+- [ ] Complete documentation-only PR #73 after its own exact-head CI passes.
+- Source boundary remains: `scripts/world.gd` is absent. The active playground test improves coverage but does not complete the missing M1.3 production controller; crop persistence patches remain unapplied.
+- No local Godot GUI/GPU or iPhone hardware test is claimed.
+- Next: finish PR #73 documentation sync, then integrate the actual production world controller when its source is added to the repository.
