@@ -11,16 +11,19 @@ func _run_tests() -> void:
 	assert(is_equal_approx(float(state["remaining_time"]), Rules.TIME_LIMIT))
 
 	state = Rules.collect_data(state, "relay_data_01")
-	assert((state["data_ids"] as Array).size() == 1)
+	var collected_ids: Array = state.get("data_ids", [])
+	assert(collected_ids.size() == 1)
 	state = Rules.collect_data(state, "relay_data_01")
-	assert((state["data_ids"] as Array).size() == 1, "Duplicate data must not increase progress")
+	collected_ids = state.get("data_ids", [])
+	assert(collected_ids.size() == 1, "Duplicate data must not increase progress")
 	state = Rules.reach_exit(state)
 	assert(str(state["status"]) == "playing", "Exit must remain locked before all data is collected")
 	assert(str(state["last_action"]) == "gate_locked")
 
 	for index: int in range(2, Rules.REQUIRED_DATA + 1):
 		state = Rules.collect_data(state, "relay_data_%02d" % index)
-	assert((state["data_ids"] as Array).size() == Rules.REQUIRED_DATA)
+	collected_ids = state.get("data_ids", [])
+	assert(collected_ids.size() == Rules.REQUIRED_DATA)
 	state = Rules.reach_exit(state)
 	assert(str(state["status"]) == "won", "Exit should win after all required data is collected")
 	var won_state: Dictionary = Rules.tick(state, 999.0)
