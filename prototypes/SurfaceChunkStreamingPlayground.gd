@@ -185,30 +185,87 @@ func serialize_stream_state() -> Dictionary:
 	}
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
+	if player == null or chunk_controller == null or director == null:
+		_set_restore_report(false, "validation", "Player, controller, or director is unavailable.", true)
+		return false
 	var schema_value: Variant = payload.get("schema_version", null)
 	var position_value: Variant = payload.get("player_position", null)
 	var minerals_value: Variant = payload.get("minerals", null)
 	if not (schema_value is int) or int(schema_value) != 1:
+		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	if not (position_value is Array) or position_value.size() != 3:
+		_set_restore_report(false, "validation", "Player position must contain three components.", true)
 		return false
 	if not (minerals_value is Dictionary):
+		_set_restore_report(false, "validation", "Mineral save payload must be a dictionary.", true)
 		return false
 	for component in position_value:
 		if not (component is int or component is float) or not is_finite(float(component)):
+			_set_restore_report(false, "validation", "Player position contains a non-finite component.", true)
 			return false
+
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
-	if not chunk_controller.restore_save_dict(minerals_value, now):
-		return false
 	var previous_position: Vector3 = player.global_position
+	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
+	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins"):
+		_set_restore_report(false, "snapshot", "Could not snapshot the current mineral state before restore.", true)
+		return false
+	if not chunk_controller.restore_save_dict(minerals_value, now):
+		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
+		return false
+
 	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	_last_grid = Vector2i(999999, 999999)
 	if _sync_streaming(now):
+		_set_restore_report(true, "complete", "", true, {
+			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		})
 		return true
+
+	# A failed target stream must not leave the candidate mineral payload applied.
+	# Reconcile the old chunk window first, then restore the exact pre-attempt mineral snapshot.
+	var target_sync_report: Dictionary = director.get_last_sync_report()
 	player.global_position = previous_position
 	_last_grid = Vector2i(999999, 999999)
-	_sync_streaming(now)
+	var recovery_success: bool = false
+	if director.has_method("recover_to_world_position"):
+		recovery_success = bool(director.recover_to_world_position(previous_position, now))
+	else:
+		recovery_success = _sync_streaming(now)
+	var recovery_report: Dictionary = director.get_last_sync_report()
+	if recovery_success:
+		_last_grid = director.get_grid_coordinate(previous_position)
+
+	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
+	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
+	var rollback_complete: bool = recovery_success and minerals_restored and ids_consistent and position_restored
+	_refresh_hud()
+	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
+		"target_sync_report": target_sync_report,
+		"recovery_report": recovery_report,
+		"recovery_success": recovery_success,
+		"minerals_restored": minerals_restored,
+		"ids_consistent": ids_consistent,
+		"position_restored": position_restored
+	})
+	if not rollback_complete:
+		push_warning("Surface stream restore rollback was incomplete; inspect get_last_restore_report().")
 	return false
+
+func get_last_restore_report() -> Dictionary:
+	return _last_restore_report.duplicate(true)
+
+func _set_restore_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
+	_last_restore_report = {
+		"success": success,
+		"phase": phase,
+		"message": message,
+		"rollback_complete": rollback_complete,
+		"details": details.duplicate(true)
+	}
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()
