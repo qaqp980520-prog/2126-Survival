@@ -111,7 +111,17 @@ jobs:
           test -f daily_games/KROLL_Neon_Breaker/rules.gd
           test -f daily_games/KROLL_Neon_Breaker/tests/rules_test.gd
           test -f daily_games/KROLL_Neon_Breaker/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Command_Grid/project.godot
+          test -f daily_games/KROLL_Command_Grid/main.tscn
+          test -f daily_games/KROLL_Command_Grid/main.gd
+          test -f daily_games/KROLL_Command_Grid/rules.gd
+          test -f daily_games/KROLL_Command_Grid/tests/rules_test.gd
+          test -f daily_games/KROLL_Command_Grid/tests/game_smoke_test.gd
+          test -f prototypes/UndergroundMiningPlayground.tscn
+          test -f prototypes/UndergroundMiningPlayground.gd
+          test -f tests/underground_mining_playground_test.gd
           test -f docs/KROLL_NEON_BREAKER_AND_ATOMIC_WORLD_SAVE_M0_1_2026-10-27.md
+          test -f docs/UNDERGROUND_MINING_PLAYGROUND_M0_1_2026-10-27.md
           test -f tests/world_session_save_roundtrip_test.gd
           test -f docs/KROLL_ECHO_DIVER_AND_WORLD_BRIDGE_TEST_HARDENING_M0_1_2026-10-27.md
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
@@ -574,17 +584,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Vertical Relay runtime smoke test passed."
-      - name: Run surface mining and shared inventory integration test
+      - name: Run surface underground-vein placement regression test
         shell: bash
         run: |
           set -o pipefail
           output="$(timeout 35s godot --headless --path . --script res://tests/surface_mining_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
-            echo "Godot reported errors during surface mining integration tests."
+            echo "Godot reported errors during underground-vein placement regression tests."
             exit 1
           fi
-          echo "$output" | grep -q 'Surface mining integration test passed.'
+          echo "$output" | grep -q 'Surface underground-vein placement test passed.'
       - name: Run surface chunk streaming playground integration test
         shell: bash
         run: |
@@ -706,3 +716,39 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Active world save roundtrip integration tests passed."
+
+      - name: Import and parse KROLL Command Grid
+        run: godot --headless --path daily_games/KROLL_Command_Grid --editor --quit
+      - name: Run KROLL Command Grid rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Command_Grid --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Command Grid rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Command Grid rules tests passed."
+      - name: Run KROLL Command Grid runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Command_Grid --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Command Grid runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Command Grid runtime smoke test passed."
+      - name: Run underground mining playground integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/underground_mining_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported underground mining integration errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Underground mining playground integration tests passed."

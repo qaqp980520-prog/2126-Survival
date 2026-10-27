@@ -11,6 +11,16 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 22 — Command Grid + underground mining entry (candidate; exact-head CI pending)
+
+- Start-of-run reconciliation: GitHub main had advanced from Run 21 closeout SHA `d2a9d8a9fef010af49eedbb5b8e231a7bec96209` to `7ee84c5e61a61bd5d30a9d7ebf391e1a6fe887d7` (21 commits ahead, 0 behind). The intervening history adds the Survival Test Hub, surface inventory bridge integration, and a correction that mineral veins remain underground and are not mineable from the surface. Run 21's Notion/index snapshot had not recorded this later history; preserve it and use the actual main SHA as the baseline.
+- New game candidate: `daily_games/KROLL_Command_Grid/`; deterministic 8×8 turn-based tactics, four data cores, shortest-path security bots, three EMP charges, 32-action budget, keyboard and mouse/touch grid input. Godot 4.3+, no external assets/add-ons.
+- New underground integration candidate: `prototypes/UndergroundMiningPlayground.tscn` and `prototypes/UndergroundMiningPlayground.gd`. Registers three cave veins under stable chunk ID `underground/cave_0_0`, uses `MineralChunkController`, `MineralVeinRegistry`, `MineralMiningNode`, and `SurvivalWorldBridge`; F mines, G drops one unit, HUD shows immediate weight/encumbrance state.
+- Regression candidate: `tests/underground_mining_playground_test.gd` checks below-surface placement, stable chunk registration, mine-to-inventory transfer, vein snapshot restore, drop weight recalculation, and no surface mining path. Existing surface test remains in place.
+- Hub/CI changes: `prototypes/SurvivalTestHub.gd`, `tests/survival_test_hub_smoke_test.gd`, `.github/workflows/godot-validation.yml`; the hub now exposes a third underground-mine entry and CI imports/tests Command Grid plus the cave integration.
+- Candidate branch: `feature/run22-underground-mine-cargo-crane-2026-10-27`, based on the verified start SHA above. Exact-head Run #354 failed at step 7 because the hub smoke test searched for an implicit Label name; fixed with explicit StatusLabel. Updated Run #357 passed the hub and earlier regression steps but failed at step 73 because CI expected the obsolete marker 'Surface mining integration test passed.' while the underground-only regression prints 'Surface underground-vein placement test passed.' The workflow marker and step label are now aligned; run fresh exact-head CI before considering merge.
+- Limits: this remains a fixed single-cave prototype, not the missing production M1.3 controller; no local GUI/GPU/iPhone test is claimed.
+
 ## 2026-10-27 Run 21 — Neon Breaker + recoverable active-world save (merged / exact-head verified)
 
 - Base main after Run 20 documentation merge: `31b8038824caf0f368262d243c2052abc4848e8b`; PR #73 exact-head Godot 4.3 CI Run #325 succeeded with all 82 numbered validation steps.

@@ -2,6 +2,7 @@ extends Control
 
 const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
+const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 
 var status_label: Label
 
@@ -59,12 +60,19 @@ func _build_ui() -> void:
 	)
 	_add_scene_button(
 		column,
+		"地下礦坑／採礦與共用背包",
+		"進入地下洞穴，開採銅、鐵與鈾礦，驗證礦脈持久化及負重即時更新。",
+		UNDERGROUND_SCENE
+	)
+	_add_scene_button(
+		column,
 		"後室傳送門實驗場",
 		"測試後室無限迷宮、傳送門、背包負重、設定與存檔。",
 		BACKROOMS_SCENE
 	)
 
 	status_label = Label.new()
+	status_label.name = "StatusLabel"
 	status_label.text = "提示：在子場景按 Esc 可釋放滑鼠；按 F10 返回此選單。各場景目前仍是獨立原型，並非完整主遊戲。"
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", Color(0.72, 0.78, 0.82))

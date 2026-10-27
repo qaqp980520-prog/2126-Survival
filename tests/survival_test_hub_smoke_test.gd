@@ -3,6 +3,7 @@ extends SceneTree
 const HubScene = preload("res://prototypes/SurvivalTestHub.tscn")
 const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
+const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 
 var failures: Array[String] = []
 
@@ -12,19 +13,21 @@ func _initialize() -> void:
 func _run() -> void:
 	_expect(ResourceLoader.exists(SURFACE_SCENE), "surface prototype scene exists")
 	_expect(ResourceLoader.exists(BACKROOMS_SCENE), "Backrooms prototype scene exists")
+	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == "res://prototypes/SurvivalTestHub.tscn", "project launches into the test hub")
 
 	var hub := HubScene.instantiate()
 	root.add_child(hub)
 	await process_frame
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 2, "hub exposes exactly two prototype launch buttons")
+	_expect(buttons.size() == 3, "hub exposes exactly three prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
 	_expect(labels.has("地表探索／區塊與礦物串流"), "hub labels the surface streaming prototype")
 	_expect(labels.has("後室傳送門實驗場"), "hub labels the Backrooms portal prototype")
-	_expect(hub.get_node_or_null("StatusLabel") != null or hub.find_child("Label", true, false) != null, "hub creates visible explanatory labels")
+	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
+	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	hub.queue_free()
 	await process_frame
