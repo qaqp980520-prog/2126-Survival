@@ -87,9 +87,9 @@ func _draw() -> void:
 		draw_rect(Rect2(center + Vector2(-16.0, -24.0), Vector2(32.0, 4.0)), Color(0.25, 0.05, 0.08), true)
 		draw_rect(Rect2(center + Vector2(-16.0, -24.0), Vector2(32.0 * checks_ratio, 4.0)), Color(0.40, 1.0, 0.48), true)
 
-	draw_string(ThemeDB.fallback_font, Vector2(690.0, 50.0), "DEFENSE STATUS", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color(0.70, 0.91, 1.0))
+	draw_string(ThemeDB.fallback_font, Vector2(690.0, 50.0), "NETWORK STATUS", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, Color(0.70, 0.91, 1.0))
 	draw_string(ThemeDB.fallback_font, Vector2(690.0, 86.0), "CREDITS   %d" % int(state.get("credits", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17, Color(1.0, 0.80, 0.34))
-	draw_string(ThemeDB.fallback_font, Vector2(690.0, 116.0), "CORE INTEGRITY   %d" % int(state.get("integrity", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17, Color(1.0, 0.42, 0.44))
+	draw_string(ThemeDB.fallback_font, Vector2(690.0, 116.0), "NETWORK INTEGRITY   %d" % int(state.get("integrity", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17, Color(1.0, 0.42, 0.44))
 	draw_string(ThemeDB.fallback_font, Vector2(690.0, 146.0), "WAVE      %d / %d" % [int(state.get("wave", 0)), Rules.WAVE_COUNTS.size()], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17, Color(0.55, 0.91, 1.0))
 	draw_string(ThemeDB.fallback_font, Vector2(690.0, 176.0), "PACKETS CLEANED     %d" % int(state.get("cleaned", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17, Color(0.68, 1.0, 0.70))
 	draw_rect(START_WAVE_RECT, Color(0.08, 0.34, 0.42), true)
@@ -104,6 +104,6 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(690.0, 466.0), "Relays auto-scan within range.", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(0.70, 0.78, 0.86))
 	draw_string(ThemeDB.fallback_font, Vector2(690.0, 490.0), "Each cleaned packet grants %d credits." % Rules.CLEAN_REWARD, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(0.70, 0.78, 0.86))
 	if str(state.get("phase", "")) == "won":
-		draw_string(ThemeDB.fallback_font, Vector2(690.0, 555.0), "CORE SECURED", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color(0.35, 1.0, 0.60))
+		draw_string(ThemeDB.fallback_font, Vector2(690.0, 555.0), "NETWORK STABLE", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color(0.35, 1.0, 0.60))
 	elif str(state.get("phase", "")) == "lost":
 		draw_string(ThemeDB.fallback_font, Vector2(690.0, 555.0), "NETWORK BREACHED", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color(1.0, 0.30, 0.38))
