@@ -258,8 +258,9 @@
 
 ## Run 18 final reconciliation｜2026-10-27
 
-- PR #67 merged by squash as `408f263648ac88a6097399331cc8fd9398489601`; the merge commit is the current `main` SHA at closeout. The feature PR is closed/merged.
-- Exact-head Godot 4.3 CI Run ID `40445410307` succeeded: all 78 job steps completed successfully, with zero failed steps. The root project import, mineral streaming diagnostics/recovery/position-validation/director tests, and all existing mini-game tests passed.
+- PR #67 merged by squash as `408f263648ac88a6097399331cc8fd9398489601` (feature merge commit). PR #68 documentation closeout merged as `1b7a12fe92696f3087ed6d9bb794d5cc97611ab0`, the current `main` SHA at final reconciliation.
+- Exact-head Godot 4.3 CI Run ID `40445410307` for PR #67 succeeded: all 78 job steps completed successfully, with zero failed steps. The root project import, mineral streaming diagnostics/recovery/position-validation/director tests, and all existing mini-game tests passed.
+- Exact-head documentation PR #68 CI Run ID `40445774345` also succeeded: 78/78 job steps, zero failures, including Mini Golf and streaming regression steps.
 - New game: `daily_games/KROLL_Orbital_Mini_Golf/` — three top-down mini-golf courses; pull-back mouse/touch aiming, keyboard direction shots, cup capture speed limit, obstacle/wall bounce, five strokes per course, and 90-second total timer. No external assets or add-ons.
 - Survival hardening: `systems/MineralGridStreamingDirector.gd` rejects non-finite or extreme world coordinates before grid conversion, invalid chunk dimensions, non-canonical IDs such as `surface/chunk_01_1`, and canonical-looking IDs outside the supported grid bound. Recovery tests prove rejected IDs/coordinates do not mutate the managed map or controller ID set.
 - Test cleanup: streaming diagnostics, Cipher Recall, Cargo Tugs, and Vector Rally smoke tests now own and release their watchdog Timer nodes. The exact-head CI log contains no actual Godot `SCRIPT ERROR:`, `ERROR:`, or `FAIL:` lines and no `ObjectDB instances leaked at exit` warning.
