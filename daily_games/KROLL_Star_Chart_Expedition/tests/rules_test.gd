@@ -33,7 +33,8 @@ func _run_tests() -> void:
 		previous = target
 	_check(state["status"] == "won", "Collecting all beacons and reaching the exit should win.")
 	_check(int(state["fuel"]) == 2, "The winning route should leave two fuel.")
-	_check((state["collected"] as Array).size() == 3, "All three beacons should be collected exactly once.")
+	var collected: Array = state["collected"]
+	_check(collected.size() == 3, "All three beacons should be collected exactly once.")
 
 	var expired: Dictionary = Rules.expire(Rules.new_state())
 	_check(expired["status"] == "failed" and expired["last_action"] == "timeout", "Timeout should fail a running mission.")
