@@ -102,9 +102,10 @@ func _run_integration_test() -> void:
 		var bad_world: Dictionary = entry["data"]
 		_expect_rejected_restore_unchanged(_bridge, bad_world, snapshot, str(entry["label"]))
 
+	var unsupported_before: Dictionary = unsupported_version.duplicate(true)
 	var rejected_export: Dictionary = _bridge.call("serialize_world_save", unsupported_version)
 	_expect(not bool(rejected_export.get("ok", false)), "reject unsupported world schema during export")
-	_expect(unsupported_version == legacy_world, "rejected export leaves input envelope unchanged")
+	_expect(unsupported_version == unsupported_before, "rejected export leaves input envelope unchanged")
 	_finish(0 if failures.is_empty() else 1)
 
 func _expect_rejected_restore_unchanged(bridge: Node, bad_world: Dictionary, expected_inventory: Dictionary, label: String) -> void:
