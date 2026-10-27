@@ -117,8 +117,11 @@ func mine_hit(hit_position: Vector3 = Vector3.ZERO) -> int:
 func restore_vein(units: int) -> void:
 	if units <= 0:
 		return
+	var previous_units := remaining_units
 	remaining_units = mini(max_units, remaining_units + units)
-	if remaining_units >= max_units:
+	# A manual restore is a new stock event. Do not let time accumulated while the
+	# vein was depleted immediately regenerate extra units on the next process tick.
+	if remaining_units > previous_units:
 		last_regen_unix = Time.get_unix_time_from_system()
 	if remaining_units > 0:
 		_depleted_signal_sent = false
