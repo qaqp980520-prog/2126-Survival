@@ -11,6 +11,18 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 26 — Orbit Warden + mineral restore contract (merged / exact-head CI passed)
+
+- Start-of-run reconciliation: actual main was a48ec761f2b36cee44e6eb5022cda2b3c39aeca4. Run 25 PRs #84/#85 were merged; exact-head Godot 4.3 Runs #395 and #397 succeeded with 102 workflow validation steps each. Open PR search was empty. The Notion asset index still showed stale Run 23 pending snapshots; a correction was appended to the fixed Notion index and the Run 26 records.
+- New game: daily_games/KROLL_Orbit_Warden/ is a non-combat top-down space-navigation arcade game: steer/thrust to recover six energy cells, avoid drifting asteroids, and use a brief deflection shield. Three lives, 75-second limit, keyboard/touch controls. Godot 4.3+, no external assets/add-ons; import through daily_games/KROLL_Orbit_Warden/project.godot.
+- Existing-system change: systems/MineralMiningNode.gd restore_vein(units, now_unix=-1) now returns the actual accepted units, caps at remaining capacity, supports deterministic timestamps, and resets regeneration timing only when stock actually increases. Existing one-argument calls remain compatible; no save schema change.
+- Regression coverage: tests/mineral_mining_regeneration_test.gd now tests exact accepted count, partial interval, capacity cap, full-stock/zero/negative no-ops, and no-op timestamp preservation.
+- Feature PR #86 merged as adaf93ab255bff720d3bc70af1221ea4cc58f727; exact candidate HEAD 453358cfae88a4f62511dd33bb40a807d04a2f6d. PR: https://github.com/qaqp980520-prog/2126-Survival/pull/86.
+- Exact-head Godot 4.3 CI Run #406 (40527501347) completed successfully: all 108 job steps succeeded. The final Orbit Warden import, rules test and runtime smoke test all succeeded. Focused Run 24 workflow Run #11 (40527501336) also succeeded, all 13 steps, including mineral regeneration and underground-mining compatibility.
+- Static review caught and fixed a missing HUD parenthesis and changed energy-cell initialization to explicit typed-array appends before the successful candidate CI. No local Godot executable is available; GUI/GPU/iPhone device playtesting is not claimed.
+- Limits: production M1.3 world controller remains absent; underground mining remains a fixed-cave prototype; inventory and mineral weight catalogs are still duplicated; crop persistence is not integrated.
+- Next: integrate the tested inventory/mining/save lifecycle into the actual production world controller when it exists, then add end-to-end pickup/drop/weight/save/reload/failure-recovery acceptance tests and device QA.
+
 ## 2026-10-27 Run 25 — Vent Runner + inventory/mineral weight compatibility (merged / exact-head CI passed)
 
 - Start-of-run reconciliation: GitHub main was `789ba5fedd90c12afdf4b710c62a322682733bd2`; Run 24 PRs #80–#83 were all merged, with exact-head Godot 4.3 Runs #387, #389, #391 and #393 each passing 98/98 numbered validation steps. No open PRs existed before Run 25.
