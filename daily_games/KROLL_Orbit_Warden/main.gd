@@ -61,7 +61,9 @@ func _process(delta: float) -> void:
 
 	for asteroid_index in range(asteroids.size() - 1, -1, -1):
 		var asteroid: Dictionary = asteroids[asteroid_index]
-		asteroid["position"] = _wrap_position(Vector2(asteroid["position"]) + Vector2(asteroid["velocity"]) * delta)
+		var asteroid_position: Vector2 = asteroid["position"]
+		var asteroid_velocity: Vector2 = asteroid["velocity"]
+		asteroid["position"] = _wrap_position(asteroid_position + asteroid_velocity * delta)
 		asteroid["rotation"] = float(asteroid["rotation"]) + float(asteroid["spin"]) * delta
 		asteroids[asteroid_index] = asteroid
 
