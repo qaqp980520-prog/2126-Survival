@@ -61,7 +61,7 @@ static func rotate_mask(mask: int) -> int:
 	return ((normalized << 1) & ALL_DIRECTIONS) | ((normalized >> 3) & 1)
 
 static func rotate_tile(state: Dictionary, cell: Vector2i) -> bool:
-	if int(state.get("moves", 0)) >= MAX_MOVES:
+	if int(state.get("moves", 0)) >= MAX_MOVES or is_solved(state):
 		return false
 	if not _inside_board(cell):
 		return false
@@ -77,7 +77,7 @@ static func rotate_tile(state: Dictionary, cell: Vector2i) -> bool:
 
 static func is_solved(state: Dictionary) -> bool:
 	var target_value: Variant = state.get("target", null)
-	if not (target_value is Vector2i):
+	if not (target_value is Vector2i) or not _inside_board(target_value):
 		return false
 	return _reachable_cells(state).has(_cell_index(target_value))
 
@@ -98,7 +98,9 @@ static func get_mask(state: Dictionary, cell: Vector2i) -> int:
 static func _reachable_cells(state: Dictionary) -> Dictionary:
 	var masks: Variant = state.get("masks", null)
 	var source_value: Variant = state.get("source", null)
-	if not (masks is Array) or not (source_value is Vector2i) or not _inside_board(source_value):
+	if not (masks is Array) or masks.size() != COLS * ROWS:
+		return {}
+	if not (source_value is Vector2i) or not _inside_board(source_value):
 		return {}
 	var queue: Array[Vector2i] = [source_value]
 	var visited: Dictionary = {_cell_index(source_value): true}
