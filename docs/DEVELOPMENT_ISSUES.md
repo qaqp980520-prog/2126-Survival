@@ -24,3 +24,7 @@
 - 「已整合」需確認遊戲專案已引用該模組。
 - 「已測試」必須記錄實際使用的 Godot 版本與測試結果。
 - 本清單建立時，上述項目尚未宣稱完成。
+
+## Run 19 source audit — 2026-10-27
+- GitHub main does not contain scripts/world.gd (contents API returned 404). The M1.3 save-validation changes are still patch files, not applied code; do not claim they are integrated until the actual controller source is present and tested.
+- The current SurvivalWorldBridge save-adapter test now owns and frees its watchdog Timer and covers malformed legacy inventory fields with no partial live-state mutation. Exact-head Godot 4.3 CI is required before calling this test hardening verified.
