@@ -100,7 +100,6 @@ jobs:
           test -f daily_games/KROLL_Orbital_Mini_Golf/tests/rules_test.gd
           test -f daily_games/KROLL_Orbital_Mini_Golf/tests/game_smoke_test.gd
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
-          test -f tests/mineral_grid_streaming_recovery_test.gd
           test -f tests/mineral_grid_streaming_position_validation_test.gd
           test -f docs/MINERAL_GRID_STREAMING_POSITION_VALIDATION_M0_1_2026-10-27.md
           test -f prototypes/SurfaceChunkStreamingPlayground.tscn
