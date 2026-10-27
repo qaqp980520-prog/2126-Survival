@@ -118,6 +118,9 @@ jobs:
           test -f tests/mineral_grid_streaming_position_validation_test.gd
           test -f docs/MINERAL_GRID_STREAMING_POSITION_VALIDATION_M0_1_2026-10-27.md
           test -f prototypes/SurfaceChunkStreamingPlayground.tscn
+          test -f prototypes/SurvivalTestHub.tscn
+          test -f prototypes/SurvivalTestHub.gd
+          test -f tests/survival_test_hub_smoke_test.gd
           test -f prototypes/SurfaceChunkStreamingPlayground.gd
           test -f tests/surface_chunk_streaming_playground_test.gd
           test -f tests/mineral_grid_streaming_transaction_test.gd
@@ -146,6 +149,8 @@ jobs:
             echo "Godot reported root-project import or parse errors."
             exit 1
           fi
+      - name: Run survival test hub smoke test
+        run: godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd
       - name: Import and parse KROLL Signal Sweep
         run: godot --headless --path daily_games/KROLL_Signal_Sweep --editor --quit
       - name: Run KROLL Signal Sweep rules tests
