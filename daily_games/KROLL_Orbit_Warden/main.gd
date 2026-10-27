@@ -50,7 +50,9 @@ func _process(delta: float) -> void:
 
 	for bullet_index in range(bullets.size() - 1, -1, -1):
 		var bullet: Dictionary = bullets[bullet_index]
-		bullet["position"] = _wrap_position(Vector2(bullet["position"]) + Vector2(bullet["velocity"]) * delta)
+		var bullet_position: Vector2 = bullet["position"]
+		var bullet_velocity: Vector2 = bullet["velocity"]
+		bullet["position"] = _wrap_position(bullet_position + bullet_velocity * delta)
 		bullet["ttl"] = float(bullet["ttl"]) - delta
 		if float(bullet["ttl"]) <= 0.0:
 			bullets.remove_at(bullet_index)
@@ -65,10 +67,12 @@ func _process(delta: float) -> void:
 
 	for bullet_index in range(bullets.size() - 1, -1, -1):
 		var bullet: Dictionary = bullets[bullet_index]
+		var bullet_position: Vector2 = bullet["position"]
 		var hit_index := -1
 		for asteroid_index in range(asteroids.size() - 1, -1, -1):
 			var asteroid: Dictionary = asteroids[asteroid_index]
-			if Vector2(bullet["position"]).distance_to(Vector2(asteroid["position"])) <= float(asteroid["radius"]):
+			var asteroid_position: Vector2 = asteroid["position"]
+			if bullet_position.distance_to(asteroid_position) <= float(asteroid["radius"]):
 				hit_index = asteroid_index
 				break
 		if hit_index >= 0:
@@ -81,7 +85,8 @@ func _process(delta: float) -> void:
 
 	if invulnerable_left <= 0.0:
 		for asteroid in asteroids:
-			if ship_position.distance_to(Vector2(asteroid["position"])) < float(asteroid["radius"]) + 11.0:
+			var asteroid_position: Vector2 = asteroid["position"]
+			if ship_position.distance_to(asteroid_position) < float(asteroid["radius"]) + 11.0:
 				Rules.lose_life(state)
 				ship_position = VIEW_SIZE * 0.5
 				ship_velocity = Vector2.ZERO
@@ -101,10 +106,11 @@ func _draw() -> void:
 		draw_circle(Vector2(x, y), 1.2 if index % 3 == 0 else 0.7, Color("#29455b"))
 
 	for asteroid in asteroids:
-		var center := Vector2(asteroid["position"])
+		var center: Vector2 = asteroid["position"]
 		var points := PackedVector2Array()
 		for local_point in asteroid["outline"]:
-			points.append(center + Vector2(local_point).rotated(float(asteroid["rotation"])))
+			var local_vector: Vector2 = local_point
+			points.append(center + local_vector.rotated(float(asteroid["rotation"])))
 		if points.size() >= 3:
 			draw_colored_polygon(points, Color("#243b4d"))
 			var closed := PackedVector2Array()
@@ -114,8 +120,9 @@ func _draw() -> void:
 			draw_polyline(closed, Color("#79b8c9"), 2.0, true)
 
 	for bullet in bullets:
-		draw_circle(Vector2(bullet["position"]), 3.5, Color("#8cf7ff"))
-		draw_circle(Vector2(bullet["position"]), 7.0, Color(0.55, 0.95, 1.0, 0.18))
+		var bullet_position: Vector2 = bullet["position"]
+		draw_circle(bullet_position, 3.5, Color("#8cf7ff"))
+		draw_circle(bullet_position, 7.0, Color(0.55, 0.95, 1.0, 0.18))
 
 	if str(state.get("status", "")) == "playing" and (invulnerable_left <= 0.0 or int(invulnerable_left * 12.0) % 2 == 0):
 		var forward := Vector2.RIGHT.rotated(ship_angle)
