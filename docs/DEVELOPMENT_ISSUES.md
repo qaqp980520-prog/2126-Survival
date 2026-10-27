@@ -83,3 +83,9 @@
 - PR #79 Run 23 was reconciled: exact-head Run #384 (40489504444) passed 94 numbered steps; PR #79 merged as `6cd7a8bf2372972a7f64064f5c6653145141657e`.
 - Still outstanding: the production M1.3 world controller is absent; crop-persistence patch files are not integrated; underground mining remains a fixed-cave prototype; streaming is synchronous/factory-driven; local GUI/GPU/iPhone tests remain unavailable.
 - Next engineering priority: introduce/locate the actual production world-session controller, connect the tested shared inventory/mining/save lifecycle, then add end-to-end production-scene load/unload/save/restore acceptance tests.
+
+
+## Run 24 documentation merge SHA reconciliation｜2026-10-27
+
+- Documentation PR #81 merged as `487c9740a9248315fd7f2f3489ef9135b9bc74a6`. GitHub compare confirms current `main` is identical to this commit; the code feature PR #80 merge `29915be423318a4c3be4a2fbceeb2ec78f1e59b9` remains the feature integration point, not the latest main SHA.
+- No separate main-push workflow run was exposed for the documentation merge; exact-head Run #389 (40493657236) passed 98/98 numbered validation steps.
