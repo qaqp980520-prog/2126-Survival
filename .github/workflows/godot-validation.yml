@@ -103,6 +103,11 @@ jobs:
           test -f daily_games/KROLL_Echo_Diver/rules.gd
           test -f daily_games/KROLL_Echo_Diver/tests/rules_test.gd
           test -f daily_games/KROLL_Echo_Diver/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Magnetic_Salvage/project.godot
+          test -f daily_games/KROLL_Magnetic_Salvage/rules.gd
+          test -f daily_games/KROLL_Magnetic_Salvage/tests/rules_test.gd
+          test -f daily_games/KROLL_Magnetic_Salvage/tests/game_smoke_test.gd
+          test -f tests/world_session_save_roundtrip_test.gd
           test -f docs/KROLL_ECHO_DIVER_AND_WORLD_BRIDGE_TEST_HARDENING_M0_1_2026-10-27.md
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
           test -f tests/mineral_grid_streaming_position_validation_test.gd
@@ -619,3 +624,39 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Echo Diver runtime smoke test passed."
+
+      - name: Import and parse KROLL Magnetic Salvage
+        run: godot --headless --path daily_games/KROLL_Magnetic_Salvage --editor --quit
+      - name: Run KROLL Magnetic Salvage rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Magnetic_Salvage --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Magnetic Salvage rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Magnetic Salvage rules tests passed."
+      - name: Run KROLL Magnetic Salvage runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Magnetic_Salvage --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Magnetic Salvage runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Magnetic Salvage runtime smoke test passed."
+      - name: Run active world save roundtrip integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/world_session_save_roundtrip_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported active world save roundtrip errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Active world save roundtrip integration tests passed."
