@@ -12,7 +12,7 @@ func _run() -> void:
 	await process_frame
 	var state: Dictionary = game.get("state")
 	_expect(not state.is_empty(), "main scene initializes game state")
-	_expect(bool(game.call("place_tower_at", Vector2i(1, 2)), ""))
+	_expect(bool(game.call("place_tower_at", Vector2i(1, 2))), "scene places a turret on a free tile")
 	_expect(not bool(game.call("place_tower_at", Vector2i(1, 3))), "scene rejects placing a turret on the route")
 	_expect(bool(game.call("start_wave")), "scene starts a wave")
 	await process_frame
