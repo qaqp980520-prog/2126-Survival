@@ -150,8 +150,8 @@ func _build_player() -> void:
 	camera.limit_right = int(WORLD_WIDTH)
 	camera.limit_top = 0
 	camera.limit_bottom = int(WORLD_BOTTOM)
-	camera.make_current()
 	player.add_child(camera)
+	camera.make_current()
 
 func _build_pickups_and_goal() -> void:
 	var data_spawns: Array[Vector2] = [
