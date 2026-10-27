@@ -22,13 +22,16 @@ func _build_ui() -> void:
 	panel.custom_minimum_size = Vector2(620.0, 0.0)
 	center.add_child(panel)
 
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 28)
+	margin.add_theme_constant_override("margin_bottom", 28)
+	panel.add_child(margin)
+
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 16)
-	column.add_theme_constant_override("margin_left", 28)
-	column.add_theme_constant_override("margin_right", 28)
-	column.add_theme_constant_override("margin_top", 28)
-	column.add_theme_constant_override("margin_bottom", 28)
-	panel.add_child(column)
+	margin.add_child(column)
 
 	var title := Label.new()
 	title.text = "2126 SURVIVAL"
