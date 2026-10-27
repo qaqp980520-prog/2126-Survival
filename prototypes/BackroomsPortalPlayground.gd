@@ -894,23 +894,36 @@ func save_game() -> bool:
     _update_hud()
     return true
 
-func load_game() -> bool:
-    if not FileAccess.file_exists(SAVE_PATH):
-        var backup_path := SAVE_PATH + ".bak"
-        if not FileAccess.file_exists(backup_path):
-            return false
-        if DirAccess.rename_absolute(ProjectSettings.globalize_path(backup_path), ProjectSettings.globalize_path(SAVE_PATH)) != OK:
-            return false
-    if not FileAccess.file_exists(SAVE_PATH):
-        return false
-    var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+func _read_save_dictionary(path: String) -> Dictionary:
+    if not FileAccess.file_exists(path):
+        return {}
+    var file := FileAccess.open(path, FileAccess.READ)
     if file == null:
-        return false
+        return {}
     var parsed: Variant = JSON.parse_string(file.get_as_text())
     file.close()
     if not (parsed is Dictionary):
+        return {}
+    return parsed
+
+func load_game() -> bool:
+    var backup_path := SAVE_PATH + ".bak"
+    var primary_data := _read_save_dictionary(SAVE_PATH)
+    if not primary_data.is_empty() and load_world_state_from_dictionary(primary_data):
+        return true
+
+    # A syntactically valid primary can still fail world-envelope validation.
+    # In either case, leave the live state untouched and try the last known-good backup.
+    var backup_data := _read_save_dictionary(backup_path)
+    if backup_data.is_empty() or not load_world_state_from_dictionary(backup_data):
         return false
-    return load_world_state_from_dictionary(parsed)
+
+    # When the primary is missing, restore it through the existing validated writer.
+    # If the primary exists but is corrupt/invalid, preserve both files: never risk
+    # deleting the only known-good backup while replacing a bad primary.
+    if not FileAccess.file_exists(SAVE_PATH):
+        _write_save_atomically(SAVE_PATH, backup_data)
+    return true
 
 func _update_hud() -> void:
     if status_label == null:
