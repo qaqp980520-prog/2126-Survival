@@ -89,3 +89,13 @@
 
 - Documentation PR #81 merged as `487c9740a9248315fd7f2f3489ef9135b9bc74a6`; at that point, GitHub compare confirmed `main` equalled this commit. Follow-up SHA-correction PR #82 then merged as `ae2a6e443926bc716c582ec0031f2176e83330f2`. These are chronological merge points, not a claim that the earlier SHA remains current after later documentation commits.
 - Exact-head Run #389 (40493657236) for PR #81 and Run #391 (40494066682) for PR #82 each passed 98/98 numbered validation steps. No separate main-push workflow run was exposed for these documentation merges.
+
+
+## Run 25 final reconciliation｜2026-10-27
+
+- Feature PR #84 merged as `4d465dab1b966617c4bf08ab57d344bffb5eb5a9`; exact candidate HEAD `f2b0d5aa6cdad0be26ae3063ccabd8a82332e334`.
+- Exact-head Godot 4.3 CI Run #395 (40509153168) completed successfully. All 102 numbered validation steps passed with zero failed steps; new KROLL Vent Runner import/rules/runtime tests passed at steps 99–101, and inventory/mineral catalog compatibility passed at step 102.
+- Added `tests/inventory_mineral_catalog_compatibility_test.gd`: verifies every MineralCatalog ID has a matching SurvivalInventory weight, all registered weights are finite/non-negative, and unknown IDs injected through the public counts dictionary are not treated as zero-weight cargo and are rejected by save validation without mutation. This is a regression guard; it does not centralize the duplicate catalogs.
+- New game `daily_games/KROLL_Vent_Runner/` is a Godot 4.3+ side-view platformer with five cells, moving hazards, vent boosts, three lives and a 90-second timer; no external assets/add-ons.
+- No local Godot GUI/GPU/iPhone test is claimed.
+- Remaining: formal M1.3 world controller absent; fixed-cave mining prototype and synchronous/factory-driven streaming remain; crop persistence is not integrated. Next: wire inventory/mining/save lifecycle into a real world-session controller and add end-to-end production-scene tests.
