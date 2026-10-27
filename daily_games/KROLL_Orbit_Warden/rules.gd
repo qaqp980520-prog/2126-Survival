@@ -1,13 +1,13 @@
 extends RefCounted
 class_name KrollOrbitWardenRules
 
-const TARGET_DESTROYS := 12
+const REQUIRED_CELLS := 6
 const STARTING_LIVES := 3
 const TIME_LIMIT := 75.0
 
 static func new_state() -> Dictionary:
 	return {
-		"asteroids_destroyed": 0,
+		"cells_collected": 0,
 		"score": 0,
 		"lives": STARTING_LIVES,
 		"time_left": TIME_LIMIT,
@@ -15,15 +15,15 @@ static func new_state() -> Dictionary:
 		"reason": ""
 	}
 
-static func register_destroy(state: Dictionary) -> bool:
+static func collect_cell(state: Dictionary) -> bool:
 	if str(state.get("status", "")) != "playing":
 		return false
-	var destroyed := int(state.get("asteroids_destroyed", 0)) + 1
-	state["asteroids_destroyed"] = mini(TARGET_DESTROYS, destroyed)
+	var collected := int(state.get("cells_collected", 0)) + 1
+	state["cells_collected"] = mini(REQUIRED_CELLS, collected)
 	state["score"] = int(state.get("score", 0)) + 100
-	if int(state["asteroids_destroyed"]) >= TARGET_DESTROYS:
+	if int(state["cells_collected"]) >= REQUIRED_CELLS:
 		state["status"] = "won"
-		state["reason"] = "sector_cleared"
+		state["reason"] = "all_cells_recovered"
 	return true
 
 static func lose_life(state: Dictionary) -> bool:
