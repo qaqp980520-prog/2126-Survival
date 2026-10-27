@@ -11,6 +11,16 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 25 — Vent Runner + inventory/mineral weight compatibility (merged / exact-head CI passed)
+
+- Start-of-run reconciliation: GitHub main was `789ba5fedd90c12afdf4b710c62a322682733bd2`; Run 24 PRs #80–#83 were all merged, with exact-head Godot 4.3 Runs #387, #389, #391 and #393 each passing 98/98 numbered validation steps. No open PRs existed before Run 25.
+- New game: `daily_games/KROLL_Vent_Runner/`, a side-view platform escape with five power cells, moving hazards, vent boosts, three lives and a 90-second limit. Godot 4.3+, no external assets/add-ons. Import through `daily_games/KROLL_Vent_Runner/project.godot`.
+- Existing-system regression: `tests/inventory_mineral_catalog_compatibility_test.gd` checks every MineralCatalog ID is registered in `SurvivalInventory.ITEM_WEIGHTS`, all mineral weights match, registered weights are finite/non-negative, and externally injected unknown counts receive the non-zero safety weight and are rejected by save validation without mutation.
+- Feature PR [#84](https://github.com/qaqp980520-prog/2126-Survival/pull/84) merged as `4d465dab1b966617c4bf08ab57d344bffb5eb5a9`; validated candidate HEAD `f2b0d5aa6cdad0be26ae3063ccabd8a82332e334`.
+- Canonical Godot 4.3 CI Run #395 (40509153168) succeeded: 102 numbered validation steps passed, zero failed steps. New game import/rules/runtime steps 99–101 and inventory/mineral compatibility step 102 all passed. Full job completed successfully after cleanup steps.
+- No local Godot executable is available; no local GUI/GPU/iPhone test is claimed. The compatibility test detects drift but does not yet centralize the two catalogs.
+- Remaining work: production M1.3 world controller is still absent; underground mining remains a fixed-cave prototype; asynchronous streaming and device QA remain open. Next priority is production world-session integration and end-to-end mining/drop/weight/save/reload/failure-recovery acceptance tests.
+
 ## 2026-10-27 Run 24 — Frequency Lock + mineral regeneration clock guard (merged / exact-head CI passed)
 
 - Start-of-run reconciliation: Run 23's PR #79 was initially recorded as pending, but the actual exact-head Godot 4.3 Run #384 (40489504444) subsequently completed successfully. PR #79 merged as `6cd7a8bf2372972a7f64064f5c6653145141657e`; this was the Run 24 base.
