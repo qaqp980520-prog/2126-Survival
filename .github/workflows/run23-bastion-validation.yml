@@ -1,9 +1,9 @@
-name: Run 23 Bastion and underground mining validation
+name: Run 23 Network Stabilizer and underground mining validation
 
 on:
   pull_request:
     paths:
-      - 'daily_games/KROLL_Bastion_Protocol/**'
+      - 'daily_games/KROLL_Network_Stabilizer/**'
       - 'tests/underground_mining_playground_test.gd'
       - 'prototypes/UndergroundMiningPlayground.gd'
       - '.github/workflows/run23-bastion-validation.yml'
@@ -22,24 +22,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Import Bastion Protocol
-        run: godot --headless --path daily_games/KROLL_Bastion_Protocol --editor --quit
-      - name: Run Bastion Protocol rules tests
+      - name: Import Network Stabilizer
+        run: godot --headless --path daily_games/KROLL_Network_Stabilizer --editor --quit
+      - name: Run Network Stabilizer rules tests
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path daily_games/KROLL_Bastion_Protocol --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(godot --headless --path daily_games/KROLL_Network_Stabilizer --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Bastion Protocol rules tests passed."
-      - name: Run Bastion Protocol runtime smoke test
+          echo "$output" | grep -q "KROLL Network Stabilizer rules tests passed."
+      - name: Run Network Stabilizer runtime smoke test
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path daily_games/KROLL_Bastion_Protocol --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(godot --headless --path daily_games/KROLL_Network_Stabilizer --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Bastion Protocol runtime smoke test passed."
+          echo "$output" | grep -q "KROLL Network Stabilizer runtime smoke test passed."
       - name: Run underground inventory overflow regression
         shell: bash
         run: |
