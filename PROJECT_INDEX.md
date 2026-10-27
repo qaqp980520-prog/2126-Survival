@@ -11,14 +11,15 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
-## 2026-10-27 Run 21 — Neon Breaker + atomic active-world save (candidate / CI pending)
+## 2026-10-27 Run 21 — Neon Breaker + recoverable active-world save (merged / exact-head verified)
 
 - Base main after Run 20 documentation merge: `31b8038824caf0f368262d243c2052abc4848e8b`; PR #73 exact-head Godot 4.3 CI Run #325 succeeded with all 82 numbered validation steps.
 - New game candidate: `daily_games/KROLL_Neon_Breaker/`; 8×5 neon brick field, paddle steering, three lives, 60-second timer, keyboard/mouse/touch controls. Godot 4.3+, no external assets or addons.
 - Rules and runtime tests cover paddle bounds, reflection, hit-angle steering, life/timer boundaries, launch, brick collision/scoring, life loss and restart.
 - Existing-system change candidate: `prototypes/BackroomsPortalPlayground.gd` writes a temporary save, flushes and parses it before promotion, retains a backup during replacement, and recovers a backup if the primary save is missing.
 - Integration tests inject a temporary-path obstruction to ensure failed writes preserve the previous save bytes, verify a complete replacement payload, and simulate recovery from a backup. Existing active-world save roundtrip and invalid-payload non-mutation tests remain enabled.
-- Candidate branch: `feature/run21-neon-breaker-atomic-save-2026-10-27`. Exact-head Godot 4.3 CI is required before merge. Local GUI/GPU/iPhone tests are not claimed.
+- PR #74 merged as `2625b3a0460305ab0759a1e01f9040ed74db36a0`; exact feature HEAD `55b2bd8248af756f3bcbaafa19fa396c37455aec` passed Godot 4.3 CI Run #327 (`40471674229`) with all 85 numbered validation steps successful and zero failures. This includes Neon Breaker import/rules/runtime (steps #82–#84) and active world save roundtrip with atomic-write failure injection (step #85).
+- Main compare confirms `main` is identical to merge commit `2625b3a0460305ab0759a1e01f9040ed74db36a0`. The GitHub connector did not expose a separate main-push workflow run for this commit; exact-head PR CI is the verified test evidence. Local GUI/GPU/iPhone tests are not claimed.
 - Boundary: `scripts/world.gd` remains absent; this work improves the active Backrooms Portal Playground controller and does not claim M1.3 production-world integration.
 
 ## 2026-10-27 Run 20 — Magnetic Salvage + active world save roundtrip (merged / exact-head verified)
