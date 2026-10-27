@@ -908,20 +908,28 @@ func _read_save_dictionary(path: String) -> Dictionary:
 
 func load_game() -> bool:
     var backup_path := SAVE_PATH + ".bak"
+    var corrupt_path := SAVE_PATH + ".corrupt"
+    var primary_exists := FileAccess.file_exists(SAVE_PATH)
     var primary_data := _read_save_dictionary(SAVE_PATH)
     if not primary_data.is_empty() and load_world_state_from_dictionary(primary_data):
         return true
 
     # A syntactically valid primary can still fail world-envelope validation.
-    # In either case, leave the live state untouched and try the last known-good backup.
+    # Validate and apply the backup before moving or repairing any file.
     var backup_data := _read_save_dictionary(backup_path)
     if backup_data.is_empty() or not load_world_state_from_dictionary(backup_data):
         return false
 
-    # When the primary is missing, restore it through the existing validated writer.
-    # If the primary exists but is corrupt/invalid, preserve both files: never risk
-    # deleting the only known-good backup while replacing a bad primary.
-    if not FileAccess.file_exists(SAVE_PATH):
+    # Preserve a bad primary for diagnosis. Repair the primary only when the
+    # corrupt path is free; if promotion fails, the validated backup stays intact.
+    if primary_exists:
+        var corrupt_absolute := ProjectSettings.globalize_path(corrupt_path)
+        if not FileAccess.file_exists(corrupt_path) and not DirAccess.dir_exists_absolute(corrupt_absolute):
+            if DirAccess.rename_absolute(ProjectSettings.globalize_path(SAVE_PATH), corrupt_absolute) == OK:
+                _write_save_atomically(SAVE_PATH, backup_data)
+    else:
+        # Missing-primary recovery uses the existing validated writer. The backup
+        # is removed only after a complete replacement has been written successfully.
         _write_save_atomically(SAVE_PATH, backup_data)
     return true
 
