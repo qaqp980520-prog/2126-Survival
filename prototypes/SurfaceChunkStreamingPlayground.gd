@@ -20,6 +20,7 @@ var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
 var _jump_was_down: bool = false
+var _last_restore_report: Dictionary = {}
 
 func _ready() -> void:
 	_build_streaming_stack()
