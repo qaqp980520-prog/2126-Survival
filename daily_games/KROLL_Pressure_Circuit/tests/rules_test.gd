@@ -27,6 +27,16 @@ func _run() -> void:
 	var solved: Dictionary = Rules.create_puzzle(2701)
 	solved["masks"] = (solved["solution_masks"] as Array).duplicate()
 	_expect(Rules.is_solved(solved), "the stored solution connects source to target")
+	var solved_source: Vector2i = solved["source"]
+	_expect(not Rules.rotate_tile(solved, solved_source), "solved puzzle is terminal and rejects further rotations")
+	_expect(int(solved.get("moves", -1)) == 0, "rejected post-win rotation does not change the move count")
+
+	var invalid_target: Dictionary = Rules.create_puzzle(2703)
+	invalid_target["target"] = Vector2i(6, 1)
+	_expect(not Rules.is_solved(invalid_target), "out-of-board target cannot alias an in-board cell index")
+	var malformed_board: Dictionary = Rules.create_puzzle(2704)
+	malformed_board["masks"] = [Rules.DIR_E]
+	_expect(not Rules.is_solved(malformed_board), "malformed mask array cannot report a connected route")
 
 	var blocked: Dictionary = Rules.create_puzzle(2702)
 	var blocked_masks: Array = blocked["masks"]
