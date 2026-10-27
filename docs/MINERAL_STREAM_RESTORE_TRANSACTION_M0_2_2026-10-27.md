@@ -30,7 +30,12 @@ The integration test injects a factory failure after at least one target chunk h
 
 ## Validation status
 
-This is a PR candidate until the exact-head Godot 4.3 CI completes. No local Godot executable is available in this run, so local GUI or engine execution is not claimed.
+- PR #64 merged to main in commit e9d853fe0114e3432b7269f902fd579bbcbe9dcc.
+- Exact-head PR CI Run #297 (40442929654) succeeded with all 72 required validation steps passing on c00be54a008978f2406ea35612d6d02609f1bcf8.
+- Main-push CI Run #298 (40443291605) succeeded with all 72 required validation steps passing on e9d853fe0114e3432b7269f902fd579bbcbe9dcc.
+- The fault-injection test confirms rollback of the previous position, active chunk IDs, saved vein IDs, and live ore count after a target factory failure.
+- The Vertical Relay and surface streaming integration tests now own and free their watchdog Timer nodes. Other legacy diagnostics/Cipher Recall/Cargo Tugs/Vector Rally tests still print non-fatal ObjectDB leak warnings.
+- No local Godot executable is available, so local GUI play and iPhone device testing are not claimed.
 
 ## Known limits
 
