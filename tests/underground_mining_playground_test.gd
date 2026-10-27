@@ -3,6 +3,7 @@ extends SceneTree
 const CaveScene = preload("res://prototypes/UndergroundMiningPlayground.tscn")
 const SurfaceScene = preload("res://prototypes/SurfaceChunkStreamingPlayground.tscn")
 const CAVE_CHUNK_ID := "underground/cave_0_0"
+const MAX_SAVED_COUNT := 1000000000
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -41,6 +42,21 @@ func _run() -> void:
 		var weight_before_drop := float(bridge.call("get_weight_kg"))
 		_expect(bridge.call("drop_item", str(vein.get("mineral_id")), 1), "shared bridge accepts a valid ore drop")
 		_expect(float(bridge.call("get_weight_kg")) < weight_before_drop, "dropping ore immediately recalculates inventory weight")
+
+		# Inject a full-count inventory: the bridge must reject the next ore unit,
+		# and the vein must not consume stock that the inventory did not accept.
+		var inventory: RefCounted = bridge.get("inventory")
+		var original_inventory: Dictionary = inventory.call("to_save_dict")
+		var overflow_save: Dictionary = original_inventory.duplicate(true)
+		var overflow_counts: Dictionary = (overflow_save.get("inventory", {}) as Dictionary).duplicate(true)
+		overflow_counts["iron_ore"] = MAX_SAVED_COUNT
+		overflow_save["inventory"] = overflow_counts
+		_expect(inventory.call("load_save_dict", overflow_save), "test can install a valid maximum-count inventory fixture")
+		var stock_before_rejected_mine := int(vein.get("remaining_units"))
+		var rejected_mine := int(cave.call("mine_nearest_vein"))
+		_expect(rejected_mine == 0, "inventory count overflow rejects mining")
+		_expect(int(vein.get("remaining_units")) == stock_before_rejected_mine, "rejected mining leaves underground vein stock unchanged")
+		_expect(inventory.call("load_save_dict", original_inventory), "restore the original inventory after overflow injection")
 
 	cave.queue_free()
 	await process_frame
