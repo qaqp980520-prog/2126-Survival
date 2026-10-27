@@ -112,6 +112,8 @@ jobs:
           test -f daily_games/KROLL_Neon_Breaker/tests/rules_test.gd
           test -f daily_games/KROLL_Neon_Breaker/tests/game_smoke_test.gd
           test -f daily_games/KROLL_Command_Grid/project.godot
+          test -f daily_games/KROLL_Command_Grid/main.tscn
+          test -f daily_games/KROLL_Command_Grid/main.gd
           test -f daily_games/KROLL_Command_Grid/rules.gd
           test -f daily_games/KROLL_Command_Grid/tests/rules_test.gd
           test -f daily_games/KROLL_Command_Grid/tests/game_smoke_test.gd
@@ -119,6 +121,7 @@ jobs:
           test -f prototypes/UndergroundMiningPlayground.gd
           test -f tests/underground_mining_playground_test.gd
           test -f docs/KROLL_NEON_BREAKER_AND_ATOMIC_WORLD_SAVE_M0_1_2026-10-27.md
+          test -f docs/UNDERGROUND_MINING_PLAYGROUND_M0_1_2026-10-27.md
           test -f tests/world_session_save_roundtrip_test.gd
           test -f docs/KROLL_ECHO_DIVER_AND_WORLD_BRIDGE_TEST_HARDENING_M0_1_2026-10-27.md
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
