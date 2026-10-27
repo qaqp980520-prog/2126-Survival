@@ -178,7 +178,7 @@ func _mine_nearest_vein() -> void:
 	var nearest: Node3D = null
 	var nearest_distance := 2.8
 	for chunk_id in chunk_controller.get_loaded_chunk_ids():
-		var chunk: Node = chunk_controller.get_chunk(str(chunk_id))
+		var chunk: Node = chunk_controller.get_chunk_root(str(chunk_id))
 		if chunk == null:
 			continue
 		for child in chunk.get_children():
