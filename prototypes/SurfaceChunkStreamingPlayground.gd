@@ -145,9 +145,14 @@ func _physics_process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
-		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
-			_mouse_look_active = false
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F10:
+				_mouse_look_active = false
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				get_tree().change_scene_to_file("res://prototypes/SurvivalTestHub.tscn")
+			elif key_event.keycode == KEY_ESCAPE:
+				_mouse_look_active = false
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_RIGHT:
