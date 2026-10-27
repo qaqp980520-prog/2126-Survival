@@ -114,18 +114,26 @@ func mine_hit(hit_position: Vector3 = Vector3.ZERO) -> int:
 			ore_depleted.emit(mineral_id)
 	return accepted
 
-func restore_vein(units: int) -> void:
+## Adds at most the remaining capacity and returns the actual accepted units.
+## now_unix is injectable so restoration timing can be tested deterministically.
+func restore_vein(units: int, now_unix: int = -1) -> int:
 	if units <= 0:
-		return
-	var previous_units := remaining_units
-	remaining_units = mini(max_units, remaining_units + units)
+		return 0
+	var current_units := clampi(remaining_units, 0, max_units)
+	remaining_units = current_units
+	if current_units >= max_units:
+		return 0
+	var restored_units := mini(units, max_units - current_units)
+	if restored_units <= 0:
+		return 0
+	remaining_units = current_units + restored_units
 	# A manual restore is a new stock event. Do not let time accumulated while the
 	# vein was depleted immediately regenerate extra units on the next process tick.
-	if remaining_units > previous_units:
-		last_regen_unix = Time.get_unix_time_from_system()
-	if remaining_units > 0:
-		_depleted_signal_sent = false
-		visible = true
+	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	last_regen_unix = now
+	_depleted_signal_sent = false
+	visible = true
+	return restored_units
 
 func to_save_dict() -> Dictionary:
 	return {
