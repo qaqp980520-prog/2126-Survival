@@ -64,7 +64,7 @@ func _ready() -> void:
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
-        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | T portal test | B return | G collect | H drop | F5 save | F9 load"
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | F10 test menu | T portal test | B return | G collect | H drop | F5 save | F9 load"
 
 func _build_settings_ui() -> void:
     var hud := get_node_or_null("HUD") as CanvasLayer
