@@ -11,6 +11,15 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-27 Run 19 — Echo Diver + World Bridge save regression hardening (candidate; not merged)
+
+- Base main at start: 5f961148f8ee25b67309ec88020b5e08bc3e4cad. Working branch: feature/run19-echo-diver-m1-3-save-validation-2026-10-27. Final candidate SHA and PR state must be taken from the live PR, not inferred from this index.
+- New game: daily_games/KROLL_Echo_Diver/; 8×7 sonar navigation, collect three beacons and reach extraction with 32 fuel and a 75-second limit. Four sonar pulses reveal nearby hazards for 2.4 seconds. Godot 4.3+, no addons or external art. Rule and runtime smoke tests are added to the shared workflow; exact-head CI is pending.
+- World bridge test hardening: tests/world_bridge_save_adapter_integration.gd now owns, stops, and frees its watchdog Timer. Invalid inventory container, unknown item, fractional/negative/out-of-range count, invalid game day, and unsupported world version cases must be rejected without changing the live inventory. Rejected export must not mutate the input world envelope.
+- Workflow adds Echo Diver import/rules/runtime checks and runs the WorldBridge save-adapter integration test with a timeout and explicit success marker.
+- Source audit: scripts/world.gd does not exist on the current main (GitHub contents API returned 404). M1.3 save validation remains in patch files; it was not applied to a missing controller. This does not mean the active M1.3 world-save path is integrated.
+- Limits: no local Godot executable; no local GUI or iPhone test. Production world-controller integration remains incomplete.
+
 ## 2026-10-27 Run 17 — Vertical Relay + atomic surface restore（已合併／已驗證）
 
 - PR #64 功能合併 commit：e9d853fe0114e3432b7269f902fd579bbcbe9dcc；PR #65 文件／索引同步合併 commit：4bc657cad8133e21a44b5a473283fe9023d9da62。此處記錄 Run 17 的兩個歷史合併點，不將較早的功能合併 SHA 誤標為最新 main。
