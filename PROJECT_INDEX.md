@@ -231,3 +231,16 @@
 - Candidate validation pending; do not merge until exact-head Godot 4.3 CI succeeds. Local Godot/GUI/iPhone tests are not claimed.
 - Limits: recovery remains synchronous and factory-driven; production world generator and asynchronous streaming are not wired. If the factory/controller continues failing, recovery may still return false and callers must inspect get_last_sync_report().
 - Next: validate the exact PR head, merge only after success, run post-merge main CI, then record the final merge SHA and CI evidence.
+
+## Run 15 final reconciliation｜2026-10-27
+- PR #60 merged as `7f4cae3eb74a7258a6f45364c07e1765956bd1f2`; exact feature head `2aa86c6e74993a1bd4a9a20ec591bef386c791ac` passed Godot 4.3 CI Run #285 (`40418593413`), 65/65 steps successful, including mineral recovery and Vector Rally import/rules/runtime tests.
+- Earlier Run 15 candidate notes above are historical; this entry is the final state. Production world generator integration and async streaming remain outstanding. Local GUI/iPhone testing is not claimed.
+
+## Run 16 final reconciliation｜2026-10-27
+- PR #61 merged as `a9c4aec4387818616e1855d4d3775c5d9e243748`; validated feature head `789de09cb9851b39265554bcff84e5a43f37070d`.
+- Exact-head Godot 4.3 CI Run #287 (`40430587483`) succeeded with 72/72 steps successful and zero failed steps. New mineral finite-position test step #46 and Star Chart import/rules/runtime steps #66–#68 all succeeded; the existing streaming director and surface integration tests also passed.
+- New game: `daily_games/KROLL_Star_Chart_Expedition/` — 7×7 turn-based route puzzle, three survey beacons, extraction gate, 34 fuel and 90-second time limit; keyboard and touch, no external assets.
+- Survival fix: `systems/MineralGridStreamingDirector.gd` rejects NaN/infinite coordinates before grid selection and before recovery reconciliation. `tests/mineral_grid_streaming_position_validation_test.gd` verifies rejection leaves controller and director chunk-ID sets unchanged.
+- GitHub compare confirms current `main` is identical to merge commit `a9c4aec4387818616e1855d4d3775c5d9e243748`. The connector did not expose a separate main-push run record, so this index does not claim post-merge push CI beyond the exact-head Run #287.
+- Limits: local Godot/GUI/iPhone tests not performed; streaming remains synchronous and factory-driven, not connected to the production world generator.
+- Next: connect the director to the production world host, then add production-scene load/unload/save/restore acceptance tests and graphical/iPhone validation.
