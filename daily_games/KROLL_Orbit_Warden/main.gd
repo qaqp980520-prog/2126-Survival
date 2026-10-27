@@ -272,12 +272,10 @@ func _restart_game() -> void:
 	notice = "Recover six energy cells. Avoid drifting asteroids."
 	for _index in range(4):
 		_spawn_asteroid()
-	energy_cells = [
-		Vector2(140.0, 150.0),
-		Vector2(820.0, 160.0),
-		Vector2(190.0, 390.0),
-		Vector2(770.0, 385.0),
-		Vector2(480.0, 170.0),
-		Vector2(480.0, 455.0)
-	]
+	energy_cells.append(Vector2(140.0, 150.0))
+	energy_cells.append(Vector2(820.0, 160.0))
+	energy_cells.append(Vector2(190.0, 390.0))
+	energy_cells.append(Vector2(770.0, 385.0))
+	energy_cells.append(Vector2(480.0, 170.0))
+	energy_cells.append(Vector2(480.0, 455.0))
 	queue_redraw()
