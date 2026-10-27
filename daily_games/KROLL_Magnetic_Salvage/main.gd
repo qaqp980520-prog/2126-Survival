@@ -53,10 +53,14 @@ func _process(delta: float) -> void:
 	time_left = maxf(0.0, time_left - delta)
 	pulse_cooldown = maxf(0.0, pulse_cooldown - delta)
 	hazard_lockout = maxf(0.0, hazard_lockout - delta)
-	charge_regen_timer += delta
-	while charge_regen_timer >= 2.5 and charge < MAX_CHARGE:
-		charge += 1
-		charge_regen_timer -= 2.5
+	if charge < MAX_CHARGE:
+		charge_regen_timer += delta
+		while charge_regen_timer >= 2.5 and charge < MAX_CHARGE:
+			charge += 1
+			charge_regen_timer -= 2.5
+	else:
+		# Do not bank unlimited regeneration while already full.
+		charge_regen_timer = 0.0
 	if time_left <= 0.0:
 		state = "lost"
 		message = "Shift expired. Press R to retry."
