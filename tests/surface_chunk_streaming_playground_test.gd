@@ -4,16 +4,30 @@ const PlaygroundScene = preload("res://prototypes/SurfaceChunkStreamingPlaygroun
 const Adapter = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 var _failed: bool = false
 var _finished: bool = false
+var _watchdog_timer: Timer
+var _fail_factory_coordinate: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
+	_watchdog_timer = Timer.new()
+	_watchdog_timer.one_shot = true
+	_watchdog_timer.wait_time = 25.0
+	root.add_child(_watchdog_timer)
+	_watchdog_timer.timeout.connect(_on_watchdog_timeout)
+	call_deferred("_start_watchdog")
 	call_deferred("_run_tests")
-	call_deferred("_watchdog")
 
-func _watchdog() -> void:
-	await create_timer(25.0).timeout
-	if not _finished:
-		push_error("Surface chunk streaming playground integration test timed out.")
-		quit(1)
+func _start_watchdog() -> void:
+	if not _finished and is_instance_valid(_watchdog_timer) and _watchdog_timer.is_inside_tree():
+		_watchdog_timer.start()
+
+func _on_watchdog_timeout() -> void:
+	if _finished:
+		return
+	_finished = true
+	push_error("Surface chunk streaming playground integration test timed out.")
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.queue_free()
+	quit(1)
 
 func _run_tests() -> void:
 	var playground: Variant = PlaygroundScene.instantiate()
@@ -89,9 +103,40 @@ func _run_tests() -> void:
 	_check(playground.chunk_controller.get_loaded_chunk_ids() == before_ids, "Rejected save must not change active chunks")
 	_check(playground.registry.get_saved_ids() == before_saved_ids, "Rejected save must not change registry IDs")
 	_check(int(restored_ore.get("remaining_units")) == before_units, "Rejected save must not change live mineral stock")
+
+	# A structurally valid restore can still fail when the requested chunk cannot be
+	# generated. The live mineral stock and previous active window must survive that failure.
+	restored_ore.set("remaining_units", 5)
+	restored_ore.set("last_regen_unix", now)
+	var target_restore: Dictionary = save_payload.duplicate(true)
+	target_restore["player_position"] = [21.0, 2.0, 1.0]
+	_fail_factory_coordinate = Vector2i(3, -1)
+	_check(bool(playground.director.bind_chunk_factory(Callable(self, "_make_fault_injected_chunk"))), "Fault-injected factory should bind")
+	var failed_restore_ok: bool = bool(playground.restore_stream_state(target_restore, now))
+	_check(not failed_restore_ok, "Restore must fail when a required target chunk cannot be generated")
+	var restore_report: Dictionary = playground.get_last_restore_report()
+	_check(str(restore_report.get("phase", "")) == "stream_sync", "Restore failure should report the streaming phase")
+	_check(bool(restore_report.get("rollback_complete", false)), "Failed restore should report a complete rollback when recovery succeeds")
+	_check(playground.player.global_position.is_equal_approx(before_position), "Failed restore must restore the prior player position")
+	_check(playground.chunk_controller.get_loaded_chunk_ids() == before_ids, "Failed restore must restore the prior active chunk IDs")
+	_check(playground.director.get_managed_chunk_ids() == before_ids, "Failed restore must reconcile director IDs to the controller")
+	_check(playground.registry.get_saved_ids() == before_saved_ids, "Failed restore must restore the prior saved vein ID set")
+	_check(int(restored_ore.get("remaining_units")) == 5, "Failed restore must restore the pre-attempt live mineral stock")
+	var restore_details: Dictionary = restore_report.get("details", {})
+	var target_report: Dictionary = restore_details.get("target_sync_report", {})
+	_check(str(target_report.get("phase", "")) == "load_factory", "Diagnostic report should retain the original target-load failure")
+	var target_details: Dictionary = target_report.get("details", {})
+	_check(target_details.get("newly_loaded_ids", []).size() > 0, "Failure injection should occur after at least one target chunk was loaded")
 	playground.queue_free()
 	await process_frame
 	_finish()
+
+func _make_fault_injected_chunk(coord: Vector2i) -> Node3D:
+	if coord == _fail_factory_coordinate:
+		return null
+	var chunk_root := Node3D.new()
+	chunk_root.name = "Chunk_%d_%d" % [coord.x, coord.y]
+	return chunk_root
 
 func _check(condition: bool, message: String) -> void:
 	if not condition:
@@ -100,6 +145,9 @@ func _check(condition: bool, message: String) -> void:
 
 func _finish() -> void:
 	_finished = true
+	if is_instance_valid(_watchdog_timer):
+		_watchdog_timer.stop()
+		_watchdog_timer.free()
 	if _failed:
 		print("Surface chunk streaming playground integration tests failed.")
 		quit(1)
