@@ -1,0 +1,101 @@
+name: Run 24 Frequency Lock and mineral regeneration validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Frequency_Lock/**'
+      - 'systems/MineralMiningNode.gd'
+      - 'tests/mineral_mining_regeneration_test.gd'
+      - 'tests/underground_mining_playground_test.gd'
+      - '.github/workflows/run24-godot-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'daily_games/KROLL_Frequency_Lock/**'
+      - 'systems/MineralMiningNode.gd'
+      - 'tests/mineral_mining_regeneration_test.gd'
+      - 'tests/underground_mining_playground_test.gd'
+      - '.github/workflows/run24-godot-validation.yml'
+
+concurrency:
+  group: run24-godot-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify engine and required files
+        run: |
+          godot --version
+          test -f project.godot
+          test -f daily_games/KROLL_Frequency_Lock/project.godot
+          test -f daily_games/KROLL_Frequency_Lock/main.tscn
+          test -f daily_games/KROLL_Frequency_Lock/rules.gd
+          test -f daily_games/KROLL_Frequency_Lock/tests/rules_test.gd
+          test -f daily_games/KROLL_Frequency_Lock/tests/game_smoke_test.gd
+          test -f systems/MineralMiningNode.gd
+          test -f tests/mineral_mining_regeneration_test.gd
+          test -f tests/underground_mining_playground_test.gd
+      - name: Import and parse root survival project
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Root project import reported errors."
+            exit 1
+          fi
+      - name: Import and parse KROLL Frequency Lock
+        run: godot --headless --path daily_games/KROLL_Frequency_Lock --editor --quit
+      - name: Run KROLL Frequency Lock rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Frequency_Lock --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Frequency Lock rules tests reported errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Frequency Lock rules tests passed."
+      - name: Run KROLL Frequency Lock runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Frequency_Lock --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Frequency Lock runtime smoke test reported errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Frequency Lock runtime smoke test passed."
+      - name: Run mineral mining regeneration regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_mining_regeneration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Mineral regeneration regression tests reported errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Mineral mining regeneration regression tests passed."
+      - name: Run underground mining compatibility regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/underground_mining_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Underground mining integration reported errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Underground mining playground integration tests passed."
