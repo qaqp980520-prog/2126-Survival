@@ -23,7 +23,7 @@ func _run_tests() -> void:
 	var seed_root := Node3D.new()
 	seed_root.name = "SeedChunk"
 	_check(bool(controller.call("load_chunk", "surface/chunk_0_0", seed_root, 1000)), "Seed chunk should load.")
-	var actual_before: PackedStringArray = controller.call("get_loaded_chunk_ids()")
+	var actual_before: PackedStringArray = controller.call("get_loaded_chunk_ids")
 	var managed_before: PackedStringArray = director.get_managed_chunk_ids()
 
 	_check(not bool(director.recover_to_world_position(Vector3(NAN, 0.0, 0.0), 1001)), "Recovery must reject NaN coordinates.")
