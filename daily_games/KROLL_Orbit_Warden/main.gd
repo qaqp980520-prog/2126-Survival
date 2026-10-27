@@ -9,14 +9,15 @@ var ship_position := VIEW_SIZE * 0.5
 var ship_velocity := Vector2.ZERO
 var ship_angle := -PI * 0.5
 var asteroids: Array[Dictionary] = []
-var bullets: Array[Dictionary] = []
+var energy_cells: Array[Vector2] = []
 var spawn_timer := 1.0
-var fire_cooldown := 0.0
 var invulnerable_left := 0.0
+var shield_left := 0.0
+var shield_cooldown := 0.0
 var rng := RandomNumberGenerator.new()
 var _touch_action := ""
 var _mouse_action := ""
-var notice := "Destroy 12 asteroids. Thrust, turn and fire."
+var notice := "Recover six energy cells. Avoid drifting asteroids."
 
 func _ready() -> void:
 	_restart_game()
@@ -30,8 +31,9 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 
-	fire_cooldown = maxf(0.0, fire_cooldown - delta)
 	invulnerable_left = maxf(0.0, invulnerable_left - delta)
+	shield_left = maxf(0.0, shield_left - delta)
+	shield_cooldown = maxf(0.0, shield_cooldown - delta)
 	if _action_down("left"):
 		ship_angle -= 3.6 * delta
 	if _action_down("right"):
@@ -48,17 +50,6 @@ func _process(delta: float) -> void:
 		_spawn_asteroid()
 		spawn_timer = 1.25
 
-	for bullet_index in range(bullets.size() - 1, -1, -1):
-		var bullet: Dictionary = bullets[bullet_index]
-		var bullet_position: Vector2 = bullet["position"]
-		var bullet_velocity: Vector2 = bullet["velocity"]
-		bullet["position"] = _wrap_position(bullet_position + bullet_velocity * delta)
-		bullet["ttl"] = float(bullet["ttl"]) - delta
-		if float(bullet["ttl"]) <= 0.0:
-			bullets.remove_at(bullet_index)
-		else:
-			bullets[bullet_index] = bullet
-
 	for asteroid_index in range(asteroids.size() - 1, -1, -1):
 		var asteroid: Dictionary = asteroids[asteroid_index]
 		var asteroid_position: Vector2 = asteroid["position"]
@@ -67,35 +58,36 @@ func _process(delta: float) -> void:
 		asteroid["rotation"] = float(asteroid["rotation"]) + float(asteroid["spin"]) * delta
 		asteroids[asteroid_index] = asteroid
 
-	for bullet_index in range(bullets.size() - 1, -1, -1):
-		var bullet: Dictionary = bullets[bullet_index]
-		var bullet_position: Vector2 = bullet["position"]
-		var hit_index := -1
-		for asteroid_index in range(asteroids.size() - 1, -1, -1):
-			var asteroid: Dictionary = asteroids[asteroid_index]
-			var asteroid_position: Vector2 = asteroid["position"]
-			if bullet_position.distance_to(asteroid_position) <= float(asteroid["radius"]):
-				hit_index = asteroid_index
-				break
-		if hit_index >= 0:
-			bullets.remove_at(bullet_index)
-			asteroids.remove_at(hit_index)
-			_register_asteroid_destroyed()
+	for cell_index in range(energy_cells.size() - 1, -1, -1):
+		if ship_position.distance_to(energy_cells[cell_index]) <= 23.0:
+			energy_cells.remove_at(cell_index)
+			_register_cell_collected()
 			if str(state.get("status", "")) != "playing":
 				queue_redraw()
 				return
 
 	if invulnerable_left <= 0.0:
-		for asteroid in asteroids:
+		for asteroid_index in range(asteroids.size()):
+			var asteroid: Dictionary = asteroids[asteroid_index]
 			var asteroid_position: Vector2 = asteroid["position"]
 			if ship_position.distance_to(asteroid_position) < float(asteroid["radius"]) + 11.0:
-				Rules.lose_life(state)
-				ship_position = VIEW_SIZE * 0.5
-				ship_velocity = Vector2.ZERO
-				invulnerable_left = 1.5
-				notice = "Hull impact. Lives remaining: %d" % int(state["lives"])
-				if str(state["status"]) == "lost":
-					notice = "Hull breach. Press R to restart."
+				if shield_left > 0.0:
+					var push_direction := (asteroid_position - ship_position).normalized()
+					if push_direction.length_squared() < 0.01:
+						push_direction = Vector2.UP
+					asteroid["velocity"] = push_direction * 170.0
+					asteroid["position"] = _wrap_position(ship_position + push_direction * (float(asteroid["radius"]) + 20.0))
+					asteroids[asteroid_index] = asteroid
+					shield_left = 0.0
+					notice = "Shield deflected an impact."
+				else:
+					Rules.lose_life(state)
+					ship_position = VIEW_SIZE * 0.5
+					ship_velocity = Vector2.ZERO
+					invulnerable_left = 1.5
+					notice = "Hull impact. Lives remaining: %d" % int(state["lives"])
+					if str(state["status"]) == "lost":
+						notice = "Hull breach. Press R to restart."
 				break
 	queue_redraw()
 
@@ -121,10 +113,17 @@ func _draw() -> void:
 			closed.append(points[0])
 			draw_polyline(closed, Color("#79b8c9"), 2.0, true)
 
-	for bullet in bullets:
-		var bullet_position: Vector2 = bullet["position"]
-		draw_circle(bullet_position, 3.5, Color("#8cf7ff"))
-		draw_circle(bullet_position, 7.0, Color(0.55, 0.95, 1.0, 0.18))
+	for cell in energy_cells:
+		var diamond := PackedVector2Array([
+			cell + Vector2(0, -12),
+			cell + Vector2(10, 0),
+			cell + Vector2(0, 12),
+			cell + Vector2(-10, 0)
+		])
+		draw_colored_polygon(diamond, Color("#ffcf70"))
+		diamond.append(diamond[0])
+		draw_polyline(diamond, Color("#fff1b5"), 2.0, true)
+		draw_circle(cell, 20.0, Color(1.0, 0.78, 0.32, 0.10))
 
 	if str(state.get("status", "")) == "playing" and (invulnerable_left <= 0.0 or int(invulnerable_left * 12.0) % 2 == 0):
 		var forward := Vector2.RIGHT.rotated(ship_angle)
@@ -138,22 +137,25 @@ func _draw() -> void:
 		draw_polyline(ship_points, Color("#e0fdff"), 2.0, true)
 		if _action_down("thrust"):
 			draw_line(ship_position - forward * 11.0, ship_position - forward * 23.0 + forward.rotated(PI / 2.0) * 3.0, Color("#ffbd66"), 3.0, true)
+		if shield_left > 0.0:
+			draw_circle(ship_position, 27.0, Color(0.30, 0.92, 1.0, 0.14))
+			draw_arc(ship_position, 27.0, 0.0, TAU, 48, Color("#8af5ff"), 2.5, true)
 
 	draw_rect(Rect2(18, 14, 924, 72), Color("#10283a"))
 	draw_string(ThemeDB.fallback_font, Vector2(34, 43), "KROLL / ORBIT WARDEN", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#82f4ff"))
-	draw_string(ThemeDB.fallback_font, Vector2(35, 69), "SCORE %04d   ASTEROIDS %02d/%02d   LIVES %d   TIME %02d" % [int(state.get("score", 0)), int(state.get("asteroids_destroyed", 0)), Rules.TARGET_DESTROYS, int(state.get("lives", Rules.STARTING_LIVES)), int(ceil(float(state.get("time_left", Rules.TIME_LIMIT))))], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#c2d6e4"))
+	draw_string(ThemeDB.fallback_font, Vector2(35, 69), "SCORE %04d   CELLS %d/%d   LIVES %d   TIME %02d" % [int(state.get("score", 0)), int(state.get("cells_collected", 0)), Rules.REQUIRED_CELLS, int(state.get("lives", Rules.STARTING_LIVES)), int(ceil(float(state.get("time_left", Rules.TIME_LIMIT))))], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#c2d6e4"))
 	draw_string(ThemeDB.fallback_font, Vector2(34, 112), notice, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#a8c6d8"))
 
 	draw_rect(Rect2(0, PLAYFIELD_BOTTOM, VIEW_SIZE.x, VIEW_SIZE.y - PLAYFIELD_BOTTOM), Color("#0b1b2c"))
 	_draw_control(Rect2(18, 558, 200, 62), "TURN LEFT", _action_down("left"))
 	_draw_control(Rect2(235, 558, 200, 62), "THRUST", _action_down("thrust"))
 	_draw_control(Rect2(452, 558, 200, 62), "TURN RIGHT", _action_down("right"))
-	_draw_control(Rect2(669, 558, 132, 62), "FIRE", false)
+	_draw_control(Rect2(669, 558, 132, 62), "SHIELD", shield_left > 0.0)
 	_draw_control(Rect2(816, 558, 126, 62), "RESET", false)
 	if str(state.get("status", "")) != "playing":
 		draw_rect(Rect2(210, 220, 540, 112), Color("#10283a"))
-		var title := "SECTOR CLEARED" if str(state.get("status", "")) == "won" else "MISSION FAILED"
-		draw_string(ThemeDB.fallback_font, Vector2(300, 267), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("#8ef5d0") if title == "SECTOR CLEARED" else Color("#ff8b9c"))
+		var title := "CELLS RECOVERED" if str(state.get("status", "")) == "won" else "MISSION FAILED"
+		draw_string(ThemeDB.fallback_font, Vector2(300, 267), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("#8ef5d0") if title == "CELLS RECOVERED" else Color("#ff8b9c"))
 		draw_string(ThemeDB.fallback_font, Vector2(300, 303), "Press R or RESET to play again.", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#d3e5ef"))
 
 func _draw_control(rect: Rect2, label: String, active: bool) -> void:
@@ -166,13 +168,13 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_R:
 			_restart_game()
 		elif event.keycode == KEY_SPACE:
-			_fire_bullet()
+			_activate_shield()
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
 			_touch_action = _action_for_position(event.position)
-			if _touch_action == "fire":
-				_fire_bullet()
+			if _touch_action == "shield":
+				_activate_shield()
 			elif _touch_action == "reset":
 				_restart_game()
 		else:
@@ -184,8 +186,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_mouse_action = _action_for_position(event.position)
-			if _mouse_action == "fire":
-				_fire_bullet()
+			if _mouse_action == "shield":
+				_activate_shield()
 			elif _mouse_action == "reset":
 				_restart_game()
 		else:
@@ -201,7 +203,7 @@ func _action_for_position(position: Vector2) -> String:
 	if position.x < 660.0:
 		return "right"
 	if position.x < 808.0:
-		return "fire"
+		return "shield"
 	return "reset"
 
 func _action_down(action: String) -> bool:
@@ -213,23 +215,19 @@ func _action_down(action: String) -> bool:
 		return Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP) or _touch_action == action or _mouse_action == action
 	return false
 
-func _fire_bullet() -> void:
-	if str(state.get("status", "")) != "playing" or fire_cooldown > 0.0:
+func _activate_shield() -> void:
+	if str(state.get("status", "")) != "playing" or shield_cooldown > 0.0:
 		return
-	var forward := Vector2.RIGHT.rotated(ship_angle)
-	bullets.append({
-		"position": ship_position + forward * 19.0,
-		"velocity": forward * 440.0 + ship_velocity,
-		"ttl": 1.4
-	})
-	fire_cooldown = 0.22
+	shield_left = 0.85
+	shield_cooldown = 5.0
+	notice = "Deflection field active."
 
-func _register_asteroid_destroyed() -> bool:
-	var accepted := Rules.register_destroy(state)
+func _register_cell_collected() -> bool:
+	var accepted := Rules.collect_cell(state)
 	if accepted:
-		notice = "Direct hit. Keep the orbit clear."
+		notice = "Energy cell secured. Keep moving."
 		if str(state.get("status", "")) == "won":
-			notice = "All targets cleared. Sector secured."
+			notice = "All energy cells recovered. Sector secured."
 	return accepted
 
 func _spawn_asteroid() -> void:
@@ -264,13 +262,22 @@ func _restart_game() -> void:
 	ship_velocity = Vector2.ZERO
 	ship_angle = -PI * 0.5
 	asteroids.clear()
-	bullets.clear()
+	energy_cells.clear()
 	spawn_timer = 1.0
-	fire_cooldown = 0.0
 	invulnerable_left = 0.0
+	shield_left = 0.0
+	shield_cooldown = 0.0
 	_touch_action = ""
 	_mouse_action = ""
-	notice = "Destroy 12 asteroids. Thrust, turn and fire."
+	notice = "Recover six energy cells. Avoid drifting asteroids."
 	for _index in range(4):
 		_spawn_asteroid()
+	energy_cells = [
+		Vector2(140.0, 150.0),
+		Vector2(820.0, 160.0),
+		Vector2(190.0, 390.0),
+		Vector2(770.0, 385.0),
+		Vector2(480.0, 170.0),
+		Vector2(480.0, 455.0)
+	]
 	queue_redraw()
