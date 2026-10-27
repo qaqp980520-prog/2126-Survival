@@ -255,3 +255,14 @@
 - GitHub compare confirms current `main` is identical to merge commit `a9c4aec4387818616e1855d4d3775c5d9e243748`. The connector did not expose a separate main-push run record, so this index does not claim post-merge push CI beyond the exact-head Run #287.
 - Limits: local Godot/GUI/iPhone tests not performed; streaming remains synchronous and factory-driven, not connected to the production world generator.
 - Next: connect the director to the production world host, then add production-scene load/unload/save/restore acceptance tests and graphical/iPhone validation.
+
+## Run 18 final reconciliation｜2026-10-27
+
+- PR #67 merged by squash as `408f263648ac88a6097399331cc8fd9398489601`; the merge commit is the current `main` SHA at closeout. The feature PR is closed/merged.
+- Exact-head Godot 4.3 CI Run ID `40445410307` succeeded: all 78 job steps completed successfully, with zero failed steps. The root project import, mineral streaming diagnostics/recovery/position-validation/director tests, and all existing mini-game tests passed.
+- New game: `daily_games/KROLL_Orbital_Mini_Golf/` — three top-down mini-golf courses; pull-back mouse/touch aiming, keyboard direction shots, cup capture speed limit, obstacle/wall bounce, five strokes per course, and 90-second total timer. No external assets or add-ons.
+- Survival hardening: `systems/MineralGridStreamingDirector.gd` rejects non-finite or extreme world coordinates before grid conversion, invalid chunk dimensions, non-canonical IDs such as `surface/chunk_01_1`, and canonical-looking IDs outside the supported grid bound. Recovery tests prove rejected IDs/coordinates do not mutate the managed map or controller ID set.
+- Test cleanup: streaming diagnostics, Cipher Recall, Cargo Tugs, and Vector Rally smoke tests now own and release their watchdog Timer nodes. The exact-head CI log contains no actual Godot `SCRIPT ERROR:`, `ERROR:`, or `FAIL:` lines and no `ObjectDB instances leaked at exit` warning.
+- PR #67 added the Mini Golf import/rules/runtime steps to `.github/workflows/godot-validation.yml`; the final exact-head workflow included 78 steps, all successful.
+- Limits: no local Godot executable was available; graphical playtesting, GPU validation, and iPhone device testing are not claimed. Mini Golf uses a small custom 2D simulation rather than a rigid-body physics engine. Mineral streaming remains synchronous/factory-driven and is not yet connected to the production world generator.
+- Next: connect the streaming director to the production world host, add end-to-end production-scene load/unload/save/restore acceptance tests, and perform GUI/iPhone validation when a suitable device/environment is available.
