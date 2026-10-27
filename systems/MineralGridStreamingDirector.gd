@@ -40,6 +40,9 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller or chunk factory is unavailable.", true)
 		return false
+	if not _is_finite_world_position(world_position):
+		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
+		return false
 	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
 		_set_sync_report(false, "validation", "Chunk dimensions and load radius must be valid.", true)
 		return false
@@ -132,6 +135,9 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 ## This is intended for recovery after a previous sync reported an incomplete rollback.
 ## Unknown ID formats are rejected before changing the director's current managed map.
 func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
+	if not _is_finite_world_position(world_position):
+		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
+		return false
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("get_loaded_chunk_ids"):
 		_set_sync_report(false, "recovery_validation", "Controller cannot provide its actual loaded chunk IDs.", false)
 		return false
@@ -177,9 +183,12 @@ func get_managed_chunk_ids() -> PackedStringArray:
 	return ids
 
 func get_grid_coordinate(world_position: Vector3) -> Vector2i:
-	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
+	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or not _is_finite_world_position(world_position):
 		return Vector2i.ZERO
 	return Vector2i(floori(world_position.x / chunk_size_x), floori(world_position.z / chunk_size_z))
+
+func _is_finite_world_position(world_position: Vector3) -> bool:
+	return is_finite(world_position.x) and is_finite(world_position.y) and is_finite(world_position.z)
 
 func _chunk_id(coord: Vector2i) -> String:
 	return "surface/chunk_%d_%d" % [coord.x, coord.y]
