@@ -314,4 +314,4 @@ func _refresh_hud() -> void:
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
 	var record_count: int = registry.get_saved_ids().size() if registry != null else 0
 	var grid_text := str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a"
-	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · ESC release\nGrid: %s   Active chunks: %d   Vein records: %d" % [grid_text, active_count, record_count]
+	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · ESC release · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d" % [grid_text, active_count, record_count]
