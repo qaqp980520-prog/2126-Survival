@@ -123,6 +123,12 @@ jobs:
           test -f docs/KROLL_NEON_BREAKER_AND_ATOMIC_WORLD_SAVE_M0_1_2026-10-27.md
           test -f docs/UNDERGROUND_MINING_PLAYGROUND_M0_1_2026-10-27.md
           test -f tests/world_session_save_roundtrip_test.gd
+          test -f daily_games/KROLL_Vent_Runner/project.godot
+          test -f daily_games/KROLL_Vent_Runner/main.tscn
+          test -f daily_games/KROLL_Vent_Runner/rules.gd
+          test -f daily_games/KROLL_Vent_Runner/tests/rules_test.gd
+          test -f daily_games/KROLL_Vent_Runner/tests/game_smoke_test.gd
+          test -f tests/inventory_mineral_catalog_compatibility_test.gd
           test -f docs/KROLL_ECHO_DIVER_AND_WORLD_BRIDGE_TEST_HARDENING_M0_1_2026-10-27.md
           test -f docs/KROLL_ORBITAL_MINI_GOLF_AND_STREAM_GUARDS_M0_1_2026-10-27.md
           test -f tests/mineral_grid_streaming_position_validation_test.gd
@@ -808,3 +814,39 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Mineral mining regeneration regression tests passed."
+
+      - name: Import and parse KROLL Vent Runner
+        run: godot --headless --path daily_games/KROLL_Vent_Runner --editor --quit
+      - name: Run KROLL Vent Runner rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Vent_Runner --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Vent Runner rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Vent Runner rules tests passed."
+      - name: Run KROLL Vent Runner runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Vent_Runner --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Vent Runner runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Vent Runner runtime smoke test passed."
+      - name: Run inventory mineral catalog compatibility test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --script res://tests/inventory_mineral_catalog_compatibility_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported inventory/mineral weight compatibility errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "Inventory mineral catalog compatibility tests passed."
