@@ -233,7 +233,7 @@
 - Next: validate the exact PR head, merge only after success, run post-merge main CI, then record the final merge SHA and CI evidence.
 
 ## Run 15 final reconciliation｜2026-10-27
-- PR #60 merged as `7f4cae3eb74a7258a6f45364c07e1765956bd1f2`; exact feature head `2aa86c6e74993a1bd4a9a20ec591bef386c791ac` passed Godot 4.3 CI Run #285 (`40418593413`), 65/65 steps successful, including mineral recovery and Vector Rally import/rules/runtime tests.
+- PR #60 merged as `7f4cae3eb74a7258a6f45364c07e1765956bd1f2`; exact feature head `2aa86c6e74993a1bd4a9a20ec591bef386c791ac` passed Godot 4.3 CI Run #285 (`40418593413`), 68/68 steps successful, including mineral recovery and Vector Rally import/rules/runtime tests. The earlier 65-step count was a documentation error; the final job record reports 68 successful steps and zero failures.
 - Earlier Run 15 candidate notes above are historical; this entry is the final state. Production world generator integration and async streaming remain outstanding. Local GUI/iPhone testing is not claimed.
 
 ## Run 16 final reconciliation｜2026-10-27
