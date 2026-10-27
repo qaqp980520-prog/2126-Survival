@@ -13,7 +13,7 @@
 
 ## 2026-10-27 Run 17 — Vertical Relay + atomic surface restore（已合併／已驗證）
 
-- 最終 main：e9d853fe0114e3432b7269f902fd579bbcbe9dcc（PR #64 merge commit）。
+- PR #64 功能合併 commit：e9d853fe0114e3432b7269f902fd579bbcbe9dcc；PR #65 文件／索引同步合併 commit：4bc657cad8133e21a44b5a473283fe9023d9da62。此處記錄 Run 17 的兩個歷史合併點，不將較早的功能合併 SHA 誤標為最新 main。
 - PR #64：Run 17: Vertical Relay and atomic surface restore；功能分支 HEAD c00be54a008978f2406ea35612d6d02609f1bcf8，已合併。
 - 精確驗證：PR-head Godot 4.3 CI Run #297（40442929654）成功，72/72 個必要驗證步驟通過；main-push CI Run #298（40443291605）亦成功，72/72 個必要驗證步驟通過。
 - KROLL Vertical Relay：daily_games/KROLL_Vertical_Relay/；單關垂直平台跳躍，收集五個資料晶片、避開兩個移動危險區並在 75 秒內抵達出口；鍵盤與觸控按鈕；無外部素材。CI 已通過匯入、規則與 runtime smoke tests。
