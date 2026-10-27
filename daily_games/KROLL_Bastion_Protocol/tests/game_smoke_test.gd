@@ -10,15 +10,17 @@ func _run() -> void:
 	var game := GameScene.instantiate()
 	root.add_child(game)
 	await process_frame
-	_expect(not (game.get("state") as Dictionary).is_empty(), "main scene initializes game state")
-	_expect(bool(game.call("place_tower_at", Vector2i(1, 2))), "scene places a turret on a free tile")
+	var state: Dictionary = game.get("state")
+	_expect(not state.is_empty(), "main scene initializes game state")
+	_expect(bool(game.call("place_tower_at", Vector2i(1, 2)), ""))
 	_expect(not bool(game.call("place_tower_at", Vector2i(1, 3))), "scene rejects placing a turret on the route")
 	_expect(bool(game.call("start_wave")), "scene starts a wave")
 	await process_frame
-	var state: Dictionary = game.get("state")
+	state = game.get("state")
 	_expect(str(state["phase"]) == "wave", "active wave state is preserved by the scene")
 	game.call("restart_game")
-	_expect(int((game.get("state") as Dictionary)["credits"]) == 100, "restart restores the initial economy")
+	state = game.get("state")
+	_expect(int(state["credits"]) == 100, "restart restores the initial economy")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
