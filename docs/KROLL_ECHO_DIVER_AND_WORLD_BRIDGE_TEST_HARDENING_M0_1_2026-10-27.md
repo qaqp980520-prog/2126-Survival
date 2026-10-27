@@ -8,7 +8,7 @@ Date: 2026-10-27
 - Gameplay: 8×7 sonar-navigation board; collect three beacons, avoid hidden hazards, conserve 32 fuel, extract before 75 seconds. Four sonar pulses reveal hazards within Manhattan radius 3 for 2.4 seconds.
 - Dependencies: Godot 4.3+, no addons or external art.
 - Import: open daily_games/KROLL_Echo_Diver/project.godot in Godot Project Manager.
-- Validation: awaiting exact-head Godot 4.3 CI; no local Godot binary is available in this run, so no local engine/GUI/iPhone test is claimed.
+- Validation: exact-head Godot 4.3 CI Run #317 (40454156074) passed all 78 validation steps on candidate head cb07165259502bbc390bbe31c501e95f9cf29011; PR #70 merged as 66e18a1350bc81c42ffac86eb440c4eba739e4da. No local Godot binary was available, so no local engine/GUI/iPhone test is claimed.
 
 ## Existing system / test hardening
 - tests/world_bridge_save_adapter_integration.gd now owns, stops and frees its watchdog Timer on all completion paths.

@@ -11,14 +11,17 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
-## 2026-10-27 Run 19 — Echo Diver + World Bridge save regression hardening (candidate; not merged)
+## 2026-10-27 Run 19 — Echo Diver + WorldBridge save regression hardening (merged / verified)
 
-- Base main at start: 5f961148f8ee25b67309ec88020b5e08bc3e4cad. Working branch: feature/run19-echo-diver-m1-3-save-validation-2026-10-27. Final candidate SHA and PR state must be taken from the live PR, not inferred from this index.
-- New game: daily_games/KROLL_Echo_Diver/; 8×7 sonar navigation, collect three beacons and reach extraction with 32 fuel and a 75-second limit. Four sonar pulses reveal nearby hazards for 2.4 seconds. Godot 4.3+, no addons or external art. Rule and runtime smoke tests are added to the shared workflow; exact-head CI is pending.
-- World bridge test hardening: tests/world_bridge_save_adapter_integration.gd now owns, stops, and frees its watchdog Timer. Invalid inventory container, unknown item, fractional/negative/out-of-range count, invalid game day, and unsupported world version cases must be rejected without changing the live inventory. Rejected export must not mutate the input world envelope.
-- Workflow adds Echo Diver import/rules/runtime checks and runs the WorldBridge save-adapter integration test with a timeout and explicit success marker.
-- Source audit: scripts/world.gd does not exist on the current main (GitHub contents API returned 404). M1.3 save validation remains in patch files; it was not applied to a missing controller. This does not mean the active M1.3 world-save path is integrated.
-- Limits: no local Godot executable; no local GUI or iPhone test. Production world-controller integration remains incomplete.
+- PR #70 merged to main as 66e18a1350bc81c42ffac86eb440c4eba739e4da. Feature head cb07165259502bbc390bbe31c501e95f9cf29011 was validated against base 5f961148f8ee25b67309ec88020b5e08bc3e4cad.
+- Exact-head Godot 4.3 CI Run #317 (40454156074) succeeded: all 78 validation steps passed, zero failed steps. It includes root project import, existing survival regression suite, Echo Diver import/rules/runtime tests, and WorldBridge save-adapter integration.
+- Run #316 (40453841062) failed only because the Echo Diver runtime smoke test omitted the workflow-required success marker; all seven runtime assertions had passed. Commit cb071652... adds the marker only when the final exit code is zero; Run #317 verifies the corrected head.
+- New game: daily_games/KROLL_Echo_Diver/; 8×7 sonar navigation, three data beacons, hidden hazards, 32 fuel, 75-second limit; four sonar pulses reveal nearby hazards for 2.4 seconds. Godot 4.3+, no external assets/add-ons.
+- WorldBridge test hardening: tests/world_bridge_save_adapter_integration.gd owns/stops/frees its watchdog Timer, tests malformed inventory containers, unknown IDs, fractional/negative/out-of-range counts, invalid game day and unsupported version, and asserts rejected restore does not mutate live inventory. CI uses a 35-second timeout and requires an explicit success marker.
+- PR #70 changed 12 files; the merged workflow contains one guarded WorldBridge integration step (no duplicate test execution).
+- M1.3 boundary: scripts/world.gd is absent from the current repository (GitHub contents API returned 404). M1.3 save-validation patches remain unapplied patch files; do not claim the production world save/controller is integrated.
+- Limits: no local Godot executable, GUI/GPU playtest, or iPhone hardware test was available. Production world-controller integration and device QA remain outstanding.
+- Next: locate/add the actual production world controller, then apply M1.3 validation and connect SurvivalWorldBridge to the real pickup/mining/save lifecycle with end-to-end tests.
 
 ## 2026-10-27 Run 17 — Vertical Relay + atomic surface restore（已合併／已驗證）
 
