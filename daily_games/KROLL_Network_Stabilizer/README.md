@@ -1,6 +1,6 @@
 # KROLL Network Stabilizer M0.1
 
-A standalone Godot 4.3+ network-stabilization arcade prototype. Place auto-scanning relays on the 10×8 grid, start three packet waves, and keep the core alive.
+A standalone Godot 4.3+ network-stabilization arcade prototype. Place scanning relays on the 10×8 grid, clear three waves of corrupted data packets, and keep the network stable.
 
 ## Controls
 - Click a free non-path tile to place a relay (40 credits).
