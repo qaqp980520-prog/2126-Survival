@@ -39,7 +39,8 @@ static func is_wall_cell(cell: Vector2i) -> bool:
 	return wall_cells().has(cell)
 
 static func cell_label(state: Dictionary, cell: Vector2i) -> String:
-	if Vector2i(state.get("player", Vector2i(-1, -1))) == cell:
+	var player: Vector2i = state.get("player", Vector2i(-1, -1))
+	if player == cell:
 		return "P"
 	if (state.get("enemies", []) as Array).has(cell):
 		return "B"
