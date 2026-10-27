@@ -37,7 +37,9 @@ func _test_blocked_and_invalid_moves() -> void:
 	var invalid: Dictionary = Rules.step(state, Vector2i(1, 1))
 	_expect(invalid.get("last_action") == "invalid_direction", "diagonal movement rejected")
 	_expect(invalid.get("position") == Rules.START, "invalid move preserves position")
-	var blocked: Dictionary = Rules.step(state, Vector2i.UP)
+	var wall_state: Dictionary = state.duplicate(true)
+	wall_state["position"] = Vector2i(0, 2)
+	var blocked: Dictionary = Rules.step(wall_state, Vector2i.RIGHT)
 	_expect(blocked.get("last_action") == "blocked", "wall blocks movement")
 	_expect(blocked.get("fuel") == Rules.FUEL_START, "blocked movement costs no fuel")
 
