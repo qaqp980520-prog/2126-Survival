@@ -1,8 +1,8 @@
 config_version=5
 
 [application]
-config/name="2126 Survival - Backrooms Portal Playground"
-run/main_scene="res://prototypes/BackroomsPortalPlayground.tscn"
+config/name="2126 Survival - Development Test Hub"
+run/main_scene="res://prototypes/SurvivalTestHub.tscn"
 
 [display]
 window/size/viewport_width=1280
