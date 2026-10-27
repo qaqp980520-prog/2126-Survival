@@ -878,7 +878,8 @@ func _write_save_atomically(destination_path: String, data: Dictionary) -> bool:
             DirAccess.remove_absolute(temporary_absolute)
         return false
 
-    if moved_existing_save and FileAccess.file_exists(backup_path):
+    # Once the new primary file is in place, any older backup is superseded.
+    if FileAccess.file_exists(backup_path):
         DirAccess.remove_absolute(backup_absolute)
     return true
 
