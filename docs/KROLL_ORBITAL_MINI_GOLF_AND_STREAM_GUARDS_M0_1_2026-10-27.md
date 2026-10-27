@@ -26,6 +26,7 @@ Known limits: the physics is an intentionally small custom approximation rather 
 - Reject finite but out-of-range grid coordinates (absolute grid X/Z above 1,000,000,000) before `floori` and before recovery mutates the director's managed map.
 - Return `Vector2i.ZERO` from the coordinate helper for invalid dimensions or unsafe positions.
 - Reject non-canonical chunk IDs such as `surface/chunk_01_1`, which parse to the same numeric coordinate as `surface/chunk_1_1` but are not the canonical ID produced by the director.
+- Reject canonical-looking IDs outside the supported absolute grid-coordinate bound of 1,000,000,000 before rebuilding the managed map.
 - Extend position-validation and recovery tests to prove rejected inputs leave existing controller/director state unchanged.
 
 ## Test cleanup
