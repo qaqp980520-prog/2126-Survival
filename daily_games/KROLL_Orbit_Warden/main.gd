@@ -141,7 +141,7 @@ func _draw() -> void:
 
 	draw_rect(Rect2(18, 14, 924, 72), Color("#10283a"))
 	draw_string(ThemeDB.fallback_font, Vector2(34, 43), "KROLL / ORBIT WARDEN", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#82f4ff"))
-	draw_string(ThemeDB.fallback_font, Vector2(35, 69), "SCORE %04d   ASTEROIDS %02d/%02d   LIVES %d   TIME %02d" % [int(state.get("score", 0)), int(state.get("asteroids_destroyed", 0)), Rules.TARGET_DESTROYS, int(state.get("lives", Rules.STARTING_LIVES)), int(ceil(float(state.get("time_left", Rules.TIME_LIMIT)))], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#c2d6e4"))
+	draw_string(ThemeDB.fallback_font, Vector2(35, 69), "SCORE %04d   ASTEROIDS %02d/%02d   LIVES %d   TIME %02d" % [int(state.get("score", 0)), int(state.get("asteroids_destroyed", 0)), Rules.TARGET_DESTROYS, int(state.get("lives", Rules.STARTING_LIVES)), int(ceil(float(state.get("time_left", Rules.TIME_LIMIT))))], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#c2d6e4"))
 	draw_string(ThemeDB.fallback_font, Vector2(34, 112), notice, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#a8c6d8"))
 
 	draw_rect(Rect2(0, PLAYFIELD_BOTTOM, VIEW_SIZE.x, VIEW_SIZE.y - PLAYFIELD_BOTTOM), Color("#0b1b2c"))
