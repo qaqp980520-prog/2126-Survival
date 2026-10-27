@@ -133,12 +133,36 @@ func _collide_obstacle(rect: Rect2) -> void:
 		clampf(ball_position.y, rect.position.y, rect.end.y)
 	)
 	var offset: Vector2 = ball_position - closest
-	if offset.length() >= Rules.BALL_RADIUS:
-		return
 	var normal: Vector2
 	if offset.length_squared() <= 0.000001:
-		normal = -ball_velocity.normalized() if ball_velocity.length_squared() > 0.000001 else Vector2.UP
+		# The center is inside the obstacle. Eject through the nearest face instead
+		# of merely moving one radius from the center and leaving it embedded.
+		var distances := [
+			ball_position.x - rect.position.x,
+			rect.end.x - ball_position.x,
+			ball_position.y - rect.position.y,
+			rect.end.y - ball_position.y
+		]
+		var nearest_face: int = 0
+		for face_index in range(1, distances.size()):
+			if float(distances[face_index]) < float(distances[nearest_face]):
+				nearest_face = face_index
+		match nearest_face:
+			0:
+				closest = Vector2(rect.position.x, ball_position.y)
+				normal = Vector2.LEFT
+			1:
+				closest = Vector2(rect.end.x, ball_position.y)
+				normal = Vector2.RIGHT
+			2:
+				closest = Vector2(ball_position.x, rect.position.y)
+				normal = Vector2.UP
+			_:
+				closest = Vector2(ball_position.x, rect.end.y)
+				normal = Vector2.DOWN
 	else:
+		if offset.length() >= Rules.BALL_RADIUS:
+			return
 		normal = offset.normalized()
 	ball_position = closest + normal * Rules.BALL_RADIUS
 	if ball_velocity.dot(normal) < 0.0:
