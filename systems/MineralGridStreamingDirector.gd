@@ -7,6 +7,7 @@ class_name MineralGridStreamingDirector
 signal sync_failed(report: Dictionary)
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
+const MAX_SAFE_GRID_COORDINATE: float = 1000000000.0
 
 @export_range(1.0, 4096.0, 1.0) var chunk_size_x: float = 64.0
 @export_range(1.0, 4096.0, 1.0) var chunk_size_z: float = 64.0
@@ -43,8 +44,11 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
 		return false
-	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
 		_set_sync_report(false, "validation", "Chunk dimensions and load radius must be valid.", true)
+		return false
+	if not _is_safe_grid_position(world_position):
+		_set_sync_report(false, "validation", "World position is outside supported grid-coordinate bounds.", true)
 		return false
 
 	var center := Vector2i(
@@ -138,6 +142,9 @@ func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> b
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
 		return false
+	if not _is_safe_grid_position(world_position):
+		_set_sync_report(false, "recovery_validation", "World position is outside supported grid-coordinate bounds.", false)
+		return false
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("get_loaded_chunk_ids"):
 		_set_sync_report(false, "recovery_validation", "Controller cannot provide its actual loaded chunk IDs.", false)
 		return false
@@ -169,7 +176,10 @@ func _parse_grid_chunk_id(chunk_id: String) -> Dictionary:
 	var parts: PackedStringArray = chunk_id.substr(prefix.length()).split("_", false)
 	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
 		return {"valid": false, "coordinate": Vector2i.ZERO}
-	return {"valid": true, "coordinate": Vector2i(parts[0].to_int(), parts[1].to_int())}
+	var coordinate := Vector2i(parts[0].to_int(), parts[1].to_int())
+	if _chunk_id(coordinate) != chunk_id:
+		return {"valid": false, "coordinate": Vector2i.ZERO}
+	return {"valid": true, "coordinate": coordinate}
 ## Returns a snapshot of the last sync outcome, including actual active IDs from both owners.
 ## On failure, callers can inspect phase/details or subscribe to sync_failed(report).
 func get_last_sync_report() -> Dictionary:
@@ -183,9 +193,18 @@ func get_managed_chunk_ids() -> PackedStringArray:
 	return ids
 
 func get_grid_coordinate(world_position: Vector3) -> Vector2i:
-	if chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or not _is_finite_world_position(world_position):
+	if not _is_safe_grid_position(world_position):
 		return Vector2i.ZERO
 	return Vector2i(floori(world_position.x / chunk_size_x), floori(world_position.z / chunk_size_z))
+
+func _is_safe_grid_position(world_position: Vector3) -> bool:
+	if not _is_finite_world_position(world_position):
+		return false
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+		return false
+	var grid_x: float = world_position.x / chunk_size_x
+	var grid_z: float = world_position.z / chunk_size_z
+	return is_finite(grid_x) and is_finite(grid_z) and absf(grid_x) <= MAX_SAFE_GRID_COORDINATE and absf(grid_z) <= MAX_SAFE_GRID_COORDINATE
 
 func _is_finite_world_position(world_position: Vector3) -> bool:
 	return is_finite(world_position.x) and is_finite(world_position.y) and is_finite(world_position.z)
