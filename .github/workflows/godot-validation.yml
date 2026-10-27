@@ -850,3 +850,28 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Inventory mineral catalog compatibility tests passed."
+
+      - name: Import and parse KROLL Orbit Warden
+        run: godot --headless --path daily_games/KROLL_Orbit_Warden --editor --quit
+      - name: Run KROLL Orbit Warden rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Orbit_Warden --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Orbit Warden rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Orbit Warden rules tests passed."
+      - name: Run KROLL Orbit Warden runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Orbit_Warden --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Orbit Warden runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Orbit Warden runtime smoke test passed."
