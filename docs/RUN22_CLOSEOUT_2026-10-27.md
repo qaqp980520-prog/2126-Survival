@@ -14,10 +14,11 @@
 ## GitHub / tests
 - PR #76: [Run 22: Command Grid and underground mining prototype](https://github.com/qaqp980520-prog/2126-Survival/pull/76), merged.
 - Candidate HEAD: `67f2818e6269ce87f6b36054bae59d38c54abfcd`.
-- Merge commit and main SHA: `0c232c540d2d479ab71a22e065384e55aea5ca54`.
+- Functional PR #76 merge commit: `0c232c540d2d479ab71a22e065384e55aea5ca54`.
+- Documentation PR #77: [verified closeout and asset index reconciliation](https://github.com/qaqp980520-prog/2126-Survival/pull/77), exact-head Run #362 (`40486889706`) passed all 91 numbered steps; merge commit and final main SHA: `a975e111853b94ae5684911812796bdd9d63d04e`.
 - Exact-head Godot 4.3 CI Run #360: [40486271348](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40486271348), success; all 91 numbered validation steps passed, zero failures. New game steps 88–90 and underground integration step 91 passed.
 - Run #354 failed at hub smoke due implicit label name; fixed with explicit StatusLabel. Run #357 failed at surface regression because workflow expected an obsolete success marker; fixed to match the test's underground-only marker.
-- Post-merge GitHub compare: main identical to merge SHA. Open PR search empty at that check. No separate main-push workflow run was exposed by the connector.
+- Post-PR #76 compare: main identical to functional merge SHA. After docs PR #77, final compare confirms main equals `a975e111853b94ae5684911812796bdd9d63d04e`; final open PR search is empty. The connector did not expose a separate main-push workflow run for the final docs SHA.
 
 ## Limits
 - The cave is a fixed single-chunk prototype, not the missing production M1.3 world controller.
