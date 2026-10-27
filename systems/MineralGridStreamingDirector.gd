@@ -179,6 +179,8 @@ func _parse_grid_chunk_id(chunk_id: String) -> Dictionary:
 	var coordinate := Vector2i(parts[0].to_int(), parts[1].to_int())
 	if _chunk_id(coordinate) != chunk_id:
 		return {"valid": false, "coordinate": Vector2i.ZERO}
+	if absf(float(coordinate.x)) > MAX_SAFE_GRID_COORDINATE or absf(float(coordinate.y)) > MAX_SAFE_GRID_COORDINATE:
+		return {"valid": false, "coordinate": Vector2i.ZERO}
 	return {"valid": true, "coordinate": coordinate}
 ## Returns a snapshot of the last sync outcome, including actual active IDs from both owners.
 ## On failure, callers can inspect phase/details or subscribe to sync_failed(report).
