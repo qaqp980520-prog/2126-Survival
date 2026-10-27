@@ -43,10 +43,11 @@
 - No local Godot GUI/GPU or iPhone hardware test is claimed.
 - Next: integrate the actual production world controller when its source is added to the repository.
 
-## Run 21 candidate checklist — 2026-10-27
-- [ ] Validate KROLL Neon Breaker import, deterministic rules, and runtime smoke test on the exact feature PR head.
-- [ ] Validate atomic world-save replacement: a blocked temporary path must preserve existing save bytes; a complete temporary JSON must replace the old save.
-- [ ] Validate recovery when a prior save exists only as `.bak`, alongside the existing active-world save/load and invalid-payload non-mutation checks.
-- [ ] Merge only after the full Godot 4.3 CI succeeds; then update the final main SHA, PR status, and CI evidence in PROJECT_INDEX and Notion.
+## Run 21 final verification — 2026-10-27
+- [x] KROLL Neon Breaker import, deterministic rules, and runtime smoke test passed on exact feature HEAD `55b2bd8248af756f3bcbaafa19fa396c37455aec`.
+- [x] Atomic world-save replacement test passed: a blocked temporary path preserved the existing save bytes; a complete temporary JSON replaced the old save.
+- [x] Backup-only recovery passed when the primary save was missing; existing active-world save/load and invalid-payload non-mutation checks also passed.
+- [x] PR #74 merged as `2625b3a0460305ab0759a1e01f9040ed74db36a0` after exact-head Godot 4.3 CI Run #327 (`40471674229`) passed all 85 numbered validation steps with zero failures.
+- Main compare confirms `main` is identical to merge commit `2625b3a0460305ab0759a1e01f9040ed74db36a0`. The GitHub connector did not expose a separate main-push run for this commit; exact-head PR CI is the verified evidence.
 - The change applies to `prototypes/BackroomsPortalPlayground.gd`; `scripts/world.gd` remains absent, so formal M1.3 production-controller integration and crop persistence are still open.
 - No local Godot GUI/GPU or iPhone hardware test is claimed.
