@@ -13,7 +13,6 @@ func _run() -> void:
 	_expect(str(game.get("state")) == "playing", "scene starts in playing state")
 	_expect(int(game.get("scraps").size()) == 8, "scene starts with eight scrap parts")
 	game.set("player_position", Vector2(190, 160))
-	game.set("scraps", [Vector2(190, 160)])
 	_expect(bool(game.call("apply_magnet_pulse")), "magnet pulse activates with available charge")
 	_expect(int(game.get("parts_collected")) == 1, "scrap at the drone is collected")
 	_expect(int(game.get("charge")) == 6, "collecting metal restores the consumed charge")
