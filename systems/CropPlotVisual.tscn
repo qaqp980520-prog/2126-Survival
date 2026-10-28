@@ -1,0 +1,59 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://systems/CropPlotVisual.gd" id="1_visual"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_soil"]
+size = Vector3(1.4, 0.2, 1.4)
+
+[sub_resource type="StandardMaterial3D" id="Material_soil"]
+albedo_color = Color(0.31, 0.235, 0.176, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_marker"]
+size = Vector3(0.22, 0.22, 0.22)
+
+[sub_resource type="StandardMaterial3D" id="Material_marker"]
+resource_local_to_scene = true
+albedo_color = Color(0.847, 0.847, 0.541, 1)
+roughness = 0.7
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_stem"]
+top_radius = 0.055
+bottom_radius = 0.11
+height = 1.0
+
+[sub_resource type="StandardMaterial3D" id="Material_stem"]
+albedo_color = Color(0.392, 0.655, 0.353, 1)
+roughness = 0.9
+
+[sub_resource type="SphereMesh" id="SphereMesh_fruit"]
+radius = 0.18
+height = 0.36
+
+[sub_resource type="StandardMaterial3D" id="Material_fruit"]
+resource_local_to_scene = true
+albedo_color = Color(0.847, 0.847, 0.541, 1)
+roughness = 0.65
+
+[node name="CropPlotVisual" type="Node3D"]
+script = ExtResource("1_visual")
+
+[node name="SoilBed" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.1, 0)
+mesh = SubResource("BoxMesh_soil")
+material_override = SubResource("Material_soil")
+
+[node name="CropTypeMarker" type="MeshInstance3D" parent="."]
+position = Vector3(-0.48, 0.31, -0.48)
+mesh = SubResource("BoxMesh_marker")
+material_override = SubResource("Material_marker")
+
+[node name="CropStem" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("CylinderMesh_stem")
+material_override = SubResource("Material_stem")
+
+[node name="CropFruit" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("SphereMesh_fruit")
+material_override = SubResource("Material_fruit")
