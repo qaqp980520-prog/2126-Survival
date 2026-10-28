@@ -106,3 +106,14 @@
 - New game `daily_games/KROLL_Vent_Runner/` is a Godot 4.3+ side-view platformer with five cells, moving hazards, vent boosts, three lives and a 90-second timer; no external assets/add-ons.
 - No local Godot GUI/GPU/iPhone test is claimed.
 - Remaining: formal M1.3 world controller absent; fixed-cave mining prototype and synchronous/factory-driven streaming remain; crop persistence is not integrated. Next: wire inventory/mining/save lifecycle into a real world-session controller and add end-to-end production-scene tests.
+
+
+## Run 27 final reconciliation — 2026-10-28
+
+- PR #88 passed exact-head Godot 4.3 CI Run #418 (40612225426) and was merged as `103399080afc19a1a0b7e3141a8252c862d78cee`; validated candidate HEAD `c4e624c2ce838fdf44f140ff10cd90842fe1a12d`. The validate job concluded success. New Pressure Circuit import/rules/runtime steps 106–108 and active-world save roundtrip step 87 passed, along with all existing regression steps.
+- Run #415's failure was an expected malformed-JSON fixture producing an engine ERROR line through `JSON.parse_string()`. Replaced this with `JSON.new().parse()` and explicit error handling. Run #416 then confirmed save recovery passed but caught the reversed previous-cell connector direction in Pressure Circuit. Fixed mask generation and added reciprocal-adjacency assertions before Run #418.
+- New game `daily_games/KROLL_Pressure_Circuit/`: deterministic 6×6 pipe-routing puzzle, 30-move budget, keyboard/mouse/touch controls, no external assets. Import through `daily_games/KROLL_Pressure_Circuit/project.godot`.
+- Save fallback now tries a validated `.bak` when primary JSON or world-envelope validation fails; preserves corrupt primary bytes at `.corrupt` when possible and attempts validated primary repair without discarding the known-good backup on failure.
+- PR #88 merge SHA is `103399080afc19a1a0b7e3141a8252c862d78cee`. The separate documentation PR must pass its own exact-head CI before merge; no post-merge main-push workflow result is claimed unless independently observed.
+- Limits remain: production M1.3 world controller absent; underground mining is a fixed-cave prototype; async streaming and crop persistence are not integrated. No local Godot executable or local GUI/GPU/iPhone test was available.
+- Next: complete the separate docs PR and verify its CI, then integrate inventory/mining/save lifecycle into a production world-session controller with end-to-end load/unload/save/restore tests.
