@@ -431,3 +431,17 @@
 - No local Godot executable was available; GUI/GPU/iPhone hardware tests are not claimed.
 - Limits: CropRegistry lifecycle is not yet connected to a production world-session controller or scene-based planting/watering/harvesting. Formal scripts/world.gd, crop visuals, full generated chunk scene persistence and asynchronous streaming remain outstanding.
 - Next: wire lifecycle calls into the production world-session controller and actual crop interactions, then add crop/chunk unload-reload/save-failure acceptance tests.
+
+
+## 2026-10-28 Run 33 — Deep Current Angler + CropPlotController (feature merged; docs closeout)
+
+- Start-of-run reconciliation: main was `05d9e8aeacea8068b784a3d44b1cc88f6f930b5f`; Run 32 PRs #98/#99 were merged and open-PR search was empty. Notion Run 32 and its game/CropRegistry version pages were inspected before work.
+- New game: `daily_games/KROLL_Deep_Current_Angler/`, a deterministic turn-based fishing game. Cast, wait for bite, hook, then alternate reel/ease to keep tension below 100; catch three fish within 30 valid actions. Godot 4.3+, no external assets/add-ons; import through `daily_games/KROLL_Deep_Current_Angler/project.godot`.
+- Existing-system integration: added `systems/CropPlotController.gd` and bound it to the active `prototypes/BackroomsPortalPlayground.gd`. It exposes plant/water/advance/harvest/query/remove operations over the existing CropRegistry and adds atomic `advance_crops`: the complete schema-1 registry snapshot is restored if any crop tick fails. No CropRegistry schema change.
+- Integration test: `tests/crop_plot_controller_integration_test.gd` uses the real active-world scene and save/load path; covers stable-ID planting, rollback after a later crop timestamp failure, successful batch growth, save/reload, watering, maturity and harvest receipt.
+- Feature PR [#100](https://github.com/qaqp980520-prog/2126-Survival/pull/100) merged as `3b010096c6ee0c73fe0039a9a0ba87398aaf2bfc`; exact candidate HEAD `8f7af262b6d4c4e7da64661859088bc8d7f67a32`.
+- Exact-head Godot 4.3 CI Run #459 ([40693583329](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40693583329)) passed all 132 validation steps, with zero failures or skipped validation steps. Angler import/rules/runtime steps 129–131 and CropPlotController active-world integration step 132 passed. Existing regression steps 1–128 also passed. Run #458 (40693478408) targeted the prior candidate and was cancelled; it is not final evidence.
+- Test correction: static review found the line-snap test's default fish energy would catch before reaching the tension limit. Commit `8f7af26` injects a higher test-only fish energy; Run #459 validates that exact HEAD.
+- No local Godot executable was available; GUI/GPU/iPhone device QA is not claimed.
+- Limits: CropPlotController is now bound to the active playground, but crop meshes/proximity interaction are not implemented. Formal `scripts/world.gd`, full generated chunk-scene persistence and asynchronous streaming remain outstanding.
+- Next: build visible plot placement/interactions and then integrate crop/mineral registry state with chunk unload/reload in the formal world-session controller.
