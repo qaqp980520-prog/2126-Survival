@@ -94,6 +94,9 @@ func _run() -> void:
 	var player2 := replacement_world.get_node("Player") as Node3D
 	_expect(bool(replacement_world.call("load_game")), "fresh world restores the saved unloaded vein record")
 	_expect(int(replacement_world.call("get_inventory_count", "iron_ore")) == 2, "fresh world also restores the shared inventory")
+	var legacy_unloaded_save: Dictionary = replacement_world.call("serialize_world_state")
+	legacy_unloaded_save.erase("mineral_veins")
+	_expect(bool(replacement_world.call("load_world_state_from_dictionary", legacy_unloaded_save)), "legacy save without vein field is accepted before chunk reload")
 	var vein2 := _new_iron_vein(replacement_world)
 	vein2.set("remaining_units", 8)
 	await process_frame
