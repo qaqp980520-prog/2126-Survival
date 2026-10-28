@@ -42,7 +42,7 @@ func _run() -> void:
 	player.global_position = Vector3(4.0, 0.0, 6.0)
 	_expect(bool(world.call("load_game")), "active world reloads saved crop state from user://")
 	_expect(_crop_stage(registry, TOMATO_ID) == 2, "load restores saved tomato growth stage")
-	_expect(is_equal_approx(float(registry.call("get_crop", TOMATO_ID).get("growth_progress", -1.0)), 0.35), "load restores saved growth progress")
+	_expect(is_equal_approx(_crop_progress(registry, TOMATO_ID), 0.35), "load restores saved growth progress")
 
 	world.queue_free()
 	await process_frame
@@ -90,6 +90,12 @@ func _crop_stage(registry: Node, stable_id: String) -> int:
 	if not (record is Dictionary):
 		return -1
 	return int(record.get("growth_stage", -1))
+
+func _crop_progress(registry: Node, stable_id: String) -> float:
+	var record: Variant = registry.call("get_crop", stable_id)
+	if not (record is Dictionary):
+		return -1.0
+	return float(record.get("growth_progress", -1.0))
 
 func _cleanup_save_files() -> void:
 	for path in RELATED_PATHS:
