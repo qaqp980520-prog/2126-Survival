@@ -395,3 +395,15 @@
 - **Audit note:** commit `55a0efcd278f63d2b4d6768e01e09bed5109cb34` added the JSON round-trip regression on main before the feature PR merged; this was recorded in Run 29 Notion notes. The PR's exact merge-candidate CI ran the test together with the schema fix before merge. Run #426's typed-path parse failure and Run #432's stale success-marker mismatch were corrected before Run #433 passed.
 - **Limitations:** no local Godot executable, local GUI/GPU or iPhone device test is claimed. Formal M1.3 world controller is still absent; crop persistence and complete generated chunk scene state are not yet integrated. Vein records persist, not the entire chunk scene.
 - **Next:** build the production world-session controller, wire the registry to actual chunk load/unload events, and add crop plus chunk-state persistence tests.
+
+
+## 2026-10-28 Run 30 — Signal Sleuth + mineral registry transactionality (merged / exact-head CI passed)
+
+- Start-of-run reconciliation: main was `d24db974269ce457942d51061723911ae8802120`; Run 29 PRs #92/#93 were merged. Run 30 feature PR #94 was the only open PR before closeout.
+- New game: `daily_games/KROLL_Signal_Sleuth/`, a deterministic 5×5 nonogram-style deduction game with three patterns, generated row/column clues, mouse/touch/keyboard controls, 60 valid cell changes, restart and next-grid actions. Godot 4.3+, no external assets/add-ons.
+- Existing-system regression: `tests/mineral_vein_registry_atomicity_test.gd` verifies valid-then-invalid multi-record restore rejects atomically, validation is side-effect-free, valid payloads restore, unknown mineral IDs in unloaded stable-ID snapshots are rejected without mutation, and fractional schema versions are rejected.
+- Exact candidate HEAD `b717e7bd2b1d392d9823b3e584fb93ac68fa8736` passed Godot 4.3 workflow Run #441 (ID 40651700256). The validate job conclusion is success; all 119 primary validation steps completed successfully, including Signal Sleuth import/rules/runtime steps 116–118 and mineral registry transactionality step 119. Three post-job cleanup steps also succeeded. No failed steps were reported.
+- PR #94 was marked ready after CI success and merged by squash as `cf102401dd1bb7536a286f09f5f34e89613bd662`. The merge request used expected head SHA `b717e7bd2b1d392d9823b3e584fb93ac68fa8736`, preventing a stale-head merge.
+- Documentation closeout branch: `docs/run30-signal-sleuth-registry-atomicity-closeout-2026-10-28`, created from the feature merge commit. This PR updates this index and `docs/DEVELOPMENT_ISSUES.md`; its own exact-head CI must pass before merge.
+- Limits remain: no local Godot executable or local GUI/GPU/iPhone test is claimed. Production M1.3 world controller is absent; crop persistence and complete generated chunk scene state are not integrated. Registry transactionality tests harden the existing registry but do not add the production world controller.
+- Next: finish the documentation PR, verify its exact-head CI and final main SHA, then prioritize production world-session controller integration and chunk/crop state persistence.
