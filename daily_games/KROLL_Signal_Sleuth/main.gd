@@ -74,6 +74,7 @@ func _build_ui() -> void:
 		for col in range(Rules.SIZE):
 			var index: int = row * Rules.SIZE + col
 			var cell := Button.new()
+			cell.focus_mode = Control.FOCUS_NONE
 			cell.custom_minimum_size = Vector2(48, 48)
 			cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			cell.tooltip_text = "Row %d, column %d" % [row + 1, col + 1]
@@ -86,10 +87,12 @@ func _build_ui() -> void:
 	controls.alignment = BoxContainer.ALIGNMENT_CENTER
 	controls.add_theme_constant_override("separation", 10)
 	var restart := Button.new()
+	restart.focus_mode = Control.FOCUS_NONE
 	restart.text = "RESTART (R)"
 	restart.pressed.connect(_restart_game)
 	controls.add_child(restart)
 	var next_grid := Button.new()
+	next_grid.focus_mode = Control.FOCUS_NONE
 	next_grid.text = "NEXT GRID (N)"
 	next_grid.pressed.connect(_next_puzzle)
 	controls.add_child(next_grid)
