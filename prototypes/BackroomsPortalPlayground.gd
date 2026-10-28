@@ -47,6 +47,7 @@ var _shadows_enabled: bool = false
 var _flicker_enabled: bool = true
 var _settings_panel: PanelContainer
 var _settings_button: Button
+var _crop_interact_button: Button
 var _settings_status: Label
 var _settings_path: String = SettingsProfile.DEFAULT_PATH
 var _settings: Dictionary = {}
@@ -82,10 +83,11 @@ func _ready() -> void:
     _build_crop_plots()
     _prepare_maze_materials()
     _build_settings_ui()
+    _build_crop_touch_ui()
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
-        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | F10 test menu | T portal test | B return | E crop plot | G collect | H drop | F5 save | F9 load"
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | F10 test menu | T portal test | B return | E / INTERACT crop | G collect | H drop | F5 save | F9 load"
 
 func _build_settings_ui() -> void:
     var hud := get_node_or_null("HUD") as CanvasLayer
@@ -334,6 +336,27 @@ func _unhandled_input(event: InputEvent) -> void:
             save_game()
         KEY_F9:
             load_game()
+
+func _build_crop_touch_ui() -> void:
+    var hud := get_node_or_null("HUD") as CanvasLayer
+    if hud == null:
+        return
+    _crop_interact_button = Button.new()
+    _crop_interact_button.name = "CropInteractButton"
+    _crop_interact_button.text = "INTERACT / E"
+    _crop_interact_button.tooltip_text = "Plant, water, grow or harvest the nearest surface crop plot."
+    _crop_interact_button.focus_mode = Control.FOCUS_NONE
+    _crop_interact_button.custom_minimum_size = Vector2(204, 56)
+    _crop_interact_button.anchor_left = 1.0
+    _crop_interact_button.anchor_right = 1.0
+    _crop_interact_button.anchor_top = 1.0
+    _crop_interact_button.anchor_bottom = 1.0
+    _crop_interact_button.offset_left = -228.0
+    _crop_interact_button.offset_right = -24.0
+    _crop_interact_button.offset_top = -154.0
+    _crop_interact_button.offset_bottom = -98.0
+    _crop_interact_button.pressed.connect(_interact_nearest_crop_plot)
+    hud.add_child(_crop_interact_button)
 
 func _build_surface() -> void:
     _add_box(main_world, "SurfaceFloor", Vector3(0, -0.5, 0), Vector3(70, 1, 70), Color(0.07, 0.12, 0.15))
@@ -1056,3 +1079,5 @@ func _update_hud() -> void:
         portal_status = "#" + str(director.active_portal.get("id", "?"))
     var maze_status := "ENDLESS MAZE" if in_backrooms else "SURFACE"
     status_label.text = "2126 SURVIVAL // KROLL PORTAL LAB\nZone: %s | Portal: %s | Carry: %.1f / %.1f kg | %s\nG collect berries: %d | H drop one | T spawn test portal\nCrop: %s" % [current_level, portal_status, weight, limit, maze_status, get_inventory_count("berries"), _crop_action_status]
+    if _crop_interact_button != null:
+        _crop_interact_button.disabled = in_backrooms
