@@ -900,3 +900,41 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "KROLL Pressure Circuit runtime smoke test passed."
+
+
+      - name: Import and parse KROLL Microgrid Operator
+        run: godot --headless --path daily_games/KROLL_Microgrid_Operator --editor --quit
+      - name: Run KROLL Microgrid Operator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Microgrid_Operator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Microgrid Operator rules errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Microgrid Operator rules tests passed."
+      - name: Run KROLL Microgrid Operator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Microgrid_Operator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported Microgrid Operator runtime errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Microgrid Operator runtime smoke test passed."
+
+      - name: Run world inventory mining lifecycle integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/world_inventory_mining_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported world inventory/mining lifecycle errors."
+            exit 1
+          fi
+          echo "$output" | grep -q "World inventory mining lifecycle integration test passed."
