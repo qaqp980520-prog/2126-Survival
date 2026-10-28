@@ -121,7 +121,7 @@ func _run() -> void:
 	invalid_veins["veins"] = invalid_records
 	invalid_save["mineral_veins"] = invalid_veins
 	for suffix in [".bak", ".corrupt"]:
-		var path := SAVE_PATH + suffix
+		var path: String = SAVE_PATH + str(suffix)
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_expect(bool(bridge2.call("collect_world_item", "berries", 1)), "mutate inventory before invalid vein restore")
