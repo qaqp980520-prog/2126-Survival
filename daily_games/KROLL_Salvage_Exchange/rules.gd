@@ -42,7 +42,8 @@ static func _prices_for(seed_value: int, day: int) -> Dictionary:
 static func trade(state: Dictionary, side: String, item: String, quantity: int = 1) -> Dictionary:
     if str(state.get("status", "")) != "playing":
         return _result(false, "terminal", state)
-    if not ITEMS.has(item) or not state.get("cargo", {}).has(item):
+    var raw_cargo: Variant = state.get("cargo", {})
+    if not (raw_cargo is Dictionary) or not ITEMS.has(item) or not raw_cargo.has(item):
         return _result(false, "unknown_item", state)
     if side != "buy" and side != "sell":
         return _result(false, "unknown_side", state)
