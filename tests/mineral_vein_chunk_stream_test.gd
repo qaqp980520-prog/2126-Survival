@@ -37,6 +37,9 @@ func _test_unload_save_reload_and_offline_regeneration() -> void:
 	assert(registry.get_saved_ids().has(stable_id))
 
 	var save_after_unload: Dictionary = registry.to_save_dict()
+	var json_roundtrip: Variant = JSON.parse_string(JSON.stringify(save_after_unload))
+	assert(json_roundtrip is Dictionary, "Registry payload must survive JSON serialization")
+	assert(registry.validate_save_dict(json_roundtrip, 1000), "JSON-decoded registry schema must validate before restore")
 	assert(save_after_unload["veins"].has(stable_id), "Unloaded chunk records must remain serializable")
 	assert(int(save_after_unload["veins"][stable_id]["remaining_units"]) == 1)
 
