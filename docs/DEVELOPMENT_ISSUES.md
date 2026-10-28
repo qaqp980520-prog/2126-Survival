@@ -138,3 +138,13 @@
 - New game `daily_games/KROLL_Memory_Matrix/` is included in main. No external assets or add-ons; import with Godot 4.3+.
 - Remaining engineering work: formal `scripts/world.gd` production controller is still absent; crop persistence and full generated chunk scene state remain unintegrated. Vein records now persist, but not complete chunk scenes. No local GUI/GPU/iPhone hardware test is claimed.
 - Next: integrate the registry with the production world-session controller and actual chunk load/unload lifecycle, then add crop and chunk-state save/reload tests.
+
+
+## Run 30 closeout — 2026-10-28
+
+- PR #94 merged as `cf102401dd1bb7536a286f09f5f34e89613bd662` after exact-head Godot 4.3 Run #441 (40651700256) succeeded on candidate `b717e7bd2b1d392d9823b3e584fb93ac68fa8736`.
+- Run #441 completed all 119 primary validation steps successfully. New steps: 116 Signal Sleuth import, 117 rules tests, 118 runtime smoke test, 119 mineral registry transactionality regression. Post-job cleanup steps also succeeded.
+- Signal Sleuth adds a deterministic 5×5 nonogram puzzle with three patterns, generated row/column clues, 60-change budget, keyboard/mouse/touch, restart and next-puzzle controls.
+- Registry regression covers atomic rejection of valid-then-invalid multi-record restore, side-effect-free validation, successful valid restore, unknown mineral IDs in unloaded stable-ID snapshots, and fractional schema rejection.
+- Current documentation closeout is in PR branch `docs/run30-signal-sleuth-registry-atomicity-closeout-2026-10-28`, based on feature merge `cf102401dd1bb7536a286f09f5f34e89613bd662`. Do not merge the docs PR until its exact-head CI passes.
+- Remaining P0/P1 work: production M1.3 world-session controller; crop persistence; full generated chunk scene state; local GUI/GPU/iPhone QA. No local Godot executable was available for this run.
