@@ -7,6 +7,11 @@ const SCHEMA_VERSION := 1
 const SUPPORTED_CROP_IDS := ["wheat", "corn", "tomato", "potato", "carrot"]
 const MIN_STAGE := 0
 const MAX_STAGE := 4
+const GROWTH_SECONDS_PER_STAGE := 120.0
+const MOISTURE_DRAIN_PER_SECOND := 0.25
+const MAX_ADVANCE_SECONDS := 86400.0
+const HARVEST_MOISTURE_COST := 20.0
+
 
 var _records: Dictionary = {}
 
@@ -41,11 +46,6 @@ func update_crop(stable_id: String, growth_stage: int, growth_progress: float, m
 		return false
 	_records[stable_id] = candidate
 	return true
-
-const GROWTH_SECONDS_PER_STAGE := 120.0
-const MOISTURE_DRAIN_PER_SECOND := 0.25
-const MAX_ADVANCE_SECONDS := 86400.0
-const HARVEST_MOISTURE_COST := 20.0
 
 ## Add water to an existing crop. Saturated crops and invalid amounts are no-ops.
 func water_crop(stable_id: String, amount: float, now_unix: int = -1) -> bool:
