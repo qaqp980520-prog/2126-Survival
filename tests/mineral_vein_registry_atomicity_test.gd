@@ -66,7 +66,7 @@ func _run() -> void:
 	print("Mineral vein registry transactionality tests passed.")
 	quit(0)
 
-func _new_vein(mineral_id: String, stock: int) -> Node:
+func _new_vein(mineral_id: String, stock: int) -> Variant:
 	var vein = MiningNode.new()
 	vein.mineral_id = mineral_id
 	vein.max_units = 8
