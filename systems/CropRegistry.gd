@@ -1,8 +1,8 @@
 extends Node
 class_name CropRegistry
 
-## Data-only stable-ID registry for crop state across saves and unloaded chunks.
-## It deliberately does not claim to implement crop visuals, planting, or growth simulation.
+## Stable-ID crop registry with deterministic watering, growth and harvest lifecycle.
+## Scene visuals and world interaction remain the responsibility of a world controller.
 const SCHEMA_VERSION := 1
 const SUPPORTED_CROP_IDS := ["wheat", "corn", "tomato", "potato", "carrot"]
 const MIN_STAGE := 0
@@ -78,9 +78,9 @@ func advance_growth(stable_id: String, elapsed_seconds: float, now_unix: int = -
     if stage < MAX_STAGE and moisture > 0.0:
         effective_seconds = minf(elapsed_seconds, moisture / MOISTURE_DRAIN_PER_SECOND)
         var total_progress: float = progress + effective_seconds / GROWTH_SECONDS_PER_STAGE
-        while total_progress >= 1.0 and stage < MAX_STAGE:
+        while total_progress >= 1.0 - 0.000001 and stage < MAX_STAGE:
             stage += 1
-            total_progress -= 1.0
+            total_progress = maxf(0.0, total_progress - 1.0)
         if stage >= MAX_STAGE:
             progress = 1.0
         else:
