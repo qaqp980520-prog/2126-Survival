@@ -160,6 +160,15 @@ jobs:
           test -f tests/mineral_vein_chunk_stream_test.gd
           test -f prototypes/minerals/MineralOreVisual.gd
           test -f prototypes/minerals/MineralMiningVFX.gd
+      - name: Check Run 31 candidate files
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Shadow_Trace/project.godot
+          test -f daily_games/KROLL_Shadow_Trace/tests/rules_test.gd
+          test -f daily_games/KROLL_Shadow_Trace/tests/game_smoke_test.gd
+          test -f systems/CropRegistry.gd
+          test -f tests/crop_registry_persistence_test.gd
       - name: Import and parse root 2126 Survival project
         shell: bash
         run: |
@@ -988,3 +997,30 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral vein registry transactionality tests passed."
+
+      - name: Import and parse KROLL Shadow Trace
+        run: godot --headless --path daily_games/KROLL_Shadow_Trace --editor --quit
+      - name: Run KROLL Shadow Trace rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Shadow_Trace --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Shadow Trace rules tests passed."
+      - name: Run KROLL Shadow Trace runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Shadow_Trace --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Shadow Trace runtime smoke test passed."
+      - name: Run crop registry persistence integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 25s godot --headless --path . --script res://tests/crop_registry_persistence_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Crop registry persistence integration test passed."
