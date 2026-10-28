@@ -38,15 +38,21 @@ func _run() -> void:
     var stable_id := str(plot.get("stable_id"))
     var now := int(Time.get_unix_time_from_system())
     var player: Node3D = world.get_node("Player")
+    var touch_button: Button = world.get_node_or_null("HUD/CropInteractButton") as Button
+    _expect(touch_button != null, "active world exposes a touch-safe crop interaction button")
     player.global_position = plots[1].global_position
-    world.call("_interact_nearest_crop_plot")
+    if touch_button != null:
+        touch_button.emit_signal("pressed")
     var nearby_id := str(plots[1].get("stable_id"))
-    _expect(not registry.call("get_crop", nearby_id).is_empty(), "active-world E interaction plants the nearest plot")
+    _expect(not registry.call("get_crop", nearby_id).is_empty(), "touch interaction button plants the nearest plot")
     world.set("in_backrooms", true)
     player.global_position = plots[2].global_position
     world.call("_interact_nearest_crop_plot")
     _expect(registry.call("get_crop", str(plots[2].get("stable_id"))).is_empty(), "Backrooms interaction cannot mutate surface crop plots")
+    _expect(touch_button != null and touch_button.disabled, "touch interaction is disabled while inside Backrooms")
     world.set("in_backrooms", false)
+    world.call("_update_hud")
+    _expect(touch_button != null and not touch_button.disabled, "touch interaction is re-enabled on the surface")
     player.global_position = Vector3.ZERO
     var result: Dictionary = plot.call("interact", now)
     _expect(bool(result.get("ok", false)) and result.get("action") == "planted", "interacting with an empty plot plants its configured crop")
