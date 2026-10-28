@@ -931,17 +931,17 @@ jobs:
           fi
           echo "$output" | grep -q "KROLL Microgrid Operator runtime smoke test passed."
 
-      - name: Run world inventory mining lifecycle integration test
+      - name: Run world inventory mining and vein persistence integration test
         shell: bash
         run: |
           set -o pipefail
           output="$(timeout 35s godot --headless --path . --script res://tests/world_inventory_mining_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
-            echo "Godot reported world inventory/mining lifecycle errors."
+            echo "Godot reported world inventory/mining/vein persistence errors."
             exit 1
           fi
-          echo "$output" | grep -q "World inventory mining lifecycle integration test passed."
+          echo "$output" | grep -q "World inventory mining and vein persistence integration test passed."
 
       - name: Import and parse KROLL Memory Matrix
         run: godot --headless --path daily_games/KROLL_Memory_Matrix --editor --quit
@@ -961,11 +961,3 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Memory Matrix runtime smoke test passed."
-      - name: Run world inventory mining and vein persistence integration test
-        shell: bash
-        run: |
-          set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/world_inventory_mining_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
-          echo "$output"
-          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "World inventory mining and vein persistence integration test passed."
