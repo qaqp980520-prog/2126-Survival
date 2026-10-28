@@ -30,10 +30,19 @@ func _run() -> void:
 	_expect(not Rules.guard_can_see_player(Vector2i(3, 0), Vector2i(0, 0)), "wall blocks guard line of sight")
 	_expect(not Rules.guard_can_see_player(Vector2i(3, 0), Vector2i(4, 1)), "diagonal cells are outside guard line of sight")
 
+	var visible_state: Dictionary = Rules.new_game(30)
+	visible_state["player"] = Vector2i(5, 0)
+	var visible_result: Dictionary = Rules.step(visible_state, Vector2i.ZERO)
+	_expect(int(visible_result["state"]["alert"]) == 1, "clear guard sight increases alert by one")
+
 	var wait_state: Dictionary = Rules.new_game(30)
 	var waited: Dictionary = Rules.step(wait_state, Vector2i.ZERO)
 	_expect(bool(waited.get("ok", false)), "wait action is legal")
 	_expect(waited["state"]["player"] == wait_state["player"] and int(waited["state"]["turns"]) == 1, "wait advances patrols without moving player")
+	var limit_state: Dictionary = Rules.new_game(30)
+	limit_state["turns"] = Rules.MAX_TURNS - 1
+	var limit_result: Dictionary = Rules.step(limit_state, Vector2i.ZERO)
+	_expect(limit_result["state"]["status"] == "failed", "turn limit ends a run without a false win")
 
 	var caught_state: Dictionary = Rules.new_game(30)
 	caught_state["player"] = Vector2i(4, 0)
