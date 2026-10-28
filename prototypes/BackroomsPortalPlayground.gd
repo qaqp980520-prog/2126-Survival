@@ -5,6 +5,7 @@ const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
@@ -24,6 +25,7 @@ const STREAM_RADIUS: int = 2
 var director
 var bridge
 var mineral_vein_registry: Node
+var crop_registry: Node
 var active_portal_visual: Area3D
 var backrooms_room: Node3D
 var in_backrooms: bool = false
@@ -62,6 +64,9 @@ func _ready() -> void:
     mineral_vein_registry = VeinRegistryScript.new()
     mineral_vein_registry.name = "MineralVeinRegistry"
     add_child(mineral_vein_registry)
+    crop_registry = CropRegistryScript.new()
+    crop_registry.name = "CropRegistry"
+    add_child(crop_registry)
     player.bind_world_bridge(bridge)
     _build_surface()
     _prepare_maze_materials()
@@ -754,9 +759,10 @@ func serialize_world_state() -> Dictionary:
     if not bool(result.get("ok", false)):
         return {}
     var save: Dictionary = result["world_save"]
-    if mineral_vein_registry == null:
+    if mineral_vein_registry == null or crop_registry == null:
         return {}
     save["mineral_veins"] = mineral_vein_registry.call("to_save_dict")
+    save["crop_registry_state"] = crop_registry.call("to_save_dict")
     save["player_position"] = [player.global_position.x, player.global_position.y, player.global_position.z]
     save["backrooms_portal_state"] = director.to_save_dict()
     save["current_level"] = current_level
@@ -810,9 +816,21 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
         return false
     if not bool(mineral_vein_registry.call("validate_save_dict", raw_mineral_veins)):
         return false
+    if crop_registry == null:
+        return false
+    # Older saves have no crop registry field; preserve current crop state rather than erasing it.
+    var raw_crop_state: Variant
+    if world_save.has("crop_registry_state"):
+        raw_crop_state = world_save["crop_registry_state"]
+    else:
+        raw_crop_state = crop_registry.call("to_save_dict")
+    if not (raw_crop_state is Dictionary) or not bool(crop_registry.call("validate_save_dict", raw_crop_state)):
+        return false
     if not bridge.restore_world_save(world_save):
         return false
     if not bool(mineral_vein_registry.call("restore_save_dict", raw_mineral_veins)):
+        return false
+    if not bool(crop_registry.call("restore_save_dict", raw_crop_state)):
         return false
     if not director.load_save_dict(portal_payload):
         return false
