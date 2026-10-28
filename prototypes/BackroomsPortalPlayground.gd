@@ -7,6 +7,7 @@ const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
+const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
@@ -28,6 +29,8 @@ var bridge
 var mineral_vein_registry: Node
 var crop_registry: Node
 var crop_plot_controller: Node
+var crop_plot_views: Array[Node3D] = []
+var _crop_action_status: String = "E: interact with a nearby crop plot."
 var active_portal_visual: Area3D
 var backrooms_room: Node3D
 var in_backrooms: bool = false
@@ -76,12 +79,13 @@ func _ready() -> void:
         push_error("CropPlotController failed to bind the active CropRegistry.")
     player.bind_world_bridge(bridge)
     _build_surface()
+    _build_crop_plots()
     _prepare_maze_materials()
     _build_settings_ui()
     backrooms_world.visible = false
     _update_hud()
     if help_label != null:
-        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | F10 test menu | T portal test | B return | G collect | H drop | F5 save | F9 load"
+        help_label.text = "WASD move | Shift sprint | Space jump | Hold RIGHT MOUSE + drag to look | V camera mode | Esc release mouse | F11 fullscreen | F10 test menu | T portal test | B return | E crop plot | G collect | H drop | F5 save | F9 load"
 
 func _build_settings_ui() -> void:
     var hud := get_node_or_null("HUD") as CanvasLayer
@@ -324,6 +328,8 @@ func _unhandled_input(event: InputEvent) -> void:
             debug_collect_berries(1)
         KEY_H:
             debug_drop_berries(1)
+        KEY_E:
+            _interact_nearest_crop_plot()
         KEY_F5:
             save_game()
         KEY_F9:
@@ -336,6 +342,47 @@ func _build_surface() -> void:
     _add_box(main_world, "SouthBoundary", Vector3(0, 2, 35), Vector3(70, 4, 1), wall_color)
     _add_box(main_world, "WestBoundary", Vector3(-35, 2, 0), Vector3(1, 4, 70), wall_color)
     _add_box(main_world, "EastBoundary", Vector3(35, 2, 0), Vector3(1, 4, 70), wall_color)
+
+func _build_crop_plots() -> void:
+    if main_world == null or crop_plot_controller == null:
+        return
+    var plot_definitions := [
+        {"id": "surface/chunk_0_0/plot_01", "crop": "wheat", "index": 1, "position": Vector3(2.0, 0.0, 2.0)},
+        {"id": "surface/chunk_0_0/plot_02", "crop": "tomato", "index": 2, "position": Vector3(4.0, 0.0, 2.0)},
+        {"id": "surface/chunk_0_0/plot_03", "crop": "carrot", "index": 3, "position": Vector3(2.0, 0.0, 4.0)},
+        {"id": "surface/chunk_0_0/plot_04", "crop": "corn", "index": 4, "position": Vector3(4.0, 0.0, 4.0)}
+    ]
+    crop_plot_views.clear()
+    for definition in plot_definitions:
+        var plot: Node3D = CropPlotVisualScene.instantiate() as Node3D
+        plot.name = "CropPlot_%02d" % int(definition["index"])
+        main_world.add_child(plot)
+        plot.position = definition["position"]
+        plot.call("configure", crop_plot_controller, str(definition["id"]), str(definition["crop"]), int(definition["index"]))
+        crop_plot_views.append(plot)
+
+func _interact_nearest_crop_plot() -> void:
+    if in_backrooms:
+        _crop_action_status = "Crop plots are on the surface; return through a portal first."
+        _update_hud()
+        return
+    var nearest: Node3D = null
+    var nearest_distance: float = 3.25
+    for plot in crop_plot_views:
+        if plot == null or not is_instance_valid(plot):
+            continue
+        var offset := Vector2(plot.global_position.x - player.global_position.x, plot.global_position.z - player.global_position.z)
+        var distance := offset.length()
+        if distance <= nearest_distance:
+            nearest = plot
+            nearest_distance = distance
+    if nearest == null:
+        _crop_action_status = "No plot in reach; move closer to a marked soil bed."
+        _update_hud()
+        return
+    var result: Dictionary = nearest.call("interact", int(Time.get_unix_time_from_system()))
+    _crop_action_status = "%s | %s" % [str(result.get("message", "Crop action did not return a message.")), str(nearest.get("status_text"))]
+    _update_hud()
 
 func _prepare_maze_materials() -> void:
     var floor_color := Color(0.57, 0.51, 0.31)
@@ -968,6 +1015,8 @@ func load_game() -> bool:
     var primary_exists := FileAccess.file_exists(SAVE_PATH)
     var primary_data := _read_save_dictionary(SAVE_PATH)
     if not primary_data.is_empty() and load_world_state_from_dictionary(primary_data):
+        _refresh_crop_plot_views()
+        _update_hud()
         return true
 
     # A syntactically valid primary can still fail world-envelope validation.
@@ -987,7 +1036,14 @@ func load_game() -> bool:
         # Missing-primary recovery uses the existing validated writer. The backup
         # is removed only after a complete replacement has been written successfully.
         _write_save_atomically(SAVE_PATH, backup_data)
+    _refresh_crop_plot_views()
+    _update_hud()
     return true
+
+func _refresh_crop_plot_views() -> void:
+    for plot in crop_plot_views:
+        if plot != null and is_instance_valid(plot):
+            plot.call("refresh")
 
 func _update_hud() -> void:
     if status_label == null:
@@ -999,4 +1055,4 @@ func _update_hud() -> void:
     if director != null and not director.active_portal.is_empty():
         portal_status = "#" + str(director.active_portal.get("id", "?"))
     var maze_status := "ENDLESS MAZE" if in_backrooms else "SURFACE"
-    status_label.text = "2126 SURVIVAL // KROLL PORTAL LAB\nZone: %s | Portal: %s | Carry: %.1f / %.1f kg | %s\nG collect berries: %d | H drop one | T spawn test portal" % [current_level, portal_status, weight, limit, maze_status, get_inventory_count("berries")]
+    status_label.text = "2126 SURVIVAL // KROLL PORTAL LAB\nZone: %s | Portal: %s | Carry: %.1f / %.1f kg | %s\nG collect berries: %d | H drop one | T spawn test portal\nCrop: %s" % [current_level, portal_status, weight, limit, maze_status, get_inventory_count("berries"), _crop_action_status]
