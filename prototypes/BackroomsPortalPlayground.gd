@@ -354,11 +354,11 @@ func _build_crop_plots() -> void:
     ]
     crop_plot_views.clear()
     for definition in plot_definitions:
-        var plot = CropPlotVisualScript.new()
+        var plot: Node3D = CropPlotVisualScript.new() as Node3D
         plot.name = "CropPlot_%02d" % int(definition["index"])
         main_world.add_child(plot)
         plot.position = definition["position"]
-        plot.configure(crop_plot_controller, str(definition["id"]), str(definition["crop"]), int(definition["index"]))
+        plot.call("configure", crop_plot_controller, str(definition["id"]), str(definition["crop"]), int(definition["index"]))
         crop_plot_views.append(plot)
 
 func _interact_nearest_crop_plot() -> void:
