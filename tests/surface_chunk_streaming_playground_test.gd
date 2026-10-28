@@ -139,6 +139,10 @@ func _run_tests() -> void:
 	bad_crop_payload["crops"] = bad_crop_records
 	bad_crop_save["crops"] = bad_crop_payload
 	_check(not bool(playground.restore_stream_state(bad_crop_save, now)), "Invalid crop payload must be rejected before streaming mutation")
+	_check(playground.player.global_position.is_equal_approx(before_position), "Rejected crop payload must preserve player position")
+	_check(playground.chunk_controller.get_loaded_chunk_ids() == before_ids, "Rejected crop payload must preserve active chunk IDs")
+	_check(playground.registry.get_saved_ids() == before_saved_ids, "Rejected crop payload must preserve mineral registry IDs")
+	_check(int(restored_ore.get("remaining_units")) == before_units, "Rejected crop payload must preserve live mineral stock")
 	_check(playground.crop_registry.get_crop(crop_stable_id) == before_crop_record, "Rejected crop payload must preserve existing crop state")
 
 	# A structurally valid restore can still fail when the requested chunk cannot be
@@ -171,6 +175,9 @@ func _run_tests() -> void:
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 2, "Legacy compatibility setup advances crop to stage two")
 	_check(bool(playground.restore_stream_state(legacy_crop_save, now + 600)), "Older stream save without a crops field remains loadable")
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 2, "Legacy stream save without crop data preserves the current crop registry")
+	var legacy_restored_root: Node3D = playground.chunk_controller.get_chunk_root("surface/chunk_0_0")
+	var legacy_restored_crop: Node = legacy_restored_root.get_node_or_null("CropPlot_0") if legacy_restored_root != null else null
+	_check(legacy_restored_crop != null and str(legacy_restored_crop.get("status_text")).contains("2/4"), "Legacy save load refreshes the preserved crop visual")
 	playground.queue_free()
 	await process_frame
 	_finish()
