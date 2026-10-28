@@ -381,7 +381,7 @@ func _interact_nearest_crop_plot() -> void:
         _update_hud()
         return
     var result: Dictionary = nearest.call("interact", int(Time.get_unix_time_from_system()))
-    _crop_action_status = str(result.get("message", "Crop action did not return a message."))
+    _crop_action_status = "%s | %s" % [str(result.get("message", "Crop action did not return a message.")), str(nearest.get("status_text"))]
     _update_hud()
 
 func _prepare_maze_materials() -> void:
