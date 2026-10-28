@@ -27,6 +27,9 @@ func _run() -> void:
     _expect(record["growth_stage"] == 3, "one growth call can cross multiple stages deterministically")
     _expect(is_equal_approx(float(record["growth_progress"]), 0.0), "whole-stage growth leaves zero fractional progress")
     _expect(is_equal_approx(float(record["moisture"]), 25.0), "moisture drain is applied over elapsed time")
+    var before_clock_rollback: Dictionary = registry.get_crop(TOMATO_ID)
+    _expect(not registry.water_crop(TOMATO_ID, 5.0, now + 2), "watering cannot move the crop timestamp backwards")
+    _expect(registry.get_crop(TOMATO_ID) == before_clock_rollback, "clock rollback leaves the crop record unchanged")
 
     var immature_before: Dictionary = registry.get_crop(TOMATO_ID)
     _expect(registry.harvest_crop(TOMATO_ID, now + 4).is_empty(), "immature crop cannot be harvested")
