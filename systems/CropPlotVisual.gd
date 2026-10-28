@@ -63,7 +63,7 @@ func interact(now_unix: int = -1) -> Dictionary:
         "planted":
             message = "Planted %s in plot %02d." % [crop_id, plot_index]
         "watered":
-            message = "Watered plot %02d. Press E again to advance growth." % plot_index
+            message = "Watered plot %02d. Press E or tap INTERACT again to advance growth." % plot_index
         "advanced":
             message = "Advanced plot %02d by one bounded growth interval." % plot_index
         "harvested":
@@ -79,7 +79,7 @@ func refresh() -> void:
     if record.is_empty():
         _stem.visible = false
         _fruit.visible = false
-        status_text = "PLOT %02d | EMPTY | E: PLANT" % plot_index
+        status_text = "PLOT %02d | EMPTY | E / TAP: PLANT" % plot_index
         return
 
     var stage := int(record.get("growth_stage", 0))
@@ -93,7 +93,7 @@ func refresh() -> void:
     _fruit.position = Vector3(0.0, 0.2 + height_scale + 0.16, 0.0)
     status_text = "PLOT %02d | %s %d/4 | H2O %.0f | %s" % [
         plot_index, crop_id.to_upper(), stage, moisture,
-        "E: HARVEST" if mature else ("E: WATER" if moisture < DRY_THRESHOLD else "E: GROW")
+        "E / TAP: HARVEST" if mature else ("E / TAP: WATER" if moisture < DRY_THRESHOLD else "E / TAP: GROW")
     ]
 
 func _apply_crop_color() -> void:
