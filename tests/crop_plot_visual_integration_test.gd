@@ -23,6 +23,10 @@ func _run() -> void:
     var registry: Node = world.get("crop_registry")
     _expect(plots.size() == 4, "active surface builds four visible stable-ID crop plots")
     _expect(registry != null, "world still owns the authoritative CropRegistry")
+    for plot_view in plots:
+        for mesh_name in ["SoilBed", "CropTypeMarker", "CropStem", "CropFruit"]:
+            var mesh_view: MeshInstance3D = plot_view.get_node(mesh_name) as MeshInstance3D
+            _expect(mesh_view != null and mesh_view.mesh != null, "%s has a scene-assigned mesh" % mesh_name)
     if plots.is_empty() or registry == null:
         world.queue_free()
         await process_frame
