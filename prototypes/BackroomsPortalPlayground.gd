@@ -900,8 +900,16 @@ func _read_save_dictionary(path: String) -> Dictionary:
     var file := FileAccess.open(path, FileAccess.READ)
     if file == null:
         return {}
-    var parsed: Variant = JSON.parse_string(file.get_as_text())
+    var parser := JSON.new()
+    var parse_error := parser.parse(file.get_as_text())
     file.close()
+    # Corrupt save data is an expected recovery case; JSON.parse_string emits
+    # an engine ERROR line for malformed input, which makes CI treat a
+    # successful backup fallback as a test failure. JSON.parse exposes the
+    # parse result without logging malformed user data as an engine error.
+    if parse_error != OK:
+        return {}
+    var parsed: Variant = parser.data
     if not (parsed is Dictionary):
         return {}
     return parsed
