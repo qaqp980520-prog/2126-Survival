@@ -159,6 +159,12 @@ func _run_tests() -> void:
 	_check(str(target_report.get("phase", "")) == "load_factory", "Diagnostic report should retain the original target-load failure")
 	var target_details: Dictionary = target_report.get("details", {})
 	_check(target_details.get("newly_loaded_ids", []).size() > 0, "Failure injection should occur after at least one target chunk was loaded")
+	var legacy_crop_save: Dictionary = save_payload.duplicate(true)
+	legacy_crop_save.erase("crops")
+	_check(bool(playground.crop_controller.advance_crop(crop_stable_id, 120.0, now + 600)), "Crop can change before checking a legacy stream save")
+	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 2, "Legacy compatibility setup advances crop to stage two")
+	_check(bool(playground.restore_stream_state(legacy_crop_save, now + 600)), "Older stream save without a crops field remains loadable")
+	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 2, "Legacy stream save without crop data preserves the current crop registry")
 	playground.queue_free()
 	await process_frame
 	_finish()
