@@ -1015,6 +1015,8 @@ func load_game() -> bool:
     var primary_exists := FileAccess.file_exists(SAVE_PATH)
     var primary_data := _read_save_dictionary(SAVE_PATH)
     if not primary_data.is_empty() and load_world_state_from_dictionary(primary_data):
+        _refresh_crop_plot_views()
+        _update_hud()
         return true
 
     # A syntactically valid primary can still fail world-envelope validation.
@@ -1034,7 +1036,14 @@ func load_game() -> bool:
         # Missing-primary recovery uses the existing validated writer. The backup
         # is removed only after a complete replacement has been written successfully.
         _write_save_atomically(SAVE_PATH, backup_data)
+    _refresh_crop_plot_views()
+    _update_hud()
     return true
+
+func _refresh_crop_plot_views() -> void:
+    for plot in crop_plot_views:
+        if plot != null and is_instance_valid(plot):
+            plot.call("refresh")
 
 func _update_hud() -> void:
     if status_label == null:
