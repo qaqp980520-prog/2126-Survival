@@ -129,7 +129,7 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 func _prepare_restore(data: Dictionary, now_unix: int = -1) -> Dictionary:
 	var schema: Variant = data.get("schema_version", null)
 	var records: Variant = data.get("veins", null)
-	if not (schema is int) or int(schema) != 1 or not (records is Dictionary):
+	if not (schema is int or schema is float) or not is_finite(float(schema)) or float(schema) != 1.0 or not (records is Dictionary):
 		return {}
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
 	if now <= 0:
