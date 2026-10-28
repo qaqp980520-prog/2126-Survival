@@ -477,3 +477,14 @@
 - PR #103 feature merge remains `8d74ef8b3ae96be94fa930d48ee69402070e73d1`; PR #104 records Run 34/35 feature validation and production gaps.
 - Final main was compared against the PR #104 merge SHA and returned identical, ahead 0 / behind 0. The final open-PR search returned empty.
 - This repository section now records the closeout CI result; no separate post-merge main-push workflow is claimed.
+
+## 2026-10-29 Run 36 — Prism Relay + streamed crop persistence (feature merged)
+
+- New game: \`daily_games/KROLL_Prism_Relay/\`, a deterministic 7×7 mirror-routing puzzle with three relay layouts, visible beam tracing, an 18-rotation budget, terminal lock, reset/next controls and mouse/touch mirror rotation. Godot 4.3+, no external assets/add-ons.
+- Existing-system integration: \`MineralChunkController\` now binds stable-ID \`CropPlotVisual\` nodes inside streamed chunks. The Surface Chunk Streaming Playground creates two crop plots per chunk and supports E interaction with the nearest plot within 3.25 world units.
+- Stream-save schema remains 1 with an optional \`crops\` payload. Restore validates crop data before mutation, restores crop and mineral registries together, refreshes active visuals and rolls crop state back if target streaming fails. Legacy stream saves without the crops key remain loadable and preserve the current CropRegistry.
+- Expanded \`tests/surface_chunk_streaming_playground_test.gd\` covers crop planting/growth, crop payload capture, chunk unload/reload with stable-ID visual reconstruction, E reach rejection, invalid crop payload atomicity, injected stream failure rollback and legacy save compatibility.
+- PR #106 merged as \`915ae79a1f24ad67572d06854cf7248de8a6db20\`. Exact candidate HEAD \`4628afcb82e7d6979fdefa65d04310332088b35d\`; Godot 4.3 CI Run #491 ([40785631457](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40785631457)) passed 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips. Streamed crop integration step 75 and Prism Relay import/rules/runtime steps 140–142 passed.
+- Independent Notion records: [Run 36 daily log](https://app.notion.com/p/407bc6a809d781ce9e57f535ae7850e4), [Prism Relay M0.1](https://app.notion.com/p/407bc6a809d781e38be3ca31979a8e12), [Streamed Crop Plot Persistence M0.1](https://app.notion.com/p/407bc6a809d78146829fde4463817c25).
+- No local Godot executable; local GUI/GPU/iPhone hardware QA is not claimed. No separate post-merge main-push workflow is claimed.
+- Remaining: formal \`scripts/world.gd\` world-session controller; complete generated chunk scene state persistence beyond crop/mineral registry records; asynchronous chunk streaming and device QA.
