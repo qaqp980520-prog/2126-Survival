@@ -5,6 +5,9 @@ const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const InventoryBridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
+const CropRegistryScript = preload("res://systems/CropRegistry.gd")
+const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
+const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
@@ -13,6 +16,8 @@ var registry: Node
 var chunk_controller: Node3D
 var director: Node
 var inventory_bridge: Node
+var crop_registry: Node
+var crop_controller: Node
 var player: CharacterBody3D
 var camera: Camera3D
 var hud: Label
@@ -23,6 +28,7 @@ var _pitch: float = -0.12
 var _mouse_look_active: bool = false
 var _jump_was_down: bool = false
 var _last_restore_report: Dictionary = {}
+var _crop_action_message: String = "E: interact with a nearby crop plot."
 
 func _ready() -> void:
 	_build_streaming_stack()
@@ -35,6 +41,14 @@ func _build_streaming_stack() -> void:
 	registry = RegistryScript.new()
 	registry.name = "MineralVeinRegistry"
 	add_child(registry)
+	crop_registry = CropRegistryScript.new()
+	crop_registry.name = "CropRegistry"
+	add_child(crop_registry)
+	crop_controller = CropPlotControllerScript.new()
+	crop_controller.name = "CropPlotController"
+	add_child(crop_controller)
+	if not crop_controller.bind_registry(crop_registry):
+		push_error("Surface playground could not bind the crop registry.")
 	inventory_bridge = InventoryBridgeScript.new()
 	inventory_bridge.name = "SurvivalWorldBridge"
 	add_child(inventory_bridge)
@@ -43,6 +57,8 @@ func _build_streaming_stack() -> void:
 	add_child(chunk_controller)
 	if not chunk_controller.bind_registry(registry):
 		push_error("Surface playground could not bind the mineral registry.")
+	if not chunk_controller.bind_crop_controller(crop_controller):
+		push_error("Surface playground could not bind the crop controller.")
 	director = DirectorScript.new()
 	director.name = "MineralGridStreamingDirector"
 	director.chunk_size_x = CHUNK_SIZE
@@ -103,7 +119,7 @@ func _build_hud() -> void:
 	add_child(layer)
 	hud = Label.new()
 	hud.position = Vector2(16.0, 16.0)
-	hud.size = Vector2(780.0, 110.0)
+	hud.size = Vector2(900.0, 150.0)
 	hud.add_theme_color_override("font_color", Color(0.62, 0.94, 1.0))
 	hud.add_theme_font_size_override("font_size", 16)
 	layer.add_child(hud)
@@ -155,6 +171,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 				get_tree().change_scene_to_file("res://prototypes/SurvivalTestHub.tscn")
+			elif key_event.keycode == KEY_E:
+				_interact_nearest_crop_plot()
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -169,6 +187,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
 		player.rotation.y = _yaw
 		camera.rotation.x = _pitch
+
+func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
+	if player == null or chunk_controller == null or crop_controller == null:
+		return {"ok": false, "action": "unavailable", "message": "Crop interaction is unavailable."}
+	var nearest: Node3D = null
+	var nearest_distance: float = 3.25
+	for plot in chunk_controller.get_loaded_crop_plots():
+		if not is_instance_valid(plot):
+			continue
+		var distance: float = player.global_position.distance_to(plot.global_position)
+		if distance <= nearest_distance:
+			nearest = plot
+			nearest_distance = distance
+	if nearest == null:
+		_crop_action_message = "No crop plot within reach."
+		_refresh_hud()
+		return {"ok": false, "action": "out_of_reach", "message": _crop_action_message}
+	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var result: Dictionary = nearest.call("interact", timestamp)
+	_crop_action_message = str(result.get("message", "Crop action completed."))
+	_refresh_hud()
+	return result
 
 func _sync_streaming(now_unix: int = -1) -> bool:
 	if player == null or director == null:
@@ -192,7 +232,8 @@ func serialize_stream_state() -> Dictionary:
 	return {
 		"schema_version": 1,
 		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z],
-		"minerals": chunk_controller.to_save_dict()
+		"minerals": chunk_controller.to_save_dict(),
+		"crops": crop_registry.to_save_dict() if crop_registry != null else {}
 	}
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
@@ -203,6 +244,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var schema_value: Variant = payload.get("schema_version", null)
 	var position_value: Variant = payload.get("player_position", null)
 	var minerals_value: Variant = payload.get("minerals", null)
+	var has_crops: bool = payload.has("crops")
+	var crops_value: Variant = payload.get("crops", null)
 	if not (schema_value is int) or int(schema_value) != 1:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
@@ -212,6 +255,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if not (minerals_value is Dictionary):
 		_set_restore_report(false, "validation", "Mineral save payload must be a dictionary.", true)
 		return false
+	if has_crops and (crop_registry == null or not (crops_value is Dictionary) or not bool(crop_registry.validate_save_dict(crops_value))):
+		_set_restore_report(false, "crop_validation", "Crop save payload is invalid; no world state was changed.", true)
+		return false
 	for component in position_value:
 		if not (component is int or component is float) or not is_finite(float(component)):
 			_set_restore_report(false, "validation", "Player position contains a non-finite component.", true)
@@ -220,16 +266,25 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var previous_position: Vector3 = player.global_position
 	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
+	var previous_crops: Dictionary = crop_registry.to_save_dict() if crop_registry != null else {}
 	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins"):
 		_set_restore_report(false, "snapshot", "Could not snapshot the current mineral state before restore.", true)
 		return false
 	if not chunk_controller.restore_save_dict(minerals_value, now):
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
 		return false
+	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
+		var minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		_set_restore_report(false, "crop_restore", "Crop registry rejected the candidate save.", minerals_rolled_back)
+		return false
+	if chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.refresh_crop_plots()
 
 	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	_last_grid = Vector2i(999999, 999999)
 	if _sync_streaming(now):
+		if chunk_controller.has_method("refresh_crop_plots"):
+			chunk_controller.refresh_crop_plots()
 		_set_restore_report(true, "complete", "", true, {
 			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
 		})
@@ -250,9 +305,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		_last_grid = director.get_grid_coordinate(previous_position)
 
 	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+	var crops_restored: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
+	if chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.refresh_crop_plots()
 	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
-	var rollback_complete: bool = recovery_success and minerals_restored and ids_consistent and position_restored
+	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and ids_consistent and position_restored
 	_refresh_hud()
 	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
 		"target_sync_report": target_sync_report,
@@ -312,6 +370,14 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	ore.inventory_bridge_path = NodePath("../../../SurvivalWorldBridge")
 	ore.position = Vector3(CHUNK_SIZE * 0.5, -3.0, CHUNK_SIZE * 0.5)
 	chunk.add_child(ore)
+	var crop_kinds: Array[String] = ["wheat", "tomato"]
+	for plot_index in range(crop_kinds.size()):
+		var plot := CropPlotVisualScene.instantiate() as Node3D
+		plot.name = "CropPlot_" + str(plot_index)
+		plot.set("crop_id", crop_kinds[plot_index])
+		plot.set("plot_index", plot_index + 1)
+		plot.position = Vector3(2.4 + float(plot_index) * 5.0, 0.0, 2.4)
+		chunk.add_child(plot)
 	return chunk
 
 func _refresh_hud() -> void:
@@ -323,4 +389,5 @@ func _refresh_hud() -> void:
 	var inventory_summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null else {}
 	var weight := float(inventory_summary.get("weight_kg", 0.0))
 	var limit := float(inventory_summary.get("limit_kg", 65.0))
-	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d\nCarry: %.1f / %.1f kg" % [grid_text, active_count, record_count, weight, limit]
+	var crop_record_count: int = crop_registry.get_saved_ids().size() if crop_registry != null else 0
+	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · E crop · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d   Crops: %d\nCarry: %.1f / %.1f kg\n%s" % [grid_text, active_count, record_count, crop_record_count, weight, limit, _crop_action_message]
