@@ -44,7 +44,7 @@ static func select_plot(state: Dictionary, index: int) -> Dictionary:
 static func water_plot(state: Dictionary, index: int) -> Dictionary:
     if str(state.get("status", "")) != "playing":
         return _result(false, "terminal", state)
-    var plots: Array = state.get("plots", [])
+    var plots: Array = state.get("plots", []).duplicate(true)
     if index < 0 or index >= plots.size():
         return _result(false, "invalid_plot", state)
     if int(state.get("water_left", 0)) <= 0:
@@ -86,7 +86,7 @@ static func advance_day(state: Dictionary) -> Dictionary:
 static func harvest_plot(state: Dictionary, index: int) -> Dictionary:
     if str(state.get("status", "")) != "playing":
         return _result(false, "terminal", state)
-    var plots: Array = state.get("plots", [])
+    var plots: Array = state.get("plots", []).duplicate(true)
     if index < 0 or index >= plots.size():
         return _result(false, "invalid_plot", state)
     var plot: Dictionary = plots[index].duplicate(true)
