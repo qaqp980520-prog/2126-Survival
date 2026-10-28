@@ -11,12 +11,16 @@ var stable_id: String = ""
 var crop_id: String = "wheat"
 var plot_index: int = 1
 var status_text: String = ""
+var _marker_material: StandardMaterial3D
+var _fruit_material: StandardMaterial3D
 
 @onready var _stem: MeshInstance3D = get_node("CropStem") as MeshInstance3D
 @onready var _fruit: MeshInstance3D = get_node("CropFruit") as MeshInstance3D
 @onready var _marker: MeshInstance3D = get_node("CropTypeMarker") as MeshInstance3D
 
 func _ready() -> void:
+    _marker_material = _marker.material_override as StandardMaterial3D
+    _fruit_material = _fruit.material_override as StandardMaterial3D
     _apply_crop_color()
     refresh()
 
@@ -93,10 +97,10 @@ func refresh() -> void:
     ]
 
 func _apply_crop_color() -> void:
-    if _marker != null and _marker.material_override is StandardMaterial3D:
-        (_marker.material_override as StandardMaterial3D).albedo_color = _crop_color()
-    if _fruit != null and _fruit.material_override is StandardMaterial3D:
-        (_fruit.material_override as StandardMaterial3D).albedo_color = _crop_color()
+    if _marker_material != null:
+        _marker_material.albedo_color = _crop_color()
+    if _fruit_material != null:
+        _fruit_material.albedo_color = _crop_color()
 
 func _crop_color() -> Color:
     match crop_id:
