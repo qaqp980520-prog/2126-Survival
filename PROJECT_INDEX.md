@@ -470,3 +470,10 @@
 - Full generated chunk-scene state persistence across chunk unload/reload remains incomplete.
 - Asynchronous chunk streaming remains incomplete.
 - Local interactive GUI, GPU performance and iPhone hardware QA are not claimed.
+
+## Run 35 documentation closeout verification — 2026-10-28
+
+- Documentation PR #104 merged as `df3ba169aeab8440102386706bcc8e0117bc26b8` after exact-head Godot 4.3 Run #483 (40718477267) passed all 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips.
+- PR #103 feature merge remains `8d74ef8b3ae96be94fa930d48ee69402070e73d1`; PR #104 records Run 34/35 feature validation and production gaps.
+- Final main was compared against the PR #104 merge SHA and returned identical, ahead 0 / behind 0. The final open-PR search returned empty.
+- This repository section now records the closeout CI result; no separate post-merge main-push workflow is claimed.
