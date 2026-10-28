@@ -10,10 +10,11 @@ var controller: Node
 var stable_id: String = ""
 var crop_id: String = "wheat"
 var plot_index: int = 1
+var status_text: String = ""
 var _built := false
 var _stem: MeshInstance3D
 var _fruit: MeshInstance3D
-var _label: Label3D
+var _marker: MeshInstance3D
 var _stem_mesh: CylinderMesh
 var _fruit_material: StandardMaterial3D
 
@@ -46,6 +47,18 @@ func _build_visuals() -> void:
     soil.material_override = soil_material
     add_child(soil)
 
+    _marker = MeshInstance3D.new()
+    _marker.name = "CropTypeMarker"
+    var marker_mesh := BoxMesh.new()
+    marker_mesh.size = Vector3(0.22, 0.22, 0.22)
+    _marker.mesh = marker_mesh
+    _marker.position = Vector3(-0.48, 0.31, -0.48)
+    var marker_material := StandardMaterial3D.new()
+    marker_material.albedo_color = _crop_color()
+    marker_material.roughness = 0.7
+    _marker.material_override = marker_material
+    add_child(_marker)
+
     _stem = MeshInstance3D.new()
     _stem.name = "CropStem"
     _stem_mesh = CylinderMesh.new()
@@ -70,15 +83,6 @@ func _build_visuals() -> void:
     _fruit_material.roughness = 0.65
     _fruit.material_override = _fruit_material
     add_child(_fruit)
-
-    _label = Label3D.new()
-    _label.name = "PlotLabel"
-    _label.position = Vector3(0.0, 1.7, 0.0)
-    _label.font_size = 28
-    _label.outline_size = 6
-    _label.modulate = Color("#e8f6e9")
-    _label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    add_child(_label)
 
 func interact(now_unix: int = -1) -> Dictionary:
     if controller == null or stable_id.is_empty():
@@ -118,7 +122,7 @@ func interact(now_unix: int = -1) -> Dictionary:
     return _result(true, action, message)
 
 func refresh() -> void:
-    if not _built or _label == null:
+    if not _built or _stem == null or _fruit == null:
         return
     var record: Dictionary = {}
     if controller != null and not stable_id.is_empty():
@@ -126,7 +130,7 @@ func refresh() -> void:
     if record.is_empty():
         _stem.visible = false
         _fruit.visible = false
-        _label.text = "PLOT %02d\nEMPTY\nE: PLANT" % plot_index
+        status_text = "PLOT %02d | EMPTY | E: PLANT" % plot_index
         return
 
     var stage := int(record.get("growth_stage", 0))
@@ -134,12 +138,11 @@ func refresh() -> void:
     var mature := stage >= 4 and float(record.get("growth_progress", 0.0)) >= 1.0
     var height_scale := 0.25 + float(stage) * 0.18
     _stem.visible = true
-    _stem.scale = Vector3.ONE
-    _stem.scale.y = height_scale
+    _stem.scale = Vector3(1.0, height_scale, 1.0)
     _stem.position = Vector3(0.0, 0.2 + height_scale * 0.5, 0.0)
     _fruit.visible = mature
     _fruit.position = Vector3(0.0, 0.2 + height_scale + 0.16, 0.0)
-    _label.text = "PLOT %02d\n%s %d/4  H2O %.0f\n%s" % [
+    status_text = "PLOT %02d | %s %d/4 | H2O %.0f | %s" % [
         plot_index, crop_id.to_upper(), stage, moisture,
         "E: HARVEST" if mature else ("E: WATER" if moisture < DRY_THRESHOLD else "E: GROW")
     ]
