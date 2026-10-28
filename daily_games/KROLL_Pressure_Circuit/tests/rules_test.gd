@@ -26,6 +26,20 @@ func _run() -> void:
 
 	var solved: Dictionary = Rules.create_puzzle(2701)
 	solved["masks"] = (solved["solution_masks"] as Array).duplicate()
+	var solution_path: Array = solved["path"]
+	var solution_masks: Array = solved["solution_masks"]
+	var reciprocal_connections_valid := true
+	for path_index in range(solution_path.size() - 1):
+		var current: Vector2i = solution_path[path_index]
+		var next_cell: Vector2i = solution_path[path_index + 1]
+		var delta: Vector2i = next_cell - current
+		var outgoing_bit := Rules.DIR_E if delta == Vector2i.RIGHT else (Rules.DIR_W if delta == Vector2i.LEFT else (Rules.DIR_S if delta == Vector2i.DOWN else Rules.DIR_N))
+		var incoming_bit := Rules.DIR_W if outgoing_bit == Rules.DIR_E else (Rules.DIR_E if outgoing_bit == Rules.DIR_W else (Rules.DIR_N if outgoing_bit == Rules.DIR_S else Rules.DIR_S))
+		var current_mask := int(solution_masks[current.y * Rules.COLS + current.x])
+		var next_mask := int(solution_masks[next_cell.y * Rules.COLS + next_cell.x])
+		if (current_mask & outgoing_bit) == 0 or (next_mask & incoming_bit) == 0:
+			reciprocal_connections_valid = false
+	_expect(reciprocal_connections_valid, "every adjacent solution path pair has reciprocal connectors")
 	_expect(Rules.is_solved(solved), "the stored solution connects source to target")
 	var solved_source: Vector2i = solved["source"]
 	_expect(not Rules.rotate_tile(solved, solved_source), "solved puzzle is terminal and rejects further rotations")
