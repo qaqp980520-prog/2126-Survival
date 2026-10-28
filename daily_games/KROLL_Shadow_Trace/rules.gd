@@ -112,7 +112,7 @@ static func guard_can_see_player(guard_position: Vector2i, player_position: Vect
 		return true
 	if delta.x != 0 and delta.y != 0:
 		return false
-	var distance: int = absi(delta.x) + absi(delta.y)
+	var distance: int = abs(delta.x) + abs(delta.y)
 	if distance > 3:
 		return false
 	var direction := Vector2i(sign(delta.x), sign(delta.y))
