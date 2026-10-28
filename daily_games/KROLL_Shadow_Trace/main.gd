@@ -58,7 +58,7 @@ func _try_click(position: Vector2) -> void:
 		return
 	var current: Vector2i = game_state.get("player", Rules.START)
 	var direction: Vector2i = cell - current
-	if absi(direction.x) + absi(direction.y) == 1:
+	if abs(direction.x) + abs(direction.y) == 1:
 		try_move(direction)
 
 func _draw() -> void:
