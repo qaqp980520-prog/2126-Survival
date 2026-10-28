@@ -801,7 +801,11 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
     # including records for unloaded chunks; validate before applying any world state.
     if mineral_vein_registry == null:
         return false
-    var raw_mineral_veins: Variant = world_save.get("mineral_veins", mineral_vein_registry.to_save_dict())
+    var raw_mineral_veins: Variant
+    if world_save.has("mineral_veins"):
+        raw_mineral_veins = world_save["mineral_veins"]
+    else:
+        raw_mineral_veins = mineral_vein_registry.to_save_dict()
     if not (raw_mineral_veins is Dictionary):
         return false
     if not bool(mineral_vein_registry.call("validate_save_dict", raw_mineral_veins)):
