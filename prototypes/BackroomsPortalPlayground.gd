@@ -756,7 +756,7 @@ func serialize_world_state() -> Dictionary:
     var save: Dictionary = result["world_save"]
     if mineral_vein_registry == null:
         return {}
-    save["mineral_veins"] = mineral_vein_registry.to_save_dict()
+    save["mineral_veins"] = mineral_vein_registry.call("to_save_dict")
     save["player_position"] = [player.global_position.x, player.global_position.y, player.global_position.z]
     save["backrooms_portal_state"] = director.to_save_dict()
     save["current_level"] = current_level
@@ -805,7 +805,7 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
     if world_save.has("mineral_veins"):
         raw_mineral_veins = world_save["mineral_veins"]
     else:
-        raw_mineral_veins = mineral_vein_registry.to_save_dict()
+        raw_mineral_veins = mineral_vein_registry.call("to_save_dict")
     if not (raw_mineral_veins is Dictionary):
         return false
     if not bool(mineral_vein_registry.call("validate_save_dict", raw_mineral_veins)):
