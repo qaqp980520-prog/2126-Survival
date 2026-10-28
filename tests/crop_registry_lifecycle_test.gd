@@ -29,6 +29,7 @@ func _run() -> void:
     _expect(is_equal_approx(float(record["moisture"]), 25.0), "moisture drain is applied over elapsed time")
     var before_clock_rollback: Dictionary = registry.get_crop(TOMATO_ID)
     _expect(not registry.water_crop(TOMATO_ID, 5.0, now + 2), "watering cannot move the crop timestamp backwards")
+    _expect(not registry.advance_growth(TOMATO_ID, 30.0, now + 2), "growth cannot move the crop timestamp backwards")
     _expect(registry.get_crop(TOMATO_ID) == before_clock_rollback, "clock rollback leaves the crop record unchanged")
 
     var immature_before: Dictionary = registry.get_crop(TOMATO_ID)
@@ -44,6 +45,9 @@ func _run() -> void:
     record = registry.get_crop(TOMATO_ID)
     _expect(record["growth_stage"] == CropRegistryScript.MAX_STAGE, "crop reaches the mature stage")
     _expect(is_equal_approx(float(record["growth_progress"]), 1.0), "mature progress is clamped to one")
+    var mature_before_harvest: Dictionary = registry.get_crop(TOMATO_ID)
+    _expect(registry.harvest_crop(TOMATO_ID, now + 6).is_empty(), "harvest rejects timestamp rollback")
+    _expect(registry.get_crop(TOMATO_ID) == mature_before_harvest, "rejected rollback harvest leaves mature crop unchanged")
     var receipt: Dictionary = registry.harvest_crop(TOMATO_ID, now + 8)
     _expect(bool(receipt.get("ok", false)), "mature crop harvest returns a receipt")
     _expect(receipt.get("crop_id") == "tomato" and receipt.get("harvest_count") == 1, "harvest receipt reports crop and count")
