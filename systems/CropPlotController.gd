@@ -41,10 +41,12 @@ func advance_crops(stable_ids: Array, elapsed_seconds: float, now_unix: int = -1
     for value in stable_ids:
         if not (value is String) or str(value).is_empty() or seen.has(value):
             return _result(false, "invalid_or_duplicate_id", [])
-        if registry.call("get_crop", value).is_empty():
+        var stable_id: String = value
+        var existing: Dictionary = registry.call("get_crop", stable_id)
+        if existing.is_empty():
             return _result(false, "unknown_crop", [])
-        seen[value] = true
-        ids.append(value)
+        seen[stable_id] = true
+        ids.append(stable_id)
     var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
     var snapshot: Dictionary = registry.call("to_save_dict")
     for stable_id in ids:
@@ -56,12 +58,14 @@ func advance_crops(stable_ids: Array, elapsed_seconds: float, now_unix: int = -1
 func harvest_crop(stable_id: String, now_unix: int = -1) -> Dictionary:
     if registry == null:
         return {}
-    return registry.call("harvest_crop", stable_id, now_unix)
+    var receipt: Dictionary = registry.call("harvest_crop", stable_id, now_unix)
+    return receipt
 
 func get_crop(stable_id: String) -> Dictionary:
     if registry == null:
         return {}
-    return registry.call("get_crop", stable_id)
+    var record: Dictionary = registry.call("get_crop", stable_id)
+    return record
 
 func remove_crop(stable_id: String) -> bool:
     if registry == null:
