@@ -127,3 +127,14 @@
 - Current main at feature closeout: 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761; documentation PR is separate and must pass exact-head CI.
 - Remaining: formal M1.3 production world controller absent; crop persistence and vein/chunk stock persistence are not integrated into active world save; no local GUI/GPU/iPhone hardware test is claimed.
 - Next: finish documentation PR, then build production world-session integration and add vein/chunk save/restore to the end-to-end acceptance suite.
+
+
+## Run 29 final verified state — 2026-10-28
+
+- **Supersedes the Run 28 statement that vein stock was not integrated into the active-world save.** PR #92 is now merged at `23b531319a5bed8c215c4292ad2dc30e9e98fcfa`; main is at that commit, and the last open-PR search was empty.
+- `BackroomsPortalPlayground` now serializes `MineralVeinRegistry` as `mineral_veins`, validates the registry payload before applying inventory/player state, restores live vein stock, and preserves unloaded stable-ID records across a fresh world instance. Old schema-v2 saves without the field remain compatible.
+- Godot 4.3 exact merge-candidate Run #433: https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40649646947 — 118/118 steps succeeded. The expanded world inventory/mining/vein test, mineral registry JSON round-trip test and Memory Matrix import/rules/runtime checks all passed.
+- Earlier issues were fixed before merge: Run #426's untyped test path, Run #430's registry schema type mismatch after JSON decode, and Run #432's outdated workflow success marker. Their causes and commits are recorded in the Run 29 Notion daily log and asset pages.
+- New game `daily_games/KROLL_Memory_Matrix/` is included in main. No external assets or add-ons; import with Godot 4.3+.
+- Remaining engineering work: formal `scripts/world.gd` production controller is still absent; crop persistence and full generated chunk scene state remain unintegrated. Vein records now persist, but not complete chunk scenes. No local GUI/GPU/iPhone hardware test is claimed.
+- Next: integrate the registry with the production world-session controller and actual chunk load/unload lifecycle, then add crop and chunk-state save/reload tests.
