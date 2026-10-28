@@ -148,3 +148,14 @@
 - Registry regression covers atomic rejection of valid-then-invalid multi-record restore, side-effect-free validation, successful valid restore, unknown mineral IDs in unloaded stable-ID snapshots, and fractional schema rejection.
 - Current documentation closeout is in PR branch `docs/run30-signal-sleuth-registry-atomicity-closeout-2026-10-28`, based on feature merge `cf102401dd1bb7536a286f09f5f34e89613bd662`. Do not merge the docs PR until its exact-head CI passes.
 - Remaining P0/P1 work: production M1.3 world-session controller; crop persistence; full generated chunk scene state; local GUI/GPU/iPhone QA. No local Godot executable was available for this run.
+
+## Run 31 — Shadow Trace + crop registry persistence (2026-10-28)
+
+- PR #96 merged as \`9e134d317f98d81a2b5061f81abf80ba6e92dd86\`; exact validated head \`59338ab48cc1a1b860200df029d6bbec81fbc470\`.
+- Exact-head Godot 4.3 Run #445 (40668945834) passed all 127 workflow steps with zero failures. Shadow Trace import/rules/runtime steps 121–123 and crop registry integration step 124 passed. Root project import, existing Signal Sleuth tests, mineral registry atomicity and the world mining/vein persistence integration also passed.
+- New \`daily_games/KROLL_Shadow_Trace/\`: 8×8 deterministic turn-based stealth prototype, three intel caches, two patrol routes, line-of-sight blocked by walls, 40-turn limit and three-alert failure; keyboard/mouse/touch controls, no external assets/add-ons.
+- Added \`systems/CropRegistry.gd\` and integrated \`crop_registry_state\` into the active Backrooms playground save envelope. Payloads are validated in full before mutation; legacy saves missing the field preserve the current registry snapshot. \`tests/crop_registry_persistence_test.gd\` covers real save/load, fresh-world restore, invalid update and restore atomicity, detached snapshots, schema validation and legacy compatibility.
+- **Scope boundary:** this is a data-only crop state registry, not the full crop gameplay system. Planting, visuals, growth simulation, watering and harvesting remain unimplemented. The production \`scripts/world.gd\` controller is still absent; complete generated chunk scene persistence remains outstanding.
+- No local Godot executable was available; GUI/GPU/iPhone device tests are not claimed.
+- Documentation closeout is on branch \`docs/run31-shadow-trace-crop-registry-closeout-2026-10-28\`; do not merge until its own exact-head Godot 4.3 CI succeeds.
+- Next: finish docs closeout, then connect crop lifecycle and chunk persistence to the production world-session controller and add production-scene load/unload/save/reload acceptance tests.
