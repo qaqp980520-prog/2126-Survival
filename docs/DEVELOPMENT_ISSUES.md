@@ -117,3 +117,13 @@
 - PR #88 merge SHA is `103399080afc19a1a0b7e3141a8252c862d78cee`. The separate documentation PR must pass its own exact-head CI before merge; no post-merge main-push workflow result is claimed unless independently observed.
 - Limits remain: production M1.3 world controller absent; underground mining is a fixed-cave prototype; async streaming and crop persistence are not integrated. No local Godot executable or local GUI/GPU/iPhone test was available.
 - Next: complete the separate docs PR and verify its CI, then integrate inventory/mining/save lifecycle into a production world-session controller with end-to-end load/unload/save/restore tests.
+
+
+## Run 28 final verified state｜2026-10-28
+
+- PR #90 merged as 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761 after exact-head Godot 4.3 Run #40636164856 succeeded. All 115 job steps completed successfully, with zero failed steps. New Microgrid Operator import/rules/runtime steps 109–111 and the world inventory mining lifecycle integration step 112 passed.
+- New game daily_games/KROLL_Microgrid_Operator/: deterministic eight-cycle power-management game; balances power, fuel, heat and stability; keyboard/mouse/touch input; no external assets/add-ons.
+- New tests/world_inventory_mining_lifecycle_test.gd joins previously separate paths: actual MineralMiningNode mining → SurvivalWorldBridge → inventory weight → real active-world save/load → restored inventory and player position → post-load drop/weight recalculation. This does not yet persist vein remaining_units/chunk state.
+- Current main at feature closeout: 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761; documentation PR is separate and must pass exact-head CI.
+- Remaining: formal M1.3 production world controller absent; crop persistence and vein/chunk stock persistence are not integrated into active world save; no local GUI/GPU/iPhone hardware test is claimed.
+- Next: finish documentation PR, then build production world-session integration and add vein/chunk save/restore to the end-to-end acceptance suite.
