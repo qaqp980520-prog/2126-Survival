@@ -894,23 +894,52 @@ func save_game() -> bool:
     _update_hud()
     return true
 
-func load_game() -> bool:
-    if not FileAccess.file_exists(SAVE_PATH):
-        var backup_path := SAVE_PATH + ".bak"
-        if not FileAccess.file_exists(backup_path):
-            return false
-        if DirAccess.rename_absolute(ProjectSettings.globalize_path(backup_path), ProjectSettings.globalize_path(SAVE_PATH)) != OK:
-            return false
-    if not FileAccess.file_exists(SAVE_PATH):
-        return false
-    var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+func _read_save_dictionary(path: String) -> Dictionary:
+    if not FileAccess.file_exists(path):
+        return {}
+    var file := FileAccess.open(path, FileAccess.READ)
     if file == null:
-        return false
-    var parsed: Variant = JSON.parse_string(file.get_as_text())
+        return {}
+    var parser := JSON.new()
+    var parse_error := parser.parse(file.get_as_text())
     file.close()
+    # Corrupt save data is an expected recovery case; JSON.parse_string emits
+    # an engine ERROR line for malformed input, which makes CI treat a
+    # successful backup fallback as a test failure. JSON.parse exposes the
+    # parse result without logging malformed user data as an engine error.
+    if parse_error != OK:
+        return {}
+    var parsed: Variant = parser.data
     if not (parsed is Dictionary):
+        return {}
+    return parsed
+
+func load_game() -> bool:
+    var backup_path := SAVE_PATH + ".bak"
+    var corrupt_path := SAVE_PATH + ".corrupt"
+    var primary_exists := FileAccess.file_exists(SAVE_PATH)
+    var primary_data := _read_save_dictionary(SAVE_PATH)
+    if not primary_data.is_empty() and load_world_state_from_dictionary(primary_data):
+        return true
+
+    # A syntactically valid primary can still fail world-envelope validation.
+    # Validate and apply the backup before moving or repairing any file.
+    var backup_data := _read_save_dictionary(backup_path)
+    if backup_data.is_empty() or not load_world_state_from_dictionary(backup_data):
         return false
-    return load_world_state_from_dictionary(parsed)
+
+    # Preserve a bad primary for diagnosis. Repair the primary only when the
+    # corrupt path is free; if promotion fails, the validated backup stays intact.
+    if primary_exists:
+        var corrupt_absolute := ProjectSettings.globalize_path(corrupt_path)
+        if not FileAccess.file_exists(corrupt_path) and not DirAccess.dir_exists_absolute(corrupt_absolute):
+            if DirAccess.rename_absolute(ProjectSettings.globalize_path(SAVE_PATH), corrupt_absolute) == OK:
+                _write_save_atomically(SAVE_PATH, backup_data)
+    else:
+        # Missing-primary recovery uses the existing validated writer. The backup
+        # is removed only after a complete replacement has been written successfully.
+        _write_save_atomically(SAVE_PATH, backup_data)
+    return true
 
 func _update_hud() -> void:
     if status_label == null:
