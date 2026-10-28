@@ -10,7 +10,8 @@ func _run() -> void:
 	var first: Dictionary = Rules.create_game(4128)
 	var same_seed: Dictionary = Rules.create_game(4128)
 	_expect(first["sequence"] == same_seed["sequence"], "same seed creates the same opening sequence")
-	_expect((first["sequence"] as Array).size() == 3, "opening round contains three signals")
+	var opening_sequence: Array = first["sequence"]
+	_expect(opening_sequence.size() == 3, "opening round contains three signals")
 	for tile in first["sequence"]:
 		_expect(int(tile) >= 0 and int(tile) < Rules.TILE_COUNT, "generated signal is inside the nine-tile grid")
 	_expect(not Rules.press_tile(first, 0), "input is locked while the sequence is showing")
@@ -28,7 +29,8 @@ func _run() -> void:
 	for tile in sequence:
 		Rules.press_tile(first, int(tile))
 	_expect(int(first["round"]) == 2 and str(first["status"]) == "showing", "perfect replay advances to a longer second round")
-	_expect((first["sequence"] as Array).size() == 4, "second round adds one signal")
+	var second_sequence: Array = first["sequence"]
+	_expect(second_sequence.size() == 4, "second round adds one signal")
 
 	while str(first["status"]) == "showing":
 		if int(first["round"]) > Rules.MAX_ROUNDS:
