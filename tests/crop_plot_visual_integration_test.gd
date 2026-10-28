@@ -33,6 +33,17 @@ func _run() -> void:
     var plot: Node = plots[0]
     var stable_id := str(plot.get("stable_id"))
     var now := int(Time.get_unix_time_from_system())
+    var player: Node3D = world.get_node("Player")
+    player.global_position = plots[1].global_position
+    world.call("_interact_nearest_crop_plot")
+    var nearby_id := str(plots[1].get("stable_id"))
+    _expect(not registry.call("get_crop", nearby_id).is_empty(), "active-world E interaction plants the nearest plot")
+    world.set("in_backrooms", true)
+    player.global_position = plots[2].global_position
+    world.call("_interact_nearest_crop_plot")
+    _expect(registry.call("get_crop", str(plots[2].get("stable_id"))).is_empty(), "Backrooms interaction cannot mutate surface crop plots")
+    world.set("in_backrooms", false)
+    player.global_position = Vector3.ZERO
     var result: Dictionary = plot.call("interact", now)
     _expect(bool(result.get("ok", false)) and result.get("action") == "planted", "interacting with an empty plot plants its configured crop")
     _expect(int(registry.call("get_crop", stable_id).get("growth_stage", -1)) == 0, "planted crop begins at stage zero")
