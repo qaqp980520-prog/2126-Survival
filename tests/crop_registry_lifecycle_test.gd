@@ -48,6 +48,12 @@ func _run() -> void:
     _expect(record["growth_stage"] == 0 and float(record["growth_progress"]) == 0.0, "harvest resets growth for the next cycle")
     _expect(record["harvest_count"] == 1, "harvest count persists in the crop record")
     _expect(float(record["moisture"]) == 0.0, "harvest consumes soil moisture")
+    var saved_payload: Dictionary = registry.to_save_dict()
+    var restored_registry := CropRegistryScript.new()
+    root.add_child(restored_registry)
+    _expect(restored_registry.restore_save_dict(saved_payload), "lifecycle state remains compatible with registry schema 1")
+    _expect(restored_registry.get_crop(TOMATO_ID) == record, "harvested state round-trips without schema changes")
+    restored_registry.queue_free()
 
     _expect(registry.register_crop(WHEAT_ID, "wheat", 1, 0.25, 0.0, now, 0), "register a dry crop")
     _expect(registry.advance_growth(WHEAT_ID, 60.0, now + 9), "dry crop time can advance without growth")
