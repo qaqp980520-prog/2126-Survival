@@ -159,3 +159,15 @@
 - No local Godot executable was available; GUI/GPU/iPhone device tests are not claimed.
 - Documentation closeout is on branch \`docs/run31-shadow-trace-crop-registry-closeout-2026-10-28\`; do not merge until its own exact-head Godot 4.3 CI succeeds.
 - Next: finish docs closeout, then connect crop lifecycle and chunk persistence to the production world-session controller and add production-scene load/unload/save/reload acceptance tests.
+
+## Run 32 closeout — 2026-10-28
+
+- PR #98 merged as f58ccdadc521aed46dc6c5b6c03dc3fdd5528070 after exact-head Godot 4.3 Run #454 (40678627167) succeeded on candidate e56efc36819cdc29ca42339060ff11409fd4601d.
+- Run #454 completed 128 numbered validation steps plus setup/cleanup (131/131 total steps successful, zero failures/skips). Greenhouse Keeper import/rules/runtime steps 125–127 and CropRegistry lifecycle step 128 passed. Crop registry persistence step 124 and all existing regression tests passed.
+- Added daily_games/KROLL_Greenhouse_Keeper/: deterministic three-plot crop-management game, limited watering, daily moisture drain, growth stages, harvest target, keyboard/mouse/touch controls, no external assets/add-ons.
+- systems/CropRegistry.gd now exposes caller-driven water_crop, advance_growth and harvest_crop operations while retaining schema 1. Candidate records are validated before mutation; invalid elapsed times and timestamp rollback are rejected; dry soil pauses growth; harvest increments harvest_count and resets the cycle.
+- tests/crop_registry_lifecycle_test.gd covers watering clamp/no-op, invalid elapsed, multi-stage growth, dry pause, maturity, harvest receipt/reset/count, timestamp rollback and schema-1 round-trip. Existing crop_registry_persistence_test.gd remains green.
+- Failure correction: Run #452 failed at root import because CropRegistry.gd could not be preloaded. The new lifecycle block had spaces in a tab-indented script; commit e56efc3 normalized the block to tabs. Run #453 was cancelled at step 32 after steps 1–31 succeeded; only Run #454 is the full exact-head pass.
+- No local Godot executable; no GUI/GPU/iPhone hardware QA claimed.
+- Remaining P0/P1 work: formal production scripts/world.gd controller; scene-based planting/watering/harvest; connect CropRegistry lifecycle to world-session and chunk load/unload; persist complete generated chunk scene state; asynchronous streaming and device QA.
+- Next: production world-session integration and crop/chunk unload/reload/save-failure end-to-end tests.
