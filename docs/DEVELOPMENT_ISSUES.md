@@ -151,13 +151,13 @@
 
 ## Run 31 — Shadow Trace + crop registry persistence (2026-10-28)
 
-- PR #96 merged as \`9e134d317f98d81a2b5061f81abf80ba6e92dd86\`; exact validated head \`59338ab48cc1a1b860200df029d6bbec81fbc470\`.
+- PR #96 merged as `9e134d317f98d81a2b5061f81abf80ba6e92dd86`; exact validated head `59338ab48cc1a1b860200df029d6bbec81fbc470`.
 - Exact-head Godot 4.3 Run #445 (40668945834) passed all 127 workflow steps with zero failures. Shadow Trace import/rules/runtime steps 121–123 and crop registry integration step 124 passed. Root project import, existing Signal Sleuth tests, mineral registry atomicity and the world mining/vein persistence integration also passed.
-- New \`daily_games/KROLL_Shadow_Trace/\`: 8×8 deterministic turn-based stealth prototype, three intel caches, two patrol routes, line-of-sight blocked by walls, 40-turn limit and three-alert failure; keyboard/mouse/touch controls, no external assets/add-ons.
-- Added \`systems/CropRegistry.gd\` and integrated \`crop_registry_state\` into the active Backrooms playground save envelope. Payloads are validated in full before mutation; legacy saves missing the field preserve the current registry snapshot. \`tests/crop_registry_persistence_test.gd\` covers real save/load, fresh-world restore, invalid update and restore atomicity, detached snapshots, schema validation and legacy compatibility.
-- **Scope boundary:** this is a data-only crop state registry, not the full crop gameplay system. Planting, visuals, growth simulation, watering and harvesting remain unimplemented. The production \`scripts/world.gd\` controller is still absent; complete generated chunk scene persistence remains outstanding.
+- New `daily_games/KROLL_Shadow_Trace/`: 8×8 deterministic turn-based stealth prototype, three intel caches, two patrol routes, line-of-sight blocked by walls, 40-turn limit and three-alert failure; keyboard/mouse/touch controls, no external assets/add-ons.
+- Added `systems/CropRegistry.gd` and integrated `crop_registry_state` into the active Backrooms playground save envelope. Payloads are validated in full before mutation; legacy saves missing the field preserve the current registry snapshot. `tests/crop_registry_persistence_test.gd` covers real save/load, fresh-world restore, invalid update and restore atomicity, detached snapshots, schema validation and legacy compatibility.
+- **Scope boundary:** this is a data-only crop state registry, not the full crop gameplay system. Planting, visuals, growth simulation, watering and harvesting remain unimplemented. The production `scripts/world.gd` controller is still absent; complete generated chunk scene persistence remains outstanding.
 - No local Godot executable was available; GUI/GPU/iPhone device tests are not claimed.
-- Documentation closeout is on branch \`docs/run31-shadow-trace-crop-registry-closeout-2026-10-28\`; do not merge until its own exact-head Godot 4.3 CI succeeds.
+- Documentation closeout is on branch `docs/run31-shadow-trace-crop-registry-closeout-2026-10-28`; do not merge until its own exact-head Godot 4.3 CI succeeds.
 - Next: finish docs closeout, then connect crop lifecycle and chunk persistence to the production world-session controller and add production-scene load/unload/save/reload acceptance tests.
 
 ## Run 32 closeout — 2026-10-28
@@ -207,11 +207,11 @@ The older checklist and historical run notes above describe their respective sna
 
 ## Current verified status — Run 36 (2026-10-29)
 
-- [x] KROLL Prism Relay M0.1 added at \`daily_games/KROLL_Prism_Relay/\`. Deterministic 7×7 mirror-routing puzzle, three layouts, 18-rotation budget, visible beam trace, mouse/touch controls and reset/next. Import/rules/runtime validation passed in exact-head Godot 4.3 Run #491, steps 140–142.
-- [x] Crop plots are now part of generated Surface Chunk Streaming Playground chunks. \`MineralChunkController\` assigns stable IDs from chunk ID + local node path and reconstructs plot visuals from the authoritative CropRegistry after unload/reload. E interacts with the nearest plot within 3.25 units.
+- [x] KROLL Prism Relay M0.1 added at `daily_games/KROLL_Prism_Relay/`. Deterministic 7×7 mirror-routing puzzle, three layouts, 18-rotation budget, visible beam trace, mouse/touch controls and reset/next. Import/rules/runtime validation passed in exact-head Godot 4.3 Run #491, steps 140–142.
+- [x] Crop plots are now part of generated Surface Chunk Streaming Playground chunks. `MineralChunkController` assigns stable IDs from chunk ID + local node path and reconstructs plot visuals from the authoritative CropRegistry after unload/reload. E interacts with the nearest plot within 3.25 units.
 - [x] Stream-save schema 1 supports an optional crop registry payload. Invalid crop payloads are rejected before mineral/player/stream mutation; target-stream failure rolls back crop and mineral snapshots; legacy saves without the crop key remain compatible.
-- [x] PR #106 merged as \`915ae79a1f24ad67572d06854cf7248de8a6db20\`; exact candidate HEAD \`4628afcb82e7d6979fdefa65d04310332088b35d\`. Run #491 passed 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips. Step 75 streaming crop integration passed.
-- [ ] Build formal production \`scripts/world.gd\` and migrate world-facing systems behind it.
+- [x] PR #106 merged as `915ae79a1f24ad67572d06854cf7248de8a6db20`; exact candidate HEAD `4628afcb82e7d6979fdefa65d04310332088b35d`. Run #491 passed 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips. Step 75 streaming crop integration passed.
+- [ ] Build formal production `scripts/world.gd` and migrate world-facing systems behind it.
 - [ ] Persist complete generated chunk scene state (all world objects/terrain/interactive state), not just mineral and crop registry data.
 - [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
