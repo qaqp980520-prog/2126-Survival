@@ -797,10 +797,12 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
         return false
     if restored_position.y < -5.0 or restored_position.y > 20.0:
         return false
-    # Older world saves have no mineral_veins field. Preserve currently loaded veins
-    # for those saves; the registry validates the complete payload before mutation.
-    var raw_mineral_veins: Variant = world_save.get("mineral_veins", {"schema_version": 1, "veins": {}})
-    if not (raw_mineral_veins is Dictionary) or mineral_vein_registry == null:
+    # Older world saves have no mineral_veins field. Preserve the registry snapshot,
+    # including records for unloaded chunks; validate before applying any world state.
+    if mineral_vein_registry == null:
+        return false
+    var raw_mineral_veins: Variant = world_save.get("mineral_veins", mineral_vein_registry.to_save_dict())
+    if not (raw_mineral_veins is Dictionary):
         return false
     if not bool(mineral_vein_registry.call("validate_save_dict", raw_mineral_veins)):
         return false
