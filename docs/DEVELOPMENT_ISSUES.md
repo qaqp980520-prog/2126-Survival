@@ -183,3 +183,18 @@
 - No local Godot executable; GUI/GPU/iPhone hardware tests are not claimed.
 - Remaining P1 work: visible crop plots and proximity interaction; formal `scripts/world.gd` world-session controller; persist complete generated chunk state across unload/reload; asynchronous streaming.
 - Next: create a scene-backed crop interaction layer and chunk lifecycle save/restore tests, without claiming the production controller exists until implemented.
+
+
+## Current verified status — Runs 34–35 (2026-10-28)
+
+The older checklist and historical run notes above describe their respective snapshots. Use this section as the current verified state:
+
+- [x] Scene-backed crop plots are integrated into the active Backrooms Portal Playground with stable IDs, proximity interaction, surface-only guard and save/load visual refresh. PR #102 merged as `b6fcdc039ea78cff478ef7f2415a3a2d6d410198`; exact-head Godot 4.3 Run #479 passed 139/139 total steps, zero failures/skips.
+- [x] Touch-safe crop interaction is available through `HUD/CropInteractButton`, while keyboard E remains supported. The button is disabled in Backrooms and re-enabled on the surface.
+- [x] KROLL Cargo Crane is integrated into the shared Godot validation workflow. PR #103 merged as `8d74ef8b3ae96be94fa930d48ee69402070e73d1`; exact-head Run #481 passed 142/142 total steps, zero failures/skips. New game import/rules/runtime steps 137–139 and crop visual interaction step 133 passed.
+- [ ] Build the formal production `scripts/world.gd` world-session controller and migrate world-facing systems behind it.
+- [ ] Persist full generated chunk scene state across unload/reload, including crop/mineral state and visual reconstruction.
+- [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
+- [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available during Runs 34–35, so those tests are not claimed.
+- Run 34 Notion candidate status saying PR #102 was open / Run #479 pending is historical and superseded by the final pass and merge SHA above.
+- Run 35 PR #103 is merged; the exact feature SHA is `8d74ef8b3ae96be94fa930d48ee69402070e73d1`. Documentation closeout PR is separate and must pass its own exact-head CI before merge.
