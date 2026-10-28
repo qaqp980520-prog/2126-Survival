@@ -96,17 +96,20 @@ func _build_ui() -> void:
     layout.add_child(footer)
     var advance := Button.new()
     advance.text = "CLOSE DAY / NEXT DAY (Enter)"
+    advance.focus_mode = Control.FOCUS_NONE
     advance.custom_minimum_size = Vector2(270, 48)
     advance.pressed.connect(dispatch_action.bind("advance", "", 0))
     footer.add_child(advance)
     action_buttons.append(advance)
     var reset := Button.new()
     reset.text = "RESET (R)"
+    reset.focus_mode = Control.FOCUS_NONE
     reset.custom_minimum_size = Vector2(150, 48)
     reset.pressed.connect(restart_game)
     footer.add_child(reset)
     var next_seed := Button.new()
     next_seed.text = "NEXT MARKET (N)"
+    next_seed.focus_mode = Control.FOCUS_NONE
     next_seed.custom_minimum_size = Vector2(190, 48)
     next_seed.pressed.connect(next_market)
     footer.add_child(next_seed)
@@ -126,6 +129,7 @@ func _add_header(parent: HBoxContainer, text_value: String, width: int) -> void:
 func _add_trade_button(parent: HBoxContainer, label_text: String, side: String, item: String, quantity: int) -> void:
     var button := Button.new()
     button.text = label_text
+    button.focus_mode = Control.FOCUS_NONE
     button.custom_minimum_size = Vector2(84, 40)
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.pressed.connect(dispatch_action.bind(side, item, quantity))
