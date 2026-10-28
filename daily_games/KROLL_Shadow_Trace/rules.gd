@@ -27,7 +27,7 @@ const GUARD_PATHS := [
 ]
 
 static func new_game(seed_value: int = 30) -> Dictionary:
-	var layout_index: int = posmod(seed_value, INTEL_LAYOUTS.size())
+	var layout_index: int = (abs(seed_value) % INTEL_LAYOUTS.size())
 	var guards: Array = []
 	for path_value in GUARD_PATHS:
 		var path: Array = path_value.duplicate(true)
@@ -79,7 +79,7 @@ static func step(state: Dictionary, direction: Vector2i) -> Dictionary:
 		var guard: Dictionary = guards[i].duplicate(true)
 		var path: Array = guard.get("path", [])
 		if not path.is_empty():
-			guard["index"] = posmod(int(guard.get("index", 0)) + 1, path.size())
+			guard["index"] = ((int(guard.get("index", 0)) + 1) % path.size())
 			guards[i] = guard
 	next["guards"] = guards
 
