@@ -124,6 +124,15 @@ func refresh_crop_plots() -> void:
 			if is_instance_valid(plot) and plot.has_method("refresh"):
 				plot.call("refresh")
 
+func get_loaded_crop_plots() -> Array[Node3D]:
+	var plots: Array[Node3D] = []
+	for local_plots in _chunk_crops.values():
+		for plot_value in local_plots.values():
+			var plot := plot_value as Node3D
+			if is_instance_valid(plot):
+				plots.append(plot)
+	return plots
+
 func to_save_dict() -> Dictionary:
 	if registry == null:
 		return {}
