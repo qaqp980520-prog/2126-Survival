@@ -7,7 +7,7 @@ const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
-const CropPlotVisualScript = preload("res://systems/CropPlotVisual.gd")
+const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
@@ -354,7 +354,7 @@ func _build_crop_plots() -> void:
     ]
     crop_plot_views.clear()
     for definition in plot_definitions:
-        var plot: Node3D = CropPlotVisualScript.new() as Node3D
+        var plot: Node3D = CropPlotVisualScene.instantiate() as Node3D
         plot.name = "CropPlot_%02d" % int(definition["index"])
         main_world.add_child(plot)
         plot.position = definition["position"]
