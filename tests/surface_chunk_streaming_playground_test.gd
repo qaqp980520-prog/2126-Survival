@@ -44,6 +44,7 @@ func _run_tests() -> void:
 	_check(playground.director.get_managed_chunk_ids() == playground.chunk_controller.get_loaded_chunk_ids(), "Director and controller active IDs must match")
 	_check(playground.director.get_grid_coordinate(Vector3(-0.1, 0.0, -0.1)) == Vector2i(-1, -1), "Negative positions must use floor-based grid coordinates")
 	_check(playground.director.get_grid_coordinate(Vector3(10.0, 0.0, 10.0)) == Vector2i(1, 1), "Exact positive chunk boundaries must map to the next chunk")
+	_check(playground.chunk_controller.get_loaded_crop_plots().size() == 18, "Two crop plots are attached to each of the nine active chunks")
 
 	var original_root: Node3D = playground.chunk_controller.get_chunk_root("surface/chunk_0_0")
 	if original_root == null:
@@ -67,10 +68,15 @@ func _run_tests() -> void:
 		return
 	var crop_stable_id: String = str(original_crop.get("stable_id"))
 	_check(not crop_stable_id.is_empty(), "Streamed crop plot receives a stable chunk-scoped ID")
-	var planted: Dictionary = original_crop.call("interact", now)
-	_check(bool(planted.get("ok", false)) and str(planted.get("action", "")) == "planted", "Chunk crop plot can plant through the shared CropPlotController")
+	playground.player.global_position = original_crop.global_position + Vector3(0.0, 1.0, 0.0)
+	var planted: Dictionary = playground.call("_interact_nearest_crop_plot", now)
+	_check(bool(planted.get("ok", false)) and str(planted.get("action", "")) == "planted", "E interaction plants the nearest streamed crop plot")
 	_check(bool(playground.crop_controller.advance_crop(crop_stable_id, 120.0, now + 120)), "Crop can advance before its chunk unloads")
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 1, "Crop growth is stored in the shared registry")
+	playground.player.global_position = Vector3(200.0, 2.0, 200.0)
+	var out_of_reach: Dictionary = playground.call("_interact_nearest_crop_plot", now + 121)
+	_check(str(out_of_reach.get("action", "")) == "out_of_reach", "Nearby interaction rejects crop plots outside the reach radius")
+	playground.player.global_position = original_position
 	var stable_id: String = Adapter.make_stable_id("surface/chunk_0_0", "Chunk_0_0/Ore_0_0")
 	var save_payload: Dictionary = playground.serialize_stream_state()
 	var mineral_payload: Dictionary = save_payload.get("minerals", {})
