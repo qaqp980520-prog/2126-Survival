@@ -66,12 +66,13 @@ func _run() -> void:
     _expect(bool(result.get("ok", false)) and result.get("action") == "advanced", "final growth tick reaches maturity")
     var mature: Dictionary = registry.call("get_crop", stable_id)
     _expect(int(mature.get("growth_stage", 0)) == 4 and float(mature.get("growth_progress", 0.0)) == 1.0, "plot exposes mature stage before harvest")
-    _expect(bool(plot.get_node("CropFruit").visible), "mature plot displays a harvestable fruit visual")
+    var fruit_visual: MeshInstance3D = plot.get_node("CropFruit") as MeshInstance3D
+    _expect(fruit_visual != null and fruit_visual.visible, "mature plot displays a harvestable fruit visual")
 
     result = plot.call("interact", now + 7)
     _expect(bool(result.get("ok", false)) and result.get("action") == "harvested", "mature plot interaction harvests and resets the cycle")
     _expect(int(registry.call("get_crop", stable_id).get("harvest_count", 0)) == 1, "harvest count is stored in the registry")
-    _expect(not bool(plot.get_node("CropFruit").visible), "harvest refresh hides the mature fruit visual")
+    _expect(not fruit_visual.visible, "harvest refresh hides the mature fruit visual")
     _expect(bool(world.call("save_game")), "visible crop interaction state can be saved by the active world")
     _expect(bool(world.call("load_game")), "active world reloads the crop registry")
     _expect(int(registry.call("get_crop", stable_id).get("harvest_count", 0)) == 1, "harvest state survives world save/load")
