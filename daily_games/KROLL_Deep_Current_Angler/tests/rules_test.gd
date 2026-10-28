@@ -22,6 +22,7 @@ func _run() -> void:
     _expect(state["mode"] == "fight", "hook starts a fish fight")
 
     var broken: Dictionary = state.duplicate(true)
+    broken["fish_energy"] = 9 # Keep the fish on the line long enough to exercise the snap threshold.
     for i in range(4):
         var result: Dictionary = Rules.perform_action(broken, "reel")
         if bool(result["ok"]):
