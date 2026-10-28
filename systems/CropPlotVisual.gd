@@ -1,7 +1,7 @@
 extends Node3D
 class_name CropPlotVisual
 
-## Lightweight surface plot visual. CropRegistry remains the authoritative data source.
+## Scene-backed plot visual. CropRegistry remains the authoritative data source.
 const WATER_AMOUNT := 35.0
 const GROWTH_TICK_SECONDS := 120.0
 const DRY_THRESHOLD := 30.0
@@ -11,15 +11,13 @@ var stable_id: String = ""
 var crop_id: String = "wheat"
 var plot_index: int = 1
 var status_text: String = ""
-var _built := false
-var _stem: MeshInstance3D
-var _fruit: MeshInstance3D
-var _marker: MeshInstance3D
-var _stem_mesh: CylinderMesh
-var _fruit_material: StandardMaterial3D
+
+@onready var _stem: MeshInstance3D = get_node("CropStem") as MeshInstance3D
+@onready var _fruit: MeshInstance3D = get_node("CropFruit") as MeshInstance3D
+@onready var _marker: MeshInstance3D = get_node("CropTypeMarker") as MeshInstance3D
 
 func _ready() -> void:
-    _build_visuals()
+    _apply_crop_color()
     refresh()
 
 func configure(value: Node, id: String, kind: String, index: int) -> void:
@@ -27,62 +25,9 @@ func configure(value: Node, id: String, kind: String, index: int) -> void:
     stable_id = id
     crop_id = kind
     plot_index = index
-    _build_visuals()
-    refresh()
-
-func _build_visuals() -> void:
-    if _built:
-        return
-    _built = true
-
-    var soil := MeshInstance3D.new()
-    soil.name = "SoilBed"
-    var soil_mesh := BoxMesh.new()
-    soil_mesh.size = Vector3(1.4, 0.2, 1.4)
-    soil.mesh = soil_mesh
-    soil.position = Vector3(0.0, 0.1, 0.0)
-    var soil_material := StandardMaterial3D.new()
-    soil_material.albedo_color = Color("#503c2d")
-    soil_material.roughness = 1.0
-    soil.material_override = soil_material
-    add_child(soil)
-
-    _marker = MeshInstance3D.new()
-    _marker.name = "CropTypeMarker"
-    var marker_mesh := BoxMesh.new()
-    marker_mesh.size = Vector3(0.22, 0.22, 0.22)
-    _marker.mesh = marker_mesh
-    _marker.position = Vector3(-0.48, 0.31, -0.48)
-    var marker_material := StandardMaterial3D.new()
-    marker_material.albedo_color = _crop_color()
-    marker_material.roughness = 0.7
-    _marker.material_override = marker_material
-    add_child(_marker)
-
-    _stem = MeshInstance3D.new()
-    _stem.name = "CropStem"
-    _stem_mesh = CylinderMesh.new()
-    _stem_mesh.top_radius = 0.055
-    _stem_mesh.bottom_radius = 0.11
-    _stem_mesh.height = 1.0
-    _stem.mesh = _stem_mesh
-    var stem_material := StandardMaterial3D.new()
-    stem_material.albedo_color = Color("#64a75a")
-    stem_material.roughness = 0.9
-    _stem.material_override = stem_material
-    add_child(_stem)
-
-    _fruit = MeshInstance3D.new()
-    _fruit.name = "CropFruit"
-    var fruit_mesh := SphereMesh.new()
-    fruit_mesh.radius = 0.18
-    fruit_mesh.height = 0.36
-    _fruit.mesh = fruit_mesh
-    _fruit_material = StandardMaterial3D.new()
-    _fruit_material.albedo_color = _crop_color()
-    _fruit_material.roughness = 0.65
-    _fruit.material_override = _fruit_material
-    add_child(_fruit)
+    if is_node_ready():
+        _apply_crop_color()
+        refresh()
 
 func interact(now_unix: int = -1) -> Dictionary:
     if controller == null or stable_id.is_empty():
@@ -122,7 +67,7 @@ func interact(now_unix: int = -1) -> Dictionary:
     return _result(true, action, message)
 
 func refresh() -> void:
-    if not _built or _stem == null or _fruit == null:
+    if not is_node_ready() or _stem == null or _fruit == null:
         return
     var record: Dictionary = {}
     if controller != null and not stable_id.is_empty():
@@ -146,6 +91,12 @@ func refresh() -> void:
         plot_index, crop_id.to_upper(), stage, moisture,
         "E: HARVEST" if mature else ("E: WATER" if moisture < DRY_THRESHOLD else "E: GROW")
     ]
+
+func _apply_crop_color() -> void:
+    if _marker != null and _marker.material_override is StandardMaterial3D:
+        (_marker.material_override as StandardMaterial3D).albedo_color = _crop_color()
+    if _fruit != null and _fruit.material_override is StandardMaterial3D:
+        (_fruit.material_override as StandardMaterial3D).albedo_color = _crop_color()
 
 func _crop_color() -> Color:
     match crop_id:
