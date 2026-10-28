@@ -33,9 +33,19 @@ func _run() -> void:
 	_expect(bool(registry.call("register_crop", TOMATO_ID, "tomato", 2, 0.35, 65.0, now, 1)), "register a crop in a loaded surface chunk")
 	_expect(bool(registry.call("register_crop", WHEAT_ID, "wheat", 1, 0.7, 40.0, now, 0)), "register a second crop record for a separate chunk")
 	_expect(not bool(registry.call("register_crop", TOMATO_ID, "tomato", 0, 0.0, 0.0, now, 0)), "duplicate stable crop ID is rejected")
+	_expect(not bool(registry.call("register_crop", "surface/chunk_0_0/unknown-01", "unknown_crop", 0, 0.0, 0.0, now, 0)), "unknown crop ID is rejected")
+	var before_invalid_update: Dictionary = registry.call("get_crop", TOMATO_ID)
+	_expect(not bool(registry.call("update_crop", TOMATO_ID, 99, 0.5, 50.0, now + 1, 1)), "invalid growth stage update is rejected")
+	_expect(registry.call("get_crop", TOMATO_ID) == before_invalid_update, "invalid crop update leaves the existing record unchanged")
+	var detached_payload: Dictionary = registry.call("to_save_dict")
+	detached_payload["crops"][TOMATO_ID]["growth_stage"] = 99
+	_expect(_crop_stage(registry, TOMATO_ID) == 2, "save snapshot is detached from live crop records")
 	var snapshot: Dictionary = world.call("serialize_world_state")
 	_expect(snapshot.has("crop_registry_state"), "world envelope serializes crop registry state")
 	_expect(bool(world.call("save_game")), "active world writes crop state through the real save writer")
+	var bad_schema: Dictionary = registry.call("to_save_dict")
+	bad_schema["schema_version"] = 1.5
+	_expect(not bool(registry.call("validate_save_dict", bad_schema)), "fractional crop registry schema is rejected")
 
 	registry.call("update_crop", TOMATO_ID, 4, 0.95, 20.0, now + 1, 2)
 	var player := world.get_node("Player") as Node3D
