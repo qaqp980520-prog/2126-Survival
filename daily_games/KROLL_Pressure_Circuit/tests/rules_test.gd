@@ -33,8 +33,8 @@ func _run() -> void:
 		var current: Vector2i = solution_path[path_index]
 		var next_cell: Vector2i = solution_path[path_index + 1]
 		var delta: Vector2i = next_cell - current
-		var outgoing_bit := Rules.DIR_E if delta == Vector2i.RIGHT else (Rules.DIR_W if delta == Vector2i.LEFT else (Rules.DIR_S if delta == Vector2i.DOWN else Rules.DIR_N))
-		var incoming_bit := Rules.DIR_W if outgoing_bit == Rules.DIR_E else (Rules.DIR_E if outgoing_bit == Rules.DIR_W else (Rules.DIR_N if outgoing_bit == Rules.DIR_S else Rules.DIR_S))
+		var outgoing_bit: int = Rules._direction_bit(delta)
+		var incoming_bit: int = Rules._direction_bit(-delta)
 		var current_mask := int(solution_masks[current.y * Rules.COLS + current.x])
 		var next_mask := int(solution_masks[next_cell.y * Rules.COLS + next_cell.x])
 		if (current_mask & outgoing_bit) == 0 or (next_mask & incoming_bit) == 0:
