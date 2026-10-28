@@ -160,7 +160,7 @@ jobs:
           test -f tests/mineral_vein_chunk_stream_test.gd
           test -f prototypes/minerals/MineralOreVisual.gd
           test -f prototypes/minerals/MineralMiningVFX.gd
-      - name: Check Run 31 candidate files
+      - name: Check Run 31 and Run 32 candidate files
         shell: bash
         run: |
           set -e
@@ -169,6 +169,11 @@ jobs:
           test -f daily_games/KROLL_Shadow_Trace/tests/game_smoke_test.gd
           test -f systems/CropRegistry.gd
           test -f tests/crop_registry_persistence_test.gd
+          test -f tests/crop_registry_lifecycle_test.gd
+          test -f daily_games/KROLL_Greenhouse_Keeper/project.godot
+          test -f daily_games/KROLL_Greenhouse_Keeper/rules.gd
+          test -f daily_games/KROLL_Greenhouse_Keeper/tests/rules_test.gd
+          test -f daily_games/KROLL_Greenhouse_Keeper/tests/game_smoke_test.gd
       - name: Import and parse root 2126 Survival project
         shell: bash
         run: |
@@ -1024,3 +1029,30 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop registry persistence integration test passed."
+
+      - name: Import and parse KROLL Greenhouse Keeper
+        run: godot --headless --path daily_games/KROLL_Greenhouse_Keeper --editor --quit
+      - name: Run KROLL Greenhouse Keeper rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Greenhouse_Keeper --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Greenhouse Keeper rules tests passed."
+      - name: Run KROLL Greenhouse Keeper runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Greenhouse_Keeper --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Greenhouse Keeper runtime smoke test passed."
+      - name: Run crop registry lifecycle tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path . --script res://tests/crop_registry_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Crop registry lifecycle tests passed."
