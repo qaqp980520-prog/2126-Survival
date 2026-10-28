@@ -6,6 +6,7 @@ const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const CropRegistryScript = preload("res://systems/CropRegistry.gd")
+const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
@@ -26,6 +27,7 @@ var director
 var bridge
 var mineral_vein_registry: Node
 var crop_registry: Node
+var crop_plot_controller: Node
 var active_portal_visual: Area3D
 var backrooms_room: Node3D
 var in_backrooms: bool = false
@@ -67,6 +69,11 @@ func _ready() -> void:
     crop_registry = CropRegistryScript.new()
     crop_registry.name = "CropRegistry"
     add_child(crop_registry)
+    crop_plot_controller = CropPlotControllerScript.new()
+    crop_plot_controller.name = "CropPlotController"
+    add_child(crop_plot_controller)
+    if not bool(crop_plot_controller.call("bind_registry", crop_registry)):
+        push_error("CropPlotController failed to bind the active CropRegistry.")
     player.bind_world_bridge(bridge)
     _build_surface()
     _prepare_maze_materials()
