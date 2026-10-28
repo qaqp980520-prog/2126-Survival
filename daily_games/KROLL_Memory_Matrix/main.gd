@@ -144,10 +144,13 @@ func _refresh_ui() -> void:
 		button.disabled = status != "input"
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey):
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
 		return
 	var tile_index := -1
-	match event.keycode:
+	match key_event.keycode:
 		KEY_1: tile_index = 0
 		KEY_2: tile_index = 1
 		KEY_3: tile_index = 2
