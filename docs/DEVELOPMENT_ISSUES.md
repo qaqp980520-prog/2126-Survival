@@ -204,3 +204,15 @@ The older checklist and historical run notes above describe their respective sna
 - Exact-head docs CI Run #483 (40718477267) passed all 142/142 total steps, zero failures/skips. The docs candidate was `0aa7c0e10c2cd295af38f7a729849934be33f36c`; PR #104 merged as `df3ba169aeab8440102386706bcc8e0117bc26b8`.
 - Final main compared identical to `df3ba169aeab8440102386706bcc8e0117bc26b8`; open-PR search returned empty. Earlier pending wording is historical only.
 - No separate post-merge main-push workflow or local GUI/GPU/iPhone pass is claimed.
+
+## Current verified status — Run 36 (2026-10-29)
+
+- [x] KROLL Prism Relay M0.1 added at \`daily_games/KROLL_Prism_Relay/\`. Deterministic 7×7 mirror-routing puzzle, three layouts, 18-rotation budget, visible beam trace, mouse/touch controls and reset/next. Import/rules/runtime validation passed in exact-head Godot 4.3 Run #491, steps 140–142.
+- [x] Crop plots are now part of generated Surface Chunk Streaming Playground chunks. \`MineralChunkController\` assigns stable IDs from chunk ID + local node path and reconstructs plot visuals from the authoritative CropRegistry after unload/reload. E interacts with the nearest plot within 3.25 units.
+- [x] Stream-save schema 1 supports an optional crop registry payload. Invalid crop payloads are rejected before mineral/player/stream mutation; target-stream failure rolls back crop and mineral snapshots; legacy saves without the crop key remain compatible.
+- [x] PR #106 merged as \`915ae79a1f24ad67572d06854cf7248de8a6db20\`; exact candidate HEAD \`4628afcb82e7d6979fdefa65d04310332088b35d\`. Run #491 passed 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips. Step 75 streaming crop integration passed.
+- [ ] Build formal production \`scripts/world.gd\` and migrate world-facing systems behind it.
+- [ ] Persist complete generated chunk scene state (all world objects/terrain/interactive state), not just mineral and crop registry data.
+- [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
+- [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+- No separate post-merge main-push workflow is claimed; CI evidence applies to the exact PR candidate SHA.
