@@ -197,4 +197,10 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available during Runs 34–35, so those tests are not claimed.
 - Run 34 Notion candidate status saying PR #102 was open / Run #479 pending is historical and superseded by the final pass and merge SHA above.
-- Run 35 PR #103 is merged; the exact feature SHA is `8d74ef8b3ae96be94fa930d48ee69402070e73d1`. Documentation closeout PR is separate and must pass its own exact-head CI before merge.
+- Run 35 PR #103 is merged as `8d74ef8b3ae96be94fa930d48ee69402070e73d1`. Documentation closeout PR #104 is also merged as `df3ba169aeab8440102386706bcc8e0117bc26b8` after exact-head Run #483 passed 142/142 total steps; final main matched that SHA and the final open-PR search was empty.
+
+## Run 35 documentation CI final correction — 2026-10-28
+
+- Exact-head docs CI Run #483 (40718477267) passed all 142/142 total steps, zero failures/skips. The docs candidate was `0aa7c0e10c2cd295af38f7a729849934be33f36c`; PR #104 merged as `df3ba169aeab8440102386706bcc8e0117bc26b8`.
+- Final main compared identical to `df3ba169aeab8440102386706bcc8e0117bc26b8`; open-PR search returned empty. Earlier pending wording is historical only.
+- No separate post-merge main-push workflow or local GUI/GPU/iPhone pass is claimed.
