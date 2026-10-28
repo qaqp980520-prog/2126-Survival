@@ -42,6 +42,81 @@ func update_crop(stable_id: String, growth_stage: int, growth_progress: float, m
 	_records[stable_id] = candidate
 	return true
 
+const GROWTH_SECONDS_PER_STAGE := 120.0
+const MOISTURE_DRAIN_PER_SECOND := 0.25
+const MAX_ADVANCE_SECONDS := 86400.0
+const HARVEST_MOISTURE_COST := 20.0
+
+## Add water to an existing crop. Saturated crops and invalid amounts are no-ops.
+func water_crop(stable_id: String, amount: float, now_unix: int = -1) -> bool:
+    if not _records.has(stable_id) or not is_finite(amount) or amount <= 0.0:
+        return false
+    var candidate: Dictionary = _records[stable_id].duplicate(true)
+    var old_moisture: float = float(candidate.get("moisture", 0.0))
+    var next_moisture: float = minf(100.0, old_moisture + amount)
+    if next_moisture <= old_moisture:
+        return false
+    candidate["moisture"] = next_moisture
+    candidate["last_updated_unix"] = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+    if not _is_valid_record(stable_id, candidate):
+        return false
+    _records[stable_id] = candidate
+    return true
+
+## Advance crop growth deterministically; callers own the clock and decide when to tick.
+## Growth pauses when soil dries. Large or invalid elapsed intervals are rejected.
+func advance_growth(stable_id: String, elapsed_seconds: float, now_unix: int = -1) -> bool:
+    if not _records.has(stable_id):
+        return false
+    if not is_finite(elapsed_seconds) or elapsed_seconds <= 0.0 or elapsed_seconds > MAX_ADVANCE_SECONDS:
+        return false
+    var candidate: Dictionary = _records[stable_id].duplicate(true)
+    var moisture: float = float(candidate.get("moisture", 0.0))
+    var stage: int = int(candidate.get("growth_stage", 0))
+    var progress: float = float(candidate.get("growth_progress", 0.0))
+    var effective_seconds: float = 0.0
+    if stage < MAX_STAGE and moisture > 0.0:
+        effective_seconds = minf(elapsed_seconds, moisture / MOISTURE_DRAIN_PER_SECOND)
+        var total_progress: float = progress + effective_seconds / GROWTH_SECONDS_PER_STAGE
+        while total_progress >= 1.0 and stage < MAX_STAGE:
+            stage += 1
+            total_progress -= 1.0
+        if stage >= MAX_STAGE:
+            progress = 1.0
+        else:
+            progress = clampf(total_progress, 0.0, 1.0)
+    candidate["growth_stage"] = stage
+    candidate["growth_progress"] = progress
+    candidate["moisture"] = maxf(0.0, moisture - elapsed_seconds * MOISTURE_DRAIN_PER_SECOND)
+    candidate["last_updated_unix"] = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+    if not _is_valid_record(stable_id, candidate):
+        return false
+    _records[stable_id] = candidate
+    return true
+
+## Harvest only a mature crop. The record is reset for a new cycle and harvest_count is retained.
+## Returns a small receipt dictionary, or an empty dictionary if the crop is not harvestable.
+func harvest_crop(stable_id: String, now_unix: int = -1) -> Dictionary:
+    if not _records.has(stable_id):
+        return {}
+    var candidate: Dictionary = _records[stable_id].duplicate(true)
+    if int(candidate.get("growth_stage", 0)) < MAX_STAGE or float(candidate.get("growth_progress", 0.0)) < 1.0:
+        return {}
+    candidate["harvest_count"] = int(candidate.get("harvest_count", 0)) + 1
+    candidate["growth_stage"] = MIN_STAGE
+    candidate["growth_progress"] = 0.0
+    candidate["moisture"] = maxf(0.0, float(candidate.get("moisture", 0.0)) - HARVEST_MOISTURE_COST)
+    candidate["last_updated_unix"] = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+    if not _is_valid_record(stable_id, candidate):
+        return {}
+    _records[stable_id] = candidate
+    return {
+        "ok": true,
+        "stable_id": stable_id,
+        "crop_id": str(candidate.get("crop_id", "")),
+        "harvest_count": int(candidate.get("harvest_count", 0))
+    }
+
 func remove_crop(stable_id: String) -> bool:
 	if not _records.has(stable_id):
 		return false
