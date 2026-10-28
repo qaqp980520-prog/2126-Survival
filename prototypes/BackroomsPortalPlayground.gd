@@ -362,6 +362,10 @@ func _build_crop_plots() -> void:
         crop_plot_views.append(plot)
 
 func _interact_nearest_crop_plot() -> void:
+    if in_backrooms:
+        _crop_action_status = "Crop plots are on the surface; return through a portal first."
+        _update_hud()
+        return
     var nearest: Node3D = null
     var nearest_distance: float = 3.25
     for plot in crop_plot_views:
