@@ -4,6 +4,7 @@ const Director = preload("res://systems/BackroomsPortalDirector.gd")
 const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
+const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
@@ -22,6 +23,7 @@ const STREAM_RADIUS: int = 2
 
 var director
 var bridge
+var mineral_vein_registry: Node
 var active_portal_visual: Area3D
 var backrooms_room: Node3D
 var in_backrooms: bool = false
@@ -57,6 +59,9 @@ func _ready() -> void:
     bridge = BridgeScript.new()
     bridge.name = "SurvivalWorldBridge"
     add_child(bridge)
+    mineral_vein_registry = VeinRegistryScript.new()
+    mineral_vein_registry.name = "MineralVeinRegistry"
+    add_child(mineral_vein_registry)
     player.bind_world_bridge(bridge)
     _build_surface()
     _prepare_maze_materials()
@@ -749,6 +754,9 @@ func serialize_world_state() -> Dictionary:
     if not bool(result.get("ok", false)):
         return {}
     var save: Dictionary = result["world_save"]
+    if mineral_vein_registry == null:
+        return {}
+    save["mineral_veins"] = mineral_vein_registry.to_save_dict()
     save["player_position"] = [player.global_position.x, player.global_position.y, player.global_position.z]
     save["backrooms_portal_state"] = director.to_save_dict()
     save["current_level"] = current_level
@@ -789,7 +797,16 @@ func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
         return false
     if restored_position.y < -5.0 or restored_position.y > 20.0:
         return false
+    # Older world saves have no mineral_veins field. Preserve currently loaded veins
+    # for those saves; the registry validates the complete payload before mutation.
+    var raw_mineral_veins: Variant = world_save.get("mineral_veins", {"schema_version": 1, "veins": {}})
+    if not (raw_mineral_veins is Dictionary) or mineral_vein_registry == null:
+        return false
+    if not bool(mineral_vein_registry.call("validate_save_dict", raw_mineral_veins)):
+        return false
     if not bridge.restore_world_save(world_save):
+        return false
+    if not bool(mineral_vein_registry.call("restore_save_dict", raw_mineral_veins)):
         return false
     if not director.load_save_dict(portal_payload):
         return false
