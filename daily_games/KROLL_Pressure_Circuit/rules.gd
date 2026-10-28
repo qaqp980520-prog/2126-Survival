@@ -30,7 +30,9 @@ static func create_puzzle(seed_value: int = 20261028) -> Dictionary:
 	for index in range(path.size()):
 		var mask := 0
 		if index > 0:
-			mask |= _direction_bit(path[index] - path[index - 1])
+			# Connector bits point outward from this cell, so the previous
+			# path cell is the reverse of the forward path delta.
+			mask |= _direction_bit(path[index - 1] - path[index])
 		if index < path.size() - 1:
 			mask |= _direction_bit(path[index + 1] - path[index])
 		solution_masks[_cell_index(path[index])] = mask
