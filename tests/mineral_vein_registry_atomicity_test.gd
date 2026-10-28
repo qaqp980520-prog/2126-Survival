@@ -2,8 +2,8 @@ extends SceneTree
 
 const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const Registry = preload("res://systems/MineralVeinRegistry.gd")
-const IRON_ID: String = "earth/sector-30/chunk-0/iron-01"
-const GOLD_ID: String = "earth/sector-30/chunk-0/gold-01"
+const IRON_ID: String = "earth/sector-30/chunk-0/a-iron-01"
+const GOLD_ID: String = "earth/sector-30/chunk-0/z-gold-01"
 
 func _initialize() -> void:
 	call_deferred("_run")
