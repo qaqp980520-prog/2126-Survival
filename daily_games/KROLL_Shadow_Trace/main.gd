@@ -97,7 +97,7 @@ func _draw() -> void:
 		var path: Array = guard.get("path", [])
 		if path.is_empty():
 			continue
-		var guard_cell: Vector2i = path[posmod(int(guard.get("index", 0)), path.size())]
+		var guard_cell: Vector2i = path[(int(guard.get("index", 0)) % path.size())]
 		var center: Vector2 = BOARD_ORIGIN + Vector2(guard_cell.x * TILE_SIZE + (TILE_SIZE - 3) * 0.5, guard_cell.y * TILE_SIZE + (TILE_SIZE - 3) * 0.5)
 		draw_circle(center, 15.0, Color(0.92, 0.22, 0.3))
 		draw_circle(center, 5.0, Color(1.0, 0.8, 0.8))
