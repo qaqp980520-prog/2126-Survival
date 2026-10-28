@@ -19,9 +19,9 @@ Date: 2026-10-28 (Asia/Taipei)
 
 ## Existing system integration
 
-- Added `systems/CropPlotVisual.gd`, a procedural visible soil bed, stem, mature fruit and Label3D status for stable crop IDs.
+- Added `systems/CropPlotVisual.gd` for procedural soil beds, crop-type marker, growth-stage stem and mature fruit; compact per-plot status is surfaced in the active HUD after interaction.
 - BackroomsPortalPlayground builds four surface plots around the spawn area. Press E near a plot to plant its configured crop; subsequent E interactions water dry plots, advance a bounded 120-second growth interval, and harvest mature plots. CropRegistry remains the source of truth; existing schema 1 is unchanged.
-- Added `tests/crop_plot_visual_integration_test.gd` to test the real active-world scene, all four views, planting, growth, water/advance cycles, mature fruit visibility, harvest count and save/reload.
+- Added `tests/crop_plot_visual_integration_test.gd` for four views, nearest-plot dispatch, surface-only guard, planting, water/growth cycles, mature fruit visibility, harvest and save/reload with visual refresh after restore. The first Label3D version emitted dummy-renderer null-mesh errors during the existing playground test; it was replaced by a species marker mesh and status_text property before final validation.
 
 ## Validation policy and limits
 
