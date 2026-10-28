@@ -99,40 +99,17 @@ func to_save_dict() -> Dictionary:
 
 ## Validate the complete payload before changing live nodes or stored records.
 ## Valid records for IDs not currently loaded are retained for later chunk registration.
+func validate_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
+	return bool(_prepare_restore(data, now_unix).get("ok", false))
+
+## Validate the full payload before changing live nodes or stored records.
+## Records for currently unloaded chunks remain available for later registration.
 func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
-	var schema: Variant = data.get("schema_version", null)
-	var records: Variant = data.get("veins", null)
-	if not (schema is int) or int(schema) != 1 or not (records is Dictionary):
+	var prepared := _prepare_restore(data, now_unix)
+	if not bool(prepared.get("ok", false)):
 		return false
-	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
-	if now <= 0:
-		return false
-
-	var next_records: Dictionary = {}
-	for raw_key in records.keys():
-		if not (raw_key is String):
-			return false
-		var key: String = raw_key
-		if key.is_empty() or key != key.strip_edges():
-			return false
-		var record: Variant = records[raw_key]
-		if not (record is Dictionary):
-			return false
-		var expected_mineral := ""
-		if _veins.has(key) and is_instance_valid(_veins[key]):
-			expected_mineral = _veins[key].mineral_id
-		if not _validate_record(key, record, expected_mineral, now):
-			return false
-		next_records[key] = record.duplicate(true)
-
-	# New live veins omitted from an older/partial world save keep their current state.
-	# Existing unloaded records, however, are authoritative only when present in payload.
-	for key in get_registered_ids():
-		if not next_records.has(key):
-			var current_record: Dictionary = _veins[key].to_save_dict()
-			if not _validate_record(key, current_record, _veins[key].mineral_id, now):
-				return false
-			next_records[key] = current_record.duplicate(true)
+	var next_records: Dictionary = prepared["records"]
+	var now: int = int(prepared["now"])
 
 	# Prevalidation above guarantees these loads use the same mineral and valid fields.
 	for key in get_registered_ids():
@@ -148,6 +125,42 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 	for key in get_registered_ids():
 		_saved_records[key] = _veins[key].to_save_dict()
 	return true
+
+func _prepare_restore(data: Dictionary, now_unix: int = -1) -> Dictionary:
+	var schema: Variant = data.get("schema_version", null)
+	var records: Variant = data.get("veins", null)
+	if not (schema is int) or int(schema) != 1 or not (records is Dictionary):
+		return {}
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	if now <= 0:
+		return {}
+
+	var next_records: Dictionary = {}
+	for raw_key in records.keys():
+		if not (raw_key is String):
+			return {}
+		var key: String = raw_key
+		if key.is_empty() or key != key.strip_edges():
+			return {}
+		var record: Variant = records[raw_key]
+		if not (record is Dictionary):
+			return {}
+		var expected_mineral := ""
+		if _veins.has(key) and is_instance_valid(_veins[key]):
+			expected_mineral = _veins[key].mineral_id
+		if not _validate_record(key, record, expected_mineral, now):
+			return {}
+		next_records[key] = record.duplicate(true)
+
+	# New live veins omitted from an older/partial world save keep their current state.
+	# Existing unloaded records are authoritative only when present in the payload.
+	for key in get_registered_ids():
+		if not next_records.has(key):
+			var current_record: Dictionary = _veins[key].to_save_dict()
+			if not _validate_record(key, current_record, _veins[key].mineral_id, now):
+				return {}
+			next_records[key] = current_record.duplicate(true)
+	return {"ok": true, "records": next_records, "now": now}
 
 func _validate_record(stable_id: String, record: Dictionary, expected_mineral_id: String = "", now_unix: int = -1) -> bool:
 	if stable_id.is_empty() or stable_id != stable_id.strip_edges():
