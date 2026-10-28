@@ -135,15 +135,20 @@ func _add_trade_button(parent: HBoxContainer, label_text: String, side: String, 
 func _unhandled_key_input(event: InputEvent) -> void:
     if not (event is InputEventKey) or not event.pressed or event.echo:
         return
+    var selection_changed := false
     match event.keycode:
         KEY_1:
             selected_item = Rules.ITEMS[0]
+            selection_changed = true
         KEY_2:
             selected_item = Rules.ITEMS[1]
+            selection_changed = true
         KEY_3:
             selected_item = Rules.ITEMS[2]
+            selection_changed = true
         KEY_4:
             selected_item = Rules.ITEMS[3]
+            selection_changed = true
         KEY_B:
             dispatch_action("buy", selected_item, 1)
         KEY_S:
@@ -154,7 +159,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
             restart_game()
         KEY_N:
             next_market()
-    _render()
+    if selection_changed:
+        _render()
 
 func dispatch_action(action: String, item: String = "", quantity: int = 0) -> bool:
     var result: Dictionary
