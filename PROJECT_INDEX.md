@@ -369,3 +369,14 @@
 - Earlier exact-head Runs #415 and #416 are historical failed candidates, not final status: #415 exposed expected corrupt-JSON ERROR logging; #416 confirmed save fallback passed but exposed reversed puzzle connector direction. Both causes were fixed and the later exact-head Run #418 passed.
 - At feature closeout, main was verified at merge commit `103399080afc19a1a0b7e3141a8252c862d78cee`; the documentation closeout is handled in a separate PR. No local Godot executable is available, so local GUI/GPU/iPhone playtesting is not claimed.
 - Remaining: production M1.3 world controller is still absent; underground mining remains a fixed-cave prototype; async chunk streaming and crop persistence remain outstanding. Next priority is to integrate the tested inventory/mining/save lifecycle into the production world controller and add production-scene load/unload/save/restore acceptance tests.
+
+
+## Run 28 final verified state — 2026-10-28
+
+- Start-of-run source-of-truth check: main was 6fb774988d2f950648745b70924f2ac79db8d43e; PR #88 and #89 from Run 27 were merged, and open-PR search was empty. The new feature branch was created from that exact main.
+- New game: daily_games/KROLL_Microgrid_Operator/, Godot 4.3+, no external assets/add-ons. An eight-cycle resource-management game that balances stored power, fuel, heat, and grid stability. Controls: 1 Generate, 2 Cool, 3 Optimize, R Reset; mouse/touch action cards.
+- Existing-system integration: tests/world_inventory_mining_lifecycle_test.gd instantiates the actual BackroomsPortalPlayground.tscn and a real MineralMiningNode, then verifies ore transfer through SurvivalWorldBridge, immediate weight increase/decrease, real save_game()/load_game() roundtrip, inventory restoration, and player-position restoration. It does not claim to persist vein remaining stock in the world save.
+- Feature PR #90 merged by squash as 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761; validated candidate HEAD d8b8f1fb2e2cdadeb6ed6bef6df1aab0e9b76da2. Exact-head Godot 4.3 Run #40636164856 completed successfully: 115/115 job steps successful, zero failed. New game import/rules/runtime steps 109–111 and mining-to-save integration step 112 passed; the log contains the explicit success markers.
+- Latest main after feature merge was verified at 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761. The documentation closeout is handled separately and must pass its own exact-head CI before merge.
+- Limitations: no local Godot executable, GUI/GPU/iPhone hardware test is claimed; production M1.3 world controller remains absent; crop persistence and vein-stock persistence are not integrated into the active world save.
+- Next engineering priority: connect the shared inventory/mining/save lifecycle to a production world-session controller and extend the end-to-end test to cover vein/chunk state persistence and restoration.
