@@ -58,8 +58,6 @@ func _build_streaming_stack() -> void:
 		push_error("Surface playground could not bind the mineral registry.")
 	if not chunk_controller.bind_crop_controller(crop_controller):
 		push_error("Surface playground could not bind the crop controller.")
-	if not chunk_controller.bind_registry(registry) or not chunk_controller.bind_crop_controller(crop_controller):
-		push_error("Surface playground could not bind the streamed world registries.")
 	director = DirectorScript.new()
 	director.name = "MineralGridStreamingDirector"
 	director.chunk_size_x = CHUNK_SIZE
