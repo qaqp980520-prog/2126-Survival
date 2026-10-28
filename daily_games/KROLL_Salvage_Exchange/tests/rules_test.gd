@@ -18,6 +18,12 @@ func _run() -> void:
     _expect(not bool(rejected["ok"]) and rejected["state"] == initial, "unknown commodities are rejected without mutation")
     rejected = Rules.trade(initial, "sell", "copper", 1)
     _expect(not bool(rejected["ok"]) and rejected["state"] == initial, "selling unavailable stock is rejected without mutation")
+    var rounded_fee := Rules.trade(initial, "buy", "copper", 1)
+    _expect(bool(rounded_fee["ok"]) and int(rounded_fee["state"]["credits"]) == 95, "small trade rounds the 5% fee up to one credit")
+    var malformed := initial.duplicate(true)
+    malformed["cargo"] = "not-a-dictionary"
+    rejected = Rules.trade(malformed, "buy", "copper", 1)
+    _expect(not bool(rejected["ok"]) and rejected["reason"] == "unknown_item", "malformed cargo payload is rejected before mutation")
 
     var bought := Rules.trade(initial, "buy", "copper", 10)
     _expect(bool(bought["ok"]), "buy ten low-priced units within the capacity")
