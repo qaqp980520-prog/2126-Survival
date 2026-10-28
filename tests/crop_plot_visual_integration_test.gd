@@ -74,8 +74,15 @@ func _run() -> void:
     _expect(int(registry.call("get_crop", stable_id).get("harvest_count", 0)) == 1, "harvest count is stored in the registry")
     _expect(not fruit_visual.visible, "harvest refresh hides the mature fruit visual")
     _expect(bool(world.call("save_game")), "visible crop interaction state can be saved by the active world")
+    result = plot.call("interact", now + 8)
+    _expect(bool(result.get("ok", false)) and result.get("action") == "watered", "post-save mutation waters the next crop cycle")
+    result = plot.call("interact", now + 9)
+    _expect(bool(result.get("ok", false)) and result.get("action") == "advanced", "post-save mutation advances the crop stage")
+    _expect(str(plot.get_node("PlotLabel").text).contains("1/4"), "plot visual reflects the post-save stage before restore")
     _expect(bool(world.call("load_game")), "active world reloads the crop registry")
     _expect(int(registry.call("get_crop", stable_id).get("harvest_count", 0)) == 1, "harvest state survives world save/load")
+    _expect(int(registry.call("get_crop", stable_id).get("growth_stage", -1)) == 0, "reload restores the saved growth stage")
+    _expect(str(plot.get_node("PlotLabel").text).contains("0/4"), "plot visuals refresh from the restored registry state")
 
     world.queue_free()
     await process_frame
