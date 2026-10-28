@@ -14,7 +14,7 @@ func _run() -> void:
 	_expect(game.has_method("restart_game"), "scene exposes restart")
 	_expect(game.get("game_state") is Dictionary, "scene initializes a game state")
 
-	_expect(bool(game.call("try_move", Vector2i(1, 0)), "player can take a legal first step")
+	_expect(bool(game.call("try_move", Vector2i(1, 0))), "player can take a legal first step")
 	_expect(int(game.get("game_state").get("turns", -1)) == 1, "successful step advances turn counter")
 	_expect(not bool(game.call("try_move", Vector2i(1, 0))), "wall collision is rejected by the live scene")
 	_expect(int(game.get("game_state").get("turns", -1)) == 1, "rejected wall move leaves turn counter unchanged")
