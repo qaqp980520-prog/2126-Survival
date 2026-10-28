@@ -171,3 +171,15 @@
 - No local Godot executable; no GUI/GPU/iPhone hardware QA claimed.
 - Remaining P0/P1 work: formal production scripts/world.gd controller; scene-based planting/watering/harvest; connect CropRegistry lifecycle to world-session and chunk load/unload; persist complete generated chunk scene state; asynchronous streaming and device QA.
 - Next: production world-session integration and crop/chunk unload/reload/save-failure end-to-end tests.
+
+
+## Run 33 closeout — 2026-10-28
+
+- PR #100 merged as `3b010096c6ee0c73fe0039a9a0ba87398aaf2bfc` after exact-head Godot 4.3 CI Run #459 (40693583329) passed on candidate `8f7af262b6d4c4e7da64661859088bc8d7f67a32`.
+- Run #459 completed all 132 validation steps with zero failures/skips. Deep Current Angler import/rules/runtime passed at steps 129–131; CropPlotController world integration passed at step 132. Existing regressions through step 128 also passed.
+- Added `systems/CropPlotController.gd` and bound it into `prototypes/BackroomsPortalPlayground.gd`; the schema-1 CropRegistry remains the source of truth. Batch growth snapshots and restores the whole registry if any crop tick fails.
+- Added `tests/crop_plot_controller_integration_test.gd` for planting, atomic rollback, batch growth, active-world save/reload, watering, maturity and harvest.
+- Run #458 targeted the pre-fix head and was cancelled; only Run #459 is the exact-head full pass. The test-only line-snap setup was corrected in commit `8f7af26`.
+- No local Godot executable; GUI/GPU/iPhone hardware tests are not claimed.
+- Remaining P1 work: visible crop plots and proximity interaction; formal `scripts/world.gd` world-session controller; persist complete generated chunk state across unload/reload; asynchronous streaming.
+- Next: create a scene-backed crop interaction layer and chunk lifecycle save/restore tests, without claiming the production controller exists until implemented.
