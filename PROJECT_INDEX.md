@@ -445,3 +445,28 @@
 - No local Godot executable was available; GUI/GPU/iPhone device QA is not claimed.
 - Limits: CropPlotController is now bound to the active playground, but crop meshes/proximity interaction are not implemented. Formal `scripts/world.gd`, full generated chunk-scene persistence and asynchronous streaming remain outstanding.
 - Next: build visible plot placement/interactions and then integrate crop/mineral registry state with chunk unload/reload in the formal world-session controller.
+
+
+## 2026-10-28 Run 34 — Salvage Exchange + scene-backed crop plots (feature merged)
+
+- Start-of-run reconciliation: main was `56a3ba086a802c601f30c2add4bc140aadc26ff2`; PR #100/#101 were merged and open-PR search was empty. Run 34 candidate details and its historical pending status were recorded in Notion, then reconciled against GitHub after the exact run completed.
+- New game: `daily_games/KROLL_Salvage_Exchange/`, a deterministic four-commodity trading game with 5% rounded-up fees, cargo capacity 10, eight-day contract and net-worth target 150. Godot 4.3+, no external assets/add-ons.
+- Existing-system change: added `systems/CropPlotVisual.tscn` and `systems/CropPlotVisual.gd`; four stable-ID surface crop plots are bound to the active `BackroomsPortalPlayground`. Press E within 3.25 m to plant, water, advance one bounded growth interval or harvest. The Backrooms boundary blocks crop mutation. CropRegistry remains authoritative; schema 1 and the save envelope are unchanged. Save/load refreshes plot visuals.
+- Failure correction: Runs #467/#469/#474 exposed null-mesh errors during headless teardown. Moving meshes into serialized `CropPlotVisual.tscn` fixed the issue. Run #478 was cancelled and is not final evidence.
+- PR #102 merged as `b6fcdc039ea78cff478ef7f2415a3a2d6d410198`. Exact-head Run #479 (40715313513) passed: 139/139 total steps (6 setup, 130 validation, 3 cleanup), zero failures/skips. Active-world playground step 23, crop visual interaction step 133, and Salvage Exchange steps 134–136 passed. No local GUI/GPU/iPhone hardware pass is claimed.
+- Independent Notion records: [Run 34 daily record](https://app.notion.com/p/407bc6a809d7815993d0e43e6886da18), [Salvage Exchange](https://app.notion.com/p/407bc6a809d7810f843cc10e64d29357), [CropPlotVisual](https://app.notion.com/p/407bc6a809d781fe8424fbde26512805).
+
+## 2026-10-28 Run 35 — Cargo Crane + touch-safe crop interaction (feature merged)
+
+- New game: `daily_games/KROLL_Cargo_Crane/`, deterministic stacking arcade game. Move the crane hook and drop six containers; overlap and center-drift checks determine success. Keyboard and on-screen mouse/touch controls, restart and next manifest; Godot 4.3+, no external assets/add-ons.
+- Existing-system change: added `HUD/CropInteractButton` to `BackroomsPortalPlayground`, preserving keyboard E while enabling tap interaction for nearby plots. The button is disabled inside Backrooms and re-enabled on the surface. Plot status text advertises both input paths.
+- Integration coverage: `tests/crop_plot_visual_integration_test.gd` now checks touch button creation, touch-triggered nearest-plot planting, Backrooms safety and re-enabling on the surface.
+- PR #103 merged as `8d74ef8b3ae96be94fa930d48ee69402070e73d1`; candidate HEAD `02858cff9d6dacd2dd92184ca544cbcaefdda073`. Exact-head Godot 4.3 Run #481 (40717496360) passed: 142/142 total steps (6 setup, 133 validation, 3 cleanup), zero failures/skips. Crop visual integration step 133 and Cargo Crane import/rules/runtime steps 137–139 passed. No local GUI/GPU/iPhone hardware pass is claimed.
+- Independent Notion records: [Run 35 daily record](https://app.notion.com/p/407bc6a809d7819fb6e8d39523270468), [Cargo Crane](https://app.notion.com/p/407bc6a809d78119b627e0a0525545df), [CropPlot Touch Interaction](https://app.notion.com/p/407bc6a809d78198808ff79cfd661dd0).
+
+## Current remaining production work
+
+- Formal `scripts/world.gd` world-session controller is still absent; the crop visuals and interaction are integrated into the Backrooms Portal Playground prototype, not a production world controller.
+- Full generated chunk-scene state persistence across chunk unload/reload remains incomplete.
+- Asynchronous chunk streaming remains incomplete.
+- Local interactive GUI, GPU performance and iPhone hardware QA are not claimed.
