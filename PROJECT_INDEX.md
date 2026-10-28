@@ -380,3 +380,18 @@
 - Latest main after feature merge was verified at 1bcc210d0ceb16fc6cbd04ebbd95a506c9325761. The documentation closeout is handled separately and must pass its own exact-head CI before merge.
 - Limitations: no local Godot executable, GUI/GPU/iPhone hardware test is claimed; production M1.3 world controller remains absent; crop persistence and vein-stock persistence are not integrated into the active world save.
 - Next engineering priority: connect the shared inventory/mining/save lifecycle to a production world-session controller and extend the end-to-end test to cover vein/chunk state persistence and restoration.
+
+
+## Run 29 — Memory Matrix and active-world mineral vein persistence (2026-10-28)
+
+- **Current verified main:** `23b531319a5bed8c215c4292ad2dc30e9e98fcfa` (PR #92 merge commit). PR #92 is merged; open PR search was empty at closeout.
+- **New game:** `daily_games/KROLL_Memory_Matrix/` — deterministic nine-tile sequence-memory game, six rounds with sequence lengths 3–8, mouse/touch and keys 1–9, three mistakes allowed, R to restart. Import via `daily_games/KROLL_Memory_Matrix/project.godot` in Godot 4.3+. No external assets/add-ons.
+- **Game tests:** `tests/rules_test.gd` covers deterministic seeds, legal tile range, input lock, invalid input non-mutation, replay, round progression, win/loss lock. `tests/game_smoke_test.gd` checks nine controls, sequence playback and first correct input.
+- **Existing-system integration:** `MineralVeinRegistry` is now owned by the active `BackroomsPortalPlayground`; `serialize_world_state()` stores it under `mineral_veins`, and world-load validates the registry payload before changing inventory/player state. Stable-ID records for unloaded chunks survive save/load and apply when a matching node registers.
+- **Backward compatibility:** old schema-v2 world saves without `mineral_veins` remain accepted and retain the current registry snapshot. Invalid mineral IDs are rejected before partial world mutation. Registry outer schema accepts finite integral JSON numeric value 1, including JSON-decoded floats.
+- **End-to-end test:** `tests/world_inventory_mining_lifecycle_test.gd` now covers actual mining through `SurvivalWorldBridge`, immediate weight, real save/load, live vein stock restore, unload, fresh-world reload, stable-ID re-registration, legacy saves and atomic rejection.
+- **PR #92:** https://github.com/qaqp980520-prog/2126-Survival/pull/92. Feature merge commit `23b531319a5bed8c215c4292ad2dc30e9e98fcfa`.
+- **Exact-head CI:** Run #433, https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40649646947 — 118/118 job steps succeeded, zero failed. Steps 29 (registry JSON round-trip), 87 (active-world save roundtrip), 112 (world mining/vein integration), 113–115 (Memory Matrix import/rules/runtime) all passed.
+- **Audit note:** commit `55a0efcd278f63d2b4d6768e01e09bed5109cb34` added the JSON round-trip regression on main before the feature PR merged; this was recorded in Run 29 Notion notes. The PR's exact merge-candidate CI ran the test together with the schema fix before merge. Run #426's typed-path parse failure and Run #432's stale success-marker mismatch were corrected before Run #433 passed.
+- **Limitations:** no local Godot executable, local GUI/GPU or iPhone device test is claimed. Formal M1.3 world controller is still absent; crop persistence and complete generated chunk scene state are not yet integrated. Vein records persist, not the entire chunk scene.
+- **Next:** build the production world-session controller, wire the registry to actual chunk load/unload events, and add crop plus chunk-state persistence tests.
