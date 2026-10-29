@@ -48,8 +48,8 @@ func _initialize() -> void:
     assert(Rules.is_revealed(ping["state"], 2, 0), "Ping reveals cells at Manhattan distance two")
     assert(not Rules.is_revealed(ping["state"], 3, 0), "Ping does not reveal beyond its radius")
 
-    var state: Dictionary = Rules.new_game(11)
-    var moved := Rules.move(state, 1, 0)
+    var collision_state: Dictionary = Rules.new_game(11)
+    var moved := Rules.move(collision_state, 1, 0)
     assert(bool(moved["ok"]) and int(moved["state"]["x"]) == 1)
     var oxygen_before: int = int(moved["state"]["oxygen"])
     var blocked := Rules.move(moved["state"], 0, 1)
@@ -57,9 +57,9 @@ func _initialize() -> void:
     assert(int(blocked["state"]["x"]) == 1 and int(blocked["state"]["y"]) == 0, "Rock must block movement")
     assert(int(blocked["state"]["oxygen"]) == oxygen_before - 1, "Attempting an unknown rock still costs oxygen")
     assert(Rules.is_revealed(blocked["state"], 1, 1), "Collision reveals the rock")
-    var invalid_move := Rules.move(state, 1, 1)
-    assert(not bool(invalid_move["ok"]) and invalid_move["state"] == state, "Diagonal movement must not mutate state")
-    var low_battery: Dictionary = state.duplicate(true)
+    var invalid_move := Rules.move(collision_state, 1, 1)
+    assert(not bool(invalid_move["ok"]) and invalid_move["state"] == collision_state, "Diagonal movement must not mutate state")
+    var low_battery: Dictionary = collision_state.duplicate(true)
     low_battery["battery"] = 1
     var rejected_ping := Rules.ping(low_battery)
     assert(not bool(rejected_ping["ok"]) and rejected_ping["state"] == low_battery, "Insufficient battery must be a no-op")
