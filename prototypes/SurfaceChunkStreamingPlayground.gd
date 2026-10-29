@@ -184,10 +184,21 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 		_world_object_action_message = "No salvage crate within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
-	var ok: bool = bool(nearest.call("interact"))
-	_world_object_action_message = "Crate opened; %d salvage units remain." % int(nearest.get("loot_remaining")) if ok else "Crate is empty."
+	var result: Dictionary = nearest.call("interact_with_inventory", inventory_bridge)
+	var ok: bool = bool(result.get("ok", false))
+	var reason: String = str(result.get("reason", "unknown"))
+	if ok:
+		_world_object_action_message = "Recovered 1 iron ore; %d salvage units remain." % int(result.get("remaining", 0))
+	elif reason == "inventory_rejected":
+		_world_object_action_message = "Inventory cannot accept iron ore; crate unchanged."
+	elif reason == "empty":
+		_world_object_action_message = "Crate is empty."
+	else:
+		_world_object_action_message = "Crate interaction blocked: %s." % reason
+	result["action"] = "interacted" if ok else reason
+	result["message"] = _world_object_action_message
 	_refresh_hud()
-	return {"ok": ok, "action": "interacted" if ok else "empty", "message": _world_object_action_message}
+	return result
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()
