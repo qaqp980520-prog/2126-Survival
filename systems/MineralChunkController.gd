@@ -35,7 +35,7 @@ func bind_registry(candidate: Node) -> bool:
 func bind_crop_controller(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "harvest_crop", "remove_crop"]:
+	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "advance_crops_to_time", "harvest_crop", "remove_crop", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and crop_controller != candidate:
@@ -62,10 +62,24 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	if not crops.is_empty() and crop_controller == null:
 		return false
 
+	var existing_crop_ids: Array[String] = []
+	var crop_snapshot: Dictionary = {}
 	for local_path in crops.keys():
 		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		if not _valid_crop_stable_id(stable_id):
 			return false
+		var existing_crop: Dictionary = crop_controller.call("get_crop", stable_id)
+		if not existing_crop.is_empty():
+			existing_crop_ids.append(stable_id)
+	if not existing_crop_ids.is_empty():
+		crop_snapshot = crop_controller.call("to_save_dict")
+		if not crop_snapshot.has("schema_version") or not crop_snapshot.has("crops"):
+			return false
+		var catch_up: Dictionary = crop_controller.call("advance_crops_to_time", existing_crop_ids, now_unix)
+		if not bool(catch_up.get("ok", false)):
+			return false
+	for local_path in crops.keys():
+		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		var plot: Node = crops[local_path]
 		plot.call("configure", crop_controller, stable_id, str(plot.get("crop_id")), int(plot.get("plot_index")))
 
@@ -74,6 +88,14 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		# A failed registration must not consume the caller's scene. Detach it so the
 		# generator can inspect, repair, or retry the same root without reconstructing it.
 		remove_child(chunk_root)
+		if not crop_snapshot.is_empty():
+			var crop_rollback_ok: bool = bool(crop_controller.call("restore_save_dict", crop_snapshot))
+			if not crop_rollback_ok:
+				push_error("Failed to roll back crop catch-up after mineral chunk registration failed.")
+			for plot_value in crops.values():
+				var plot_node: Node = plot_value as Node
+				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+					plot_node.call("refresh")
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
