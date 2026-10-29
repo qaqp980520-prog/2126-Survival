@@ -21,6 +21,13 @@ func _run() -> void:
 	var origin: Node3D = chunk_controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
 	var crate: Node = origin.get_node_or_null("SalvageCrate") if origin != null else null
 	_expect(crate != null and crate.has_method("interact_with_inventory"), "active chunk creates a transactional salvage crate")
+	var initial_crate_state: Dictionary = crate.call("get_world_object_state") if crate != null else {}
+	_expect(str(initial_crate_state.get("loot_item_id", "")) == "iron_ore", "origin chunk uses its deterministic iron-ore loot identity")
+	var probe_chunk: Node3D = world.call("_make_chunk", Vector2i(1, 0)) as Node3D
+	var probe_crate: Node = probe_chunk.get_node_or_null("SalvageCrate") if probe_chunk != null else null
+	_expect(probe_crate != null and str(probe_crate.get("loot_item_id")) == "copper_ore", "adjacent chunk factory deterministically selects copper ore")
+	if probe_chunk != null:
+		probe_chunk.free()
 	if crate == null:
 		_finish(world)
 		return
@@ -31,6 +38,7 @@ func _run() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var first: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first.get("ok", false)) and str(first.get("action", "")) == "interacted", "nearby crate grants loot through the world interaction")
+	_expect(str(first.get("item_id", "")) == "iron_ore", "inventory receipt reports the persisted loot item identity")
 	_expect(_inventory_count(bridge, "iron_ore") == before_count + 1, "one iron ore is added to inventory")
 	_expect(bool(crate.get("opened")) and int(crate.get("loot_remaining")) == 1, "crate state changes only after successful inventory grant")
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), before_weight + 3.0), "inventory weight updates with the collected ore")

@@ -3,10 +3,13 @@ class_name WorldObjectStatefulProp
 
 ## Small interactable prop used to exercise the stable-ID world-object lifecycle.
 ## The registry stores only the primitive state returned by get_world_object_state().
+const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const MAX_LOOT: int = 2
+const DEFAULT_LOOT_ITEM_ID: String = "iron_ore"
 
 var opened: bool = false
 var loot_remaining: int = MAX_LOOT
+var loot_item_id: String = DEFAULT_LOOT_ITEM_ID
 var _body_mesh: MeshInstance3D
 var _lid_mesh: MeshInstance3D
 
@@ -18,11 +21,17 @@ func _ready() -> void:
 func get_world_object_state() -> Dictionary:
 	return {
 		"opened": opened,
-		"loot_remaining": loot_remaining
+		"loot_remaining": loot_remaining,
+		"loot_item_id": loot_item_id
 	}
 
+
 func validate_world_object_state(state: Dictionary) -> bool:
-	if state.size() != 2 or not state.has("opened") or not state.has("loot_remaining"):
+	if not state.has("opened") or not state.has("loot_remaining"):
+		return false
+	if state.size() != 2 and state.size() != 3:
+		return false
+	if state.size() == 3 and not state.has("loot_item_id"):
 		return false
 	var opened_value: Variant = state.get("opened", null)
 	var loot_value: Variant = state.get("loot_remaining", null)
@@ -30,32 +39,49 @@ func validate_world_object_state(state: Dictionary) -> bool:
 		return false
 	if int(loot_value) < 0 or int(loot_value) > MAX_LOOT:
 		return false
-	# A never-opened crate cannot already have been marked open with its full contents.
+	# Older schema-1 records contain only opened/loot_remaining. Keep accepting them.
+	if state.has("loot_item_id"):
+		var item_value: Variant = state.get("loot_item_id", null)
+		if not (item_value is String) or not MineralCatalogScript.has_mineral(str(item_value)):
+			return false
 	return not (bool(opened_value) and int(loot_value) == MAX_LOOT)
+
 
 func apply_world_object_state(state: Dictionary) -> bool:
 	if not validate_world_object_state(state):
 		return false
 	var opened_value: bool = bool(state["opened"])
 	var loot_value: int = int(state["loot_remaining"])
+	var item_value: String = str(state.get("loot_item_id", loot_item_id))
+	if not MineralCatalogScript.has_mineral(item_value):
+		return false
 	opened = opened_value
-	loot_remaining = int(loot_value)
+	loot_remaining = loot_value
+	loot_item_id = item_value
 	_refresh_visuals()
 	return true
 
+
+func set_loot_item(item_id: String) -> bool:
+	if opened or loot_remaining != MAX_LOOT or not MineralCatalogScript.has_mineral(item_id):
+		return false
+	loot_item_id = item_id
+	return true
+
+
 func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 	if loot_remaining <= 0:
-		return {"ok": false, "reason": "empty", "remaining": 0}
+		return {"ok": false, "reason": "empty", "item_id": loot_item_id, "remaining": 0}
 	if inventory_bridge == null or not is_instance_valid(inventory_bridge):
-		return {"ok": false, "reason": "inventory_unavailable", "remaining": loot_remaining}
+		return {"ok": false, "reason": "inventory_unavailable", "item_id": loot_item_id, "remaining": loot_remaining}
 	for method_name in ["collect_world_item", "serialize_inventory", "restore_inventory"]:
 		if not inventory_bridge.has_method(method_name):
-			return {"ok": false, "reason": "inventory_contract", "remaining": loot_remaining}
+			return {"ok": false, "reason": "inventory_contract", "item_id": loot_item_id, "remaining": loot_remaining}
 	var inventory_snapshot: Variant = inventory_bridge.call("serialize_inventory")
 	if not (inventory_snapshot is Dictionary) or inventory_snapshot.is_empty():
-		return {"ok": false, "reason": "inventory_snapshot_invalid", "remaining": loot_remaining}
-	if not bool(inventory_bridge.call("collect_world_item", "iron_ore", 1)):
-		return {"ok": false, "reason": "inventory_rejected", "remaining": loot_remaining}
+		return {"ok": false, "reason": "inventory_snapshot_invalid", "item_id": loot_item_id, "remaining": loot_remaining}
+	if not bool(inventory_bridge.call("collect_world_item", loot_item_id, 1)):
+		return {"ok": false, "reason": "inventory_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
 	var next_state: Dictionary = get_world_object_state()
 	next_state["opened"] = true
 	next_state["loot_remaining"] = loot_remaining - 1
@@ -63,14 +89,15 @@ func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 		var rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
 		if not rollback_ok:
 			push_error("Salvage crate failed to roll back inventory after rejecting its state transition.")
-		return {"ok": false, "reason": "state_rejected", "remaining": loot_remaining}
+		return {"ok": false, "reason": "state_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
 	return {
 		"ok": true,
 		"reason": "collected",
-		"item_id": "iron_ore",
+		"item_id": loot_item_id,
 		"amount": 1,
 		"remaining": loot_remaining
 	}
+
 
 func interact() -> bool:
 	if loot_remaining <= 0:
