@@ -282,7 +282,7 @@ func get_world_session_status() -> Dictionary:
 	var object_count: int = object_state_registry.get_saved_ids().size() if object_state_registry != null and object_state_registry.has_method("get_saved_ids") else 0
 	var position_value: Array = [player.global_position.x, player.global_position.y, player.global_position.z] if player != null else []
 	return {
-		"ready": _world_session_initialized and registry != null and chunk_controller != null and director != null and crop_registry != null and crop_controller != null,
+		"ready": _world_session_initialized and registry != null and chunk_controller != null and director != null and crop_registry != null and crop_controller != null and object_state_registry != null,
 		"active_chunk_ids": active_ids,
 		"saved_vein_count": vein_count,
 		"saved_crop_count": crop_count,
