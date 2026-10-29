@@ -1,72 +1,26 @@
-extends Node3D
+extends "res://scripts/world.gd"
 
-const RegistryScript = preload("res://systems/MineralVeinRegistry.gd")
-const ControllerScript = preload("res://systems/MineralChunkController.gd")
-const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
-const InventoryBridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
-const CropRegistryScript = preload("res://systems/CropRegistry.gd")
-const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
 
-var registry: Node
-var chunk_controller: Node3D
-var director: Node
-var inventory_bridge: Node
-var crop_registry: Node
-var crop_controller: Node
-var player: CharacterBody3D
 var camera: Camera3D
 var hud: Label
-var _stream_clock_unix: int = -1
-var _last_grid: Vector2i = Vector2i(999999, 999999)
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
 var _jump_was_down: bool = false
-var _last_restore_report: Dictionary = {}
 var _crop_action_message: String = "E: interact with a nearby crop plot."
 
 func _ready() -> void:
-	_build_streaming_stack()
+	if not initialize_world_session():
+		return
 	_build_environment()
 	_build_player()
 	_build_hud()
 	_sync_streaming(int(Time.get_unix_time_from_system()))
-
-func _build_streaming_stack() -> void:
-	registry = RegistryScript.new()
-	registry.name = "MineralVeinRegistry"
-	add_child(registry)
-	crop_registry = CropRegistryScript.new()
-	crop_registry.name = "CropRegistry"
-	add_child(crop_registry)
-	crop_controller = CropPlotControllerScript.new()
-	crop_controller.name = "CropPlotController"
-	add_child(crop_controller)
-	if not crop_controller.bind_registry(crop_registry):
-		push_error("Surface playground could not bind the crop registry.")
-	inventory_bridge = InventoryBridgeScript.new()
-	inventory_bridge.name = "SurvivalWorldBridge"
-	add_child(inventory_bridge)
-	chunk_controller = ControllerScript.new()
-	chunk_controller.name = "MineralChunkController"
-	add_child(chunk_controller)
-	if not chunk_controller.bind_registry(registry):
-		push_error("Surface playground could not bind the mineral registry.")
-	if not chunk_controller.bind_crop_controller(crop_controller):
-		push_error("Surface playground could not bind the crop controller.")
-	director = DirectorScript.new()
-	director.name = "MineralGridStreamingDirector"
-	director.chunk_size_x = CHUNK_SIZE
-	director.chunk_size_z = CHUNK_SIZE
-	director.load_radius = 1
-	add_child(director)
-	if not director.bind_controller(chunk_controller) or not director.bind_chunk_factory(Callable(self, "_make_chunk")):
-		push_error("Surface playground could not bind the streaming director.")
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -209,132 +163,6 @@ func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	_crop_action_message = str(result.get("message", "Crop action completed."))
 	_refresh_hud()
 	return result
-
-func _sync_streaming(now_unix: int = -1) -> bool:
-	if player == null or director == null:
-		return false
-	_stream_clock_unix = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
-	var success: bool = director.sync_to_world_position(player.global_position, _stream_clock_unix)
-	if success:
-		_last_grid = director.get_grid_coordinate(player.global_position)
-		_refresh_hud()
-	return success
-
-func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
-	if player == null:
-		return false
-	player.global_position = position
-	return _sync_streaming(now_unix)
-
-func serialize_stream_state() -> Dictionary:
-	if chunk_controller == null or player == null:
-		return {}
-	return {
-		"schema_version": 1,
-		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z],
-		"minerals": chunk_controller.to_save_dict(),
-		"crops": crop_registry.to_save_dict() if crop_registry != null else {}
-	}
-
-func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
-	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
-	if player == null or chunk_controller == null or director == null:
-		_set_restore_report(false, "validation", "Player, controller, or director is unavailable.", true)
-		return false
-	var schema_value: Variant = payload.get("schema_version", null)
-	var position_value: Variant = payload.get("player_position", null)
-	var minerals_value: Variant = payload.get("minerals", null)
-	var has_crops: bool = payload.has("crops")
-	var crops_value: Variant = payload.get("crops", null)
-	if not (schema_value is int) or int(schema_value) != 1:
-		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
-		return false
-	if not (position_value is Array) or position_value.size() != 3:
-		_set_restore_report(false, "validation", "Player position must contain three components.", true)
-		return false
-	if not (minerals_value is Dictionary):
-		_set_restore_report(false, "validation", "Mineral save payload must be a dictionary.", true)
-		return false
-	if has_crops and (crop_registry == null or not (crops_value is Dictionary) or not bool(crop_registry.validate_save_dict(crops_value))):
-		_set_restore_report(false, "crop_validation", "Crop save payload is invalid; no world state was changed.", true)
-		return false
-	for component in position_value:
-		if not (component is int or component is float) or not is_finite(float(component)):
-			_set_restore_report(false, "validation", "Player position contains a non-finite component.", true)
-			return false
-
-	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
-	var previous_position: Vector3 = player.global_position
-	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
-	var previous_crops: Dictionary = crop_registry.to_save_dict() if crop_registry != null else {}
-	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins"):
-		_set_restore_report(false, "snapshot", "Could not snapshot the current mineral state before restore.", true)
-		return false
-	if not chunk_controller.restore_save_dict(minerals_value, now):
-		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
-		return false
-	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
-		var minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
-		_set_restore_report(false, "crop_restore", "Crop registry rejected the candidate save.", minerals_rolled_back)
-		return false
-	if chunk_controller.has_method("refresh_crop_plots"):
-		chunk_controller.refresh_crop_plots()
-
-	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
-	_last_grid = Vector2i(999999, 999999)
-	if _sync_streaming(now):
-		if chunk_controller.has_method("refresh_crop_plots"):
-			chunk_controller.refresh_crop_plots()
-		_set_restore_report(true, "complete", "", true, {
-			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
-		})
-		return true
-
-	# A failed target stream must not leave the candidate mineral payload applied.
-	# Reconcile the old chunk window first, then restore the exact pre-attempt mineral snapshot.
-	var target_sync_report: Dictionary = director.get_last_sync_report()
-	player.global_position = previous_position
-	_last_grid = Vector2i(999999, 999999)
-	var recovery_success: bool = false
-	if director.has_method("recover_to_world_position"):
-		recovery_success = bool(director.recover_to_world_position(previous_position, now))
-	else:
-		recovery_success = _sync_streaming(now)
-	var recovery_report: Dictionary = director.get_last_sync_report()
-	if recovery_success:
-		_last_grid = director.get_grid_coordinate(previous_position)
-
-	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
-	var crops_restored: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
-	if chunk_controller.has_method("refresh_crop_plots"):
-		chunk_controller.refresh_crop_plots()
-	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
-	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
-	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and ids_consistent and position_restored
-	_refresh_hud()
-	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
-		"target_sync_report": target_sync_report,
-		"recovery_report": recovery_report,
-		"recovery_success": recovery_success,
-		"minerals_restored": minerals_restored,
-		"ids_consistent": ids_consistent,
-		"position_restored": position_restored
-	})
-	if not rollback_complete:
-		push_warning("Surface stream restore rollback was incomplete; inspect get_last_restore_report().")
-	return false
-
-func get_last_restore_report() -> Dictionary:
-	return _last_restore_report.duplicate(true)
-
-func _set_restore_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
-	_last_restore_report = {
-		"success": success,
-		"phase": phase,
-		"message": message,
-		"rollback_complete": rollback_complete,
-		"details": details.duplicate(true)
-	}
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()

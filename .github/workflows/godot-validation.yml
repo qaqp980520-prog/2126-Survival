@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'systems/**'
+      - 'scripts/**'
       - 'tests/**'
       - 'daily_games/**'
       - 'prototypes/**'
@@ -1185,3 +1186,31 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop chunk offline growth integration test passed."
+
+      - name: Import and parse KROLL Echo Survey
+        run: godot --headless --path daily_games/KROLL_Echo_Survey --editor --quit
+      - name: Run KROLL Echo Survey rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Echo_Survey --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Echo Survey rules tests passed."
+      - name: Run KROLL Echo Survey runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Echo_Survey --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Echo Survey runtime smoke test passed."
+      - name: Run world-session controller integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/world_session_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World session controller integration tests passed."
+

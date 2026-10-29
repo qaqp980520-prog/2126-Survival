@@ -77,8 +77,11 @@ func _run_tests() -> void:
 	var out_of_reach: Dictionary = playground.call("_interact_nearest_crop_plot", now + 121)
 	_check(str(out_of_reach.get("action", "")) == "out_of_reach", "Nearby interaction rejects crop plots outside the reach radius")
 	playground.player.global_position = original_position
+	_check(bool(playground.inventory_bridge.collect_world_item("iron_ore", 2)), "World bridge accepts registered ore before saving")
+	_check(is_equal_approx(playground.inventory_bridge.get_weight_kg(), 6.0), "Two iron ore weigh six kilograms before save")
 	var stable_id: String = Adapter.make_stable_id("surface/chunk_0_0", "Chunk_0_0/Ore_0_0")
 	var save_payload: Dictionary = playground.serialize_stream_state()
+	_check(save_payload.has("inventory"), "Stream save includes the optional inventory payload")
 	var mineral_payload: Dictionary = save_payload.get("minerals", {})
 	var saved_veins: Dictionary = mineral_payload.get("veins", {})
 	_check(saved_veins.has(stable_id), "Save must include the loaded vein")
@@ -113,6 +116,7 @@ func _run_tests() -> void:
 		return
 	_check(int(restored_ore.get("remaining_units")) == 2, "Stable ID must restore saved vein stock after streaming away and back")
 	_check(playground.player.global_position.is_equal_approx(original_position), "Restore must return the player to the exact saved position")
+	_check(is_equal_approx(playground.inventory_bridge.get_weight_kg(), 6.0), "Valid stream restore recovers the saved inventory weight")
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 1, "Crop registry restores the saved growth stage")
 	var restored_crop: Node = restored_root.get_node_or_null("CropPlot_0") if restored_root != null else null
 	_check(restored_crop != null and str(restored_crop.get("stable_id")) == crop_stable_id, "Reloaded chunk reconstructs the same stable crop ID")
@@ -151,6 +155,11 @@ func _run_tests() -> void:
 	restored_ore.set("last_regen_unix", now)
 	var target_restore: Dictionary = save_payload.duplicate(true)
 	target_restore["player_position"] = [21.0, 2.0, 1.0]
+	var target_inventory: Dictionary = target_restore.get("inventory", {}).duplicate(true)
+	var target_counts: Dictionary = target_inventory.get("inventory", {}).duplicate(true)
+	target_counts["iron_ore"] = 5
+	target_inventory["inventory"] = target_counts
+	target_restore["inventory"] = target_inventory
 	_fail_factory_coordinate = Vector2i(3, -1)
 	_check(bool(playground.director.bind_chunk_factory(Callable(self, "_make_fault_injected_chunk"))), "Fault-injected factory should bind")
 	var failed_restore_ok: bool = bool(playground.restore_stream_state(target_restore, now))
@@ -164,6 +173,8 @@ func _run_tests() -> void:
 	_check(playground.registry.get_saved_ids() == before_saved_ids, "Failed restore must restore the prior saved vein ID set")
 	_check(int(restored_ore.get("remaining_units")) == 5, "Failed restore must restore the pre-attempt live mineral stock")
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 1, "Failed stream restore must roll back crop registry state")
+	_check(is_equal_approx(playground.inventory_bridge.get_weight_kg(), 6.0), "Failed target streaming must roll back the candidate inventory weight")
+	_check(int(playground.inventory_bridge.serialize_inventory().get("inventory", {}).get("iron_ore", 0)) == 2, "Failed target streaming must restore the previous inventory counts")
 	var restore_details: Dictionary = restore_report.get("details", {})
 	var target_report: Dictionary = restore_details.get("target_sync_report", {})
 	_check(str(target_report.get("phase", "")) == "load_factory", "Diagnostic report should retain the original target-load failure")
