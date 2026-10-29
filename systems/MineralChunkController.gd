@@ -384,7 +384,7 @@ func _restore_world_object_nodes(chunk_id: String, objects: Dictionary, registry
 		if saved_record.is_empty():
 			defaults[stable_id] = current_state.duplicate(true)
 			continue
-		if str(saved_record.get("chunk_id", "")) != chunk_id or not (saved_record.get("state", {}) is Dictionary) or not bool(node.call("apply_world_object_state", saved_record.get("state", {}))):
+		if str(saved_record.get("chunk_id", "")) != chunk_id or not (saved_record.get("state", {}) is Dictionary) or (node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", saved_record.get("state", {})))) or not bool(node.call("apply_world_object_state", saved_record.get("state", {}))):
 			_rollback_world_object_restore(initial_states, registry_snapshot)
 			return false
 	for stable_id in defaults.keys():
