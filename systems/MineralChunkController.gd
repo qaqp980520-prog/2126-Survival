@@ -35,7 +35,7 @@ func bind_registry(candidate: Node) -> bool:
 func bind_crop_controller(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "advance_crops_to_time", "harvest_crop", "remove_crop"]:
+	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "advance_crops_to_time", "harvest_crop", "remove_crop", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and crop_controller != candidate:
