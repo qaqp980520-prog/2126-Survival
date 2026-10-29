@@ -31,6 +31,8 @@ func validate_world_object_state(state: Dictionary) -> bool:
 		return false
 	if state.size() != 2 and state.size() != 3:
 		return false
+	if state.size() == 3 and not state.has("loot_item_id"):
+		return false
 	var opened_value: Variant = state.get("opened", null)
 	var loot_value: Variant = state.get("loot_remaining", null)
 	if not (opened_value is bool) or not (loot_value is int):
