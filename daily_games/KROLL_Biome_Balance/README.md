@@ -36,3 +36,8 @@ Open daily_games/KROLL_Biome_Balance/project.godot with Godot 4.3 or later. No e
 - tests/game_smoke_test.gd: scene controls, all three complete six-turn runs, restart and next-layout behavior.
 
 This is a discrete ecosystem puzzle, not a scientific population model or a real-world conservation simulator.
+
+
+## Exact-head CI
+
+The repository's canonical Godot 4.3 workflow imports this project, runs the deterministic rules tests, runs the scene smoke test, and then executes the salvage-loot identity regression. Merge is gated on the complete workflow result for the current pull-request head.
