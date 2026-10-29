@@ -1,0 +1,64 @@
+extends SceneTree
+
+const RegistryScript = preload("res://systems/CropRegistry.gd")
+const CropControllerScript = preload("res://systems/CropPlotController.gd")
+const ChunkControllerScript = preload("res://systems/MineralChunkController.gd")
+const MineralRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const CropPlotScene = preload("res://systems/CropPlotVisual.tscn")
+
+func _initialize() -> void:
+    call_deferred("_run")
+
+func _run() -> void:
+    var now: int = int(Time.get_unix_time_from_system())
+    var registry: Node = RegistryScript.new()
+    var crop_controller: Node = CropControllerScript.new()
+    var mineral_registry: Node = MineralRegistryScript.new()
+    var chunk_controller: Node3D = ChunkControllerScript.new()
+    root.add_child(registry)
+    root.add_child(crop_controller)
+    root.add_child(mineral_registry)
+    root.add_child(chunk_controller)
+    await process_frame
+    assert(crop_controller.bind_registry(registry))
+    assert(chunk_controller.bind_registry(mineral_registry))
+    assert(chunk_controller.bind_crop_controller(crop_controller))
+
+    var chunk_id := "surface/offline-growth-test"
+    var first_root := _new_chunk()
+    assert(chunk_controller.load_chunk(chunk_id, first_root, now))
+    var stable_id := chunk_id + "/crop/ChunkRoot/CropPlot_0"
+    assert(crop_controller.plant_crop(stable_id, "wheat", 60.0, now))
+    assert(crop_controller.advance_crop(stable_id, 120.0, now + 120))
+    var before_unload: Dictionary = crop_controller.get_crop(stable_id)
+    assert(int(before_unload.get("growth_stage", -1)) == 1)
+    assert(is_equal_approx(float(before_unload.get("moisture", -1.0)), 30.0))
+    assert(chunk_controller.unload_chunk(chunk_id, now + 120))
+
+    var reloaded_root := _new_chunk()
+    assert(chunk_controller.load_chunk(chunk_id, reloaded_root, now + 240))
+    var after_reload: Dictionary = crop_controller.get_crop(stable_id)
+    assert(int(after_reload.get("growth_stage", -1)) == 2, "Offline interval should advance the crop by one additional stage")
+    assert(is_equal_approx(float(after_reload.get("moisture", -1.0)), 0.0), "The remaining moisture is consumed during offline growth")
+    assert(int(after_reload.get("last_updated_unix", 0)) == now + 240, "Reload records the catch-up target timestamp")
+    var reloaded_plot: Node = reloaded_root.get_node_or_null("CropPlot_0")
+    assert(reloaded_plot != null and str(reloaded_plot.get("status_text", "")).contains("2/4"), "Reloaded visual reflects offline growth")
+
+    chunk_controller.unload_chunk(chunk_id, now + 240)
+    chunk_controller.queue_free()
+    crop_controller.queue_free()
+    mineral_registry.queue_free()
+    registry.queue_free()
+    await process_frame
+    print("Crop chunk offline growth integration test passed.")
+    quit(0)
+
+func _new_chunk() -> Node3D:
+    var chunk := Node3D.new()
+    chunk.name = "ChunkRoot"
+    var plot: Node3D = CropPlotScene.instantiate()
+    plot.name = "CropPlot_0"
+    plot.crop_id = "wheat"
+    plot.plot_index = 1
+    chunk.add_child(plot)
+    return chunk
