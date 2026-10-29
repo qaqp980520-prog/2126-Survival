@@ -58,11 +58,12 @@ func _run() -> void:
 
 func _test_layout_reachability() -> void:
 	for seed_value in [1, 2, 3]:
-		var targets: Array[Vector2] = Rules.survivor_positions(seed_value)
+		var seed: int = int(seed_value)
+		var targets: Array[Vector2] = Rules.survivor_positions(seed)
 		targets.append(Rules.PAD_POSITION)
 		var current := Vector2(70.0, 250.0)
-		for target in targets:
-			assert(_grid_reachable(current, target, seed_value), "Seed %d must have a grid path to each survivor and the extraction pad" % seed_value)
+		for target: Vector2 in targets:
+			assert(_grid_reachable(current, target, seed), "Seed %d must have a grid path to each survivor and the extraction pad" % seed)
 			current = target
 
 func _grid_reachable(start: Vector2, goal: Vector2, seed_value: int) -> bool:
