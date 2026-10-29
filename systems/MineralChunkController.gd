@@ -171,7 +171,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 				object_state_registry.call("restore_save_dict", object_snapshot)
 				return false
 			var object_state: Variant = object_node.call("get_world_object_state")
-			if not (object_state is Dictionary) or not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
+			if not (object_state is Dictionary) or (object_node.has_method("validate_world_object_state") and not bool(object_node.call("validate_world_object_state", object_state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
 				object_state_registry.call("restore_save_dict", object_snapshot)
 				return false
 	if not veins.is_empty() and not bool(adapter.unload_chunk(chunk_id, now_unix)):
