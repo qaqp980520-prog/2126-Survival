@@ -100,6 +100,21 @@ func advance_growth(stable_id: String, elapsed_seconds: float, now_unix: int = -
 	_records[stable_id] = candidate
 	return true
 
+## Catch up a crop to a wall-clock timestamp when its streamed chunk is loaded again.
+## Moisture is capped at 100, so a single bounded day is enough to reach the dry steady state
+## even after a longer absence. The stored timestamp still advances to the requested time.
+func advance_to_time(stable_id: String, now_unix: int = -1) -> bool:
+	if not _records.has(stable_id):
+		return false
+	var target: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var last_updated: int = int(_records[stable_id].get("last_updated_unix", 1))
+	if target < last_updated:
+		return false
+	if target == last_updated:
+		return true
+	var elapsed: int = target - last_updated
+	return advance_growth(stable_id, minf(float(elapsed), MAX_ADVANCE_SECONDS), target)
+
 ## Harvest only a mature crop. The record is reset for a new cycle and harvest_count is retained.
 ## Returns a small receipt dictionary, or an empty dictionary if the crop is not harvestable.
 func harvest_crop(stable_id: String, now_unix: int = -1) -> Dictionary:
