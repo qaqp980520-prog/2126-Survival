@@ -121,7 +121,8 @@ static func display_tile(state: Dictionary, x: int, y: int) -> String:
     if not is_revealed(state, x, y):
         return "?"
     var tile: String = _tile_at(state, x, y)
-    if tile == "C" and bool(state.get("collected", {}).get(_key(x, y), false)):
+    var collected: Dictionary = state.get("collected", {})
+    if tile == "C" and bool(collected.get(_key(x, y), false)):
         return "✓"
     return tile
 
