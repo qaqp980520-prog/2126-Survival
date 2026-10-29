@@ -90,7 +90,8 @@ static func step(state: Dictionary, input_vector: Vector2, delta: float) -> Dict
 	var rescued: Array = next.get("rescued", []).duplicate()
 	var survivors: Array = next.get("survivor_positions", [])
 	for index in range(mini(rescued.size(), survivors.size())):
-		if not bool(rescued[index]) and position.distance_to(survivors[index]) <= RESCUE_RADIUS and velocity.length() <= SAFE_RESCUE_SPEED:
+		var survivor_position: Vector2 = survivors[index]
+		if not bool(rescued[index]) and position.distance_to(survivor_position) <= RESCUE_RADIUS and velocity.length() <= SAFE_RESCUE_SPEED:
 			rescued[index] = true
 	next["rescued"] = rescued
 	var all_rescued: bool = rescued.size() == 3 and bool(rescued[0]) and bool(rescued[1]) and bool(rescued[2])
