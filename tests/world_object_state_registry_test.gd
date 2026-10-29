@@ -39,6 +39,47 @@ func _run() -> void:
 	_expect(bool(registry.call("forget_object_state", "surface/chunk_0_0/crate_1")), "explicit forget removes a record")
 	_expect(registry.call("get_saved_ids").is_empty(), "registry is empty after explicit forget")
 
+	var budget_registry: Node = RegistryScript.new()
+	root.add_child(budget_registry)
+	await process_frame
+	var long_value: String = ""
+	for character_index in range(256):
+		long_value += "x"
+	var large_string_state: Dictionary = {}
+	for property_index in range(64):
+		large_string_state["p_%02d" % property_index] = long_value
+	for record_index in range(61):
+		_expect(bool(budget_registry.call("set_object_state", "budget/chunk/item_%d" % record_index, "budget/chunk", large_string_state)), "aggregate string budget accepts record %d" % record_index)
+	_expect(not bool(budget_registry.call("set_object_state", "budget/chunk/item_61", "budget/chunk", large_string_state)), "aggregate string-character budget rejects the next oversized record")
+	_expect(budget_registry.call("get_saved_ids").size() == 61, "rejected aggregate string payload creates no partial record")
+	_expect(bool(budget_registry.call("set_object_state", "budget/chunk/item_0", "budget/chunk", {"note": "ok"})), "replacing a record releases its prior aggregate budget")
+	_expect(bool(budget_registry.call("set_object_state", "budget/chunk/item_61", "budget/chunk", large_string_state)), "released aggregate budget can be reused")
+	var budget_save: Dictionary = budget_registry.call("to_save_dict")
+	var over_budget_save: Dictionary = budget_save.duplicate(true)
+	over_budget_save["objects"]["budget/chunk/item_62"] = {"chunk_id": "budget/chunk", "state": large_string_state.duplicate(true)}
+	var ids_before_overflow_restore: PackedStringArray = budget_registry.call("get_saved_ids")
+	_expect(not bool(budget_registry.call("validate_save_dict", over_budget_save)), "save validation rejects aggregate string payload overflow")
+	_expect(not bool(budget_registry.call("restore_save_dict", over_budget_save)), "restore rejects aggregate string payload overflow")
+	_expect(budget_registry.call("get_saved_ids") == ids_before_overflow_restore, "over-budget restore leaves all existing records unchanged")
+	_expect(bool(budget_registry.call("forget_object_state", "budget/chunk/item_1")), "forgetting a record releases aggregate string budget")
+	_expect(bool(budget_registry.call("set_object_state", "budget/chunk/item_62", "budget/chunk", large_string_state)), "released budget remains accurate after deletion")
+
+	var property_registry: Node = RegistryScript.new()
+	root.add_child(property_registry)
+	await process_frame
+	var numeric_state: Dictionary = {}
+	for property_index in range(64):
+		numeric_state["p_%02d" % property_index] = property_index
+	for record_index in range(1562):
+		if not bool(property_registry.call("set_object_state", "property/chunk/item_%d" % record_index, "property/chunk", numeric_state)):
+			_expect(false, "aggregate property budget accepts records up to the configured limit")
+			break
+	_expect(not bool(property_registry.call("set_object_state", "property/chunk/item_1562", "property/chunk", numeric_state)), "aggregate property-count budget rejects the next record")
+	_expect(property_registry.call("get_saved_ids").size() == 1562, "property-budget rejection leaves record count unchanged")
+
+	budget_registry.queue_free()
+	property_registry.queue_free()
+	await process_frame
 	registry.queue_free()
 	await process_frame
 	if failures.is_empty():
