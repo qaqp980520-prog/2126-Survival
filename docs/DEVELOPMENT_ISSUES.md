@@ -329,3 +329,18 @@ The older checklist and historical run notes above describe their respective sna
 - A previous smoke test had an incorrect expectation after seed 3; corrected in commit `c02aa304b3eeeed80bf2b97cfcfe97d365581a5c` and revalidated on the exact final candidate.
 - Save schema remains version 1. If an external inventory adapter mutates and then its compensation method also fails, the code reports the failure; it cannot guarantee external rollback in that case.
 - Follow-up: bind stable object-state persistence into every production interactable factory, persist full terrain and object deltas, integrate async chunk streaming, and conduct device QA.
+
+
+## Run 46 — 2026-10-30 — Beat Lab and salvage reentrancy guard
+
+**Feature PR:** [#126](https://github.com/qaqp980520-prog/2126-Survival/pull/126), merged as \`f9599478512416ffc64192550518989f620ca7e0\`. Exact tested candidate \`75357e463780d3ec1502aef5210ebb0af5a0afdc\`.
+
+- Added \`daily_games/KROLL_Beat_Lab/\`: deterministic 4-lane visual rhythm game, 100 BPM, 3 charts × 24 notes, keyboard/mouse/touch, rules and runtime smoke tests. Godot 4.3+, no external assets/audio/plugins.
+- Added a reentrancy guard to \`WorldObjectStatefulProp.interact_with_inventory()\`; nested inventory interactions return \`interaction_in_progress\`, and the legacy \`interact()\` path is blocked during an active inventory transaction.
+- Added \`tests/salvage_crate_reentrancy_test.gd\`, using a bridge that attempts nested interactions during \`collect_world_item()\`; verifies no duplicate grant and that later independent transactions still work.
+- Reconciled canonical CI coverage: the pre-Run-46 main workflow did not contain explicit Run 45 Rail Yard/rollback steps. Added explicit input checks, Rail Yard import/rules/runtime, salvage inventory rollback, Beat Lab import/rules/runtime, and reentrancy regression steps.
+- Canonical Godot 4.3 CI [Run #574](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40970079987): 183/183 steps successful, zero failed or skipped.
+- Focused Run 45 validation [Run #6](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40970079995): 12/12 steps successful.
+- World save schema remains version 1. Reentrancy guard is synchronous and local to the prop; it is not a server-authoritative multiplayer transaction lock.
+- No local Godot executable was available; manual GUI/GPU/iPhone hardware testing is not claimed.
+- Remaining: production-wide prop lifecycle binding, full terrain/object delta persistence, asynchronous chunk streaming/recovery and device QA.
