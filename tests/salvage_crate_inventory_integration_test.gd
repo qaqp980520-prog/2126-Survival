@@ -35,11 +35,17 @@ func _run() -> void:
 	_expect(bool(crate.get("opened")) and int(crate.get("loot_remaining")) == 1, "crate state changes only after successful inventory grant")
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), before_weight + 3.0), "inventory weight updates with the collected ore")
 	var saved: Dictionary = world.call("serialize_stream_state")
-	var object_payload: Dictionary = saved.get("world_objects", {}).get("objects", {})
+	var world_objects_payload: Dictionary = saved.get("world_objects", {})
+	var object_payload: Dictionary = world_objects_payload.get("objects", {})
 	var saved_crate_state: Dictionary = {}
 	for object_id in object_payload.keys():
-		if str(object_id).contains("SalvageCrate"):
-			saved_crate_state = object_payload[object_id].get("state", {})
+		var record: Variant = object_payload[object_id]
+		if not (record is Dictionary) or str(record.get("chunk_id", "")) != "surface/chunk_0_0":
+			continue
+		var candidate_state: Variant = record.get("state", {})
+		if candidate_state is Dictionary and candidate_state.has("loot_remaining") and candidate_state.has("opened"):
+			saved_crate_state = candidate_state.duplicate(true)
+			break
 	_expect(bool(saved_crate_state.get("opened", false)) and int(saved_crate_state.get("loot_remaining", -1)) == 1, "world save captures the crate after one collection")
 	var second: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
 	_expect(bool(second.get("ok", false)) and int(crate.get("loot_remaining")) == 0, "second interaction consumes the final salvage unit")
