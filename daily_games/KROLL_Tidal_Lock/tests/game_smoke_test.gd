@@ -12,7 +12,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	_expect(game.get("state") is Dictionary, "scene initializes game state")
-	_expect(game.get_node_or_null("VBoxContainer") == null or game.get_child_count() > 0, "scene builds its interface")
+	_expect(game.get_child_count() == 1 and game.get_child(0) is VBoxContainer, "scene builds a single root interface container")
 	_expect(game.get("status_label") is Label, "status label exists")
 	_expect(game.get("chamber_labels").size() == 4, "four chamber panels are created")
 
