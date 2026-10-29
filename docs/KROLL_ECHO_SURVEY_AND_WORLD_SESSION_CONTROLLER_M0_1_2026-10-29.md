@@ -22,7 +22,7 @@ Dependencies: Godot 4.3+, no external assets or plugins. Open daily_games/KROLL_
 
 Path: scripts/world.gd; adopted by prototypes/SurfaceChunkStreamingPlayground.gd.
 
-WorldSessionController is the shared composition root for the existing streamed-world prototype. It owns MineralVeinRegistry, CropRegistry, CropPlotController, SurvivalWorldBridge, MineralChunkController and MineralGridStreamingDirector; the derived scene supplies its chunk factory, environment, player, HUD and chunk geometry. Save/restore and failure-reporting methods were moved to the base class without changing the schema-1 envelope. get_world_session_status() provides a stable diagnostic snapshot.
+WorldSessionController is the shared composition root for the existing streamed-world prototype. It owns MineralVeinRegistry, CropRegistry, CropPlotController, SurvivalWorldBridge, MineralChunkController and MineralGridStreamingDirector; the derived scene supplies its chunk factory, environment, player, HUD and chunk geometry. Save/restore and failure-reporting methods were moved to the base class without changing the schema-1 envelope. The stream save now includes an optional inventory payload alongside minerals/crops; restore validates inventory in a temporary model before mutation and rolls it back if target streaming fails. Legacy schema-1 saves without inventory remain loadable and preserve the current inventory. get_world_session_status() provides a stable diagnostic snapshot.
 
 New regression: tests/world_session_controller_test.gd verifies idempotent initialization, component status, initial 3×3 stream window, save/restore, and invalid-schema no-mutation.
 
