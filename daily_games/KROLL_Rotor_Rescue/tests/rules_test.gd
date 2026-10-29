@@ -12,7 +12,9 @@ func _run() -> void:
 	assert(Rules.new_game(1)["survivor_positions"] != Rules.new_game(2)["survivor_positions"], "Different seeds must change the rescue layout")
 
 	var moved: Dictionary = Rules.step(first, Vector2.RIGHT, 0.1)
-	assert((moved["position"] as Vector2).x > (first["position"] as Vector2).x, "Right thrust moves the helicopter")
+	var moved_position: Vector2 = moved["position"]
+	var start_position: Vector2 = first["position"]
+	assert(moved_position.x > start_position.x, "Right thrust moves the helicopter")
 	assert(float(moved["fuel"]) < float(first["fuel"]), "Thrust consumes fuel")
 
 	var capped: Dictionary = Rules.new_game(1)
@@ -20,7 +22,8 @@ func _run() -> void:
 		capped = Rules.step(capped, Vector2.RIGHT, 0.1)
 		if bool(capped.get("failed", false)):
 			break
-	assert((capped["velocity"] as Vector2).length() <= Rules.MAX_SPEED + 0.001, "Velocity remains under the flight speed cap")
+	var capped_velocity: Vector2 = capped["velocity"]
+	assert(capped_velocity.length() <= Rules.MAX_SPEED + 0.001, "Velocity remains under the flight speed cap")
 
 	var rescue: Dictionary = Rules.new_game(1)
 	rescue["position"] = Rules.survivor_positions(1)[0]
@@ -47,6 +50,7 @@ func _run() -> void:
 	assert(bool(victory["won"]), "All survivors plus a safe landing wins the mission")
 
 	var locked: Dictionary = Rules.step(victory, Vector2.RIGHT, 0.1)
-	assert((locked["position"] as Vector2).is_equal_approx(Rules.PAD_POSITION), "Terminal state ignores further input")
+	var locked_position: Vector2 = locked["position"]
+	assert(locked_position.is_equal_approx(Rules.PAD_POSITION), "Terminal state ignores further input")
 	print("KROLL Rotor Rescue rules tests passed.")
 	quit(0)
