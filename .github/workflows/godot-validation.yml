@@ -180,6 +180,10 @@ jobs:
           test -f daily_games/KROLL_Deep_Current_Angler/tests/game_smoke_test.gd
           test -f systems/CropPlotController.gd
           test -f tests/crop_plot_controller_integration_test.gd
+          test -f tests/crop_chunk_offline_growth_test.gd
+          test -f daily_games/KROLL_Skyline_Courier/project.godot
+          test -f daily_games/KROLL_Skyline_Courier/tests/rules_test.gd
+          test -f daily_games/KROLL_Skyline_Courier/tests/game_smoke_test.gd
       - name: Import and parse root 2126 Survival project
         shell: bash
         run: |
@@ -1154,3 +1158,30 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Prism Relay runtime smoke test passed."
+
+      - name: Import and parse KROLL Skyline Courier
+        run: godot --headless --path daily_games/KROLL_Skyline_Courier --editor --quit
+      - name: Run KROLL Skyline Courier rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Skyline_Courier --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Skyline Courier rules tests passed."
+      - name: Run KROLL Skyline Courier runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Skyline_Courier --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Skyline Courier runtime smoke test passed."
+      - name: Run crop chunk offline growth integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/crop_chunk_offline_growth_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Crop chunk offline growth integration test passed."
