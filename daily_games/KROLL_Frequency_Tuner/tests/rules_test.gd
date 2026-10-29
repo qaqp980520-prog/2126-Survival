@@ -15,6 +15,18 @@ func _run() -> void:
 		_solve_layout(state)
 	_expect(Rules.next_seed(13) == 27 and Rules.next_seed(41) == 13, "layout cycling wraps deterministically")
 
+	var seen_outputs: Dictionary = {}
+	var mapping_is_unique: bool = true
+	for x in range(10):
+		for y in range(10):
+			for z in range(10):
+				var output: Array[int] = Rules.output_values([x, y, z])
+				var output_key: String = "%d-%d-%d" % [output[0], output[1], output[2]]
+				if seen_outputs.has(output_key):
+					mapping_is_unique = false
+				seen_outputs[output_key] = true
+	_expect(mapping_is_unique and seen_outputs.size() == 1000, "modulo-10 signal transform maps all 1000 dial states uniquely")
+
 	var invalid_state: Dictionary = Rules.new_game(13)
 	var before: Dictionary = invalid_state.duplicate(true)
 	var invalid_dial: Dictionary = Rules.tune(invalid_state, 3, 1)
