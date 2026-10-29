@@ -54,9 +54,11 @@ static func _resolve_terminal(state: Dictionary) -> void:
 	if int(state.get("mistakes", 0)) > MAX_MISTAKES:
 		state["status"] = "failed"
 		state["message"] = "SHIFT FAILED: too many routing errors. Restart and try again."
-	elif int(state.get("index", 0)) >= (state.get("temperatures", []) as Array).size():
-		state["status"] = "won"
-		state["message"] = "SHIFT COMPLETE: all canisters processed within the error budget."
+	else:
+		var temperatures: Array = state.get("temperatures", [])
+		if int(state.get("index", 0)) >= temperatures.size():
+			state["status"] = "won"
+			state["message"] = "SHIFT COMPLETE: all canisters processed within the error budget."
 
 static func _layout_index(seed_value: int) -> int:
 	var found: int = SEEDS.find(seed_value)
