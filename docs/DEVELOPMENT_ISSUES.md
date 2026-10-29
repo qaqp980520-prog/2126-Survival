@@ -261,3 +261,15 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - Documentation closeout is tracked in PR [#115](https://github.com/qaqp980520-prog/2126-Survival/pull/115); its final merge SHA and exact-head CI result are recorded in the Run 40 Notion closeout.
+
+## Run 41 — 2026-10-29: Thermal Sort + aggregate world-object state budget
+
+- [x] Add KROLL Thermal Sort M0.1 with deterministic 12-canister shifts, three layouts, explicit Celsius thresholds, two-error budget, keyboard/touch controls, rules tests and scene runtime smoke test.
+- [x] Add import/rules/runtime steps to `.github/workflows/godot-validation.yml`.
+- [x] Bound WorldObjectStateRegistry aggregate payload at 100,000 total properties and 1,000,000 total string-value characters, preserving per-object 64-property and per-string 256-character caps.
+- [x] Add aggregate-limit regression coverage for rejected writes/restores, replacement/deletion budget release and non-mutation after failed restore.
+- [x] Feature PR #116 merged as `093e45116b56da7be33b04d5a536d967b13214a9`. Exact candidate `981eda60d12d7253efa15934e283de4f07b8a769` passed Godot 4.3 CI Run #539: 160 numbered validation steps + three post/cleanup entries (163 total step entries), zero failures.
+- [ ] Integrate saved state into every production interactable factory and define per-object semantic migrations.
+- [ ] Persist all generated terrain/object mutations and integrate asynchronous chunk streaming with save/restore and failure recovery.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+- Compatibility boundary: schema remains 1, but legacy object-registry payloads exceeding the new aggregate caps are intentionally rejected.
