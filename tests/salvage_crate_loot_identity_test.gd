@@ -3,6 +3,7 @@ extends SceneTree
 const PropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const RegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
+const InventoryModel = preload("res://systems/SurvivalInventory.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -59,6 +60,15 @@ func _run() -> void:
 	_expect(bool(result.get("ok", false)) and str(result.get("item_id", "")) == "copper_ore", "crate grants its persisted item identity")
 	_expect(_inventory_count(bridge, "copper_ore") == before_count + 1, "matching item is added to the shared inventory")
 	_expect(int(restored.get("loot_remaining")) == 1, "successful collection decrements loot only after grant")
+	var inventory_snapshot: Dictionary = bridge.call("serialize_inventory")
+	var inventory: Object = bridge.get("inventory")
+	var counts: Dictionary = inventory.get("counts")
+	counts["copper_ore"] = InventoryModel.MAX_SAVED_COUNT
+	var before_rejected_state: Dictionary = restored.call("get_world_object_state")
+	var rejected: Dictionary = restored.call("interact_with_inventory", bridge)
+	_expect(not bool(rejected.get("ok", false)) and str(rejected.get("reason", "")) == "inventory_rejected", "full inventory rejects a non-default loot item")
+	_expect(restored.call("get_world_object_state") == before_rejected_state, "rejected copper collection preserves the crate state")
+	_expect(bool(bridge.call("restore_inventory", inventory_snapshot)), "rejection fixture restores the valid inventory snapshot")
 
 	var post_state: Dictionary = restored.call("get_world_object_state")
 	_expect(bool(restored_registry.call("set_object_state", stable_id, chunk_id, post_state)), "updated prop state remains registry-valid")
