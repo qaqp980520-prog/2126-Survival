@@ -4,6 +4,7 @@ const RegistryScript = preload("res://systems/CropRegistry.gd")
 const CropControllerScript = preload("res://systems/CropPlotController.gd")
 const ChunkControllerScript = preload("res://systems/MineralChunkController.gd")
 const MineralRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const CropPlotScene = preload("res://systems/CropPlotVisual.tscn")
 
 func _initialize() -> void:
@@ -44,7 +45,26 @@ func _run() -> void:
     var reloaded_plot: Node = reloaded_root.get_node_or_null("CropPlot_0")
     assert(reloaded_plot != null and str(reloaded_plot.get("status_text", "")).contains("2/4"), "Reloaded visual reflects offline growth")
 
-    chunk_controller.unload_chunk(chunk_id, now + 240)
+    assert(chunk_controller.unload_chunk(chunk_id, now + 240))
+
+    var failure_chunk_id := "surface/offline-failure-test"
+    var failure_crop_id := failure_chunk_id + "/crop/ChunkRoot/CropPlot_0"
+    assert(crop_controller.plant_crop(failure_crop_id, "tomato", 60.0, now + 300))
+    var failure_before: Dictionary = crop_controller.get_crop(failure_crop_id)
+    var bad_root := _new_chunk()
+    var bad_ore: Node3D = MiningNodeScript.new()
+    bad_ore.name = "BadOre"
+    bad_ore.mineral_id = "missing_mineral"
+    bad_ore.max_units = 5
+    bad_ore.remaining_units = 5
+    bad_ore.regen_interval_seconds = 60
+    bad_ore.last_regen_unix = now + 300
+    bad_root.add_child(bad_ore)
+    assert(not chunk_controller.load_chunk(failure_chunk_id, bad_root, now + 420), "Invalid mineral registration rejects the chunk")
+    assert(bad_root.get_parent() == null, "Failed chunk registration leaves the scene root with the caller")
+    assert(crop_controller.get_crop(failure_crop_id) == failure_before, "Failed mineral registration rolls back offline crop catch-up")
+    bad_root.free()
+
     chunk_controller.queue_free()
     crop_controller.queue_free()
     mineral_registry.queue_free()
