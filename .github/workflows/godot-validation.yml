@@ -1246,3 +1246,22 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World object state registry tests passed."
 
+      - name: Import and parse KROLL Rotor Rescue
+        run: godot --headless --path daily_games/KROLL_Rotor_Rescue --editor --quit
+      - name: Run KROLL Rotor Rescue rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Rotor_Rescue --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Rotor Rescue rules tests passed."
+      - name: Run KROLL Rotor Rescue runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Rotor_Rescue --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Rotor Rescue runtime smoke test passed."
+
