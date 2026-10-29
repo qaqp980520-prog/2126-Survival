@@ -77,6 +77,10 @@ jobs:
           test -f systems/WorldObjectStateRegistry.gd
           test -f tests/world_object_state_registry_test.gd
           test -f daily_games/KROLL_Tidal_Lock/project.godot
+          test -f daily_games/KROLL_Thermal_Sort/project.godot
+          test -f daily_games/KROLL_Thermal_Sort/rules.gd
+          test -f daily_games/KROLL_Thermal_Sort/tests/rules_test.gd
+          test -f daily_games/KROLL_Thermal_Sort/tests/game_smoke_test.gd
           test -f daily_games/KROLL_Tidal_Lock/tests/rules_test.gd
           test -f daily_games/KROLL_Tidal_Lock/tests/game_smoke_test.gd
           test -f daily_games/KROLL_Signal_Siphon/project.godot
@@ -1265,3 +1269,21 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Rotor Rescue runtime smoke test passed."
 
+      - name: Import and parse KROLL Thermal Sort
+        run: godot --headless --path daily_games/KROLL_Thermal_Sort --editor --quit
+      - name: Run KROLL Thermal Sort rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Thermal_Sort --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Sort rules tests passed."
+      - name: Run KROLL Thermal Sort runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Thermal_Sort --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Sort runtime smoke test passed."
