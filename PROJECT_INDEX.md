@@ -520,3 +520,14 @@
 - PR [#112](https://github.com/qaqp980520-prog/2126-Survival/pull/112) merged as `213c795382682b3d8a51c27be0a2d4da1ce2f671`. Final exact candidate `873ec47bb22ba93becc5f8b2a3b90cfb4b0e6fd2` passed Godot 4.3 CI [Run #40810244136](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40810244136): 157/157 reported job steps succeeded, zero failures/skips. Tidal Lock import/rules/runtime steps 151–153, registry test step 154, and world-session rollback step 150 passed.
 - Notion: [Run 39 daily record](https://app.notion.com/p/408bc6a809d78171b12cf0bb7e9ac702), [Tidal Lock M0.1](https://app.notion.com/p/408bc6a809d7816db17bf97c1eb120f4), [WorldObjectStateRegistry M0.1](https://app.notion.com/p/408bc6a809d78110bcc0c2dfea03c560).
 - Limits: registry does not automatically apply saved state to every scene node; chunk factories must apply records to interactable objects. Full generated terrain/object persistence and asynchronous chunk streaming remain open. Manual GUI/GPU/iPhone QA is not claimed.
+
+## 2026-10-29 Run 40 — Rotor Rescue + streamed world-object lifecycle (merged / exact-head CI passed)
+
+- Feature PR [#114](https://github.com/qaqp980520-prog/2126-Survival/pull/114) merged as `d3b2192c55a9808e85d80f111eb24e89c3894571`; validated candidate HEAD `5915d46016d53f6ea58a0e32e6e7a7bfb73c1730`.
+- Exact-head Godot 4.3 CI [Run #532](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40822891951) completed successfully. The validate job passed all 157 numbered workflow steps plus three post/cleanup steps (160 step entries total), with zero failures. Rotor Rescue import, rules and runtime smoke steps 155–157 passed; world-session integration step 150 and world-object registry step 154 also passed.
+- New game `daily_games/KROLL_Rotor_Rescue/`: deterministic 2D inertial flight rescue with three layouts, fuel/time limits, obstacle collision, three crew pickups and safe landing extraction. Godot 4.3+, no external assets/add-ons.
+- Added `systems/WorldObjectStatefulProp.gd`; stable IDs derive from chunk ID + node path. `MineralChunkController` captures live object state before save/unload and applies it on load. Invalid semantic state rejects capture/restore without partial registry mutation or losing chunk ownership.
+- The Surface Chunk Streaming Playground now spawns a persistent SalvageCrate per streamed chunk with F interaction. World save schema remains version 1; `world_objects` is optional for legacy saves.
+- Run #531 exposed a smoke-test assumption about default Button node names; explicit touch/action button names and matching assertions fixed it. Only Run #532 is the final exact-head success evidence.
+- No local Godot executable; no manual GUI/GPU/iPhone hardware QA is claimed.
+- Remaining: connect stateful-prop restoration to every production interactable factory; persist complete generated terrain/object mutations; integrate asynchronous chunk streaming and failure recovery.
