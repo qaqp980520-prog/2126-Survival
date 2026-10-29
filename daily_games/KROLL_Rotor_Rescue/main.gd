@@ -50,6 +50,7 @@ func _build_controls() -> void:
 	]
 	for definition in definitions:
 		var button := Button.new()
+		button.name = "Touch_%s" % str(definition["direction"])
 		button.text = str(definition["label"])
 		button.position = Vector2(float(definition["x"]), 526.0)
 		button.size = Vector2(70.0, 48.0)
@@ -58,6 +59,7 @@ func _build_controls() -> void:
 		button.button_up.connect(_release_touch.bind(str(definition["direction"])))
 		add_child(button)
 	var reset_button := Button.new()
+	reset_button.name = "RestartButton"
 	reset_button.text = "RESTART"
 	reset_button.position = Vector2(650.0, 526.0)
 	reset_button.size = Vector2(100.0, 48.0)
@@ -65,6 +67,7 @@ func _build_controls() -> void:
 	reset_button.pressed.connect(_restart)
 	add_child(reset_button)
 	var next_button := Button.new()
+	next_button.name = "NextButton"
 	next_button.text = "NEXT"
 	next_button.position = Vector2(760.0, 526.0)
 	next_button.size = Vector2(100.0, 48.0)
