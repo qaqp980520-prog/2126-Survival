@@ -171,6 +171,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	if chunk_controller.has_method("capture_loaded_world_object_states") and not bool(chunk_controller.call("capture_loaded_world_object_states")):
+		_set_restore_report(false, "snapshot", "Could not capture current live world-object state before restore.", true)
+		return false
 	var previous_position: Vector3 = player.global_position
 	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
 	var previous_crops: Dictionary = crop_registry.to_save_dict() if crop_registry != null else {}
