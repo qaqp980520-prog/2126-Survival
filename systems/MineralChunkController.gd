@@ -250,7 +250,7 @@ func capture_loaded_world_object_states() -> bool:
 				object_state_registry.call("restore_save_dict", snapshot)
 				return false
 			var state: Variant = node.call("get_world_object_state")
-			if not (state is Dictionary) or not bool(object_state_registry.call("set_object_state", str(stable_id), str(chunk_id), state)):
+			if not (state is Dictionary) or (node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), str(chunk_id), state)):
 				object_state_registry.call("restore_save_dict", snapshot)
 				return false
 	return true
@@ -288,7 +288,8 @@ func _apply_saved_world_object_states() -> bool:
 					_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
 					return false
 				continue
-			if str(record.get("chunk_id", "")) != str(chunk_id) or not (record.get("state", {}) is Dictionary) or not bool(node.call("apply_world_object_state", record.get("state", {}))):
+			var saved_state: Variant = record.get("state", {})
+			if str(record.get("chunk_id", "")) != str(chunk_id) or not (saved_state is Dictionary) or (node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", saved_state))) or not bool(node.call("apply_world_object_state", saved_state)):
 				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
 				return false
 	return true
