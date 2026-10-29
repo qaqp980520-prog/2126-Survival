@@ -92,6 +92,10 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 			var crop_rollback_ok: bool = bool(crop_controller.call("restore_save_dict", crop_snapshot))
 			if not crop_rollback_ok:
 				push_error("Failed to roll back crop catch-up after mineral chunk registration failed.")
+			for plot_value in crops.values():
+				var plot_node: Node = plot_value as Node
+				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+					plot_node.call("refresh")
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
