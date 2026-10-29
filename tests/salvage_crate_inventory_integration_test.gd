@@ -47,7 +47,7 @@ func _run() -> void:
 	_expect(bool(world.call("restore_stream_state", saved, now + 2)), "saved world state restores successfully")
 	origin = chunk_controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
 	crate = origin.get_node_or_null("SalvageCrate") if origin != null else null
-	_expect(crate != null and int(crate.get("loot_remaining", -1)) == 1 and bool(crate.get("opened")), "restored crate returns to its saved one-loot state")
+	_expect(crate != null and int(crate.get("loot_remaining")) == 1 and bool(crate.get("opened")), "restored crate returns to its saved one-loot state")
 	_expect(_inventory_count(bridge, "iron_ore") == before_count + 1, "inventory and crate state restore together")
 	var inventory: Object = bridge.get("inventory")
 	var inventory_counts: Dictionary = inventory.get("counts")
