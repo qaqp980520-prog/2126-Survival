@@ -23,6 +23,11 @@ func _run() -> void:
 	_expect(crate != null and crate.has_method("interact_with_inventory"), "active chunk creates a transactional salvage crate")
 	var initial_crate_state: Dictionary = crate.call("get_world_object_state") if crate != null else {}
 	_expect(str(initial_crate_state.get("loot_item_id", "")) == "iron_ore", "origin chunk uses its deterministic iron-ore loot identity")
+	var probe_chunk: Node3D = world.call("_make_chunk", Vector2i(1, 0)) as Node3D
+	var probe_crate: Node = probe_chunk.get_node_or_null("SalvageCrate") if probe_chunk != null else null
+	_expect(probe_crate != null and str(probe_crate.get("loot_item_id")) == "copper_ore", "adjacent chunk factory deterministically selects copper ore")
+	if probe_chunk != null:
+		probe_chunk.free()
 	if crate == null:
 		_finish(world)
 		return
