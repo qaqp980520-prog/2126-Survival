@@ -48,6 +48,9 @@ func _run() -> void:
     var original_position: Vector3 = world_player.global_position
     var now: int = int(Time.get_unix_time_from_system())
     _check(live_crate != null and bool(live_crate.call("apply_world_object_state", {"opened": false, "loot_remaining": 2})), "Live crate can be mutated after a save snapshot")
+    _check(bool(world.call("restore_stream_state", save_payload, now)), "Restore applies saved state to an object that remains loaded")
+    _check(live_crate != null and bool(live_crate.get("opened")) and int(live_crate.get("loot_remaining")) == 1, "Same-window restore resets the live prop from the saved record")
+    _check(live_crate != null and bool(live_crate.call("apply_world_object_state", {"opened": false, "loot_remaining": 2})), "Crate can be changed again before chunk unload")
     _check(bool(world.call("debug_move_player_to", Vector3(21.0, 2.0, 1.0), now)), "World-session should stream when the player crosses chunk boundaries")
     _check(bool(inventory_bridge.call("drop_item", "iron_ore", 1)), "Dropping ore should recalculate inventory weight")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 3.0), "Dropping one ore must remove three kilograms")
