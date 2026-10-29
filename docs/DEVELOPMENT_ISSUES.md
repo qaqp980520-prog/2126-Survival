@@ -260,4 +260,4 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Persist all generated terrain and object mutations across unload/reload, including changes not represented by current registry payloads.
 - [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
-- Documentation closeout is in PR [#115](https://github.com/qaqp980520-prog/2126-Survival/pull/115), which must pass its own exact-head CI before merge.
+- Documentation closeout is tracked in PR [#115](https://github.com/qaqp980520-prog/2126-Survival/pull/115); its final merge SHA and exact-head CI result are recorded in the Run 40 Notion closeout.
