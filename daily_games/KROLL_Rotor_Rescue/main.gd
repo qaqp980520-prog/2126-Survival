@@ -2,7 +2,6 @@ extends Control
 
 const Rules = preload("res://rules.gd")
 const SEEDS: Array[int] = [1, 2, 3]
-const WORLD_HEIGHT: float = 490.0
 
 var game_state: Dictionary = {}
 var _seed_index: int = 0
