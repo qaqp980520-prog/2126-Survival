@@ -5,6 +5,7 @@ var state: Dictionary = {}
 var seed_cursor: int = 0
 var status_label: Label
 var details_label: Label
+var feedback_message: String = ""
 var chamber_labels: Array[Label] = []
 var action_buttons: Dictionary = {}
 
@@ -106,17 +107,20 @@ func _add_button(parent: Container, text_value: String, key: String, callback: C
 func _act(result: Dictionary) -> void:
 	if bool(result.get("ok", false)):
 		state = result.get("state", state)
+		feedback_message = str(state.get("message", ""))
 	else:
-		details_label.text = "ACTION BLOCKED: " + str(result.get("reason", "unknown"))
+		feedback_message = "ACTION BLOCKED: " + str(result.get("reason", "unknown"))
 	_render()
 
 func restart_game() -> void:
 	state = Rules.new_game(int(state.get("seed", 7)))
+	feedback_message = str(state.get("message", ""))
 	_render()
 
 func next_layout() -> void:
 	seed_cursor = (seed_cursor + 1) % Rules.SEEDS.size()
 	state = Rules.new_game(Rules.SEEDS[seed_cursor])
+	feedback_message = str(state.get("message", ""))
 	_render()
 
 func _render() -> void:
@@ -126,8 +130,7 @@ func _render() -> void:
 		str(state.get("status", "unknown")).to_upper(),
 		int(state.get("turns", 0)), Rules.MAX_TURNS, int(state.get("pump_energy", 0))
 	]
-	if details_label.text.is_empty() or details_label.text.begins_with("ACTION BLOCKED"):
-		details_label.text = str(state.get("message", ""))
+	details_label.text = feedback_message if not feedback_message.is_empty() else str(state.get("message", ""))
 	var levels: Array = state.get("levels", [])
 	var gates: Array = state.get("gates", [])
 	var position: int = int(state.get("position", 0))
