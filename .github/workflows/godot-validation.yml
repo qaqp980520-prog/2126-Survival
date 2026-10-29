@@ -1375,3 +1375,69 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Salvage crate loot identity tests passed."
+
+      - name: Verify Run 45 and Run 46 test inputs
+        shell: bash
+        run: |
+          test -f daily_games/KROLL_Rail_Yard/project.godot
+          test -f daily_games/KROLL_Rail_Yard/tests/rules_test.gd
+          test -f daily_games/KROLL_Rail_Yard/tests/game_smoke_test.gd
+          test -f tests/salvage_crate_inventory_rollback_test.gd
+          test -f daily_games/KROLL_Beat_Lab/project.godot
+          test -f daily_games/KROLL_Beat_Lab/rules.gd
+          test -f daily_games/KROLL_Beat_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Beat_Lab/tests/game_smoke_test.gd
+          test -f tests/salvage_crate_reentrancy_test.gd
+
+      - name: Import and parse KROLL Rail Yard
+        run: godot --headless --path daily_games/KROLL_Rail_Yard --editor --quit
+      - name: Run KROLL Rail Yard rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Rail_Yard --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Rail Yard rules tests passed."
+      - name: Run KROLL Rail Yard runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 15s godot --headless --path daily_games/KROLL_Rail_Yard --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Rail Yard runtime smoke test passed."
+      - name: Run salvage crate inventory rollback regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_inventory_rollback_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Salvage crate inventory rollback tests passed."
+      - name: Import and parse KROLL Beat Lab
+        run: godot --headless --path daily_games/KROLL_Beat_Lab --editor --quit
+      - name: Run KROLL Beat Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Beat_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Beat Lab rules tests passed."
+      - name: Run KROLL Beat Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Beat_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Beat Lab runtime smoke test passed."
+      - name: Run salvage crate reentrancy regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_reentrancy_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Salvage crate reentrancy tests passed."
