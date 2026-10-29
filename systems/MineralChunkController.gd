@@ -63,6 +63,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		return false
 
 	var existing_crop_ids: Array[String] = []
+	var crop_snapshot: Dictionary = {}
 	for local_path in crops.keys():
 		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		if not _valid_crop_stable_id(stable_id):
@@ -71,6 +72,9 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		if not existing_crop.is_empty():
 			existing_crop_ids.append(stable_id)
 	if not existing_crop_ids.is_empty():
+		crop_snapshot = crop_controller.call("to_save_dict")
+		if not crop_snapshot.has("schema_version") or not crop_snapshot.has("crops"):
+			return false
 		var catch_up: Dictionary = crop_controller.call("advance_crops_to_time", existing_crop_ids, now_unix)
 		if not bool(catch_up.get("ok", false)):
 			return false
@@ -84,6 +88,10 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		# A failed registration must not consume the caller's scene. Detach it so the
 		# generator can inspect, repair, or retry the same root without reconstructing it.
 		remove_child(chunk_root)
+		if not crop_snapshot.is_empty():
+			var crop_rollback_ok: bool = bool(crop_controller.call("restore_save_dict", crop_snapshot))
+			if not crop_rollback_ok:
+				push_error("Failed to roll back crop catch-up after mineral chunk registration failed.")
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
