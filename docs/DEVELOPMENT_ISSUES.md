@@ -252,7 +252,7 @@ The older checklist and historical run notes above describe their respective sna
 
 ## Run 40 final verified status — 2026-10-29
 
-- [x] PR #114 merged as `d3b2192c55a9808e85d80f111eb24e89c3894571`; exact candidate `5915d46016d53f6ea58a0e32e6e7a7bfb73c1730` passed Godot 4.3 CI Run #532 (40822891951), 157 validation steps plus setup/cleanup, zero failures.
+- [x] PR #114 merged as `d3b2192c55a9808e85d80f111eb24e89c3894571`; exact candidate `5915d46016d53f6ea58a0e32e6e7a7bfb73c1730` passed Godot 4.3 CI Run #532 (40822891951), 157 numbered workflow steps plus three post/cleanup steps (160 step entries total), zero failures.
 - [x] KROLL Rotor Rescue import/rules/runtime passed at steps 155–157. The smoke test failure from Run #531 was corrected by assigning stable names to controls and asserting those names.
 - [x] WorldObjectStatefulProp lifecycle is integrated with MineralChunkController and WorldSessionController; save/unload capture and load/restore apply stable-ID state transactionally. Failure injection confirms rollback.
 - [x] World save envelope remains schema 1 and `world_objects` is optional for legacy saves.
