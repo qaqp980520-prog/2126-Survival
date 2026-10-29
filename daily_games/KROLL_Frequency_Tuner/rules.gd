@@ -30,7 +30,8 @@ static func new_game(seed_value: int = 13) -> Dictionary:
 
 static func output_values(frequencies: Array) -> Array[int]:
 	if frequencies.size() != 3:
-		return []
+		var empty_result: Array[int] = []
+		return empty_result
 	var x: int = int(frequencies[0])
 	var y: int = int(frequencies[1])
 	var z: int = int(frequencies[2])
