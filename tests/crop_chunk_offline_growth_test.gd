@@ -4,6 +4,7 @@ const RegistryScript = preload("res://systems/CropRegistry.gd")
 const CropControllerScript = preload("res://systems/CropPlotController.gd")
 const ChunkControllerScript = preload("res://systems/MineralChunkController.gd")
 const MineralRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const AdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const CropPlotScene = preload("res://systems/CropPlotVisual.tscn")
 
@@ -51,18 +52,30 @@ func _run() -> void:
     var failure_crop_id := failure_chunk_id + "/crop/ChunkRoot/CropPlot_0"
     assert(crop_controller.plant_crop(failure_crop_id, "tomato", 60.0, now + 300))
     var failure_before: Dictionary = crop_controller.get_crop(failure_crop_id)
+    var conflict_ore: Node3D = MiningNodeScript.new()
+    conflict_ore.name = "ConflictOre"
+    conflict_ore.mineral_id = "iron_ore"
+    conflict_ore.max_units = 5
+    conflict_ore.remaining_units = 5
+    conflict_ore.regen_interval_seconds = 60
+    conflict_ore.last_regen_unix = now + 300
+    root.add_child(conflict_ore)
+    var conflict_stable_id: String = AdapterScript.make_stable_id(failure_chunk_id, "ChunkRoot/BadOre")
+    assert(mineral_registry.register_vein(conflict_stable_id, conflict_ore, now + 300), "Register a conflicting stable vein ID")
     var bad_root := _new_chunk()
     var bad_ore: Node3D = MiningNodeScript.new()
     bad_ore.name = "BadOre"
-    bad_ore.mineral_id = "missing_mineral"
+    bad_ore.mineral_id = "iron_ore"
     bad_ore.max_units = 5
     bad_ore.remaining_units = 5
     bad_ore.regen_interval_seconds = 60
     bad_ore.last_regen_unix = now + 300
     bad_root.add_child(bad_ore)
-    assert(not chunk_controller.load_chunk(failure_chunk_id, bad_root, now + 420), "Invalid mineral registration rejects the chunk")
+    assert(not chunk_controller.load_chunk(failure_chunk_id, bad_root, now + 420), "Duplicate stable vein registration rejects the chunk")
     assert(bad_root.get_parent() == null, "Failed chunk registration leaves the scene root with the caller")
     assert(crop_controller.get_crop(failure_crop_id) == failure_before, "Failed mineral registration rolls back offline crop catch-up")
+    assert(mineral_registry.unregister_vein(conflict_stable_id, conflict_ore, now + 420), "Remove the pre-existing conflict after the assertion")
+    conflict_ore.queue_free()
     bad_root.free()
 
     chunk_controller.queue_free()
