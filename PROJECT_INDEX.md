@@ -499,3 +499,24 @@
 - Exact-head Godot 4.3 CI [Run #502](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40798810304) passed 149/149 total job steps, including 146 named validation steps, with no failures or skips. New Skyline import/rules/runtime steps 143–145 and crop offline growth integration step 146 passed. Earlier Run #498's Node.get argument error was fixed before the final candidate.
 - Notion records: [Run 37 daily log](https://app.notion.com/p/408bc6a809d7813d97e6c07b1dfdd79d), [Skyline Courier M0.1](https://app.notion.com/p/408bc6a809d7819e8747dfebcea4326e), [Crop Offline Growth M0.1](https://app.notion.com/p/408bc6a809d781b1b7aef71202004e1d).
 - Limits: no local Godot executable; manual GUI/GPU/iPhone testing is not claimed. Production `scripts/world.gd` remains absent; complete generated terrain/object persistence and async chunk streaming remain open.
+
+
+## Run 38 — Echo Survey and WorldSessionController (2026-10-29)
+
+- New game: `daily_games/KROLL_Echo_Survey/`, a deterministic 8×8 sonar exploration and salvage game with three layouts, battery/oxygen management, rock collision and extraction. Godot 4.3+; no external assets.
+- World architecture: add `scripts/world.gd` as the first reusable `WorldSessionController` base. It centralizes streamed-world component ownership, schema-1 save/restore, diagnostics and rollback reporting; the Surface Chunk Streaming Playground still supplies player/environment/HUD/chunk factory.
+- Save compatibility: optional inventory payload is validated through a temporary SurvivalInventory model; a failed target stream rolls inventory, minerals, crops and player position back. Legacy schema-1 saves without inventory remain loadable.
+- Integration test: `tests/world_session_controller_test.gd` covers idempotent initialization, initial 3×3 window, inventory weight round-trip, invalid inventory no-mutation, legacy saves and injected chunk-factory failure rollback.
+- PR [#111](https://github.com/qaqp980520-prog/2126-Survival/pull/111) merged as `739ef96a5c99dbfc163fadfd25ca4025fe87e4e0`. Exact candidate `48589112a1daf7f15830d75b4e67b20dcb23ce97` passed Godot 4.3 CI [Run #513](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40801522315), including Echo Survey import/rules/runtime steps 147–149 and world-session integration step 150.
+- Notion: [Run 38 daily record](https://app.notion.com/p/408bc6a809d7813c8589fcf03d99ffb8), [Echo Survey M0.1](https://app.notion.com/p/408bc6a809d781008062ea709e9cc1b0), [WorldSessionController M0.1](https://app.notion.com/p/408bc6a809d781c0a2f8e3a8868bf507).
+- Remaining: complete generated terrain/object state persistence and asynchronous chunk streaming; manual GUI/GPU/iPhone QA is not claimed because no local Godot executable/device was available.
+
+## Run 39 — Tidal Lock and persistent world-object state (2026-10-29)
+
+- New game: `daily_games/KROLL_Tidal_Lock/`, a deterministic four-chamber water-lock puzzle. Gate, pressure difference, pump energy and 10-action budget are covered by rules and runtime tests.
+- System: `systems/WorldObjectStateRegistry.gd` persists stable-ID object state per chunk. It validates before deep-copying, caps records at 50,000 and properties per object at 64, and only accepts bool/int/finite float/bounded string values.
+- Integration: optional `world_objects` is saved in the schema-1 WorldSessionController envelope. Legacy saves without the field preserve the current registry. Failed target streaming rolls world-object state back with inventory/mineral/crop/player/window state.
+- Tests: `tests/world_object_state_registry_test.gd` and expanded `tests/world_session_controller_test.gd` / `tests/surface_chunk_streaming_playground_test.gd` cover stable ID/chunk ownership, deep-copy snapshots, property cap, invalid payload atomicity, legacy compatibility and injected target-stream failure rollback.
+- PR [#112](https://github.com/qaqp980520-prog/2126-Survival/pull/112) merged as `213c795382682b3d8a51c27be0a2d4da1ce2f671`. Final exact candidate `873ec47bb22ba93becc5f8b2a3b90cfb4b0e6fd2` passed Godot 4.3 CI [Run #40810244136](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40810244136): 157/157 reported job steps succeeded, zero failures/skips. Tidal Lock import/rules/runtime steps 151–153, registry test step 154, and world-session rollback step 150 passed.
+- Notion: [Run 39 daily record](https://app.notion.com/p/408bc6a809d78171b12cf0bb7e9ac702), [Tidal Lock M0.1](https://app.notion.com/p/408bc6a809d7816db17bf97c1eb120f4), [WorldObjectStateRegistry M0.1](https://app.notion.com/p/408bc6a809d78110bcc0c2dfea03c560).
+- Limits: registry does not automatically apply saved state to every scene node; chunk factories must apply records to interactable objects. Full generated terrain/object persistence and asynchronous chunk streaming remain open. Manual GUI/GPU/iPhone QA is not claimed.
