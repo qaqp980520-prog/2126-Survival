@@ -273,3 +273,17 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Persist all generated terrain/object mutations and integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - Compatibility boundary: schema remains 1, but legacy object-registry payloads exceeding the new aggregate caps are intentionally rejected.
+
+
+## Run 42 — 2026-10-29: Span Engineer and salvage inventory transaction
+
+- [x] Add KROLL Span Engineer M0.1 with deterministic five-span bridge design, 12-unit material budget, three anchor layouts, rules tests and scene runtime smoke test.
+- [x] Fix active Surface Chunk Streaming Playground crate interaction: inventory must accept one iron ore before loot is consumed; inventory rejection leaves the crate unchanged.
+- [x] Add salvage crate end-to-end regression test for item count, weight, crate state, save/restore and max-count rejection.
+- [x] Add the new game and salvage integration checks to the Godot 4.3 workflow.
+- [x] Feature PR #118 merged as \`fcadbb4b6afd2a29af58d99d5149075c6a018def\`. Exact candidate \`92731d84de28ab7adce6707c26a000bad7d30f2f\` passed [Run #40855286483](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40855286483): 164 numbered validation steps + three post/cleanup entries (167 total), zero failures.
+- [ ] Extend semantic state restore to every production interactable factory, not only the current Surface Chunk Streaming Playground.
+- [ ] Add stable per-object loot identity and data migration before introducing multiple salvage loot types.
+- [ ] Persist all generated terrain/object mutations and integrate asynchronous chunk streaming with save/restore and failure recovery.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+- Compatibility: no world-save schema change; schema 1 remains. Current salvage crate reward is one \`iron_ore\` per successful interaction, and full inventory cannot consume crate loot.
