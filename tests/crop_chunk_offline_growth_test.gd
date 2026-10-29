@@ -74,6 +74,8 @@ func _run() -> void:
     assert(not chunk_controller.load_chunk(failure_chunk_id, bad_root, now + 420), "Duplicate stable vein registration rejects the chunk")
     assert(bad_root.get_parent() == null, "Failed chunk registration leaves the scene root with the caller")
     assert(crop_controller.get_crop(failure_crop_id) == failure_before, "Failed mineral registration rolls back offline crop catch-up")
+    var failed_plot: Node = bad_root.get_node_or_null("CropPlot_0")
+    assert(failed_plot != null and str(failed_plot.get("status_text")).contains("0/4"), "Detached crop visuals refresh to the rolled-back state")
     assert(mineral_registry.unregister_vein(conflict_stable_id, conflict_ore, now + 420), "Remove the pre-existing conflict after the assertion")
     conflict_ore.queue_free()
     bad_root.free()
