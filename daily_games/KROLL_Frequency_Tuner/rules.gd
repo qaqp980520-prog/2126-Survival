@@ -34,11 +34,12 @@ static func output_values(frequencies: Array) -> Array[int]:
 	var x: int = int(frequencies[0])
 	var y: int = int(frequencies[1])
 	var z: int = int(frequencies[2])
-	return [
+	var result: Array[int] = [
 		posmod(x + 2 * y + z, 10),
 		posmod(2 * x + y + 3 * z, 10),
 		posmod(3 * x + 2 * y + 2 * z, 10)
 	]
+	return result
 
 static func tune(state: Dictionary, dial: int, delta: int) -> Dictionary:
 	if str(state.get("status", "")) != "playing":
