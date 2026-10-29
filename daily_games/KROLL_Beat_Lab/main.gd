@@ -80,13 +80,6 @@ func next_chart() -> void:
 	restart_chart()
 
 func _build_ui() -> void:
-	var background := ColorRect.new()
-	background.name = "Background"
-	background.color = Color("#07111f")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
-
 	var margin := MarginContainer.new()
 	margin.name = "PageMargin"
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
