@@ -53,6 +53,16 @@ func _run() -> void:
 	_expect(not bool(restored.call("validate_world_object_state", invalid_state)), "unknown mineral loot IDs are rejected")
 	_expect(not bool(restored.call("apply_world_object_state", invalid_state)), "invalid loot identity cannot be applied")
 	_expect(restored.call("get_world_object_state") == before_invalid, "invalid loot restore leaves live prop unchanged")
+
+	var inconsistent_states: Array[Dictionary] = [
+		{"opened": false, "loot_remaining": 1},
+		{"opened": false, "loot_remaining": 0},
+		{"opened": true, "loot_remaining": PropScript.MAX_LOOT}
+	]
+	for inconsistent_state in inconsistent_states:
+		_expect(not bool(restored.call("validate_world_object_state", inconsistent_state)), "inconsistent opened/remaining combination is rejected")
+		_expect(not bool(restored.call("apply_world_object_state", inconsistent_state)), "inconsistent state cannot mutate a live crate")
+		_expect(restored.call("get_world_object_state") == before_invalid, "rejected state preserves the live crate snapshot")
 	_expect(not bool(restored.call("validate_world_object_state", {"opened": false, "loot_remaining": 2, "unexpected": "x"})), "unknown third state field is rejected")
 
 	var before_count: int = _inventory_count(bridge, "copper_ore")

@@ -44,7 +44,8 @@ func validate_world_object_state(state: Dictionary) -> bool:
 		var item_value: Variant = state.get("loot_item_id", null)
 		if not (item_value is String) or not MineralCatalogScript.has_mineral(str(item_value)):
 			return false
-	return not (bool(opened_value) and int(loot_value) == MAX_LOOT)
+	# A closed crate must be full; any consumed loot requires the opened state.
+	return bool(opened_value) == (int(loot_value) < MAX_LOOT)
 
 
 func apply_world_object_state(state: Dictionary) -> bool:
