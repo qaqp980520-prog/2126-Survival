@@ -201,7 +201,7 @@ func _refresh_ui() -> void:
 func _format_cars(cars: Array, show_next: bool) -> String:
 	if cars.is_empty():
 		return "EMPTY"
-	var parts: Array[String] = []
+	var parts := PackedStringArray()
 	for index in range(cars.size()):
 		var marker: String = "▶ " if show_next and index == 0 else ""
 		parts.append(marker + str(cars[index]))
