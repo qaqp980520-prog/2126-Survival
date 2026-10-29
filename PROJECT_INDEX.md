@@ -585,3 +585,24 @@
 - PR #122 includes 10 changed files and the canonical workflow extension in `.github/workflows/godot-validation.yml`. Latest main at this docs branch start is `bb8265977ce4d885680c5861943fb162766b354f`.
 - Remaining engineering: production interactable factories need comprehensive state binding; full terrain/object mutations and asynchronous chunk streaming/recovery remain open. No local Godot executable or hardware was available; manual GUI/GPU/iPhone tests are not claimed.
 - Notion: [Run 44 daily log](https://app.notion.com/p/408bc6a809d78173a006e89b74283536), [Frequency Tuner M0.1](https://app.notion.com/p/408bc6a809d7813ca98bd73d007c24b5), [WorldObjectStatefulProp M0.2](https://app.notion.com/p/408bc6a809d781c595affc57d4d83c58), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
+
+## Run 45 — 2026-10-29
+
+### KROLL Rail Yard M0.1
+- Project: `daily_games/KROLL_Rail_Yard/`; Godot 4.3+; no external assets or add-ons.
+- Queue/stack shunting puzzle: five cars A–E, three deterministic layouts, siding capacity 3, 12-move limit, keyboard and touch controls.
+- Tests: `daily_games/KROLL_Rail_Yard/tests/rules_test.gd` and `tests/game_smoke_test.gd`; includes malformed/duplicate car rejection, stack capacity, move budget, terminal lock, actual button signals, restart and wraparound.
+- Targeted Godot 4.3 CI: [Run #40897295646](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40897295646), all 12 job steps successful.
+- Full repository Godot 4.3 CI: [Run #40897295631](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40897295631), all 171 validation steps plus setup/post/cleanup successful; zero failed or skipped steps.
+
+### Salvage inventory compensation
+- `systems/WorldObjectStatefulProp.gd` now attempts `restore_inventory(snapshot)` if `collect_world_item()` returns false, covering adapters that mutate before rejecting.
+- If compensation fails, the result explicitly reports `inventory_rollback_failed`; it does not claim rollback succeeded.
+- Regression: `tests/salvage_crate_inventory_rollback_test.gd`, passed in targeted Run #40897295646.
+- World save schema remains unchanged.
+
+### Merge record
+- Feature PR [#124](https://github.com/qaqp980520-prog/2126-Survival/pull/124) merged after both exact-head workflows passed.
+- Merge commit: `7c95896145c735fb6a0f1f4d8cb41165c3216988`.
+- Candidate head tested: `c02aa304b3eeeed80bf2b97cfcfe97d365581a5c`.
+- Remaining: integrate stateful lifecycle into all production interactable factories; full terrain/object-change persistence; asynchronous chunk streaming; manual GUI/GPU/iPhone QA. No device QA is claimed.

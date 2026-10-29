@@ -316,3 +316,16 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Persist complete generated terrain and world-object mutations across unload/reload.
 - [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+
+## Run 45 — 2026-10-29 — Rail Yard and salvage compensation
+
+**Merged feature:** PR [#124](https://github.com/qaqp980520-prog/2126-Survival/pull/124), merge commit `7c95896145c735fb6a0f1f4d8cb41165c3216988`; exact tested head `c02aa304b3eeeed80bf2b97cfcfe97d365581a5c`.
+
+- Added `daily_games/KROLL_Rail_Yard/`: deterministic shunting puzzle; five cars, FIFO input, capacity-3 LIFO siding, A–E output, three layouts and 12-move budget.
+- Added tests for invalid/duplicate car IDs, illegal moves, siding capacity, move-limit terminal behavior, three complete solutions, actual scene button signals, restart and seed wraparound.
+- Hardened `WorldObjectStatefulProp.interact_with_inventory()`: a rejected inventory grant now attempts compensation from the pre-call snapshot; compensation failure is surfaced as `inventory_rollback_failed`.
+- [Targeted CI Run #40897295646](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40897295646): all 12 job steps passed, including root import, rollback regression, Rail Yard import, rules and runtime smoke.
+- [Full Godot 4.3 CI Run #40897295631](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40897295631): all 171 validation steps and setup/post/cleanup steps passed, zero failures or skips.
+- A previous smoke test had an incorrect expectation after seed 3; corrected in commit `c02aa304b3eeeed80bf2b97cfcfe97d365581a5c` and revalidated on the exact final candidate.
+- Save schema remains version 1. If an external inventory adapter mutates and then its compensation method also fails, the code reports the failure; it cannot guarantee external rollback in that case.
+- Follow-up: bind stable object-state persistence into every production interactable factory, persist full terrain and object deltas, integrate async chunk streaming, and conduct device QA.
