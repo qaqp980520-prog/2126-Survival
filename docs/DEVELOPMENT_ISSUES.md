@@ -302,3 +302,17 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - Compatibility boundary: save envelope remains schema 1. Old two-field crate state is accepted and preserves the deterministic factory identity. The previous Run 42 note saying crates only grant iron ore is historical and superseded by Run 43's coordinate-based deterministic loot IDs; this is not a weighted/random loot table yet.
+
+
+## Run 44 — 2026-10-29: Frequency Tuner + salvage crate state invariants
+
+- [x] Add KROLL Frequency Tuner M0.1 with three deterministic signal dials, modulo-10 coupled outputs, 14-move budget, mouse/touch/keyboard controls, rules tests and scene runtime smoke test.
+- [x] Add exact-head Godot 4.3 workflow checks for Frequency Tuner import, rules and runtime.
+- [x] Exhaustively test all 1,000 dial combinations for unique output mapping; test the real dial-button signal in the scene smoke test.
+- [x] Tighten `WorldObjectStatefulProp` state validation: closed crates must be full; consumed loot requires `opened=true`; invalid state is rejected without mutating the live prop.
+- [x] Preserve world-save schema 1 and valid legacy two-field crate state.
+- [x] Feature PR [#122](https://github.com/qaqp980520-prog/2126-Survival/pull/122) merged as `bb8265977ce4d885680c5861943fb162766b354f`. Exact candidate `8334fd2d3b6fc0ed97ec2159bce44cb80698c126` passed [Godot 4.3 CI Run #562](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40879170090): 174/174 steps, zero failures, zero skipped steps. Frequency Tuner steps 168–170 and salvage loot identity step 171 passed.
+- [ ] Extend semantic state restoration to all production interactable object factories.
+- [ ] Persist complete generated terrain and world-object mutations across unload/reload.
+- [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
