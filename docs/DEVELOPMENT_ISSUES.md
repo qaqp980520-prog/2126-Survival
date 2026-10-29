@@ -287,3 +287,18 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Persist all generated terrain/object mutations and integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - Compatibility: no world-save schema change; schema 1 remains. Current salvage crate reward is one `iron_ore` per successful interaction, and full inventory cannot consume crate loot.
+
+
+## Run 43 — 2026-10-29: Biome Balance + persisted salvage loot identity
+
+- [x] Add KROLL Biome Balance M0.1 with deterministic seeds 17/29/41, six-turn ecosystem management, two interventions per turn, bounded resources, keyboard/mouse/touch controls, rules tests and scene smoke test.
+- [x] Extend the canonical Godot 4.3 workflow with game import, rules/runtime tests and salvage loot identity regression.
+- [x] Persist MineralCatalog-backed `loot_item_id` on WorldObjectStatefulProp and preserve schema-1 legacy state containing only `opened` and `loot_remaining`.
+- [x] Assign deterministic salvage loot by chunk coordinate; origin chunk remains `iron_ore`, adjacent chunk (1,0) is `copper_ore`; HUD displays the catalog mineral name.
+- [x] Verify successful inventory grant, full-inventory rejection without crate mutation, invalid ID rejection, registry save/restore and legacy-state compatibility.
+- [x] PR [#120](https://github.com/qaqp980520-prog/2126-Survival/pull/120) merged as `3530f5145f98895d58e914b392b57ff0062cd9e7`. Exact candidate `bd5aebb35f8c23fc190d52ea75ae7281d76718b7` passed Godot 4.3 CI [Run #554](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40862702927): 168 numbered workflow steps plus three post/cleanup entries (171 total), zero failures.
+- [ ] Expand semantic state restoration to every production interactable object factory.
+- [ ] Persist complete generated terrain and all world-object mutations across unload/reload.
+- [ ] Integrate asynchronous chunk streaming with world-session save/restore and failure recovery.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+- Compatibility boundary: save envelope remains schema 1. Old two-field crate state is accepted and preserves the deterministic factory identity. The previous Run 42 note saying crates only grant iron ore is historical and superseded by Run 43's coordinate-based deterministic loot IDs; this is not a weighted/random loot table yet.
