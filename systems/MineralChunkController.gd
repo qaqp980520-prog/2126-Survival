@@ -106,6 +106,12 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	if not world_objects.is_empty():
 		object_registry_snapshot = object_state_registry.call("to_save_dict")
 		if not object_registry_snapshot.has("schema_version") or not object_registry_snapshot.has("objects"):
+			if not crop_snapshot.is_empty():
+				crop_controller.call("restore_save_dict", crop_snapshot)
+				for plot_value in crops.values():
+					var plot_node: Node = plot_value as Node
+					if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+						plot_node.call("refresh")
 			return false
 
 	add_child(chunk_root)
