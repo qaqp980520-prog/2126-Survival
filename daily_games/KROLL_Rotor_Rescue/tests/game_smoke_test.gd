@@ -13,7 +13,8 @@ func _run() -> void:
 	await process_frame
 	var state: Dictionary = game.get("game_state")
 	assert(int(state.get("seed", 0)) == 1, "Main scene starts with the first deterministic layout")
-	assert(game.get_node_or_null("Button") != null, "Touch control buttons are created")
+	assert(game.get_node_or_null("Touch_left") != null, "Named touch movement controls are created")
+	assert(game.get_node_or_null("RestartButton") != null and game.get_node_or_null("NextButton") != null, "Restart and next-layout controls are created")
 	var next: Dictionary = Rules.step(state, Vector2.RIGHT, 0.1)
 	var next_position: Vector2 = next["position"]
 	var initial_position: Vector2 = state["position"]
