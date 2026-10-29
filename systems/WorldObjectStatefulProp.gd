@@ -10,6 +10,7 @@ const DEFAULT_LOOT_ITEM_ID: String = "iron_ore"
 var opened: bool = false
 var loot_remaining: int = MAX_LOOT
 var loot_item_id: String = DEFAULT_LOOT_ITEM_ID
+var _inventory_interaction_in_progress: bool = false
 var _body_mesh: MeshInstance3D
 var _lid_mesh: MeshInstance3D
 
@@ -71,6 +72,15 @@ func set_loot_item(item_id: String) -> bool:
 
 
 func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
+	if _inventory_interaction_in_progress:
+		return {"ok": false, "reason": "interaction_in_progress", "item_id": loot_item_id, "remaining": loot_remaining}
+	_inventory_interaction_in_progress = true
+	var result: Dictionary = _interact_with_inventory_transaction(inventory_bridge)
+	_inventory_interaction_in_progress = false
+	return result
+
+
+func _interact_with_inventory_transaction(inventory_bridge: Node) -> Dictionary:
 	if loot_remaining <= 0:
 		return {"ok": false, "reason": "empty", "item_id": loot_item_id, "remaining": 0}
 	if inventory_bridge == null or not is_instance_valid(inventory_bridge):
@@ -106,6 +116,8 @@ func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 
 
 func interact() -> bool:
+	if _inventory_interaction_in_progress:
+		return false
 	if loot_remaining <= 0:
 		return false
 	opened = true
