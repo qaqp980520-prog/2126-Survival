@@ -531,3 +531,21 @@
 - Run #531 exposed a smoke-test assumption about default Button node names; explicit touch/action button names and matching assertions fixed it. Only Run #532 is the final exact-head success evidence.
 - No local Godot executable; no manual GUI/GPU/iPhone hardware QA is claimed.
 - Remaining: connect stateful-prop restoration to every production interactable factory; persist complete generated terrain/object mutations; integrate asynchronous chunk streaming and failure recovery.
+
+## Run 40 documentation closeout — final external-state correction (2026-10-29)
+
+- Documentation PR [#115](https://github.com/qaqp980520-prog/2126-Survival/pull/115) exact candidate `65c729bd95a94cb6884157d548a946255bcad81c` passed Godot 4.3 CI [Run #537](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40833525231): 157 numbered validation steps plus three post/cleanup entries, 160 step entries total, all successful.
+- PR #115 merged as `1368827db0a3d62411f9c5551fae604a0f9c2626`. Earlier pending checkpoints in historical records are superseded. Run 41 started from this exact main SHA.
+
+## 2026-10-29 Run 41 — Thermal Sort + aggregate world-object registry budgets (merged / exact-head CI passed)
+
+- Start-of-run reconciliation: main was `1368827db0a3d62411f9c5551fae604a0f9c2626`; PR #115 was merged, and open-PR search was empty. A fresh feature branch was created from that SHA.
+- New game: `daily_games/KROLL_Thermal_Sort/`, a deterministic temperature-routing arcade game with three layouts (seeds 101, 202, 303), 12 canisters per shift, cold/stable/hot thresholds, two allowed mistakes, keyboard/mouse/touch controls, restart/next-layout, and no external assets/add-ons. Import via `daily_games/KROLL_Thermal_Sort/project.godot` in Godot 4.3+.
+- Game tests: `daily_games/KROLL_Thermal_Sort/tests/rules_test.gd` checks threshold boundaries, deterministic seeds, invalid-bin non-mutation, clean completion for all layouts and third-error failure. `tests/game_smoke_test.gd` instantiates the real scene, checks stable button names, completes a shift, restarts and advances seed.
+- Existing-system hardening: `systems/WorldObjectStateRegistry.gd` now caps aggregate state at 100,000 total properties and 1,000,000 total string-value characters in addition to the existing 50,000 record cap, 64 properties per object and 256 characters per string. Incremental counters are updated on insert/replacement/deletion and restored from validated snapshots.
+- Regression: `tests/world_object_state_registry_test.gd` exercises aggregate string and property limits, budget release on replacement/deletion, over-budget save validation and all-or-nothing rejection of over-budget restore.
+- Shared workflow `.github/workflows/godot-validation.yml` now imports Thermal Sort and runs its rules/runtime tests; the existing world-object registry test executes against the expanded aggregate-budget cases.
+- Feature PR [#116](https://github.com/qaqp980520-prog/2126-Survival/pull/116) merged as `093e45116b56da7be33b04d5a536d967b13214a9`. Exact candidate HEAD `981eda60d12d7253efa15934e283de4f07b8a769` passed Godot 4.3 CI [Run #539](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40838865278): 160 numbered validation steps plus three post/cleanup entries, 163 total step entries, all successful. Registry aggregate tests passed at step 154; Rotor Rescue import/rules/runtime passed at 155–157; Thermal Sort import/rules/runtime passed at 158–160.
+- Save schema remains version 1. Ordinary legacy saves remain compatible, but a schema-1 object-registry payload above the new aggregate limits is intentionally rejected.
+- Notion records: [Run 41 daily log](https://app.notion.com/p/408bc6a809d7814d817bc82af5132e90), [Thermal Sort M0.1](https://app.notion.com/p/408bc6a809d7813b9cd9e9d1e0a97946), [WorldObjectStateRegistry Aggregate Budget M0.1](https://app.notion.com/p/408bc6a809d7810a941cca02f5a9d2b1).
+- Limits: Thermal Sort is standalone and not connected to the survival inventory. The registry stores bounded primitive state; production prop factories still need comprehensive semantic restoration. Full terrain mutation persistence and asynchronous streaming remain open. No local Godot executable, manual GUI/GPU or iPhone hardware pass is claimed.
