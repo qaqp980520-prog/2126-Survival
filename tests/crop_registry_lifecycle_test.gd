@@ -68,6 +68,18 @@ func _run() -> void:
     _expect(dry["growth_stage"] == 1 and is_equal_approx(float(dry["growth_progress"]), 0.25), "dry crop growth is paused")
     _expect(dry["last_updated_unix"] == now + 9, "injected timestamps are stored deterministically")
 
+    var offline_id := "surface/chunk_3_0/offline-wheat"
+    _expect(registry.register_crop(offline_id, "wheat", 0, 0.0, 60.0, now + 1000, 0), "register an offline-growth crop")
+    var offline_target: int = now + 1000 + 86400 * 3
+    _expect(registry.advance_to_time(offline_id, offline_target), "offline crop catches up after a multi-day absence")
+    var offline: Dictionary = registry.get_crop(offline_id)
+    _expect(offline["last_updated_unix"] == offline_target, "offline catch-up advances the persisted timestamp to the target")
+    _expect(offline["growth_stage"] == 2 and is_equal_approx(float(offline["moisture"]), 0.0), "bounded catch-up reaches the dry steady state without inventing growth after water runs out")
+    var offline_snapshot: Dictionary = offline.duplicate(true)
+    _expect(registry.advance_to_time(offline_id, offline_target), "repeating the same catch-up timestamp is idempotent")
+    _expect(not registry.advance_to_time(offline_id, offline_target - 1), "offline catch-up rejects clock rollback")
+    _expect(registry.get_crop(offline_id) == offline_snapshot, "clock rollback leaves offline crop data unchanged")
+
     registry.queue_free()
     await process_frame
     if failures.is_empty():
