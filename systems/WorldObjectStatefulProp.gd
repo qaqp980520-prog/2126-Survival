@@ -21,7 +21,7 @@ func get_world_object_state() -> Dictionary:
 		"loot_remaining": loot_remaining
 	}
 
-func apply_world_object_state(state: Dictionary) -> bool:
+func validate_world_object_state(state: Dictionary) -> bool:
 	if state.size() != 2 or not state.has("opened") or not state.has("loot_remaining"):
 		return false
 	var opened_value: Variant = state.get("opened", null)
@@ -31,9 +31,14 @@ func apply_world_object_state(state: Dictionary) -> bool:
 	if int(loot_value) < 0 or int(loot_value) > MAX_LOOT:
 		return false
 	# A never-opened crate cannot already have been marked open with its full contents.
-	if bool(opened_value) and int(loot_value) == MAX_LOOT:
+	return not (bool(opened_value) and int(loot_value) == MAX_LOOT)
+
+func apply_world_object_state(state: Dictionary) -> bool:
+	if not validate_world_object_state(state):
 		return false
-	opened = bool(opened_value)
+	var opened_value: bool = bool(state["opened"])
+	var loot_value: int = int(state["loot_remaining"])
+	opened = opened_value
 	loot_remaining = int(loot_value)
 	_refresh_visuals()
 	return true
