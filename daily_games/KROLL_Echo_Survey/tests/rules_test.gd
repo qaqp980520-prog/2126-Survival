@@ -22,19 +22,19 @@ func _initialize() -> void:
                     caches.append(Vector2i(x, y))
         assert(caches.size() == Rules.TARGET_CACHES, "Each layout must contain exactly three caches")
         for cache in caches:
-            var route: Array[Vector2i] = _find_path(rows, Vector2i(0, 0), cache)
-            assert(not route.is_empty(), "Every cache must be reachable in every layout")
+            var route_from_start: Array[Vector2i] = _find_path(rows, Vector2i(0, 0), cache)
+            assert(not route_from_start.is_empty(), "Every cache must be reachable in every layout")
 
         var route_state: Dictionary = state
         for cache in caches:
-            var route: Array[Vector2i] = _find_path(rows, Vector2i(int(route_state["x"]), int(route_state["y"])), cache)
-            for step in route:
+            var travel_path: Array[Vector2i] = _find_path(rows, Vector2i(int(route_state["x"]), int(route_state["y"])), cache)
+            for step in travel_path:
                 var delta: Vector2i = step - Vector2i(int(route_state["x"]), int(route_state["y"]))
                 var moved: Dictionary = Rules.move(route_state, delta.x, delta.y)
                 assert(bool(moved["ok"]), "A computed open-cell route must be traversable")
                 route_state = moved["state"]
                 assert(str(route_state["status"]) == "playing", "Oxygen budget must support the cache route")
-        var return_route: Array[Vector2i] = _find_path(rows, Vector2i(int(route_state["x"]), int(route_state["y"])), Vector2i.ZERO)
+        var return_route: Array[Vector2i] = _find_path(rows, Vector2i(int(route_state["x"]), int(route_state["y"])), Vector2i(0, 0))
         for step in return_route:
             var delta: Vector2i = step - Vector2i(int(route_state["x"]), int(route_state["y"]))
             route_state = Rules.move(route_state, delta.x, delta.y)["state"]
@@ -77,7 +77,8 @@ func _find_path(rows: Array, start: Vector2i, target: Vector2i) -> Array[Vector2
     if start == target:
         return []
     var queue: Array[Vector2i] = [start]
-    var parent: Dictionary = {_key(start): ""}
+    var parent: Dictionary = {}
+    parent[_key(start)] = ""
     var position_by_key: Dictionary = {}
     var cursor_index: int = 0
     while cursor_index < queue.size():
