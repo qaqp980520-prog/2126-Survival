@@ -80,8 +80,9 @@ func _run_tests() -> void:
 	_check(bool(playground.inventory_bridge.collect_world_item("iron_ore", 2)), "World bridge accepts registered ore before saving")
 	_check(is_equal_approx(playground.inventory_bridge.get_weight_kg(), 6.0), "Two iron ore weigh six kilograms before save")
 	var stable_id: String = Adapter.make_stable_id("surface/chunk_0_0", "Chunk_0_0/Ore_0_0")
+	_check(bool(playground.object_state_registry.set_object_state("surface/chunk_0_0/container_1", "surface/chunk_0_0", {"opened": false, "loot_seed": 17})), "World-object registry stores a stable container state")
 	var save_payload: Dictionary = playground.serialize_stream_state()
-	_check(save_payload.has("inventory"), "Stream save includes the optional inventory payload")
+	_check(save_payload.has("inventory") and save_payload.has("world_objects"), "Stream save includes optional inventory and world-object payloads")
 	var mineral_payload: Dictionary = save_payload.get("minerals", {})
 	var saved_veins: Dictionary = mineral_payload.get("veins", {})
 	_check(saved_veins.has(stable_id), "Save must include the loaded vein")
@@ -160,6 +161,7 @@ func _run_tests() -> void:
 	target_counts["iron_ore"] = 5
 	target_inventory["inventory"] = target_counts
 	target_restore["inventory"] = target_inventory
+	_check(bool(playground.object_state_registry.set_property("surface/chunk_0_0/container_1", "surface/chunk_0_0", "opened", true)), "Live container changes after the save snapshot")
 	_fail_factory_coordinate = Vector2i(3, -1)
 	_check(bool(playground.director.bind_chunk_factory(Callable(self, "_make_fault_injected_chunk"))), "Fault-injected factory should bind")
 	var failed_restore_ok: bool = bool(playground.restore_stream_state(target_restore, now))
@@ -175,6 +177,8 @@ func _run_tests() -> void:
 	_check(int(playground.crop_registry.get_crop(crop_stable_id).get("growth_stage", -1)) == 1, "Failed stream restore must roll back crop registry state")
 	_check(is_equal_approx(playground.inventory_bridge.get_weight_kg(), 6.0), "Failed target streaming must roll back the candidate inventory weight")
 	_check(int(playground.inventory_bridge.serialize_inventory().get("inventory", {}).get("iron_ore", 0)) == 2, "Failed target streaming must restore the previous inventory counts")
+	_check(bool(playground.object_state_registry.get_object_state("surface/chunk_0_0/container_1").get("state", {}).get("opened", false)), "Failed target streaming must roll back world-object state")
+	_check(bool(restore_report.get("details", {}).get("world_objects_restored", false)), "Rollback diagnostics report world-object restoration")
 	var restore_details: Dictionary = restore_report.get("details", {})
 	var target_report: Dictionary = restore_details.get("target_sync_report", {})
 	_check(str(target_report.get("phase", "")) == "load_factory", "Diagnostic report should retain the original target-load failure")
