@@ -216,3 +216,16 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - No separate post-merge main-push workflow is claimed; CI evidence applies to the exact PR candidate SHA.
+
+## Run 37 — 2026-10-29: streamed crop offline growth and Skyline Courier
+
+- [x] Add KROLL Skyline Courier M0.1 with deterministic three-lane routes, hazard collisions, packet collection, timer/lives, keyboard and touch controls.
+- [x] Add bounded `CropRegistry.advance_to_time()` and atomic `CropPlotController.advance_crops_to_time()`; catch up crop records on streamed chunk reload without changing schema 1.
+- [x] If mineral registration rejects a chunk after crop catch-up, restore the prior crop snapshot and refresh detached crop visuals.
+- [x] Add offline growth, clock rollback, failed registration and visual rollback regression tests.
+- [x] PR #109 merged as `7b9c589985a9af87a9ba3a3f7b98dc1cc60e8041`; exact candidate `cefa1b0b4255752755c2ff4c289fe67ed38973bb`. Godot 4.3 CI Run #502 passed 149/149 job steps, zero failures/skips.
+- [ ] Build formal production `scripts/world.gd` and migrate world-facing systems behind it.
+- [ ] Persist complete generated chunk scene state (terrain, all interactive objects and world mutations), not only crop/mineral registry records.
+- [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
+- [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
+- No separate post-merge main-push workflow is claimed; the test evidence applies to exact PR candidate HEAD.
