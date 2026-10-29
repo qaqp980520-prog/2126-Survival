@@ -42,7 +42,7 @@ func _run() -> void:
 			saved_crate_state = object_payload[object_id].get("state", {})
 	_expect(bool(saved_crate_state.get("opened", false)) and int(saved_crate_state.get("loot_remaining", -1)) == 1, "world save captures the crate after one collection")
 	var second: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
-	_expect(bool(second.get("ok", false)) and int(crate.get("loot_remaining", -1)) == 0, "second interaction consumes the final salvage unit")
+	_expect(bool(second.get("ok", false)) and int(crate.get("loot_remaining")) == 0, "second interaction consumes the final salvage unit")
 	_expect(_inventory_count(bridge, "iron_ore") == before_count + 2, "second collection adds exactly one more item")
 	_expect(bool(world.call("restore_stream_state", saved, now + 2)), "saved world state restores successfully")
 	origin = chunk_controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
