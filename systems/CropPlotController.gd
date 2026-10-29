@@ -107,5 +107,15 @@ func remove_crop(stable_id: String) -> bool:
         return false
     return bool(registry.call("remove_crop", stable_id))
 
+func to_save_dict() -> Dictionary:
+    if registry == null:
+        return {}
+    return registry.call("to_save_dict")
+
+func restore_save_dict(payload: Dictionary) -> bool:
+    if registry == null:
+        return false
+    return bool(registry.call("restore_save_dict", payload))
+
 func _result(ok: bool, reason: String, ids: Array) -> Dictionary:
     return {"ok": ok, "reason": reason, "advanced_ids": ids.duplicate()}
