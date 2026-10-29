@@ -75,7 +75,7 @@ func _sync_streaming(now_unix: int = -1) -> bool:
 	var success: bool = director.sync_to_world_position(player.global_position, _stream_clock_unix)
 	if success:
 		_last_grid = director.get_grid_coordinate(player.global_position)
-		_refresh_hud()
+		_refresh_world_hud()
 	return success
 
 func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
@@ -169,7 +169,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
 	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and ids_consistent and position_restored
-	_refresh_hud()
+	_refresh_world_hud()
 	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
 		"target_sync_report": target_sync_report,
 		"recovery_report": recovery_report,
@@ -193,6 +193,10 @@ func _set_restore_report(success: bool, phase: String, message: String, rollback
 		"rollback_complete": rollback_complete,
 		"details": details.duplicate(true)
 	}
+
+func _refresh_world_hud() -> void:
+	if has_method("_refresh_hud"):
+		call("_refresh_hud")
 
 ## Stable status snapshot for HUD, diagnostics and save/load acceptance tests.
 func get_world_session_status() -> Dictionary:
