@@ -575,3 +575,13 @@
 - World-save envelope remains schema 1. Loot is deterministic by chunk coordinate, not a weighted random loot table. Full generated terrain/object mutation persistence and asynchronous chunk streaming remain open.
 - Notion: [Run 43 daily log](https://app.notion.com/p/408bc6a809d7811d8aa2dc58cde40771), [Biome Balance M0.1](https://app.notion.com/p/408bc6a809d7814faacad0bac4d728ea), [Salvage Loot Identity Persistence M0.1](https://app.notion.com/p/408bc6a809d781fa9ac3f1f18cea10df), [Godot Validation Workflow M0.1](https://app.notion.com/p/408bc6a809d7816c84adc08886871c8f).
 - Limits: no local Godot executable; no manual GUI/GPU/iPhone hardware pass is claimed.
+
+
+## 2026-10-29 Run 44 — Frequency Tuner + salvage crate state invariants (feature merged / exact-head CI passed)
+
+- Feature PR [#122](https://github.com/qaqp980520-prog/2126-Survival/pull/122) merged as `bb8265977ce4d885680c5861943fb162766b354f`. Exact candidate HEAD `8334fd2d3b6fc0ed97ec2159bce44cb80698c126` passed [Godot 4.3 CI Run #562](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40879170090): 174/174 workflow steps completed, zero failures and zero skipped steps.
+- New game `daily_games/KROLL_Frequency_Tuner/`: three coupled modulo-10 frequency dials, fixed seeds 13/27/41, 14-move budget, keyboard/mouse/touch UI, rules tests and runtime smoke test. Godot 4.3+, no external assets or plugins. CI steps 168–170 passed; the rules suite exhaustively verifies the output mapping across all 1,000 possible dial states and the scene smoke test emits a real dial-button signal.
+- Existing-system fix: `systems/WorldObjectStatefulProp.gd` now rejects inconsistent state combinations: a closed crate must be full; a crate with consumed loot must be marked opened. `tests/salvage_crate_loot_identity_test.gd` verifies rejected restores do not mutate live state while preserving valid schema-1 two-field legacy records. CI step 171 passed.
+- PR #122 includes 10 changed files and the canonical workflow extension in `.github/workflows/godot-validation.yml`. Latest main at this docs branch start is `bb8265977ce4d885680c5861943fb162766b354f`.
+- Remaining engineering: production interactable factories need comprehensive state binding; full terrain/object mutations and asynchronous chunk streaming/recovery remain open. No local Godot executable or hardware was available; manual GUI/GPU/iPhone tests are not claimed.
+- Notion: [Run 44 daily log](https://app.notion.com/p/408bc6a809d78173a006e89b74283536), [Frequency Tuner M0.1](https://app.notion.com/p/408bc6a809d7813ca98bd73d007c24b5), [WorldObjectStatefulProp M0.2](https://app.notion.com/p/408bc6a809d781c595affc57d4d83c58), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
