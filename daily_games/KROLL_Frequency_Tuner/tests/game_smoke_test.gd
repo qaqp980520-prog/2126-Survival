@@ -18,7 +18,7 @@ func _run() -> void:
 	_expect(game.find_child("TargetOutput1", true, false) is Label, "target output labels exist")
 	_expect(game.find_child("CurrentOutput3", true, false) is Label, "current output labels exist")
 
-	var dial_a_plus: Button = game.find_child("Dial1Plus", true, false)
+	var dial_a_plus: Button = game.find_child("Dial1Plus", true, false) as Button
 	var before_dial_a: int = int(game.get("state")["frequencies"][0])
 	dial_a_plus.emit_signal("pressed")
 	_expect(int(game.get("state")["frequencies"][0]) == posmod(before_dial_a + 1, 10), "dial button signal is wired to the tuning action")
