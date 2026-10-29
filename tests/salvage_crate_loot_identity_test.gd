@@ -57,7 +57,7 @@ func _run() -> void:
 	var inconsistent_states: Array[Dictionary] = [
 		{"opened": false, "loot_remaining": 1},
 		{"opened": false, "loot_remaining": 0},
-		{"opened": true, "loot_remaining": WorldObjectStatefulProp.MAX_LOOT}
+		{"opened": true, "loot_remaining": PropScript.MAX_LOOT}
 	]
 	for inconsistent_state in inconsistent_states:
 		_expect(not bool(restored.call("validate_world_object_state", inconsistent_state)), "inconsistent opened/remaining combination is rejected")
