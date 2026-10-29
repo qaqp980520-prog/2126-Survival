@@ -35,7 +35,7 @@ func bind_registry(candidate: Node) -> bool:
 func bind_crop_controller(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "harvest_crop", "remove_crop"]:
+	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "advance_crops_to_time", "harvest_crop", "remove_crop"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and crop_controller != candidate:
@@ -62,10 +62,20 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	if not crops.is_empty() and crop_controller == null:
 		return false
 
+	var existing_crop_ids: Array[String] = []
 	for local_path in crops.keys():
 		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		if not _valid_crop_stable_id(stable_id):
 			return false
+		var existing_crop: Dictionary = crop_controller.call("get_crop", stable_id)
+		if not existing_crop.is_empty():
+			existing_crop_ids.append(stable_id)
+	if not existing_crop_ids.is_empty():
+		var catch_up: Dictionary = crop_controller.call("advance_crops_to_time", existing_crop_ids, now_unix)
+		if not bool(catch_up.get("ok", false)):
+			return false
+	for local_path in crops.keys():
+		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		var plot: Node = crops[local_path]
 		plot.call("configure", crop_controller, stable_id, str(plot.get("crop_id")), int(plot.get("plot_index")))
 
