@@ -2,6 +2,7 @@ extends "res://scripts/world.gd"
 
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
@@ -12,7 +13,8 @@ var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
 var _jump_was_down: bool = false
-var _crop_action_message: String = "E: interact with a nearby crop plot."
+var _crop_action_message: String = "E: crop · F: salvage crate."
+var _world_object_action_message: String = "F: interact with a nearby salvage crate."
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -127,6 +129,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_tree().change_scene_to_file("res://prototypes/SurvivalTestHub.tscn")
 			elif key_event.keycode == KEY_E:
 				_interact_nearest_crop_plot()
+			elif key_event.keycode == KEY_F:
+				_interact_nearest_world_prop()
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -164,6 +168,27 @@ func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	_refresh_hud()
 	return result
 
+func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
+	if player == null or chunk_controller == null:
+		return {"ok": false, "action": "unavailable", "message": "World-object interaction is unavailable."}
+	var nearest: Node3D = null
+	var nearest_distance: float = 3.25
+	for prop in chunk_controller.get_loaded_world_state_nodes():
+		if not is_instance_valid(prop):
+			continue
+		var distance: float = player.global_position.distance_to(prop.global_position)
+		if distance <= nearest_distance:
+			nearest = prop
+			nearest_distance = distance
+	if nearest == null:
+		_world_object_action_message = "No salvage crate within reach."
+		_refresh_hud()
+		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
+	var ok: bool = bool(nearest.call("interact"))
+	_world_object_action_message = "Crate opened; %d salvage units remain." % int(nearest.get("loot_remaining")) if ok else "Crate is empty."
+	_refresh_hud()
+	return {"ok": ok, "action": "interacted" if ok else "empty", "message": _world_object_action_message}
+
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()
 	chunk.name = "Chunk_%d_%d" % [coord.x, coord.y]
@@ -198,6 +223,10 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	ore.inventory_bridge_path = NodePath("../../../SurvivalWorldBridge")
 	ore.position = Vector3(CHUNK_SIZE * 0.5, -3.0, CHUNK_SIZE * 0.5)
 	chunk.add_child(ore)
+	var crate: Node3D = StatefulPropScript.new()
+	crate.name = "SalvageCrate"
+	crate.position = Vector3(CHUNK_SIZE * 0.55, 0.0, CHUNK_SIZE * 0.62)
+	chunk.add_child(crate)
 	var crop_kinds: Array[String] = ["wheat", "tomato"]
 	for plot_index in range(crop_kinds.size()):
 		var plot := CropPlotVisualScene.instantiate() as Node3D
@@ -218,4 +247,4 @@ func _refresh_hud() -> void:
 	var weight := float(inventory_summary.get("weight_kg", 0.0))
 	var limit := float(inventory_summary.get("limit_kg", 65.0))
 	var crop_record_count: int = crop_registry.get_saved_ids().size() if crop_registry != null else 0
-	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · E crop · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d   Crops: %d\nCarry: %.1f / %.1f kg\n%s" % [grid_text, active_count, record_count, crop_record_count, weight, limit, _crop_action_message]
+	hud.text = "KROLL // SURFACE STREAM PLAYGROUND\nWASD move · SPACE jump · RMB look · E crop · F crate · F10 test menu\nGrid: %s   Active chunks: %d   Vein records: %d   Crops: %d\nCarry: %.1f / %.1f kg\n%s\n%s" % [grid_text, active_count, record_count, crop_record_count, weight, limit, _crop_action_message, _world_object_action_message]
