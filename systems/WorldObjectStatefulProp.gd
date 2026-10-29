@@ -22,6 +22,8 @@ func get_world_object_state() -> Dictionary:
 	}
 
 func apply_world_object_state(state: Dictionary) -> bool:
+	if state.size() != 2 or not state.has("opened") or not state.has("loot_remaining"):
+		return false
 	var opened_value: Variant = state.get("opened", null)
 	var loot_value: Variant = state.get("loot_remaining", null)
 	if not (opened_value is bool) or not (loot_value is int):
