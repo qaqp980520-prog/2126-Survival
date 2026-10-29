@@ -43,6 +43,35 @@ func apply_world_object_state(state: Dictionary) -> bool:
 	_refresh_visuals()
 	return true
 
+func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
+	if loot_remaining <= 0:
+		return {"ok": false, "reason": "empty", "remaining": 0}
+	if inventory_bridge == null or not is_instance_valid(inventory_bridge):
+		return {"ok": false, "reason": "inventory_unavailable", "remaining": loot_remaining}
+	for method_name in ["collect_world_item", "serialize_inventory", "restore_inventory"]:
+		if not inventory_bridge.has_method(method_name):
+			return {"ok": false, "reason": "inventory_contract", "remaining": loot_remaining}
+	var inventory_snapshot: Variant = inventory_bridge.call("serialize_inventory")
+	if not (inventory_snapshot is Dictionary) or inventory_snapshot.is_empty():
+		return {"ok": false, "reason": "inventory_snapshot_invalid", "remaining": loot_remaining}
+	if not bool(inventory_bridge.call("collect_world_item", "iron_ore", 1)):
+		return {"ok": false, "reason": "inventory_rejected", "remaining": loot_remaining}
+	var next_state: Dictionary = get_world_object_state()
+	next_state["opened"] = true
+	next_state["loot_remaining"] = loot_remaining - 1
+	if not apply_world_object_state(next_state):
+		var rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
+		if not rollback_ok:
+			push_error("Salvage crate failed to roll back inventory after rejecting its state transition.")
+		return {"ok": false, "reason": "state_rejected", "remaining": loot_remaining}
+	return {
+		"ok": true,
+		"reason": "collected",
+		"item_id": "iron_ore",
+		"amount": 1,
+		"remaining": loot_remaining
+	}
+
 func interact() -> bool:
 	if loot_remaining <= 0:
 		return false
