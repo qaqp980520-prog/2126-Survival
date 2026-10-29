@@ -4,6 +4,8 @@ const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const Registry = preload("res://systems/MineralVeinRegistry.gd")
 const Controller = preload("res://systems/MineralChunkController.gd")
 const Adapter = preload("res://systems/MineralChunkLifecycleAdapter.gd")
+const ObjectRegistry = preload("res://systems/WorldObjectStateRegistry.gd")
+const StatefulProp = preload("res://systems/WorldObjectStatefulProp.gd")
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -16,6 +18,10 @@ func _run_tests() -> void:
 	await _test_failed_load_preserves_caller_root()
 	await process_frame
 	await _test_failed_unload_rolls_back_registration()
+	await process_frame
+	await _test_stateful_object_survives_unload_reload()
+	await process_frame
+	await _test_failed_object_state_application_is_atomic()
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
@@ -142,6 +148,74 @@ func _test_failed_unload_rolls_back_registration() -> void:
 	controller.queue_free()
 	registry.queue_free()
 	await process_frame
+
+func _test_stateful_object_survives_unload_reload() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+	var chunk_id := "earth/object-sector"
+	var first_chunk: Node3D = _new_stateful_chunk()
+	assert(controller.load_chunk(chunk_id, first_chunk, now))
+	var stable_id := chunk_id + "/object/ChunkRoot/SalvageCrate"
+	var crate: Node = first_chunk.get_node("SalvageCrate")
+	assert(int(object_registry.get_object_state(stable_id).get("state", {}).get("loot_remaining", -1)) == 2, "First load seeds the object's default state")
+	assert(bool(crate.call("interact")), "The stateful prop can be interacted with")
+	assert(controller.capture_loaded_world_object_states(), "Saving captures current live prop state")
+	assert(controller.unload_chunk(chunk_id, now), "Chunk unload captures object state before freeing nodes")
+	var saved: Dictionary = object_registry.get_object_state(stable_id).get("state", {})
+	assert(bool(saved.get("opened", false)) and int(saved.get("loot_remaining", -1)) == 1, "Unload stores the opened crate state")
+	var replacement: Node3D = _new_stateful_chunk()
+	assert(controller.load_chunk(chunk_id, replacement, now), "Reload reapplies the saved object state")
+	var restored: Node = replacement.get_node("SalvageCrate")
+	assert(bool(restored.get("opened")) and int(restored.get("loot_remaining")) == 1, "Reloaded prop matches its stable-ID record")
+	assert(controller.unload_chunk(chunk_id, now))
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_failed_object_state_application_is_atomic() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+	var chunk_id := "earth/object-reject"
+	var stable_id := chunk_id + "/object/ChunkRoot/SalvageCrate"
+	assert(object_registry.set_object_state(stable_id, chunk_id, {"opened": true, "loot_remaining": 2}), "Registry accepts bounded primitive state even if a specific prop rejects the semantic combination")
+	var before: Dictionary = object_registry.to_save_dict()
+	var incoming: Node3D = _new_stateful_chunk()
+	assert(not controller.load_chunk(chunk_id, incoming, now), "Prop must reject an incompatible saved state")
+	assert(incoming.get_parent() == null, "Failed state application leaves the caller-owned chunk detached")
+	var incoming_crate: Node = incoming.get_node("SalvageCrate")
+	assert(not bool(incoming_crate.get("opened")) and int(incoming_crate.get("loot_remaining")) == 2, "Failed apply restores the incoming prop's original state")
+	assert(object_registry.to_save_dict() == before, "Failed apply restores the object registry snapshot atomically")
+	assert(not controller.is_chunk_loaded(chunk_id), "Failed object restoration must not register a partial chunk")
+	incoming.free()
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _new_stateful_chunk() -> Node3D:
+	var chunk := Node3D.new()
+	chunk.name = "ChunkRoot"
+	var crate: Node3D = StatefulProp.new()
+	crate.name = "SalvageCrate"
+	chunk.add_child(crate)
+	return chunk
 
 func _new_mineral_chunk(units: int, regen_time: int) -> Node3D:
 	var chunk := Node3D.new()
