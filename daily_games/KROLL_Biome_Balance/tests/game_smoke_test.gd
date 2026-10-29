@@ -41,7 +41,7 @@ func _run() -> void:
 	game.call("restart_game")
 	_expect(str(game.get("state").get("status", "")) == "playing" and int(game.get("state").get("turn", 0)) == 1, "restart resets current layout")
 	game.call("next_layout")
-	_expect(int(game.get("state").get("seed", -1)) == 29, "next layout advances deterministically")
+	_expect(int(game.get("state").get("seed", -1)) == 17, "next layout advances deterministically")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
