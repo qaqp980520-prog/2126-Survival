@@ -82,7 +82,7 @@ func advance_crops_to_time(stable_ids: Array, now_unix: int = -1) -> Dictionary:
         ids.append(stable_id)
     var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
     if timestamp < latest_record_time:
-        return _result(true, "clock_rollback_noop", ids)
+        return _result(true, "clock_rollback_noop", [])
     var snapshot: Dictionary = registry.call("to_save_dict")
     for stable_id in ids:
         if not bool(registry.call("advance_to_time", stable_id, timestamp)):
