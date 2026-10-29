@@ -18,6 +18,11 @@ func _run() -> void:
 	_expect(not bool(registry.call("set_object_state", "surface/chunk_0_0/crate_1", "surface/chunk_1_0", {"opened": false})), "stable ID cannot be reassigned to a different chunk")
 	_expect(not bool(registry.call("set_property", "surface/chunk_0_0/crate_1", "surface/chunk_0_0", "nested", {"unsafe": true})), "nested values are rejected")
 	_expect(not bool(registry.call("set_property", "surface/chunk_0_0/crate_1", "surface/chunk_0_0", "bad_float", INF)), "non-finite numbers are rejected")
+	var oversized_state: Dictionary = {}
+	for index in range(65):
+		oversized_state["property_%d" % index] = index
+	_expect(not bool(registry.call("set_object_state", "surface/chunk_0_0/oversized", "surface/chunk_0_0", oversized_state)), "objects exceeding the property-count cap are rejected")
+	_expect(registry.call("get_saved_ids").size() == 1, "rejected oversized object state does not create a partial record")
 
 	var save: Dictionary = registry.call("to_save_dict")
 	_expect(bool(registry.call("validate_save_dict", save)), "valid registry save passes validation")
