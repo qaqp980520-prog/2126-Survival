@@ -107,7 +107,10 @@ func get_note_lane(index: int) -> int:
 	return int(notes[index]["lane"])
 
 func get_notes() -> Array[Dictionary]:
-	return notes.duplicate(true)
+	var result: Array[Dictionary] = []
+	for note in notes:
+		result.append(note.duplicate(true))
+	return result
 
 func get_status() -> Dictionary:
 	var remaining: int = 0
