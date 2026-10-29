@@ -16,6 +16,15 @@ func _run() -> void:
 	var invalid_direct: Dictionary = Rules.apply_action(first, "direct")
 	_expect(not bool(invalid_direct.get("ok", false)) and invalid_direct.get("reason") == "wrong_car", "wrong next car cannot enter output")
 	_expect(first == invalid_direct.get("state", {}), "rejected action does not mutate source state")
+	var unknown_car: Dictionary = first.duplicate(true)
+	unknown_car["incoming"][0] = "X"
+	var unknown_result: Dictionary = Rules.apply_action(unknown_car, "push")
+	_expect(not bool(unknown_result.get("ok", false)) and unknown_result.get("reason") == "invalid_state", "unknown car IDs are rejected")
+	_expect(unknown_car == unknown_result.get("state", {}), "unknown car rejection preserves the malformed input snapshot")
+	var duplicate_car: Dictionary = first.duplicate(true)
+	duplicate_car["incoming"][0] = "A"
+	var duplicate_result: Dictionary = Rules.apply_action(duplicate_car, "push")
+	_expect(not bool(duplicate_result.get("ok", false)) and duplicate_result.get("reason") == "invalid_state", "duplicate car IDs are rejected")
 
 	var capacity_state: Dictionary = Rules.new_game(3)
 	for _index in range(Rules.SIDING_CAPACITY):
