@@ -1,0 +1,71 @@
+name: Run 45 targeted Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'systems/WorldObjectStatefulProp.gd'
+      - 'tests/salvage_crate_inventory_rollback_test.gd'
+      - 'daily_games/KROLL_Rail_Yard/**'
+      - '.github/workflows/run45-targeted-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: run45-targeted-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Print Godot version
+        run: godot --version
+      - name: Import and parse root project
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Root project import/parse failed."
+            exit 1
+          fi
+      - name: Run salvage inventory rollback regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_inventory_rollback_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Salvage inventory rollback regression failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "Salvage crate inventory rollback tests passed."
+      - name: Import and parse KROLL Rail Yard
+        run: godot --headless --path daily_games/KROLL_Rail_Yard --editor --quit
+      - name: Run KROLL Rail Yard rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path daily_games/KROLL_Rail_Yard --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Rail Yard rules tests failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Rail Yard rules tests passed."
+      - name: Run KROLL Rail Yard runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Rail_Yard --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Rail Yard runtime smoke test failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "KROLL Rail Yard runtime smoke test passed."
