@@ -70,7 +70,8 @@ func _grid_reachable(start: Vector2, goal: Vector2, seed_value: int) -> bool:
 	var start_cell := Vector2i(roundi(start.x / GRID_STEP), roundi(start.y / GRID_STEP))
 	var goal_cell := Vector2i(roundi(goal.x / GRID_STEP), roundi(goal.y / GRID_STEP))
 	var queue: Array[Vector2i] = [start_cell]
-	var visited: Dictionary = {start_cell: true}
+	var visited: Dictionary = {}
+	visited[start_cell] = true
 	var cursor: int = 0
 	var directions: Array[Vector2i] = [
 		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
