@@ -488,3 +488,14 @@
 - Independent Notion records: [Run 36 daily log](https://app.notion.com/p/407bc6a809d781ce9e57f535ae7850e4), [Prism Relay M0.1](https://app.notion.com/p/407bc6a809d781e38be3ca31979a8e12), [Streamed Crop Plot Persistence M0.1](https://app.notion.com/p/407bc6a809d78146829fde4463817c25).
 - No local Godot executable; local GUI/GPU/iPhone hardware QA is not claimed. No separate post-merge main-push workflow is claimed.
 - Remaining: formal `scripts/world.gd` world-session controller; complete generated chunk scene state persistence beyond crop/mineral registry records; asynchronous chunk streaming and device QA.
+
+## Run 37 — Skyline Courier and streamed crop offline growth (2026-10-29)
+
+- Feature PR [#109](https://github.com/qaqp980520-prog/2126-Survival/pull/109) merged as `7b9c589985a9af87a9ba3a3f7b98dc1cc60e8041`; feature candidate HEAD was `cefa1b0b4255752755c2ff4c289fe67ed38973bb`. Final main compared identical to the merge SHA; no open PR remained before this documentation closeout.
+- New playable game: [KROLL Skyline Courier](daily_games/KROLL_Skyline_Courier/README.md), a deterministic three-lane runner with keyboard/touch lane selection, three lives, a 45-second delivery window and a six-packet objective. No external assets/add-ons.
+- Crop persistence: `CropRegistry.advance_to_time()` performs bounded wall-clock catch-up; `CropPlotController.advance_crops_to_time()` advances a chunk's crop IDs as an atomic batch. `MineralChunkController.load_chunk()` catches up crops before rebuilding visuals and restores the crop snapshot if subsequent mineral registration fails, including refreshing the detached plot visuals after rollback.
+- Compatibility: crop save schema remains version 1. Catch-up simulates at most one day because moisture drains to dry steady state within 400 seconds; time rollback is an atomic no-op.
+- New regression: `tests/crop_chunk_offline_growth_test.gd`; expanded `tests/crop_registry_lifecycle_test.gd` and `tests/crop_plot_controller_integration_test.gd`.
+- Exact-head Godot 4.3 CI [Run #502](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40798810304) passed 149/149 total job steps, including 146 named validation steps, with no failures or skips. New Skyline import/rules/runtime steps 143–145 and crop offline growth integration step 146 passed. Earlier Run #498's Node.get argument error was fixed before the final candidate.
+- Notion records: [Run 37 daily log](https://app.notion.com/p/408bc6a809d7813d97e6c07b1dfdd79d), [Skyline Courier M0.1](https://app.notion.com/p/408bc6a809d7819e8747dfebcea4326e), [Crop Offline Growth M0.1](https://app.notion.com/p/408bc6a809d781b1b7aef71202004e1d).
+- Limits: no local Godot executable; manual GUI/GPU/iPhone testing is not claimed. Production `scripts/world.gd` remains absent; complete generated terrain/object persistence and async chunk streaming remain open.
