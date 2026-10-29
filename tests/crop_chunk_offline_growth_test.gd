@@ -43,7 +43,7 @@ func _run() -> void:
     assert(is_equal_approx(float(after_reload.get("moisture", -1.0)), 0.0), "The remaining moisture is consumed during offline growth")
     assert(int(after_reload.get("last_updated_unix", 0)) == now + 240, "Reload records the catch-up target timestamp")
     var reloaded_plot: Node = reloaded_root.get_node_or_null("CropPlot_0")
-    assert(reloaded_plot != null and str(reloaded_plot.get("status_text", "")).contains("2/4"), "Reloaded visual reflects offline growth")
+    assert(reloaded_plot != null and str(reloaded_plot.get("status_text")).contains("2/4"), "Reloaded visual reflects offline growth")
 
     assert(chunk_controller.unload_chunk(chunk_id, now + 240))
 
