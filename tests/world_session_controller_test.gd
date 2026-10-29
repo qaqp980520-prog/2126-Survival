@@ -65,6 +65,23 @@ func _run() -> void:
 
     var before_position: Vector3 = world_player.global_position
     var before_ids: PackedStringArray = world_chunk_controller.get_loaded_chunk_ids()
+    var semantic_invalid_save: Dictionary = save_payload.duplicate(true)
+    var semantic_objects: Dictionary = semantic_invalid_save["world_objects"].duplicate(true)
+    var semantic_records: Dictionary = semantic_objects["objects"].duplicate(true)
+    var actual_crate_id := "surface/chunk_0_0/object/Chunk_0_0/SalvageCrate"
+    var semantic_record: Dictionary = semantic_records[actual_crate_id].duplicate(true)
+    var semantic_state: Dictionary = semantic_record["state"].duplicate(true)
+    semantic_state["opened"] = true
+    semantic_state["loot_remaining"] = 2
+    semantic_record["state"] = semantic_state
+    semantic_records[actual_crate_id] = semantic_record
+    semantic_objects["objects"] = semantic_records
+    semantic_invalid_save["world_objects"] = semantic_objects
+    _check(not bool(world.call("restore_stream_state", semantic_invalid_save, now)), "A prop-level semantic rejection must fail the restore transaction")
+    _check(restored_crate != null and bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "Semantic rejection rolls the live prop back")
+    _check(world_player.global_position.is_equal_approx(before_position), "Semantic rejection preserves player position")
+    _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 6.0), "Semantic rejection preserves inventory weight")
+    _check(world_chunk_controller.get_loaded_chunk_ids() == before_ids, "Semantic rejection preserves active chunks")
     var invalid_payload: Dictionary = save_payload.duplicate(true)
     invalid_payload["schema_version"] = 99
     _check(not bool(world.call("restore_stream_state", invalid_payload, now)), "Unsupported schema must be rejected")
