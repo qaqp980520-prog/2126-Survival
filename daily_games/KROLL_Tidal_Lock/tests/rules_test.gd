@@ -31,9 +31,11 @@ func _run() -> void:
 	_expect(int(state["pump_energy"]) == 2, "pumping consumes one energy unit")
 
 	var boundary: Dictionary = Rules.new_game(7)
-	var low: Dictionary = Rules.pump(boundary, -1)
+	var lowered: Dictionary = Rules.pump(boundary, -1)
+	_expect(bool(lowered["ok"]) and int(lowered["state"]["levels"][0]) == 0, "pump can lower water to the zero boundary")
+	var low: Dictionary = Rules.pump(lowered["state"], -1)
 	_expect(not bool(low["ok"]) and low["reason"] == "level_limit", "water level cannot go below zero")
-	_expect(int(boundary["pump_energy"]) == Rules.MAX_PUMP_ENERGY, "rejected pump does not consume energy")
+	_expect(int(lowered["state"]["pump_energy"]) == int(low["state"]["pump_energy"]), "rejected pump does not consume energy")
 
 	for seed_value in Rules.SEEDS:
 		var solved: Dictionary = _solve(seed_value)
