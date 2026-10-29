@@ -229,3 +229,23 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with save/restore and failure recovery.
 - [ ] Run interactive GUI, GPU performance and iPhone hardware acceptance tests; no local Godot executable/device was available, so these are not claimed.
 - No separate post-merge main-push workflow is claimed; the test evidence applies to exact PR candidate HEAD.
+
+
+## Run 38 — final status (2026-10-29)
+
+- [x] PR #111 merged as `739ef96a5c99dbfc163fadfd25ca4025fe87e4e0`; exact candidate `48589112a1daf7f15830d75b4e67b20dcb23ce97` passed Godot 4.3 CI [Run #513](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40801522315).
+- [x] Add KROLL Echo Survey and the first reusable `scripts/world.gd` WorldSessionController base; integrate schema-1 inventory payload validation and failure rollback.
+- [ ] Finish production chunk scene state persistence for all generated terrain and interactable objects.
+- [ ] Integrate asynchronous chunk streaming and recovery with the formal world-session layer.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available.
+
+## Run 39 — final status (2026-10-29)
+
+- [x] PR #112 merged as `213c795382682b3d8a51c27be0a2d4da1ce2f671`; exact candidate `873ec47bb22ba93becc5f8b2a3b90cfb4b0e6fd2` passed Godot 4.3 CI [Run #40810244136](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40810244136), 157/157 reported steps, no failures/skips.
+- [x] Add KROLL Tidal Lock with import/rules/runtime tests.
+- [x] Add WorldObjectStateRegistry with stable IDs, chunk ownership, bounded primitive properties, 64-property per-object cap, atomic save validation and schema-1 optional integration.
+- [x] Extend failure-injection tests to assert object-state rollback when target chunk creation fails; preserve legacy saves without `world_objects`.
+- [ ] Wire registry records to every real interactable object's spawn/apply-state path; current registry is persistent storage and query API, not automatic scene-node binding.
+- [ ] Finish complete generated terrain/object persistence and asynchronous chunk streaming.
+- [ ] Run manual GUI/GPU/iPhone hardware acceptance tests; no local Godot executable/device was available.
+- No separate post-merge main-push workflow is claimed; CI evidence applies to the exact PR candidate SHA.
