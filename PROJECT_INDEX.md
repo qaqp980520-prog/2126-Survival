@@ -606,3 +606,16 @@
 - Merge commit: `7c95896145c735fb6a0f1f4d8cb41165c3216988`.
 - Candidate head tested: `c02aa304b3eeeed80bf2b97cfcfe97d365581a5c`.
 - Remaining: integrate stateful lifecycle into all production interactable factories; full terrain/object-change persistence; asynchronous chunk streaming; manual GUI/GPU/iPhone QA. No device QA is claimed.
+
+
+## Run 46 — 2026-10-30 — Beat Lab + salvage reentrancy guard (feature merged; exact-head CI passed)
+
+- Feature PR [#126](https://github.com/qaqp980520-prog/2126-Survival/pull/126) merged as \`f9599478512416ffc64192550518989f620ca7e0\`. Exact candidate HEAD \`75357e463780d3ec1502aef5210ebb0af5a0afdc\`.
+- Canonical Godot 4.3 CI [Run #574](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40970079987) completed successfully: all 183 workflow steps succeeded, zero failed/skipped steps. Final steps verified Run 45 Rail Yard import/rules/runtime, inventory rollback, Run 46 Beat Lab import/rules/runtime, and salvage reentrancy.
+- Focused Run 45 Godot 4.3 CI [Run #6](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40970079995) passed all 12/12 steps, including root import, inventory rollback regression and Rail Yard import/rules/runtime.
+- New game \`daily_games/KROLL_Beat_Lab/\`: original visual rhythm game, 4 lanes (A/S/D/F), 100 BPM, 3 deterministic 24-note charts, ±0.18-second hit window, 100 points per hit, 1,800-point target and at most 4 misses. Godot 4.3+, no external assets, plugins or audio files. Tests: \`tests/rules_test.gd\` and \`tests/game_smoke_test.gd\`.
+- Existing-system fix: \`systems/WorldObjectStatefulProp.gd\` rejects reentrant inventory interaction with \`interaction_in_progress\` while a grant transaction is running; legacy state-only \`interact()\` is also blocked during the transaction. New \`tests/salvage_crate_reentrancy_test.gd\` verifies nested calls cannot duplicate the reward and later independent transactions still work.
+- Workflow correction: the fetched pre-Run-46 main workflow did not include explicit Run 45 Rail Yard or inventory rollback steps, despite the prior Run 45 narrative. The feature PR added these checks to \`.github/workflows/godot-validation.yml\` alongside Run 46 tests. The current workflow now contains those explicit test steps.
+- Save schema remains version 1. The guard is synchronous single-node reentrancy protection, not a multiplayer server-authoritative lock. No local Godot executable, manual GUI/GPU or iPhone hardware test is claimed.
+- Remaining: production-wide stateful prop factory binding; complete terrain/object delta persistence; asynchronous chunk streaming/recovery; manual device QA.
+- Notion records: [Run 46 daily log](https://app.notion.com/p/408bc6a809d78155b851edc25e8acb6e), [Beat Lab M0.1](https://app.notion.com/p/408bc6a809d781b9a970c05627fdcbfb), [reentrancy guard M0.1](https://app.notion.com/p/408bc6a809d781cb8714c5c620dbc268), [workflow record](https://app.notion.com/p/408bc6a809d78167a16aec00062d22f9).
