@@ -9,6 +9,7 @@ const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const InventoryBridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
+const InventoryModelScript = preload("res://systems/SurvivalInventory.gd")
 const WORLD_CHUNK_SIZE: float = 10.0
 
 var registry: Node
@@ -91,7 +92,8 @@ func serialize_stream_state() -> Dictionary:
 		"schema_version": 1,
 		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z],
 		"minerals": chunk_controller.to_save_dict(),
-		"crops": crop_registry.to_save_dict() if crop_registry != null else {}
+		"crops": crop_registry.to_save_dict() if crop_registry != null else {},
+		"inventory": inventory_bridge.call("serialize_inventory") if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory") else {}
 	}
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
@@ -104,6 +106,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var minerals_value: Variant = payload.get("minerals", null)
 	var has_crops: bool = payload.has("crops")
 	var crops_value: Variant = payload.get("crops", null)
+	var has_inventory: bool = payload.has("inventory")
+	var inventory_value: Variant = payload.get("inventory", null)
 	if not (schema_value is int) or int(schema_value) != 1:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
@@ -116,6 +120,14 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if has_crops and (crop_registry == null or not (crops_value is Dictionary) or not bool(crop_registry.validate_save_dict(crops_value))):
 		_set_restore_report(false, "crop_validation", "Crop save payload is invalid; no world state was changed.", true)
 		return false
+	if has_inventory:
+		if inventory_bridge == null or not (inventory_value is Dictionary):
+			_set_restore_report(false, "inventory_validation", "Inventory save payload is invalid; no world state was changed.", true)
+			return false
+		var inventory_probe: Variant = InventoryModelScript.new()
+		if not bool(inventory_probe.call("load_save_dict", inventory_value)):
+			_set_restore_report(false, "inventory_validation", "Inventory save payload failed model validation; no world state was changed.", true)
+			return false
 	for component in position_value:
 		if not (component is int or component is float) or not is_finite(float(component)):
 			_set_restore_report(false, "validation", "Player position contains a non-finite component.", true)
@@ -125,8 +137,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var previous_position: Vector3 = player.global_position
 	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
 	var previous_crops: Dictionary = crop_registry.to_save_dict() if crop_registry != null else {}
+	var previous_inventory: Dictionary = inventory_bridge.call("serialize_inventory") if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory") else {}
 	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins"):
 		_set_restore_report(false, "snapshot", "Could not snapshot the current mineral state before restore.", true)
+		return false
+	if has_inventory and (not previous_inventory.has("schema_version") or not previous_inventory.has("inventory")):
+		_set_restore_report(false, "snapshot", "Could not snapshot the current inventory before restore.", true)
 		return false
 	if not chunk_controller.restore_save_dict(minerals_value, now):
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
@@ -134,6 +150,13 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
 		var minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
 		_set_restore_report(false, "crop_restore", "Crop registry rejected the candidate save.", minerals_rolled_back)
+		return false
+	if has_inventory and not bool(inventory_bridge.call("restore_inventory", inventory_value)):
+		var minerals_rolled_back_for_inventory: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var crops_rolled_back_for_inventory: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
+		if chunk_controller.has_method("refresh_crop_plots"):
+			chunk_controller.refresh_crop_plots()
+		_set_restore_report(false, "inventory_restore", "Inventory bridge rejected the candidate save.", minerals_rolled_back_for_inventory and crops_rolled_back_for_inventory)
 		return false
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
@@ -164,17 +187,22 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 
 	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
 	var crops_restored: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
+	var inventory_restored: bool = true
+	if has_inventory and inventory_bridge != null and not previous_inventory.is_empty():
+		inventory_restored = bool(inventory_bridge.call("restore_inventory", previous_inventory))
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
 	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
-	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and ids_consistent and position_restored
+	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and inventory_restored and ids_consistent and position_restored
 	_refresh_world_hud()
 	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
 		"target_sync_report": target_sync_report,
 		"recovery_report": recovery_report,
 		"recovery_success": recovery_success,
 		"minerals_restored": minerals_restored,
+		"crops_restored": crops_restored,
+		"inventory_restored": inventory_restored,
 		"ids_consistent": ids_consistent,
 		"position_restored": position_restored
 	})
