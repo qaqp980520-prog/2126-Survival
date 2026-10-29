@@ -43,6 +43,13 @@ static func apply_action(state: Dictionary, action_name: String) -> Dictionary:
 	var output: Array = output_value
 	if incoming.size() + siding.size() + output.size() != TARGET_ORDER.size():
 		return _result(false, "invalid_state", state)
+	var seen_cars: Dictionary = {}
+	for car_value in incoming + siding + output:
+		if not (car_value is String) or not TARGET_ORDER.has(str(car_value)) or seen_cars.has(str(car_value)):
+			return _result(false, "invalid_state", state)
+		seen_cars[str(car_value)] = true
+	if seen_cars.size() != TARGET_ORDER.size():
+		return _result(false, "invalid_state", state)
 	var next: Dictionary = state.duplicate(true)
 	incoming = next["incoming"]
 	siding = next["siding"]
