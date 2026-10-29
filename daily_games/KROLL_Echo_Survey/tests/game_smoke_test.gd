@@ -8,7 +8,7 @@ func _initialize() -> void:
 func _run() -> void:
     var packed: PackedScene = load("res://main.tscn")
     assert(packed != null, "Echo Survey main scene must load")
-    var game: Control = packed.instantiate() as Control
+    var game: Variant = packed.instantiate()
     root.add_child(game)
     await process_frame
     assert(str(game.state.get("status", "")) == "playing")
