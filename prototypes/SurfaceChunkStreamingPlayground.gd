@@ -3,9 +3,11 @@ extends "res://scripts/world.gd"
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
+const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
+const SALVAGE_LOOT_IDS: Array[String] = ["copper_ore", "iron_ore", "coal_ore", "silver_ore"]
 
 var camera: Camera3D
 var hud: Label
@@ -187,10 +189,13 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	var result: Dictionary = nearest.call("interact_with_inventory", inventory_bridge)
 	var ok: bool = bool(result.get("ok", false))
 	var reason: String = str(result.get("reason", "unknown"))
+	var item_id: String = str(result.get("item_id", "iron_ore"))
+	var mineral_data: Dictionary = MineralCatalogScript.get_mineral(item_id)
+	var display_name: String = str(mineral_data.get("display_name", item_id))
 	if ok:
-		_world_object_action_message = "Recovered 1 iron ore; %d salvage units remain." % int(result.get("remaining", 0))
+		_world_object_action_message = "Recovered 1 %s; %d salvage units remain." % [display_name, int(result.get("remaining", 0))]
 	elif reason == "inventory_rejected":
-		_world_object_action_message = "Inventory cannot accept iron ore; crate unchanged."
+		_world_object_action_message = "Inventory cannot accept %s; crate unchanged." % display_name
 	elif reason == "empty":
 		_world_object_action_message = "Crate is empty."
 	else:
@@ -199,6 +204,7 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	result["message"] = _world_object_action_message
 	_refresh_hud()
 	return result
+
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()
@@ -236,6 +242,8 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	chunk.add_child(ore)
 	var crate: Node3D = StatefulPropScript.new()
 	crate.name = "SalvageCrate"
+	var loot_index: int = posmod(coord.x * 31 + coord.y * 17 + 1009, SALVAGE_LOOT_IDS.size())
+	crate.call("set_loot_item", SALVAGE_LOOT_IDS[loot_index])
 	crate.position = Vector3(CHUNK_SIZE * 0.55, 0.0, CHUNK_SIZE * 0.62)
 	chunk.add_child(crate)
 	var crop_kinds: Array[String] = ["wheat", "tomato"]
