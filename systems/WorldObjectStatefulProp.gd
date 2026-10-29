@@ -82,6 +82,11 @@ func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 	if not (inventory_snapshot is Dictionary) or inventory_snapshot.is_empty():
 		return {"ok": false, "reason": "inventory_snapshot_invalid", "item_id": loot_item_id, "remaining": loot_remaining}
 	if not bool(inventory_bridge.call("collect_world_item", loot_item_id, 1)):
+		# Treat the bridge call as an untrusted transaction boundary: an adapter may
+		# mutate before returning false. Restore the pre-call snapshot before leaving.
+		var rejection_rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
+		if not rejection_rollback_ok:
+			return {"ok": false, "reason": "inventory_rollback_failed", "item_id": loot_item_id, "remaining": loot_remaining}
 		return {"ok": false, "reason": "inventory_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
 	var next_state: Dictionary = get_world_object_state()
 	next_state["opened"] = true
