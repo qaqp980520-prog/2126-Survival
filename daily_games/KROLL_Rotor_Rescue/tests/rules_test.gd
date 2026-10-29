@@ -52,5 +52,58 @@ func _run() -> void:
 	var locked: Dictionary = Rules.step(victory, Vector2.RIGHT, 0.1)
 	var locked_position: Vector2 = locked["position"]
 	assert(locked_position.is_equal_approx(Rules.PAD_POSITION), "Terminal state ignores further input")
+	_test_layout_reachability()
 	print("KROLL Rotor Rescue rules tests passed.")
 	quit(0)
+
+func _test_layout_reachability() -> void:
+	for seed_value in [1, 2, 3]:
+		var targets: Array[Vector2] = Rules.survivor_positions(seed_value)
+		targets.append(Rules.PAD_POSITION)
+		var current := Vector2(70.0, 250.0)
+		for target in targets:
+			assert(_grid_reachable(current, target, seed_value), "Seed %d must have a grid path to each survivor and the extraction pad" % seed_value)
+			current = target
+
+func _grid_reachable(start: Vector2, goal: Vector2, seed_value: int) -> bool:
+	const GRID_STEP: int = 20
+	var start_cell := Vector2i(roundi(start.x / GRID_STEP), roundi(start.y / GRID_STEP))
+	var goal_cell := Vector2i(roundi(goal.x / GRID_STEP), roundi(goal.y / GRID_STEP))
+	var queue: Array[Vector2i] = [start_cell]
+	var visited: Dictionary = {start_cell: true}
+	var cursor: int = 0
+	var directions: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)
+	]
+	while cursor < queue.size():
+		var cell: Vector2i = queue[cursor]
+		cursor += 1
+		var point := Vector2(float(cell.x * GRID_STEP), float(cell.y * GRID_STEP))
+		if point.distance_to(goal) <= float(GRID_STEP) * 1.5:
+			return true
+		for direction in directions:
+			var next_cell := cell + direction
+			if visited.has(next_cell):
+				continue
+			var next_point := Vector2(float(next_cell.x * GRID_STEP), float(next_cell.y * GRID_STEP))
+			if not _grid_point_is_free(next_point, seed_value):
+				continue
+			if direction.x != 0 and direction.y != 0:
+				var horizontal := Vector2(float((cell.x + direction.x) * GRID_STEP), float(cell.y * GRID_STEP))
+				var vertical := Vector2(float(cell.x * GRID_STEP), float((cell.y + direction.y) * GRID_STEP))
+				if not _grid_point_is_free(horizontal, seed_value) or not _grid_point_is_free(vertical, seed_value):
+					continue
+			visited[next_cell] = true
+			queue.append(next_cell)
+	return false
+
+func _grid_point_is_free(point: Vector2, seed_value: int) -> bool:
+	const MARGIN: float = 18.0
+	if point.x < Rules.WORLD_MIN.x + MARGIN or point.y < Rules.WORLD_MIN.y + MARGIN or point.x > Rules.WORLD_MAX.x - MARGIN or point.y > Rules.WORLD_MAX.y - MARGIN:
+		return false
+	for obstacle: Rect2 in Rules.obstacle_rects(seed_value):
+		var inflated := Rect2(obstacle.position - Vector2(MARGIN, MARGIN), obstacle.size + Vector2(MARGIN * 2.0, MARGIN * 2.0))
+		if inflated.has_point(point):
+			return false
+	return true
