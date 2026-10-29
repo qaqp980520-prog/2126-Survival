@@ -21,7 +21,7 @@ func _run() -> void:
     var active_ids: PackedStringArray = status.get("active_chunk_ids", PackedStringArray())
     _check(active_ids.size() == 9, "World-session controller must own the initial 3x3 streamed window")
     _check(int(status.get("saved_vein_count", 0)) == 9, "World-session controller must own mineral registry state")
-    _check(int(status.get("saved_world_object_count", -1)) == 0, "World-session controller must own an initially empty object-state registry")
+    _check(int(status.get("saved_world_object_count", -1)) == 9, "Each active chunk seeds one stable salvage-crate state")
     _check(status.has("inventory") and status.has("player_position"), "Status snapshot must expose inventory and player position")
 
     var world_player: CharacterBody3D = world.get("player") as CharacterBody3D
@@ -35,12 +35,19 @@ func _run() -> void:
 
     _check(bool(inventory_bridge.call("collect_world_item", "iron_ore", 2)), "World-session inventory bridge should accept registered ore")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 6.0), "Two iron ore must add six kilograms")
+    var origin_root: Node3D = world_chunk_controller.get_chunk_root("surface/chunk_0_0")
+    var live_crate: Node = origin_root.get_node_or_null("SalvageCrate") if origin_root != null else null
+    _check(live_crate != null, "Active chunk factory creates a stateful salvage crate")
+    _check(live_crate != null and bool(live_crate.call("interact")), "Salvage crate interaction changes live state")
+    _check(live_crate != null and bool(live_crate.get("opened")) and int(live_crate.get("loot_remaining")) == 1, "Live crate opens and consumes one salvage unit")
     _check(bool(object_registry.call("set_object_state", "surface/chunk_0_0/crate_1", "surface/chunk_0_0", {"opened": false, "loot_seed": 42})), "World-object registry accepts stable object state")
     var save_payload: Dictionary = world.call("serialize_stream_state")
+    _check(not save_payload.is_empty(), "World serialization captures live object state before returning the save")
     _check(int(save_payload.get("schema_version", 0)) == 1, "World-session save envelope must remain schema 1")
     _check(save_payload.has("minerals") and save_payload.has("crops") and save_payload.has("inventory") and save_payload.has("world_objects") and save_payload.has("player_position"), "Save envelope must include minerals, crops, inventory, world objects and player position")
     var original_position: Vector3 = world_player.global_position
     var now: int = int(Time.get_unix_time_from_system())
+    _check(live_crate != null and bool(live_crate.call("apply_world_object_state", {"opened": false, "loot_remaining": 2})), "Live crate can be mutated after a save snapshot")
     _check(bool(world.call("debug_move_player_to", Vector3(21.0, 2.0, 1.0), now)), "World-session should stream when the player crosses chunk boundaries")
     _check(bool(inventory_bridge.call("drop_item", "iron_ore", 1)), "Dropping ore should recalculate inventory weight")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 3.0), "Dropping one ore must remove three kilograms")
@@ -48,7 +55,10 @@ func _run() -> void:
     _check(bool(world.call("restore_stream_state", save_payload, now)), "Valid schema-1 world snapshot should restore")
     _check(world_player.global_position.is_equal_approx(original_position), "Valid restore must recover the saved player position")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 6.0), "Valid restore must recover inventory counts and weight")
-    _check(not bool(object_registry.call("get_object_state", "surface/chunk_0_0/crate_1")["state"]["opened"]), "Valid restore must recover the saved unopened crate state")
+    _check(not bool(object_registry.call("get_object_state", "surface/chunk_0_0/crate_1")["state"]["opened"]), "Valid restore must recover the saved registry record")
+    var restored_root: Node3D = world_chunk_controller.get_chunk_root("surface/chunk_0_0")
+    var restored_crate: Node = restored_root.get_node_or_null("SalvageCrate") if restored_root != null else null
+    _check(restored_crate != null and bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "Reloaded chunk reapplies the saved live crate state")
 
     var before_position: Vector3 = world_player.global_position
     var before_ids: PackedStringArray = world_chunk_controller.get_loaded_chunk_ids()
@@ -73,7 +83,8 @@ func _run() -> void:
     invalid_objects["objects"]["surface/chunk_0_0/crate_1"]["state"]["opened"] = ["invalid"]
     invalid_objects_save["world_objects"] = invalid_objects
     _check(not bool(world.call("restore_stream_state", invalid_objects_save, now)), "Invalid world-object payload must be rejected before world mutation")
-    _check(not bool(object_registry.call("get_object_state", "surface/chunk_0_0/crate_1")["state"]["opened"]), "Rejected object payload preserves the live object state")
+    _check(not bool(object_registry.call("get_object_state", "surface/chunk_0_0/crate_1")["state"]["opened"]), "Rejected object payload preserves the registry state")
+    _check(restored_crate != null and bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "Rejected object payload preserves the live prop state")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), 6.0), "Rejected object payload preserves inventory weight")
 
     var legacy_save: Dictionary = save_payload.duplicate(true)
