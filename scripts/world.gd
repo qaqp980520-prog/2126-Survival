@@ -10,6 +10,7 @@ const InventoryBridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
 const InventoryModelScript = preload("res://systems/SurvivalInventory.gd")
+const ObjectStateRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 const WORLD_CHUNK_SIZE: float = 10.0
 
 var registry: Node
@@ -17,6 +18,7 @@ var chunk_controller: Node3D
 var director: Node
 var inventory_bridge: Node
 var crop_registry: Node
+var object_state_registry: Node
 var crop_controller: Node
 var player: CharacterBody3D
 var _stream_clock_unix: int = -1
@@ -35,7 +37,7 @@ func initialize_world_session() -> bool:
 	return true
 
 func _cleanup_partial_world_session() -> void:
-	var owned_nodes: Array[Node] = [director, chunk_controller, inventory_bridge, crop_controller, crop_registry, registry]
+	var owned_nodes: Array[Node] = [director, chunk_controller, inventory_bridge, crop_controller, object_state_registry, crop_registry, registry]
 	for node in owned_nodes:
 		if node == null or not is_instance_valid(node):
 			continue
@@ -44,6 +46,7 @@ func _cleanup_partial_world_session() -> void:
 		node.free()
 	registry = null
 	crop_registry = null
+	object_state_registry = null
 	crop_controller = null
 	inventory_bridge = null
 	chunk_controller = null
@@ -58,6 +61,9 @@ func _build_streaming_stack() -> bool:
 	crop_registry = CropRegistryScript.new()
 	crop_registry.name = "CropRegistry"
 	add_child(crop_registry)
+	object_state_registry = ObjectStateRegistryScript.new()
+	object_state_registry.name = "WorldObjectStateRegistry"
+	add_child(object_state_registry)
 	crop_controller = CropPlotControllerScript.new()
 	crop_controller.name = "CropPlotController"
 	add_child(crop_controller)
@@ -110,7 +116,8 @@ func serialize_stream_state() -> Dictionary:
 		"schema_version": 1,
 		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z],
 		"minerals": chunk_controller.to_save_dict(),
-		"crops": crop_registry.to_save_dict() if crop_registry != null else {}
+		"crops": crop_registry.to_save_dict() if crop_registry != null else {},
+		"world_objects": object_state_registry.to_save_dict() if object_state_registry != null else {"schema_version": 1, "objects": {}}
 	}
 	if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory"):
 		payload["inventory"] = inventory_bridge.call("serialize_inventory")
@@ -128,6 +135,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var crops_value: Variant = payload.get("crops", null)
 	var has_inventory: bool = payload.has("inventory")
 	var inventory_value: Variant = payload.get("inventory", null)
+	var has_world_objects: bool = payload.has("world_objects")
+	var world_objects_value: Variant = payload.get("world_objects", null)
 	if not (schema_value is int) or int(schema_value) != 1:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
@@ -139,6 +148,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	if has_crops and (crop_registry == null or not (crops_value is Dictionary) or not bool(crop_registry.validate_save_dict(crops_value))):
 		_set_restore_report(false, "crop_validation", "Crop save payload is invalid; no world state was changed.", true)
+		return false
+	if has_world_objects and (object_state_registry == null or not (world_objects_value is Dictionary) or not bool(object_state_registry.validate_save_dict(world_objects_value))):
+		_set_restore_report(false, "world_object_validation", "World-object save payload is invalid; no world state was changed.", true)
 		return false
 	if has_inventory:
 		if inventory_bridge == null or not (inventory_value is Dictionary):
@@ -158,11 +170,15 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
 	var previous_crops: Dictionary = crop_registry.to_save_dict() if crop_registry != null else {}
 	var previous_inventory: Dictionary = inventory_bridge.call("serialize_inventory") if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory") else {}
+	var previous_world_objects: Dictionary = object_state_registry.to_save_dict() if object_state_registry != null else {"schema_version": 1, "objects": {}}
 	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins"):
 		_set_restore_report(false, "snapshot", "Could not snapshot the current mineral state before restore.", true)
 		return false
 	if has_inventory and (not previous_inventory.has("schema_version") or not previous_inventory.has("inventory")):
 		_set_restore_report(false, "snapshot", "Could not snapshot the current inventory before restore.", true)
+		return false
+	if has_world_objects and (not previous_world_objects.has("schema_version") or not previous_world_objects.has("objects")):
+		_set_restore_report(false, "snapshot", "Could not snapshot current world-object state before restore.", true)
 		return false
 	if not chunk_controller.restore_save_dict(minerals_value, now):
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
@@ -177,6 +193,15 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
 		_set_restore_report(false, "inventory_restore", "Inventory bridge rejected the candidate save.", minerals_rolled_back_for_inventory and crops_rolled_back_for_inventory)
+		return false
+	if has_world_objects and not bool(object_state_registry.restore_save_dict(world_objects_value)):
+		var objects_minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var objects_crops_rolled_back: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
+		var objects_inventory_rolled_back: bool = not has_inventory or bool(inventory_bridge.call("restore_inventory", previous_inventory))
+		var objects_rolled_back: bool = object_state_registry.restore_save_dict(previous_world_objects)
+		if chunk_controller.has_method("refresh_crop_plots"):
+			chunk_controller.refresh_crop_plots()
+		_set_restore_report(false, "world_object_restore", "World-object registry rejected the candidate save.", objects_minerals_rolled_back and objects_crops_rolled_back and objects_inventory_rolled_back and objects_rolled_back)
 		return false
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
@@ -210,11 +235,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var inventory_restored: bool = true
 	if has_inventory and inventory_bridge != null and not previous_inventory.is_empty():
 		inventory_restored = bool(inventory_bridge.call("restore_inventory", previous_inventory))
+	var world_objects_restored: bool = not has_world_objects or bool(object_state_registry.restore_save_dict(previous_world_objects))
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
 	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
-	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and inventory_restored and ids_consistent and position_restored
+	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and inventory_restored and world_objects_restored and ids_consistent and position_restored
 	_refresh_world_hud()
 	_set_restore_report(false, "stream_sync", "Target stream sync failed; rollback status is reported in details.", rollback_complete, {
 		"target_sync_report": target_sync_report,
@@ -223,6 +249,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		"minerals_restored": minerals_restored,
 		"crops_restored": crops_restored,
 		"inventory_restored": inventory_restored,
+		"world_objects_restored": world_objects_restored,
 		"ids_consistent": ids_consistent,
 		"position_restored": position_restored
 	})
@@ -252,12 +279,14 @@ func get_world_session_status() -> Dictionary:
 	var active_ids: PackedStringArray = chunk_controller.get_loaded_chunk_ids() if chunk_controller != null and chunk_controller.has_method("get_loaded_chunk_ids") else PackedStringArray()
 	var vein_count: int = registry.get_saved_ids().size() if registry != null and registry.has_method("get_saved_ids") else 0
 	var crop_count: int = crop_registry.get_saved_ids().size() if crop_registry != null and crop_registry.has_method("get_saved_ids") else 0
+	var object_count: int = object_state_registry.get_saved_ids().size() if object_state_registry != null and object_state_registry.has_method("get_saved_ids") else 0
 	var position_value: Array = [player.global_position.x, player.global_position.y, player.global_position.z] if player != null else []
 	return {
-		"ready": _world_session_initialized and registry != null and chunk_controller != null and director != null and crop_registry != null and crop_controller != null,
+		"ready": _world_session_initialized and registry != null and chunk_controller != null and director != null and crop_registry != null and crop_controller != null and object_state_registry != null,
 		"active_chunk_ids": active_ids,
 		"saved_vein_count": vein_count,
 		"saved_crop_count": crop_count,
+		"saved_world_object_count": object_count,
 		"inventory": inventory_summary,
 		"player_position": position_value
 	}
