@@ -29,9 +29,27 @@ func initialize_world_session() -> bool:
 	if _world_session_initialized:
 		return true
 	if not _build_streaming_stack():
+		_cleanup_partial_world_session()
 		return false
 	_world_session_initialized = true
 	return true
+
+func _cleanup_partial_world_session() -> void:
+	var owned_nodes: Array[Node] = [director, chunk_controller, inventory_bridge, crop_controller, crop_registry, registry]
+	for node in owned_nodes:
+		if node == null or not is_instance_valid(node):
+			continue
+		if node.get_parent() == self:
+			remove_child(node)
+		node.free()
+	registry = null
+	crop_registry = null
+	crop_controller = null
+	inventory_bridge = null
+	chunk_controller = null
+	director = null
+	_world_session_initialized = false
+	_last_grid = Vector2i(999999, 999999)
 
 func _build_streaming_stack() -> bool:
 	registry = RegistryScript.new()
@@ -88,13 +106,15 @@ func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
 func serialize_stream_state() -> Dictionary:
 	if chunk_controller == null or player == null:
 		return {}
-	return {
+	var payload: Dictionary = {
 		"schema_version": 1,
 		"player_position": [player.global_position.x, player.global_position.y, player.global_position.z],
 		"minerals": chunk_controller.to_save_dict(),
-		"crops": crop_registry.to_save_dict() if crop_registry != null else {},
-		"inventory": inventory_bridge.call("serialize_inventory") if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory") else {}
+		"crops": crop_registry.to_save_dict() if crop_registry != null else {}
 	}
+	if inventory_bridge != null and inventory_bridge.has_method("serialize_inventory"):
+		payload["inventory"] = inventory_bridge.call("serialize_inventory")
+	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
