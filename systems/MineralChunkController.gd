@@ -225,7 +225,12 @@ func get_loaded_world_state_nodes() -> Array[Node3D]:
 
 ## Persist the live state of every loaded stateful object before a world save is serialized.
 func capture_loaded_world_object_states() -> bool:
-	if _chunk_objects.is_empty():
+	var has_stateful_objects: bool = false
+	for chunk_objects in _chunk_objects.values():
+		if not chunk_objects.is_empty():
+			has_stateful_objects = true
+			break
+	if not has_stateful_objects:
 		return true
 	if object_state_registry == null:
 		return false
