@@ -26,12 +26,12 @@ func _run() -> void:
 		return
 	var player: CharacterBody3D = world.get("player") as CharacterBody3D
 	player.global_position = crate.global_position + Vector3(0.0, 1.0, 0.0)
-	var before_count: int = int(bridge.get("inventory").counts.get("iron_ore", 0))
+	var before_count: int = _inventory_count(bridge, "iron_ore")
 	var before_weight: float = float(bridge.call("get_weight_kg"))
 	var now: int = int(Time.get_unix_time_from_system())
 	var first: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first.get("ok", false)) and str(first.get("action", "")) == "interacted", "nearby crate grants loot through the world interaction")
-	_expect(int(bridge.get("inventory").counts.get("iron_ore", 0)) == before_count + 1, "one iron ore is added to inventory")
+	_expect(_inventory_count(bridge, "iron_ore") == before_count + 1, "one iron ore is added to inventory")
 	_expect(bool(crate.get("opened")) and int(crate.get("loot_remaining")) == 1, "crate state changes only after successful inventory grant")
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), before_weight + 3.0), "inventory weight updates with the collected ore")
 	var saved: Dictionary = world.call("serialize_stream_state")
@@ -43,19 +43,31 @@ func _run() -> void:
 	_expect(bool(saved_crate_state.get("opened", false)) and int(saved_crate_state.get("loot_remaining", -1)) == 1, "world save captures the crate after one collection")
 	var second: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
 	_expect(bool(second.get("ok", false)) and int(crate.get("loot_remaining", -1)) == 0, "second interaction consumes the final salvage unit")
-	_expect(int(bridge.get("inventory").counts.get("iron_ore", 0)) == before_count + 2, "second collection adds exactly one more item")
+	_expect(_inventory_count(bridge, "iron_ore") == before_count + 2, "second collection adds exactly one more item")
 	_expect(bool(world.call("restore_stream_state", saved, now + 2)), "saved world state restores successfully")
 	origin = chunk_controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
 	crate = origin.get_node_or_null("SalvageCrate") if origin != null else null
 	_expect(crate != null and int(crate.get("loot_remaining", -1)) == 1 and bool(crate.get("opened")), "restored crate returns to its saved one-loot state")
-	_expect(int(bridge.get("inventory").counts.get("iron_ore", 0)) == before_count + 1, "inventory and crate state restore together")
-	bridge.get("inventory").counts["iron_ore"] = InventoryModel.MAX_SAVED_COUNT
+	_expect(_inventory_count(bridge, "iron_ore") == before_count + 1, "inventory and crate state restore together")
+	var inventory: Object = bridge.get("inventory")
+	var inventory_counts: Dictionary = inventory.get("counts")
+	inventory_counts["iron_ore"] = InventoryModel.MAX_SAVED_COUNT
 	var full_state: Dictionary = crate.call("get_world_object_state")
 	var rejected: Dictionary = world.call("_interact_nearest_world_prop", now + 3)
 	_expect(not bool(rejected.get("ok", false)) and str(rejected.get("action", "")) == "inventory_rejected", "full inventory rejects crate collection")
 	_expect(crate.call("get_world_object_state") == full_state, "rejected collection leaves crate state unchanged")
-	_expect(int(bridge.get("inventory").counts.get("iron_ore", -1)) == InventoryModel.MAX_SAVED_COUNT, "rejected collection does not overfill inventory")
+	_expect(_inventory_count(bridge, "iron_ore", -1) == InventoryModel.MAX_SAVED_COUNT, "rejected collection does not overfill inventory")
 	_finish(world)
+
+
+func _inventory_count(bridge: Node, item_id: String, default_value: int = 0) -> int:
+	var inventory: Object = bridge.get("inventory")
+	if inventory == null:
+		return default_value
+	var counts_value: Variant = inventory.get("counts")
+	if not (counts_value is Dictionary):
+		return default_value
+	return int(counts_value.get(item_id, default_value))
 
 func _finish(world: Node) -> void:
 	world.queue_free()
