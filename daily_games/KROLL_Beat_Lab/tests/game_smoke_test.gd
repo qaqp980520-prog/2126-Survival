@@ -7,7 +7,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var game: Control = MainScene.instantiate() as Control
+	var game: Variant = MainScene.instantiate()
 	root.add_child(game)
 	await process_frame
 	_expect(game.lane_buttons.size() == 4, "four lane buttons are created")
