@@ -80,7 +80,11 @@ static func step(state: Dictionary, input_state: Dictionary, delta: float, scena
 	if str(next["status"]) != "active":
 		return next
 	var dt: float = delta
-	var turn: float = float(bool(input_state.get("right", false))) - float(bool(input_state.get("left", false)))
+	var turn: float = 0.0
+	if bool(input_state.get("right", false)):
+		turn += 1.0
+	if bool(input_state.get("left", false)):
+		turn -= 1.0
 	next["angle"] = wrapf(float(next["angle"]) + turn * TURN_RATE * dt, -PI, PI)
 	var direction := Vector2(cos(float(next["angle"])), sin(float(next["angle"])))
 	var velocity: Vector2 = next["velocity"]
@@ -113,14 +117,17 @@ static func can_dock(state: Dictionary, scenario: Dictionary) -> bool:
 	if str(state["status"]) != "active":
 		return str(state["status"]) == "docked"
 	var distance: float = distance_to_target(state, scenario)
-	var speed: float = (state["velocity"] as Vector2).length()
+	var velocity: Vector2 = state["velocity"]
+	var speed: float = velocity.length()
 	var angle_error: float = absf(wrapf(float(state["angle"]) - float(scenario["target_angle"]), -PI, PI))
 	return distance <= DOCK_RADIUS and speed <= MAX_DOCK_SPEED and angle_error <= MAX_ANGLE_ERROR
 
 static func distance_to_target(state: Dictionary, scenario: Dictionary) -> float:
 	if not (state.get("position", null) is Vector2) or not (scenario.get("target_position", null) is Vector2):
 		return INF
-	return (state["position"] as Vector2).distance_to(scenario["target_position"] as Vector2)
+	var position: Vector2 = state["position"]
+	var target_position: Vector2 = scenario["target_position"]
+	return position.distance_to(target_position)
 
 static func _validate_scenario(scenario: Dictionary) -> bool:
 	for key in ["ship_position", "ship_velocity", "target_position"]:
