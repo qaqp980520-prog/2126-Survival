@@ -20,6 +20,8 @@ func _run() -> void:
 		_expect(_inside_arena(candidate_layout.get("dock", Vector2.ZERO)), "each layout dock is inside the arena")
 		for beacon in candidate_beacons:
 			_expect(_inside_arena(beacon), "each beacon is inside the arena")
+		var route_result: Dictionary = _simulate_autopilot(rules, candidate_layout)
+		_expect(bool(route_result.get("finished", false)) and bool(route_result.get("won", false)), "each authored layout is completable by the deterministic route-follower acceptance simulation")
 	var thrust_state: Dictionary = rules.call("step", state, Vector2.RIGHT, 0.1, _empty_layout())
 	var thrust_velocity: Vector2 = thrust_state.get("velocity", Vector2.ZERO)
 	_expect(thrust_velocity.x > 0.0, "thrust accelerates the drone")
@@ -87,6 +89,27 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _simulate_autopilot(rules: RefCounted, layout: Dictionary) -> Dictionary:
+	var state: Dictionary = rules.call("create_state", layout)
+	var beacons: Array = layout.get("beacons", [])
+	var delta: float = 1.0 / 60.0
+	for _frame in range(7500):
+		if bool(state.get("finished", false)):
+			return state
+		var collected: int = int(state.get("collected", 0))
+		var target: Vector2 = beacons[collected] if collected < beacons.size() else layout.get("dock", Vector2.ZERO)
+		var position: Vector2 = state.get("position", Vector2.ZERO)
+		var velocity: Vector2 = state.get("velocity", Vector2.ZERO)
+		var offset: Vector2 = target - position
+		var desired_velocity: Vector2 = Vector2.ZERO
+		if offset.length_squared() > 0.001:
+			desired_velocity = offset.normalized() * minf(145.0, offset.length() * 1.3)
+		var acceleration: Vector2 = (desired_velocity - velocity) * 2.0
+		if acceleration.length() > 190.0:
+			acceleration = acceleration.normalized() * 190.0
+		state = rules.call("step", state, acceleration / 190.0, delta, layout)
+	return state
 
 func _inside_arena(position: Vector2) -> bool:
 	return position.x >= 0.0 and position.x <= 640.0 and position.y >= 0.0 and position.y <= 420.0
