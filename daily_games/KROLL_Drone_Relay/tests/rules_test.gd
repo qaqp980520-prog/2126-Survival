@@ -58,19 +58,30 @@ func _test_hold_and_wall() -> void:
 func _test_collision_resolution() -> void:
 	var state: Dictionary = Rules.create_state(0)
 	var drones: Array = state.get("drones", []).duplicate(true)
-	drones[0]["position"] = Vector2i(1, 1)
-	drones[1]["position"] = Vector2i(3, 1)
-	drones[2]["position"] = Vector2i(0, 5)
+	drones[0]["position"] = Vector2i(1, 5)
+	drones[1]["position"] = Vector2i(3, 5)
+	drones[2]["position"] = Vector2i(0, 3)
 	state["drones"] = drones
 	state = Rules.set_command(state, 0, Vector2i.RIGHT).get("state", state)
 	state = Rules.set_command(state, 1, Vector2i.LEFT).get("state", state)
 	var result: Dictionary = Rules.step(state)
 	var next_state: Dictionary = result.get("state", {})
 	var next_drones: Array = next_state.get("drones", [])
-	_expect(Vector2i(next_drones[0].get("position")) == Vector2i(1, 1), "same-destination collision blocks drone A")
-	_expect(Vector2i(next_drones[1].get("position")) == Vector2i(3, 1), "same-destination collision blocks drone B")
+	_expect(Vector2i(next_drones[0].get("position")) == Vector2i(1, 5), "same-destination collision blocks drone A")
+	_expect(Vector2i(next_drones[1].get("position")) == Vector2i(3, 5), "same-destination collision blocks drone B")
 	_expect(int(next_state.get("collisions", 0)) == 2, "collision diagnostics count both blocked drones")
 	_expect(int(next_drones[0].get("battery", 0)) == Rules.INITIAL_BATTERY, "collision does not consume battery")
+
+	var occupied_state: Dictionary = Rules.create_state(0)
+	var occupied_drones: Array = occupied_state.get("drones", []).duplicate(true)
+	occupied_drones[0]["position"] = Vector2i(0, 5)
+	occupied_drones[1]["position"] = Vector2i(1, 5)
+	occupied_state["drones"] = occupied_drones
+	occupied_state = Rules.set_command(occupied_state, 0, Vector2i.RIGHT).get("state", occupied_state)
+	var occupied_result: Dictionary = Rules.step(occupied_state)
+	var occupied_next: Dictionary = occupied_result.get("state", {})
+	_expect(Vector2i(occupied_next.get("drones", [])[0].get("position")) == Vector2i(0, 5), "moving into a stationary drone's cell is blocked")
+	_expect(int(occupied_next.get("collisions", 0)) == 1, "stationary-cell conflict is recorded")
 
 
 func _test_all_authored_solutions() -> void:
