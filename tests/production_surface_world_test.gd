@@ -24,7 +24,18 @@ func _run() -> void:
 	_expect(ids.has("underground/mine_0_0"), "active chunk IDs include the persistent underground mine")
 	_expect(int(status.get("saved_vein_count", 0)) == 36, "nine surface veins plus twenty-seven underground mine veins are registered")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "dedicated underground mine chunk loads with the playable surface world")
-	_expect(int(status.get("saved_world_object_count", 0)) == 9, "one stable salvage crate per chunk")
+	var surface_crate_count: int = 0
+	var underground_cache_count: int = 0
+	for prop in world.chunk_controller.get_loaded_world_state_nodes():
+		if not is_instance_valid(prop):
+			continue
+		if prop.global_position.y < -7.0:
+			underground_cache_count += 1
+		else:
+			surface_crate_count += 1
+	_expect(surface_crate_count == 9, "nine surface chunks retain one stable salvage crate each")
+	_expect(underground_cache_count == 2, "origin underground room contributes two stable salvage caches")
+	_expect(int(status.get("saved_world_object_count", 0)) == 11, "world-object registry counts nine surface crates and two underground caches")
 	var initial_plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(initial_plots.size() == 18, "two crop plot visuals are bound per loaded chunk")
 	_expect(int(status.get("saved_crop_count", 0)) == 0, "empty plots are not prematurely written as planted crop records")
