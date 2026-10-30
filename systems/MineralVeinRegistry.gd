@@ -90,7 +90,7 @@ func to_save_dict() -> Dictionary:
 	# Refresh loaded records without forcing time advancement; restore applies elapsed
 	# time once using the caller's clock, keeping deterministic tests and save behavior.
 	for key in get_registered_ids():
-		_saved_records[key] = _veins[key].to_save_dict()
+		_saved_records[key] = _veins[key].call("to_save_dict")
 	var saved_veins: Dictionary = {}
 	for key in get_saved_ids():
 		if _saved_records.has(key):
@@ -137,7 +137,7 @@ func restore_snapshot_exact(data: Dictionary, now_unix: int = -1) -> bool:
 	for key in get_registered_ids():
 		if next_records.has(key):
 			var record: Dictionary = next_records[key]
-			if not _veins[key].load_save_dict(record, now, false):
+			if not bool(_veins[key].call("load_save_dict", record, now, false)):
 				return false
 	_saved_records = next_records
 	for key in get_registered_ids():
