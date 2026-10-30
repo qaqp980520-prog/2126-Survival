@@ -12,25 +12,20 @@ const STAMINA_RESTORE: Dictionary = {
 	"food": 30.0
 }
 
-var slots: Array[String] = DEFAULT_SLOTS.duplicate()
+var slots: Array[String] = ["berries", "herbs", "meat", "food"]
 var selected_slot: int = 0
+var _consuming: bool = false
 
 func get_slot_item(slot_index: int) -> String:
 	if slot_index < 0 or slot_index >= SLOT_COUNT:
 		return ""
 	return slots[slot_index]
 
-func get_slot_count(slot_index: int, inventory: RefCounted) -> int:
+func get_slot_count(slot_index: int, inventory_bridge: Node) -> int:
 	var item_id: String = get_slot_item(slot_index)
-	if item_id.is_empty() or inventory == null:
+	if item_id.is_empty() or inventory_bridge == null or not inventory_bridge.has_method("get_item_count"):
 		return 0
-	var counts: Variant = inventory.get("counts")
-	if not (counts is Dictionary):
-		return 0
-	var count: Variant = counts.get(item_id, 0)
-	if not (count is int) or int(count) < 0:
-		return 0
-	return int(count)
+	return int(inventory_bridge.call("get_item_count", item_id))
 
 func select_slot(slot_index: int) -> bool:
 	if slot_index < 0 or slot_index >= SLOT_COUNT:
@@ -44,10 +39,12 @@ func assign_slot(slot_index: int, item_id: String) -> bool:
 	slots[slot_index] = item_id
 	return true
 
-func consume_selected(inventory: RefCounted, stamina: RefCounted) -> Dictionary:
-	if inventory == null or stamina == null:
+func consume_selected(inventory_bridge: Node, stamina: RefCounted) -> Dictionary:
+	if _consuming:
+		return {"ok": false, "reason": "interaction_in_progress"}
+	if inventory_bridge == null or stamina == null:
 		return {"ok": false, "reason": "unavailable"}
-	if not inventory.has_method("remove_item") or not inventory.has_method("add_item") or not stamina.has_method("add_stamina"):
+	if not inventory_bridge.has_method("consume_item") or not inventory_bridge.has_method("collect_world_item") or not inventory_bridge.has_method("get_item_count") or not stamina.has_method("add_stamina"):
 		return {"ok": false, "reason": "contract"}
 	var item_id: String = get_slot_item(selected_slot)
 	if item_id.is_empty() or not STAMINA_RESTORE.has(item_id):
@@ -58,26 +55,30 @@ func consume_selected(inventory: RefCounted, stamina: RefCounted) -> Dictionary:
 		return {"ok": false, "reason": "stamina_state"}
 	if float(current_value) >= maximum:
 		return {"ok": false, "reason": "stamina_full", "item_id": item_id}
-	if get_slot_count(selected_slot, inventory) <= 0:
+	if get_slot_count(selected_slot, inventory_bridge) <= 0:
 		return {"ok": false, "reason": "empty", "item_id": item_id}
-	var removed: int = int(inventory.call("remove_item", item_id, 1))
-	if removed != 1:
+	_consuming = true
+	if not bool(inventory_bridge.call("consume_item", item_id, 1)):
+		_consuming = false
 		return {"ok": false, "reason": "inventory_rejected", "item_id": item_id}
 	var restored: float = float(stamina.call("add_stamina", float(STAMINA_RESTORE[item_id])))
 	if restored <= 0.0:
-		var returned: int = int(inventory.call("add_item", item_id, 1))
-		return {"ok": false, "reason": "stamina_rejected", "rollback_complete": returned == 1, "item_id": item_id}
+		var returned: bool = bool(inventory_bridge.call("collect_world_item", item_id, 1))
+		_consuming = false
+		return {"ok": false, "reason": "stamina_rejected", "rollback_complete": returned, "item_id": item_id}
+	_consuming = false
 	return {
 		"ok": true,
 		"reason": "consumed",
 		"item_id": item_id,
 		"restored": restored,
-		"remaining": get_slot_count(selected_slot, inventory)
+		"remaining": get_slot_count(selected_slot, inventory_bridge)
 	}
 
 func reset() -> void:
-	slots = DEFAULT_SLOTS.duplicate()
+	slots = ["berries", "herbs", "meat", "food"]
 	selected_slot = 0
+	_consuming = false
 
 func to_save_dict() -> Dictionary:
 	return {

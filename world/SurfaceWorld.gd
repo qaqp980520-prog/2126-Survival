@@ -198,7 +198,7 @@ func _consume_selected_quick_slot() -> Dictionary:
 	if quick_use == null or inventory_bridge == null:
 		return {"ok": false, "reason": "unavailable"}
 	var inventory: RefCounted = inventory_bridge.get("inventory") as RefCounted
-	var result: Dictionary = quick_use.call("consume_selected", inventory, stamina)
+	var result: Dictionary = quick_use.call("consume_selected", inventory_bridge, stamina)
 	if bool(result.get("ok", false)):
 		_world_object_action_message = "Used %s; restored %.1f stamina." % [
 			str(result.get("item_id", "ration")),
@@ -675,13 +675,12 @@ func _refresh_hud() -> void:
 		(touch_buttons["crop"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):
 		(touch_buttons["sprint"] as Button).text = "SPRINT ON" if _sprint_active else "SPRINT"
-	var inventory: RefCounted = inventory_bridge.get("inventory") as RefCounted if inventory_bridge != null else null
 	for slot_index in range(QuickUseScript.SLOT_COUNT):
 		var quick_key: String = "quick_%d" % (slot_index + 1)
 		if not touch_buttons.has(quick_key):
 			continue
 		var item_id: String = str(quick_use.call("get_slot_item", slot_index))
-		var item_count: int = int(quick_use.call("get_slot_count", slot_index, inventory))
+		var item_count: int = int(quick_use.call("get_slot_count", slot_index, inventory_bridge))
 		var selected: bool = int(quick_use.get("selected_slot")) == slot_index
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
