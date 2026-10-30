@@ -204,6 +204,15 @@ func get_loaded_chunk_ids() -> PackedStringArray:
 	ids.sort()
 	return ids
 
+func get_loaded_mineral_nodes() -> Array[Node3D]:
+	var nodes: Array[Node3D] = []
+	for local_veins in _chunk_veins.values():
+		for vein_value in local_veins.values():
+			var vein := vein_value as Node3D
+			if is_instance_valid(vein):
+				nodes.append(vein)
+	return nodes
+
 func refresh_crop_plots() -> void:
 	for local_plots in _chunk_crops.values():
 		for plot_value in local_plots.values():

@@ -1638,3 +1638,43 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Verify Run 52 underground mine and Gravity Courier inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/UndergroundMineFactory.gd
+          test -f tests/production_surface_world_mining_test.gd
+          test -f daily_games/KROLL_Gravity_Courier/project.godot
+          test -f daily_games/KROLL_Gravity_Courier/main.tscn
+          test -f daily_games/KROLL_Gravity_Courier/main.gd
+          test -f daily_games/KROLL_Gravity_Courier/rules.gd
+          test -f daily_games/KROLL_Gravity_Courier/tests/rules_test.gd
+          test -f daily_games/KROLL_Gravity_Courier/tests/game_smoke_test.gd
+      - name: Import and parse KROLL Gravity Courier
+        run: godot --headless --path daily_games/KROLL_Gravity_Courier --editor --quit
+      - name: Run KROLL Gravity Courier rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Gravity_Courier --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Gravity Courier rules tests passed."
+      - name: Run KROLL Gravity Courier runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Gravity_Courier --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Gravity Courier runtime smoke test passed."
+      - name: Run production surface underground mining integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_mining_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface underground mining tests passed."
+
