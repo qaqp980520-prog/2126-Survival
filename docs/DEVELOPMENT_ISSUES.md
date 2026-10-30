@@ -478,3 +478,18 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Audit production interactable factories and terrain/object delta persistence.
 - [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
 - Compatibility: world-save schema remains version 1; the new director manages a horizontal single-elevation 3×3 window only. Local Godot is unavailable; no local GUI/GPU/device test is claimed.
+
+
+## Run 54 — 2026-10-30 — Fossil Lab + production carry-weight movement
+
+- [x] Add `daily_games/KROLL_Fossil_Lab/`: four triomino bone fragments, three deterministic 5×5 blueprints, rotation, target-mask placement, undo, keyboard/mouse/touch, rules tests and runtime smoke test.
+- [x] Connect `world/SurfaceWorld.gd` movement to the existing SurvivalWorldBridge profile: 5.0 m/s normal, 0.68 multiplier above day-based carry limit, 0.42 multiplier above 90 kg, jump disabled only above 90 kg.
+- [x] Add production integration coverage for 63/66/90/93 kg, actual movement speed, jump lock and immediate recovery after dropping 3 kg.
+- [x] Feature PR [#141](https://github.com/qaqp980520-prog/2126-Survival/pull/141) merged as `c24c881e497e0f71b56462d672db143ae55a5639`.
+- [x] Exact candidate `d1aca4feafacafdc1f7789ec15d75457c235203c` passed Godot 4.3 [Run #623](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41038847298): 223/223 successful job entries, zero failures and zero skipped. New steps 216–220 all passed.
+- [x] Preserve existing inventory thresholds, item weights, stable IDs and world-save schema 1.
+- [ ] Design and integrate stamina consumption/recovery before claiming overweight stamina penalties; current production world has no stamina model.
+- [ ] Complete production-wide interactable factory persistence audit and terrain/object delta persistence.
+- [ ] Add vertical multi-level underground connections and asynchronous chunk streaming/recovery.
+- [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
+- Compatibility: no inventory save schema or item weight changes. No local Godot GUI/GPU/device test is claimed.
