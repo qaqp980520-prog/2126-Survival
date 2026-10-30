@@ -23,7 +23,9 @@ func _run() -> void:
 	_expect(ids.size() == 9, "surface world starts with a 3x3 chunk window")
 	_expect(int(status.get("saved_vein_count", 0)) == 9, "one mineral vein per chunk")
 	_expect(int(status.get("saved_world_object_count", 0)) == 9, "one stable salvage crate per chunk")
-	_expect(int(status.get("saved_crop_count", 0)) >= 18, "two persistent crop plots per chunk")
+	var initial_plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
+	_expect(initial_plots.size() == 18, "two crop plot visuals are bound per loaded chunk")
+	_expect(int(status.get("saved_crop_count", 0)) == 0, "empty plots are not prematurely written as planted crop records")
 	var origin: Node3D = world.chunk_controller.get_chunk_root(ORIGIN_CHUNK_ID)
 	var crate: Node = origin.get_node_or_null("SalvageCrate") if origin != null else null
 	_expect(crate != null, "origin chunk creates a salvage crate")
