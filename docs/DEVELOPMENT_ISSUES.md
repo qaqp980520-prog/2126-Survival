@@ -344,3 +344,17 @@ The older checklist and historical run notes above describe their respective sna
 - World save schema remains version 1. Reentrancy guard is synchronous and local to the prop; it is not a server-authoritative multiplayer transaction lock.
 - No local Godot executable was available; manual GUI/GPU/iPhone hardware testing is not claimed.
 - Remaining: production-wide prop lifecycle binding, full terrain/object delta persistence, asynchronous chunk streaming/recovery and device QA.
+
+## Run 47 — 2026-10-30 — Pipe Relay and state mutation guard
+
+**Feature PR:** [#128](https://github.com/qaqp980520-prog/2126-Survival/pull/128), merged as `be912f75aa0580681e5e337ede5383f4f963b888`. Exact tested candidate `f8cca4b91c99dfaa910a9e635bd3c61c63e35cb7`.
+
+- Added `daily_games/KROLL_Pipe_Relay/`: 4×4 deterministic pipe-routing puzzle, 3 layouts, 10 rotations, mouse/touch tile rotation and keyboard shortcuts. No external assets, plugins or audio. Godot 4.3+.
+- Rules tests cover all three solutions, all-segment connectivity, malformed/duplicate tile coordinates, invalid indices, move-budget enforcement and terminal lock. Runtime smoke test verifies real button signals, restart, layout advance and visible status.
+- Exact-head canonical Godot 4.3 CI [Run #578](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40984092639): 185 numbered workflow steps plus 3 post/cleanup steps (188 total job step entries), all successful; zero failures/skips.
+- Independent exhaustive enumeration: Docking Spur has 1 valid solution among 32 distinct orientations; Cargo Descent and Crosswind Relay each have 1 among 1,024. This is supplementary algorithm simulation, not engine CI.
+- Hardened `WorldObjectStatefulProp`: block `set_loot_item()` and `apply_world_object_state()` during inventory transactions; commit validated internal state directly. New `tests/salvage_crate_state_mutation_guard_test.gd` verifies reentrant state mutation is rejected and reward identity/count remain consistent.
+- Added Pipe Relay and state mutation guard steps to canonical workflow.
+- Save schema remains version 1. Guard covers supported API methods in a synchronous single-node transaction; direct external assignment to the script's public state fields remains possible and should be addressed with private backing fields if stronger encapsulation is needed.
+- No local Godot executable; no manual GUI/GPU/iPhone hardware QA is claimed.
+- Remaining: private backing fields/read-only accessors review; production-wide stateful prop factory binding; full terrain/object delta persistence; asynchronous chunk streaming/recovery; device QA.
