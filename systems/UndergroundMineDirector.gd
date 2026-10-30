@@ -180,7 +180,7 @@ func _parse_chunk_id(id: String) -> Dictionary:
 
 func _capture_registry_snapshot() -> Dictionary:
 	var candidate: Variant = chunk_controller.get("registry")
-	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("to_save_dict"):
+	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("to_save_dict") or not candidate.has_method("restore_snapshot_exact"):
 		return {}
 	var snapshot: Variant = candidate.call("to_save_dict")
 	if not (snapshot is Dictionary) or not snapshot.has("schema_version") or not snapshot.has("veins"):
@@ -191,8 +191,8 @@ func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], 
 	var new_ok: bool = _rollback_new_loads(new_ids, now_unix)
 	var registry_ok: bool = false
 	var registry: Variant = chunk_controller.get("registry")
-	if registry != null and is_instance_valid(registry) and registry.has_method("restore_save_dict"):
-		registry_ok = bool(registry.call("restore_save_dict", registry_snapshot, now_unix))
+	if registry != null and is_instance_valid(registry) and registry.has_method("restore_snapshot_exact"):
+		registry_ok = bool(registry.call("restore_snapshot_exact", registry_snapshot, now_unix))
 	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix) if registry_ok else false
 	_managed_chunk_ids = previous_managed.duplicate(true) if new_ok and registry_ok and old_ok else _actual_managed_map()
 	return new_ok and registry_ok and old_ok
