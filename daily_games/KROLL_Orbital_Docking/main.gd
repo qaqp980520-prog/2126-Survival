@@ -120,7 +120,8 @@ func _refresh_hud() -> void:
 	if hud == null or status_label == null or state.is_empty():
 		return
 	var distance: float = Rules.distance_to_target(state, scenario)
-	var speed: float = (state["velocity"] as Vector2).length()
+	var velocity: Vector2 = state["velocity"]
+	var speed: float = velocity.length()
 	hud.text = "KROLL ORBITAL DOCKING // %s\nFUEL %.1f   SPEED %.1f   DISTANCE %.1f   TIME %.1f" % [
 		str(scenario["name"]), float(state["fuel"]), speed, distance, float(state["elapsed"])
 	]
