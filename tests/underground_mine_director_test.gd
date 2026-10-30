@@ -34,7 +34,7 @@ func _run() -> void:
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "initial mine window contains nine chunks")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_0_0"), "origin mine chunk is loaded")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_-1_-1"), "negative-coordinate mine chunk is loaded")
-	_expect(controller.call("get_loaded_world_state_nodes").size() == 2, "origin mine room registers its two stateful salvage caches")
+	_expect(controller.call("get_loaded_world_state_nodes").size() == 7, "initial nine-room window registers two origin caches and five deterministic regional caches")
 	var center: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
 	var east: Node3D = controller.call("get_chunk_root", "underground/mine_1_0")
 	var vein: Node3D = null
