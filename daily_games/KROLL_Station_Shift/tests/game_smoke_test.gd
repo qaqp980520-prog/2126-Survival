@@ -10,7 +10,7 @@ func _run() -> void:
 	var game: Control = MainScene.instantiate() as Control
 	_expect(game != null, "main scene instantiates as a Control")
 	if game == null:
-		_finish()
+		await _finish()
 		return
 	root.add_child(game)
 	await process_frame
@@ -39,7 +39,7 @@ func _run() -> void:
 	if next_button != null:
 		next_button.pressed.emit()
 		_expect(int(game.get("scenario_index", -1)) == 1, "next-scenario button selects the next authored scenario")
-	_finish(game)
+	await _finish(game)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
