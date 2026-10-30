@@ -12,12 +12,13 @@ func _run() -> void:
 	root.add_child(prop)
 	await process_frame
 
-	_expect(_is_read_only(prop, "opened"), "opened is exposed as a read-only property")
-	_expect(_is_read_only(prop, "loot_remaining"), "loot_remaining is exposed as a read-only property")
-	_expect(_is_read_only(prop, "loot_item_id"), "loot_item_id is exposed as a read-only property")
-	_expect(not _has_setter(prop, "opened"), "opened has no public setter")
-	_expect(not _has_setter(prop, "loot_remaining"), "loot_remaining has no public setter")
-	_expect(not _has_setter(prop, "loot_item_id"), "loot_item_id has no public setter")
+	var source: String = FileAccess.get_file_as_string("res://systems/WorldObjectStatefulProp.gd")
+	_expect(_property_is_getter_only(source, "opened", "_opened"), "opened is declared with a getter and no setter")
+	_expect(_property_is_getter_only(source, "loot_remaining", "_loot_remaining"), "loot_remaining is declared with a getter and no setter")
+	_expect(_property_is_getter_only(source, "loot_item_id", "_loot_item_id"), "loot_item_id is declared with a getter and no setter")
+	_expect(source.contains("var _opened: bool"), "opened data uses a private backing field")
+	_expect(source.contains("var _loot_remaining: int"), "loot count uses a private backing field")
+	_expect(source.contains("var _loot_item_id: String"), "loot identity uses a private backing field")
 	_expect(not bool(prop.get("opened")), "opened remains readable through the compatibility property")
 	_expect(int(prop.get("loot_remaining")) == PropScript.MAX_LOOT, "loot_remaining remains readable through the compatibility property")
 	_expect(str(prop.get("loot_item_id")) == "iron_ore", "loot_item_id remains readable through the compatibility property")
@@ -25,6 +26,8 @@ func _run() -> void:
 	_expect(bool(prop.call("set_loot_item", "copper_ore")), "validated loot configuration still works")
 	var configured: Dictionary = prop.call("get_world_object_state")
 	_expect(str(configured.get("loot_item_id", "")) == "copper_ore", "validated setter updates the private backing field")
+	_expect(bool(prop.call("apply_world_object_state", {"opened": false, "loot_remaining": 2, "loot_item_id": "silver_ore"})), "validated state restore still works")
+	_expect(str(prop.get("loot_item_id")) == "silver_ore", "read-only property reflects validated state restoration")
 
 	prop.queue_free()
 	await process_frame
@@ -36,17 +39,14 @@ func _run() -> void:
 			push_error("FAIL: " + failure)
 		quit(1)
 
-func _is_read_only(target: Object, property_name: String) -> bool:
-	for info in target.get_property_list():
-		if str(info.get("name", "")) == property_name:
-			return (int(info.get("usage", 0)) & PROPERTY_USAGE_READ_ONLY) != 0
-	return false
-
-func _has_setter(target: Object, property_name: String) -> bool:
-	for info in target.get_property_list():
-		if str(info.get("name", "")) == property_name:
-			return not str(info.get("setter", "")).is_empty()
-	return true
+func _property_is_getter_only(source: String, property_name: String, backing_name: String) -> bool:
+	var marker: String = "var " + property_name + ":"
+	var start: int = source.find(marker)
+	if start < 0:
+		return false
+	var next_property: int = source.find("\nvar ", start + marker.length())
+	var block: String = source.substr(start, next_property - start if next_property >= 0 else source.length() - start)
+	return block.contains("\tget:") and block.contains("\t\treturn " + backing_name) and not block.contains("\tset:")
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:

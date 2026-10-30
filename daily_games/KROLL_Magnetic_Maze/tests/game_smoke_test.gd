@@ -20,7 +20,7 @@ func _run() -> void:
 	var mode_button: Button = game.get_node_or_null("HUD/ControlPanel/Layout/ToggleMode") as Button
 	var restart_button: Button = game.get_node_or_null("HUD/ControlPanel/Layout/Restart") as Button
 	var next_button: Button = game.get_node_or_null("HUD/ControlPanel/Layout/NextLevel") as Button
-	var move_up_button: Button = game.get_node_or_null("HUD/ControlPanel/Layout/MoveUp") as Button
+	var move_up_button: Button = game.get_node_or_null("HUD/ControlPanel/Layout/DPad/MoveUp") as Button
 	_expect(pulse_button != null and mode_button != null and restart_button != null and next_button != null and move_up_button != null, "all core touch controls are created with stable names")
 	if pulse_button != null:
 		pulse_button.emit_signal("pressed")
