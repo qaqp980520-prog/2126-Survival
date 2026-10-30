@@ -57,6 +57,8 @@ static func get_case(index: int) -> Dictionary:
 	if index < 0 or index >= CASES.size():
 		return {}
 	var result: Dictionary = CASES[index].duplicate(true)
+	result.erase("anomaly_container")
+	result.erase("anomaly_field")
 	var containers: Array = result.get("containers", [])
 	for container_index in range(containers.size()):
 		var manifest: Dictionary = containers[container_index]
