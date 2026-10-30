@@ -9,6 +9,7 @@ var reentrant_result: Dictionary = {}
 var reentrant_quick_use: RefCounted
 var reentrant_bridge: Node
 var reentrant_stamina: RefCounted
+var refund_stamina_for_test: RefCounted
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -56,6 +57,28 @@ func _run() -> void:
 	result = quick_use.call("consume_selected", empty_bridge, stamina)
 	_expect(not bool(result.get("ok", false)) and str(result.get("reason", "")) == "empty", "empty slot inventory is rejected without stamina change")
 
+	# Force stamina to full from the synchronous item_consumed signal. The quick-use
+	# transaction must refund the already-removed item and release its re-entry guard.
+	var refund_inventory: RefCounted = InventoryScript.new({"berries": 1})
+	var refund_bridge: Node = BridgeScript.new()
+	_expect(bool(refund_bridge.call("bind_inventory", refund_inventory)), "rollback test binds a separate inventory bridge")
+	var refund_stamina: RefCounted = StaminaScript.new()
+	refund_stamina.set("current_stamina", 25.0)
+	var refund_quick_use: RefCounted = QuickUseScript.new()
+	refund_stamina_for_test = refund_stamina
+	var refund_callback: Callable = Callable(self, "_fill_stamina_on_item_consumed")
+	refund_bridge.connect("item_consumed", refund_callback)
+	var refund_result: Dictionary = refund_quick_use.call("consume_selected", refund_bridge, refund_stamina)
+	_expect(not bool(refund_result.get("ok", false)) and str(refund_result.get("reason", "")) == "stamina_rejected", "stamina changing to full during the inventory signal rejects the use")
+	_expect(bool(refund_result.get("rollback_complete", false)), "quick-use reports a successful inventory refund after stamina rejection")
+	_expect(is_equal_approx(float(refund_stamina.get("current_stamina")), 100.0), "synchronous callback fills stamina before the restoration attempt")
+	_expect(int(refund_inventory.get("counts").get("berries", 0)) == 1, "failed stamina restoration returns the consumed ration")
+	refund_bridge.disconnect("item_consumed", refund_callback)
+	refund_stamina.set("current_stamina", 50.0)
+	refund_result = refund_quick_use.call("consume_selected", refund_bridge, refund_stamina)
+	_expect(bool(refund_result.get("ok", false)), "quick-use transaction guard releases after a successful refund")
+	_expect(int(refund_inventory.get("counts").get("berries", 0)) == 0, "a later retry consumes the refunded ration exactly once")
+
 	var saved: Dictionary = quick_use.call("to_save_dict")
 	var restored: RefCounted = QuickUseScript.new()
 	_expect(bool(restored.call("load_save_dict", saved)), "valid quick-use save restores")
@@ -67,8 +90,9 @@ func _run() -> void:
 	invalid = saved.duplicate(true)
 	invalid["slots"][0] = "uranium_ore"
 	_expect(not bool(restored.call("validate_save_dict", invalid)), "non-consumable hotbar item is rejected")
-	# The bridge is a Node, not RefCounted; explicitly release both test instances.
+	# These bridges are Nodes, not RefCounted; explicitly release the test instances.
 	empty_bridge.free()
+	refund_bridge.free()
 	bridge.free()
 	if failures.is_empty():
 		print("Survival quick-use model tests passed.")
@@ -80,6 +104,9 @@ func _run() -> void:
 
 func _on_item_consumed(_item_id: String, _amount: int) -> void:
 	reentrant_result = reentrant_quick_use.call("consume_selected", reentrant_bridge, reentrant_stamina)
+
+func _fill_stamina_on_item_consumed(_item_id: String, _amount: int) -> void:
+	refund_stamina_for_test.set("current_stamina", 100.0)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
