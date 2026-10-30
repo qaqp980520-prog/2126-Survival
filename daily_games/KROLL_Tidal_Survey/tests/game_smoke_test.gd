@@ -19,14 +19,25 @@ func _run() -> void:
 	_expect(buttons.has("up") and buttons.has("left") and buttons.has("down") and buttons.has("right"), "touch thrust controls are present")
 	_expect(buttons.has("restart") and buttons.has("next"), "restart and next-layout controls are present")
 	var state_before: Dictionary = scene.get("state")
-	scene.call("_start_layout", 1)
+	var next_button: Button = buttons.get("next") as Button
+	_expect(next_button != null, "next-layout action resolves to a real Button")
+	if next_button != null:
+		next_button.emit_signal("pressed")
 	var state_after: Dictionary = scene.get("state")
-	_expect(int(scene.get("layout_index")) == 1, "layout selector changes to the second survey")
+	_expect(int(scene.get("layout_index")) == 1, "wired NEXT button changes to the second survey")
 	_expect(state_after != state_before and is_equal_approx(float(state_after.get("oxygen", 0.0)), 100.0), "layout change resets the survey state")
-	scene.call("_set_touch_direction", "right")
-	_expect((scene.get("touch_directions") as Dictionary).has("right"), "touch button down records a thrust direction")
-	scene.call("_clear_touch_direction", "right")
-	_expect(not (scene.get("touch_directions") as Dictionary).has("right"), "touch button up clears the thrust direction")
+	var right_button: Button = buttons.get("right") as Button
+	_expect(right_button != null, "right-thrust control resolves to a real Button")
+	if right_button != null:
+		right_button.emit_signal("button_down")
+	_expect((scene.get("touch_directions") as Dictionary).has("right"), "touch button_down signal records a thrust direction")
+	if right_button != null:
+		right_button.emit_signal("button_up")
+	_expect(not (scene.get("touch_directions") as Dictionary).has("right"), "touch button_up signal clears the thrust direction")
+	var restart_button: Button = buttons.get("restart") as Button
+	if restart_button != null:
+		restart_button.emit_signal("pressed")
+	_expect(int(scene.get("layout_index")) == 1 and is_equal_approx(float((scene.get("state") as Dictionary).get("oxygen", 0.0)), 100.0), "wired RESTART button resets the active survey")
 	scene.queue_free()
 	await process_frame
 	if failures.is_empty():
