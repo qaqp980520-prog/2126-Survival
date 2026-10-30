@@ -71,10 +71,14 @@ func _run() -> void:
 	invalid_payload["stamina"]["current"] = 100.01
 	var position_before: Vector3 = world.player.global_position
 	var weight_before: float = float(bridge.call("get_weight_kg"))
+	var chunks_before: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
 	_expect(not bool(world.call("restore_stream_state", invalid_payload, int(Time.get_unix_time_from_system()))), "invalid stamina payload is rejected before world mutation")
 	_expect(is_equal_approx(float(stamina.get("current_stamina")), 55.0), "invalid stamina payload preserves current stamina")
 	_expect(world.player.global_position.is_equal_approx(position_before), "invalid stamina payload preserves player position")
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), weight_before), "invalid stamina payload preserves inventory weight")
+	_expect(world.chunk_controller.get_loaded_chunk_ids() == chunks_before, "invalid stamina payload preserves the active chunk window")
+	var restore_report: Dictionary = world.call("get_last_restore_report")
+	_expect(str(restore_report.get("phase", "")) == "stamina_validation" and bool(restore_report.get("rollback_complete", false)), "invalid stamina rejection reports a non-mutating validation failure")
 	_finish(0 if failures.is_empty() else 1)
 
 func _expect(condition: bool, message: String) -> void:
