@@ -1804,3 +1804,36 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface world stamina tests passed."
+
+
+      - name: Verify Run 56 KROLL Station Shift and stamina M0.2 inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Station_Shift/project.godot
+          test -f daily_games/KROLL_Station_Shift/main.tscn
+          test -f daily_games/KROLL_Station_Shift/main.gd
+          test -f daily_games/KROLL_Station_Shift/rules.gd
+          test -f daily_games/KROLL_Station_Shift/tests/rules_test.gd
+          test -f daily_games/KROLL_Station_Shift/tests/game_smoke_test.gd
+          test -f systems/SurvivalStamina.gd
+          test -f tests/survival_stamina_test.gd
+          test -f tests/production_surface_world_stamina_test.gd
+      - name: Import and parse KROLL Station Shift
+        run: godot --headless --path daily_games/KROLL_Station_Shift --editor --quit
+      - name: Run KROLL Station Shift rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Station_Shift --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Station Shift rules tests passed."
+      - name: Run KROLL Station Shift runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Station_Shift --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Station Shift runtime smoke test passed."

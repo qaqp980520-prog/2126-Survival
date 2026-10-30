@@ -1,23 +1,29 @@
 extends RefCounted
 class_name SurvivalStamina
 
-## Small deterministic stamina model shared by the production SurfaceWorld.
-## Balance values are prototype defaults and remain easy to tune independently.
+## Deterministic stamina model shared by the production SurfaceWorld.
+## Tuning defaults are prototype values and remain centralized here.
 const SAVE_SCHEMA_VERSION: int = 1
 const MAX_STAMINA: float = 100.0
 const MOVE_DRAIN_PER_SECOND: float = 2.0
 const IDLE_RECOVERY_PER_SECOND: float = 6.0
 const JUMP_COST: float = 10.0
+const MIN_SPRINT_STAMINA: float = 5.0
+const SPRINT_SPEED_MULTIPLIER: float = 1.35
+const SPRINT_DRAIN_MULTIPLIER: float = 2.25
+const EXHAUSTED_SPEED_MULTIPLIER: float = 0.65
 
 var current_stamina: float = MAX_STAMINA
 
-func tick(delta_seconds: float, moving: bool, movement_multiplier: float = 1.0) -> void:
+func tick(delta_seconds: float, moving: bool, movement_multiplier: float = 1.0, sprinting: bool = false) -> void:
 	if not is_finite(delta_seconds) or delta_seconds <= 0.0:
 		return
 	if moving:
 		var safe_multiplier: float = movement_multiplier if is_finite(movement_multiplier) else 1.0
 		safe_multiplier = clampf(safe_multiplier, 0.1, 1.0)
 		var drain_rate: float = MOVE_DRAIN_PER_SECOND / safe_multiplier
+		if sprinting and can_sprint():
+			drain_rate *= SPRINT_DRAIN_MULTIPLIER
 		current_stamina = maxf(0.0, current_stamina - drain_rate * delta_seconds)
 	else:
 		current_stamina = minf(MAX_STAMINA, current_stamina + IDLE_RECOVERY_PER_SECOND * delta_seconds)
@@ -27,6 +33,16 @@ func get_max_stamina() -> float:
 
 func can_jump() -> bool:
 	return current_stamina >= JUMP_COST
+
+func can_sprint() -> bool:
+	return current_stamina >= MIN_SPRINT_STAMINA
+
+func get_movement_speed_multiplier(sprinting: bool = false) -> float:
+	if current_stamina <= 0.0:
+		return EXHAUSTED_SPEED_MULTIPLIER
+	if sprinting and can_sprint():
+		return SPRINT_SPEED_MULTIPLIER
+	return 1.0
 
 func spend_jump() -> bool:
 	if not can_jump():

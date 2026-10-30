@@ -19,6 +19,8 @@ var hud: Label
 var touch_buttons: Dictionary = {}
 var _touch_directions: Dictionary = {}
 var _touch_jump: bool = false
+var _touch_sprint: bool = false
+var _sprint_active: bool = false
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
@@ -105,13 +107,13 @@ func _build_hud() -> void:
 	panel.anchor_right = 0.5
 	panel.anchor_top = 1.0
 	panel.anchor_bottom = 1.0
-	panel.offset_left = -146.0
-	panel.offset_right = 146.0
-	panel.offset_top = -112.0
+	panel.offset_left = -116.0
+	panel.offset_right = 116.0
+	panel.offset_top = -156.0
 	panel.offset_bottom = -10.0
 	layer.add_child(panel)
 	var grid := GridContainer.new()
-	grid.columns = 4
+	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
 	panel.add_child(grid)
@@ -123,6 +125,7 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "crop", "CROP")
 	_add_touch_button(grid, "crate", "CRATE")
 	_add_touch_button(grid, "shaft", "DESCEND")
+	_add_touch_button(grid, "sprint", "SPRINT")
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -146,6 +149,9 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_on_touch_crate_pressed)
 		"shaft":
 			button.pressed.connect(_on_touch_shaft_pressed)
+		"sprint":
+			button.button_down.connect(_set_touch_sprint.bind(true))
+			button.button_up.connect(_set_touch_sprint.bind(false))
 
 func _on_touch_crop_pressed() -> void:
 	_interact_nearest_crop_plot()
@@ -165,27 +171,37 @@ func _clear_touch_direction(direction: String) -> void:
 func _set_touch_jump(value: bool) -> void:
 	_touch_jump = value
 
-## Read movement penalties from the same inventory model used by mining and salvage.
-func get_player_movement_profile() -> Dictionary:
+func _set_touch_sprint(value: bool) -> void:
+	_touch_sprint = value
+
+## Read carry penalties from the inventory model and stamina penalties from SurvivalStamina.
+func get_player_movement_profile(sprinting: bool = false) -> Dictionary:
 	var summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null and inventory_bridge.has_method("get_summary") else {}
 	var multiplier: float = clampf(float(summary.get("movement_multiplier", 1.0)), 0.0, 1.0)
 	var stamina_value: float = float(stamina.get("current_stamina")) if stamina != null else 100.0
 	var stamina_can_jump: bool = bool(stamina.call("can_jump")) if stamina != null else true
+	var stamina_can_sprint: bool = bool(stamina.call("can_sprint")) if stamina != null else true
+	var sprint_active: bool = sprinting and stamina_can_sprint
+	var stamina_speed_multiplier: float = float(stamina.call("get_movement_speed_multiplier", sprint_active)) if stamina != null else 1.0
 	var inventory_can_jump: bool = bool(summary.get("can_jump", true))
 	return {
 		"weight_kg": float(summary.get("weight_kg", 0.0)),
 		"limit_kg": float(summary.get("limit_kg", 65.0)),
 		"movement_multiplier": multiplier,
-		"move_speed": BASE_MOVE_SPEED * multiplier,
+		"stamina_movement_multiplier": stamina_speed_multiplier,
+		"move_speed": BASE_MOVE_SPEED * multiplier * stamina_speed_multiplier,
 		"stamina": stamina_value,
 		"stamina_max": float(stamina.call("get_max_stamina")) if stamina != null else 100.0,
 		"inventory_can_jump": inventory_can_jump,
 		"stamina_can_jump": stamina_can_jump,
+		"can_sprint": stamina_can_sprint,
+		"sprinting": sprint_active,
+		"exhausted": stamina_value <= 0.0,
 		"can_jump": inventory_can_jump and stamina_can_jump
 	}
 
-func get_effective_move_speed() -> float:
-	return float(get_player_movement_profile().get("move_speed", BASE_MOVE_SPEED))
+func get_effective_move_speed(sprinting: bool = false) -> float:
+	return float(get_player_movement_profile(sprinting).get("move_speed", BASE_MOVE_SPEED))
 
 func can_player_jump_now() -> bool:
 	return bool(get_player_movement_profile().get("can_jump", true))
@@ -199,11 +215,17 @@ func _try_start_jump() -> bool:
 	_refresh_hud()
 	return true
 
-func _tick_stamina(delta: float, moving: bool) -> void:
+func _tick_stamina(delta: float, moving: bool, sprinting: bool = false) -> void:
 	if stamina == null:
 		return
-	var profile: Dictionary = get_player_movement_profile()
-	stamina.call("tick", delta, moving, float(profile.get("movement_multiplier", 1.0)))
+	var profile: Dictionary = get_player_movement_profile(sprinting)
+	stamina.call(
+		"tick",
+		delta,
+		moving,
+		float(profile.get("movement_multiplier", 1.0)),
+		bool(profile.get("sprinting", false))
+	)
 
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
@@ -226,7 +248,9 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var movement := (right * move_input.x + forward * move_input.y).normalized()
-	var movement_profile: Dictionary = get_player_movement_profile()
+	var sprint_requested: bool = (Input.is_key_pressed(KEY_SHIFT) or _touch_sprint) and movement.length_squared() > 0.0001
+	var movement_profile: Dictionary = get_player_movement_profile(sprint_requested)
+	_sprint_active = bool(movement_profile.get("sprinting", false))
 	var move_speed: float = float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
 	player.velocity.x = movement.x * move_speed
 	player.velocity.z = movement.z * move_speed
@@ -239,7 +263,7 @@ func _physics_process(delta: float) -> void:
 		_try_start_jump()
 	_jump_was_down = jump_down
 	# Resolve a same-frame jump before movement drain so exactly JUMP_COST remains sufficient.
-	_tick_stamina(delta, movement.length_squared() > 0.0001)
+	_tick_stamina(delta, movement.length_squared() > 0.0001, _sprint_active)
 	var previous_position: Vector3 = player.global_position
 	player.move_and_slide()
 	if _is_underground:
@@ -568,10 +592,14 @@ func _refresh_hud() -> void:
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
 	var grid_text := str(mine_director.get_grid_coordinate(player.global_position)) if _is_underground and mine_director != null and player != null else (str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a")
-	var movement_profile: Dictionary = get_player_movement_profile()
+	var movement_profile: Dictionary = get_player_movement_profile(_sprint_active)
 	var weight := float(movement_profile.get("weight_kg", 0.0))
 	var limit := float(movement_profile.get("limit_kg", 65.0))
-	var movement_percent: int = roundi(float(movement_profile.get("movement_multiplier", 1.0)) * 100.0)
+	var movement_percent: int = roundi(
+		float(movement_profile.get("movement_multiplier", 1.0))
+		* float(movement_profile.get("stamina_movement_multiplier", 1.0)) * 100.0
+	)
+	var movement_mode: String = "SPRINT" if bool(movement_profile.get("sprinting", false)) else ("EXHAUSTED" if bool(movement_profile.get("exhausted", false)) else "WALK")
 	var jump_status: String = "JUMP READY"
 	if not bool(movement_profile.get("inventory_can_jump", true)):
 		jump_status = "JUMP LOCKED (>90 kg)"
@@ -586,9 +614,11 @@ func _refresh_hud() -> void:
 		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
 	if touch_buttons.has("crop"):
 		(touch_buttons["crop"] as Button).disabled = _is_underground
+	if touch_buttons.has("sprint"):
+		(touch_buttons["sprint"] as Button).text = "SPRINT ON" if _sprint_active else "SPRINT"
 	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
-	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%%   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
-		weight, limit, movement_percent, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
+		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
