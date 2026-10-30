@@ -64,8 +64,8 @@ func _run() -> void:
 	var return_position := Vector3(1.5, -8.25, 7.5)
 	world.player.global_position = return_position
 	await physics_frame
-	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "returning through the mine tunnels reloads the origin room")
 	await process_frame
+	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "returning through the mine tunnels reloads the origin room")
 	var reloaded_nearest: Node3D = _nearest_mine_vein()
 	_expect(reloaded_nearest != null and str(reloaded_nearest.get("mineral_id")) == item_id and int(reloaded_nearest.get("remaining_units")) == stock_before - 1, "mined mineral identity and stock survive director unload/reload")
 	_expect(_inventory_count(item_id) == 1, "mine window reload does not duplicate inventory")
