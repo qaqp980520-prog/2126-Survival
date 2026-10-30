@@ -1478,3 +1478,42 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate state mutation guard tests passed."
+
+
+      - name: Verify Run 48 Magnetic Maze and read-only prop inputs
+        shell: bash
+        run: |
+          test -f daily_games/KROLL_Magnetic_Maze/project.godot
+          test -f daily_games/KROLL_Magnetic_Maze/main.tscn
+          test -f daily_games/KROLL_Magnetic_Maze/main.gd
+          test -f daily_games/KROLL_Magnetic_Maze/rules.gd
+          test -f daily_games/KROLL_Magnetic_Maze/tests/rules_test.gd
+          test -f daily_games/KROLL_Magnetic_Maze/tests/game_smoke_test.gd
+          test -f tests/salvage_crate_read_only_state_test.gd
+
+      - name: Import and parse KROLL Magnetic Maze
+        run: godot --headless --path daily_games/KROLL_Magnetic_Maze --editor --quit
+      - name: Run KROLL Magnetic Maze rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Magnetic_Maze --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Magnetic Maze rules tests passed."
+      - name: Run KROLL Magnetic Maze runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Magnetic_Maze --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Magnetic Maze runtime smoke test passed."
+      - name: Run salvage crate read-only state property regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_read_only_state_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Salvage crate read-only state tests passed."
