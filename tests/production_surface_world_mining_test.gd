@@ -36,6 +36,13 @@ func _run() -> void:
 	world.player.global_position = Vector3(1.5, 2.0, 7.5)
 	_expect(bool(world.call("_toggle_mine_access")), "player can descend through the mine shaft")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "player enters the underground layer")
+	var underground_cache_count: int = 0
+	for prop in world.chunk_controller.get_loaded_world_state_nodes():
+		if is_instance_valid(prop) and prop.global_position.y < -7.0:
+			underground_cache_count += 1
+	_expect(underground_cache_count == 2, "origin mine room registers two stateful caches in the shared world-object controller")
+	var underground_buttons: Dictionary = world.get("touch_buttons")
+	_expect((underground_buttons["crate"] as Button).text == "CACHE", "underground touch action is relabeled for salvage caches")
 	var nearest: Node3D = _nearest_mine_vein()
 	_expect(nearest != null, "mine exposes a nearby vein")
 	if nearest == null:

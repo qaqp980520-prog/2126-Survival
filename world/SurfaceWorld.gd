@@ -683,7 +683,7 @@ func _refresh_hud() -> void:
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
 	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
 	if touch_buttons.has("crate"):
-		(touch_buttons["crate"] as Button).text = "CACHE/MINE" if _is_underground else "CRATE"
+		(touch_buttons["crate"] as Button).text = "CACHE" if _is_underground else "CRATE"
 	if touch_buttons.has("shaft"):
 		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
 	if touch_buttons.has("crop"):
