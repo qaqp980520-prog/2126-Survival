@@ -569,3 +569,25 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - The isolated `UndergroundMineDirector` test fixture must bind both `MineralVeinRegistry` and `WorldObjectStateRegistry` whenever its factory creates `WorldObjectStatefulProp` nodes. The fixture was updated in Run 58; production registry validation must remain enabled.
 - Current world save schema remains version 1; no migration is required for the two origin-room caches.
 - Final feature candidate `44256ddc52b9c90396b9035f0a9493408f5fcb78` passed Godot 4.3 CI Run #665 (240/240) before PR #152 was merged as `13bc8d218bafc79cfa1cd4cc4532d43563069310`.
+
+
+## Run 59 closeout — 2026-10-31
+
+### Completed
+- **Regional underground cache distribution:** the Run 58 follow-up requesting non-origin room loot tables is completed in M0.1. West/east/north/south weighted tables now choose among all seven catalog minerals. A deterministic coordinate hash preserves contents through unload/reload; one third of non-origin rooms are cache-free. The origin room retains its two existing caches and stable names.
+- **Regional cache inventory lifecycle:** production integration now collects a regional coal cache through the shared inventory bridge, verifies catalog weight is immediately added, and verifies stable identity, remaining stock and no duplicate inventory grant after actual chunk unload/reload.
+- **World-object counts:** the initial 3×3 mine window now contains seven underground caches; production world-object count is nine surface crates plus seven underground caches (16).
+- **KROLL Cargo Audit M0.1:** three fixed deduction cases with hidden answer projection, mass/seal/count scanning, scan/accusation limits and keyboard/mouse/touch input.
+
+### Remaining work
+1. **Loot-table authoring:** current tables are constants and deterministic coordinate hashes. Add a data-driven resource and a saved world seed before procedural mine generation; do not change existing stable cache IDs without migration tests.
+2. **Vertical mine layers:** current mine remains one elevation. Add floor/depth IDs, stairs/elevators and vertical transition persistence.
+3. **Asynchronous chunk streaming:** current chunk load/unload and rollback remain synchronous. Add a bounded request queue and cancellation-safe rollback before claiming background generation.
+4. **Underground interaction feedback:** add explicit prompt/raycast selection, cache open animation and inventory-full feedback; current F interaction remains nearest-target based.
+5. **Cargo Audit expansion:** only three authored cases exist. Procedural manifest generation, campaign persistence and difficulty progression are not implemented.
+6. **Device QA:** no local Godot executable was available. Manual GUI, GPU performance and iPhone device tests remain outstanding.
+
+### Run 59 exact validation
+- Feature PR #154 merged as `63913a4cfea8da1af0e05242373a0a0d1226f455`.
+- Exact candidate `6394fe6c8c686ec91656c5a7bdefdc5555f4e4de` passed Godot 4.3 [Run #672](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41146228476): 245/245 numbered steps plus setup/cleanup/completion (248/248 total successful step records), zero failures and zero skipped steps.
+- No world save schema migration was required; schema remains version 1.
