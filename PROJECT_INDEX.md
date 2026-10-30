@@ -756,3 +756,34 @@
 - Limits: this change connects existing movement multiplier and jump gating only. It does not add a stamina model or overweight stamina consumption; stamina fields/rates/save semantics must be designed before implementation. No local Godot executable was available; no manual GUI/GPU/iPhone test is claimed.
 - Notion: [Run 54 daily log](https://app.notion.com/p/409bc6a809d781f39c7df45031f212c9), [Fossil Lab M0.1](https://app.notion.com/p/409bc6a809d781b2a068c7faa74f8cc9), [Carry Weight Movement M0.1](https://app.notion.com/p/409bc6a809d781c09558db9ea73a27ce), [workflow record](https://app.notion.com/p/409bc6a809d78147b3d5f4b07e5ad24d), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
 - Remaining: stamina system design/integration, production-wide interactable factory persistence audit, vertical multi-level underground connections, asynchronous chunk streaming, terrain/object delta persistence and manual device QA.
+
+
+## 2026-10-30 Run 55 — Tidal Survey + production stamina M0.1 (feature merged)
+
+- Baseline main before Run 55: `2504e62b3208c49ba7374bd858a8e68b6e51cb94`. Start-of-run branch inventory was fully paged at 148 branches and there were no open PRs. Run 54 daily log and asset records were checked before work; no Run 55 record existed at start.
+- Feature PR [#143](https://github.com/qaqp980520-prog/2126-Survival/pull/143) merged as `de11e4a77962fdfbafe950f2ad9e63a6c1b07d4c). Exact candidate HEAD: `26745ff0bc302e8c25a1c04342cc86a58ef35e17`.
+- Exact-head Godot 4.3 [Run #637](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41047042931) succeeded: 229/229 workflow job step entries successful, zero failures and zero skipped. New checks 221–226 all passed.
+- Added `daily_games/KROLL_Tidal_Survey/`: deterministic 2D top-down underwater navigation with inertial thrust, drag, constant current fields, ordered beacons, hazard cooldowns, oxygen depletion and return-to-dock objective. Includes keyboard and on-screen mouse/touch directional controls, three authored layouts, rules tests and scene smoke test. No external assets/add-ons/audio.
+- Tidal Survey acceptance includes a deterministic route-follower simulation that completes all three authored layouts within the oxygen budget. Scene smoke test emits actual NEXT/RESTART and directional Button signals, not only direct helper calls.
+- Added `systems/SurvivalStamina.gd` and integrated it into production `world/SurfaceWorld.gd`. Horizontal movement drains stamina; stationary time regenerates; a successful jump spends 10 stamina. Movement drain is derived from the existing inventory movement multiplier: 2.0/s at normal speed, about 2.94/s at the overweight 0.68 multiplier, and about 4.76/s at the super-heavy 0.42 multiplier. Existing inventory remains the sole owner of weight thresholds and movement multipliers.
+- Stamina prototype defaults: maximum 100, normal movement drain 2.0/s, idle recovery 6.0/s, jump cost 10. These are provisional tuning values, not final balance locks. Same-frame jump is resolved before movement drain so exactly 10 stamina is sufficient to initiate a jump.
+- Production SurfaceWorld saves stamina as an optional payload schema 1 while keeping the world envelope at schema 1. New saves round-trip current stamina; legacy schema-1 saves without the optional key remain valid and initialize stamina to full. Invalid or unknown stamina fields are rejected before world restore mutation.
+- Added `tests/survival_stamina_test.gd` and `tests/production_surface_world_stamina_test.gd`. Coverage includes normal/overweight/super-heavy drain, idle recovery, exact jump threshold, invalid delta, save validation, actual physics-input drain, carry-weight coupling, legacy fallback, invalid-payload non-mutation, position/inventory/chunk-window preservation and restore diagnostics.
+- Added design notes: `docs/KROLL_TIDAL_SURVEY_M0_1_2026-10-30.md` and `docs/SURVIVAL_STAMINA_MODEL_M0_1_2026-10-30.md`.
+- Updated `.github/workflows/godot-validation.yml` with Tidal Survey import/rules/runtime checks and stamina model/production integration tests.
+- The Run 54 note that no stamina model existed is historical and is superseded by this Run 55 M0.1 integration.
+
+### Known limits
+
+- Stamina rates are provisional. Sprinting, food/hotbar restoration and a separate exhaustion movement penalty at zero stamina are not implemented.
+- Current fields in Tidal Survey are constant within their radius; no saved campaign/high-score progression.
+- Formal world-wide factory migration, terrain/object delta persistence, vertical multi-level underground connections and asynchronous chunk streaming remain open.
+- No local Godot executable was available; no manual GUI, GPU or iPhone hardware QA is claimed. Engine evidence is GitHub-hosted Godot 4.3 CI.
+
+### Notion
+
+- Run 55 daily log: https://app.notion.com/p/409bc6a809d7815895d9c58a4144225b
+- KROLL Tidal Survey M0.1: https://app.notion.com/p/409bc6a809d78129a9e5f61b70b53ae9
+- SurvivalStamina Model M0.1: https://app.notion.com/p/409bc6a809d78100ad02ffa906026980
+- Workflow Run 55 M0.1: https://app.notion.com/p/409bc6a809d781f6ae23f95d26d80aeb
+- Asset index: https://app.notion.com/p/400bc6a809d781269143fa5379833145
