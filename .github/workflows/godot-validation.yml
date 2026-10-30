@@ -9,6 +9,7 @@ on:
     paths:
       - 'systems/**'
       - 'scripts/**'
+      - 'world/**'
       - 'tests/**'
       - 'daily_games/**'
       - 'prototypes/**'
@@ -1586,3 +1587,54 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Outpost Architect runtime smoke test passed."
+
+      - name: Verify Run 51 Surface World and Airlock Operator inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/SurfaceChunkFactory.gd
+          test -f world/SurfaceWorld.gd
+          test -f world/SurfaceWorld.tscn
+          test -f tests/production_surface_world_test.gd
+          test -f tests/survival_test_hub_smoke_test.gd
+          test -f daily_games/KROLL_Airlock_Operator/project.godot
+          test -f daily_games/KROLL_Airlock_Operator/main.tscn
+          test -f daily_games/KROLL_Airlock_Operator/main.gd
+          test -f daily_games/KROLL_Airlock_Operator/rules.gd
+          test -f daily_games/KROLL_Airlock_Operator/tests/rules_test.gd
+          test -f daily_games/KROLL_Airlock_Operator/tests/game_smoke_test.gd
+
+      - name: Import and parse KROLL Airlock Operator
+        run: godot --headless --path daily_games/KROLL_Airlock_Operator --editor --quit
+      - name: Run KROLL Airlock Operator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Airlock_Operator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Airlock Operator rules tests passed."
+      - name: Run KROLL Airlock Operator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Airlock_Operator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Airlock Operator runtime smoke test passed."
+      - name: Run production surface world integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world integration tests passed."
+      - name: Run updated survival test hub smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
