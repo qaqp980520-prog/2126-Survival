@@ -22,6 +22,9 @@ func tick(delta_seconds: float, moving: bool, movement_multiplier: float = 1.0) 
 	else:
 		current_stamina = minf(MAX_STAMINA, current_stamina + IDLE_RECOVERY_PER_SECOND * delta_seconds)
 
+func get_max_stamina() -> float:
+	return MAX_STAMINA
+
 func can_jump() -> bool:
 	return current_stamina >= JUMP_COST
 
