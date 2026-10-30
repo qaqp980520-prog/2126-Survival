@@ -56,7 +56,7 @@ func _run() -> void:
 	_expect(bool(bridge.call("collect_world_item", "iron_ore", 22)), "inventory accepts 66 kg of iron ore")
 	world.call("_tick_stamina", 1.0, true)
 	var overweight_remaining: float = float(stamina.get("current_stamina"))
-	var overweight_drain: float = normal_remaining - overweight_remaining
+	var overweight_drain: float = 100.0 - overweight_remaining
 	_expect(overweight_drain > 2.8 and overweight_drain < 3.1, "production overweight movement drains more stamina than normal movement")
 	_expect(bool(bridge.call("collect_world_item", "iron_ore", 9)), "inventory reaches 93 kg")
 	world.call("_tick_stamina", 1.0, true)
