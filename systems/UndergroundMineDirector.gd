@@ -194,8 +194,13 @@ func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], 
 	if registry != null and is_instance_valid(registry) and registry.has_method("restore_snapshot_exact"):
 		registry_ok = bool(registry.call("restore_snapshot_exact", registry_snapshot, now_unix))
 	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix) if registry_ok else false
-	_managed_chunk_ids = previous_managed.duplicate(true) if new_ok and registry_ok and old_ok else _actual_managed_map()
-	return new_ok and registry_ok and old_ok
+	var final_registry_ok: bool = false
+	if old_ok and registry != null and is_instance_valid(registry) and registry.has_method("restore_snapshot_exact"):
+		# Re-apply the exact snapshot after reloading stale roots, because normal
+		# chunk registration may perform elapsed-time catch-up during load.
+		final_registry_ok = bool(registry.call("restore_snapshot_exact", registry_snapshot, now_unix))
+	_managed_chunk_ids = previous_managed.duplicate(true) if new_ok and registry_ok and old_ok and final_registry_ok else _actual_managed_map()
+	return new_ok and registry_ok and old_ok and final_registry_ok
 
 func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 	var success := true
