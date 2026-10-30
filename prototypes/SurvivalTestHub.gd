@@ -1,5 +1,6 @@
 extends Control
 
+const WORLD_SCENE := "res://world/SurfaceWorld.tscn"
 const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
 const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
@@ -48,10 +49,16 @@ func _build_ui() -> void:
 	column.add_child(subtitle)
 
 	var note := Label.new()
-	note.text = "目前是原型測試入口，完整主世界尚未整合。請選擇要測試的子系統："
+	note.text = "主世界已整合地表區塊、礦物、作物、打撈箱與共用背包；下方保留獨立子系統測試入口。"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 
+	_add_scene_button(
+		column,
+		"主世界／地表生存",
+		"進入可遊玩的地表世界：WASD 移動、E 管理作物、F 回收打撈箱；支援鍵盤與觸控操作。",
+		WORLD_SCENE
+	)
 	_add_scene_button(
 		column,
 		"地表探索／區塊與礦物串流",
@@ -73,7 +80,7 @@ func _build_ui() -> void:
 
 	status_label = Label.new()
 	status_label.name = "StatusLabel"
-	status_label.text = "提示：在子場景按 Esc 可釋放滑鼠；按 F10 返回此選單。各場景目前仍是獨立原型，並非完整主遊戲。"
+	status_label.text = "提示：在世界或原型場景按 Esc 可釋放滑鼠；按 F10 返回此選單。地表世界已整合共用系統，其他區域仍在開發中。"
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", Color(0.72, 0.78, 0.82))
 	column.add_child(status_label)

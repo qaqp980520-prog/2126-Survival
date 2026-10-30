@@ -1,13 +1,7 @@
 extends "res://scripts/world.gd"
 
-const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
-const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
-const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
-
-const CHUNK_SIZE: float = 10.0
-const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
-const SALVAGE_LOOT_IDS: Array[String] = ["copper_ore", "iron_ore", "coal_ore", "silver_ore"]
+const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 
 var camera: Camera3D
 var hud: Label
@@ -207,54 +201,7 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 
 
 func _make_chunk(coord: Vector2i) -> Node3D:
-	var chunk := Node3D.new()
-	chunk.name = "Chunk_%d_%d" % [coord.x, coord.y]
-	chunk.position = Vector3(float(coord.x) * CHUNK_SIZE, 0.0, float(coord.y) * CHUNK_SIZE)
-	var ground := StaticBody3D.new()
-	ground.name = "Ground"
-	chunk.add_child(ground)
-	var box_size := Vector3(CHUNK_SIZE, 0.5, CHUNK_SIZE)
-	var collision := CollisionShape3D.new()
-	var box_shape := BoxShape3D.new()
-	box_shape.size = box_size
-	collision.shape = box_shape
-	collision.position = Vector3(CHUNK_SIZE * 0.5, -0.25, CHUNK_SIZE * 0.5)
-	ground.add_child(collision)
-	if DisplayServer.get_name() != "headless":
-		var ground_mesh := MeshInstance3D.new()
-		var box_mesh := BoxMesh.new()
-		box_mesh.size = box_size
-		ground_mesh.mesh = box_mesh
-		ground_mesh.position = collision.position
-		var material := StandardMaterial3D.new()
-		material.albedo_color = Color(0.10, 0.15, 0.19) if (coord.x + coord.y) % 2 == 0 else Color(0.13, 0.18, 0.22)
-		ground_mesh.material_override = material
-		ground.add_child(ground_mesh)
-	var ore: Node3D = MiningNodeScript.new()
-	ore.name = "Ore_%d_%d" % [coord.x, coord.y]
-	ore.mineral_id = str(MINERAL_IDS[posmod(coord.x + coord.y, MINERAL_IDS.size())])
-	ore.max_units = 6
-	ore.remaining_units = 6
-	ore.regen_interval_seconds = 60
-	ore.last_regen_unix = _stream_clock_unix if _stream_clock_unix > 0 else int(Time.get_unix_time_from_system())
-	ore.inventory_bridge_path = NodePath("../../../SurvivalWorldBridge")
-	ore.position = Vector3(CHUNK_SIZE * 0.5, -3.0, CHUNK_SIZE * 0.5)
-	chunk.add_child(ore)
-	var crate: Node3D = StatefulPropScript.new()
-	crate.name = "SalvageCrate"
-	var loot_index: int = posmod(coord.x * 31 + coord.y * 17 + 1009, SALVAGE_LOOT_IDS.size())
-	crate.call("set_loot_item", SALVAGE_LOOT_IDS[loot_index])
-	crate.position = Vector3(CHUNK_SIZE * 0.55, 0.0, CHUNK_SIZE * 0.62)
-	chunk.add_child(crate)
-	var crop_kinds: Array[String] = ["wheat", "tomato"]
-	for plot_index in range(crop_kinds.size()):
-		var plot := CropPlotVisualScene.instantiate() as Node3D
-		plot.name = "CropPlot_" + str(plot_index)
-		plot.set("crop_id", crop_kinds[plot_index])
-		plot.set("plot_index", plot_index + 1)
-		plot.position = Vector3(2.4 + float(plot_index) * 5.0, 0.0, 2.4)
-		chunk.add_child(plot)
-	return chunk
+	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
 func _refresh_hud() -> void:
 	if hud == null:
