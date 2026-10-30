@@ -131,4 +131,4 @@ static func _in_bounds(position: Vector2i) -> bool:
 
 
 static func _is_cardinal(direction: Vector2i) -> bool:
-	return absi(direction.x) + absi(direction.y) == 1
+	return abs(direction.x) + abs(direction.y) == 1

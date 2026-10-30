@@ -41,12 +41,12 @@ func _build_ui() -> void:
 	add_child(hud)
 	var panel := PanelContainer.new()
 	panel.name = "ControlPanel"
-	panel.position = Vector2(560.0, 62.0)
-	panel.custom_minimum_size = Vector2(340.0, 500.0)
+	panel.position = Vector2(560.0, 48.0)
+	panel.custom_minimum_size = Vector2(340.0, 550.0)
 	hud.add_child(panel)
 	var layout := VBoxContainer.new()
 	layout.name = "Layout"
-	layout.add_theme_constant_override("separation", 8)
+	layout.add_theme_constant_override("separation", 6)
 	panel.add_child(layout)
 
 	var title := Label.new()
@@ -56,29 +56,41 @@ func _build_ui() -> void:
 
 	status_label = Label.new()
 	status_label.name = "StatusLabel"
-	status_label.custom_minimum_size = Vector2(300.0, 120.0)
+	status_label.custom_minimum_size = Vector2(300.0, 96.0)
 	status_label.add_theme_font_size_override("font_size", 16)
 	layout.add_child(status_label)
 
 	help_label = Label.new()
 	help_label.text = "WASD / arrows: move and face\nSPACE: magnetic pulse\nTAB: toggle PUSH / PULL\nR: restart   N: next layout"
-	help_label.custom_minimum_size = Vector2(300.0, 90.0)
+	help_label.custom_minimum_size = Vector2(300.0, 72.0)
 	layout.add_child(help_label)
 
-	_add_button(layout, "MoveUp", "MOVE UP", Callable(self, "_move_up"))
-	_add_button(layout, "MoveLeft", "MOVE LEFT", Callable(self, "_move_left"))
-	_add_button(layout, "MoveDown", "MOVE DOWN", Callable(self, "_move_down"))
-	_add_button(layout, "MoveRight", "MOVE RIGHT", Callable(self, "_move_right"))
+	var dpad := GridContainer.new()
+	dpad.name = "DPad"
+	dpad.columns = 3
+	layout.add_child(dpad)
+	_add_spacer(dpad)
+	_add_button(dpad, "MoveUp", "UP", Callable(self, "_move_up"), Vector2(88.0, 38.0))
+	_add_spacer(dpad)
+	_add_button(dpad, "MoveLeft", "LEFT", Callable(self, "_move_left"), Vector2(88.0, 38.0))
+	_add_button(dpad, "MoveDown", "DOWN", Callable(self, "_move_down"), Vector2(88.0, 38.0))
+	_add_button(dpad, "MoveRight", "RIGHT", Callable(self, "_move_right"), Vector2(88.0, 38.0))
+
 	_add_button(layout, "Pulse", "MAGNETIC PULSE", Callable(self, "_pulse"))
 	_add_button(layout, "ToggleMode", "TOGGLE PUSH / PULL", Callable(self, "_toggle_mode"))
 	_add_button(layout, "Restart", "RESTART", Callable(self, "_restart"))
 	_add_button(layout, "NextLevel", "NEXT LAYOUT", Callable(self, "_next_level"))
 
-func _add_button(parent: Control, node_name: String, caption: String, callback: Callable) -> Button:
+func _add_spacer(parent: Control) -> void:
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(88.0, 38.0)
+	parent.add_child(spacer)
+
+func _add_button(parent: Control, node_name: String, caption: String, callback: Callable, minimum_size: Vector2 = Vector2(300.0, 38.0)) -> Button:
 	var button := Button.new()
 	button.name = node_name
 	button.text = caption
-	button.custom_minimum_size = Vector2(300.0, 38.0)
+	button.custom_minimum_size = minimum_size
 	parent.add_child(button)
 	button.pressed.connect(callback)
 	return button
