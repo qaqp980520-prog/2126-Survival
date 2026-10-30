@@ -461,3 +461,20 @@ The older checklist and historical run notes above describe their respective sna
 3. Not all production interactable factories have been migrated to stable IDs and validated restore.
 4. Complete terrain/object delta persistence and asynchronous chunk streaming still need work.
 5. No local Godot runtime or iPhone device was available; manual GUI, GPU and device QA are not claimed.
+
+
+## Run 53 — 2026-10-30 — Orbital Docking + underground 3×3 streaming
+
+- [x] Add `daily_games/KROLL_Orbital_Docking/`: deterministic 2D inertial spacecraft docking with three approaches, fuel/time budgets, rotation, forward/reverse thrust, keyboard/touch controls, rules tests and scene smoke test.
+- [x] Add transactional `systems/UndergroundMineDirector.gd`: bounded horizontal 3×3 active room window, stable coordinate IDs, snapshot rollback, failure reports and no orphan records.
+- [x] Extend `UndergroundMineFactory.gd` with connected 10 m rooms, aligned doorway openings and coordinate-derived mineral identities; preserve the existing timestamp-first call contract.
+- [x] Integrate actual physics-driven underground streaming and rollback-safe surface return into `world/SurfaceWorld.gd`.
+- [x] Add production tests for nine-room windows, physical travel, stable mineral stock after unload/reload, doorway alignment, invalid coordinates, factory failure rollback and registry cleanup.
+- [x] Feature PR [#139](https://github.com/qaqp980520-prog/2126-Survival/pull/139) merged as `a40e25b0be8ed948c2324914f2b7151db993026c`.
+- [x] Exact candidate `6298da84c4bfc46272e939aa7ba00d1541caedac` passed Godot 4.3 [Run #620](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41032518860): 218/218 successful job entries, zero failures and zero skipped. New checks 211–215 all passed.
+- [x] Reconcile stale Notion candidate references: `b4e83f7b8236bfd6dffab11d2e5db7371685eaa6` belonged to cancelled Run #619 and is superseded by the actual merged PR head `6298da84c4bfc46272e939aa7ba00d1541caedac`.
+- [ ] Add vertical multi-level underground connections and their save/restore coverage.
+- [ ] Integrate asynchronous chunk streaming and transactional recovery.
+- [ ] Audit production interactable factories and terrain/object delta persistence.
+- [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
+- Compatibility: world-save schema remains version 1; the new director manages a horizontal single-elevation 3×3 window only. Local Godot is unavailable; no local GUI/GPU/device test is claimed.
