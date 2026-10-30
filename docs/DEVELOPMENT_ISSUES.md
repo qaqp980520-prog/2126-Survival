@@ -538,3 +538,19 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
 - Compatibility: stamina and world-save schema remain version 1; legacy saves without stamina still default to full. No inventory carry thresholds or item weights changed. No local GUI/GPU/device QA is claimed.
 
+
+
+## Run 57 — 2026-10-30 — Void Runner + SurvivalQuickUse M0.1 (feature merged)
+
+- [x] Add `daily_games/KROLL_Void_Runner/`: deterministic three-lane runner with three authored routes, lane changes, jump/slide, hazards, data-cell objectives, keyboard and mouse/touch controls, rules tests and scene runtime smoke test.
+- [x] Add `systems/SurvivalQuickUse.gd` and integrate four consumable slots into `world/SurfaceWorld.gd` through `SurvivalWorldBridge.gd`; inventory remains authoritative in SurvivalInventory.
+- [x] Implement full-stamina/empty-slot rejection, partial-capacity clamping, synchronous re-entry guard, save validation, legacy fallback and failed-restoration item refund.
+- [x] Add model regression for synchronous callback filling stamina after item removal; verify the ration is refunded, `rollback_complete=true`, transaction guard released and a later retry consumes exactly once.
+- [x] Add production HUD integration coverage for inventory-change refresh, full-stamina disable, enabling after stamina decreases, consumption count refresh, touch controls, save/restore, invalid payload non-mutation and legacy fallback.
+- [x] Exact-head Godot 4.3 Run #659 passed all 236 numbered validation steps, zero failed, zero skipped. New checks 231–236 all passed.
+- [x] Feature PR [#150](https://github.com/qaqp980520-prog/2126-Survival/pull/150) merged as `9428c90f88d3e50cd90c46a29e717d7e5b56a245`; exact candidate `b4b9cca82280ffb8d887c346acff929720fa2ed3`.
+- [x] Preserve failed/superseded validation history: #655/#656 full-stamina HUD expectation, #657 absolute stamina expectations ignoring idle recovery, #658 superseded candidate. Only #659 is final acceptance evidence.
+- [ ] Tune consumable restoration values after playable-world feedback and add drag-and-drop slot assignment UI.
+- [ ] Add sprint animation/camera feedback; complete production-wide interactable factory persistence, terrain/object deltas, vertical underground connections and asynchronous streaming/recovery.
+- [ ] Perform manual GUI, GPU and iPhone device QA when local runtime/device access is available.
+- Compatibility: world-save envelope and quick-use payload remain schema 1; legacy saves without quick-use initialize default assignments. No local GUI/GPU/device QA is claimed.
