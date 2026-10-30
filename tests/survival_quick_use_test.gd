@@ -67,6 +67,9 @@ func _run() -> void:
 	invalid = saved.duplicate(true)
 	invalid["slots"][0] = "uranium_ore"
 	_expect(not bool(restored.call("validate_save_dict", invalid)), "non-consumable hotbar item is rejected")
+	# The bridge is a Node, not RefCounted; explicitly release both test instances.
+	empty_bridge.free()
+	bridge.free()
 	if failures.is_empty():
 		print("Survival quick-use model tests passed.")
 		quit(0)
