@@ -7,9 +7,24 @@ const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const MAX_LOOT: int = 2
 const DEFAULT_LOOT_ITEM_ID: String = "iron_ore"
 
-var opened: bool = false
-var loot_remaining: int = MAX_LOOT
-var loot_item_id: String = DEFAULT_LOOT_ITEM_ID
+var _opened: bool = false
+var _loot_remaining: int = MAX_LOOT
+var _loot_item_id: String = DEFAULT_LOOT_ITEM_ID
+
+# Read-only compatibility properties: existing callers may read these names,
+# but all state changes must go through the validated methods below.
+var opened: bool:
+	get:
+		return _opened
+
+var loot_remaining: int:
+	get:
+		return _loot_remaining
+
+var loot_item_id: String:
+	get:
+		return _loot_item_id
+
 var _inventory_interaction_in_progress: bool = false
 var _body_mesh: MeshInstance3D
 var _lid_mesh: MeshInstance3D
@@ -21,9 +36,9 @@ func _ready() -> void:
 
 func get_world_object_state() -> Dictionary:
 	return {
-		"opened": opened,
-		"loot_remaining": loot_remaining,
-		"loot_item_id": loot_item_id
+		"opened": _opened,
+		"loot_remaining": _loot_remaining,
+		"loot_item_id": _loot_item_id
 	}
 
 
@@ -54,26 +69,26 @@ func apply_world_object_state(state: Dictionary) -> bool:
 		return false
 	var opened_value: bool = bool(state["opened"])
 	var loot_value: int = int(state["loot_remaining"])
-	var item_value: String = str(state.get("loot_item_id", loot_item_id))
+	var item_value: String = str(state.get("loot_item_id", _loot_item_id))
 	if not MineralCatalogScript.has_mineral(item_value):
 		return false
-	opened = opened_value
-	loot_remaining = loot_value
-	loot_item_id = item_value
+	_opened = opened_value
+	_loot_remaining = loot_value
+	_loot_item_id = item_value
 	_refresh_visuals()
 	return true
 
 
 func set_loot_item(item_id: String) -> bool:
-	if _inventory_interaction_in_progress or opened or loot_remaining != MAX_LOOT or not MineralCatalogScript.has_mineral(item_id):
+	if _inventory_interaction_in_progress or _opened or _loot_remaining != MAX_LOOT or not MineralCatalogScript.has_mineral(item_id):
 		return false
-	loot_item_id = item_id
+	_loot_item_id = item_id
 	return true
 
 
 func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 	if _inventory_interaction_in_progress:
-		return {"ok": false, "reason": "interaction_in_progress", "item_id": loot_item_id, "remaining": loot_remaining}
+		return {"ok": false, "reason": "interaction_in_progress", "item_id": _loot_item_id, "remaining": _loot_remaining}
 	_inventory_interaction_in_progress = true
 	var result: Dictionary = _interact_with_inventory_transaction(inventory_bridge)
 	_inventory_interaction_in_progress = false
@@ -81,52 +96,52 @@ func interact_with_inventory(inventory_bridge: Node) -> Dictionary:
 
 
 func _interact_with_inventory_transaction(inventory_bridge: Node) -> Dictionary:
-	if loot_remaining <= 0:
-		return {"ok": false, "reason": "empty", "item_id": loot_item_id, "remaining": 0}
+	if _loot_remaining <= 0:
+		return {"ok": false, "reason": "empty", "item_id": _loot_item_id, "remaining": 0}
 	if inventory_bridge == null or not is_instance_valid(inventory_bridge):
-		return {"ok": false, "reason": "inventory_unavailable", "item_id": loot_item_id, "remaining": loot_remaining}
+		return {"ok": false, "reason": "inventory_unavailable", "item_id": _loot_item_id, "remaining": _loot_remaining}
 	for method_name in ["collect_world_item", "serialize_inventory", "restore_inventory"]:
 		if not inventory_bridge.has_method(method_name):
-			return {"ok": false, "reason": "inventory_contract", "item_id": loot_item_id, "remaining": loot_remaining}
+			return {"ok": false, "reason": "inventory_contract", "item_id": _loot_item_id, "remaining": _loot_remaining}
 	var inventory_snapshot: Variant = inventory_bridge.call("serialize_inventory")
 	if not (inventory_snapshot is Dictionary) or inventory_snapshot.is_empty():
-		return {"ok": false, "reason": "inventory_snapshot_invalid", "item_id": loot_item_id, "remaining": loot_remaining}
-	if not bool(inventory_bridge.call("collect_world_item", loot_item_id, 1)):
+		return {"ok": false, "reason": "inventory_snapshot_invalid", "item_id": _loot_item_id, "remaining": _loot_remaining}
+	if not bool(inventory_bridge.call("collect_world_item", _loot_item_id, 1)):
 		# Treat the bridge call as an untrusted transaction boundary: an adapter may
 		# mutate before returning false. Restore the pre-call snapshot before leaving.
 		var rejection_rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
 		if not rejection_rollback_ok:
-			return {"ok": false, "reason": "inventory_rollback_failed", "item_id": loot_item_id, "remaining": loot_remaining}
-		return {"ok": false, "reason": "inventory_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
+			return {"ok": false, "reason": "inventory_rollback_failed", "item_id": _loot_item_id, "remaining": _loot_remaining}
+		return {"ok": false, "reason": "inventory_rejected", "item_id": _loot_item_id, "remaining": _loot_remaining}
 	var next_state: Dictionary = get_world_object_state()
 	next_state["opened"] = true
-	next_state["loot_remaining"] = loot_remaining - 1
+	next_state["loot_remaining"] = _loot_remaining - 1
 	if not validate_world_object_state(next_state):
 		var rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
 		if not rollback_ok:
 			push_error("Salvage crate failed to roll back inventory after rejecting its state transition.")
-		return {"ok": false, "reason": "state_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
+		return {"ok": false, "reason": "state_rejected", "item_id": _loot_item_id, "remaining": _loot_remaining}
 	# Commit internally while public state-mutating APIs remain locked against bridge callbacks.
-	opened = bool(next_state["opened"])
-	loot_remaining = int(next_state["loot_remaining"])
-	loot_item_id = str(next_state.get("loot_item_id", loot_item_id))
+	_opened = bool(next_state["opened"])
+	_loot_remaining = int(next_state["loot_remaining"])
+	_loot_item_id = str(next_state.get("loot_item_id", _loot_item_id))
 	_refresh_visuals()
 	return {
 		"ok": true,
 		"reason": "collected",
-		"item_id": loot_item_id,
+		"item_id": _loot_item_id,
 		"amount": 1,
-		"remaining": loot_remaining
+		"remaining": _loot_remaining
 	}
 
 
 func interact() -> bool:
 	if _inventory_interaction_in_progress:
 		return false
-	if loot_remaining <= 0:
+	if _loot_remaining <= 0:
 		return false
-	opened = true
-	loot_remaining -= 1
+	_opened = true
+	_loot_remaining -= 1
 	_refresh_visuals()
 	return true
 
@@ -158,9 +173,9 @@ func _build_visuals() -> void:
 func _refresh_visuals() -> void:
 	if _lid_mesh == null or not is_instance_valid(_lid_mesh):
 		return
-	_lid_mesh.rotation.x = -0.95 if opened else 0.0
-	_lid_mesh.position = Vector3(0.0, 0.72, -0.28 if opened else 0.0)
+	_lid_mesh.rotation.x = -0.95 if _opened else 0.0
+	_lid_mesh.position = Vector3(0.0, 0.72, -0.28 if _opened else 0.0)
 	if _body_mesh != null and is_instance_valid(_body_mesh):
 		var material := _body_mesh.material_override as StandardMaterial3D
 		if material != null:
-			material.albedo_color = Color("#6d5038") if loot_remaining == 0 else Color("#8c633e")
+			material.albedo_color = Color("#6d5038") if _loot_remaining == 0 else Color("#8c633e")
