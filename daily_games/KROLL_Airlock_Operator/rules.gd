@@ -63,6 +63,11 @@ static func apply_action(state: Dictionary, action: String) -> Dictionary:
 				reason = "already_closed"
 			else:
 				next["outer_open"] = false
+		"close_inner":
+			if not bool(next["inner_open"]):
+				reason = "already_closed"
+			else:
+				next["inner_open"] = false
 		"load_pod":
 			if not bool(next["outer_open"]):
 				reason = "outer_closed"

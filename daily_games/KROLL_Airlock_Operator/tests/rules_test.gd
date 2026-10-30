@@ -20,6 +20,9 @@ func _run() -> void:
 	state = Rules.apply_action(state,"load_pod")["state"]
 	_expect(int(state.get("pods_airlock",-1)) == 1 and int(state.get("oxygen",-1)) == 55, "loading moves one pod and consumes five oxygen")
 	state = Rules.apply_action(state,"close_outer")["state"]
+	var pressure_mismatch: Dictionary = Rules.apply_action(state,"open_inner")
+	_expect(not bool(pressure_mismatch.get("ok",false)) and str(pressure_mismatch.get("reason","")) == "pressure_mismatch", "inner door refuses a 100 kPa pressure difference")
+	_expect(int(state.get("airlock_pressure",-1)) == 0 and not bool(state.get("inner_open",true)), "pressure mismatch rejection leaves the airlock unchanged")
 	state = Rules.apply_action(state,"pressurize")["state"]
 	state = Rules.apply_action(state,"pressurize")["state"]
 	state = Rules.apply_action(state,"open_inner")["state"]
