@@ -178,7 +178,7 @@ func get_player_movement_profile() -> Dictionary:
 		"movement_multiplier": multiplier,
 		"move_speed": BASE_MOVE_SPEED * multiplier,
 		"stamina": stamina_value,
-		"stamina_max": float(stamina.get("MAX_STAMINA")) if stamina != null else 100.0,
+		"stamina_max": float(stamina.call("get_max_stamina")) if stamina != null else 100.0,
 		"inventory_can_jump": inventory_can_jump,
 		"stamina_can_jump": stamina_can_jump,
 		"can_jump": inventory_can_jump and stamina_can_jump
