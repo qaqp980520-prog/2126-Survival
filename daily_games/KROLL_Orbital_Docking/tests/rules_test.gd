@@ -23,7 +23,9 @@ func _test_scenarios() -> void:
 		var state: Dictionary = Rules.create_state(index)
 		assert(Rules.validate_state(state))
 		names.append(str(scenario["name"]))
-		assert((scenario["target_position"] as Vector2).distance_to(state["position"]) > 100.0)
+		var target_position: Vector2 = scenario["target_position"]
+		var ship_position: Vector2 = state["position"]
+		assert(target_position.distance_to(ship_position) > 100.0)
 	assert(names.size() == 3)
 
 func _test_rotation_and_thrust() -> void:
@@ -34,7 +36,9 @@ func _test_rotation_and_thrust() -> void:
 	var next: Dictionary = Rules.step(state, {"left": true, "thrust": true}, 0.1, scenario)
 	assert(float(next["angle"]) < before_angle)
 	assert(float(next["fuel"]) < before_fuel)
-	assert((next["velocity"] as Vector2).length() > (state["velocity"] as Vector2).length())
+	var next_velocity: Vector2 = next["velocity"]
+	var original_velocity: Vector2 = state["velocity"]
+	assert(next_velocity.length() > original_velocity.length())
 	assert(float(state["fuel"]) == before_fuel)
 
 func _test_reverse_thruster() -> void:
@@ -43,7 +47,8 @@ func _test_reverse_thruster() -> void:
 	state["angle"] = 0.0
 	state["velocity"] = Vector2(100.0, 0.0)
 	var next: Dictionary = Rules.step(state, {"reverse": true}, 0.1, scenario)
-	assert((next["velocity"] as Vector2).x < 100.0)
+	var next_velocity: Vector2 = next["velocity"]
+	assert(next_velocity.x < 100.0)
 	assert(float(next["fuel"]) < float(state["fuel"]))
 
 func _test_docking_constraints() -> void:
