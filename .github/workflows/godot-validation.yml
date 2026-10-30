@@ -1517,3 +1517,42 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate read-only state tests passed."
+
+      - name: Verify Run 49 Drone Relay and world-object lifecycle inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Drone_Relay/project.godot
+          test -f daily_games/KROLL_Drone_Relay/main.tscn
+          test -f daily_games/KROLL_Drone_Relay/main.gd
+          test -f daily_games/KROLL_Drone_Relay/rules.gd
+          test -f daily_games/KROLL_Drone_Relay/tests/rules_test.gd
+          test -f daily_games/KROLL_Drone_Relay/tests/game_smoke_test.gd
+          test -f tests/world_object_chunk_lifecycle_test.gd
+
+      - name: Import and parse KROLL Drone Relay
+        run: godot --headless --path daily_games/KROLL_Drone_Relay --editor --quit
+      - name: Run KROLL Drone Relay rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Drone_Relay --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Drone Relay rules tests passed."
+      - name: Run KROLL Drone Relay runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Drone_Relay --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Drone Relay runtime smoke test passed."
+      - name: Run world-object chunk lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 35s godot --headless --path . --script res://tests/world_object_chunk_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World-object chunk lifecycle tests passed."
