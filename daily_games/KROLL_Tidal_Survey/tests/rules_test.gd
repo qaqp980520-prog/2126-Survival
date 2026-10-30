@@ -12,22 +12,34 @@ func _run() -> void:
 	var layout: Dictionary = rules.call("get_layout", 0)
 	var state: Dictionary = rules.call("create_state", layout)
 	_expect(is_equal_approx(float(state.get("oxygen", 0.0)), 100.0), "new survey starts with full oxygen")
+	for layout_index in range(int(rules.call("layout_count"))):
+		var candidate_layout: Dictionary = rules.call("get_layout", layout_index)
+		var candidate_beacons: Array = candidate_layout.get("beacons", [])
+		_expect(candidate_beacons.size() == 3, "each authored layout requires three ordered beacons")
+		_expect(_inside_arena(candidate_layout.get("start", Vector2.ZERO)), "each layout start is inside the arena")
+		_expect(_inside_arena(candidate_layout.get("dock", Vector2.ZERO)), "each layout dock is inside the arena")
+		for beacon in candidate_beacons:
+			_expect(_inside_arena(beacon), "each beacon is inside the arena")
 	var thrust_state: Dictionary = rules.call("step", state, Vector2.RIGHT, 0.1, _empty_layout())
-	_expect(Vector2(thrust_state.get("velocity", Vector2.ZERO)).x > 0.0, "thrust accelerates the drone")
+	var thrust_velocity: Vector2 = thrust_state.get("velocity", Vector2.ZERO)
+	_expect(thrust_velocity.x > 0.0, "thrust accelerates the drone")
 	var capped_state: Dictionary = state.duplicate(true)
 	capped_state["velocity"] = Vector2(500.0, 0.0)
 	capped_state = rules.call("step", capped_state, Vector2.ZERO, 0.01, _empty_layout())
-	_expect(Vector2(capped_state["velocity"]).length() <= 230.0 + 0.01, "drone speed is capped")
+	var capped_velocity: Vector2 = capped_state["velocity"]
+	_expect(capped_velocity.length() <= 230.0 + 0.01, "drone speed is capped")
 	var drag_state: Dictionary = state.duplicate(true)
 	drag_state["velocity"] = Vector2(100.0, 0.0)
 	drag_state = rules.call("step", drag_state, Vector2.ZERO, 0.1, _empty_layout())
-	_expect(Vector2(drag_state["velocity"]).length() < 100.0, "water drag reduces momentum without thrust")
+	var dragged_velocity: Vector2 = drag_state["velocity"]
+	_expect(dragged_velocity.length() < 100.0, "water drag reduces momentum without thrust")
 	var current_layout: Dictionary = _empty_layout()
 	current_layout["currents"] = [{"center": Vector2(100.0, 100.0), "radius": 100.0, "force": Vector2(80.0, 0.0)}]
 	var current_state: Dictionary = rules.call("create_state", current_layout)
 	current_state["position"] = Vector2(100.0, 100.0)
 	current_state = rules.call("step", current_state, Vector2.ZERO, 0.1, current_layout)
-	_expect(Vector2(current_state["velocity"]).x > 0.0, "current field applies deterministic drift")
+	var current_velocity: Vector2 = current_state["velocity"]
+	_expect(current_velocity.x > 0.0, "current field applies deterministic drift")
 	var route_layout: Dictionary = {
 		"name": "Test Route",
 		"start": Vector2(100.0, 100.0),
@@ -75,6 +87,9 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _inside_arena(position: Vector2) -> bool:
+	return position.x >= 0.0 and position.x <= 640.0 and position.y >= 0.0 and position.y <= 420.0
 
 func _empty_layout() -> Dictionary:
 	return {
