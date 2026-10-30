@@ -1756,3 +1756,51 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Fossil Lab runtime smoke test passed."
 
+
+      - name: Verify Run 55 Tidal Survey and stamina assets
+        shell: bash
+        run: |
+          set -e
+          test -f systems/SurvivalStamina.gd
+          test -f tests/survival_stamina_test.gd
+          test -f tests/production_surface_world_stamina_test.gd
+          test -f daily_games/KROLL_Tidal_Survey/project.godot
+          test -f daily_games/KROLL_Tidal_Survey/main.tscn
+          test -f daily_games/KROLL_Tidal_Survey/main.gd
+          test -f daily_games/KROLL_Tidal_Survey/rules.gd
+          test -f daily_games/KROLL_Tidal_Survey/tests/rules_test.gd
+          test -f daily_games/KROLL_Tidal_Survey/tests/game_smoke_test.gd
+      - name: Import and parse KROLL Tidal Survey
+        run: godot --headless --path daily_games/KROLL_Tidal_Survey --editor --quit
+      - name: Run KROLL Tidal Survey rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Tidal_Survey --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Tidal Survey rules tests passed."
+      - name: Run KROLL Tidal Survey runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Tidal_Survey --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Tidal Survey runtime smoke test passed."
+      - name: Run Survival stamina model tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/survival_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival stamina model tests passed."
+      - name: Run production SurfaceWorld stamina integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world stamina tests passed."
