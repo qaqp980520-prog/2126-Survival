@@ -38,7 +38,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "KROLL // OUTPOST ARCHITECT"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 25)
+	title.add_theme_font_size_override("font_size", 20)
 	content.add_child(title)
 
 	layout_label = Label.new()
@@ -63,7 +63,7 @@ func _build_ui() -> void:
 	board_center.add_child(board_grid)
 	for cell_index in range(Rules.BOARD_CELLS):
 		var cell_button := Button.new()
-		cell_button.custom_minimum_size = Vector2(64, 58)
+		cell_button.custom_minimum_size = Vector2(52, 54)
 		cell_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cell_button.focus_mode = Control.FOCUS_ALL
 		cell_button.pressed.connect(_on_board_pressed.bind(cell_index))
@@ -81,7 +81,8 @@ func _build_ui() -> void:
 	content.add_child(hand_row)
 	for card_index in range(Rules.HAND_SIZE):
 		var card_button := Button.new()
-		card_button.custom_minimum_size = Vector2(120, 58)
+		card_button.custom_minimum_size = Vector2(84, 58)
+		card_button.add_theme_font_size_override("font_size", 12)
 		card_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card_button.pressed.connect(_on_hand_pressed.bind(card_index))
 		hand_row.add_child(card_button)
@@ -94,11 +95,15 @@ func _build_ui() -> void:
 
 	restart_button = Button.new()
 	restart_button.text = "RESTART (R)"
+	restart_button.custom_minimum_size = Vector2(100, 40)
+	restart_button.add_theme_font_size_override("font_size", 13)
 	restart_button.pressed.connect(_restart)
 	controls.add_child(restart_button)
 
 	next_button = Button.new()
-	next_button.text = "NEXT OUTPOST (N)"
+	next_button.text = "NEXT (N)"
+	next_button.custom_minimum_size = Vector2(100, 40)
+	next_button.add_theme_font_size_override("font_size", 13)
 	next_button.pressed.connect(_next_layout)
 	controls.add_child(next_button)
 
