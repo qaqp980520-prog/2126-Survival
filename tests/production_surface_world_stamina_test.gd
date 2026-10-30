@@ -25,6 +25,12 @@ func _run() -> void:
 	_expect(is_equal_approx(float(stamina.get("current_stamina")), 100.0), "production stamina starts full")
 	var profile: Dictionary = world.call("get_player_movement_profile")
 	_expect(bool(profile.get("can_jump", false)), "full stamina and normal carry weight permit jumping")
+	var frame_start_stamina: float = float(stamina.get("current_stamina"))
+	world.call("_set_touch_direction", "forward")
+	await physics_frame
+	world.call("_clear_touch_direction", "forward")
+	_expect(float(stamina.get("current_stamina")) < frame_start_stamina, "actual production physics movement drains stamina")
+	stamina.call("reset")
 
 	world.call("_tick_stamina", 1.0, true)
 	var normal_remaining: float = float(stamina.get("current_stamina"))
