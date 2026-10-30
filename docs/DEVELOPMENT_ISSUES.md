@@ -554,3 +554,18 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - [ ] Add sprint animation/camera feedback; complete production-wide interactable factory persistence, terrain/object deltas, vertical underground connections and asynchronous streaming/recovery.
 - [ ] Perform manual GUI, GPU and iPhone device QA when local runtime/device access is available.
 - Compatibility: world-save envelope and quick-use payload remain schema 1; legacy saves without quick-use initialize default assignments. No local GUI/GPU/device QA is claimed.
+
+
+## Run 58 follow-up issues (2026-10-31)
+
+1. **Underground cache distribution remains prototype-scoped.** Two deterministic stateful caches exist only in `underground/mine_0_0`. Other rooms have no room-specific loot tables, random cache placement, or rarity weighting. Next: define per-room cache spawn tables and validate them against mineral density and inventory weight.
+2. **Underground interaction is nearest-target based.** F selects the nearest cache or mineral vein. There is not yet a dedicated interaction prompt, raycast selection, cache animation, or inventory-full feedback panel for underground caches.
+3. **Vertical mine layers are still pending.** Current mine streaming remains a horizontal chunk grid on one underground elevation. Multi-depth floors, ladders/elevators, and vertical transition persistence are not implemented.
+4. **Asynchronous chunk streaming is still pending.** Current load/unload and failure rollback paths are synchronous; no background generation/stream queue is claimed.
+5. **Orbital Imager M0.1 is a fixed 2D prototype.** It has three authored assignments and deterministic camera-frame rules; it does not yet provide a 3D orbital camera, procedural survey maps, or saved campaign progress.
+6. **Device validation remains outstanding.** GitHub Actions Godot 4.3 headless CI passed, but no local Godot executable was available for manual GUI, GPU, or iPhone device testing.
+
+### Run 58 validation note
+- The isolated `UndergroundMineDirector` test fixture must bind both `MineralVeinRegistry` and `WorldObjectStateRegistry` whenever its factory creates `WorldObjectStatefulProp` nodes. The fixture was updated in Run 58; production registry validation must remain enabled.
+- Current world save schema remains version 1; no migration is required for the two origin-room caches.
+- Final feature candidate `44256ddc52b9c90396b9035f0a9493408f5fcb78` passed Godot 4.3 CI Run #665 (240/240) before PR #152 was merged as `13bc8d218bafc79cfa1cd4cc4532d43563069310`.

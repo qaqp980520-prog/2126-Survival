@@ -829,3 +829,40 @@
 - Sprint animation/camera feedback, production-wide interactable factory migration, terrain/object delta persistence, vertical underground connections and asynchronous chunk streaming/recovery remain open.
 - GitHub repository `main` is not branch-protected and required status checks are not enabled. This merge used a manual exact-head Godot 4.3 gate; repository protection settings were not changed.
 - No local Godot executable is available; manual GUI, GPU and iPhone device QA are not claimed. Engine evidence is the exact-head GitHub-hosted Godot 4.3 workflow above.
+
+
+## Run 58 — KROLL Orbital Imager and underground salvage cache integration (2026-10-31)
+
+### New playable Godot 4 mini-game
+- Project: `daily_games/KROLL_Orbital_Imager/`
+- Entry scene: `daily_games/KROLL_Orbital_Imager/main.tscn`
+- Rules: `daily_games/KROLL_Orbital_Imager/rules.gd`
+- Tests: `daily_games/KROLL_Orbital_Imager/tests/rules_test.gd` and `tests/game_smoke_test.gd`
+- Gameplay: camera-framing puzzle across Lunar Beacon Array, Crater Relay, and Orbital Debris Field. Pan with WASD/arrows, zoom with Q/E, capture with Space; mouse/touch buttons are provided.
+- Capture requires all three green targets inside the camera frame and every red interference marker outside. Each assignment has three shutter attempts.
+- Godot 4.3+, no external assets or add-ons.
+
+### Existing world-system integration
+- `systems/UndergroundMineFactory.gd`: the origin room `underground/mine_0_0` now creates `MineCache_Gold` and `MineCache_Coal` using `WorldObjectStatefulProp`.
+- Both caches reuse `WorldObjectStateRegistry` and `MineralChunkController`; no world-save schema change.
+- `world/SurfaceWorld.gd`: underground F interaction chooses the closest valid target. A nearer cache opens; a nearer mineable vein continues through the existing mining path.
+- Underground touch action label is `CACHE`; HUD help describes cache/mining behavior.
+- Stable cache ID includes the underground chunk ID and scene-node path.
+
+### Regression coverage
+- `tests/production_surface_world_mining_test.gd`: verifies cache registration, touch label, gold-ore transaction, save snapshot, stable ID, chunk unload/reload, restored remaining stock, and no duplicate inventory grant.
+- `tests/production_surface_world_test.gd`: asserts nine surface crates plus two underground caches (11 world objects total).
+- `tests/underground_mine_director_test.gd`: binds both mineral and world-object registries and asserts the two origin caches are registered.
+- Orbital Imager rules and scene smoke tests are wired into `.github/workflows/godot-validation.yml`.
+
+### Exact GitHub evidence
+- Feature PR #152 merged: https://github.com/qaqp980520-prog/2126-Survival/pull/152
+- Feature candidate HEAD tested: `44256ddc52b9c90396b9035f0a9493408f5fcb78`
+- Merge commit / current main at closeout: `13bc8d218bafc79cfa1cd4cc4532d43563069310`
+- Godot 4.3 exact-head CI Run #665: 240/240 numbered workflow steps successful, zero failures and zero skipped steps.
+- Historical failures retained: Run #663 exposed a stale object-count expectation (9 versus the correct 11); Run #664 exposed a missing WorldObjectStateRegistry binding in the isolated mine-director test fixture. Both were corrected before Run #665.
+
+### Known limits
+- Salvage caches are currently placed only in `mine_0_0`; other underground rooms remain mineral-only.
+- Orbital Imager M0.1 uses fixed 2D maps, with no 3D orbital camera or campaign persistence.
+- No local Godot executable was available; GUI, GPU performance, and iPhone device testing are not claimed.
