@@ -40,7 +40,7 @@ func _run() -> void:
 	for prop in world.chunk_controller.get_loaded_world_state_nodes():
 		if is_instance_valid(prop) and prop.global_position.y < -7.0:
 			underground_cache_count += 1
-	_expect(underground_cache_count == 2, "origin mine room registers two stateful caches in the shared world-object controller")
+	_expect(underground_cache_count == 7, "initial mine window registers two origin caches and five deterministic regional caches")
 	var underground_buttons: Dictionary = world.get("touch_buttons")
 	_expect((underground_buttons["crate"] as Button).text == "CACHE", "underground touch action is relabeled for salvage caches")
 	var nearest: Node3D = _nearest_mine_vein()
