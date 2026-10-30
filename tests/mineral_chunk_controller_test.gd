@@ -176,8 +176,9 @@ func _test_stateful_object_survives_unload_reload() -> void:
 	var restored: Node = replacement.get_node("SalvageCrate")
 	assert(bool(restored.get("opened")) and int(restored.get("loot_remaining")) == 1, "Reloaded prop matches its stable-ID record")
 	var registry_before_invalid_capture: Dictionary = object_registry.to_save_dict()
-	restored.set("opened", true)
-	restored.set("loot_remaining", 2)
+	# Test-only reflection deliberately corrupts backing state to exercise capture rollback.
+	restored.set("_opened", true)
+	restored.set("_loot_remaining", 2)
 	assert(not controller.capture_loaded_world_object_states(), "Capture rejects semantically invalid live state")
 	assert(object_registry.to_save_dict() == registry_before_invalid_capture, "Invalid live state cannot partially mutate the registry")
 	assert(not controller.unload_chunk(chunk_id, now), "Unload rejects semantically invalid live state")
