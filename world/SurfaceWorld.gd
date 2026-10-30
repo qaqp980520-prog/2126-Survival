@@ -38,6 +38,8 @@ var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 func _ready() -> void:
 	if not initialize_world_session():
 		return
+	if inventory_bridge != null and inventory_bridge.has_signal("inventory_changed"):
+		inventory_bridge.connect("inventory_changed", Callable(self, "_on_inventory_changed"))
 	_build_environment()
 	_build_player()
 	_build_hud()
@@ -182,6 +184,9 @@ func _set_touch_jump(value: bool) -> void:
 
 func _set_touch_sprint(value: bool) -> void:
 	_touch_sprint = value
+
+func _on_inventory_changed(_summary: Dictionary) -> void:
+	_refresh_hud()
 
 func _select_quick_slot(slot_index: int) -> bool:
 	if quick_use == null or not bool(quick_use.call("select_slot", slot_index)):

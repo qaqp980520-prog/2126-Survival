@@ -24,6 +24,8 @@ func _run() -> void:
 		_finish(1)
 		return
 	_expect(bool(bridge.call("collect_world_item", "berries", 2)), "inventory accepts two berries")
+	var buttons: Dictionary = world.get("touch_buttons")
+	_expect(buttons.has("quick_1") and not (buttons["quick_1"] as Button).disabled, "inventory signal immediately enables a stocked hotbar slot")
 	stamina.set("current_stamina", 40.0)
 	var result: Dictionary = world.call("_consume_quick_slot", 0)
 	_expect(bool(result.get("ok", false)), "production quick-use action consumes the selected ration")
@@ -33,8 +35,7 @@ func _run() -> void:
 
 	_expect(bool(bridge.call("collect_world_item", "herbs", 1)), "inventory accepts an herb ration")
 	stamina.set("current_stamina", 50.0)
-	var buttons: Dictionary = world.get("touch_buttons")
-	_expect(buttons.has("quick_2"), "production HUD exposes the second quick-use touch slot")
+	_expect(buttons.has("quick_2") and not (buttons["quick_2"] as Button).disabled, "inventory signal immediately enables the herb touch slot")
 	(buttons["quick_2"] as Button).pressed.emit()
 	_expect(is_equal_approx(float(stamina.get("current_stamina")), 62.0), "touch quick-use button restores stamina through the real signal")
 	_expect(int(inventory.get("counts").get("herbs", 0)) == 0, "touch quick-use removes exactly one herb")
