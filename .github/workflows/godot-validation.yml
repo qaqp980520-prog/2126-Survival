@@ -1718,3 +1718,41 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Orbital Docking runtime smoke test passed."
 
+
+      - name: Run production SurfaceWorld carry movement integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_carry_movement_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world carry movement tests passed."
+      - name: Verify Run 54 KROLL Fossil Lab inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Fossil_Lab/project.godot
+          test -f daily_games/KROLL_Fossil_Lab/main.tscn
+          test -f daily_games/KROLL_Fossil_Lab/main.gd
+          test -f daily_games/KROLL_Fossil_Lab/rules.gd
+          test -f daily_games/KROLL_Fossil_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Fossil_Lab/tests/game_smoke_test.gd
+      - name: Import and parse KROLL Fossil Lab
+        run: godot --headless --path daily_games/KROLL_Fossil_Lab --editor --quit
+      - name: Run KROLL Fossil Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Fossil_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fossil Lab rules tests passed."
+      - name: Run KROLL Fossil Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Fossil_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fossil Lab runtime smoke test passed."
+
