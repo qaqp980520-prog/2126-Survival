@@ -401,3 +401,36 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Integrate asynchronous chunk streaming with world-session transactional save/restore and failure recovery.
 - [ ] Perform manual GUI, GPU, and iPhone hardware acceptance; no local Godot executable/device was available.
 - Compatibility boundary: the lifecycle regression exercises the SurfaceChunkStreamingPlayground factory path only; it does not prove all production factories are migrated. The initial Run #588 failed before new game/lifecycle tests and must remain recorded as a failed candidate; only Run #589 validates the corrected exact HEAD.
+
+
+## Run 50 — 2026-10-30: Outpost Architect and legacy world-object rollback
+
+### Resolved in PR #134
+
+- Added KROLL Outpost Architect M0.1: a deterministic 5×5 outpost-building puzzle with three authored decks, eight placements, an 18-energy budget, adjacency scoring, keyboard/mouse/touch controls, rules tests and a real-scene smoke test.
+- Added an exact rollback fix in \`scripts/world.gd\`. If target chunk streaming fails, restore the pre-attempt world-object Registry snapshot regardless of whether the incoming legacy schema-1 payload includes the optional \`world_objects\` key. The streaming attempt itself can create temporary world-object records before failing.
+- Extended the actual SurfaceChunkStreamingPlayground world-session integration test with deterministic factory failure after one temporary target chunk loads. The test asserts the target failure phase, one temporary load, exact Registry payload and stable-ID set, active chunk IDs, player position and complete rollback report.
+- Added canonical workflow steps for Outpost Architect file checks, Godot import, rules tests and runtime smoke.
+- Kept world-save schema at version 1. A successful legacy restore without \`world_objects\` continues to preserve the current Registry; only the failed target-stream rollback path changes.
+
+### Validation
+
+- Functional PR #134 merged as \`84dfae68a7170fb66ba60c17093292ccd6018f69\`.
+- Exact candidate \`0e5be2ea6a4f3b70ebd0646488091355101febe0\` passed canonical Godot 4.3 [Run #596](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41018084060): 202/202 job step entries succeeded, zero failures and zero skipped.
+- Step 150: world-session controller integration test, including the new legacy failed-stream rollback injection, succeeded.
+- Steps 196–199: Outpost Architect file verification, project import, rules tests and runtime smoke test all succeeded.
+- Independent model calculation verifies the three authored build routes: 27/27, 25/25 and 25/25; each spends 14 of 18 energy. This is supplementary, not engine validation.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+### Source audit correction
+
+- Current main contains \`scripts/world.gd\` with \`class_name WorldSessionController\`. It is a reusable world-session composition base, added in the earlier Run 38 work. Historical Run 19–37 notes saying the file was absent are correct for those earlier snapshots but must not be read as current state.
+- A concrete production world subclass/scene and migration of every production interactable factory remain incomplete. The existing SurfaceChunkStreamingPlayground lifecycle path is not proof that all production factories are migrated.
+
+### Remaining limitations / next work
+
+1. Migrate all production interactable object factories to stable IDs and validated state restore.
+2. Persist generated terrain and object deltas across chunk unload/reload and world save/load.
+3. Integrate asynchronous chunk streaming with world-session transactional save/restore and failure recovery.
+4. Strengthen backing-field encapsulation where required.
+5. Perform manual GUI, GPU performance and iPhone device QA when a local Godot runtime and devices are available.
