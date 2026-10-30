@@ -10,6 +10,8 @@ const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
 const MINE_ENTRY_UNDERGROUND: Vector3 = Vector3(1.5, -8.25, 7.5)
 const MINE_ACCESS_RANGE: float = 2.75
 const MINE_INTERACTION_RANGE: float = 3.5
+const BASE_MOVE_SPEED: float = 5.0
+const BASE_JUMP_SPEED: float = 7.0
 var camera: Camera3D
 var hud: Label
 var touch_buttons: Dictionary = {}
@@ -161,6 +163,30 @@ func _clear_touch_direction(direction: String) -> void:
 func _set_touch_jump(value: bool) -> void:
 	_touch_jump = value
 
+## Read movement penalties from the same inventory model used by mining and salvage.
+func get_player_movement_profile() -> Dictionary:
+	var summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null and inventory_bridge.has_method("get_summary") else {}
+	var multiplier: float = clampf(float(summary.get("movement_multiplier", 1.0)), 0.0, 1.0)
+	return {
+		"weight_kg": float(summary.get("weight_kg", 0.0)),
+		"limit_kg": float(summary.get("limit_kg", 65.0)),
+		"movement_multiplier": multiplier,
+		"move_speed": BASE_MOVE_SPEED * multiplier,
+		"can_jump": bool(summary.get("can_jump", true))
+	}
+
+func get_effective_move_speed() -> float:
+	return float(get_player_movement_profile().get("move_speed", BASE_MOVE_SPEED))
+
+func can_player_jump_now() -> bool:
+	return bool(get_player_movement_profile().get("can_jump", true))
+
+func _try_start_jump() -> bool:
+	if player == null or not player.is_on_floor() or not can_player_jump_now():
+		return false
+	player.velocity.y = BASE_JUMP_SPEED
+	return true
+
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
 		return
@@ -182,15 +208,17 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var movement := (right * move_input.x + forward * move_input.y).normalized()
-	player.velocity.x = movement.x * 5.0
-	player.velocity.z = movement.z * 5.0
+	var movement_profile: Dictionary = get_player_movement_profile()
+	var move_speed: float = float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
+	player.velocity.x = movement.x * move_speed
+	player.velocity.z = movement.z * move_speed
 	if not player.is_on_floor():
 		player.velocity.y -= 20.0 * delta
 	elif player.velocity.y < 0.0:
 		player.velocity.y = 0.0
 	var jump_down: bool = Input.is_key_pressed(KEY_SPACE) or _touch_jump
-	if jump_down and not _jump_was_down and player.is_on_floor():
-		player.velocity.y = 7.0
+	if jump_down and not _jump_was_down:
+		_try_start_jump()
 	_jump_was_down = jump_down
 	var previous_position: Vector3 = player.global_position
 	player.move_and_slide()
@@ -506,9 +534,11 @@ func _refresh_hud() -> void:
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
 	var grid_text := str(mine_director.get_grid_coordinate(player.global_position)) if _is_underground and mine_director != null and player != null else (str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a")
-	var inventory_summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null else {}
-	var weight := float(inventory_summary.get("weight_kg", 0.0))
-	var limit := float(inventory_summary.get("limit_kg", 65.0))
+	var movement_profile: Dictionary = get_player_movement_profile()
+	var weight := float(movement_profile.get("weight_kg", 0.0))
+	var limit := float(movement_profile.get("limit_kg", 65.0))
+	var movement_percent: int = roundi(float(movement_profile.get("movement_multiplier", 1.0)) * 100.0)
+	var jump_status: String = "JUMP READY" if bool(movement_profile.get("can_jump", true)) else "JUMP LOCKED (>90 kg)"
 	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
 	if touch_buttons.has("crate"):
 		(touch_buttons["crate"] as Button).text = "MINE" if _is_underground else "CRATE"
@@ -517,8 +547,8 @@ func _refresh_hud() -> void:
 	if touch_buttons.has("crop"):
 		(touch_buttons["crop"] as Button).disabled = _is_underground
 	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
-	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg\n%s\n%s" % [
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%%   %s\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
-		weight, limit, _crop_action_message, _world_object_action_message
+		weight, limit, movement_percent, jump_status, _crop_action_message, _world_object_action_message
 	]
