@@ -665,3 +665,18 @@
 - Canonical Godot 4.3 CI Run #584: https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40995941086 — 193/193 job steps succeeded, zero failures, zero skipped.
 - Targeted Run #10: https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40995941214 — 12/12 job steps succeeded.
 - Local environment has no Godot executable; manual GUI, GPU performance, and iPhone device QA were not performed.
+
+
+## 2026-10-30 Run 49 — Drone Relay + real world-object chunk lifecycle
+
+- Feature PR [#132](https://github.com/qaqp980520-prog/2126-Survival/pull/132) merged as `1792752a237e3d2d035c3f9c7e74a07baf0090c2`. Exact tested candidate: `8995b49d6961984c72aa54c2c499ef766f4030b3`.
+- Canonical Godot 4.3 CI [Run #589](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41006189052) passed: 195 numbered validation steps plus 3 post/cleanup entries, 198 job entries total; zero failures and zero skipped.
+- Added `daily_games/KROLL_Drone_Relay/`: 6×6 simultaneous three-agent routing puzzle, three deterministic layouts, per-drone directional commands, nine-tick/battery budgets, collision blocking, keyboard and mouse/touch controls. Godot 4.3+, no external assets/plugins/audio/network. Tests: `tests/rules_test.gd` and `tests/game_smoke_test.gd`.
+- Rules tests cover cardinal command validation, simultaneous moves, wall blocking, battery use, same-destination collision, moving into a stationary drone, terminal states, and authored solutions of 5, 7, and 6 ticks. Independent Python path-model verification is supplementary and not a substitute for Godot CI.
+- Added `tests/world_object_chunk_lifecycle_test.gd`: creates the actual SurfaceChunkStreamingPlayground, collects from its live SalvageCrate through SurvivalWorldBridge, verifies stable ID/state serialization, unloads and regenerates the origin chunk, verifies a new crate instance restores loot identity/count without duplicate inventory, then restores a matching world+inventory snapshot and checks empty-crate behavior.
+- Extended `.github/workflows/godot-validation.yml` with explicit Drone Relay file checks/import/rules/runtime and real chunk lifecycle regression. Exact CI steps 192–195 all passed.
+- Initial candidate `61e28582bdc1131b081958717e40d649af6f5ed9` failed root import because two Node.get calls used an unsupported second argument. Both were corrected; final candidate `8995b49d6961984c72aa54c2c499ef766f4030b3` passed Run #589. The initial failure is retained as history, not treated as a pass.
+- World save schema remains version 1; no production runtime factory or save envelope was changed. The new lifecycle test covers the SurfaceChunkStreamingPlayground factory path, not every production factory.
+- No local Godot executable was available; manual GUI, GPU, and iPhone hardware QA are not claimed.
+- Notion: [Run 49 daily log](https://app.notion.com/p/409bc6a809d7810f9d98c6fea34114c4), [Drone Relay M0.1](https://app.notion.com/p/409bc6a809d781889323f1c18940f958), [world-object lifecycle regression M0.1](https://app.notion.com/p/409bc6a809d781b19485ea31b0cf27ea), [workflow M0.1](https://app.notion.com/p/409bc6a809d781679a06dbc68f80f0f3), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
+- Remaining: migrate all production interactable factories to stable IDs/validated restore; persist complete terrain/object deltas across chunk and save/load boundaries; integrate asynchronous chunk streaming and recovery; perform device QA.

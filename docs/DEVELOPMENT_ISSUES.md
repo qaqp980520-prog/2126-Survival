@@ -385,3 +385,19 @@ The older checklist and historical run notes above describe their respective sna
 3. Persist terrain and object deltas across chunk unload/reload and save/load.
 4. Integrate asynchronous chunk streaming with transactional rollback/recovery.
 5. Run manual GUI, GPU performance, and iPhone device QA when a suitable device and local Godot runtime are available.
+
+
+## Run 49 — 2026-10-30 — Drone Relay and real world-object chunk lifecycle
+
+- [x] Add `daily_games/KROLL_Drone_Relay/`: deterministic 6×6 simultaneous multi-agent routing puzzle, three layouts, keyboard/touch UI, rules and scene smoke tests.
+- [x] Verify authored routes independently: 5, 7, and 6 ticks. This is supplementary rules-model analysis, not engine CI.
+- [x] Add `tests/world_object_chunk_lifecycle_test.gd` using the actual SurfaceChunkStreamingPlayground SalvageCrate and SurvivalWorldBridge. Verify real grant, stable-ID save, chunk unload, regenerated node restoration, inventory non-duplication, full world+inventory restore, and empty-crate rejection.
+- [x] Extend canonical workflow with Drone Relay import/rules/runtime and chunk lifecycle regression.
+- [x] Correct initial Run #588 root-import failure: two Node.get calls supplied unsupported default arguments. Fixed both in the lifecycle test; do not count Run #588 as a pass.
+- [x] Feature PR [#132](https://github.com/qaqp980520-prog/2126-Survival/pull/132) merged as `1792752a237e3d2d035c3f9c7e74a07baf0090c2`; exact candidate `8995b49d6961984c72aa54c2c499ef766f4030b3` passed canonical Godot 4.3 [Run #589](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41006189052): 198/198 job entries succeeded, zero failures/skips. Steps 192–195 cover Drone Relay import/rules/runtime and the actual world-object chunk lifecycle regression.
+- [x] Keep world-save schema at version 1; this run adds regression coverage, not a production factory migration.
+- [ ] Integrate stable IDs and validated semantic state restoration into every production interactable object factory.
+- [ ] Persist complete generated terrain and object deltas across unload/reload and save/load.
+- [ ] Integrate asynchronous chunk streaming with world-session transactional save/restore and failure recovery.
+- [ ] Perform manual GUI, GPU, and iPhone hardware acceptance; no local Godot executable/device was available.
+- Compatibility boundary: the lifecycle regression exercises the SurfaceChunkStreamingPlayground factory path only; it does not prove all production factories are migrated. The initial Run #588 failed before new game/lifecycle tests and must remain recorded as a failed candidate; only Run #589 validates the corrected exact HEAD.
