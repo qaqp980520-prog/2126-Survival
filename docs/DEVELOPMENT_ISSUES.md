@@ -434,3 +434,30 @@ The older checklist and historical run notes above describe their respective sna
 3. Integrate asynchronous chunk streaming with world-session transactional save/restore and failure recovery.
 4. Strengthen backing-field encapsulation where required.
 5. Perform manual GUI, GPU performance and iPhone device QA when a local Godot runtime and devices are available.
+
+
+## Run 51 reconciliation and Run 52 — 2026-10-30
+
+### Run 51 source-of-truth correction
+
+- PR #136 is merged at 771bc9f2171e1f638457cd17fb64a542fd7e90f4.
+- Exact candidate 862ee711cc62801d378ac6d8215aabf202cc1b4f passed Godot 4.3 Run #602 with 208/208 successful steps.
+- docs/run51-closeout-2026-10-30 was compared with main and had no diff. No separate Run 51 docs PR existed; the old pending note was corrected in Notion and is explicitly reconciled here.
+
+### Resolved in Run 52 feature PR #137
+
+- Added KROLL Gravity Courier: 2D gravity-switching cargo platformer; real floor/ceiling CharacterBody2D movement is covered by the runtime smoke test.
+- Added a dedicated stable-ID underground mine chunk and a visible surface lift entry. G enters/exits; F routes to MineralMiningNode.mine_hit(). Mined items enter the same SurvivalWorldBridge inventory and update carry weight.
+- Persisted location_layer and surface_return_position as optional schema-1 fields. Legacy schema-1 surface saves without these fields continue to load.
+- Added cross-layer recovery compatibility: the surface director ignores only underground/* IDs, while unknown/malformed IDs continue to fail validation.
+- Added production integration tests for mine entry, mining, shared inventory and weight, chunk unload/reload, world restore, legacy saves, and surface recovery while the underground chunk is registered.
+- Feature PR #137 merged as 5b5a534e22dd0b27bed60b3ed6530357c869581b. Exact candidate d5d6c565cbb14a3a5128075d153d5e343fc507dd passed [Godot 4.3 Run #609](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41027928173): 213/213 successful workflow entries, zero failures/skips.
+- Failure history preserved: Run #607 failed at step 47 because the first recovery guard skipped every non-surface ID and weakened unknown-ID rejection. The final implementation skips only underground/*; Run #609 passed the same recovery test plus the new mine integration test.
+
+### Remaining limitations
+
+1. The mine shaft is a lift/teleport layer transition, not a continuous physical ladder.
+2. Only one fixed underground mine chunk exists and remains loaded; multi-level underground streaming is future work.
+3. Not all production interactable factories have been migrated to stable IDs and validated restore.
+4. Complete terrain/object delta persistence and asynchronous chunk streaming still need work.
+5. No local Godot runtime or iPhone device was available; manual GUI, GPU and device QA are not claimed.

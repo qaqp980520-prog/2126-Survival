@@ -696,3 +696,31 @@
 - Local environment has no Godot executable; manual GUI, GPU performance and iPhone device QA were not performed.
 - Notion: [Run 50 daily log](https://app.notion.com/p/409bc6a809d78122b735dcd0ed03f236), [Outpost Architect M0.1](https://app.notion.com/p/409bc6a809d781019571c946df716438), [WorldSessionController rollback M0.2](https://app.notion.com/p/409bc6a809d781bcbc1ac70641522597), [workflow M0.1](https://app.notion.com/p/409bc6a809d7818d8b05d9295dabd151), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
 - Remaining: migrate every production interactable factory to stable IDs/validated restore; persist complete terrain and object deltas across chunk unload/reload and save/load; integrate asynchronous chunk streaming and recovery; perform device QA.
+
+
+## Run 51 reconciliation and Run 52 — 2026-10-30
+
+### Run 51 final-state correction
+
+- Feature PR [#136](https://github.com/qaqp980520-prog/2126-Survival/pull/136) merged into main at 771bc9f2171e1f638457cd17fb64a542fd7e90f4.
+- Exact candidate 862ee711cc62801d378ac6d8215aabf202cc1b4f passed Godot 4.3 CI [Run #602](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41025383273): 208/208 successful workflow steps, zero failures/skips.
+- The old branch docs/run51-closeout-2026-10-30 was checked and is identical to Run 51 main (0 ahead, 0 behind, 0 changed files); no separate Run 51 documentation PR existed. Earlier pending wording is historical and was corrected in Notion and this Run 52 closeout.
+
+### Run 52 verified feature assets
+
+- Feature PR [#137](https://github.com/qaqp980520-prog/2126-Survival/pull/137) merged at 5b5a534e22dd0b27bed60b3ed6530357c869581b. Exact tested candidate: d5d6c565cbb14a3a5128075d153d5e343fc507dd.
+- Godot 4.3 CI [Run #609](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41027928173) passed: 213/213 workflow step entries succeeded, zero failures/skips. Steps 207–209 import, rules-test and physically simulate Gravity Courier; step 210 exercises the real production SurfaceWorld underground mining path.
+- Added daily game daily_games/KROLL_Gravity_Courier/: a 2D gravity-switching cargo platformer with four cargo cells, floor/ceiling physics, keyboard and touch controls, rules tests and runtime smoke tests. Godot 4.3+, no external assets/plugins/audio/network.
+- Added systems/UndergroundMineFactory.gd and integrated a stable underground/mine_0_0 chunk into world/SurfaceWorld.gd. The visible mine-shaft lift uses G to descend/ascend; F mines the nearest reachable vein through the shared SurvivalWorldBridge inventory. The mine contains iron, copper and uranium veins using the existing MineralMiningNode and 300-second regeneration configuration.
+- Added MineralChunkController.get_loaded_mineral_nodes(). The SurfaceWorld HUD switches CRATE to MINE, DESCEND to ASCEND, and disables crop interaction underground.
+- World save schema remains version 1. SurfaceWorld adds optional location_layer and surface_return_position fields. Older schema-1 saves without these fields default to the surface layer.
+- MineralGridStreamingDirector now ignores only the explicit underground/* namespace while reconciling surface recovery. Unknown and malformed non-underground IDs remain rejected. The first broad non-surface skip failed existing validation at Run #607 step 47; the narrowed fix passed the final Run #609.
+- End-to-end tests cover surface-only mining restriction, shaft distance, mining via the F interaction route, shared inventory count and carry weight, mine chunk unload/reload, stable vein stock, world save/restore, legacy schema-1 saves, and surface recovery with an underground chunk loaded.
+
+### Limitations and next work
+
+- The current mine entrance is a visible lift/level transition, not a continuous physics ladder.
+- One fixed underground mine chunk is kept loaded; a separate multi-level underground streaming director and spatial load/unload policy are not yet implemented.
+- Surface-generated veins remain below ground; the newly accessible mine currently provides the reachable iron/copper/uranium veins.
+- No local Godot executable was available. Manual GUI, GPU performance and iPhone hardware QA are not claimed.
+- Next: implement multi-level underground chunk streaming and transactional recovery; migrate all formal interactable factories to stable IDs/validated restore; persist terrain and object deltas across chunk unload/reload; perform device QA.
