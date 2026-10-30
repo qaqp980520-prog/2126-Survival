@@ -809,3 +809,23 @@
 - The Run 55 note that sprinting and zero-stamina exhaustion were not implemented is historical and superseded by Run 56 M0.2.
 - Production-wide interactable factory migration, terrain/object delta persistence, vertical multi-level underground connections, asynchronous chunk streaming/recovery and manual GUI/GPU/iPhone QA remain open.
 - No local Godot executable is available; no local GUI, GPU or iPhone hardware test is claimed. Engine evidence is the exact-head GitHub-hosted Godot 4.3 CI above.
+
+
+## 2026-10-30 Run 57 — Void Runner + SurvivalQuickUse M0.1 (feature merged / exact-head CI passed)
+
+- Run 57 started from verified main `dca26e854229e35dc1dc5b7251609344fc2df96c`. The initial candidate branches/PRs #147–#149 were superseded and closed unmerged; the selected correction branch was `fix/run57-quick-use-hud-full-stamina-test-2026-10-30`.
+- Feature PR [#150](https://github.com/qaqp980520-prog/2126-Survival/pull/150) merged as `9428c90f88d3e50cd90c46a29e717d7e5b56a245`. Exact candidate HEAD: `b4b9cca82280ffb8d887c346acff929720fa2ed3`.
+- Exact-head Godot 4.3 [Run #659](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41064963418) completed successfully: all 236 numbered validation steps passed, zero failed and zero skipped; the three job post/cleanup steps also succeeded. The final new checks 231–236 passed: Void Runner asset verification, project import, rules tests, scene runtime smoke test, quick-use model tests and production SurfaceWorld integration.
+- Added `daily_games/KROLL_Void_Runner/`: deterministic three-lane runner with three authored routes, lane changes, jump/slide windows, barriers/gates/drones, data-cell collection, two integrity points, keyboard and mouse/touch controls. Godot 4.3+, no external assets, add-ons, audio or network dependencies.
+- Added `systems/SurvivalQuickUse.gd` and integrated it through `systems/SurvivalWorldBridge.gd` and production `world/SurfaceWorld.gd`. Four default slots: berries (+8), herbs (+12), meat (+24), food (+30) stamina. Restoration clamps to remaining capacity; a full stamina bar or empty slot preserves inventory. Keyboard 1–4 selects, C consumes; touch buttons expose each slot.
+- Inventory counts remain owned by SurvivalInventory and consumption uses the shared bridge signals. The quick-use model guards synchronous re-entry. If stamina becomes full after item removal but before restoration, it attempts a bridge-based refund and reports `stamina_rejected` with `rollback_complete`; the regression proves guard release and a later successful retry.
+- Optional quick-use payload schema 1 is stored inside the existing world-save envelope schema 1. Legacy saves without the key reset to default slots; invalid payloads are rejected before world mutation. No save-envelope version bump.
+- Exact-head failure history is retained: Runs #655/#656 exposed a test expecting the full-stamina HUD button to remain enabled; production behavior correctly disables it to avoid wasting a ration. Run #657 then exposed absolute stamina assertions that ignored legitimate idle physics recovery. The tests were corrected to check HUD state transitions and live pre-use stamina deltas. Run #658 targeted a superseded intermediate SHA. Only exact-head Run #659 is final acceptance evidence.
+- Run 57 Notion records: [daily log](https://app.notion.com/p/409bc6a809d78105bc15f86debfbb55f), [KROLL Void Runner](https://app.notion.com/p/409bc6a809d7816bb98fe2fb3aaaaeaa), [SurvivalQuickUse](https://app.notion.com/p/409bc6a809d7819bbdf6f5e5e3e6a92d), [HUD correction](https://app.notion.com/p/409bc6a809d781459bdef0097774689f), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
+
+### Run 57 limits / next
+
+- Consumable restoration values are provisional; no drag-and-drop hotbar assignment UI exists.
+- Sprint animation/camera feedback, production-wide interactable factory migration, terrain/object delta persistence, vertical underground connections and asynchronous chunk streaming/recovery remain open.
+- GitHub repository `main` is not branch-protected and required status checks are not enabled. This merge used a manual exact-head Godot 4.3 gate; repository protection settings were not changed.
+- No local Godot executable is available; manual GUI, GPU and iPhone device QA are not claimed. Engine evidence is the exact-head GitHub-hosted Godot 4.3 workflow above.
