@@ -26,6 +26,16 @@ func _run() -> void:
 	_expect(int(game.get("case_index")) == 1 and str(game.get("state").get("status", "")) == "investigating", "next button opens the following case")
 	(buttons["reset"] as Button).pressed.emit()
 	_expect(int(game.get("state").get("scans_used", -1)) == 0, "reset button clears the scan ledger")
+	var container_key := InputEventKey.new()
+	container_key.pressed = true
+	container_key.keycode = KEY_3
+	game.call("_unhandled_input", container_key)
+	_expect(int(game.get("selected_container")) == 2, "keyboard number key selects a container")
+	var field_key := InputEventKey.new()
+	field_key.pressed = true
+	field_key.keycode = KEY_C
+	game.call("_unhandled_input", field_key)
+	_expect(str(game.get("selected_field")) == "count", "keyboard letter key selects an inspection field")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
