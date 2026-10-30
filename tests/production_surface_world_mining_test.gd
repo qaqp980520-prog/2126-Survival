@@ -1,7 +1,6 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
-const MineFactory = preload("res://systems/UndergroundMineFactory.gd")
 const MINE_ID: String = "underground/mine_0_0"
 var failures: Array[String] = []
 var world: Node3D
@@ -24,7 +23,9 @@ func _run() -> void:
 	for vein in world.chunk_controller.get_loaded_mineral_nodes():
 		if vein.global_position.y < -7.0:
 			mine_veins.append(vein)
-	_expect(mine_veins.size() == 3, "three dedicated mineral veins are below the surface")
+	_expect(mine_veins.size() == 27, "nine underground rooms expose twenty-seven mineral veins below the surface")
+	var mine_director: Node = world.get("mine_director")
+	_expect(mine_director != null and mine_director.get_managed_chunk_ids().size() == 9, "underground director manages a bounded nine-room window")
 	_expect(not bool(world.get("_is_underground")), "new game begins on the surface")
 	var recovery_position: Vector3 = world.player.global_position
 	_expect(bool(world.director.call("recover_to_world_position", recovery_position, int(Time.get_unix_time_from_system()))), "surface director recovery ignores independently managed underground layer IDs")
@@ -50,15 +51,20 @@ func _run() -> void:
 	_expect(_inventory_count(item_id) == 1, "mined ore enters the shared surface-world inventory")
 	var saved_weight: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
 	_expect(saved_weight > weight_before, "mining immediately increases shared carry weight")
-	_expect(bool(world.chunk_controller.call("unload_chunk", MINE_ID, now + 1)), "underground mine chunk unloads through the shared lifecycle controller")
+	var away_position := Vector3(21.5, -8.25, 7.5)
+	world.player.global_position = away_position
+	_expect(bool(mine_director.call("sync_to_world_position", away_position, now + 1)), "walking two mine cells east advances the underground streaming window")
 	await process_frame
-	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "mine chunk node is removed after unload")
-	var regenerated: Node3D = MineFactory.make_chunk(now + 2)
-	_expect(regenerated != null and world.chunk_controller.call("load_chunk", MINE_ID, regenerated, now + 2), "mine factory reloads the same stable chunk")
+	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "origin mine chunk unloads outside the underground radius")
+	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_2_0"), "new eastern mine chunk loads with a stable coordinate ID")
+	_expect(mine_director.get_managed_chunk_ids().size() == 9, "underground active window remains bounded to nine chunks")
+	var return_position := Vector3(1.5, -8.25, 7.5)
+	world.player.global_position = return_position
+	_expect(bool(mine_director.call("sync_to_world_position", return_position, now + 2)), "returning through the mine tunnels reloads the origin room")
 	await process_frame
 	var reloaded_nearest: Node3D = _nearest_mine_vein()
-	_expect(reloaded_nearest != null and int(reloaded_nearest.get("remaining_units")) == stock_before - 1, "mined stock survives underground chunk unload and reload")
-	_expect(_inventory_count(item_id) == 1, "chunk reload does not duplicate inventory")
+	_expect(reloaded_nearest != null and str(reloaded_nearest.get("mineral_id")) == item_id and int(reloaded_nearest.get("remaining_units")) == stock_before - 1, "mined mineral identity and stock survive director unload/reload")
+	_expect(_inventory_count(item_id) == 1, "mine window reload does not duplicate inventory")
 	var saved: Dictionary = world.call("serialize_stream_state")
 	_expect(str(saved.get("location_layer", "")) == "underground", "world save records the underground location layer")
 	_expect(saved.get("surface_return_position", []) is Array, "world save records the surface return point")
