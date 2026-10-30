@@ -16,7 +16,7 @@ Recover four cargo cells and reach the exit. Gravity can be reversed between DOW
 - On-screen LEFT / RIGHT / JUMP / FLIP buttons support mouse and touch.
 
 ## Verification
-The rules test checks gravity transitions, immutable rejected actions, cargo identity, duplicate rejection and exit gating. The smoke test instantiates the real scene, emits touch and cargo/exit signals, and verifies mission completion and restart.
+The rules test checks gravity transitions, immutable rejected actions, cargo identity, duplicate rejection and exit gating. The smoke test instantiates the real scene, verifies floor and ceiling physics under both gravity directions, emits touch and cargo/exit signals, and verifies mission completion and restart.
 
 ## Limits
 This is a single-screen prototype with deterministic collision geometry. It is not a full campaign or a save-backed progression system.

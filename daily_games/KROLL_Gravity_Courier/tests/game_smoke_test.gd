@@ -14,9 +14,16 @@ func _run() -> void:
 	_expect((game.get("cargo_areas") as Dictionary).size() == 4, "scene creates four collectible cargo cells")
 	var buttons: Dictionary = game.get("touch_buttons")
 	_expect(buttons.has("left") and buttons.has("right") and buttons.has("jump") and buttons.has("flip"), "scene creates all touch controls")
+	var player: CharacterBody2D = game.get("player")
+	await _wait_physics_frames(90)
+	_expect(player.is_on_floor(), "courier physically settles on the lower surface")
+	var floor_position: float = player.global_position.y
 	var initial_gravity: int = int(game.get("state").get("gravity_sign", 0))
 	(buttons["flip"] as Button).emit_signal("pressed")
 	_expect(int(game.get("state").get("gravity_sign", 0)) == -initial_gravity, "real touch flip button reverses gravity")
+	await _wait_physics_frames(90)
+	_expect(player.global_position.y < floor_position - 100.0, "reversed gravity physically carries the courier toward the ceiling")
+	_expect(player.is_on_ceiling(), "courier attaches to the upper surface under upward gravity")
 	var goal: Area2D = game.get("goal_area")
 	goal.body_entered.emit(game.get("player"))
 	_expect(str(game.get("state").get("result", "")) == "playing", "exit rejects the courier before all cargo is collected")
@@ -37,6 +44,10 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+func _wait_physics_frames(count: int) -> void:
+	for _index in range(count):
+		await physics_frame
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
