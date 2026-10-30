@@ -52,8 +52,8 @@ func _run() -> void:
 	stamina.set("current_stamina", 50.0)
 	result = quick_use.call("consume_selected", bridge, stamina)
 	_expect(bool(result.get("ok", false)) and is_equal_approx(float(result.get("restored", 0.0)), 12.0), "herbs restore twelve stamina")
-	var empty_inventory: RefCounted = InventoryScript.new()
-	result = quick_use.call("consume_selected", empty_inventory, stamina)
+	var empty_bridge: Node = BridgeScript.new()
+	result = quick_use.call("consume_selected", empty_bridge, stamina)
 	_expect(not bool(result.get("ok", false)) and str(result.get("reason", "")) == "empty", "empty slot inventory is rejected without stamina change")
 
 	var saved: Dictionary = quick_use.call("to_save_dict")

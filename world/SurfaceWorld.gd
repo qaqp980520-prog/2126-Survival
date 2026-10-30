@@ -197,7 +197,6 @@ func _consume_quick_slot(slot_index: int) -> Dictionary:
 func _consume_selected_quick_slot() -> Dictionary:
 	if quick_use == null or inventory_bridge == null:
 		return {"ok": false, "reason": "unavailable"}
-	var inventory: RefCounted = inventory_bridge.get("inventory") as RefCounted
 	var result: Dictionary = quick_use.call("consume_selected", inventory_bridge, stamina)
 	if bool(result.get("ok", false)):
 		_world_object_action_message = "Used %s; restored %.1f stamina." % [
