@@ -2,6 +2,15 @@ extends SceneTree
 
 const PlaygroundScene = preload("res://prototypes/SurfaceChunkStreamingPlayground.tscn")
 
+class FailingChunkFactory extends RefCounted:
+    var world: Node
+    var fail_coord: Vector2i = Vector2i(3, -1)
+
+    func make_chunk(coord: Vector2i) -> Node3D:
+        if coord == fail_coord:
+            return null
+        return world.call("_make_chunk", coord) as Node3D
+
 var _failed: bool = false
 
 func _initialize() -> void:
@@ -116,6 +125,31 @@ func _run() -> void:
     _check(bool(world.call("restore_stream_state", legacy_save, now)), "Schema-1 legacy save without optional inventory/object fields must remain loadable")
     _check(is_equal_approx(float(inventory_bridge.call("get_weight_kg")), legacy_weight), "Legacy save without inventory must preserve the current inventory")
     _check(bool(object_registry.call("get_object_state", "surface/chunk_0_0/crate_1")["state"]["opened"]), "Legacy save without world_objects preserves current object state")
+
+    var previous_object_payload: Dictionary = object_registry.call("to_save_dict")
+    var previous_object_ids: PackedStringArray = object_registry.call("get_saved_ids")
+    var previous_chunk_ids: PackedStringArray = world_chunk_controller.get_loaded_chunk_ids()
+    var failed_legacy_save: Dictionary = legacy_save.duplicate(true)
+    failed_legacy_save["player_position"] = [31.0, 2.0, 1.0]
+    var director: Node = world.get("director") as Node
+    var original_factory: Callable = director.get("chunk_factory")
+    var failing_factory := FailingChunkFactory.new()
+    failing_factory.world = world
+    failing_factory.fail_coord = Vector2i(3, -1)
+    _check(bool(director.call("bind_chunk_factory", Callable(failing_factory, "make_chunk"))), "install a deterministic factory failure after one target chunk can load")
+    var failed_restore: bool = bool(world.call("restore_stream_state", failed_legacy_save, now + 1))
+    _check(not failed_restore, "target stream failure rejects the legacy restore attempt")
+    var failure_report: Dictionary = world.call("get_last_restore_report")
+    _check(str(failure_report.get("phase", "")) == "stream_sync", "failed target stream is reported by the world-session transaction")
+    _check(bool(failure_report.get("rollback_complete", false)), "failed target stream reports complete recovery")
+    var target_sync_report: Dictionary = failure_report.get("details", {}).get("target_sync_report", {})
+    var target_sync_details: Dictionary = target_sync_report.get("details", {})
+    _check(str(target_sync_report.get("phase", "")) == "load_factory" and target_sync_details.get("newly_loaded_ids", []).size() == 1, "failure injection occurs after one temporary chunk was loaded")
+    _check(object_registry.call("to_save_dict") == previous_object_payload, "failed legacy restore removes temporary world-object records and restores the exact registry snapshot")
+    _check(object_registry.call("get_saved_ids") == previous_object_ids, "failed legacy restore restores the exact stable-ID set")
+    _check(world_chunk_controller.get_loaded_chunk_ids() == previous_chunk_ids, "failed legacy restore preserves the active chunk window")
+    _check(world_player.global_position.is_equal_approx(Vector3(1.0, 2.0, 1.0)), "failed legacy restore returns the player to the pre-attempt position")
+    _check(bool(director.call("bind_chunk_factory", original_factory)), "restore the original world chunk factory after failure injection")
 
     world.queue_free()
     await process_frame
