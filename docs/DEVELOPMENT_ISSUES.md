@@ -493,3 +493,27 @@ The older checklist and historical run notes above describe their respective sna
 - [ ] Add vertical multi-level underground connections and asynchronous chunk streaming/recovery.
 - [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
 - Compatibility: no inventory save schema or item weight changes. No local Godot GUI/GPU/device test is claimed.
+
+
+## Run 55 — 2026-10-30 — Tidal Survey + production stamina integration
+
+- [x] Add `daily_games/KROLL_Tidal_Survey/`: inertial underwater navigation, current fields, three ordered-beacon layouts, hazards, oxygen budget, dock return, keyboard and touch controls, deterministic rules tests and scene smoke test.
+- [x] Add deterministic route-follower acceptance simulation; all three authored layouts are completable within the oxygen budget.
+- [x] Add `systems/SurvivalStamina.gd` and connect it to production `world/SurfaceWorld.gd`.
+- [x] Use the existing inventory movement multiplier as the single source of truth for encumbrance stamina drain. Normal/overweight/super-heavy movement drain is 2.0/approximately 2.94/approximately 4.76 stamina per second with provisional defaults.
+- [x] Add idle recovery, 10-point jump cost, exact-threshold behavior and HUD stamina reporting.
+- [x] Persist optional stamina schema 1 inside the existing world-save schema 1. Legacy saves without the stamina key default to full stamina; invalid payloads are rejected before world mutation.
+- [x] Add model and production integration tests for actual physics-input drain, weight coupling, jump threshold, save/restore, legacy fallback, invalid payload non-mutation and chunk-window preservation.
+- [x] Feature PR [#143](https://github.com/qaqp980520-prog/2126-Survival/pull/143) merged as `de11e4a77962fdfbafe950f2ad9e63a6c1b07d4c`.
+- [x] Exact candidate `26745ff0bc302e8c25a1c04342cc86a58ef35e17` passed Godot 4.3 [Run #637](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41047042931): 229/229 successful job step entries, zero failures, zero skipped. New steps 221–226 all passed.
+- [x] Add design notes `docs/KROLL_TIDAL_SURVEY_M0_1_2026-10-30.md` and `docs/SURVIVAL_STAMINA_MODEL_M0_1_2026-10-30.md`.
+
+### Remaining limitations
+
+1. Stamina tuning values are provisional and need playable-world feedback.
+2. Sprinting, food/hotbar stamina restoration and a separate exhaustion movement penalty at zero stamina are not implemented.
+3. Tidal Survey current fields are static within each radius; no campaign/high-score persistence.
+4. Production-wide interactable factory migration, terrain/object delta persistence, vertical multi-level underground connections and asynchronous chunk streaming/recovery remain open.
+5. No local Godot executable or iPhone device was available; manual GUI, GPU and device QA are not claimed.
+
+Compatibility: world-save envelope remains schema 1. Stamina is an optional, separately validated schema-1 payload; legacy saves without it load with full stamina. Inventory weight rules and item weights are unchanged.
