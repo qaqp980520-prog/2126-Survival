@@ -156,10 +156,9 @@ func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> b
 	var invalid_ids: Array[String] = []
 	for raw_id in raw_ids:
 		var chunk_id: String = str(raw_id)
-		# This director owns only the surface grid. Other world layers (for example
-		# underground/mine_0_0) remain registered with the shared controller but
-		# are managed by their own layer lifecycle and must not block surface recovery.
-		if not chunk_id.begins_with("surface/"):
+		# This director owns the surface grid. The underground layer has a
+		# separate lifecycle; preserve its IDs without parsing them as surface cells.
+		if chunk_id.begins_with("underground/"):
 			continue
 		var parsed: Dictionary = _parse_grid_chunk_id(chunk_id)
 		if not bool(parsed.get("valid", false)):
