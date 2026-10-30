@@ -220,7 +220,7 @@ func _refresh_ui() -> void:
 		drone_buttons[index_drone].text = "DRONE %s%s\n%s" % [str(drone.get("id", "?")), " ✓" if reached else "", Rules.command_name(command)]
 		drone_buttons[index_drone].modulate = Color("#d8f7ff") if index_drone == selected_drone else Color("#ffffff")
 	if status_label != null:
-		var battery_text: Array[String] = []
+		var battery_text := PackedStringArray()
 		for drone in drones:
 			battery_text.append("%s:%d" % [str(drone.get("id", "?")), int(drone.get("battery", 0))])
 		status_label.text = "%s\nTICK: %d / %d   BATTERY: %s\nCOLLISION BLOCKS: %d   STATUS: %s" % [
