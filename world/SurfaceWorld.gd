@@ -376,14 +376,22 @@ func _toggle_mine_access() -> bool:
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	if _is_underground:
+		var previous_underground_position: Vector3 = player.global_position
 		if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
 			_world_object_action_message = "Could not restore the mine-shaft area."
 			_refresh_hud()
 			return false
 		_is_underground = false
 		player.global_position = _surface_return_position
+		if not _sync_streaming(now):
+			_is_underground = true
+			player.global_position = previous_underground_position
+			if not mine_director.sync_to_world_position(previous_underground_position, now):
+				push_error("Underground window rollback failed after surface return streaming rejection.")
+			_world_object_action_message = "Surface streaming failed; the layer transition was rolled back."
+			_refresh_hud()
+			return false
 		_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
-		_sync_streaming(now)
 		_world_object_action_message = "Returned to the surface."
 	else:
 		if not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
