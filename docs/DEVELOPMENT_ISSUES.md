@@ -358,3 +358,30 @@ The older checklist and historical run notes above describe their respective sna
 - Save schema remains version 1. Guard covers supported API methods in a synchronous single-node transaction; direct external assignment to the script's public state fields remains possible and should be addressed with private backing fields if stronger encapsulation is needed.
 - No local Godot executable; no manual GUI/GPU/iPhone hardware QA is claimed.
 - Remaining: private backing fields/read-only accessors review; production-wide stateful prop factory binding; full terrain/object delta persistence; asynchronous chunk streaming/recovery; device QA.
+
+
+## Run 48 — 2026-10-30: magnetic maze and read-only salvage state
+
+### Resolved in PR #130
+
+- Added KROLL Magnetic Maze M0.1 with three deterministic layouts, PUSH/PULL magnetic pulses, wall-blocked rays, keyboard/touch UI, rules tests, and real-scene smoke coverage.
+- Encapsulated SalvageCrate state behind getter-only compatibility properties and private-convention backing fields.
+- Migrated the mineral chunk corruption fixture away from public property writes; it now mutates backing fields only to simulate an invalid internal state and verify registry capture remains atomic.
+- Added canonical workflow steps for game import, rules, runtime smoke, and read-only accessor regression.
+- Kept world-save schema at version 1.
+
+### Validation
+
+- Functional PR #130 merged as \`024dca1f82f550cf5676d3b3a5795287346ab93c\`.
+- Exact candidate \`7e16dde771b5be31f6d41689d86ceba6601c7cf8\` passed canonical Godot 4.3 Run #584: 193/193 steps, zero failures, zero skipped.
+- Targeted Run #10 passed 12/12 steps.
+- Three authored puzzle layouts were independently checked with BFS; shortest input-action counts were 3, 20, and 22.
+- No local Godot executable was available; GUI/GPU/iPhone device QA remains unverified.
+
+### Remaining limitations / next work
+
+1. GDScript underscore-prefixed backing fields are conventionally private, not a hard language access boundary. If a stronger boundary is required, move mutable state into a dedicated state object and expose only validated methods.
+2. Migrate all formal interactable factories to stable IDs and validated state restore.
+3. Persist terrain and object deltas across chunk unload/reload and save/load.
+4. Integrate asynchronous chunk streaming with transactional rollback/recovery.
+5. Run manual GUI, GPU performance, and iPhone device QA when a suitable device and local Godot runtime are available.
