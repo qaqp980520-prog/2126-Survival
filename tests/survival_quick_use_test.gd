@@ -25,7 +25,7 @@ func _run() -> void:
 	_expect(not bool(quick_use.call("assign_slot", 2, "iron_ore")), "non-consumable items cannot be assigned")
 	_expect(bool(quick_use.call("select_slot", 0)), "valid slot selection succeeds")
 	stamina.set("current_stamina", 40.0)
-	bridge.item_consumed.connect(_on_item_consumed)
+	bridge.connect("item_consumed", Callable(self, "_on_item_consumed"))
 	reentrant_quick_use = quick_use
 	reentrant_bridge = bridge
 	reentrant_stamina = stamina
