@@ -34,7 +34,7 @@ func _run() -> void:
 	var vein: Node3D = center.get_node_or_null("Vein_0") if center != null else null
 	var east_vein: Node3D = east.get_node_or_null("Vein_0") if east != null else null
 	_expect(vein != null, "origin chunk contains a stable mineral node")
-	_expect(east_vein != null and str(east_vein.get("mineral_id")) != str(vein.get("mineral_id")), "mineral identity varies deterministically by room coordinate")
+	_expect(east_vein != null and vein != null and str(east_vein.get("mineral_id")) != str(vein.get("mineral_id")), "mineral identity varies deterministically by room coordinate")
 	if center != null and east != null:
 		var east_wall_a: Node3D = center.get_node_or_null("MineWallEast_A")
 		var east_wall_b: Node3D = center.get_node_or_null("MineWallEast_B")
