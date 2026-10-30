@@ -129,6 +129,7 @@ func _run() -> void:
     var previous_object_payload: Dictionary = object_registry.call("to_save_dict")
     var previous_object_ids: PackedStringArray = object_registry.call("get_saved_ids")
     var previous_chunk_ids: PackedStringArray = world_chunk_controller.get_loaded_chunk_ids()
+    var previous_player_position: Vector3 = world_player.global_position
     var failed_legacy_save: Dictionary = legacy_save.duplicate(true)
     failed_legacy_save["player_position"] = [31.0, 2.0, 1.0]
     var director: Node = world.get("director") as Node
@@ -148,7 +149,7 @@ func _run() -> void:
     _check(object_registry.call("to_save_dict") == previous_object_payload, "failed legacy restore removes temporary world-object records and restores the exact registry snapshot")
     _check(object_registry.call("get_saved_ids") == previous_object_ids, "failed legacy restore restores the exact stable-ID set")
     _check(world_chunk_controller.get_loaded_chunk_ids() == previous_chunk_ids, "failed legacy restore preserves the active chunk window")
-    _check(world_player.global_position.is_equal_approx(Vector3(1.0, 2.0, 1.0)), "failed legacy restore returns the player to the pre-attempt position")
+    _check(world_player.global_position.is_equal_approx(previous_player_position), "failed legacy restore returns the player to the pre-attempt position")
     _check(bool(director.call("bind_chunk_factory", original_factory)), "restore the original world chunk factory after failure injection")
 
     world.queue_free()
