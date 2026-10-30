@@ -787,3 +787,25 @@
 - SurvivalStamina Model M0.1: https://app.notion.com/p/409bc6a809d78100ad02ffa906026980
 - Workflow Run 55 M0.1: https://app.notion.com/p/409bc6a809d781f6ae23f95d26d80aeb
 - Asset index: https://app.notion.com/p/400bc6a809d781269143fa5379833145
+
+
+## 2026-10-30 Run 56 — Station Shift + SurvivalStamina M0.2 (feature merged)
+
+- Run 56 started from verified main `273ed4077c1402e715ebdb500979ffe217ba75a1`; Run 55 feature PR #143 and documentation PR #144 were both merged. The Run 56 feature branch was `feature/run56-station-shift-stamina-2026-10-30`.
+- Feature PR [#145](https://github.com/qaqp980520-prog/2126-Survival/pull/145) merged as `52f47d61b992a2449dcaae35b1c4b230ccd9925a). Exact final candidate HEAD: `169d9b394cd09636896790b91d4951f01cf2c090`.
+- Exact-head Godot 4.3 [Run #645](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41052380165) succeeded: 233/233 workflow step entries successful, zero failures and zero skipped. The final new checks 227–230 passed: Station Shift input verification, project import, rules tests and scene runtime smoke test.
+- Added `daily_games/KROLL_Station_Shift/`: deterministic six-cycle station operations management, three authored scenarios, five crew assigned across Power / Life Support / Repairs, Energy/Oxygen/Hull reserves, keyboard controls and mouse/touch buttons. Rules tests contain a winning six-cycle allocation for each scenario; runtime smoke test emits actual UI button signals. Godot 4.3+, no external assets, add-ons or audio.
+- Upgraded `systems/SurvivalStamina.gd` to M0.2 and integrated it into production `world/SurfaceWorld.gd`: hold Shift or touch SPRINT while moving; sprint speed factor 1.35, stamina drain factor 2.25, sprint threshold 5; at zero stamina the player can still walk at 0.65 of post-carry speed and cannot sprint. Stationary recovery remains 6/s; jump cost remains 10.
+- Carry weight remains owned by SurvivalInventory. Stamina speed/drain factors multiply the existing inventory movement multiplier; no duplicate carry-weight rules were added.
+- Sprint/exhaustion are derived from current stamina and are not separately persisted. Stamina payload schema 1 and world-save envelope schema 1 remain unchanged; legacy saves without stamina still initialize to full stamina.
+- Expanded `tests/survival_stamina_test.gd` and `tests/production_surface_world_stamina_test.gd` for sprint threshold, drain, exhaustion, recovery, touch button signal, real physics input, carry-weight coupling, jump boundary and save compatibility. Added Station Shift import/rules/runtime steps to `.github/workflows/godot-validation.yml`.
+- Exact-head failure history was retained and corrected rather than hidden: Run #642 had stale stamina snapshot expectations; Run #643 used the wrong post-reset overweight baseline; Run #644 found an invalid two-argument `Object.get()` in the new game smoke test. The final correction is the one-line `Object.get("scenario_index")` call in commit `169d9b394cd09636896790b91d4951f01cf2c090`; only Run #645 is final acceptance evidence.
+- Run 56 Notion records: [daily log](https://app.notion.com/p/409bc6a809d7816893d9d35c5ceda603), [Station Shift M0.1](https://app.notion.com/p/409bc6a809d781c88377e90360990a11), [SurvivalStamina M0.2](https://app.notion.com/p/409bc6a809d7817c8990e1643856edb4), [workflow record](https://app.notion.com/p/409bc6a809d7813e9eb1e584efadb294), [asset index](https://app.notion.com/p/400bc6a809d781269143fa5379833145).
+
+### Run 56 limits
+
+- Stamina rates are provisional and require playable-world tuning.
+- Food/hotbar stamina restoration and sprint animation/camera feedback remain unimplemented.
+- The Run 55 note that sprinting and zero-stamina exhaustion were not implemented is historical and superseded by Run 56 M0.2.
+- Production-wide interactable factory migration, terrain/object delta persistence, vertical multi-level underground connections, asynchronous chunk streaming/recovery and manual GUI/GPU/iPhone QA remain open.
+- No local Godot executable is available; no local GUI, GPU or iPhone hardware test is claimed. Engine evidence is the exact-head GitHub-hosted Godot 4.3 CI above.
