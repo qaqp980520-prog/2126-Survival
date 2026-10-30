@@ -558,7 +558,7 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 
 ## Run 58 follow-up issues (2026-10-31)
 
-1. **Underground cache distribution remains prototype-scoped.** Two deterministic stateful caches exist only in `underground/mine_0_0`. Other rooms have no room-specific loot tables, random cache placement, or rarity weighting. Next: define per-room cache spawn tables and validate them against mineral density and inventory weight.
+1. **[Closed in Run 59] Underground cache distribution.** At Run 58 closeout, two deterministic stateful caches existed only in `underground/mine_0_0`. Run 59 added four directional weighted tables, deterministic non-origin cache spawning and production inventory-weight/unload-reload regression. Remaining follow-up: move constants into data-driven resources and introduce a saved world seed before procedural generation.
 2. **Underground interaction is nearest-target based.** F selects the nearest cache or mineral vein. There is not yet a dedicated interaction prompt, raycast selection, cache animation, or inventory-full feedback panel for underground caches.
 3. **Vertical mine layers are still pending.** Current mine streaming remains a horizontal chunk grid on one underground elevation. Multi-depth floors, ladders/elevators, and vertical transition persistence are not implemented.
 4. **Asynchronous chunk streaming is still pending.** Current load/unload and failure rollback paths are synchronous; no background generation/stream queue is claimed.
