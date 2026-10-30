@@ -1441,3 +1441,40 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate reentrancy tests passed."
+
+
+      - name: Verify Run 47 Pipe Relay and state mutation guard inputs
+        shell: bash
+        run: |
+          test -f daily_games/KROLL_Pipe_Relay/project.godot
+          test -f daily_games/KROLL_Pipe_Relay/rules.gd
+          test -f daily_games/KROLL_Pipe_Relay/tests/rules_test.gd
+          test -f daily_games/KROLL_Pipe_Relay/tests/game_smoke_test.gd
+          test -f tests/salvage_crate_state_mutation_guard_test.gd
+
+      - name: Import and parse KROLL Pipe Relay
+        run: godot --headless --path daily_games/KROLL_Pipe_Relay --editor --quit
+      - name: Run KROLL Pipe Relay rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Pipe_Relay --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pipe Relay rules tests passed."
+      - name: Run KROLL Pipe Relay runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Pipe_Relay --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pipe Relay runtime smoke test passed."
+      - name: Run salvage crate state mutation guard regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_state_mutation_guard_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Salvage crate state mutation guard tests passed."

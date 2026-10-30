@@ -50,7 +50,7 @@ func validate_world_object_state(state: Dictionary) -> bool:
 
 
 func apply_world_object_state(state: Dictionary) -> bool:
-	if not validate_world_object_state(state):
+	if _inventory_interaction_in_progress or not validate_world_object_state(state):
 		return false
 	var opened_value: bool = bool(state["opened"])
 	var loot_value: int = int(state["loot_remaining"])
@@ -65,7 +65,7 @@ func apply_world_object_state(state: Dictionary) -> bool:
 
 
 func set_loot_item(item_id: String) -> bool:
-	if opened or loot_remaining != MAX_LOOT or not MineralCatalogScript.has_mineral(item_id):
+	if _inventory_interaction_in_progress or opened or loot_remaining != MAX_LOOT or not MineralCatalogScript.has_mineral(item_id):
 		return false
 	loot_item_id = item_id
 	return true
@@ -101,11 +101,16 @@ func _interact_with_inventory_transaction(inventory_bridge: Node) -> Dictionary:
 	var next_state: Dictionary = get_world_object_state()
 	next_state["opened"] = true
 	next_state["loot_remaining"] = loot_remaining - 1
-	if not apply_world_object_state(next_state):
+	if not validate_world_object_state(next_state):
 		var rollback_ok: bool = bool(inventory_bridge.call("restore_inventory", inventory_snapshot))
 		if not rollback_ok:
 			push_error("Salvage crate failed to roll back inventory after rejecting its state transition.")
 		return {"ok": false, "reason": "state_rejected", "item_id": loot_item_id, "remaining": loot_remaining}
+	# Commit internally while public state-mutating APIs remain locked against bridge callbacks.
+	opened = bool(next_state["opened"])
+	loot_remaining = int(next_state["loot_remaining"])
+	loot_item_id = str(next_state.get("loot_item_id", loot_item_id))
+	_refresh_visuals()
 	return {
 		"ok": true,
 		"reason": "collected",
