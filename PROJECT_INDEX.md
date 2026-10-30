@@ -633,3 +633,35 @@
 - No local Godot executable was available. The exact-head GitHub Godot 4.3 CI is the engine evidence; no manual GUI/GPU/iPhone hardware test is claimed.
 - Notion records: [Run 47 daily log](https://app.notion.com/p/409bc6a809d7817c82ebc5eaba9e6af9), [Pipe Relay M0.1](https://app.notion.com/p/409bc6a809d78107b8d6d548694e6cb3), [state mutation guard M0.1](https://app.notion.com/p/409bc6a809d781cdbe01eea47439e921), [workflow M0.1](https://app.notion.com/p/409bc6a809d781a8bc9bf795410c31d9).
 - Remaining: consider private backing fields/read-only accessors for stronger encapsulation; bind stateful lifecycle into every production interactable factory; persist complete terrain/object deltas; integrate asynchronous chunk streaming/recovery; conduct device QA.
+
+
+## Run 48 — 2026-10-30
+
+### New playable Godot 4 project: KROLL Magnetic Maze M0.1
+
+- Project: \`daily_games/KROLL_Magnetic_Maze/\`
+- Import: open \`daily_games/KROLL_Magnetic_Maze/project.godot\` with Godot 4.3+ Project Manager.
+- Dependencies: Godot 4.3+ only; no external assets, plugins, audio files, or network services.
+- Gameplay: deterministic 7×7 magnetic crate-routing puzzle with PUSH/PULL pulses, wall-blocked magnetic rays, three authored layouts, keyboard controls, and mouse/touch buttons.
+- Controls: WASD/arrows move and set facing; Space pulses; Tab toggles PUSH/PULL; R restarts; N advances layout.
+- Tests: \`tests/rules_test.gd\` covers all three authored solutions, push/pull, blocked rays, invalid directions, charge accounting, and blocked turning. \`tests/game_smoke_test.gd\` instantiates the real scene and emits UI button signals.
+- Independent BFS verification found shortest solutions of 3, 20, and 22 input actions for the three layouts respectively. This is a separate rules-model check, not a substitute for engine CI.
+
+### WorldObjectStatefulProp read-only state accessors M0.1
+
+- File: \`systems/WorldObjectStatefulProp.gd\`.
+- Tests: \`tests/salvage_crate_read_only_state_test.gd\` and the updated corruption fixture in \`tests/mineral_chunk_controller_test.gd\`.
+- Backing fields: \`_opened\`, \`_loot_remaining\`, \`_loot_item_id\`.
+- Compatibility readers: \`opened\`, \`loot_remaining\`, and \`loot_item_id\` remain getter-only properties; state changes use \`set_loot_item()\` and \`apply_world_object_state()\`.
+- Save payload keys and world-save schema 1 remain unchanged.
+- GDScript leading underscores are a convention, not enforced private access. Callers must treat backing fields as internal and use the validated APIs.
+- Repository compatibility review covered 42 test scripts plus 30 system/prototype/script files; the one direct-write test fixture was migrated to deliberate backing-field corruption for atomic-capture testing.
+
+### Exact validation evidence
+
+- Functional PR #130: https://github.com/qaqp980520-prog/2126-Survival/pull/130
+- Functional candidate SHA: \`7e16dde771b5be31f6d41689d86ceba6601c7cf8\`
+- Squash merge SHA: \`024dca1f82f550cf5676d3b3a5795287346ab93c\`
+- Canonical Godot 4.3 CI Run #584: https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40995941086 — 193/193 job steps succeeded, zero failures, zero skipped.
+- Targeted Run #10: https://github.com/qaqp980520-prog/2126-Survival/actions/runs/40995941214 — 12/12 job steps succeeded.
+- Local environment has no Godot executable; manual GUI, GPU performance, and iPhone device QA were not performed.
