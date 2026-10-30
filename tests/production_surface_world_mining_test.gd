@@ -53,7 +53,10 @@ func _run() -> void:
 	_expect(saved_weight > weight_before, "mining immediately increases shared carry weight")
 	var away_position := Vector3(21.5, -8.25, 7.5)
 	world.player.global_position = away_position
-	_expect(bool(mine_director.call("sync_to_world_position", away_position, now + 1)), "walking two mine cells east advances the underground streaming window")
+	world.call("_physics_process", 0.016)
+	_expect(not bool(world.call("_toggle_mine_access")), "player cannot teleport back to the shaft from a distant mine room")
+	_expect(bool(mine_director.call("get_managed_chunk_ids").size() == 9), "underground physics keeps the managed window bounded")
+	_expect(bool(controller_has_mine(world, "underground/mine_2_0")), "walking two mine cells east streams the eastern room")
 	await process_frame
 	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "origin mine chunk unloads outside the underground radius")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_2_0"), "new eastern mine chunk loads with a stable coordinate ID")
