@@ -761,7 +761,7 @@
 ## 2026-10-30 Run 55 — Tidal Survey + production stamina M0.1 (feature merged)
 
 - Baseline main before Run 55: `2504e62b3208c49ba7374bd858a8e68b6e51cb94`. Start-of-run branch inventory was fully paged at 148 branches and there were no open PRs. Run 54 daily log and asset records were checked before work; no Run 55 record existed at start.
-- Feature PR [#143](https://github.com/qaqp980520-prog/2126-Survival/pull/143) merged as `de11e4a77962fdfbafe950f2ad9e63a6c1b07d4c). Exact candidate HEAD: `26745ff0bc302e8c25a1c04342cc86a58ef35e17`.
+- Feature PR [#143](https://github.com/qaqp980520-prog/2126-Survival/pull/143) merged as `de11e4a77962fdfbafe950f2ad9e63a6c1b07d4c`. Exact candidate HEAD: `26745ff0bc302e8c25a1c04342cc86a58ef35e17`.
 - Exact-head Godot 4.3 [Run #637](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41047042931) succeeded: 229/229 workflow job step entries successful, zero failures and zero skipped. New checks 221–226 all passed.
 - Added `daily_games/KROLL_Tidal_Survey/`: deterministic 2D top-down underwater navigation with inertial thrust, drag, constant current fields, ordered beacons, hazard cooldowns, oxygen depletion and return-to-dock objective. Includes keyboard and on-screen mouse/touch directional controls, three authored layouts, rules tests and scene smoke test. No external assets/add-ons/audio.
 - Tidal Survey acceptance includes a deterministic route-follower simulation that completes all three authored layouts within the oxygen budget. Scene smoke test emits actual NEXT/RESTART and directional Button signals, not only direct helper calls.
