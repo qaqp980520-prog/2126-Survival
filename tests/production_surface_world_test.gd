@@ -34,8 +34,8 @@ func _run() -> void:
 		else:
 			surface_crate_count += 1
 	_expect(surface_crate_count == 9, "nine surface chunks retain one stable salvage crate each")
-	_expect(underground_cache_count == 2, "origin underground room contributes two stable salvage caches")
-	_expect(int(status.get("saved_world_object_count", 0)) == 11, "world-object registry counts nine surface crates and two underground caches")
+	_expect(underground_cache_count == 7, "nine-room underground window contributes two origin caches and five regional caches")
+	_expect(int(status.get("saved_world_object_count", 0)) == 16, "world-object registry counts nine surface crates and seven underground caches")
 	var initial_plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(initial_plots.size() == 18, "two crop plot visuals are bound per loaded chunk")
 	_expect(int(status.get("saved_crop_count", 0)) == 0, "empty plots are not prematurely written as planted crop records")
