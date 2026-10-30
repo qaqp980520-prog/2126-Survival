@@ -56,14 +56,15 @@ func _run() -> void:
 	world.call("_physics_process", 0.016)
 	_expect(not bool(world.call("_toggle_mine_access")), "player cannot teleport back to the shaft from a distant mine room")
 	_expect(bool(mine_director.call("get_managed_chunk_ids").size() == 9), "underground physics keeps the managed window bounded")
-	_expect(bool(controller_has_mine(world, "underground/mine_2_0")), "walking two mine cells east streams the eastern room")
+	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_2_0"), "walking two mine cells east streams the eastern room")
 	await process_frame
 	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "origin mine chunk unloads outside the underground radius")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_2_0"), "new eastern mine chunk loads with a stable coordinate ID")
 	_expect(mine_director.get_managed_chunk_ids().size() == 9, "underground active window remains bounded to nine chunks")
 	var return_position := Vector3(1.5, -8.25, 7.5)
 	world.player.global_position = return_position
-	_expect(bool(mine_director.call("sync_to_world_position", return_position, now + 2)), "returning through the mine tunnels reloads the origin room")
+	world.call("_physics_process", 0.016)
+	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "returning through the mine tunnels reloads the origin room")
 	await process_frame
 	var reloaded_nearest: Node3D = _nearest_mine_vein()
 	_expect(reloaded_nearest != null and str(reloaded_nearest.get("mineral_id")) == item_id and int(reloaded_nearest.get("remaining_units")) == stock_before - 1, "mined mineral identity and stock survive director unload/reload")
