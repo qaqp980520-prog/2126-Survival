@@ -227,7 +227,6 @@ func _physics_process(delta: float) -> void:
 	right = right.normalized()
 	var movement := (right * move_input.x + forward * move_input.y).normalized()
 	var movement_profile: Dictionary = get_player_movement_profile()
-	_tick_stamina(delta, movement.length_squared() > 0.0001)
 	var move_speed: float = float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
 	player.velocity.x = movement.x * move_speed
 	player.velocity.z = movement.z * move_speed
@@ -239,6 +238,8 @@ func _physics_process(delta: float) -> void:
 	if jump_down and not _jump_was_down:
 		_try_start_jump()
 	_jump_was_down = jump_down
+	# Resolve a same-frame jump before movement drain so exactly JUMP_COST remains sufficient.
+	_tick_stamina(delta, movement.length_squared() > 0.0001)
 	var previous_position: Vector3 = player.global_position
 	player.move_and_slide()
 	if _is_underground:
