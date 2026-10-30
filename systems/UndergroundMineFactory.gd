@@ -8,6 +8,97 @@ const MINERAL_IDS: Array[String] = [
 	"iron_ore", "copper_ore", "gold_ore", "silver_ore",
 	"aluminium_ore", "coal_ore", "uranium_ore"
 ]
+const CACHE_POSITIONS: Array[Vector3] = [
+	Vector3(1.2, -8.25, 1.2),
+	Vector3(8.2, -8.25, 8.0),
+	Vector3(8.2, -8.25, 2.0),
+	Vector3(1.2, -8.25, 8.0)
+]
+const CACHE_TABLES: Dictionary = {
+	"west": [
+		{"item_id": "iron_ore", "weight": 4},
+		{"item_id": "coal_ore", "weight": 3},
+		{"item_id": "copper_ore", "weight": 2}
+	],
+	"east": [
+		{"item_id": "copper_ore", "weight": 4},
+		{"item_id": "silver_ore", "weight": 2},
+		{"item_id": "aluminium_ore", "weight": 3}
+	],
+	"north": [
+		{"item_id": "aluminium_ore", "weight": 4},
+		{"item_id": "silver_ore", "weight": 3},
+		{"item_id": "gold_ore", "weight": 1}
+	],
+	"south": [
+		{"item_id": "coal_ore", "weight": 4},
+		{"item_id": "gold_ore", "weight": 2},
+		{"item_id": "uranium_ore", "weight": 1}
+	]
+}
+
+## Returns deterministic, room-specific cache entries without mutating a scene.
+## The origin remains the two-cache service room; other rooms use weighted tables
+## and a coordinate hash so unloading/reloading never rerolls their contents.
+static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	if coord == Vector2i.ZERO:
+		entries.append({
+			"node_name": "MineCache_Gold",
+			"item_id": "gold_ore",
+			"position": Vector3(8.2, -8.25, 8.0),
+			"table_id": "service"
+		})
+		entries.append({
+			"node_name": "MineCache_Coal",
+			"item_id": "coal_ore",
+			"position": Vector3(8.2, -8.25, 2.0),
+			"table_id": "service"
+		})
+		return entries
+
+	# One third of non-origin rooms are intentionally cache-free. The decision
+	# is stable per coordinate and keeps loot density below one cache per room.
+	if posmod(coord.x * 31 + coord.y * 17 + 1009, 3) == 0:
+		return entries
+
+	var table_id: String = _get_cache_table_id(coord)
+	var table_value: Variant = CACHE_TABLES.get(table_id, [])
+	if not (table_value is Array) or table_value.is_empty():
+		return entries
+	var total_weight: int = 0
+	for entry_value in table_value:
+		if entry_value is Dictionary:
+			total_weight += maxi(0, int(entry_value.get("weight", 0)))
+	if total_weight <= 0:
+		return entries
+
+	var roll: int = posmod(coord.x * 97 + coord.y * 53 + 2029, total_weight)
+	var selected_item_id: String = ""
+	for entry_value in table_value:
+		if not (entry_value is Dictionary):
+			continue
+		var weight: int = maxi(0, int(entry_value.get("weight", 0)))
+		if roll < weight:
+			selected_item_id = str(entry_value.get("item_id", ""))
+			break
+		roll -= weight
+	if selected_item_id.is_empty() or not MINERAL_IDS.has(selected_item_id):
+		return entries
+
+	var position_index: int = posmod(coord.x * 7 + coord.y * 11 + 1, CACHE_POSITIONS.size())
+	entries.append({
+		"node_name": "MineCache_%s" % selected_item_id,
+		"item_id": selected_item_id,
+		"position": CACHE_POSITIONS[position_index],
+		"table_id": table_id
+	})
+	return entries
+
+static func _get_cache_table_id(coord: Vector2i) -> String:
+	if abs(coord.x) >= abs(coord.y):
+		return "west" if coord.x < 0 else "east"
+	return "north" if coord.y < 0 else "south"
 
 ## Keep timestamp as the first argument for compatibility with Run 52 callers.
 static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> Node3D:
@@ -49,13 +140,8 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 		vein.position = positions[index]
 		root.add_child(vein)
 
-	# The origin room is the mine's initial service point. Its caches share the
-	# same chunk-scoped state registry as surface salvage crates.
-	if coord == Vector2i.ZERO:
-		if not _add_salvage_cache(root, "MineCache_Gold", "gold_ore", Vector3(8.2, -8.25, 8.0)):
-			root.free()
-			return null
-		if not _add_salvage_cache(root, "MineCache_Coal", "coal_ore", Vector3(8.2, -8.25, 2.0)):
+	for cache_data in get_cache_spawn_data(coord):
+		if not _add_salvage_cache(root, str(cache_data.get("node_name", "")), str(cache_data.get("item_id", "")), cache_data.get("position", Vector3.ZERO)):
 			root.free()
 			return null
 	return root
