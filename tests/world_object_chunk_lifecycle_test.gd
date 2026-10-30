@@ -5,6 +5,7 @@ const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
 const CRATE_STABLE_ID: String = "surface/chunk_0_0/object/Chunk_0_0/SalvageCrate"
 
 var failures: Array[String] = []
+var _finished: bool = false
 var watchdog: Timer
 var playground: Node
 
@@ -46,7 +47,7 @@ func _run() -> void:
 	var interaction_position: Vector3 = crate.global_position + Vector3(0.0, 1.0, 0.0)
 	playground.player.global_position = interaction_position
 	var now: int = int(Time.get_unix_time_from_system())
-	var first_result: Dictionary = playground.call("_interact_nearest_world_prop", now)
+	var first_result: Dictionary = playground.call("_interact_nearest_world_prop")
 	_expect(bool(first_result.get("ok", false)), "first real interaction grants one item through SurvivalWorldBridge")
 	_expect(str(first_result.get("item_id", "")) == item_id and int(first_result.get("remaining", -1)) == 1, "first interaction consumes exactly one unit of the crate's configured item")
 	_expect(bool(crate.get("opened")) and int(crate.get("loot_remaining")) == 1, "live crate reflects the first successful transaction")
@@ -83,7 +84,7 @@ func _run() -> void:
 	_expect(str(restored_crate.get("loot_item_id", "")) == item_id, "reloaded crate restores its saved item identity")
 	_expect(_inventory_count(item_id) == 1, "chunk reload does not duplicate the previously collected item")
 
-	var second_result: Dictionary = playground.call("_interact_nearest_world_prop", now + 3)
+	var second_result: Dictionary = playground.call("_interact_nearest_world_prop")
 	_expect(bool(second_result.get("ok", false)) and int(second_result.get("remaining", -1)) == 0, "second interaction consumes the final saved salvage unit")
 	_expect(_inventory_count(item_id) == 2, "second interaction adds exactly one more item")
 
@@ -94,9 +95,9 @@ func _run() -> void:
 	_expect(save_restored_crate != null and str(save_restored_crate.get("loot_item_id", "")) == item_id, "full world restore retains the crate item identity")
 	_expect(_inventory_count(item_id) == 1, "full world restore rolls inventory back to the matching saved count")
 
-	var final_result: Dictionary = playground.call("_interact_nearest_world_prop", now + 5)
+	var final_result: Dictionary = playground.call("_interact_nearest_world_prop")
 	_expect(bool(final_result.get("ok", false)) and int(final_result.get("remaining", -1)) == 0, "restored crate can be interacted with again")
-	var empty_result: Dictionary = playground.call("_interact_nearest_world_prop", now + 6)
+	var empty_result: Dictionary = playground.call("_interact_nearest_world_prop")
 	_expect(not bool(empty_result.get("ok", false)) and str(empty_result.get("reason", "")) == "empty", "empty crate cannot grant a third item")
 	_expect(_inventory_count(item_id) == 2, "repeated empty interaction does not duplicate inventory")
 
@@ -123,10 +124,15 @@ func _on_timeout() -> void:
 
 
 func _finish(exit_code: int) -> void:
+	if _finished:
+		return
+	_finished = true
 	if is_instance_valid(watchdog):
 		watchdog.stop()
 		watchdog.queue_free()
 	if is_instance_valid(playground):
 		playground.queue_free()
 	await process_frame
+	if exit_code == 0 and failures.is_empty():
+		print("World-object chunk lifecycle tests passed.")
 	quit(exit_code)
