@@ -38,18 +38,19 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "KROLL // OUTPOST ARCHITECT"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_font_size_override("font_size", 18)
 	content.add_child(title)
 
 	layout_label = Label.new()
 	layout_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	layout_label.add_theme_font_size_override("font_size", 17)
+	layout_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout_label.add_theme_font_size_override("font_size", 14)
 	content.add_child(layout_label)
 
 	status_label = Label.new()
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.add_theme_font_size_override("font_size", 16)
+	status_label.add_theme_font_size_override("font_size", 15)
 	content.add_child(status_label)
 
 	var board_center := CenterContainer.new()
@@ -73,6 +74,8 @@ func _build_ui() -> void:
 	var hand_title := Label.new()
 	hand_title.text = "MODULE HAND // choose a module, then choose a cell"
 	hand_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hand_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hand_title.add_theme_font_size_override("font_size", 13)
 	content.add_child(hand_title)
 
 	var hand_row := HBoxContainer.new()
