@@ -22,6 +22,7 @@ const REQUIRED_INVENTORY_METHODS: Array[String] = [
 signal inventory_changed(summary: Dictionary)
 signal item_collected(item_id: String, amount: int)
 signal item_dropped(item_id: String, amount: int)
+signal item_consumed(item_id: String, amount: int)
 
 @export var inventory_script: Script
 var inventory: RefCounted
@@ -69,6 +70,26 @@ func drop_item(item_id: String, amount: int = 1) -> bool:
 	item_dropped.emit(item_id, removed)
 	_emit_inventory_changed()
 	return true
+
+## Consume an inventory item and publish the same change notifications as other world actions.
+func consume_item(item_id: String, amount: int = 1) -> bool:
+	if not _is_valid_amount(item_id, amount):
+		return false
+	var removed: int = inventory.remove_item(item_id, amount)
+	if removed <= 0:
+		return false
+	item_consumed.emit(item_id, removed)
+	_emit_inventory_changed()
+	return true
+
+func get_item_count(item_id: String) -> int:
+	if inventory == null:
+		return 0
+	var counts: Variant = inventory.get("counts")
+	if not (counts is Dictionary):
+		return 0
+	var amount: Variant = counts.get(item_id, 0)
+	return int(amount) if amount is int and int(amount) > 0 else 0
 
 func get_weight_kg() -> float:
 	return inventory.total_weight_kg() if inventory != null else 0.0
