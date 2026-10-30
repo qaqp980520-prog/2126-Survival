@@ -5,6 +5,7 @@ const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFactory.gd")
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
+const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -14,6 +15,7 @@ const MINE_INTERACTION_RANGE: float = 3.5
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
 var stamina: RefCounted = StaminaScript.new()
+var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
 var hud: Label
 var touch_buttons: Dictionary = {}
@@ -36,6 +38,8 @@ var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 func _ready() -> void:
 	if not initialize_world_session():
 		return
+	if inventory_bridge != null and inventory_bridge.has_signal("inventory_changed"):
+		inventory_bridge.connect("inventory_changed", Callable(self, "_on_inventory_changed"))
 	_build_environment()
 	_build_player()
 	_build_hud()
@@ -109,7 +113,7 @@ func _build_hud() -> void:
 	panel.anchor_bottom = 1.0
 	panel.offset_left = -116.0
 	panel.offset_right = 116.0
-	panel.offset_top = -156.0
+	panel.offset_top = -240.0
 	panel.offset_bottom = -10.0
 	layer.add_child(panel)
 	var grid := GridContainer.new()
@@ -126,6 +130,10 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "crate", "CRATE")
 	_add_touch_button(grid, "shaft", "DESCEND")
 	_add_touch_button(grid, "sprint", "SPRINT")
+	_add_touch_button(grid, "quick_1", "1 BERRIES")
+	_add_touch_button(grid, "quick_2", "2 HERBS")
+	_add_touch_button(grid, "quick_3", "3 MEAT")
+	_add_touch_button(grid, "quick_4", "4 FOOD")
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -152,6 +160,9 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 		"sprint":
 			button.button_down.connect(_set_touch_sprint.bind(true))
 			button.button_up.connect(_set_touch_sprint.bind(false))
+		"quick_1", "quick_2", "quick_3", "quick_4":
+			var slot_index: int = int(key.substr(6, 1)) - 1
+			button.pressed.connect(_consume_quick_slot.bind(slot_index))
 
 func _on_touch_crop_pressed() -> void:
 	_interact_nearest_crop_plot()
@@ -173,6 +184,38 @@ func _set_touch_jump(value: bool) -> void:
 
 func _set_touch_sprint(value: bool) -> void:
 	_touch_sprint = value
+
+func _on_inventory_changed(_summary: Dictionary) -> void:
+	_refresh_hud()
+
+func _select_quick_slot(slot_index: int) -> bool:
+	if quick_use == null or not bool(quick_use.call("select_slot", slot_index)):
+		return false
+	_refresh_hud()
+	return true
+
+func _consume_quick_slot(slot_index: int) -> Dictionary:
+	if not _select_quick_slot(slot_index):
+		return {"ok": false, "reason": "invalid_slot"}
+	return _consume_selected_quick_slot()
+
+func _consume_selected_quick_slot() -> Dictionary:
+	if quick_use == null or inventory_bridge == null:
+		return {"ok": false, "reason": "unavailable"}
+	var result: Dictionary = quick_use.call("consume_selected", inventory_bridge, stamina)
+	if bool(result.get("ok", false)):
+		_world_object_action_message = "Used %s; restored %.1f stamina." % [
+			str(result.get("item_id", "ration")),
+			float(result.get("restored", 0.0))
+		]
+	elif str(result.get("reason", "")) == "stamina_full":
+		_world_object_action_message = "Stamina is already full; ration preserved."
+	elif str(result.get("reason", "")) == "empty":
+		_world_object_action_message = "Selected quick slot is empty."
+	else:
+		_world_object_action_message = "Quick-use rejected: %s." % str(result.get("reason", "unknown"))
+	_refresh_hud()
+	return result
 
 ## Read carry penalties from the inventory model and stamina penalties from SurvivalStamina.
 func get_player_movement_profile(sprinting: bool = false) -> Dictionary:
@@ -285,6 +328,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed and not key_event.echo:
+			match key_event.keycode:
+				KEY_1: _select_quick_slot(0)
+				KEY_2: _select_quick_slot(1)
+				KEY_3: _select_quick_slot(2)
+				KEY_4: _select_quick_slot(3)
+				KEY_C: _consume_selected_quick_slot()
 			if key_event.keycode == KEY_F10:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -522,6 +571,7 @@ func serialize_stream_state() -> Dictionary:
 		return {}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
 	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
+	payload["quick_use"] = quick_use.call("to_save_dict") if quick_use != null else {"schema_version": 1, "slots": ["berries", "herbs", "meat", "food"], "selected_slot": 0}
 	payload["surface_return_position"] = [
 		_surface_return_position.x,
 		_surface_return_position.y,
@@ -536,6 +586,13 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		var stamina_probe: RefCounted = StaminaScript.new()
 		if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
 			_set_restore_report(false, "stamina_validation", "Stamina save payload is invalid; no world state was changed.", true)
+			return false
+	var has_quick_use: bool = payload.has("quick_use")
+	var quick_use_value: Variant = payload.get("quick_use", null)
+	if has_quick_use:
+		var quick_use_probe: RefCounted = QuickUseScript.new()
+		if not (quick_use_value is Dictionary) or not bool(quick_use_probe.call("validate_save_dict", quick_use_value)):
+			_set_restore_report(false, "quick_use_validation", "Quick-use hotbar payload is invalid; no world state was changed.", true)
 			return false
 	var layer_value: Variant = payload.get("location_layer", "surface")
 	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
@@ -576,6 +633,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 	else:
 		stamina.call("reset")
+	if has_quick_use:
+		if not bool(quick_use.call("load_save_dict", quick_use_value)):
+			_set_restore_report(false, "quick_use_restore", "Validated quick-use payload could not be applied.", false)
+			return false
+	else:
+		quick_use.call("reset")
 	_is_underground = target_underground
 	_surface_return_position = next_return_position
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
@@ -616,7 +679,17 @@ func _refresh_hud() -> void:
 		(touch_buttons["crop"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):
 		(touch_buttons["sprint"] as Button).text = "SPRINT ON" if _sprint_active else "SPRINT"
-	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
+	for slot_index in range(QuickUseScript.SLOT_COUNT):
+		var quick_key: String = "quick_%d" % (slot_index + 1)
+		if not touch_buttons.has(quick_key):
+			continue
+		var item_id: String = str(quick_use.call("get_slot_item", slot_index))
+		var item_count: int = int(quick_use.call("get_slot_count", slot_index, inventory_bridge))
+		var selected: bool = int(quick_use.get("selected_slot")) == slot_index
+		var quick_button: Button = touch_buttons[quick_key] as Button
+		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
+		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
+	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F mine · G shaft · 1-4 ration · C use"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),

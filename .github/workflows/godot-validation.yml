@@ -1837,3 +1837,51 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Station Shift runtime smoke test passed."
+
+      - name: Verify Run 57 KROLL Void Runner and quick-use assets
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Void_Runner/project.godot
+          test -f daily_games/KROLL_Void_Runner/main.tscn
+          test -f daily_games/KROLL_Void_Runner/main.gd
+          test -f daily_games/KROLL_Void_Runner/rules.gd
+          test -f daily_games/KROLL_Void_Runner/tests/rules_test.gd
+          test -f daily_games/KROLL_Void_Runner/tests/game_smoke_test.gd
+          test -f systems/SurvivalQuickUse.gd
+          test -f tests/survival_quick_use_test.gd
+          test -f tests/production_surface_world_quick_use_test.gd
+      - name: Import and parse KROLL Void Runner
+        run: godot --headless --path daily_games/KROLL_Void_Runner --editor --quit
+      - name: Run KROLL Void Runner rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Void_Runner --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Void Runner rules tests passed."
+      - name: Run KROLL Void Runner runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Void_Runner --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Void Runner runtime smoke test passed."
+      - name: Run Survival quick-use model tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path . --script res://tests/survival_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival quick-use model tests passed."
+      - name: Run production SurfaceWorld quick-use integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld quick-use integration tests passed."
