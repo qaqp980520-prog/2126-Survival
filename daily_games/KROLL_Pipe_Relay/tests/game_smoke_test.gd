@@ -43,7 +43,8 @@ func _run() -> void:
 	if run_button != null:
 		run_button.emit_signal("pressed")
 		await process_frame
-		_expect(not str(instance.get_node("Layout/StatusLabel").text).is_empty(), "test-network button updates visible feedback")
+		var status_label := instance.get_node_or_null("Layout/StatusLabel") as Label
+		_expect(status_label != null and not status_label.text.is_empty(), "test-network button updates visible feedback")
 
 	instance.queue_free()
 	await process_frame
