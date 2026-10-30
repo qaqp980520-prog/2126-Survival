@@ -517,3 +517,24 @@ The older checklist and historical run notes above describe their respective sna
 5. No local Godot executable or iPhone device was available; manual GUI, GPU and device QA are not claimed.
 
 Compatibility: world-save envelope remains schema 1. Stamina is an optional, separately validated schema-1 payload; legacy saves without it load with full stamina. Inventory weight rules and item weights are unchanged.
+
+
+## Run 56 — 2026-10-30 — Station Shift + stamina sprint/exhaustion M0.2
+
+- [x] Add `daily_games/KROLL_Station_Shift/`: deterministic six-cycle station operations management with three scenarios, five crew across Power/Life Support/Repairs, Energy/Oxygen/Hull reserves, keyboard and mouse/touch controls, rules tests and scene smoke test.
+- [x] Validate a complete winning crew allocation for each of the three authored scenarios.
+- [x] Upgrade `systems/SurvivalStamina.gd` to M0.2 and integrate sprinting into production `world/SurfaceWorld.gd`: Shift/touch sprint, 1.35 speed factor, 2.25x drain, 5-point sprint threshold and 0.65 walking factor at zero stamina.
+- [x] Preserve SurvivalInventory as the only source of carry-weight movement multipliers; stamina factors multiply the existing carry factor rather than replacing it.
+- [x] Preserve jump cost 10 and exact threshold; keep stamina payload and world-save envelope at schema 1; sprint/exhaustion are derived from current stamina.
+- [x] Expand model and production SurfaceWorld tests for sprint threshold, drain, exhaustion, recovery, touch sprint signal, actual physics movement, carry-weight coupling, jump boundary, save/restore and legacy fallback.
+- [x] Add Station Shift import, rules and runtime smoke tests to the full Godot 4.3 workflow.
+- [x] Feature PR [#145](https://github.com/qaqp980520-prog/2126-Survival/pull/145) merged as `52f47d61b992a2449dcaae35b1c4b230ccd9925a`.
+- [x] Exact candidate `169d9b394cd09636896790b91d4951f01cf2c090` passed Godot 4.3 [Run #645](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41052380165): 233/233 successful workflow entries, zero failures and zero skipped. New steps 227–230 all passed.
+- [x] Retain failure history: #642 stale stamina expected values, #643 wrong overweight baseline, #644 invalid two-argument Object.get in Station Shift smoke test. The exact current candidate fixed the final parser issue; Run #645 is the only final acceptance run.
+- [ ] Tune stamina rates after playable-world feedback.
+- [ ] Add food/hotbar stamina restoration and sprint animation/camera feedback.
+- [ ] Complete production-wide interactable factory migration and terrain/object delta persistence.
+- [ ] Add vertical multi-level underground connections and asynchronous chunk streaming/recovery.
+- [ ] Perform manual GUI, GPU and iPhone device QA when a local Godot runtime and suitable devices are available.
+- Compatibility: stamina and world-save schema remain version 1; legacy saves without stamina still default to full. No inventory carry thresholds or item weights changed. No local GUI/GPU/device QA is claimed.
+
