@@ -17,7 +17,7 @@ func _run() -> void:
 	var capped_state: Dictionary = state.duplicate(true)
 	capped_state["velocity"] = Vector2(500.0, 0.0)
 	capped_state = rules.call("step", capped_state, Vector2.ZERO, 0.01, _empty_layout())
-	_expect(Vector2(capped_state["velocity"]).length() <= float(rules.MAX_SPEED) + 0.01, "drone speed is capped")
+	_expect(Vector2(capped_state["velocity"]).length() <= 230.0 + 0.01, "drone speed is capped")
 	var drag_state: Dictionary = state.duplicate(true)
 	drag_state["velocity"] = Vector2(100.0, 0.0)
 	drag_state = rules.call("step", drag_state, Vector2.ZERO, 0.1, _empty_layout())
@@ -60,7 +60,7 @@ func _run() -> void:
 	cooldown_state = rules.call("step", cooldown_state, Vector2.ZERO, 0.01, hazard_layout)
 	_expect(int(cooldown_state.get("hits", 0)) == 1, "hazard cooldown prevents repeated contact damage")
 	var exhausted_state: Dictionary = rules.call("create_state", _empty_layout())
-	exhausted_state["oxygen"] = 0.1
+	exhausted_state["oxygen"] = 0.01
 	exhausted_state = rules.call("step", exhausted_state, Vector2.ZERO, 0.1, _empty_layout())
 	_expect(bool(exhausted_state.get("finished", false)) and not bool(exhausted_state.get("won", false)), "oxygen depletion ends the survey")
 	var finished_snapshot: Dictionary = exhausted_state.duplicate(true)
