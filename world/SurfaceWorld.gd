@@ -384,8 +384,6 @@ func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null:
 		return {"ok": false, "action": "unavailable", "message": "World-object interaction is unavailable."}
-	if _is_underground:
-		return _interact_nearest_mineral(now_unix)
 	var nearest: Node3D = null
 	var nearest_distance: float = 3.25
 	for prop in chunk_controller.get_loaded_world_state_nodes():
@@ -395,8 +393,15 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 		if distance <= nearest_distance:
 			nearest = prop
 			nearest_distance = distance
+	# In mines, F selects the closest valid target: a salvage cache or a mineral vein.
+	if _is_underground:
+		var nearest_vein: Node3D = _get_nearest_mineable_vein()
+		if nearest_vein != null:
+			var vein_distance: float = player.global_position.distance_to(nearest_vein.global_position)
+			if nearest == null or vein_distance < nearest_distance:
+				return _interact_nearest_mineral(now_unix)
 	if nearest == null:
-		_world_object_action_message = "No salvage crate within reach."
+		_world_object_action_message = "No salvage cache or mineable vein within reach." if _is_underground else "No salvage crate within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
 	var result: Dictionary = nearest.call("interact_with_inventory", inventory_bridge)
@@ -408,15 +413,29 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	if ok:
 		_world_object_action_message = "Recovered 1 %s; %d salvage units remain." % [display_name, int(result.get("remaining", 0))]
 	elif reason == "inventory_rejected":
-		_world_object_action_message = "Inventory cannot accept %s; crate unchanged." % display_name
+		_world_object_action_message = "Inventory cannot accept %s; cache unchanged." % display_name
 	elif reason == "empty":
-		_world_object_action_message = "Crate is empty."
+		_world_object_action_message = "Cache is empty."
 	else:
-		_world_object_action_message = "Crate interaction blocked: %s." % reason
+		_world_object_action_message = "Cache interaction blocked: %s." % reason
 	result["action"] = "interacted" if ok else reason
 	result["message"] = _world_object_action_message
 	_refresh_hud()
 	return result
+
+func _get_nearest_mineable_vein() -> Node3D:
+	if not _is_underground or player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
+		return null
+	var nearest: Node3D = null
+	var nearest_distance: float = MINE_INTERACTION_RANGE
+	for vein in chunk_controller.call("get_loaded_mineral_nodes"):
+		if not is_instance_valid(vein) or not bool(vein.get("visible")) or int(vein.get("remaining_units")) <= 0:
+			continue
+		var distance: float = player.global_position.distance_to(vein.global_position)
+		if distance <= nearest_distance:
+			nearest = vein
+			nearest_distance = distance
+	return nearest
 
 func _build_underground_mine() -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller):
@@ -529,7 +548,7 @@ func _toggle_mine_access() -> bool:
 			_refresh_hud()
 			return false
 		_last_mine_grid = mine_director.get_grid_coordinate(player.global_position)
-		_world_object_action_message = "Entered the underground mine. Follow open doorways; F mines nearby veins."
+		_world_object_action_message = "Entered the underground mine. F opens nearby caches or mines the closest vein."
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
@@ -541,15 +560,7 @@ func _interact_nearest_mineral(_now_unix: int = -1) -> Dictionary:
 		return {"ok": false, "action": "underground_only", "message": "Mineral veins can only be mined underground."}
 	if player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
 		return {"ok": false, "action": "unavailable", "message": "Underground mining is unavailable."}
-	var nearest: Node3D = null
-	var nearest_distance: float = MINE_INTERACTION_RANGE
-	for vein in chunk_controller.call("get_loaded_mineral_nodes"):
-		if not is_instance_valid(vein) or not bool(vein.get("visible")) or int(vein.get("remaining_units")) <= 0:
-			continue
-		var distance: float = player.global_position.distance_to(vein.global_position)
-		if distance <= nearest_distance:
-			nearest = vein
-			nearest_distance = distance
+	var nearest: Node3D = _get_nearest_mineable_vein()
 	if nearest == null:
 		_world_object_action_message = "No mineable vein within reach."
 		_refresh_hud()
@@ -672,7 +683,7 @@ func _refresh_hud() -> void:
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
 	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
 	if touch_buttons.has("crate"):
-		(touch_buttons["crate"] as Button).text = "MINE" if _is_underground else "CRATE"
+		(touch_buttons["crate"] as Button).text = "CACHE" if _is_underground else "CRATE"
 	if touch_buttons.has("shaft"):
 		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
 	if touch_buttons.has("crop"):
@@ -689,7 +700,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F mine · G shaft · 1-4 ration · C use"
+	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G shaft · 1-4 ration · C use"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),

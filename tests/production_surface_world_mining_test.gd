@@ -36,6 +36,13 @@ func _run() -> void:
 	world.player.global_position = Vector3(1.5, 2.0, 7.5)
 	_expect(bool(world.call("_toggle_mine_access")), "player can descend through the mine shaft")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "player enters the underground layer")
+	var underground_cache_count: int = 0
+	for prop in world.chunk_controller.get_loaded_world_state_nodes():
+		if is_instance_valid(prop) and prop.global_position.y < -7.0:
+			underground_cache_count += 1
+	_expect(underground_cache_count == 2, "origin mine room registers two stateful caches in the shared world-object controller")
+	var underground_buttons: Dictionary = world.get("touch_buttons")
+	_expect((underground_buttons["crate"] as Button).text == "CACHE", "underground touch action is relabeled for salvage caches")
 	var nearest: Node3D = _nearest_mine_vein()
 	_expect(nearest != null, "mine exposes a nearby vein")
 	if nearest == null:
@@ -51,6 +58,25 @@ func _run() -> void:
 	_expect(_inventory_count(item_id) == 1, "mined ore enters the shared surface-world inventory")
 	var saved_weight: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
 	_expect(saved_weight > weight_before, "mining immediately increases shared carry weight")
+	var gold_cache: Node3D = _find_mine_cache("MineCache_Gold")
+	_expect(gold_cache != null, "origin mine room contains a real stateful gold salvage cache")
+	if gold_cache == null:
+		_finish(1)
+		return
+	var cache_instance_id: int = gold_cache.get_instance_id()
+	var cache_item_id: String = str(gold_cache.get("loot_item_id"))
+	_expect(cache_item_id == "gold_ore" and int(gold_cache.get("loot_remaining")) == 2, "gold cache starts with its deterministic item identity and two units")
+	var cache_stable_id: String = MINE_ID + "/object/UndergroundMine_0_0/MineCache_Gold"
+	world.player.global_position = gold_cache.global_position + Vector3(0.0, 1.0, 0.0)
+	var cache_result: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
+	_expect(bool(cache_result.get("ok", false)) and str(cache_result.get("item_id", "")) == "gold_ore", "F interaction selects a nearer underground cache over a more distant vein")
+	_expect(int(cache_result.get("remaining", -1)) == 1 and _inventory_count("gold_ore") == 1, "cache transaction grants exactly one gold ore and leaves one unit")
+	var cache_save: Dictionary = world.call("serialize_stream_state")
+	var cache_records: Dictionary = cache_save.get("world_objects", {}).get("objects", {})
+	var cache_record: Dictionary = cache_records.get(cache_stable_id, {})
+	var cache_saved_state: Dictionary = cache_record.get("state", {})
+	_expect(not cache_record.is_empty() and str(cache_record.get("chunk_id", "")) == MINE_ID, "world save includes the underground cache stable ID and chunk ownership")
+	_expect(int(cache_saved_state.get("loot_remaining", -1)) == 1 and str(cache_saved_state.get("loot_item_id", "")) == "gold_ore", "world save captures the cache's remaining stock and item identity")
 	var away_position := Vector3(21.5, -8.25, 7.5)
 	world.player.global_position = away_position
 	await physics_frame
@@ -66,6 +92,12 @@ func _run() -> void:
 	await physics_frame
 	await process_frame
 	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "returning through the mine tunnels reloads the origin room")
+	var reloaded_cache: Node3D = _find_mine_cache("MineCache_Gold")
+	_expect(reloaded_cache != null and reloaded_cache.get_instance_id() != cache_instance_id, "reloaded mine cache is a new scene instance")
+	_expect(reloaded_cache != null and int(reloaded_cache.get("loot_remaining")) == 1 and str(reloaded_cache.get("loot_item_id")) == "gold_ore", "underground cache state survives chunk unload and reload")
+	var persisted_cache_record: Dictionary = world.object_state_registry.call("get_object_state", cache_stable_id)
+	_expect(int(persisted_cache_record.get("state", {}).get("loot_remaining", -1)) == 1, "underground cache remains in the shared object-state registry after reload")
+	_expect(_inventory_count("gold_ore") == 1, "mine cache reload does not duplicate the collected gold")
 	var reloaded_nearest: Node3D = _nearest_mine_vein()
 	_expect(reloaded_nearest != null and str(reloaded_nearest.get("mineral_id")) == item_id and int(reloaded_nearest.get("remaining_units")) == stock_before - 1, "mined mineral identity and stock survive director unload/reload")
 	_expect(_inventory_count(item_id) == 1, "mine window reload does not duplicate inventory")
@@ -99,6 +131,12 @@ func _nearest_mine_vein() -> Node3D:
 			nearest = vein
 			distance_limit = distance
 	return nearest
+
+func _find_mine_cache(node_name: String) -> Node3D:
+	for prop in world.chunk_controller.get_loaded_world_state_nodes():
+		if is_instance_valid(prop) and prop.name == node_name and prop.global_position.y < -7.0:
+			return prop
+	return null
 
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")

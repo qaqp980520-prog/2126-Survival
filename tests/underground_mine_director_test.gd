@@ -4,12 +4,14 @@ const Registry = preload("res://systems/MineralVeinRegistry.gd")
 const Controller = preload("res://systems/MineralChunkController.gd")
 const Director = preload("res://systems/UndergroundMineDirector.gd")
 const Factory = preload("res://systems/UndergroundMineFactory.gd")
+const ObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 
 var failures: Array[String] = []
 var fail_coordinate: Vector2i = Vector2i(999, 999)
 var registry: Node
 var controller: Node3D
 var director: Node
+var object_registry: Node
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -18,17 +20,21 @@ func _run() -> void:
 	registry = Registry.new()
 	controller = Controller.new()
 	director = Director.new()
+	object_registry = ObjectRegistryScript.new()
 	root.add_child(registry)
+	root.add_child(object_registry)
 	root.add_child(controller)
 	root.add_child(director)
 	await process_frame
-	_expect(bool(controller.call("bind_registry", registry)), "mineral chunk controller binds the registry")
+	_expect(bool(controller.call("bind_registry", registry)), "mineral chunk controller binds the mineral registry")
+	_expect(bool(controller.call("bind_object_state_registry", object_registry)), "mineral chunk controller binds the shared world-object registry")
 	_expect(bool(director.call("bind_controller", controller)), "underground director binds the shared chunk controller")
 	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "underground director accepts a deterministic factory")
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -8.25, 7.5), 1000)), "initial underground window loads")
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "initial mine window contains nine chunks")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_0_0"), "origin mine chunk is loaded")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_-1_-1"), "negative-coordinate mine chunk is loaded")
+	_expect(controller.call("get_loaded_world_state_nodes").size() == 2, "origin mine room registers its two stateful salvage caches")
 	var center: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
 	var east: Node3D = controller.call("get_chunk_root", "underground/mine_1_0")
 	var vein: Node3D = null
@@ -98,6 +104,8 @@ func _finish(exit_code: int) -> void:
 		controller.queue_free()
 	if is_instance_valid(registry):
 		registry.queue_free()
+	if is_instance_valid(object_registry):
+		object_registry.queue_free()
 	await process_frame
 	if exit_code == 0 and failures.is_empty():
 		print("Underground mine director tests passed.")
