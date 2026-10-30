@@ -141,7 +141,8 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 		root.add_child(vein)
 
 	for cache_data in get_cache_spawn_data(coord):
-		if not _add_salvage_cache(root, str(cache_data.get("node_name", "")), str(cache_data.get("item_id", "")), cache_data.get("position", Vector3.ZERO)):
+		var cache_position: Vector3 = cache_data.get("position", Vector3.ZERO)
+		if not _add_salvage_cache(root, str(cache_data.get("node_name", "")), str(cache_data.get("item_id", "")), cache_position):
 			root.free()
 			return null
 	return root
