@@ -2,6 +2,7 @@ extends SceneTree
 
 const Factory = preload("res://systems/UndergroundMineFactory.gd")
 const MineralCatalog = preload("res://systems/MineralCatalog.gd")
+const VEIN_POSITIONS: Array[Vector3] = [Vector3(2.5, -8.0, 6.0), Vector3(6.5, -8.0, 6.0), Vector3(6.5, -8.0, 2.5)]
 
 var failures: Array[String] = []
 
@@ -39,6 +40,10 @@ func _run() -> void:
 				_expect(MineralCatalog.has_mineral(item_id), "cache item belongs to the mineral catalog")
 				_expect(node_name.begins_with("MineCache_"), "cache node has a stable MineCache name")
 				_expect(position_value is Vector3, "cache placement is a local Vector3")
+				if position_value is Vector3:
+					var cache_position: Vector3 = position_value
+					for vein_position in VEIN_POSITIONS:
+						_expect(cache_position.distance_to(vein_position) > 1.5, "cache placement does not overlap a mineral vein")
 				if coord != Vector2i.ZERO:
 					_expect(table_id == _expected_table_id(coord), "room uses the correct regional loot table")
 					all_items[item_id] = true
