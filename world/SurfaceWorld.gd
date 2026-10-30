@@ -2,6 +2,13 @@ extends "res://scripts/world.gd"
 
 const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
+const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFactory.gd")
+const MINE_CHUNK_ID: String = "underground/mine_0_0"
+const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
+const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
+const MINE_ENTRY_UNDERGROUND: Vector3 = Vector3(1.5, -8.25, 7.5)
+const MINE_ACCESS_RANGE: float = 2.75
+const MINE_INTERACTION_RANGE: float = 3.5
 var camera: Camera3D
 var hud: Label
 var touch_buttons: Dictionary = {}
@@ -13,6 +20,9 @@ var _mouse_look_active: bool = false
 var _jump_was_down: bool = false
 var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
 var _world_object_action_message: String = "F / CRATE: recover nearby salvage."
+var _is_underground: bool = false
+var _mine_chunk_ready: bool = false
+var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -22,6 +32,9 @@ func _ready() -> void:
 	_build_hud()
 	if not _sync_streaming(int(Time.get_unix_time_from_system())):
 		push_error("Surface world could not create its initial chunk window.")
+	if not _build_underground_mine():
+		push_error("Surface world could not register its underground mine chunk.")
+	_build_mine_entrance_visual()
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -102,6 +115,7 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "jump", "JUMP")
 	_add_touch_button(grid, "crop", "CROP")
 	_add_touch_button(grid, "crate", "CRATE")
+	_add_touch_button(grid, "shaft", "DESCEND")
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -123,12 +137,17 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_on_touch_crop_pressed)
 		"crate":
 			button.pressed.connect(_on_touch_crate_pressed)
+		"shaft":
+			button.pressed.connect(_on_touch_shaft_pressed)
 
 func _on_touch_crop_pressed() -> void:
 	_interact_nearest_crop_plot()
 
 func _on_touch_crate_pressed() -> void:
 	_interact_nearest_world_prop()
+
+func _on_touch_shaft_pressed() -> void:
+	_toggle_mine_access()
 
 func _set_touch_direction(direction: String) -> void:
 	_touch_directions[direction] = true
@@ -188,6 +207,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_interact_nearest_crop_plot()
 			elif key_event.keycode == KEY_F:
 				_interact_nearest_world_prop()
+			elif key_event.keycode == KEY_G:
+				_toggle_mine_access()
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -228,6 +249,8 @@ func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null:
 		return {"ok": false, "action": "unavailable", "message": "World-object interaction is unavailable."}
+	if _is_underground:
+		return _interact_nearest_mineral(now_unix)
 	var nearest: Node3D = null
 	var nearest_distance: float = 3.25
 	for prop in chunk_controller.get_loaded_world_state_nodes():
@@ -260,6 +283,156 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	_refresh_hud()
 	return result
 
+func _build_underground_mine() -> bool:
+	if chunk_controller == null or not is_instance_valid(chunk_controller):
+		return false
+	if chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
+		_mine_chunk_ready = true
+		return true
+	var now: int = _stream_clock_unix if _stream_clock_unix > 0 else int(Time.get_unix_time_from_system())
+	var mine_root: Node3D = UndergroundMineFactoryScript.make_chunk(now)
+	if mine_root == null:
+		return false
+	if not chunk_controller.load_chunk(MINE_CHUNK_ID, mine_root, now):
+		mine_root.free()
+		return false
+	_mine_chunk_ready = true
+	return true
+
+func _build_mine_entrance_visual() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var marker := Node3D.new()
+	marker.name = "KrollMineShaftEntrance"
+	marker.position = MINE_ENTRY_SURFACE
+	add_child(marker)
+	var hatch := MeshInstance3D.new()
+	hatch.name = "ShaftHatch"
+	var hatch_mesh := BoxMesh.new()
+	hatch_mesh.size = Vector3(2.2, 0.12, 2.2)
+	hatch.mesh = hatch_mesh
+	hatch.position.y = 0.06
+	var hatch_material := StandardMaterial3D.new()
+	hatch_material.albedo_color = Color(0.12, 0.28, 0.34)
+	hatch_material.metallic = 0.72
+	hatch_material.emission_enabled = true
+	hatch_material.emission = Color(0.04, 0.42, 0.56)
+	hatch_material.emission_energy_multiplier = 0.7
+	hatch.material_override = hatch_material
+	marker.add_child(hatch)
+	for offset in [Vector3(-1.0, 0.72, -1.0), Vector3(1.0, 0.72, -1.0), Vector3(-1.0, 0.72, 1.0), Vector3(1.0, 0.72, 1.0)]:
+		var post := MeshInstance3D.new()
+		var post_mesh := BoxMesh.new()
+		post_mesh.size = Vector3(0.14, 1.44, 0.14)
+		post.mesh = post_mesh
+		post.position = offset
+		post.material_override = hatch_material
+		marker.add_child(post)
+	var sign := Label3D.new()
+	sign.text = "KROLL MINE SHAFT  [G]"
+	sign.position = Vector3(0.0, 1.8, 0.0)
+	sign.font_size = 32
+	sign.modulate = Color(0.55, 0.92, 1.0)
+	marker.add_child(sign)
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3(0.0, 1.25, 0.0)
+	lamp.light_color = Color(0.18, 0.72, 1.0)
+	lamp.light_energy = 1.1
+	lamp.omni_range = 7.0
+	lamp.shadow_enabled = false
+	marker.add_child(lamp)
+
+func _toggle_mine_access() -> bool:
+	if player == null or not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
+		_world_object_action_message = "Mine shaft is unavailable."
+		_refresh_hud()
+		return false
+	var horizontal_distance := Vector2(
+		player.global_position.x - MINE_ENTRY_SURFACE.x,
+		player.global_position.z - MINE_ENTRY_SURFACE.z
+	).length()
+	if horizontal_distance > MINE_ACCESS_RANGE:
+		_world_object_action_message = "Move closer to the KROLL mine shaft to use G."
+		_refresh_hud()
+		return false
+	if _is_underground:
+		_is_underground = false
+		player.global_position = _surface_return_position
+		_world_object_action_message = "Returned to the surface."
+	else:
+		_surface_return_position = player.global_position
+		_is_underground = true
+		player.global_position = MINE_ENTRY_UNDERGROUND
+		_world_object_action_message = "Entered the underground mine. F mines nearby veins."
+	player.velocity = Vector3.ZERO
+	_jump_was_down = false
+	_refresh_hud()
+	return true
+
+func _interact_nearest_mineral(_now_unix: int = -1) -> Dictionary:
+	if not _is_underground:
+		return {"ok": false, "action": "underground_only", "message": "Mineral veins can only be mined underground."}
+	if player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
+		return {"ok": false, "action": "unavailable", "message": "Underground mining is unavailable."}
+	var nearest: Node3D = null
+	var nearest_distance: float = MINE_INTERACTION_RANGE
+	for vein in chunk_controller.call("get_loaded_mineral_nodes"):
+		if not is_instance_valid(vein) or not bool(vein.get("visible")) or int(vein.get("remaining_units")) <= 0:
+			continue
+		var distance: float = player.global_position.distance_to(vein.global_position)
+		if distance <= nearest_distance:
+			nearest = vein
+			nearest_distance = distance
+	if nearest == null:
+		_world_object_action_message = "No mineable vein within reach."
+		_refresh_hud()
+		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
+	var accepted: int = int(nearest.call("mine_hit", Vector3.ZERO))
+	var item_id: String = str(nearest.get("mineral_id"))
+	var mineral_data: Dictionary = MineralCatalogScript.get_mineral(item_id)
+	var display_name: String = str(mineral_data.get("display_name", item_id))
+	if accepted > 0:
+		_world_object_action_message = "Mined %d %s; %d units remain." % [accepted, display_name, int(nearest.get("remaining_units"))]
+	else:
+		_world_object_action_message = "Mining rejected: inventory full or vein depleted."
+	_refresh_hud()
+	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
+
+func serialize_stream_state() -> Dictionary:
+	var payload: Dictionary = super.serialize_stream_state()
+	if payload.is_empty():
+		return {}
+	payload["location_layer"] = "underground" if _is_underground else "surface"
+	payload["surface_return_position"] = [
+		_surface_return_position.x,
+		_surface_return_position.y,
+		_surface_return_position.z
+	]
+	return payload
+
+func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	var layer_value: Variant = payload.get("location_layer", "surface")
+	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
+		return false
+	var target_underground: bool = str(layer_value) == "underground"
+	if target_underground and (not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)):
+		return false
+	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
+	if payload.has("surface_return_position"):
+		var return_value: Variant = payload.get("surface_return_position")
+		if not (return_value is Array) or return_value.size() != 3:
+			return false
+		for component in return_value:
+			if not (component is int or component is float) or not is_finite(float(component)):
+				return false
+		next_return_position = Vector3(float(return_value[0]), float(return_value[1]), float(return_value[2]))
+	if not super.restore_stream_state(payload, now_unix):
+		return false
+	_is_underground = target_underground
+	_surface_return_position = next_return_position
+	_refresh_hud()
+	return true
+
 func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
@@ -272,8 +445,16 @@ func _refresh_hud() -> void:
 	var inventory_summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null else {}
 	var weight := float(inventory_summary.get("weight_kg", 0.0))
 	var limit := float(inventory_summary.get("limit_kg", 65.0))
-	hud.text = "2126 SURVIVAL // SURFACE WORLD\nWASD move · SPACE jump · RMB look · E crop · F crate · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg\n%s\n%s" % [
-		grid_text, active_count, int(status.get("saved_vein_count", 0)),
+	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
+	if touch_buttons.has("crate"):
+		(touch_buttons["crate"] as Button).text = "MINE" if _is_underground else "CRATE"
+	if touch_buttons.has("shaft"):
+		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
+	if touch_buttons.has("crop"):
+		(touch_buttons["crop"] as Button).disabled = _is_underground
+	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg\n%s\n%s" % [
+		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
 		weight, limit, _crop_action_message, _world_object_action_message
 	]
