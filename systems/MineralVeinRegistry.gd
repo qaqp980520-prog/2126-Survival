@@ -126,6 +126,24 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 		_saved_records[key] = _veins[key].to_save_dict()
 	return true
 
+## Restore a transaction snapshot exactly, without offline regeneration or clock advancement.
+## Use only for rolling back an in-flight chunk transaction; normal world loads use restore_save_dict().
+func restore_snapshot_exact(data: Dictionary, now_unix: int = -1) -> bool:
+	var prepared := _prepare_restore(data, now_unix)
+	if not bool(prepared.get("ok", false)):
+		return false
+	var next_records: Dictionary = prepared["records"]
+	var now: int = int(prepared["now"])
+	for key in get_registered_ids():
+		if next_records.has(key):
+			var record: Dictionary = next_records[key]
+			if not _veins[key].load_save_dict(record, now, false):
+				return false
+	_saved_records = next_records
+	for key in get_registered_ids():
+		_saved_records[key] = _veins[key].to_save_dict()
+	return true
+
 func _prepare_restore(data: Dictionary, now_unix: int = -1) -> Dictionary:
 	var schema: Variant = data.get("schema_version", null)
 	var records: Variant = data.get("veins", null)
