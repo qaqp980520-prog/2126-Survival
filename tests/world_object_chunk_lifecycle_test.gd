@@ -81,7 +81,7 @@ func _run() -> void:
 		return
 	_expect(restored_crate.get_instance_id() != original_instance_id, "reloaded crate is a new node instance")
 	_expect(bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "reloaded crate restores its saved opened and remaining state")
-	_expect(str(restored_crate.get("loot_item_id", "")) == item_id, "reloaded crate restores its saved item identity")
+	_expect(str(restored_crate.get("loot_item_id")) == item_id, "reloaded crate restores its saved item identity")
 	_expect(_inventory_count(item_id) == 1, "chunk reload does not duplicate the previously collected item")
 
 	var second_result: Dictionary = playground.call("_interact_nearest_world_prop")
@@ -92,7 +92,7 @@ func _run() -> void:
 	var save_restored_root: Node3D = playground.chunk_controller.get_chunk_root(ORIGIN_CHUNK_ID)
 	var save_restored_crate: Node = save_restored_root.get_node_or_null("SalvageCrate") if save_restored_root != null else null
 	_expect(save_restored_crate != null and bool(save_restored_crate.get("opened")) and int(save_restored_crate.get("loot_remaining")) == 1, "full world restore reapplies the earlier crate state to the live node")
-	_expect(save_restored_crate != null and str(save_restored_crate.get("loot_item_id", "")) == item_id, "full world restore retains the crate item identity")
+	_expect(save_restored_crate != null and str(save_restored_crate.get("loot_item_id")) == item_id, "full world restore retains the crate item identity")
 	_expect(_inventory_count(item_id) == 1, "full world restore rolls inventory back to the matching saved count")
 
 	var final_result: Dictionary = playground.call("_interact_nearest_world_prop")
