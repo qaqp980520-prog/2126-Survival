@@ -170,6 +170,9 @@ func _select_container(index: int) -> void:
 func _select_field(field: String) -> void:
 	if not Rules.FIELDS.has(field):
 		return
+	var certified_field: String = str(Rules.get_case(case_index).get("certified_field", ""))
+	if field == certified_field:
+		return
 	selected_field = field
 	_refresh_ui()
 
@@ -199,7 +202,12 @@ func _submit_suspect() -> Dictionary:
 func _reset_case() -> void:
 	state = Rules.create_state()
 	selected_container = 0
+	var certified_field: String = str(Rules.get_case(case_index).get("certified_field", ""))
 	selected_field = "mass"
+	for field in Rules.FIELDS:
+		if field != certified_field:
+			selected_field = field
+			break
 	scan_history.clear()
 	_refresh_ui()
 
@@ -233,7 +241,7 @@ func _refresh_ui() -> void:
 		button.text = field.to_upper() + ("  // CERTIFIED" if field == certified_field else "")
 		button.disabled = field == certified_field or str(state.get("status", "")) != "investigating"
 	var scan_button: Button = touch_buttons["scan"] as Button
-	scan_button.disabled = str(state.get("status", "")) != "investigating" or int(state.get("scans_left", 0)) <= 0
+	scan_button.disabled = str(state.get("status", "")) != "investigating" or int(state.get("scans_left", 0)) <= 0 or selected_field == certified_field
 	(touch_buttons["submit"] as Button).disabled = str(state.get("status", "")) != "investigating"
 	(touch_buttons["reset"] as Button).disabled = false
 	(touch_buttons["next"] as Button).disabled = str(state.get("status", "")) == "investigating"
