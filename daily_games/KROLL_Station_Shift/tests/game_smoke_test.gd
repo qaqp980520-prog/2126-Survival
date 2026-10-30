@@ -38,7 +38,7 @@ func _run() -> void:
 		_expect(int(state.get("round", -1)) == 0, "restart button resets the current scenario")
 	if next_button != null:
 		next_button.pressed.emit()
-		_expect(int(game.get("scenario_index", -1)) == 1, "next-scenario button selects the next authored scenario")
+		_expect(int(game.get("scenario_index")) == 1, "next-scenario button selects the next authored scenario")
 	await _finish(game)
 
 func _expect(condition: bool, message: String) -> void:
