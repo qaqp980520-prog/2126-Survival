@@ -31,8 +31,12 @@ func _run() -> void:
 	_expect(controller.call("is_chunk_loaded", "underground/mine_-1_-1"), "negative-coordinate mine chunk is loaded")
 	var center: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
 	var east: Node3D = controller.call("get_chunk_root", "underground/mine_1_0")
-	var vein: Node3D = center.get_node_or_null("Vein_0") as Node3D if center != null else null
-	var east_vein: Node3D = east.get_node_or_null("Vein_0") as Node3D if east != null else null
+	var vein: Node3D = null
+	var east_vein: Node3D = null
+	if center != null:
+		vein = center.get_node_or_null("Vein_0") as Node3D
+	if east != null:
+		east_vein = east.get_node_or_null("Vein_0") as Node3D
 	_expect(vein != null, "origin chunk contains a stable mineral node")
 	_expect(east_vein != null and vein != null and str(east_vein.get("mineral_id")) != str(vein.get("mineral_id")), "mineral identity varies deterministically by room coordinate")
 	if center != null and east != null:
@@ -50,7 +54,9 @@ func _run() -> void:
 	_expect(bool(controller.call("is_chunk_loaded", "underground/mine_2_0")), "new east mine chunk loads")
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -8.25, 7.5), 1002)), "returning to the origin reloads its stable chunk")
 	var restored: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
-	var restored_vein: Node3D = restored.get_node_or_null("Vein_0") as Node3D if restored != null else null
+	var restored_vein: Node3D = null
+	if restored != null:
+		restored_vein = restored.get_node_or_null("Vein_0") as Node3D
 	_expect(restored_vein != null and int(restored_vein.get("remaining_units")) == 5, "mineral stock survives a real director unload/reload")
 	var previous_ids: PackedStringArray = director.call("get_managed_chunk_ids")
 	var previous_saved_ids: PackedStringArray = registry.call("get_saved_ids")
@@ -62,7 +68,9 @@ func _run() -> void:
 	_expect(director.call("get_managed_chunk_ids") == previous_ids, "failed sync restores the previous managed ID set")
 	_expect(bool(controller.call("is_chunk_loaded", "underground/mine_0_0")), "failed sync preserves the old origin chunk")
 	var rollback_root: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
-	var rollback_vein: Node3D = rollback_root.get_node_or_null("Vein_0") as Node3D if rollback_root != null else null
+	var rollback_vein: Node3D = null
+	if rollback_root != null:
+		rollback_vein = rollback_root.get_node_or_null("Vein_0") as Node3D
 	_expect(rollback_vein != null and int(rollback_vein.get("last_regen_unix")) == previous_regen_timestamp, "failed sync restores the exact mineral regeneration clock")
 	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_2_-1")), "failed sync rolls back a partial new load")
 	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_3_-1")), "failed factory chunk is never registered")
