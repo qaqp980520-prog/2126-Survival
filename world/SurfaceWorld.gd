@@ -450,6 +450,8 @@ func _refresh_hud() -> void:
 		(touch_buttons["crate"] as Button).text = "MINE" if _is_underground else "CRATE"
 	if touch_buttons.has("shaft"):
 		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
+	if touch_buttons.has("crop"):
+		(touch_buttons["crop"] as Button).disabled = _is_underground
 	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),

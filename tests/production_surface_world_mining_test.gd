@@ -42,11 +42,14 @@ func _run() -> void:
 		return
 	var item_id: String = str(nearest.get("mineral_id"))
 	var stock_before: int = int(nearest.get("remaining_units"))
-	var first_mine: Dictionary = world.call("_interact_nearest_mineral")
-	_expect(bool(first_mine.get("ok", false)) and int(first_mine.get("amount", 0)) == 1, "F-equivalent mine action grants one ore")
+	var now: int = int(Time.get_unix_time_from_system())
+	var weight_before: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
+	var first_mine: Dictionary = world.call("_interact_nearest_world_prop", now)
+	_expect(bool(first_mine.get("ok", false)) and int(first_mine.get("amount", 0)) == 1, "F interaction routes to underground mining and grants one ore")
 	_expect(int(nearest.get("remaining_units")) == stock_before - 1, "successful mining consumes exactly one vein unit")
 	_expect(_inventory_count(item_id) == 1, "mined ore enters the shared surface-world inventory")
-	var now: int = int(Time.get_unix_time_from_system())
+	var saved_weight: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
+	_expect(saved_weight > weight_before, "mining immediately increases shared carry weight")
 	_expect(bool(world.chunk_controller.call("unload_chunk", MINE_ID, now + 1)), "underground mine chunk unloads through the shared lifecycle controller")
 	await process_frame
 	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "mine chunk node is removed after unload")
@@ -72,6 +75,7 @@ func _run() -> void:
 	_expect(not bool(world.get("_is_underground")) and world.player.global_position.y > 0.0, "legacy save defaults to the surface layer")
 	var buttons: Dictionary = world.get("touch_buttons")
 	_expect(buttons.has("shaft") and buttons.has("crate"), "touch HUD exposes shaft and mining action buttons")
+	_expect((buttons["crate"] as Button).text == "CRATE" and not (buttons["crop"] as Button).disabled, "surface HUD restores crate and crop controls")
 	_finish(0 if failures.is_empty() else 1)
 
 func _nearest_mine_vein() -> Node3D:
