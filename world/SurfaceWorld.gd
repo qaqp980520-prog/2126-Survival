@@ -3,6 +3,7 @@ extends "res://scripts/world.gd"
 const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFactory.gd")
+const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -22,6 +23,8 @@ var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
 var _world_object_action_message: String = "F / CRATE: recover nearby salvage."
 var _is_underground: bool = false
 var _mine_chunk_ready: bool = false
+var mine_director: Node
+var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
 var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 
 func _ready() -> void:
@@ -189,10 +192,21 @@ func _physics_process(delta: float) -> void:
 	if jump_down and not _jump_was_down and player.is_on_floor():
 		player.velocity.y = 7.0
 	_jump_was_down = jump_down
+	var previous_position: Vector3 = player.global_position
 	player.move_and_slide()
-	var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
-	if current_grid != _last_grid:
-		_sync_streaming(int(Time.get_unix_time_from_system()))
+	if _is_underground:
+		var current_mine_grid: Vector2i = mine_director.get_grid_coordinate(player.global_position)
+		if current_mine_grid != _last_mine_grid:
+			if mine_director.sync_to_world_position(player.global_position, int(Time.get_unix_time_from_system())):
+				_last_mine_grid = current_mine_grid
+			else:
+				player.global_position = previous_position
+				player.velocity = Vector3.ZERO
+				_world_object_action_message = "Underground streaming failed; movement was rolled back."
+	else:
+		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
+		if current_grid != _last_grid:
+			_sync_streaming(int(Time.get_unix_time_from_system()))
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -286,18 +300,23 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 func _build_underground_mine() -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller):
 		return false
-	if chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
-		_mine_chunk_ready = true
-		return true
+	if mine_director == null:
+		mine_director = UndergroundMineDirectorScript.new()
+		mine_director.name = "UndergroundMineDirector"
+		add_child(mine_director)
+		if not mine_director.bind_controller(chunk_controller):
+			return false
+		if not mine_director.bind_chunk_factory(Callable(self, "_make_underground_chunk")):
+			return false
 	var now: int = _stream_clock_unix if _stream_clock_unix > 0 else int(Time.get_unix_time_from_system())
-	var mine_root: Node3D = UndergroundMineFactoryScript.make_chunk(now)
-	if mine_root == null:
+	if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
 		return false
-	if not chunk_controller.load_chunk(MINE_CHUNK_ID, mine_root, now):
-		mine_root.free()
-		return false
-	_mine_chunk_ready = true
-	return true
+	_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
+	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+	return _mine_chunk_ready
+
+func _make_underground_chunk(coord: Vector2i, now_unix: int) -> Node3D:
+	return UndergroundMineFactoryScript.make_chunk(now_unix, coord)
 
 func _build_mine_entrance_visual() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -343,7 +362,7 @@ func _build_mine_entrance_visual() -> void:
 	marker.add_child(lamp)
 
 func _toggle_mine_access() -> bool:
-	if player == null or not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
+	if player == null or mine_director == null:
 		_world_object_action_message = "Mine shaft is unavailable."
 		_refresh_hud()
 		return false
@@ -352,18 +371,45 @@ func _toggle_mine_access() -> bool:
 		player.global_position.z - MINE_ENTRY_SURFACE.z
 	).length()
 	if horizontal_distance > MINE_ACCESS_RANGE:
-		_world_object_action_message = "Move closer to the KROLL mine shaft to use G."
+		_world_object_action_message = "Return to the KROLL mine shaft before changing layers."
 		_refresh_hud()
 		return false
+	var now: int = int(Time.get_unix_time_from_system())
 	if _is_underground:
+		var previous_underground_position: Vector3 = player.global_position
+		if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
+			_world_object_action_message = "Could not restore the mine-shaft area."
+			_refresh_hud()
+			return false
 		_is_underground = false
 		player.global_position = _surface_return_position
+		if not _sync_streaming(now):
+			_is_underground = true
+			player.global_position = previous_underground_position
+			if not mine_director.sync_to_world_position(previous_underground_position, now):
+				push_error("Underground window rollback failed after surface return streaming rejection.")
+			_world_object_action_message = "Surface streaming failed; the layer transition was rolled back."
+			_refresh_hud()
+			return false
+		_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
 		_world_object_action_message = "Returned to the surface."
 	else:
+		if not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
+			_world_object_action_message = "Mine shaft is unavailable."
+			_refresh_hud()
+			return false
 		_surface_return_position = player.global_position
 		_is_underground = true
 		player.global_position = MINE_ENTRY_UNDERGROUND
-		_world_object_action_message = "Entered the underground mine. F mines nearby veins."
+		if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
+			_is_underground = false
+			player.global_position = _surface_return_position
+			_world_object_action_message = "Could not load the underground mine window."
+			_refresh_hud()
+			return false
+		_last_mine_grid = mine_director.get_grid_coordinate(player.global_position)
+		_world_object_action_message = "Entered the underground mine. Follow open doorways; F mines nearby veins."
+	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
 	_refresh_hud()
@@ -414,9 +460,14 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var layer_value: Variant = payload.get("location_layer", "surface")
 	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
 		return false
-	var target_underground: bool = str(layer_value) == "underground"
-	if target_underground and (not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)):
+	var position_value: Variant = payload.get("player_position", null)
+	if not (position_value is Array) or position_value.size() != 3:
 		return false
+	for component in position_value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return false
+	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
+	var target_underground: bool = str(layer_value) == "underground"
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
 		var return_value: Variant = payload.get("surface_return_position")
@@ -426,10 +477,23 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			if not (component is int or component is float) or not is_finite(float(component)):
 				return false
 		next_return_position = Vector3(float(return_value[0]), float(return_value[1]), float(return_value[2]))
-	if not super.restore_stream_state(payload, now_unix):
+	if player == null or mine_director == null:
+		return false
+	var previous_position: Vector3 = player.global_position
+	var previous_underground: bool = _is_underground
+	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
+	if not mine_director.sync_to_world_position(mine_target, now):
+		return false
+	if not super.restore_stream_state(payload, now):
+		var rollback_target: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
+		if not mine_director.sync_to_world_position(rollback_target, now):
+			push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	_is_underground = target_underground
 	_surface_return_position = next_return_position
+	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
+	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	_refresh_hud()
 	return true
 
@@ -441,7 +505,7 @@ func _refresh_hud() -> void:
 		return
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
-	var grid_text := str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a"
+	var grid_text := str(mine_director.get_grid_coordinate(player.global_position)) if _is_underground and mine_director != null and player != null else (str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a")
 	var inventory_summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null else {}
 	var weight := float(inventory_summary.get("weight_kg", 0.0))
 	var limit := float(inventory_summary.get("limit_kg", 65.0))

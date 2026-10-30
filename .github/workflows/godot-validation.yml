@@ -1678,3 +1678,43 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface underground mining tests passed."
 
+      - name: Run Run 53 underground mine director tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 40s godot --headless --path . --script res://tests/underground_mine_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Underground mine director tests passed."
+
+      - name: Verify Run 53 KROLL Orbital Docking inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/UndergroundMineDirector.gd
+          test -f tests/underground_mine_director_test.gd
+          test -f daily_games/KROLL_Orbital_Docking/project.godot
+          test -f daily_games/KROLL_Orbital_Docking/main.tscn
+          test -f daily_games/KROLL_Orbital_Docking/main.gd
+          test -f daily_games/KROLL_Orbital_Docking/rules.gd
+          test -f daily_games/KROLL_Orbital_Docking/tests/rules_test.gd
+          test -f daily_games/KROLL_Orbital_Docking/tests/game_smoke_test.gd
+      - name: Import and parse KROLL Orbital Docking
+        run: godot --headless --path daily_games/KROLL_Orbital_Docking --editor --quit
+      - name: Run KROLL Orbital Docking rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Docking --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Docking rules tests passed."
+      - name: Run KROLL Orbital Docking runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Docking --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Docking runtime smoke test passed."
+
