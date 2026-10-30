@@ -238,7 +238,7 @@ func _refresh_ui() -> void:
 		container_buttons[index].disabled = str(state.get("status", "")) != "investigating"
 	for field in Rules.FIELDS:
 		var button: Button = field_buttons[field]
-		button.text = field.to_upper() + ("  // CERTIFIED" if field == certified_field else "")
+		button.text = ("▶ " if selected_field == field else "") + field.to_upper() + ("  // CERTIFIED" if field == certified_field else "")
 		button.disabled = field == certified_field or str(state.get("status", "")) != "investigating"
 	var scan_button: Button = touch_buttons["scan"] as Button
 	scan_button.disabled = str(state.get("status", "")) != "investigating" or int(state.get("scans_left", 0)) <= 0 or selected_field == certified_field
