@@ -12,6 +12,7 @@ func _run() -> void:
 	var manifest: Dictionary = Rules.get_case(0)
 	var manifest_containers: Array = manifest.get("containers", [])
 	_expect(not manifest_containers.is_empty() and not manifest_containers[0].has("actual_mass"), "player-facing manifest never exposes hidden sensor readings")
+	_expect(not manifest.has("anomaly_container") and not manifest.has("anomaly_field"), "player-facing case projection hides the answer metadata")
 
 	var state: Dictionary = Rules.create_state()
 	_expect(int(state.get("scans_left", -1)) == 8 and int(state.get("attempts_left", -1)) == 2, "case starts with eight scans and two accusations")
