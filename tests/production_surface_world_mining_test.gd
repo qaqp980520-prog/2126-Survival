@@ -53,7 +53,7 @@ func _run() -> void:
 	_expect(saved_weight > weight_before, "mining immediately increases shared carry weight")
 	var away_position := Vector3(21.5, -8.25, 7.5)
 	world.player.global_position = away_position
-	world.call("_physics_process", 0.016)
+	await physics_frame
 	_expect(not bool(world.call("_toggle_mine_access")), "player cannot teleport back to the shaft from a distant mine room")
 	_expect(bool(mine_director.call("get_managed_chunk_ids").size() == 9), "underground physics keeps the managed window bounded")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_2_0"), "walking two mine cells east streams the eastern room")
@@ -63,7 +63,7 @@ func _run() -> void:
 	_expect(mine_director.get_managed_chunk_ids().size() == 9, "underground active window remains bounded to nine chunks")
 	var return_position := Vector3(1.5, -8.25, 7.5)
 	world.player.global_position = return_position
-	world.call("_physics_process", 0.016)
+	await physics_frame
 	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "returning through the mine tunnels reloads the origin room")
 	await process_frame
 	var reloaded_nearest: Node3D = _nearest_mine_vein()
