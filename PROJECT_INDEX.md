@@ -866,3 +866,37 @@
 - Salvage caches are currently placed only in `mine_0_0`; other underground rooms remain mineral-only.
 - Orbital Imager M0.1 uses fixed 2D maps, with no 3D orbital camera or campaign persistence.
 - No local Godot executable was available; GUI, GPU performance, and iPhone device testing are not claimed.
+
+
+## Run 59 — KROLL Cargo Audit M0.1 and Underground Cache Distribution M0.1 (2026-10-31)
+
+### New Godot 4 game: KROLL Cargo Audit
+- Project: `daily_games/KROLL_Cargo_Audit/`
+- Three authored manifest-investigation cases, four containers per case, three inspection fields (mass/seal/count), one certified field per case, eight-scan budget, two incorrect accusations, score and case progression.
+- The player-facing case projection removes both actual sensor readings and the hidden answer metadata. Rules tests validate exactly one discrepancy per case and the runtime smoke test exercises actual mouse/touch button signals and keyboard container/field selection.
+- Import with Godot 4.3+ via `daily_games/KROLL_Cargo_Audit/project.godot`. No external assets, audio, plugins or network dependencies.
+
+### Underground mine cache distribution
+- Updated `systems/UndergroundMineFactory.gd` with four directional weighted loot tables: west, east, north and south.
+- The origin service room keeps the existing `MineCache_Gold` and `MineCache_Coal` identities and contents. Non-origin rooms use a deterministic coordinate hash: one third remain cache-free; the remaining rooms receive at most one cache selected from the regional weighted table.
+- Cache node name, room chunk ID and scene path provide stable world-object identity. Caches continue using `WorldObjectStatefulProp`, `WorldObjectStateRegistry` and `MineralChunkController`; world save schema remains version 1.
+- The initial 3×3 mine window contains seven caches across six rooms: two origin service caches plus five regional caches.
+- Independent deterministic formula simulation over a 13×13 sample (excluding origin) yields 168 non-origin rooms: 112 spawned and 56 empty. The four directional tables are all exercised and all seven catalog minerals appear. This is a separate formula simulation, not a Godot engine test.
+
+### Regression coverage
+- `tests/underground_cache_distribution_test.gd`: verifies deterministic spawn decisions, exact two-thirds / one-third ratio, four table regions, all seven mineral IDs, unique stable IDs, initial-window density and cache/vein non-overlap.
+- `tests/underground_mine_director_test.gd`: verifies seven stateful caches in the initial nine-room window.
+- `tests/production_surface_world_test.gd`: verifies nine surface crates plus seven underground caches (16 world objects).
+- `tests/production_surface_world_mining_test.gd`: collects a regional coal cache through the shared inventory bridge, verifies catalog weight is applied immediately, then unloads/reloads the room and verifies stable identity, remaining stock and no duplicate inventory grant.
+- `.github/workflows/godot-validation.yml` adds Cargo Audit import/rules/runtime and underground cache distribution steps; existing production SurfaceWorld, mine director and mining lifecycle regressions also run.
+
+### Exact GitHub evidence
+- Feature PR [#154](https://github.com/qaqp980520-prog/2126-Survival/pull/154) merged as `63913a4cfea8da1af0e05242373a0a0d1226f455`.
+- Exact feature candidate HEAD `6394fe6c8c686ec91656c5a7bdefdc5555f4e4de` passed Godot 4.3 [Run #672](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41146228476): all 245 numbered validation steps and all setup/cleanup/completion step records succeeded (248/248), zero failures and zero skipped steps.
+- Current main at feature closeout: `63913a4cfea8da1af0e05242373a0a0d1226f455`.
+
+### Known limits
+- Cache selection is deterministic from room coordinates and fixed weighted tables; there is no saved world seed or data-driven editable loot-table resource yet.
+- Underground world remains a single elevation with synchronous chunk streaming. Vertical floors, ladders/elevators and asynchronous load/recovery remain pending.
+- Cargo Audit has three fixed cases only; no generated manifests, persistent campaign scores or multiplayer.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device testing are not claimed.
