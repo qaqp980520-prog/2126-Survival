@@ -30,7 +30,7 @@ const LAYOUTS: Array[Dictionary] = [
 		"name": "Basalt Channel",
 		"start": Vector2(62.0, 64.0),
 		"dock": Vector2(62.0, 64.0),
-		"beacons": [Vector2(175.0, 355.0), Vector2(360.0,  seventy), Vector2(560.0, 345.0)],
+		"beacons": [Vector2(175.0, 355.0), Vector2(360.0, 70.0), Vector2(560.0, 345.0)],
 		"hazards": [Vector2(265.0, 190.0), Vector2(470.0, 250.0)],
 		"currents": [
 			{"center": Vector2(185.0, 210.0), "radius": 105.0, "force": Vector2(54.0, 30.0)},
