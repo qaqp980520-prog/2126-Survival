@@ -2,6 +2,7 @@ extends RefCounted
 
 ## Deterministic 10m underground room factory. Adjacent rooms share aligned open doorways.
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = [
 	"iron_ore", "copper_ore", "gold_ore", "silver_ore",
@@ -47,7 +48,27 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 		vein.set("inventory_bridge_path", NodePath("../../../SurvivalWorldBridge"))
 		vein.position = positions[index]
 		root.add_child(vein)
+
+	# The origin room is the mine's initial service point. Its caches share the
+	# same chunk-scoped state registry as surface salvage crates.
+	if coord == Vector2i.ZERO:
+		if not _add_salvage_cache(root, "MineCache_Gold", "gold_ore", Vector3(8.2, -8.25, 8.0)):
+			root.free()
+			return null
+		if not _add_salvage_cache(root, "MineCache_Coal", "coal_ore", Vector3(8.2, -8.25, 2.0)):
+			root.free()
+			return null
 	return root
+
+static func _add_salvage_cache(parent: Node3D, node_name: String, item_id: String, position: Vector3) -> bool:
+	var cache: Node3D = StatefulPropScript.new()
+	cache.name = node_name
+	if not bool(cache.call("set_loot_item", item_id)):
+		cache.free()
+		return false
+	cache.position = position
+	parent.add_child(cache)
+	return true
 
 static func _add_wall_with_door(parent: Node3D, wall_name: String, origin: Vector3, vertical_wall: bool) -> void:
 	var first_center: Vector3

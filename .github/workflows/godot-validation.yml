@@ -1885,3 +1885,34 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld quick-use integration tests passed."
+
+      - name: Verify Run 58 Orbital Imager and underground salvage caches
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Orbital_Imager/project.godot
+          test -f daily_games/KROLL_Orbital_Imager/main.tscn
+          test -f daily_games/KROLL_Orbital_Imager/main.gd
+          test -f daily_games/KROLL_Orbital_Imager/rules.gd
+          test -f daily_games/KROLL_Orbital_Imager/tests/rules_test.gd
+          test -f daily_games/KROLL_Orbital_Imager/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_mining_test.gd
+          test -f systems/UndergroundMineFactory.gd
+      - name: Import and parse KROLL Orbital Imager
+        run: godot --headless --path daily_games/KROLL_Orbital_Imager --editor --quit
+      - name: Run KROLL Orbital Imager rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Imager --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Imager rules tests passed."
+      - name: Run KROLL Orbital Imager runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Imager --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Imager runtime smoke test passed."
