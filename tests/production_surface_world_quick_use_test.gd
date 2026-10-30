@@ -31,9 +31,10 @@ func _run() -> void:
 	stamina.set("current_stamina", 40.0)
 	await physics_frame
 	_expect(berry_button != null and not berry_button.disabled, "stamina deficit enables the stocked hotbar slot on the next HUD refresh")
+	var stamina_before_berry: float = float(stamina.get("current_stamina"))
 	var result: Dictionary = world.call("_consume_quick_slot", 0)
 	_expect(bool(result.get("ok", false)), "production quick-use action consumes the selected ration")
-	_expect(is_equal_approx(float(stamina.get("current_stamina")), 48.0), "production ration restores stamina")
+	_expect(is_equal_approx(float(stamina.get("current_stamina")), stamina_before_berry + 8.0), "production ration restores eight stamina above the live pre-use value")
 	var inventory: RefCounted = bridge.get("inventory") as RefCounted
 	_expect(int(inventory.get("counts").get("berries", 0)) == 1, "production use decrements the shared inventory exactly once")
 	_expect(berry_button != null and berry_button.text.contains("x1"), "consumption signal immediately refreshes the remaining berry count")
@@ -42,8 +43,9 @@ func _run() -> void:
 	stamina.set("current_stamina", 50.0)
 	await physics_frame
 	_expect(buttons.has("quick_2") and not (buttons["quick_2"] as Button).disabled, "inventory change and stamina refresh enable the herb touch slot")
+	var stamina_before_herb: float = float(stamina.get("current_stamina"))
 	(buttons["quick_2"] as Button).pressed.emit()
-	_expect(is_equal_approx(float(stamina.get("current_stamina")), 62.0), "touch quick-use button restores stamina through the real signal")
+	_expect(is_equal_approx(float(stamina.get("current_stamina")), stamina_before_herb + 12.0), "touch quick-use button restores twelve stamina through the real signal")
 	_expect(int(inventory.get("counts").get("herbs", 0)) == 0, "touch quick-use removes exactly one herb")
 
 	stamina.reset()
