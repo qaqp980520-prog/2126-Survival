@@ -1556,3 +1556,33 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World-object chunk lifecycle tests passed."
+
+      - name: Verify Run 50 Outpost Architect and legacy world-object rollback inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Outpost_Architect/project.godot
+          test -f daily_games/KROLL_Outpost_Architect/main.tscn
+          test -f daily_games/KROLL_Outpost_Architect/main.gd
+          test -f daily_games/KROLL_Outpost_Architect/rules.gd
+          test -f daily_games/KROLL_Outpost_Architect/tests/rules_test.gd
+          test -f daily_games/KROLL_Outpost_Architect/tests/game_smoke_test.gd
+
+      - name: Import and parse KROLL Outpost Architect
+        run: godot --headless --path daily_games/KROLL_Outpost_Architect --editor --quit
+      - name: Run KROLL Outpost Architect rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Outpost_Architect --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Outpost Architect rules tests passed."
+      - name: Run KROLL Outpost Architect runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Outpost_Architect --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Outpost Architect runtime smoke test passed."

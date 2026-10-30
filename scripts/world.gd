@@ -243,7 +243,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var inventory_restored: bool = true
 	if has_inventory and inventory_bridge != null and not previous_inventory.is_empty():
 		inventory_restored = bool(inventory_bridge.call("restore_inventory", previous_inventory))
-	var world_objects_restored: bool = not has_world_objects or bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
+	# Streaming can mutate the registry even for legacy saves that omit world_objects.
+	# Restore the pre-attempt snapshot on every failed target sync, not only when the payload had that field.
+	var world_objects_restored: bool = bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
 	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
