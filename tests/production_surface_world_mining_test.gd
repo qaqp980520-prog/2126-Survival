@@ -26,6 +26,9 @@ func _run() -> void:
 			mine_veins.append(vein)
 	_expect(mine_veins.size() == 3, "three dedicated mineral veins are below the surface")
 	_expect(not bool(world.get("_is_underground")), "new game begins on the surface")
+	var recovery_position: Vector3 = world.player.global_position
+	_expect(bool(world.director.call("recover_to_world_position", recovery_position, int(Time.get_unix_time_from_system()))), "surface director recovery ignores independently managed underground layer IDs")
+	_expect(world.chunk_controller.is_chunk_loaded(MINE_ID), "surface director recovery preserves the underground mine chunk")
 	var surface_mine_attempt: Dictionary = world.call("_interact_nearest_mineral")
 	_expect(str(surface_mine_attempt.get("action", "")) == "underground_only", "surface layer rejects mining")
 	_expect(not bool(world.call("_toggle_mine_access")), "mine shaft cannot be used from outside its interaction range")
