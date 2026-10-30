@@ -4,6 +4,7 @@ const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd"
 const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFactory.gd")
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
+const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -12,6 +13,7 @@ const MINE_ACCESS_RANGE: float = 2.75
 const MINE_INTERACTION_RANGE: float = 3.5
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
+var stamina: RefCounted = StaminaScript.new()
 var camera: Camera3D
 var hud: Label
 var touch_buttons: Dictionary = {}
@@ -93,7 +95,7 @@ func _build_hud() -> void:
 	hud = Label.new()
 	hud.name = "WorldStatus"
 	hud.position = Vector2(16.0, 14.0)
-	hud.size = Vector2(900.0, 128.0)
+	hud.size = Vector2(900.0, 160.0)
 	hud.add_theme_color_override("font_color", Color(0.62, 0.94, 1.0))
 	hud.add_theme_font_size_override("font_size", 15)
 	layer.add_child(hud)
@@ -167,12 +169,19 @@ func _set_touch_jump(value: bool) -> void:
 func get_player_movement_profile() -> Dictionary:
 	var summary: Dictionary = inventory_bridge.call("get_summary") if inventory_bridge != null and inventory_bridge.has_method("get_summary") else {}
 	var multiplier: float = clampf(float(summary.get("movement_multiplier", 1.0)), 0.0, 1.0)
+	var stamina_value: float = float(stamina.get("current_stamina")) if stamina != null else 100.0
+	var stamina_can_jump: bool = bool(stamina.call("can_jump")) if stamina != null else true
+	var inventory_can_jump: bool = bool(summary.get("can_jump", true))
 	return {
 		"weight_kg": float(summary.get("weight_kg", 0.0)),
 		"limit_kg": float(summary.get("limit_kg", 65.0)),
 		"movement_multiplier": multiplier,
 		"move_speed": BASE_MOVE_SPEED * multiplier,
-		"can_jump": bool(summary.get("can_jump", true))
+		"stamina": stamina_value,
+		"stamina_max": float(stamina.get("MAX_STAMINA")) if stamina != null else 100.0,
+		"inventory_can_jump": inventory_can_jump,
+		"stamina_can_jump": stamina_can_jump,
+		"can_jump": inventory_can_jump and stamina_can_jump
 	}
 
 func get_effective_move_speed() -> float:
@@ -184,8 +193,17 @@ func can_player_jump_now() -> bool:
 func _try_start_jump() -> bool:
 	if player == null or not player.is_on_floor() or not can_player_jump_now():
 		return false
+	if stamina == null or not bool(stamina.call("spend_jump")):
+		return false
 	player.velocity.y = BASE_JUMP_SPEED
+	_refresh_hud()
 	return true
+
+func _tick_stamina(delta: float, moving: bool) -> void:
+	if stamina == null:
+		return
+	var profile: Dictionary = get_player_movement_profile()
+	stamina.call("tick", delta, moving, float(profile.get("movement_multiplier", 1.0)))
 
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
@@ -209,6 +227,7 @@ func _physics_process(delta: float) -> void:
 	right = right.normalized()
 	var movement := (right * move_input.x + forward * move_input.y).normalized()
 	var movement_profile: Dictionary = get_player_movement_profile()
+	_tick_stamina(delta, movement.length_squared() > 0.0001)
 	var move_speed: float = float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
 	player.velocity.x = movement.x * move_speed
 	player.velocity.z = movement.z * move_speed
@@ -477,6 +496,7 @@ func serialize_stream_state() -> Dictionary:
 	if payload.is_empty():
 		return {}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
+	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
 	payload["surface_return_position"] = [
 		_surface_return_position.x,
 		_surface_return_position.y,
@@ -485,6 +505,13 @@ func serialize_stream_state() -> Dictionary:
 	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	var has_stamina: bool = payload.has("stamina")
+	var stamina_value: Variant = payload.get("stamina", null)
+	if has_stamina:
+		var stamina_probe: RefCounted = StaminaScript.new()
+		if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
+			_set_restore_report(false, "stamina_validation", "Stamina save payload is invalid; no world state was changed.", true)
+			return false
 	var layer_value: Variant = payload.get("location_layer", "surface")
 	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
 		return false
@@ -518,6 +545,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		if not mine_director.sync_to_world_position(rollback_target, now):
 			push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
+	if has_stamina:
+		if not bool(stamina.call("load_save_dict", stamina_value)):
+			_set_restore_report(false, "stamina_restore", "Validated stamina payload could not be applied.", false)
+			return false
+	else:
+		stamina.call("reset")
 	_is_underground = target_underground
 	_surface_return_position = next_return_position
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
@@ -538,7 +571,13 @@ func _refresh_hud() -> void:
 	var weight := float(movement_profile.get("weight_kg", 0.0))
 	var limit := float(movement_profile.get("limit_kg", 65.0))
 	var movement_percent: int = roundi(float(movement_profile.get("movement_multiplier", 1.0)) * 100.0)
-	var jump_status: String = "JUMP READY" if bool(movement_profile.get("can_jump", true)) else "JUMP LOCKED (>90 kg)"
+	var jump_status: String = "JUMP READY"
+	if not bool(movement_profile.get("inventory_can_jump", true)):
+		jump_status = "JUMP LOCKED (>90 kg)"
+	elif not bool(movement_profile.get("stamina_can_jump", true)):
+		jump_status = "JUMP LOCKED (LOW STAMINA)"
+	var stamina_value: float = float(movement_profile.get("stamina", 100.0))
+	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
 	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
 	if touch_buttons.has("crate"):
 		(touch_buttons["crate"] as Button).text = "MINE" if _is_underground else "CRATE"
@@ -547,8 +586,8 @@ func _refresh_hud() -> void:
 	if touch_buttons.has("crop"):
 		(touch_buttons["crop"] as Button).disabled = _is_underground
 	var action_help: String = "F mine · G shaft" if _is_underground else "E crop · F crate · G mine shaft"
-	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%%   %s\n%s\n%s" % [
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%%   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
-		weight, limit, movement_percent, jump_status, _crop_action_message, _world_object_action_message
+		weight, limit, movement_percent, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
