@@ -70,7 +70,9 @@ func _build_interaction_area() -> void:
 func _set_interaction_area_enabled(enabled: bool) -> void:
 	var area := get_node_or_null("InteractionArea") as Area3D
 	if area != null:
-		area.collision_layer = 2 if enabled else 0
+		var target_layer: int = 2 if enabled else 0
+		if area.collision_layer != target_layer:
+			area.collision_layer = target_layer
 
 func _process(_delta: float) -> void:
 	apply_elapsed_regeneration()
