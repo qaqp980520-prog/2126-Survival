@@ -46,7 +46,7 @@ func _run() -> void:
 	var after_unload: Dictionary = BinderScript.bind_patches([west, south, far])
 	_expect(bool(after_unload.get("ok", false)) and int(after_unload.get("pair_count", -1)) == 1, "rebinding after one patch unload removes only its stale adjacency")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "ground_ramp", "unloaded neighbor restores the west outer ramp")
-	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "neighbor_higher", "remaining south neighbor stays bound")
+	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "local_higher", "remaining south neighbor stays bound with the correct local-higher policy")
 	var duplicate := PatchScript.new()
 	duplicate.name = "Duplicate"
 	duplicate.position = west.position
@@ -54,7 +54,7 @@ func _run() -> void:
 	await process_frame
 	var rejected: Dictionary = BinderScript.bind_patches([west, south, duplicate])
 	_expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "duplicate_position", "duplicate patch positions are rejected before rebinding")
-	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "neighbor_higher", "rejected duplicate leaves the existing valid adjacency intact")
+	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "local_higher", "rejected duplicate leaves the existing valid adjacency intact")
 	holder.queue_free()
 	await process_frame
 	await process_frame
