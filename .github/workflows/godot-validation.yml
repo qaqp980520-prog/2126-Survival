@@ -1996,3 +1996,42 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Orbital Pinball runtime smoke test passed."
 
+
+      - name: Verify Run 61 KROLL Tether Recovery and data-driven mine loot inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Tether_Recovery/project.godot
+          test -f daily_games/KROLL_Tether_Recovery/main.tscn
+          test -f daily_games/KROLL_Tether_Recovery/main.gd
+          test -f daily_games/KROLL_Tether_Recovery/rules.gd
+          test -f daily_games/KROLL_Tether_Recovery/tests/rules_test.gd
+          test -f daily_games/KROLL_Tether_Recovery/tests/game_smoke_test.gd
+          test -f systems/data/underground_loot_tables.json
+          test -f tests/underground_loot_tables_resource_test.gd
+      - name: Import and parse KROLL Tether Recovery
+        run: godot --headless --path daily_games/KROLL_Tether_Recovery --editor --quit
+      - name: Run KROLL Tether Recovery rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Tether_Recovery --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Tether Recovery rules tests passed."
+      - name: Run KROLL Tether Recovery runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Tether_Recovery --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Tether Recovery runtime smoke test passed."
+      - name: Run underground loot-table resource compatibility tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/underground_loot_tables_resource_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Underground loot-table resource tests passed."

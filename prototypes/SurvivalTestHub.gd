@@ -5,6 +5,7 @@ const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
 const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
+const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 
 var status_label: Label
 
@@ -77,6 +78,12 @@ func _build_ui() -> void:
 		"KROLL Orbital Pinball",
 		"三張彈珠台、三顆球、碰撞反彈與雙側擋板；支援鍵盤、滑鼠與觸控。",
 		PINBALL_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Tether Recovery",
+		"駕駛回收無人機，使用繫索拖運三件貨物返回停靠區；支援推進、煞車與觸控。",
+		TETHER_SCENE
 	)
 	_add_scene_button(
 		column,

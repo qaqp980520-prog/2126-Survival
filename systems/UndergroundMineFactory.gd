@@ -16,28 +16,51 @@ const CACHE_POSITIONS: Array[Vector3] = [
 	Vector3(8.2, -8.25, 2.0),
 	Vector3(1.2, -8.25, 8.0)
 ]
-const CACHE_TABLES: Dictionary = {
-	"west": [
-		{"item_id": "iron_ore", "weight": 4},
-		{"item_id": "coal_ore", "weight": 3},
-		{"item_id": "copper_ore", "weight": 2}
-	],
-	"east": [
-		{"item_id": "copper_ore", "weight": 4},
-		{"item_id": "silver_ore", "weight": 2},
-		{"item_id": "aluminium_ore", "weight": 3}
-	],
-	"north": [
-		{"item_id": "aluminium_ore", "weight": 4},
-		{"item_id": "silver_ore", "weight": 3},
-		{"item_id": "gold_ore", "weight": 1}
-	],
-	"south": [
-		{"item_id": "coal_ore", "weight": 4},
-		{"item_id": "gold_ore", "weight": 2},
-		{"item_id": "uranium_ore", "weight": 1}
-	]
-}
+const CACHE_TABLE_RESOURCE_PATH: String = "res://systems/data/underground_loot_tables.json"
+static var _cache_tables_initialized: bool = false
+static var _cache_tables_cache: Dictionary = {}
+
+## Loads and validates the editable regional loot-table resource.
+## Invalid/missing data fails closed: no regional cache is generated.
+static func load_cache_tables(force_reload: bool = false) -> Dictionary:
+	if _cache_tables_initialized and not force_reload:
+		return _cache_tables_cache.duplicate(true)
+	_cache_tables_initialized = true
+	_cache_tables_cache = {}
+	if not FileAccess.file_exists(CACHE_TABLE_RESOURCE_PATH):
+		return {}
+	var file := FileAccess.open(CACHE_TABLE_RESOURCE_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var parser := JSON.new()
+	if parser.parse(file.get_as_text()) != OK:
+		return {}
+	_cache_tables_cache = validate_cache_tables(parser.get_data())
+	return _cache_tables_cache.duplicate(true)
+
+## Pure validation entry point so malformed authoring data can be regression-tested
+## without mutating the shipped resource file.
+static func validate_cache_tables(payload: Variant) -> Dictionary:
+	if not (payload is Dictionary) or int(payload.get("schema_version", 0)) != 1:
+		return {}
+	var raw_tables: Variant = payload.get("tables", null)
+	if not (raw_tables is Dictionary) or raw_tables.size() != 4:
+		return {}
+	for table_id in ["west", "east", "north", "south"]:
+		var raw_entries: Variant = raw_tables.get(table_id, null)
+		if not (raw_entries is Array) or raw_entries.is_empty():
+			return {}
+		var seen_items: Dictionary = {}
+		for raw_entry in raw_entries:
+			if not (raw_entry is Dictionary):
+				return {}
+			var item_id: String = str(raw_entry.get("item_id", ""))
+			var weight_value: Variant = raw_entry.get("weight", null)
+			if not MINERAL_IDS.has(item_id) or not (weight_value is int or weight_value is float) or float(weight_value) <= 0.0 or not is_equal_approx(float(weight_value), roundf(float(weight_value))) or seen_items.has(item_id):
+				return {}
+			seen_items[item_id] = true
+	return raw_tables.duplicate(true)
+
 
 ## Returns deterministic room-specific cache entries. Layer zero's service caches
 ## retain their original names and contents for save compatibility.
@@ -65,7 +88,7 @@ static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array
 		return entries
 
 	var table_id: String = _get_cache_table_id(coord, layer_index)
-	var table_value: Variant = CACHE_TABLES.get(table_id, [])
+	var table_value: Variant = load_cache_tables().get(table_id, [])
 	if not (table_value is Array) or table_value.is_empty():
 		return entries
 	var total_weight: int = 0
