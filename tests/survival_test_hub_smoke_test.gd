@@ -17,6 +17,7 @@ const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
 const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
 const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
+const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 
 var failures: Array[String] = []
 
@@ -39,6 +40,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(THERMAL_GLIDER_SCENE), "Thermal Glider game scene exists")
 	_expect(ResourceLoader.exists(GRAVITY_FOUNDRY_SCENE), "Gravity Foundry game scene exists")
 	_expect(ResourceLoader.exists(ECHO_MAPPER_SCENE), "Echo Mapper game scene exists")
+	_expect(ResourceLoader.exists(ATMOSPHERE_LAB_SCENE), "Atmosphere Lab game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -47,7 +49,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 16, "hub exposes the world entry and fifteen prototype launch buttons")
+	_expect(buttons.size() == 17, "hub exposes the world entry and sixteen prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -67,6 +69,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Gravity Foundry"), "hub labels the Gravity Foundry game")
 	_expect(labels.has("KROLL Echo Mapper"), "hub labels the Echo Mapper game")
 	_expect(labels.has("KROLL Knight Circuit"), "hub labels the Knight Circuit game")
+	_expect(labels.has("KROLL Atmosphere Lab"), "hub labels the Atmosphere Lab game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -166,6 +169,19 @@ func _run() -> void:
 			var knight_state: Dictionary = knight_circuit.call("get_current_state")
 			_expect(str(knight_state.get("level_id", "")) == "hangar_circuit", "root-loaded Knight Circuit starts the Hangar Circuit")
 		knight_circuit.queue_free()
+		await process_frame
+
+	var atmosphere_lab_scene := load(ATMOSPHERE_LAB_SCENE) as PackedScene
+	_expect(atmosphere_lab_scene != null, "root hub can load the Atmosphere Lab scene")
+	if atmosphere_lab_scene != null:
+		var atmosphere_lab := atmosphere_lab_scene.instantiate()
+		root.add_child(atmosphere_lab)
+		await process_frame
+		_expect(atmosphere_lab.has_method("get_current_state"), "root-loaded Atmosphere Lab initializes its station model")
+		if atmosphere_lab.has_method("get_current_state"):
+			var atmosphere_state: Dictionary = atmosphere_lab.call("get_current_state")
+			_expect(str(atmosphere_state.get("level_id", "")) == "coastal_front", "root-loaded Atmosphere Lab starts Coastal Front")
+		atmosphere_lab.queue_free()
 		await process_frame
 
 	hub.queue_free()
