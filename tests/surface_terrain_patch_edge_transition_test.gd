@@ -32,7 +32,12 @@ func _run() -> void:
 		if body == null:
 			continue
 		for side in SIDES:
-			var ramp := body.get_node_or_null("TerrainRampCollision_"+side) as CollisionShape3D
+			var ramp_body := patch.get_node_or_null("TerrainRampBody_"+side) as StaticBody3D
+			_expect(ramp_body != null,"%s ramp has an independent static collision body" % side)
+			if ramp_body == null:
+				continue
+			_expect(ramp_body != body and ramp_body.collision_layer == 1 and ramp_body.collision_mask == 0,"%s ramp body is isolated on the world collision layer" % side)
+			var ramp := ramp_body.get_node_or_null("TerrainRampCollision_"+side) as CollisionShape3D
 			_expect(ramp != null,"%s ramp collision exists" % side)
 			if ramp == null:
 				continue
