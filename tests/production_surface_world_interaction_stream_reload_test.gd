@@ -18,6 +18,7 @@ func _run() -> void:
     root.add_child(world)
     await process_frame
     await physics_frame
+    var now_unix: int = int(Time.get_unix_time_from_system()) + 1
 
     var original_root: Node3D = world.chunk_controller.call("get_chunk_root", CHUNK_ID) as Node3D
     var original_crate: Node3D = _find_crate(CHUNK_ID)
@@ -44,7 +45,7 @@ func _run() -> void:
     _expect(bool(original_crate.call("interact")), "crate state changes before the controller unload")
     _expect(bool(original_crate.get("opened")) and int(original_crate.get("loot_remaining")) == 1, "pre-unload crate state is opened with one item remaining")
 
-    var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5), 1790000000))
+    var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5), now_unix))
     _expect(moved_away, "production streaming director moves the active window away from the origin")
     _expect(not bool(world.chunk_controller.call("is_chunk_loaded", CHUNK_ID)), "controller unloads the origin chunk through the director")
     var saved_record: Dictionary = world.object_state_registry.call("get_object_state", stable_id)
@@ -58,7 +59,7 @@ func _run() -> void:
     await process_frame
     _expect(not is_instance_valid(original_root) and not is_instance_valid(original_crate) and not is_instance_valid(original_proxy), "old chunk, crate and proxy are freed after the unload frame")
 
-    var returned: bool = bool(world.call("debug_move_player_to", Vector3(1.5, 2.0, 7.5), 1790000001))
+    var returned: bool = bool(world.call("debug_move_player_to", Vector3(1.5, 2.0, 7.5), now_unix + 1))
     _expect(returned, "production streaming director reloads the origin window")
     var restored_root: Node3D = world.chunk_controller.call("get_chunk_root", CHUNK_ID) as Node3D
     var restored_crate: Node3D = _find_crate(CHUNK_ID)
@@ -80,7 +81,7 @@ func _run() -> void:
     var restored_target: Dictionary = world.call("get_camera_interaction_target")
     _expect(str(restored_target.get("kind", "")) == "prop" and restored_target.get("node") == restored_crate, "camera ray selects the reloaded crate through its new proxy")
     _expect(restored_target.get("proxy") == restored_proxy, "cached target references the reloaded proxy, not the stale proxy")
-    var action_result: Dictionary = world.call("_interact_nearest_world_prop", 1790000002)
+    var action_result: Dictionary = world.call("_interact_nearest_world_prop", now_unix + 2)
     _expect(bool(action_result.get("ok", false)) and int(action_result.get("remaining", -1)) == 0, "F interaction works after controller-driven unload and reload")
     _finish(0 if failures.is_empty() else 1)
 
