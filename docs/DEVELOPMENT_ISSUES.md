@@ -896,3 +896,37 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-object/world-save schema remains version 1.
 - Cache lifecycle coverage is deterministic and finite (5×5 sample × nine layers); it does not claim exhaustive coverage of an unbounded procedural world.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+
+## Run 72 closeout — 2026-10-31
+
+### Completed and merged
+
+- Added KROLL Atmosphere Lab M0.1, a three-station weather-balancing puzzle with four instruments, a 14-action budget per station, deterministic storm-load evaluation, keyboard/mouse/touch controls, rules tests, runtime smoke coverage and root Test Hub registration.
+- Added SurfaceTerrainPatch M0.1 to every generated surface chunk. The 2 m patch stores height level, material type and revision through the existing schema-1 world-object registry.
+- Added T-key and touch-button terrain editing through a dedicated production camera-ray target kind.
+- Added a production SurfaceWorld regression for terrain edit, collision geometry, invalid-state rollback, revision cap, world save/restore, chunk unload/reload, fresh node/proxy recreation and restored T-key interaction.
+- Updated world-session and production SurfaceWorld object-count expectations to distinguish terrain patches from salvage crates, underground caches and lift anchors.
+- No world-save schema migration; schema remains version 1.
+
+### Failure history and exact corrections
+
+- Run #810 failed at step 150 because the existing world-session test expected nine stateful salvage crates after SurfaceChunkFactory correctly added nine terrain patches. Commit `6631f8f37123d6cd29b49b3db72caf441c78a146` changed the assertion to nine crates plus nine terrain patches (18 total).
+- Run #811 passed steps 1–304 but failed workflow preflight step 305 due to a stale grep name. The workflow expected `SurfaceTerrainPatchScript`, while the actual factory constant is `TerrainPatchScript`. Commit `b6234ecf32d21057d2fb387e7d95c91f58c24aec` fixed the assertion; no production factory change was required.
+- Commit `6b33d9f5ab249f43666e99f42f9527a54d38741e` added collision-shape height/grounding checks after edit, restore and reload, invalid-state non-mutation and maximum-revision rejection.
+- Feature PR [#181](https://github.com/qaqp980520-prog/2126-Survival/pull/181) merged as `cfedc9ea03f953cf1b508c13bd120e16a762a61d`.
+- Exact feature HEAD `6b33d9f5ab249f43666e99f42f9527a54d38741e` passed Godot 4.3 [Run #813](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41206050265): 309/309 primary validation steps succeeded, zero failures and zero skipped; checkout, container shutdown and job completion also succeeded.
+
+### Remaining engineering work
+
+1. Extend terrain editing beyond one 2 m patch per chunk; design multi-tile adjacency and height transitions before adding arbitrary sculpting.
+2. Add collision/edge regression for neighboring patches at different height levels.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
+4. Continue applying the stable-ID/state/fresh-proxy lifecycle contract to remaining formal interactables.
+5. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1.
+- Terrain patch is a persistence/interaction foundation, not a voxel terrain engine or arbitrary mesh editor.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
