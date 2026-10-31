@@ -3,6 +3,7 @@ extends RefCounted
 ## Deterministic 10m underground room factory with explicit vertical mine layers.
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
+const LiftScript = preload("res://systems/UndergroundMineLift.gd")
 const CHUNK_SIZE: float = 10.0
 const LAYER_SPACING: float = 20.0
 const MAX_LAYER_INDEX: int = 8
@@ -186,48 +187,11 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO, laye
 	return root
 
 static func _add_lift_anchor(parent: Node3D, layer_index: int) -> void:
-	var anchor := Node3D.new()
+	var anchor: Node3D = LiftScript.new()
 	anchor.name = "MineLiftAnchor"
 	anchor.position = Vector3(1.5, -8.25, 7.5)
-	var interaction_area := Area3D.new()
-	interaction_area.name = "InteractionArea"
-	interaction_area.collision_layer = 2
-	interaction_area.collision_mask = 0
-	interaction_area.monitoring = false
-	var interaction_collision := CollisionShape3D.new()
-	var interaction_shape := CylinderShape3D.new()
-	interaction_shape.radius = 1.35
-	interaction_shape.height = 2.2
-	interaction_collision.shape = interaction_shape
-	interaction_collision.position.y = 0.9
-	interaction_area.add_child(interaction_collision)
-	anchor.add_child(interaction_area)
+	anchor.set("layer_index", layer_index)
 	parent.add_child(anchor)
-	if DisplayServer.get_name() == "headless":
-		return
-	var platform := MeshInstance3D.new()
-	platform.name = "LiftPlatform"
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 1.05
-	mesh.bottom_radius = 1.05
-	mesh.height = 0.12
-	platform.mesh = mesh
-	platform.position.y = 0.08
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.08, 0.32, 0.42)
-	material.metallic = 0.8
-	material.emission_enabled = true
-	material.emission = Color(0.02, 0.35, 0.55)
-	material.emission_energy_multiplier = 0.85
-	platform.material_override = material
-	anchor.add_child(platform)
-	var label := Label3D.new()
-	label.name = "LiftLabel"
-	label.text = "KROLL LIFT · LEVEL %02d · V DOWN / G UP" % (layer_index + 1)
-	label.position = Vector3(0.0, 1.35, 0.0)
-	label.font_size = 24
-	label.modulate = Color(0.55, 0.92, 1.0)
-	anchor.add_child(label)
 
 static func _add_salvage_cache(parent: Node3D, node_name: String, item_id: String, position: Vector3) -> bool:
 	var cache: Node3D = StatefulPropScript.new()
