@@ -124,7 +124,6 @@ func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 			"stable_id": stable_id,
 			"patch": patch
 		})
-	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["chunk_id"]) < str(b["chunk_id"]))
 	return entries
 
 func _find_patch(controller: Node, chunk_id: String) -> Node3D:
