@@ -264,7 +264,7 @@ func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
 	var adapter: Node = Adapter.new()
 	root.add_child(adapter)
 	await process_frame
-	assert(adapter.bind_registry(mineral_registry))
+	assert(bool(adapter.call("bind_registry", mineral_registry)))
 	var valid_vein: Node3D = MiningNode.new()
 	valid_vein.name = "ValidVein"
 	valid_vein.set("mineral_id", "iron_ore")
@@ -275,9 +275,10 @@ func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
 	adapter_invalid_vein.name = "AdapterInvalidVein"
 	adapter_invalid_vein.set("mineral_id", "unknown_mineral")
 	adapter_invalid_vein.set("last_regen_unix", now)
-	assert(not adapter.load_chunk("earth/adapter-preflight", {"valid": valid_vein, "invalid": adapter_invalid_vein}, now), "adapter independently preflights every vein before registering any")
+	assert(not bool(adapter.call("load_chunk", "earth/adapter-preflight", {"valid": valid_vein, "invalid": adapter_invalid_vein}, now)), "adapter independently preflights every vein before registering any")
 	assert(mineral_registry.get_registered_ids().is_empty(), "adapter preflight leaves no partial mineral registration")
-	assert(adapter.get_loaded_chunk_ids().is_empty(), "adapter preflight does not mark a rejected chunk as loaded")
+	var adapter_loaded_ids: PackedStringArray = adapter.call("get_loaded_chunk_ids")
+	assert(adapter_loaded_ids.is_empty(), "adapter preflight does not mark a rejected chunk as loaded")
 	valid_vein.free()
 	adapter_invalid_vein.free()
 	adapter.queue_free()
