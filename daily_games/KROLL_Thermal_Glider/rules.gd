@@ -12,7 +12,7 @@ const COURSES: Array[Dictionary] = [
 		"headwind": 6.0,
 		"runway_x": 1780.0,
 		"runway_y": 300.0,
-		"beacons": [Vector2(390.0, 190.0), Vector2(850.0, 255.0), Vector2(1280.0, 165.0)],
+		"beacons": [Vector2(390.0, 245.0), Vector2(850.0, 225.0), Vector2(1280.0, 255.0)],
 		"thermals": [
 			{"position": Vector2(560.0, 245.0), "radius": 125.0, "lift": 52.0},
 			{"position": Vector2(1110.0, 285.0), "radius": 105.0, "lift": 45.0}
@@ -25,7 +25,7 @@ const COURSES: Array[Dictionary] = [
 		"headwind": 13.0,
 		"runway_x": 1880.0,
 		"runway_y": 330.0,
-		"beacons": [Vector2(430.0, 150.0), Vector2(940.0, 205.0), Vector2(1390.0, 245.0)],
+		"beacons": [Vector2(430.0, 235.0), Vector2(940.0, 195.0), Vector2(1390.0, 250.0)],
 		"thermals": [
 			{"position": Vector2(670.0, 210.0), "radius": 115.0, "lift": 68.0},
 			{"position": Vector2(1210.0, 255.0), "radius": 90.0, "lift": 38.0}
@@ -38,7 +38,7 @@ const COURSES: Array[Dictionary] = [
 		"headwind": 2.0,
 		"runway_x": 1740.0,
 		"runway_y": 275.0,
-		"beacons": [Vector2(360.0, 245.0), Vector2(810.0, 145.0), Vector2(1240.0, 220.0)],
+		"beacons": [Vector2(360.0, 245.0), Vector2(810.0, 190.0), Vector2(1240.0, 245.0)],
 		"thermals": [
 			{"position": Vector2(500.0, 300.0), "radius": 100.0, "lift": 42.0},
 			{"position": Vector2(1000.0, 220.0), "radius": 145.0, "lift": 58.0},
