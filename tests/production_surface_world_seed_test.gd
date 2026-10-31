@@ -61,12 +61,17 @@ func _run() -> void:
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "same-window cache identities are regenerated from the saved seed")
 
 	var original_factory: Callable = mine_director.get("chunk_factory")
+	var object_registry: Node = world.get("object_state_registry") as Node
+	var previous_mineral_snapshot: Dictionary = chunk_controller.call("to_save_dict")
+	var previous_object_snapshot: Dictionary = object_registry.call("to_save_dict")
 	mine_director.set("chunk_factory", Callable(self, "_fail_once_factory").bind(original_factory))
 	var failed_seed_save: Dictionary = saved.duplicate(true)
 	failed_seed_save["world_seed"] = 84
 	_expect(not bool(world.call("restore_stream_state", failed_seed_save, 1793400015)), "failed target-seed chunk creation rejects the restore")
 	_expect(int(world.get("world_seed")) == 42, "failed seed restore rolls the previous world seed back")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "failed seed restore rebuilds the previous cache window")
+	_expect(chunk_controller.call("to_save_dict") == previous_mineral_snapshot, "failed seed restore preserves the exact mineral registry snapshot")
+	_expect(object_registry.call("to_save_dict") == previous_object_snapshot, "failed seed restore removes candidate-seed object records and restores the exact prior registry")
 	mine_director.set("chunk_factory", original_factory)
 
 	var away := Vector3(21.5, -8.25, 7.5)
