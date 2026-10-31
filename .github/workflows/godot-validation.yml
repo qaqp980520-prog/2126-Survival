@@ -2248,6 +2248,7 @@ jobs:
           test -f daily_games/KROLL_Hex_Frontier/project.godot
           test -f daily_games/KROLL_Hex_Frontier/main.tscn
           test -f daily_games/KROLL_Hex_Frontier/main.gd
+          test -f daily_games/KROLL_Hex_Frontier/daily_games/KROLL_Hex_Frontier/main.gd
           test -f daily_games/KROLL_Hex_Frontier/rules.gd
           test -f daily_games/KROLL_Hex_Frontier/tests/rules_test.gd
           test -f daily_games/KROLL_Hex_Frontier/tests/game_smoke_test.gd
