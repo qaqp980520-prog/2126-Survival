@@ -1,6 +1,6 @@
 extends Control
 
-const Rules = preload("res://rules.gd")
+const Rules = preload("res://daily_games/KROLL_Gravity_Foundry/rules.gd")
 const CELL_SIZE: float = 64.0
 
 var state: Dictionary = {}
