@@ -34,8 +34,11 @@ func _run() -> void:
 	var surface_mine_attempt: Dictionary = world.call("_interact_nearest_mineral")
 	_expect(str(surface_mine_attempt.get("action", "")) == "underground_only", "surface layer rejects mining")
 	_expect(not bool(world.call("_toggle_mine_access")), "mine shaft cannot be used from outside its interaction range")
-	world.player.global_position = Vector3(1.5, 2.0, 7.5)
-	_expect(bool(world.call("_toggle_mine_access")), "player can descend through the mine shaft")
+	var surface_lift: Node3D = world.get_node_or_null("KrollMineShaftEntrance") as Node3D
+	_expect(surface_lift != null, "surface mine lift exposes its interaction target")
+	if surface_lift != null:
+		await _aim_at(surface_lift, Vector3(0.0, 1.0, 2.0), Vector3(0.0, 0.9, 0.0))
+	_expect(bool(world.call("_toggle_mine_access")), "player can descend through the aimed mine shaft")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "player enters the underground layer")
 	var underground_cache_count: int = 0
 	for prop in world.chunk_controller.get_loaded_world_state_nodes():
@@ -53,6 +56,7 @@ func _run() -> void:
 	var stock_before: int = int(nearest.get("remaining_units"))
 	var now: int = int(Time.get_unix_time_from_system())
 	var weight_before: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
+	await _aim_at(nearest, Vector3(0.0, 1.0, 2.0), Vector3.ZERO)
 	var first_mine: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first_mine.get("ok", false)) and int(first_mine.get("amount", 0)) == 1, "F interaction routes to underground mining and grants one ore")
 	_expect(int(nearest.get("remaining_units")) == stock_before - 1, "successful mining consumes exactly one vein unit")
@@ -68,7 +72,7 @@ func _run() -> void:
 	var cache_item_id: String = str(gold_cache.get("loot_item_id"))
 	_expect(cache_item_id == "gold_ore" and int(gold_cache.get("loot_remaining")) == 2, "gold cache starts with its deterministic item identity and two units")
 	var cache_stable_id: String = MINE_ID + "/object/UndergroundMine_0_0/MineCache_Gold"
-	world.player.global_position = gold_cache.global_position + Vector3(0.0, 1.0, 0.0)
+	await _aim_at(gold_cache)
 	var cache_result: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
 	_expect(bool(cache_result.get("ok", false)) and str(cache_result.get("item_id", "")) == "gold_ore", "F interaction selects a nearer underground cache over a more distant vein")
 	_expect(int(cache_result.get("remaining", -1)) == 1 and _inventory_count("gold_ore") == 1, "cache transaction grants exactly one gold ore and leaves one unit")
@@ -79,7 +83,7 @@ func _run() -> void:
 	var regional_instance_id: int = regional_cache.get_instance_id() if regional_cache != null else 0
 	var regional_weight_before: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
 	if regional_cache != null:
-		world.player.global_position = regional_cache.global_position + Vector3(0.0, 1.0, 0.0)
+		await _aim_at(regional_cache)
 		var regional_result: Dictionary = world.call("_interact_nearest_world_prop", now + 2)
 		_expect(bool(regional_result.get("ok", false)) and str(regional_result.get("item_id", "")) == "coal_ore", "regional cache grants its room-table mineral through the shared inventory bridge")
 		var regional_weight_after: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
@@ -126,13 +130,21 @@ func _run() -> void:
 	var saved: Dictionary = world.call("serialize_stream_state")
 	_expect(str(saved.get("location_layer", "")) == "underground", "world save records the underground location layer")
 	_expect(saved.get("surface_return_position", []) is Array, "world save records the surface return point")
-	_expect(bool(world.call("_toggle_mine_access")), "player can ascend to the surface")
+	var origin_lift: Node3D = _find_lift_anchor()
+	_expect(origin_lift != null, "origin underground lift exposes its interaction target")
+	if origin_lift != null:
+		await _aim_at(origin_lift, Vector3(0.0, 0.0, 2.0), Vector3(0.0, 0.9, 0.0))
+	_expect(bool(world.call("_toggle_mine_access")), "player can ascend to the surface while aiming at the lift")
 	_expect(not bool(world.get("_is_underground")) and world.player.global_position.y > 0.0, "ascending returns player to the surface")
 	_expect(bool(world.call("restore_stream_state", saved, now + 3)), "world save restores the underground location")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "restored player returns to the underground layer")
 	_expect(_inventory_count(item_id) == 1, "world restore preserves the saved mining inventory count")
 	world.player.global_position = Vector3(1.5, -8.25, 7.5)
-	_expect(bool(world.call("_descend_mine_layer")), "player can descend from the origin lift to the second underground level")
+	var level_zero_lift: Node3D = _find_lift_anchor()
+	_expect(level_zero_lift != null, "level-one lift target is available before descending")
+	if level_zero_lift != null:
+		await _aim_at(level_zero_lift, Vector3(0.0, 0.0, 2.0), Vector3(0.0, 0.9, 0.0))
+	_expect(bool(world.call("_descend_mine_layer")), "player can descend from the aimed origin lift to the second underground level")
 	_expect(int(world.get("_mine_layer_index")) == 1 and world.player.global_position.y < -27.0, "player is positioned on underground level two")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/layer_1/mine_0_0"), "production world loads the layer-qualified origin room")
 	var layer_one_vein: Node3D = _nearest_mine_vein()
@@ -140,6 +152,7 @@ func _run() -> void:
 	var layer_one_item: String = str(layer_one_vein.get("mineral_id")) if layer_one_vein != null else ""
 	var layer_one_stock: int = int(layer_one_vein.get("remaining_units")) if layer_one_vein != null else 0
 	if layer_one_vein != null:
+		await _aim_at(layer_one_vein, Vector3(0.0, 1.0, 2.0), Vector3.ZERO)
 		var deep_mine_result: Dictionary = world.call("_interact_nearest_mineral", now + 5)
 		_expect(bool(deep_mine_result.get("ok", false)), "player can mine a real vein on the deeper level")
 		_expect(int(layer_one_vein.get("remaining_units")) == layer_one_stock - 1, "deeper-level mining consumes exactly one unit")
@@ -156,9 +169,16 @@ func _run() -> void:
 	var reloaded_deep_vein: Node3D = _nearest_mine_vein()
 	_expect(reloaded_deep_vein != null and str(reloaded_deep_vein.get("mineral_id")) == layer_one_item, "deeper-layer mineral identity survives a real unload/reload")
 	_expect(reloaded_deep_vein != null and int(reloaded_deep_vein.get("remaining_units")) == layer_one_stock - 1, "deeper-layer mineral stock survives unload/reload")
-	_expect(bool(world.call("_toggle_mine_access")), "G ascends one level from the deeper mine")
+	var deep_lift: Node3D = _find_lift_anchor()
+	_expect(deep_lift != null, "deeper-level lift exposes its raycast target")
+	if deep_lift != null:
+		await _aim_at(deep_lift, Vector3(0.0, 0.0, 2.0), Vector3(0.0, 0.9, 0.0))
+	_expect(bool(world.call("_toggle_mine_access")), "G ascends one level when aiming at the deeper lift")
 	_expect(int(world.get("_mine_layer_index")) == 0 and world.player.global_position.y > -10.0, "lift returns the player to mine level one")
-	_expect(bool(world.call("_toggle_mine_access")), "G from mine level one returns to the surface")
+	var surface_level_lift: Node3D = _find_lift_anchor()
+	if surface_level_lift != null:
+		await _aim_at(surface_level_lift, Vector3(0.0, 0.0, 2.0), Vector3(0.0, 0.9, 0.0))
+	_expect(bool(world.call("_toggle_mine_access")), "G from mine level one returns to the surface while aiming at the lift")
 	_expect(not bool(world.get("_is_underground")), "surface return exits the underground state")
 	_expect(bool(world.call("restore_stream_state", deep_save, now + 6)), "world save restores the player to the deeper mine level")
 	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == 1, "restored world keeps the exact underground depth")
@@ -174,6 +194,23 @@ func _run() -> void:
 	_expect(buttons.has("shaft") and buttons.has("crate") and buttons.has("deeper"), "touch HUD exposes shaft, deeper-level and mining action buttons")
 	_expect((buttons["crate"] as Button).text == "CRATE" and not (buttons["crop"] as Button).disabled, "surface HUD restores crate and crop controls")
 	_finish(0 if failures.is_empty() else 1)
+
+func _aim_at(target: Node3D, player_offset: Vector3 = Vector3(0.0, 1.0, 2.0), target_offset: Vector3 = Vector3(0.0, 0.55, 0.0)) -> void:
+	world.player.global_position = target.global_position + player_offset
+	world.camera.look_at(target.global_position + target_offset, Vector3.UP)
+	await physics_frame
+
+func _find_lift_anchor() -> Node3D:
+	var nearest: Node3D = null
+	var nearest_distance: float = 3.5
+	for candidate in world.find_children("MineLiftAnchor", "Node3D", true, false):
+		if not is_instance_valid(candidate):
+			continue
+		var distance: float = world.player.global_position.distance_to(candidate.global_position)
+		if distance < nearest_distance:
+			nearest = candidate as Node3D
+			nearest_distance = distance
+	return nearest
 
 func _nearest_mine_vein() -> Node3D:
 	var nearest: Node3D = null
