@@ -207,7 +207,7 @@ func _draw() -> void:
 		if beacon.x < -60.0 or beacon.x > size.x + 60.0:
 			continue
 		var color: Color = Color("#7d9ba8") if index < checkpoint else Color("#ffc66d")
-		draw_line(Vector2(beacon.x, 90.0), Vector2(beacon.x, GROUND_Y), Color(color, 0.28), 2.0)
+		draw_line(Vector2(beacon.x, 90.0), Vector2(beacon.x, GROUND_Y), Color(color.r, color.g, color.b, 0.28), 2.0)
 		draw_circle(beacon, 12.0, color)
 		draw_arc(beacon, 22.0, 0.0, TAU, 32, color, 2.0, true)
 		draw_string(ThemeDB.fallback_font, beacon + Vector2(-16.0, -30.0), "B%d" % (index + 1), HORIZONTAL_ALIGNMENT_LEFT, 42.0, 15, color)
