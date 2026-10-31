@@ -617,3 +617,28 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-save envelope remains schema 1; `mine_depth` is optional.
 - Legacy layer-zero chunk IDs and origin cache identities remain unchanged.
 - No local GUI/GPU/iPhone test is claimed.
+
+
+## Run 61 closeout — 2026-10-31
+
+### Completed
+- **KROLL Tether Recovery M0.1:** top-down inertial towing game with three authored missions, tether attach/release, cargo spring pull, dock delivery, hazard/hull, fuel/time, reset/next and keyboard/mouse/touch controls.
+- **Underground cache tables M0.2:** regional weighted tables moved into validated JSON. The loader validates schema, exact region set, MineralCatalog IDs, unique item IDs and positive integral numeric weights; missing/invalid resources fail closed.
+- Existing coordinate/layer hashing, layer-zero service cache names/content and representative layer 0–8 outputs are preserved. No save schema change.
+
+### CI history and correction
+- Candidate `c3270da44b130f0925a2b663b9913ad9a2f14cc6` failed Run #683 at production SurfaceWorld integration step 204: Godot JSON numeric values were represented as floats and the first validator required integer Variants, so regional caches were omitted.
+- Corrected validation to accept positive integral int/float values and reject fractional weights. Final candidate `b8c33dd301179158cc4c82bc26c5501d9322f439` passed exact-head Godot 4.3 [Run #685](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41153746104): 258/258 total step records, zero failures/skips.
+- Feature PR [#158](https://github.com/qaqp980520-prog/2126-Survival/pull/158) merged as `dd23ce770df08a0e93403ee6942ab36bd98484af`; main was re-read and confirmed at this SHA.
+
+### Remaining work
+1. Add a persisted world seed with legacy fallback; prove old cache IDs/content unchanged before migration.
+2. Add depth-band loot table overrides only after a compatibility plan for already-visited layers.
+3. Add a loot-table editor/validation preview.
+4. Add tether tension/line feedback and cargo status markers; later add audio/haptics.
+5. Local GUI/GPU/iPhone QA remains outstanding.
+
+### Compatibility
+- World-save schema remains version 1; no new save fields.
+- Layer-zero service caches and deterministic coordinate/layer outputs remain compatible.
+- No local GUI/GPU/iPhone pass is claimed.
