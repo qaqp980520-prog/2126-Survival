@@ -40,13 +40,18 @@ func _run() -> void:
 				_expect(convex.margin <= 0.01,"%s ramp uses a narrow collision margin for shallow slopes" % side)
 			if convex == null or convex.points.size() != 6:
 				continue
+			var expected_rotation: float = _expected_rotation_y(side)
+			_expect(is_equal_approx(ramp.rotation.y,expected_rotation),"%s ramp rotates the canonical collision wedge into place" % side)
+			var transformed_points: Array[Vector3] = []
+			for local_point in convex.points:
+				transformed_points.append(ramp.transform * local_point)
 			var min_y: float = INF
 			var max_y: float = -INF
 			var min_x: float = INF
 			var max_x: float = -INF
 			var min_z: float = INF
 			var max_z: float = -INF
-			for point in convex.points:
+			for point in transformed_points:
 				min_y=minf(min_y,point.y)
 				max_y=maxf(max_y,point.y)
 				min_x=minf(min_x,point.x)
@@ -64,7 +69,7 @@ func _run() -> void:
 			var outer_edge: float = inner_edge+PatchScript.EDGE_RAMP_RUN
 			var inner_top_found: bool = false
 			var outer_ground_found: bool = false
-			for point in convex.points:
+			for point in transformed_points:
 				var edge_value: float = point.x if side == "East" or side == "West" else point.z
 				var inner_value: float = inner_edge if side == "East" or side == "South" else -inner_edge
 				var outer_value: float = outer_edge if side == "East" or side == "South" else -outer_edge
@@ -104,6 +109,14 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAILED: "+failure)
 		quit(1)
+
+func _expected_rotation_y(side: String) -> float:
+	match side:
+		"East": return 0.0
+		"South": return -PI*0.5
+		"West": return PI
+		"North": return PI*0.5
+	return 0.0
 
 func _expect(condition: bool,description: String) -> void:
 	if condition:
