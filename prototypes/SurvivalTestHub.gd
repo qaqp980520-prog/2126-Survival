@@ -8,6 +8,7 @@ const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
 const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
+const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
 
 var status_label: Label
 
@@ -98,6 +99,12 @@ func _build_ui() -> void:
 		"KROLL Flux Hockey",
 		"操控下方擋板，把能量球打進上方球門；三座競技場，支援拖曳與鍵盤。",
 		FLUX_HOCKEY_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Star Chart",
+		"操控望遠鏡方位與倍率，依序鎖定四顆恆星，完成三個星區測繪任務。",
+		STAR_CHART_SCENE
 	)
 	_add_scene_button(
 		column,
