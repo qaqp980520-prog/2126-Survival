@@ -30,7 +30,17 @@ func _run() -> void:
     var active_ids: PackedStringArray = status.get("active_chunk_ids", PackedStringArray())
     _check(active_ids.size() == 9, "World-session controller must own the initial 3x3 streamed window")
     _check(int(status.get("saved_vein_count", 0)) == 9, "World-session controller must own mineral registry state")
-    _check(int(status.get("saved_world_object_count", -1)) == 9, "Each active chunk seeds one stable salvage-crate state")
+    var loaded_stateful_nodes: Array = world.get("chunk_controller").call("get_loaded_world_state_nodes")
+    var loaded_crate_count: int = 0
+    var loaded_terrain_patch_count: int = 0
+    for stateful_node in loaded_stateful_nodes:
+        if str(stateful_node.name) == "SalvageCrate":
+            loaded_crate_count += 1
+        elif str(stateful_node.name) == "TerrainPatch":
+            loaded_terrain_patch_count += 1
+    _check(loaded_crate_count == 9, "Each active surface chunk retains one stable salvage crate")
+    _check(loaded_terrain_patch_count == 9, "Each active surface chunk registers one persistent terrain patch")
+    _check(int(status.get("saved_world_object_count", -1)) == 18, "World-session registry counts nine salvage crates and nine terrain patches")
     _check(status.has("inventory") and status.has("player_position"), "Status snapshot must expose inventory and player position")
 
     var world_player: CharacterBody3D = world.get("player") as CharacterBody3D
