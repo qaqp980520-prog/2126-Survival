@@ -14,6 +14,7 @@ const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 const MOLECULE_FORGE_SCENE := "res://daily_games/KROLL_Molecule_Forge/main.tscn"
 const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
+const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
 
 var failures: Array[String] = []
 
@@ -34,6 +35,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(MOLECULE_FORGE_SCENE), "Molecule Forge game scene exists")
 	_expect(ResourceLoader.exists(HEX_FRONTIER_SCENE), "Hex Frontier game scene exists")
 	_expect(ResourceLoader.exists(THERMAL_GLIDER_SCENE), "Thermal Glider game scene exists")
+	_expect(ResourceLoader.exists(GRAVITY_FOUNDRY_SCENE), "Gravity Foundry game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -42,7 +44,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 13, "hub exposes the world entry and twelve prototype launch buttons")
+	_expect(buttons.size() == 14, "hub exposes the world entry and thirteen prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -59,6 +61,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Molecule Forge"), "hub labels the Molecule Forge game")
 	_expect(labels.has("KROLL Hex Frontier"), "hub labels the Hex Frontier game")
 	_expect(labels.has("KROLL Thermal Glider"), "hub labels the Thermal Glider game")
+	_expect(labels.has("KROLL Gravity Foundry"), "hub labels the Gravity Foundry game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -119,6 +122,19 @@ func _run() -> void:
 		var flight_state: Dictionary = thermal_glider.call("get_current_state")
 		_expect(str(flight_state.get("status", "")) == "flying", "root-loaded Thermal Glider starts a flight")
 		thermal_glider.queue_free()
+		await process_frame
+
+	var gravity_foundry_scene := load(GRAVITY_FOUNDRY_SCENE) as PackedScene
+	_expect(gravity_foundry_scene != null, "root hub can load the Gravity Foundry scene")
+	if gravity_foundry_scene != null:
+		var gravity_foundry := gravity_foundry_scene.instantiate()
+		root.add_child(gravity_foundry)
+		await process_frame
+		_expect(gravity_foundry.has_method("get_current_state"), "root-loaded Gravity Foundry initializes its puzzle model")
+		if gravity_foundry.has_method("get_current_state"):
+			var gravity_state: Dictionary = gravity_foundry.call("get_current_state")
+			_expect(str(gravity_state.get("level_id", "")) == "reactor_bay", "root-loaded Gravity Foundry starts the Reactor Bay sector")
+		gravity_foundry.queue_free()
 		await process_frame
 
 	hub.queue_free()

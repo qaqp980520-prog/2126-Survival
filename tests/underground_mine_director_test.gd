@@ -35,7 +35,18 @@ func _run() -> void:
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "initial mine window contains nine chunks")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_0_0"), "origin mine chunk is loaded")
 	_expect(controller.call("is_chunk_loaded", "underground/mine_-1_-1"), "negative-coordinate mine chunk is loaded")
-	_expect(controller.call("get_loaded_world_state_nodes").size() == 7, "initial nine-room window registers two origin caches and five deterministic regional caches")
+	var initial_world_objects: Array = controller.call("get_loaded_world_state_nodes")
+	var initial_cache_count: int = 0
+	var initial_lift_count: int = 0
+	for world_object in initial_world_objects:
+		if not is_instance_valid(world_object):
+			continue
+		if world_object.name == "MineLiftAnchor":
+			initial_lift_count += 1
+		elif str(world_object.name).begins_with("MineCache_"):
+			initial_cache_count += 1
+	_expect(initial_cache_count == 7, "initial nine-room window registers two origin caches and five deterministic regional caches")
+	_expect(initial_lift_count == 1, "origin mine chunk registers one stateful lift anchor")
 	var center: Node3D = controller.call("get_chunk_root", "underground/mine_0_0")
 	var east: Node3D = controller.call("get_chunk_root", "underground/mine_1_0")
 	var vein: Node3D = null

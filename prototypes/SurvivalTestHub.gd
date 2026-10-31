@@ -13,6 +13,7 @@ const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 const MOLECULE_FORGE_SCENE := "res://daily_games/KROLL_Molecule_Forge/main.tscn"
 const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
+const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
 
 var status_label: Label
 
@@ -146,6 +147,12 @@ func _build_ui() -> void:
 		"KROLL Thermal Glider",
 		"操控滑翔翼穿越三個測繪信標，利用熱氣流補充升力與電池，最後安全降落。",
 		THERMAL_GLIDER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Gravity Foundry",
+		"移動操作員、推動核心並旋轉重力，將核心送上壓力板後抵達出口；支援鍵盤與觸控。",
+		GRAVITY_FOUNDRY_SCENE
 	)
 	_add_scene_button(
 		launch_list,

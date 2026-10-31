@@ -901,7 +901,12 @@ func _is_camera_interaction_target_current(target: Dictionary) -> bool:
 			var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
 			return mineral_nodes.has(target_node) and bool(target_node.get("visible")) and int(target_node.get("remaining_units")) > 0
 		"lift":
-			return true
+			if target_node.name == "MineLiftAnchor":
+				if not chunk_controller.has_method("get_loaded_world_state_nodes"):
+					return false
+				var loaded_lifts: Array = chunk_controller.call("get_loaded_world_state_nodes")
+				return loaded_lifts.has(target_node)
+			return target_node.name == "KrollMineShaftEntrance"
 	return false
 
 
@@ -963,6 +968,10 @@ func _cast_camera_interaction_target() -> Dictionary:
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
+		# Lift anchors are stateful world objects too, but their G/V actions must
+		# retain the dedicated lift interaction kind rather than generic prop routing.
+		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
+			return {"kind": "lift", "node": candidate}
 		if chunk_controller != null:
 			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
 			if crop_plots.has(candidate):
@@ -974,8 +983,6 @@ func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 				var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
 				if mineral_nodes.has(candidate) and bool(candidate.get("visible")) and int(candidate.get("remaining_units")) > 0:
 					return {"kind": "vein", "node": candidate}
-		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
-			return {"kind": "lift", "node": candidate}
 		candidate = candidate.get_parent()
 	return {}
 
