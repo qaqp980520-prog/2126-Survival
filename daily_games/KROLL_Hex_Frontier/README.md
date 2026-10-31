@@ -27,7 +27,7 @@ Expand from your blue headquarters and control ten of the nineteen hexes before 
 
 ## Import
 
-Open project.godot in Godot 4.3 or newer. The project has no external assets, plugins, audio or network dependency. It is also available from the 2126 Survival Test Hub.
+Open project.godot in Godot 4.3 or newer. The project has no external assets, plugins, audio or network dependency. It is also available from the 2126 Survival Test Hub. A nested script shim keeps the same scene loadable both as a standalone project and from the root project.
 
 ## Files
 
