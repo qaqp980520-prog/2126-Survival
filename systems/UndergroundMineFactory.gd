@@ -189,6 +189,19 @@ static func _add_lift_anchor(parent: Node3D, layer_index: int) -> void:
 	var anchor := Node3D.new()
 	anchor.name = "MineLiftAnchor"
 	anchor.position = Vector3(1.5, -8.25, 7.5)
+	var interaction_area := Area3D.new()
+	interaction_area.name = "InteractionArea"
+	interaction_area.collision_layer = 2
+	interaction_area.collision_mask = 0
+	interaction_area.monitoring = false
+	var interaction_collision := CollisionShape3D.new()
+	var interaction_shape := CylinderShape3D.new()
+	interaction_shape.radius = 1.35
+	interaction_shape.height = 2.2
+	interaction_collision.shape = interaction_shape
+	interaction_collision.position.y = 0.9
+	interaction_area.add_child(interaction_collision)
+	anchor.add_child(interaction_area)
 	parent.add_child(anchor)
 	if DisplayServer.get_name() == "headless":
 		return
