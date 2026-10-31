@@ -66,7 +66,7 @@ func _run() -> void:
 	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(41.5, 2.0, 41.5), _test_time))
 	_expect(moved_away, "production director moves to a disjoint surface window")
 	for entry in entries:
-		_expect(not bool(controller.call("is_chunk_loaded", str(entry["chunk_id"]))), "original surface chunk unloads")
+		_expect(not bool(controller.call("is_chunk_loaded", str(entry["chunk_id"])), "original surface chunk unloads")
 	await process_frame
 	await process_frame
 	for entry in entries:
@@ -148,21 +148,28 @@ func _expect_edge_ramps(patch: Node3D, expected_height: float, label: String) ->
 	_expect(body != null, "%s retains its terrain collision body" % label)
 	if body == null:
 		return
+	var slope_length: float = sqrt(PatchScript.EDGE_RAMP_RUN*PatchScript.EDGE_RAMP_RUN+expected_height*expected_height)
+	var angle: float = atan(expected_height/PatchScript.EDGE_RAMP_RUN)
 	for side in ["East", "West", "North", "South"]:
 		var ramp := body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
 		_expect(ramp != null, "%s has a %s edge ramp" % [label, side])
 		if ramp == null:
 			continue
-		var convex := ramp.shape as ConvexPolygonShape3D
-		_expect(convex != null and convex.points.size() == 6, "%s %s ramp has six collision vertices" % [label, side])
-		if convex == null or convex.points.size() != 6:
+		var ramp_box := ramp.shape as BoxShape3D
+		_expect(ramp_box != null, "%s %s ramp uses a box collision slab" % [label, side])
+		if ramp_box == null:
 			continue
-		var min_y: float = INF
-		var max_y: float = -INF
-		for point in convex.points:
-			min_y = minf(min_y, point.y)
-			max_y = maxf(max_y, point.y)
-		_expect(is_equal_approx(min_y, 0.0) and is_equal_approx(max_y, expected_height), "%s %s ramp bridges ground and patch top" % [label, side])
+		var expected_size := Vector3(slope_length,PatchScript.EDGE_RAMP_COLLISION_THICKNESS,PatchScript.PATCH_SIZE) if side == "East" or side == "West" else Vector3(PatchScript.PATCH_SIZE,PatchScript.EDGE_RAMP_COLLISION_THICKNESS,slope_length)
+		_expect(ramp_box.size.distance_to(expected_size) <= 0.0001, "%s %s ramp collision dimensions match saved height" % [label, side])
+		var expected_rotation := Vector3.ZERO
+		match side:
+			"East": expected_rotation=Vector3(0.0,0.0,-angle)
+			"West": expected_rotation=Vector3(0.0,0.0,angle)
+			"North": expected_rotation=Vector3(-angle,0.0,0.0)
+			"South": expected_rotation=Vector3(angle,0.0,0.0)
+		_expect(ramp.rotation.distance_to(expected_rotation) <= 0.0001, "%s %s ramp keeps its edge orientation" % [label, side])
+		var top_center: Vector3 = ramp.transform*Vector3(0.0,ramp_box.size.y*0.5,0.0)
+		_expect(absf(top_center.y-expected_height*0.5) <= 0.0001, "%s %s ramp top face stays centered on the visual slope" % [label, side])
 
 func _find_patch(controller: Node, chunk_id: String) -> Node3D:
 	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
