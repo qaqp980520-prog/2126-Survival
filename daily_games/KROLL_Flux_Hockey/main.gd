@@ -15,15 +15,16 @@ func _process(delta: float) -> void:
 	if game_state.is_empty() or str(game_state.get("winner", "")) != "":
 		return
 	var target_x: float = float(game_state.get("player_x", Rules.CENTER_X))
-	if _pointer_active:
-		target_x = _pointer_target_x
-	else:
-		var axis: float = 0.0
-		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
-			axis -= 1.0
-		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
-			axis += 1.0
+	var axis: float = 0.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		axis -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		axis += 1.0
+	if axis != 0.0:
+		_pointer_active = false
 		target_x += axis * Rules.PLAYER_SPEED * delta
+	elif _pointer_active:
+		target_x = _pointer_target_x
 	var old_player_score: int = int(game_state.get("player_score", 0))
 	var old_ai_score: int = int(game_state.get("ai_score", 0))
 	game_state = Rules.step(game_state, target_x, delta)
