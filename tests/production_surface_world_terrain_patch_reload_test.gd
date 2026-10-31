@@ -3,7 +3,7 @@ extends SceneTree
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const CHUNK_ID: String = "surface/chunk_0_0"
 const STABLE_ID: String = "surface/chunk_0_0/object/Chunk_0_0/TerrainPatch"
-const FIXED_TIME: int = 2000000000
+var _test_time: int = 0
 var failures: Array[String] = []
 var world: Node3D
 
@@ -11,6 +11,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	_test_time = int(Time.get_unix_time_from_system()) + 10
 	world = WorldScene.instantiate() as Node3D
 	_expect(world != null, "production SurfaceWorld instantiates for terrain persistence coverage")
 	if world == null:
@@ -32,6 +33,8 @@ func _run() -> void:
 		return
 	_expect(str(controller.call("_make_world_object_stable_id", CHUNK_ID, "Chunk_0_0/TerrainPatch")) == STABLE_ID, "terrain patch uses its deterministic stable ID")
 	var original_state: Dictionary = original_patch.call("get_world_object_state")
+	_expect(not bool(original_patch.call("validate_world_object_state", {"height_level": 3, "surface_type": "soil", "revision": 0})), "terrain state rejects an out-of-range height")
+	_expect(not bool(original_patch.call("validate_world_object_state", {"height_level": 0, "surface_type": "lava", "revision": 0})), "terrain state rejects an unknown surface material")
 	_expect(original_state == {"height_level": 0, "surface_type": "soil", "revision": 0}, "terrain patch starts from its legacy-safe default state")
 	var original_proxy: Area3D = original_patch.get_node_or_null("InteractionArea") as Area3D
 	_expect(original_proxy != null and original_proxy.is_inside_tree(), "terrain patch registers an in-tree camera interaction proxy")
@@ -70,10 +73,10 @@ func _run() -> void:
 		_expect(saved_objects[STABLE_ID].get("state", {}) == edited_state, "world save contains the exact edited terrain state")
 	original_patch.call("cycle_terrain_edit")
 	_expect(int(original_patch.call("get_world_object_state").get("height_level", -1)) == 2, "second edit changes the live terrain before restore")
-	_expect(bool(world.call("restore_stream_state", save_payload, FIXED_TIME)), "schema-1 world restore accepts the saved terrain state")
+	_expect(bool(world.call("restore_stream_state", save_payload, _test_time)), "schema-1 world restore accepts the saved terrain state")
 	_expect(original_patch.call("get_world_object_state") == edited_state, "world save restore reapplies terrain height and material atomically")
 
-	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5), FIXED_TIME))
+	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5), _test_time))
 	_expect(moved_away, "production director moves the active window away from the origin")
 	_expect(not bool(controller.call("is_chunk_loaded", CHUNK_ID)), "controller unloads the edited origin chunk")
 	await process_frame
@@ -83,7 +86,7 @@ func _run() -> void:
 	var saved_record: Dictionary = world.get("object_state_registry").call("get_object_state", STABLE_ID)
 	_expect(saved_record.get("state", {}) == edited_state, "registry retains the edited terrain state while unloaded")
 
-	var returned: bool = bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), FIXED_TIME + 1))
+	var returned: bool = bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), _test_time + 1))
 	_expect(returned, "production director reloads the origin chunk")
 	await process_frame
 	await physics_frame
@@ -97,6 +100,12 @@ func _run() -> void:
 		_expect(reloaded_proxy != null and reloaded_proxy.get_instance_id() != old_proxy_instance, "reload creates a new interaction proxy instance")
 		var retarget: Dictionary = world.call("_cast_camera_interaction_target")
 		_expect(str(retarget.get("kind", "")) == "terrain" and retarget.get("node") == reloaded_patch, "camera ray can select the reloaded terrain patch")
+		world.set("_camera_interaction_target_cache", retarget)
+		var terrain_key := InputEventKey.new()
+		terrain_key.pressed = true
+		terrain_key.keycode = KEY_T
+		world.call("_unhandled_input", terrain_key)
+		_expect(int(reloaded_patch.call("get_world_object_state").get("revision", -1)) == 2, "T keyboard action edits the reloaded terrain through the production target route")
 	await _finish(0)
 
 func _find_patch() -> Node3D:
