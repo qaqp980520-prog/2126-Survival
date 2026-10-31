@@ -824,7 +824,7 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 
 ### Remaining engineering work
 
-1. Extend stable-ID/state/proxy lifecycle coverage to every formal interactable factory and all generated mine layers.
+1. Extend stable-ID/state/proxy lifecycle coverage from all-layer mine lifts to every cache, mineral vein, crop and future formal interactable factory across generated mine layers.
 2. Add terrain-edit persistence across chunk unload/reload without breaking schema-v1 saves or stable chunk IDs.
 3. Design bounded asynchronous chunk streaming with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
 4. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
@@ -834,3 +834,35 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - The lift persists its layer index in the existing world-object registry; world-save schema remains version 1.
 - Gravity Foundry is a deterministic grid puzzle prototype, not a continuous physics simulation; no campaign save, audio, animation or controller remapping.
 - No local GUI/GPU/iPhone test is claimed; only exact-head Godot 4.3 CI is verified.
+
+
+## Run 70 closeout — 2026-10-31
+
+### Completed and merged
+
+- KROLL Echo Mapper M0.1: three 9×9 sonar-exploration missions, temporary fog reveal, wall feedback, three beacons per mission, extraction objective, six sonar charges and 60-turn budget. Keyboard and touch controls are available.
+- Registered Echo Mapper in SurvivalTestHub; root hub smoke verifies 15 launch buttons and instantiates the new game from the root project.
+- Added production all-layer lift lifecycle regression for mine layers 0–8. It uses real SurfaceWorld camera-ray targeting and G/V ascent/descent, verifies layer payloads, stable IDs, fresh proxies after streaming, and maximum-depth rejection.
+- Added schema-1 world save/load roundtrip coverage for all nine lift records. Every layer index and stable ID survives the production restore path; no schema migration.
+- Polished board/legend spacing and added sonar beacon-visibility and reveal-expiry assertions.
+
+### Exact acceptance and merge
+
+- Feature PR [#177](https://github.com/qaqp980520-prog/2126-Survival/pull/177) merged as \`dff16b375c19a01ec8d39257dd3fe793493c2c08\`; feature HEAD \`4c3e537a1228bcac55e771e0135d15615e21f3b5\`.
+- Canonical Godot 4.3 exact-head [Run #793](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41195456289): 299/299 main validation steps successful, zero failures, zero skipped. Job cleanup completed.
+- Root Test Hub smoke passed at step 205. Echo Mapper input verification/import/rules/runtime passed at steps 295–298. The production all-nine-layer lift lifecycle and save/load roundtrip passed at step 299.
+- Superseded Run #791 and #792 candidates were cancelled after later commits; they are not final validation evidence.
+- Main was verified at the feature merge SHA before the documentation follow-up.
+
+### Remaining engineering work
+
+1. Extend cache loot/state/proxy lifecycle coverage to every generated cache placement and every mine layer; extend the same contract to mineral veins, crops and future interactable factories.
+2. Add terrain-edit persistence across chunk unload/reload without breaking schema-v1 saves or stable chunk IDs.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
+4. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1; all nine mine lift layer indices and stable IDs survive the tested save/load roundtrip.
+- Echo Mapper is a deterministic fixed-map prototype, not a procedural sonar simulation; no campaign save, audio, animation or controller remapping.
+- No local Godot executable was available; manual GUI, GPU and iPhone QA are not claimed. Exact-head cloud Godot 4.3 CI is verified.
