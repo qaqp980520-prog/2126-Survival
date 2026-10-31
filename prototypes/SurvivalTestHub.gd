@@ -7,6 +7,7 @@ const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
 const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
+const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
 
 var status_label: Label
 
@@ -91,6 +92,12 @@ func _build_ui() -> void:
 		"KROLL Shadow Courier",
 		"回收三份資料、避開旋轉巡邏視線，使用誘餌穿越 KROLL 設施；支援鍵盤與觸控。",
 		SHADOW_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Flux Hockey",
+		"操控下方擋板，把能量球打進上方球門；三座競技場，支援拖曳與鍵盤。",
+		FLUX_HOCKEY_SCENE
 	)
 	_add_scene_button(
 		column,

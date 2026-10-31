@@ -2075,3 +2075,43 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld world-seed integration tests passed."
+
+      - name: Verify Run 63 Flux Hockey and mine interaction prompt inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Flux_Hockey/project.godot
+          test -f daily_games/KROLL_Flux_Hockey/main.tscn
+          test -f daily_games/KROLL_Flux_Hockey/main.gd
+          test -f daily_games/KROLL_Flux_Hockey/rules.gd
+          test -f daily_games/KROLL_Flux_Hockey/tests/rules_test.gd
+          test -f daily_games/KROLL_Flux_Hockey/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_interaction_prompt_test.gd
+          grep -q 'InteractionPrompt' world/SurfaceWorld.gd
+          grep -q 'get_interaction_prompt_text' world/SurfaceWorld.gd
+      - name: Import and parse KROLL Flux Hockey
+        run: godot --headless --path daily_games/KROLL_Flux_Hockey --editor --quit
+      - name: Run KROLL Flux Hockey rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Flux_Hockey --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Flux Hockey rules tests passed."
+      - name: Run KROLL Flux Hockey runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Flux_Hockey --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Flux Hockey runtime smoke test passed."
+      - name: Run production SurfaceWorld interaction prompt test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld interaction prompt tests passed."
