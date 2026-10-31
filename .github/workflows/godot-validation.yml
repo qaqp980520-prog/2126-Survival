@@ -2516,6 +2516,8 @@ jobs:
           test -f daily_games/KROLL_Neon_Climber/rules.gd
           test -f daily_games/KROLL_Neon_Climber/tests/rules_test.gd
           test -f daily_games/KROLL_Neon_Climber/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/main.gd
+          test -f daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/rules.gd
           test -f tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
           grep -q 'NEON_CLIMBER_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'KROLL Neon Climber' tests/survival_test_hub_smoke_test.gd
