@@ -118,11 +118,11 @@ func _cell_rect(cell: Vector2i) -> Rect2:
 func _action_button_rect(button_id: String) -> Rect2:
     match button_id:
         "undo":
-            return Rect2(300.0, 630.0, 110.0, 52.0)
+            return Rect2(300.0, 650.0, 110.0, 52.0)
         "reset":
-            return Rect2(425.0, 630.0, 110.0, 52.0)
+            return Rect2(425.0, 650.0, 110.0, 52.0)
         "next":
-            return Rect2(550.0, 630.0, 110.0, 52.0)
+            return Rect2(550.0, 650.0, 110.0, 52.0)
     return Rect2()
 
 func _handle_press(position: Vector2) -> void:
