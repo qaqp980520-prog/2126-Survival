@@ -849,7 +849,61 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
 func get_camera_interaction_target() -> Dictionary:
-	return _camera_interaction_target_cache.duplicate()
+	var target: Dictionary = _camera_interaction_target_cache.duplicate()
+	if target.is_empty():
+		return {}
+	if not _is_camera_interaction_target_current(target):
+		_camera_interaction_target_cache.clear()
+		return {}
+	return target
+
+func _is_camera_interaction_target_current(target: Dictionary) -> bool:
+	var target_node: Node3D = target.get("node") as Node3D
+	var proxy: Area3D = target.get("proxy") as Area3D
+	if target_node == null or proxy == null:
+		return false
+	if not is_instance_valid(target_node) or not is_instance_valid(proxy):
+		return false
+	if not target_node.is_inside_tree() or target_node.is_queued_for_deletion():
+		return false
+	if not proxy.is_inside_tree() or proxy.is_queued_for_deletion():
+		return false
+	if (proxy.collision_layer & INTERACTION_PROXY_COLLISION_MASK) == 0:
+		return false
+	var ancestor: Node = target_node
+	while ancestor != null and ancestor != self:
+		if not ancestor.is_inside_tree() or ancestor.is_queued_for_deletion():
+			return false
+		ancestor = ancestor.get_parent()
+	if ancestor != self:
+		return false
+	var proxy_ancestor: Node = proxy
+	while proxy_ancestor != null and proxy_ancestor != target_node:
+		if not proxy_ancestor.is_inside_tree() or proxy_ancestor.is_queued_for_deletion():
+			return false
+		proxy_ancestor = proxy_ancestor.get_parent()
+	if proxy_ancestor != target_node or chunk_controller == null:
+		return false
+	match str(target.get("kind", "")):
+		"crop":
+			if not chunk_controller.has_method("get_loaded_crop_plots"):
+				return false
+			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
+			return crop_plots.has(target_node)
+		"prop":
+			if not chunk_controller.has_method("get_loaded_world_state_nodes"):
+				return false
+			var world_props: Array = chunk_controller.call("get_loaded_world_state_nodes")
+			return world_props.has(target_node)
+		"vein":
+			if not chunk_controller.has_method("get_loaded_mineral_nodes"):
+				return false
+			var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
+			return mineral_nodes.has(target_node) and bool(target_node.get("visible")) and int(target_node.get("remaining_units")) > 0
+		"lift":
+			return true
+	return false
+
 
 func _cast_camera_interaction_target() -> Dictionary:
 	if player == null or camera == null or not is_instance_valid(camera) or chunk_controller == null:
@@ -893,6 +947,7 @@ func _cast_camera_interaction_target() -> Dictionary:
 	var target_node: Node3D = target.get("node") as Node3D
 	if target_node == null or not is_instance_valid(target_node):
 		return {}
+	target["proxy"] = target_hit.get("collider")
 	var max_range: float = 3.25
 	match str(target.get("kind", "")):
 		"vein":
