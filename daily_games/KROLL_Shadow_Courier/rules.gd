@@ -105,7 +105,8 @@ static func is_inside(tile: Vector2i) -> bool:
 	return tile.x >= 0 and tile.y >= 0 and tile.x < GRID_SIZE and tile.y < GRID_SIZE
 
 static func is_wall(state: Dictionary, tile: Vector2i) -> bool:
-	return (state.get("walls", []) as Array).has(tile)
+	var walls: Array = state.get("walls", [])
+	return walls.has(tile)
 
 static func reset(state: Dictionary) -> Dictionary:
 	return create_state(int(state.get("level_index", 0)))
