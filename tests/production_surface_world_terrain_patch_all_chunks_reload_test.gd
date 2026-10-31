@@ -46,6 +46,7 @@ func _run() -> void:
 			var edit: Dictionary = patch.call("cycle_terrain_edit")
 			_expect(bool(edit.get("ok", false)), "surface patch %d accepts deterministic edit %d" % [index, edit_index + 1])
 		entry["state"] = patch.call("get_world_object_state")
+		_expect_patch_geometry(patch, entry["state"], "edited patch %d" % index)
 		entry["patch_instance"] = patch.get_instance_id()
 		entry["proxy"] = proxy
 		entry["proxy_instance"] = proxy.get_instance_id()
@@ -90,6 +91,7 @@ func _run() -> void:
 		_expect(fresh_patch.get_instance_id() != int(entry["patch_instance"]), "reloaded patch is a fresh node instance")
 		_expect(str(controller.call("_make_world_object_stable_id", chunk_id, "%s/TerrainPatch" % fresh_patch.get_parent().name)) == stable_id, "reloaded patch retains its deterministic stable ID")
 		_expect(fresh_patch.call("get_world_object_state") == entry["state"], "reloaded patch restores its unique height/material/revision")
+		_expect_patch_geometry(fresh_patch, entry["state"], "reloaded patch %s" % chunk_id)
 		var fresh_proxy: Area3D = fresh_patch.get_node_or_null("InteractionArea") as Area3D
 		_expect(fresh_proxy != null and fresh_proxy.is_inside_tree(), "reloaded patch rebuilds its interaction proxy")
 		if fresh_proxy != null:
@@ -101,6 +103,8 @@ func _run() -> void:
 	for entry in entries:
 		var restored_patch: Node3D = _find_patch(controller, str(entry["chunk_id"]))
 		_expect(restored_patch != null and restored_patch.call("get_world_object_state") == entry["state"], "schema-1 restore preserves each chunk's independent terrain state")
+		if restored_patch != null:
+			_expect_patch_geometry(restored_patch, entry["state"], "schema-1 restored patch %s" % str(entry["chunk_id"]))
 
 	await _finish(0)
 
@@ -125,6 +129,16 @@ func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 			"patch": patch
 		})
 	return entries
+
+func _expect_patch_geometry(patch: Node3D, state: Dictionary, label: String) -> void:
+	var collision: CollisionShape3D = patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+	_expect(collision != null and collision.shape is BoxShape3D, "%s has a box collision shape" % label)
+	if collision == null or not (collision.shape is BoxShape3D):
+		return
+	var expected_height: float = 0.05 + float(state.get("height_level", 0)) * 0.25
+	var box: BoxShape3D = collision.shape as BoxShape3D
+	_expect(is_equal_approx(box.size.y, expected_height), "%s collision height matches its saved state" % label)
+	_expect(is_equal_approx(collision.position.y, expected_height * 0.5), "%s collision remains grounded" % label)
 
 func _find_patch(controller: Node, chunk_id: String) -> Node3D:
 	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
