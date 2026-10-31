@@ -716,3 +716,29 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Evaluate camera-raycast interaction prompts and cache lid animation as separate changes.
 - Add adaptive AI only with deterministic difficulty tests and play-balance evidence.
 - Complete manual GUI, GPU and iPhone testing when the required local engine/device environment is available.
+
+
+## Run 66 closeout — 2026-10-31
+
+### Completed
+- **KROLL Molecule Forge M0.1:** added a playable 5×5 molecular assembly puzzle with H2O, NH3 and CH4 challenges, orthogonal single-bond adjacency, H/O/N/C valence checks, exact formula/connectivity/bond-count/saturation validation, atomic rejection of over-valence placements, keyboard/mouse/touch input, remove/undo/reset/next, deterministic rules tests and scene runtime smoke coverage.
+- **Survival Test Hub:** added Molecule Forge as the 11th launch entry and extended root-project smoke coverage to instantiate the standalone scene and call its rules module.
+- **Production chunk reload regression:** added `tests/production_surface_world_interaction_stream_reload_test.gd`. It uses the real SurfaceWorld, production streaming director and MineralChunkController to unload/reload `surface/chunk_0_0`; verifies stable ID `surface/chunk_0_0/object/Chunk_0_0/SalvageCrate`, persisted opened/remaining state, old node/proxy disposal, new node/proxy registration, camera-ray retargeting and F interaction after reload.
+- No production runtime code or world-save schema change was required; the test closes an end-to-end coverage gap in the existing factory/controller/registry path.
+
+### CI and merge evidence
+- Feature PR [#168](https://github.com/qaqp980520-prog/2126-Survival/pull/168) merged as `87a0ca940a1f4269fc8919e9bf1292c5be29de15`.
+- Exact feature HEAD `79647c9083b0369e86ba22ce24a23500920fa58d` passed Godot 4.3 exact-head [Run #751](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41171780488): 283/283 total step records, zero failures/skips. Steps 277–279 validated Molecule Forge import/rules/runtime; step 280 validated the production chunk unload/reload path.
+- Earlier #746–#750 runs were superseded by later candidate corrections; do not use them as final acceptance evidence.
+
+### Remaining work
+1. Extend stable-ID lifecycle coverage from the salvage crate to every formal interactable factory (crop plot, mineral vein/cache, lift and future KROLL devices), including state-specific proxies.
+2. Add terrain-edit persistence across chunk unload/reload without invalidating legacy chunk IDs or save schema.
+3. Design asynchronous chunk streaming with bounded requests, cancellation-safe ownership and deterministic rollback before claiming background streaming.
+4. Add local GUI, GPU performance and iPhone hardware QA when a local Godot executable/device test environment is available.
+
+### Compatibility and limitations
+- World-save schema remains version 1; no migration or persisted-field change.
+- This test covers one production surface salvage crate and its Area3D proxy; it is not proof that all future object factories are integrated.
+- Molecule Forge is an educational 2D orthogonal single-bond puzzle, not a molecular geometry/chemistry simulator.
+- No local GUI/GPU/iPhone test is claimed; only the exact-head Godot 4.3 CI run is verified.
