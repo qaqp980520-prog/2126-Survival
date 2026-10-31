@@ -27,19 +27,24 @@ func _run() -> void:
 	state = game.get("state")
 	_expect(state.get("player_pos") == before + Vector2i.DOWN, "touch direction button moves the player")
 	(game.find_child("Button_wait", true, false) as Button).pressed.emit()
-	_expect(int((game.get("state") as Dictionary).get("turn", 0)) >= 2, "touch wait button advances the patrol turn")
+	var current_state: Dictionary = game.get("state")
+	_expect(int(current_state.get("turn", 0)) >= 2, "touch wait button advances the patrol turn")
 	(game.find_child("Button_decoy", true, false) as Button).pressed.emit()
-	_expect(int((game.get("state") as Dictionary).get("decoys", 2)) <= 2, "touch decoy button safely invokes the decoy action")
+	current_state = game.get("state")
+	_expect(int(current_state.get("decoys", 2)) <= 2, "touch decoy button safely invokes the decoy action")
 	(game.find_child("Button_reset", true, false) as Button).pressed.emit()
-	_expect(int((game.get("state") as Dictionary).get("turn", -1)) == 0, "touch reset button restarts the mission")
+	current_state = game.get("state")
+	_expect(int(current_state.get("turn", -1)) == 0, "touch reset button restarts the mission")
 	(game.find_child("Button_next", true, false) as Button).pressed.emit()
-	_expect(int((game.get("state") as Dictionary).get("level_index", -1)) == 1, "touch next button advances the mission")
+	current_state = game.get("state")
+	_expect(int(current_state.get("level_index", -1)) == 1, "touch next button advances the mission")
 
 	var key_event := InputEventKey.new()
 	key_event.pressed = true
 	key_event.keycode = KEY_D
 	game.call("_unhandled_input", key_event)
-	_expect((game.get("state") as Dictionary).get("player_pos") == Vector2i(1, 7), "keyboard event moves the player one tile")
+	current_state = game.get("state")
+	_expect(current_state.get("player_pos") == Vector2i(1, 7), "keyboard event moves the player one tile")
 
 	game.queue_free()
 	await process_frame
