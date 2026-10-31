@@ -18,7 +18,8 @@ func _run() -> void:
     _expect(game.has_method("_drill_selected") and game.has_method("_vent"), "scene exposes drill and coolant actions")
     var mission: Dictionary = game.call("get_current_mission")
     _expect(str(mission.get("id", "")) == "copper_spine", "first site loads from the standalone rules module")
-    _expect((mission.get("layout", []) as Array).size() == 8, "first site exposes eight rows")
+    var first_layout: Array = mission.get("layout", [])
+    _expect(first_layout.size() == 8, "first site exposes eight rows")
     game.call("_drill_selected")
     var state: Dictionary = game.call("get_state")
     _expect(int(state.get("row", 0)) == 1 and int(state.get("ore", 0)) == 1, "first drill action extracts the center copper seam")
@@ -30,11 +31,14 @@ func _run() -> void:
     game.call("restart_sector")
     var touch_drill := InputEventScreenTouch.new()
     touch_drill.pressed = true
-    touch_drill.position = (game.call("_button_rect", "drill") as Rect2).get_center()
+    var drill_rect: Rect2 = game.call("_button_rect", "drill")
+    touch_drill.position = drill_rect.get_center()
     game.call("_unhandled_input", touch_drill)
     state = game.call("get_state")
     _expect(int(state.get("row", 0)) == 1, "touch DRILL button advances the live scene")
 
+    game.call("restart_sector")
+    game.set("mission_index", 0)
     game.call("restart_sector")
     var routes: Array = [
         [2, 1, 2, 3, 2, 1, 2, 3]
@@ -50,7 +54,8 @@ func _run() -> void:
     game.call("restart_sector")
     var touch_restart := InputEventScreenTouch.new()
     touch_restart.pressed = true
-    touch_restart.position = (game.call("_button_rect", "restart") as Rect2).get_center()
+    var restart_rect: Rect2 = game.call("_button_rect", "restart")
+    touch_restart.position = restart_rect.get_center()
     game.call("_unhandled_input", touch_restart)
     state = game.call("get_state")
     _expect(int(state.get("row", -1)) == 0, "touch RESTART button resets the current site")
