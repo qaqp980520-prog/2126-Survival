@@ -148,6 +148,18 @@ func _run() -> void:
 	for stable_id in stable_ids:
 		_expect(saved_objects.has(stable_id), "world save contains lift state %s" % stable_id)
 
+	var restore_ok: bool = bool(world.call("restore_stream_state", save_payload, int(Time.get_unix_time_from_system()) + 1))
+	_expect(restore_ok, "production world accepts its all-nine-lifts schema-1 save payload")
+	if restore_ok:
+		await process_frame
+		var restore_report: Dictionary = world.call("get_last_restore_report")
+		_expect(bool(restore_report.get("success", false)), "world restore report confirms the complete save/load transaction")
+		var restored_ids: PackedStringArray = registry.call("get_saved_ids")
+		for layer_index in range(MAX_LAYER_INDEX + 1):
+			_expect(restored_ids.has(stable_ids[layer_index]), "save/load roundtrip retains layer %d lift identity" % layer_index)
+			var restored_record: Dictionary = registry.call("get_object_state", stable_ids[layer_index])
+			_expect(int(restored_record.get("state", {}).get("layer_index", -1)) == layer_index, "save/load roundtrip retains layer %d lift payload" % layer_index)
+
 	await _finish(0 if failures.is_empty() else 1)
 
 func _chunk_id(layer_index: int) -> String:
