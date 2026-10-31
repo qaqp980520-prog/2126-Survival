@@ -2124,6 +2124,7 @@ jobs:
           test -f daily_games/KROLL_Star_Chart/project.godot
           test -f daily_games/KROLL_Star_Chart/main.tscn
           test -f daily_games/KROLL_Star_Chart/main.gd
+          test -f daily_games/KROLL_Star_Chart/daily_games/KROLL_Star_Chart/main.gd
           test -f daily_games/KROLL_Star_Chart/rules.gd
           test -f daily_games/KROLL_Star_Chart/tests/rules_test.gd
           test -f daily_games/KROLL_Star_Chart/tests/game_smoke_test.gd
