@@ -23,6 +23,8 @@ func _run() -> void:
         _expect(bool(action.get("ok", false)), "the game scene accepts a legal board action")
         var updated: Dictionary = game.call("get_current_state")
         _expect(int(rules.call("territory_count", updated, 1)) == 2, "board redraw reflects the accepted claim")
+        var repeated: Dictionary = game.call("perform_action_at", legal[0])
+        _expect(not bool(repeated.get("ok", false)) and str(repeated.get("reason", "")) == "action_already_used", "runtime scene rejects a second action before the next turn")
     var turn: Dictionary = game.call("end_player_turn")
     _expect(bool(turn.get("ok", false)), "end-turn button resolves the AI response")
     var after_ai: Dictionary = game.call("get_current_state")
