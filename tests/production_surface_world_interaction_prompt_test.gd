@@ -31,6 +31,8 @@ func _run() -> void:
 		_expect(prompt.text.contains("OPEN SALVAGE CRATE"), "surface HUD prompts F interaction when a crate is in reach")
 
 	world.player.global_position = Vector3(1.5, 2.0, 7.5)
+	world.call("_refresh_hud")
+	_expect(prompt.text.contains("ENTER KROLL MINE LIFT"), "surface HUD prompts for the mine lift when the player is beside it")
 	_expect(bool(world.call("_toggle_mine_access")), "test enters the production underground lift")
 	var gold_cache: Node3D = _find_world_prop(world, "MineCache_Gold", "UndergroundMine_0_0")
 	_expect(gold_cache != null, "origin mine room exposes its stateful gold cache")
