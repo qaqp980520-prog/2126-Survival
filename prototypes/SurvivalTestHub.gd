@@ -12,6 +12,7 @@ const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
 const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 const MOLECULE_FORGE_SCENE := "res://daily_games/KROLL_Molecule_Forge/main.tscn"
 const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
+const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
 
 var status_label: Label
 
@@ -139,6 +140,12 @@ func _build_ui() -> void:
 		"KROLL Hex Frontier",
 		"在十九格六角地圖擴張領地、升級能源格，先控制十格取得勝利。",
 		HEX_FRONTIER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Thermal Glider",
+		"操控滑翔翼穿越三個測繪信標，利用熱氣流補充升力與電池，最後安全降落。",
+		THERMAL_GLIDER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
