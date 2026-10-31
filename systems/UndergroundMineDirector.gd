@@ -222,27 +222,42 @@ func _parse_chunk_id(id: String) -> Dictionary:
 	return {"valid": true, "coordinate": coord, "layer": layer_index}
 
 func _capture_registry_snapshot() -> Dictionary:
-	var candidate: Variant = chunk_controller.get("registry")
-	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("to_save_dict") or not candidate.has_method("restore_snapshot_exact"):
+	var mineral_registry: Variant = chunk_controller.get("registry")
+	if mineral_registry == null or not is_instance_valid(mineral_registry) or not mineral_registry.has_method("to_save_dict") or not mineral_registry.has_method("restore_snapshot_exact"):
 		return {}
-	var snapshot: Variant = candidate.call("to_save_dict")
-	if not (snapshot is Dictionary) or not snapshot.has("schema_version") or not snapshot.has("veins"):
+	var mineral_snapshot: Variant = mineral_registry.call("to_save_dict")
+	if not (mineral_snapshot is Dictionary) or not mineral_snapshot.has("schema_version") or not mineral_snapshot.has("veins"):
 		return {}
-	return snapshot.duplicate(true)
+	var object_registry: Variant = chunk_controller.get("object_state_registry")
+	if object_registry == null or not is_instance_valid(object_registry) or not object_registry.has_method("to_save_dict") or not object_registry.has_method("restore_save_dict"):
+		return {}
+	var object_snapshot: Variant = object_registry.call("to_save_dict")
+	if not (object_snapshot is Dictionary) or not object_snapshot.has("schema_version") or not object_snapshot.has("objects"):
+		return {}
+	return {
+		"mineral": mineral_snapshot.duplicate(true),
+		"objects": object_snapshot.duplicate(true)
+	}
 
 func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], previous_managed: Dictionary, registry_snapshot: Dictionary, now_unix: int) -> bool:
 	var new_ok: bool = _rollback_new_loads(new_ids, now_unix)
-	var registry_ok: bool = false
-	var registry: Variant = chunk_controller.get("registry")
-	if registry != null and is_instance_valid(registry) and registry.has_method("restore_snapshot_exact"):
-		registry_ok = bool(registry.call("restore_snapshot_exact", registry_snapshot, now_unix))
-	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix) if registry_ok else false
-	var final_registry_ok: bool = false
-	if old_ok and registry != null and is_instance_valid(registry) and registry.has_method("restore_snapshot_exact"):
-		# Re-apply after reloading stale roots because normal registration may catch up elapsed time.
-		final_registry_ok = bool(registry.call("restore_snapshot_exact", registry_snapshot, now_unix))
-	_managed_chunk_ids = previous_managed.duplicate(true) if new_ok and registry_ok and old_ok and final_registry_ok else _actual_managed_map()
-	return new_ok and registry_ok and old_ok and final_registry_ok
+	var mineral_registry: Variant = chunk_controller.get("registry")
+	var object_registry: Variant = chunk_controller.get("object_state_registry")
+	var mineral_snapshot: Dictionary = registry_snapshot.get("mineral", {})
+	var object_snapshot: Dictionary = registry_snapshot.get("objects", {})
+	var mineral_ok: bool = mineral_registry != null and is_instance_valid(mineral_registry) and mineral_registry.has_method("restore_snapshot_exact") and bool(mineral_registry.call("restore_snapshot_exact", mineral_snapshot, now_unix))
+	var objects_ok: bool = object_registry != null and is_instance_valid(object_registry) and object_registry.has_method("restore_save_dict") and bool(object_registry.call("restore_save_dict", object_snapshot))
+	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix) if mineral_ok and objects_ok else false
+	var final_mineral_ok: bool = false
+	var final_objects_ok: bool = false
+	if old_ok and mineral_registry != null and is_instance_valid(mineral_registry) and mineral_registry.has_method("restore_snapshot_exact"):
+		# Re-apply exact snapshots after reloading stale roots; registration can update both registries.
+		final_mineral_ok = bool(mineral_registry.call("restore_snapshot_exact", mineral_snapshot, now_unix))
+	if old_ok and object_registry != null and is_instance_valid(object_registry) and object_registry.has_method("restore_save_dict"):
+		final_objects_ok = bool(object_registry.call("restore_save_dict", object_snapshot))
+	var rollback_complete: bool = new_ok and mineral_ok and objects_ok and old_ok and final_mineral_ok and final_objects_ok
+	_managed_chunk_ids = previous_managed.duplicate(true) if rollback_complete else _actual_managed_map()
+	return rollback_complete
 
 func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 	var success := true
