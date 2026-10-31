@@ -46,7 +46,7 @@ func _run() -> void:
 	invalid_fractional["world_seed"] = 42.5
 	var position_before: Vector3 = player.global_position
 	_expect(not bool(world.call("restore_stream_state", invalid_fractional, 1793400000)), "fractional world seeds are rejected before mutation")
-	_expect(int(world.get("world_seed")) == 42 and world.player.global_position.is_equal_approx(position_before), "fractional seed rejection preserves the live world")
+	_expect(int(world.get("world_seed")) == 42 and player.global_position.is_equal_approx(position_before), "fractional seed rejection preserves the live world")
 	var invalid_negative: Dictionary = saved.duplicate(true)
 	invalid_negative["world_seed"] = -1
 	_expect(not bool(world.call("restore_stream_state", invalid_negative, 1793400001)), "negative world seeds are rejected")
@@ -64,7 +64,7 @@ func _run() -> void:
 
 	var legacy_save: Dictionary = saved.duplicate(true)
 	legacy_save.erase("world_seed")
-	_expect(bool(world.mine_director.call("sync_to_world_position", away, 1793400020)), "legacy compatibility fixture unloads the origin window")
+	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400020)), "legacy compatibility fixture unloads the origin window")
 	world.set("world_seed", 84)
 	_expect(bool(world.call("restore_stream_state", legacy_save, 1793400021)), "legacy schema-1 save without world_seed remains loadable")
 	_expect(int(world.get("world_seed")) == LEGACY_SEED, "legacy saves without world_seed fall back to the original deterministic seed")
