@@ -810,6 +810,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
 	_last_mine_layer_index = target_depth
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
 
