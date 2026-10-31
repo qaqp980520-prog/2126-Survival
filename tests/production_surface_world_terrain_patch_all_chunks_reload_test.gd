@@ -141,6 +141,28 @@ func _expect_patch_geometry(patch: Node3D, state: Dictionary, label: String) -> 
 	var box: BoxShape3D = collision.shape as BoxShape3D
 	_expect(is_equal_approx(box.size.y, expected_height), "%s collision height matches its saved state" % label)
 	_expect(is_equal_approx(collision.position.y, expected_height * 0.5), "%s collision remains grounded" % label)
+	_expect_edge_ramps(patch, expected_height, label)
+
+func _expect_edge_ramps(patch: Node3D, expected_height: float, label: String) -> void:
+	var body := patch.get_node_or_null("TerrainCollisionBody") as StaticBody3D
+	_expect(body != null, "%s retains its terrain collision body" % label)
+	if body == null:
+		return
+	for side in ["East", "West", "North", "South"]:
+		var ramp := body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
+		_expect(ramp != null, "%s has a %s edge ramp" % [label, side])
+		if ramp == null:
+			continue
+		var convex := ramp.shape as ConvexPolygonShape3D
+		_expect(convex != null and convex.points.size() == 6, "%s %s ramp has six collision vertices" % [label, side])
+		if convex == null or convex.points.size() != 6:
+			continue
+		var min_y: float = INF
+		var max_y: float = -INF
+		for point in convex.points:
+			min_y = minf(min_y, point.y)
+			max_y = maxf(max_y, point.y)
+		_expect(is_equal_approx(min_y, 0.0) and is_equal_approx(max_y, expected_height), "%s %s ramp bridges ground and patch top" % [label, side])
 
 func _find_patch(controller: Node, chunk_id: String) -> Node3D:
 	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
