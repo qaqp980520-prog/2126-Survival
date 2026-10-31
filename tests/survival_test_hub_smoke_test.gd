@@ -19,7 +19,7 @@ const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
-const BIODOME_KEEPER_SCENE := "res://daily_games/KROLL_BioDome_Keeper/main.tscn"
+const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
 
 var failures: Array[String] = []
 
@@ -44,7 +44,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(ECHO_MAPPER_SCENE), "Echo Mapper game scene exists")
 	_expect(ResourceLoader.exists(ATMOSPHERE_LAB_SCENE), "Atmosphere Lab game scene exists")
 	_expect(ResourceLoader.exists(NEON_CLIMBER_SCENE), "Neon Climber game scene exists")
-	_expect(ResourceLoader.exists(BIODOME_KEEPER_SCENE), "BioDome Keeper game scene exists")
+	_expect(ResourceLoader.exists(ROBOTIC_ARM_OPERATOR_SCENE), "Robotic Arm Operator game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -75,7 +75,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Knight Circuit"), "hub labels the Knight Circuit game")
 	_expect(labels.has("KROLL Atmosphere Lab"), "hub labels the Atmosphere Lab game")
 	_expect(labels.has("KROLL Neon Climber"), "hub labels the Neon Climber game")
-	_expect(labels.has("KROLL BioDome Keeper"), "hub labels the BioDome Keeper game")
+	_expect(labels.has("KROLL Robotic Arm Operator"), "hub labels the Robotic Arm Operator game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -203,17 +203,17 @@ func _run() -> void:
 		await process_frame
 
 
-	var biodome_scene := load(BIODOME_KEEPER_SCENE) as PackedScene
-	_expect(biodome_scene != null, "root hub can load the BioDome Keeper scene")
-	if biodome_scene != null:
-		var biodome := biodome_scene.instantiate()
-		root.add_child(biodome)
+	var arm_scene := load(ROBOTIC_ARM_OPERATOR_SCENE) as PackedScene
+	_expect(arm_scene != null, "root hub can load the Robotic Arm Operator scene")
+	if arm_scene != null:
+		var arm_game := arm_scene.instantiate()
+		root.add_child(arm_game)
 		await process_frame
-		_expect(biodome.has_method("get_current_state"), "root-loaded BioDome Keeper initializes its ecosystem model")
-		if biodome.has_method("get_current_state"):
-			var biodome_state: Dictionary = biodome.call("get_current_state")
-			_expect(str(biodome_state.get("mission_id", "")) == "fern_hall", "root-loaded BioDome Keeper starts Fern Hall")
-		biodome.queue_free()
+		_expect(arm_game.has_method("get_current_state"), "root-loaded Robotic Arm Operator initializes its manipulator model")
+		if arm_game.has_method("get_current_state"):
+			var arm_state: Dictionary = arm_game.call("get_current_state")
+			_expect(str(arm_state.get("status", "")) == "playing", "root-loaded Robotic Arm Operator starts its first work order")
+		arm_game.queue_free()
 		await process_frame
 	hub.queue_free()
 	await process_frame

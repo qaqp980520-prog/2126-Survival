@@ -2555,44 +2555,44 @@ jobs:
           echo "$output" | grep -q "Production SurfaceWorld all-chunk terrain patch reload tests passed."
 
 
-      - name: Verify Run 74 BioDome Keeper and terrain edge transition inputs
+      - name: Verify Run 74 Robotic Arm Operator and terrain edge transition inputs
         shell: bash
         run: |
           set -e
-          test -f daily_games/KROLL_BioDome_Keeper/project.godot
-          test -f daily_games/KROLL_BioDome_Keeper/main.tscn
-          test -f daily_games/KROLL_BioDome_Keeper/main.gd
-          test -f daily_games/KROLL_BioDome_Keeper/rules.gd
-          test -f daily_games/KROLL_BioDome_Keeper/tests/rules_test.gd
-          test -f daily_games/KROLL_BioDome_Keeper/tests/game_smoke_test.gd
-          test -f daily_games/KROLL_BioDome_Keeper/daily_games/KROLL_BioDome_Keeper/main.gd
-          test -f daily_games/KROLL_BioDome_Keeper/daily_games/KROLL_BioDome_Keeper/rules.gd
-          cmp -s daily_games/KROLL_BioDome_Keeper/main.gd daily_games/KROLL_BioDome_Keeper/daily_games/KROLL_BioDome_Keeper/main.gd
-          cmp -s daily_games/KROLL_BioDome_Keeper/rules.gd daily_games/KROLL_BioDome_Keeper/daily_games/KROLL_BioDome_Keeper/rules.gd
-          grep -q 'BIODOME_KEEPER_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'KROLL BioDome Keeper' tests/survival_test_hub_smoke_test.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/project.godot
+          test -f daily_games/KROLL_Robotic_Arm_Operator/main.tscn
+          test -f daily_games/KROLL_Robotic_Arm_Operator/main.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/rules.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/tests/rules_test.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/daily_games/KROLL_Robotic_Arm_Operator/main.gd
+          test -f daily_games/KROLL_Robotic_Arm_Operator/daily_games/KROLL_Robotic_Arm_Operator/rules.gd
+          cmp -s daily_games/KROLL_Robotic_Arm_Operator/main.gd daily_games/KROLL_Robotic_Arm_Operator/daily_games/KROLL_Robotic_Arm_Operator/main.gd
+          cmp -s daily_games/KROLL_Robotic_Arm_Operator/rules.gd daily_games/KROLL_Robotic_Arm_Operator/daily_games/KROLL_Robotic_Arm_Operator/rules.gd
+          grep -q 'ROBOTIC_ARM_OPERATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Robotic Arm Operator' tests/survival_test_hub_smoke_test.gd
           grep -q 'EDGE_RAMP_RUN' systems/SurfaceTerrainPatch.gd
           grep -q 'TerrainRampCollision' systems/SurfaceTerrainPatch.gd
           test -f tests/surface_terrain_patch_edge_transition_test.gd
           grep -q 'Production SurfaceWorld all-chunk terrain patch reload tests passed.' tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
-      - name: Import and parse KROLL BioDome Keeper
-        run: godot --headless --path daily_games/KROLL_BioDome_Keeper --editor --quit
-      - name: Run KROLL BioDome Keeper rules tests
+      - name: Import and parse KROLL Robotic Arm Operator
+        run: godot --headless --path daily_games/KROLL_Robotic_Arm_Operator --editor --quit
+      - name: Run KROLL Robotic Arm Operator rules tests
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_BioDome_Keeper --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Robotic_Arm_Operator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL BioDome Keeper rules tests passed."
-      - name: Run KROLL BioDome Keeper runtime smoke test
+          echo "$output" | grep -q "KROLL Robotic Arm Operator rules tests passed."
+      - name: Run KROLL Robotic Arm Operator runtime smoke test
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_BioDome_Keeper --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Robotic_Arm_Operator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL BioDome Keeper runtime smoke test passed."
+          echo "$output" | grep -q "KROLL Robotic Arm Operator runtime smoke test passed."
       - name: Run SurfaceTerrainPatch edge transition regression
         shell: bash
         run: |
