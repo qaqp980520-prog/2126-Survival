@@ -15,7 +15,7 @@ const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
 const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
 const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
-const VECTOR_RALLY_SCENE := "res://daily_games/KROLL_Vector_Rally/main.tscn"
+const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 
 var status_label: Label
 
@@ -164,9 +164,9 @@ func _build_ui() -> void:
 	)
 	_add_scene_button(
 		launch_list,
-		"KROLL Vector Rally",
-		"駕駛電動賽車完成三座環形賽道，控制轉向、油門、煞車與手煞車；支援鍵盤與觸控。",
-		VECTOR_RALLY_SCENE
+		"KROLL Knight Circuit",
+		"以騎士的 L 形走法走遍 5×5 棋盤，每格只能踩一次；支援點擊、觸控與方向鍵選取。",
+		KNIGHT_CIRCUIT_SCENE
 	)
 	_add_scene_button(
 		launch_list,
