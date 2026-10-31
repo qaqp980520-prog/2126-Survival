@@ -2371,3 +2371,48 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld underground cache/lift reload tests passed."
+
+
+      - name: Verify Run 70 Echo Mapper and all-layer lift lifecycle inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Echo_Mapper/project.godot
+          test -f daily_games/KROLL_Echo_Mapper/main.tscn
+          test -f daily_games/KROLL_Echo_Mapper/main.gd
+          test -f daily_games/KROLL_Echo_Mapper/daily_games/KROLL_Echo_Mapper/main.gd
+          test -f daily_games/KROLL_Echo_Mapper/rules.gd
+          test -f daily_games/KROLL_Echo_Mapper/daily_games/KROLL_Echo_Mapper/rules.gd
+          test -f daily_games/KROLL_Echo_Mapper/tests/rules_test.gd
+          test -f daily_games/KROLL_Echo_Mapper/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_underground_lift_all_layers_test.gd
+          grep -q 'SONAR_RADIUS' daily_games/KROLL_Echo_Mapper/rules.gd
+          grep -q 'MineLiftAnchor' systems/UndergroundMineFactory.gd
+          grep -q 'MAX_LAYER_INDEX' tests/production_surface_world_underground_lift_all_layers_test.gd
+          grep -q 'ECHO_MAPPER_SCENE' prototypes/SurvivalTestHub.gd
+      - name: Import and parse KROLL Echo Mapper
+        run: godot --headless --path daily_games/KROLL_Echo_Mapper --editor --quit
+      - name: Run KROLL Echo Mapper rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 25s godot --headless --path daily_games/KROLL_Echo_Mapper --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Echo Mapper rules tests passed."
+      - name: Run KROLL Echo Mapper runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Echo_Mapper --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Echo Mapper runtime smoke test passed."
+      - name: Run production SurfaceWorld all mine-layers lift lifecycle test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/production_surface_world_underground_lift_all_layers_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld all mine-layers lift lifecycle tests passed."

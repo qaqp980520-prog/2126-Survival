@@ -14,6 +14,7 @@ const MOLECULE_FORGE_SCENE := "res://daily_games/KROLL_Molecule_Forge/main.tscn"
 const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
 const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
+const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 
 var status_label: Label
 
@@ -153,6 +154,12 @@ func _build_ui() -> void:
 		"KROLL Gravity Foundry",
 		"移動操作員、推動核心並旋轉重力，將核心送上壓力板後抵達出口；支援鍵盤與觸控。",
 		GRAVITY_FOUNDRY_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Echo Mapper",
+		"使用聲納脈衝探索三個隱藏維修區，回收訊號信標並抵達撤離艙；支援鍵盤與觸控。",
+		ECHO_MAPPER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
