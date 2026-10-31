@@ -155,6 +155,7 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "right", "D")
 	_add_touch_button(grid, "jump", "JUMP")
 	_add_touch_button(grid, "crop", "CROP")
+	_add_touch_button(grid, "terrain", "TERRAIN")
 	_add_touch_button(grid, "crate", "CRATE")
 	_add_touch_button(grid, "shaft", "DESCEND")
 	_add_touch_button(grid, "deeper", "DOWN ONE")
@@ -184,6 +185,8 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_on_touch_crop_pressed)
 		"crate":
 			button.pressed.connect(_on_touch_crate_pressed)
+		"terrain":
+			button.pressed.connect(_on_touch_terrain_pressed)
 		"shaft":
 			button.pressed.connect(_on_touch_shaft_pressed)
 		"deeper":
@@ -200,6 +203,9 @@ func _on_touch_crop_pressed() -> void:
 
 func _on_touch_crate_pressed() -> void:
 	_interact_nearest_world_prop()
+
+func _on_touch_terrain_pressed() -> void:
+	_interact_nearest_terrain_patch()
 
 func _on_touch_shaft_pressed() -> void:
 	_toggle_mine_access()
@@ -381,6 +387,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_interact_nearest_crop_plot()
 			elif key_event.keycode == KEY_F:
 				_interact_nearest_world_prop()
+			elif key_event.keycode == KEY_T:
+				_interact_nearest_terrain_patch()
 			elif key_event.keycode == KEY_G:
 				_toggle_mine_access()
 			elif key_event.keycode == KEY_V:
@@ -446,6 +454,24 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	result["message"] = _world_object_action_message
 	_refresh_hud()
 	return result
+func _interact_nearest_terrain_patch() -> Dictionary:
+	if player == null or chunk_controller == null:
+		return {"ok": false, "reason": "unavailable"}
+	var target: Dictionary = get_camera_interaction_target()
+	var selected: Node3D = target.get("node") as Node3D
+	if str(target.get("kind", "")) != "terrain" or selected == null or not selected.has_method("cycle_terrain_edit"):
+		_world_object_action_message = "Aim at a surface terrain patch within reach."
+		_refresh_hud()
+		return {"ok": false, "reason": "out_of_reach", "message": _world_object_action_message}
+	var result: Dictionary = selected.call("cycle_terrain_edit")
+	var state: Dictionary = result.get("state", {})
+	if bool(result.get("ok", false)):
+		_world_object_action_message = "Terrain patch updated: %s · height %d · revision %d." % [str(state.get("surface_type", "soil")), int(state.get("height_level", 0)), int(state.get("revision", 0))]
+	else:
+		_world_object_action_message = "Terrain edit blocked: %s." % str(result.get("reason", "unknown"))
+	_refresh_hud()
+	return result
+
 func _get_nearest_mineable_vein() -> Node3D:
 	if not _is_underground or player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
 		return null
@@ -890,6 +916,11 @@ func _is_camera_interaction_target_current(target: Dictionary) -> bool:
 				return false
 			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
 			return crop_plots.has(target_node)
+		"terrain":
+			if not chunk_controller.has_method("get_loaded_world_state_nodes") or not target_node.has_method("cycle_terrain_edit"):
+				return false
+			var terrain_nodes: Array = chunk_controller.call("get_loaded_world_state_nodes")
+			return terrain_nodes.has(target_node)
 		"prop":
 			if not chunk_controller.has_method("get_loaded_world_state_nodes"):
 				return false
@@ -977,6 +1008,8 @@ func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 			if crop_plots.has(candidate):
 				return {"kind": "crop", "node": candidate}
 			var world_props: Array = chunk_controller.call("get_loaded_world_state_nodes")
+			if candidate.has_method("cycle_terrain_edit") and world_props.has(candidate):
+				return {"kind": "terrain", "node": candidate}
 			if world_props.has(candidate):
 				return {"kind": "prop", "node": candidate}
 			if chunk_controller.has_method("get_loaded_mineral_nodes"):
@@ -1005,6 +1038,9 @@ func get_interaction_prompt_text() -> String:
 				str(cache_data.get("display_name", cache_id)).to_upper(),
 				int(target_node.get("loot_remaining"))
 			]
+		"terrain":
+			var terrain_state: Dictionary = target_node.call("get_world_object_state")
+			return "T  EDIT TERRAIN · LEVEL %d · %s" % [int(terrain_state.get("height_level", 0)), str(terrain_state.get("surface_type", "soil")).to_upper()]
 		"lift":
 			if _is_underground:
 				var current_layer: int = mine_director.get_layer_index(player.global_position) if mine_director != null else 0
@@ -1044,6 +1080,8 @@ func _refresh_hud() -> void:
 		(touch_buttons["deeper"] as Button).disabled = not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
 	if touch_buttons.has("crop"):
 		(touch_buttons["crop"] as Button).disabled = _is_underground
+	if touch_buttons.has("terrain"):
+		(touch_buttons["terrain"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):
 		(touch_buttons["sprint"] as Button).text = "SPRINT ON" if _sprint_active else "SPRINT"
 	for slot_index in range(QuickUseScript.SLOT_COUNT):
@@ -1056,7 +1094,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
+	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
