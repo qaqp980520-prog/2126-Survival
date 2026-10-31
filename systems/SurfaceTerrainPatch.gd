@@ -203,6 +203,29 @@ func get_edge_ramp_profile() -> Dictionary:
 		"sides":RAMP_SIDES.duplicate()
 	}
 
+func bind_neighbor_patch(side: String, neighbor_patch: Node3D) -> bool:
+	if not RAMP_SIDES.has(side) or not is_instance_valid(neighbor_patch) or neighbor_patch == self:
+		return false
+	if not neighbor_patch.has_method("get_world_object_state"):
+		return false
+	var expected_offset := Vector3.ZERO
+	match side:
+		"east":
+			expected_offset = Vector3(PATCH_SIZE, 0.0, 0.0)
+		"west":
+			expected_offset = Vector3(-PATCH_SIZE, 0.0, 0.0)
+		"north":
+			expected_offset = Vector3(0.0, 0.0, -PATCH_SIZE)
+		"south":
+			expected_offset = Vector3(0.0, 0.0, PATCH_SIZE)
+	var actual_offset: Vector3 = neighbor_patch.global_position - global_position
+	if absf(actual_offset.x - expected_offset.x) > 0.01 or absf(actual_offset.y) > 0.01 or absf(actual_offset.z - expected_offset.z) > 0.01:
+		return false
+	var neighbor_state: Variant = neighbor_patch.call("get_world_object_state")
+	if not (neighbor_state is Dictionary):
+		return false
+	return set_neighbor_edge_state(side, neighbor_state)
+
 func set_neighbor_edge_state(side: String, neighbor_state: Dictionary) -> bool:
 	if not RAMP_SIDES.has(side) or not validate_world_object_state(neighbor_state):
 		return false
