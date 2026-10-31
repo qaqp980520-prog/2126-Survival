@@ -400,7 +400,9 @@ func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
 		return {"ok": false, "action": "unavailable", "message": "Crop interaction is unavailable."}
 	var target: Dictionary = get_camera_interaction_target()
-	var selected_plot: Node3D = target.get("node") as Node3D if str(target.get("kind", "")) == "crop" else null
+	var selected_plot: Node3D = null
+	if str(target.get("kind", "")) == "crop":
+		selected_plot = target.get("node") as Node3D
 	if selected_plot == null:
 		_crop_action_message = "Aim at a crop plot within reach."
 		_refresh_hud()
@@ -666,7 +668,8 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 		var target: Dictionary = get_camera_interaction_target()
 		if str(target.get("kind", "")) == "vein":
 			nearest = target.get("node") as Node3D
-	if nearest == null or not chunk_controller.call("get_loaded_mineral_nodes").has(nearest):
+	var loaded_veins: Array = chunk_controller.call("get_loaded_mineral_nodes")
+	if nearest == null or not loaded_veins.has(nearest):
 		_world_object_action_message = "Aim at a mineable vein within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
