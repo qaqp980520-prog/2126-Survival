@@ -66,6 +66,7 @@ func new_game(scenario: int = 0) -> Dictionary:
         "scenario": selected_scenario,
         "turn": 1,
         "current_player": 1,
+        "action_used": false,
         "energy": {"1": 4, "2": 4},
         "tiles": tiles,
         "winner": 0,
@@ -91,7 +92,7 @@ func territory_count(state: Dictionary, owner: int) -> int:
 
 func get_legal_claims(state: Dictionary, owner: int) -> Array[Vector2i]:
     var result: Array[Vector2i] = []
-    if int(state.get("winner", 0)) != 0 or int(state.get("current_player", 0)) != owner:
+    if int(state.get("winner", 0)) != 0 or int(state.get("current_player", 0)) != owner or bool(state.get("action_used", false)):
         return result
     if get_energy(state, owner) < CLAIM_COST:
         return result
@@ -103,7 +104,7 @@ func get_legal_claims(state: Dictionary, owner: int) -> Array[Vector2i]:
 
 func get_legal_upgrades(state: Dictionary, owner: int) -> Array[Vector2i]:
     var result: Array[Vector2i] = []
-    if int(state.get("winner", 0)) != 0 or int(state.get("current_player", 0)) != owner:
+    if int(state.get("winner", 0)) != 0 or int(state.get("current_player", 0)) != owner or bool(state.get("action_used", false)):
         return result
     if get_energy(state, owner) < UPGRADE_COST:
         return result
@@ -119,6 +120,8 @@ func apply_claim(state: Dictionary, coord: Vector2i) -> Dictionary:
         return _failure("game_over", state)
     if owner != 1 and owner != 2:
         return _failure("invalid_turn", state)
+    if bool(state.get("action_used", false)):
+        return _failure("action_already_used", state)
     if get_energy(state, owner) < CLAIM_COST:
         return _failure("insufficient_energy", state)
     var tile: Dictionary = get_tile(state, coord)
@@ -136,6 +139,8 @@ func apply_upgrade(state: Dictionary, coord: Vector2i) -> Dictionary:
         return _failure("game_over", state)
     if owner != 1 and owner != 2:
         return _failure("invalid_turn", state)
+    if bool(state.get("action_used", false)):
+        return _failure("action_already_used", state)
     if get_energy(state, owner) < UPGRADE_COST:
         return _failure("insufficient_energy", state)
     var tile: Dictionary = get_tile(state, coord)
@@ -151,6 +156,7 @@ func apply_upgrade(state: Dictionary, coord: Vector2i) -> Dictionary:
     tiles[_key(coord)] = upgraded
     next["tiles"] = tiles
     _spend_energy(next, owner, UPGRADE_COST)
+    next["action_used"] = true
     next["last_action"] = "Player %d upgraded a tile at %s." % [owner, _coord_label(coord)]
     return {"ok": true, "reason": "upgraded", "state": next}
 
@@ -161,6 +167,7 @@ func advance_round(state: Dictionary) -> Dictionary:
         return _failure("not_player_turn", state)
     var next: Dictionary = state.duplicate(true)
     next["current_player"] = 2
+    next["action_used"] = false
     _apply_income(next, 2)
     var ai_action: String = "AI passed."
     var ai_claims: Array[Vector2i] = get_legal_claims(next, 2)
@@ -185,6 +192,7 @@ func advance_round(state: Dictionary) -> Dictionary:
                 ai_action = "AI upgraded %s." % _coord_label(upgrade_coord)
     if int(next.get("winner", 0)) == 0:
         next["current_player"] = 1
+        next["action_used"] = false
         next["turn"] = int(next.get("turn", 1)) + 1
         _apply_income(next, 1)
     else:
@@ -200,6 +208,7 @@ func _claim_in_place(state: Dictionary, owner: int, coord: Vector2i) -> void:
     tiles[_key(coord)] = tile
     state["tiles"] = tiles
     _spend_energy(state, owner, CLAIM_COST)
+    state["action_used"] = true
     state["last_action"] = "Player %d claimed %s." % [owner, _coord_label(coord)]
     if territory_count(state, owner) >= WIN_TERRITORY:
         state["winner"] = owner
