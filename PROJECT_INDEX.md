@@ -1118,3 +1118,44 @@
 - Crop binding preflight currently covers CropPlotVisual/MineralChunkController. It does not prove every other formal interactable factory (mineral veins/caches, lift and future KROLL devices) is fully integrated.
 - Terrain-edit persistence and asynchronous/cancellable chunk streaming remain unfinished.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
+
+
+## 2026-10-31 Run 68 — KROLL Thermal Glider + mineral registration preflight and production vein reload
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Thermal_Glider/`, a 2D flight-and-landing challenge with three deterministic courses: Coastal Thermals, Ridge Crossing and Floodplain Wind.
+- Pilot the glider through three ordered survey beacons, use localized thermal columns for lift and assist-battery recharge, manage pitch/boost/airbrake, then land within bounded runway speed, vertical-speed, pitch and altitude constraints.
+- Keyboard: W/Up nose up, S/Down nose down, Space boost, Shift airbrake, R restart, N next course. On-screen hold controls support touch.
+- Includes deterministic reference-flight coverage proving all three course layouts can reach a safe landing; standalone and root Survival Test Hub import/runtime smoke coverage.
+- Files: `project.godot`, `main.tscn`, `main.gd`, `rules.gd`, standalone path shim, README, `tests/rules_test.gd`, `tests/game_smoke_test.gd`.
+- No external assets, audio, plugins or network services. Godot 4.3+.
+
+### Mineral registration preflight and atomic chunk binding
+
+- Added pure, non-mutating `MineralMiningNode.can_register()` validation for catalog ID, max/remaining stock, units-per-hit, regeneration interval and timestamp.
+- `MineralChunkController.load_chunk()` and direct `MineralChunkLifecycleAdapter.load_chunk()` preflight every vein and deterministic stable ID before registering mineral nodes or binding sibling crop visuals.
+- Regression coverage proves malformed mineral data cannot leave a partial CropRegistry record, direct adapter loads do not partially register valid veins when another input is invalid, and rejected roots remain caller-owned.
+- Updated `tests/crop_chunk_offline_growth_test.gd` to match the stronger preflight contract: after duplicate mineral stable-ID rejection, the crop record remains unchanged and the detached crop visual remains unbound (null controller, empty stable ID). The previous post-binding refresh expectation was stale.
+
+### Production underground mineral-vein unload/reload regression
+
+- Added `tests/production_surface_world_mineral_vein_chunk_reload_test.gd` using the real SurfaceWorld, production mine lift, UndergroundMineDirector/Factory, MineralChunkController, MineralVeinRegistry and MineralMiningNode.
+- Enters the real mine, camera-selects and mines a factory-created vein, streams the origin chunk out, verifies stable-ID stock persists while the old live node/proxy is invalidated, reloads a new node and Area3D proxy with the same ID and remaining stock, then camera-selects and mines the replacement.
+- World-save and mineral-registry payload schemas remain version 1; no migration or second state store was introduced.
+
+### Exact GitHub evidence
+
+- Feature PR [#172](https://github.com/qaqp980520-prog/2126-Survival/pull/172) merged as `5afefd60ff11a4170ceac6aae7abe682345ac5bc`.
+- Exact feature candidate HEAD: `b1d0b09d6f05dda485f011e8c8dd7b228a237eca`.
+- Canonical exact-head Godot 4.3 [Run #770](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41179031212) passed 292/292 workflow step records, zero failures and zero skipped. Run 68-specific steps 285–289 passed: input verification, Thermal Glider import, rules, runtime smoke, and production SurfaceWorld mineral-vein chunk reload.
+- Supplemental exact-head mineral-regeneration [Run #40](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41179031107) passed 13/13 step records, zero failures and zero skipped.
+- Historical Run #769 failed at step 146 because the old crop offline-growth test expected a detached visual to be bound/refreshed after the new preflight correctly rejected the chunk before binding. The corrected test passed at step 146 on Run #770; no skipped steps remained.
+- Feature PR changed 17 files (943 additions, 2 deletions); branch was 25 commits ahead / 3 docs-only commits behind main at merge. GitHub reported mergeable=true.
+
+### Known limits and next steps
+
+- Preflight and production reload coverage now include mineral veins, but do not yet prove every cache, lift and future stateful KROLL interactable proxy lifecycle.
+- Terrain-edit persistence across chunk unload/reload remains unfinished.
+- Chunk streaming is still synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
