@@ -23,6 +23,8 @@ func _run() -> void:
 		_expect(is_equal_approx(float(profile.get("rise",-1.0)),expected_height),"profile rise matches saved terrain height")
 		_expect(is_equal_approx(float(profile.get("run",-1.0)),PatchScript.EDGE_RAMP_RUN),"all edge ramps use the same run")
 		_expect(is_equal_approx(float(profile.get("slope_length",-1.0)),sqrt(PatchScript.EDGE_RAMP_RUN*PatchScript.EDGE_RAMP_RUN+expected_height*expected_height)),"visual slope length preserves exact horizontal run and vertical rise")
+		await physics_frame
+		var space_state: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
 		var body := patch.get_node_or_null("TerrainCollisionBody") as StaticBody3D
 		_expect(body != null,"terrain collision body exists")
 		if body == null:
@@ -70,6 +72,26 @@ func _run() -> void:
 					outer_ground_found=true
 			_expect(inner_top_found,"%s ramp meets raised patch edge" % side)
 			_expect(outer_ground_found,"%s ramp meets surrounding ground" % side)
+			for fraction in [0.25,0.5,0.75]:
+				var sample := Vector3.ZERO
+				match side:
+					"East": sample=Vector3(inner_edge+PatchScript.EDGE_RAMP_RUN*fraction,0.0,0.0)
+					"West": sample=Vector3(-inner_edge-PatchScript.EDGE_RAMP_RUN*fraction,0.0,0.0)
+					"North": sample=Vector3(0.0,0.0,-inner_edge-PatchScript.EDGE_RAMP_RUN*fraction)
+					"South": sample=Vector3(0.0,0.0,inner_edge+PatchScript.EDGE_RAMP_RUN*fraction)
+				var ray := PhysicsRayQueryParameters3D.create(
+					Vector3(sample.x,expected_height+1.0,sample.z),
+					Vector3(sample.x,-0.25,sample.z)
+				)
+				ray.collision_mask=1
+				ray.collide_with_areas=false
+				ray.collide_with_bodies=true
+				var hit: Dictionary = space_state.intersect_ray(ray)
+				_expect(not hit.is_empty(),"%s ramp has a physics hit at sample %.2f" % [side,fraction])
+				if not hit.is_empty():
+					var hit_position: Vector3 = hit.get("position",Vector3.ZERO)
+					var expected_y: float = expected_height*(1.0-fraction)
+					_expect(absf(hit_position.y-expected_y) <= 0.03,"%s ramp collision follows its linear visual slope at sample %.2f" % [side,fraction])
 	patch.queue_free()
 	await process_frame
 	if failures.is_empty():
