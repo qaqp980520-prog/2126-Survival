@@ -84,7 +84,16 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		return false
 	for local_path in crops.keys():
 		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
+		var plot: Node = crops[local_path] as Node
 		if not _valid_crop_stable_id(stable_id):
+			return false
+		if not plot.has_method("can_configure") or not bool(plot.call(
+			"can_configure",
+			crop_controller,
+			stable_id,
+			str(plot.get("crop_id")),
+			int(plot.get("plot_index"))
+		)):
 			return false
 		var existing_crop: Dictionary = crop_controller.call("get_crop", stable_id)
 		if not existing_crop.is_empty():
@@ -99,7 +108,14 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	for local_path in crops.keys():
 		var stable_id := _make_crop_stable_id(chunk_id, str(local_path))
 		var plot: Node = crops[local_path]
-		plot.call("configure", crop_controller, stable_id, str(plot.get("crop_id")), int(plot.get("plot_index")))
+		if not bool(plot.call("configure", crop_controller, stable_id, str(plot.get("crop_id")), int(plot.get("plot_index")))):
+			if not crop_snapshot.is_empty():
+				crop_controller.call("restore_save_dict", crop_snapshot)
+				for plot_value in crops.values():
+					var plot_node: Node = plot_value as Node
+					if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+						plot_node.call("refresh")
+			return false
 
 	var object_registry_snapshot: Dictionary = {}
 	var initial_object_states: Dictionary = {}

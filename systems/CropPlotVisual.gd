@@ -2,6 +2,7 @@ extends Node3D
 class_name CropPlotVisual
 
 ## Scene-backed plot visual. CropRegistry remains the authoritative data source.
+const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const WATER_AMOUNT := 35.0
 const GROWTH_TICK_SECONDS := 120.0
 const DRY_THRESHOLD := 30.0
@@ -24,7 +25,23 @@ func _ready() -> void:
     _apply_crop_color()
     refresh()
 
-func configure(value: Node, id: String, kind: String, index: int) -> void:
+func can_configure(value: Node, id: String, kind: String, index: int) -> bool:
+    if value == null or not is_instance_valid(value):
+        return false
+    for method_name in ["get_crop", "plant_crop", "water_crop", "advance_crop", "harvest_crop"]:
+        if not value.has_method(method_name):
+            return false
+    if id.is_empty() or id != id.strip_edges() or id.length() > 160:
+        return false
+    if id.find("/") <= 0 or id.contains(" ") or id.contains("\t") or id.contains("\n") or id.contains("\r") or id.contains("//") or id.contains(".."):
+        return false
+    if not CropRegistryScript.SUPPORTED_CROP_IDS.has(kind) or index < 1:
+        return false
+    return true
+
+func configure(value: Node, id: String, kind: String, index: int) -> bool:
+    if not can_configure(value, id, kind, index):
+        return false
     controller = value
     stable_id = id
     crop_id = kind
@@ -32,6 +49,7 @@ func configure(value: Node, id: String, kind: String, index: int) -> void:
     if is_node_ready():
         _apply_crop_color()
         refresh()
+    return true
 
 func interact(now_unix: int = -1) -> Dictionary:
     if controller == null or stable_id.is_empty():

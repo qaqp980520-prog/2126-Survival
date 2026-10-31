@@ -2232,7 +2232,7 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Molecule Forge runtime smoke test passed."
-      - name: Run production SurfaceWorld interaction stream reload test
+      - name: Run production SurfaceWorld crop and salvage chunk reload test
         shell: bash
         run: |
           set -o pipefail
@@ -2240,3 +2240,38 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld interaction stream reload tests passed."
+
+      - name: Verify Run 67 Hex Frontier and crop binding inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Hex_Frontier/project.godot
+          test -f daily_games/KROLL_Hex_Frontier/main.tscn
+          test -f daily_games/KROLL_Hex_Frontier/main.gd
+          test -f daily_games/KROLL_Hex_Frontier/daily_games/KROLL_Hex_Frontier/main.gd
+          test -f daily_games/KROLL_Hex_Frontier/rules.gd
+          test -f daily_games/KROLL_Hex_Frontier/tests/rules_test.gd
+          test -f daily_games/KROLL_Hex_Frontier/tests/game_smoke_test.gd
+          test -f tests/mineral_chunk_controller_test.gd
+          test -f tests/production_surface_world_interaction_stream_reload_test.gd
+          grep -q 'can_configure' systems/CropPlotVisual.gd
+          grep -q 'can_configure' systems/MineralChunkController.gd
+          grep -q 'crop_after_unload' tests/production_surface_world_interaction_stream_reload_test.gd
+      - name: Import and parse KROLL Hex Frontier
+        run: godot --headless --path daily_games/KROLL_Hex_Frontier --editor --quit
+      - name: Run KROLL Hex Frontier rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Hex_Frontier --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Hex Frontier rules tests passed."
+      - name: Run KROLL Hex Frontier runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Hex_Frontier --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Hex Frontier runtime smoke test passed."
