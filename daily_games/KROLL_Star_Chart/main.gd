@@ -145,7 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_nudge_aim(Vector2(drag_event.relative.x / viewport_size.x, drag_event.relative.y / viewport_size.y))
 
 func _nudge_aim(delta_value: Vector2) -> void:
-	aim = Rules.clamp_aim(aim + delta_value)
+	aim = rules.clamp_aim(aim + delta_value)
 	queue_redraw()
 
 func _set_aim_from_screen(position: Vector2) -> void:
@@ -204,4 +204,4 @@ func _draw() -> void:
 	draw_rect(lock_rect, Color(0.06, 0.22, 0.29, 0.96))
 	draw_rect(lock_rect, Color(0.34, 0.86, 0.92, 0.95), false, 2.0)
 	draw_string(ThemeDB.fallback_font, lock_rect.position + Vector2(28.0, 43.0), "LOCK TARGET", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.76, 0.97, 1.0))
-	draw_string(ThemeDB.fallback_font, Vector2(size.x - 190.0, 24.0), "MISSION %d / %d" % [mission_index + 1, Rules.MISSION_COUNT], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.62, 0.82, 0.92))
+	draw_string(ThemeDB.fallback_font, Vector2(size.x - 190.0, 24.0), "MISSION %d / %d" % [mission_index + 1, MISSION_COUNT], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.62, 0.82, 0.92))
