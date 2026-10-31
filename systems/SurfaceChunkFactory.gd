@@ -4,6 +4,7 @@ extends RefCounted
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const CHUNK_SIZE: float = 10.0
 const MINERAL_IDS: Array[String] = ["iron_ore", "copper_ore", "gold_ore"]
 const SALVAGE_LOOT_IDS: Array[String] = ["copper_ore", "iron_ore", "coal_ore", "silver_ore"]
@@ -33,6 +34,10 @@ static func make_chunk(coord: Vector2i, now_unix: int = -1) -> Node3D:
 		material.albedo_color = Color(0.10, 0.15, 0.19) if (coord.x + coord.y) % 2 == 0 else Color(0.13, 0.18, 0.22)
 		ground_mesh.material_override = material
 		ground.add_child(ground_mesh)
+	var terrain_patch: Node3D = TerrainPatchScript.new()
+	terrain_patch.name = "TerrainPatch"
+	terrain_patch.position = Vector3(8.0, 0.0, 8.0)
+	chunk.add_child(terrain_patch)
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var ore: Node3D = MiningNodeScript.new()
 	ore.name = "Ore_%d_%d" % [coord.x, coord.y]
