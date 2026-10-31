@@ -31,6 +31,24 @@ func _run() -> void:
 			seen[item_id] = true
 			all_items[item_id] = true
 	_expect(all_items.size() == 7, "regional resource covers all seven catalog minerals")
+	var valid_payload := {"schema_version": 1, "tables": tables}
+	_expect(Factory.validate_cache_tables(valid_payload).size() == 4, "pure validator accepts the shipped table payload")
+	_expect(Factory.validate_cache_tables({"schema_version": 2, "tables": tables}).is_empty(), "unsupported resource schema fails closed")
+	var missing_region: Dictionary = tables.duplicate(true)
+	missing_region.erase("east")
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": missing_region}).is_empty(), "missing regional table fails closed")
+	var unknown_item: Dictionary = tables.duplicate(true)
+	unknown_item["west"][0]["item_id"] = "unregistered_ore"
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": unknown_item}).is_empty(), "unknown mineral IDs fail closed")
+	var zero_weight: Dictionary = tables.duplicate(true)
+	zero_weight["west"][0]["weight"] = 0
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": zero_weight}).is_empty(), "zero weights fail closed")
+	var duplicate_item: Dictionary = tables.duplicate(true)
+	duplicate_item["west"].append(duplicate_item["west"][0].duplicate(true))
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": duplicate_item}).is_empty(), "duplicate item IDs in one table fail closed")
+	var extra_region: Dictionary = tables.duplicate(true)
+	extra_region["cavern"] = extra_region["west"].duplicate(true)
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": extra_region}).is_empty(), "unknown region keys fail closed")
 
 	_expect_golden(Vector2i.ZERO, 0, ["MineCache_Gold", "MineCache_Coal"], ["gold_ore", "coal_ore"], ["service", "service"])
 	_expect_golden(Vector2i(-1, 1), 0, ["MineCache_coal_ore"], ["coal_ore"], ["west"])
