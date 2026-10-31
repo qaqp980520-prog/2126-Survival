@@ -131,8 +131,9 @@ func _run() -> void:
 		root.add_child(gravity_foundry)
 		await process_frame
 		_expect(gravity_foundry.has_method("get_current_state"), "root-loaded Gravity Foundry initializes its puzzle model")
-		var gravity_state: Dictionary = gravity_foundry.call("get_current_state")
-		_expect(str(gravity_state.get("level_id", "")) == "reactor_bay", "root-loaded Gravity Foundry starts the Reactor Bay sector")
+		if gravity_foundry.has_method("get_current_state"):
+			var gravity_state: Dictionary = gravity_foundry.call("get_current_state")
+			_expect(str(gravity_state.get("level_id", "")) == "reactor_bay", "root-loaded Gravity Foundry starts the Reactor Bay sector")
 		gravity_foundry.queue_free()
 		await process_frame
 
