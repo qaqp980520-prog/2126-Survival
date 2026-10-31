@@ -16,7 +16,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1280, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "midway",
-		"checkpoint_position": Vector2(650, 400),
+		"checkpoint_position": Vector2(760, 400),
 		"exit": Rect2(1160, 520, 72, 140),
 		"platforms": [
 			Rect2(0, 660, 1280, 60),
@@ -43,7 +43,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1440, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "reactor_mid",
-		"checkpoint_position": Vector2(760, 330),
+		"checkpoint_position": Vector2(870, 330),
 		"exit": Rect2(1320, 500, 72, 160),
 		"platforms": [
 			Rect2(0, 660, 1440, 60),
