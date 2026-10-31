@@ -2275,3 +2275,48 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Hex Frontier runtime smoke test passed."
+
+      - name: Verify Run 68 Thermal Glider and mineral vein reload inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Thermal_Glider/project.godot
+          test -f daily_games/KROLL_Thermal_Glider/main.tscn
+          test -f daily_games/KROLL_Thermal_Glider/main.gd
+          test -f daily_games/KROLL_Thermal_Glider/daily_games/KROLL_Thermal_Glider/main.gd
+          test -f daily_games/KROLL_Thermal_Glider/rules.gd
+          test -f daily_games/KROLL_Thermal_Glider/tests/rules_test.gd
+          test -f daily_games/KROLL_Thermal_Glider/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_mineral_vein_chunk_reload_test.gd
+          grep -q 'get_loaded_mineral_nodes' systems/MineralChunkController.gd
+          grep -q 'can_register' systems/MineralMiningNode.gd
+          grep -q 'can_register' systems/MineralChunkLifecycleAdapter.gd
+          grep -q 'can_register' systems/MineralChunkController.gd
+          grep -q 'InteractionArea' systems/MineralMiningNode.gd
+          grep -q 'sync_to_world_position' tests/production_surface_world_mineral_vein_chunk_reload_test.gd
+      - name: Import and parse KROLL Thermal Glider
+        run: godot --headless --path daily_games/KROLL_Thermal_Glider --editor --quit
+      - name: Run KROLL Thermal Glider rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Thermal_Glider --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Glider rules tests passed."
+      - name: Run KROLL Thermal Glider runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Thermal_Glider --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Glider runtime smoke test passed."
+      - name: Run production SurfaceWorld mineral vein chunk reload test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 60s godot --headless --path . --script res://tests/production_surface_world_mineral_vein_chunk_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld mineral-vein chunk reload tests passed."

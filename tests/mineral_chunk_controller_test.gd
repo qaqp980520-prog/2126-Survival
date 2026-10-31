@@ -26,6 +26,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_object_state_application_is_atomic()
 	await process_frame
+	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
+	await process_frame
 	await _test_invalid_crop_binding_rejected_before_chunk_registration()
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
@@ -221,6 +223,68 @@ func _test_failed_object_state_application_is_atomic() -> void:
 	incoming.free()
 	controller.queue_free()
 	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var crop_registry: Node = CropRegistry.new()
+	var crop_controller: Node = CropController.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(crop_registry)
+	root.add_child(crop_controller)
+	root.add_child(controller)
+	await process_frame
+	assert(crop_controller.bind_registry(crop_registry))
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_crop_controller(crop_controller))
+
+	var chunk := Node3D.new()
+	chunk.name = "ChunkRoot"
+	var plot: Node3D = CropPlot.new()
+	plot.name = "CropPlot_0"
+	plot.set("crop_id", "wheat")
+	plot.set("plot_index", 1)
+	chunk.add_child(plot)
+	var invalid_vein: Node3D = MiningNode.new()
+	invalid_vein.name = "InvalidVein"
+	invalid_vein.set("mineral_id", "missing_mineral")
+	invalid_vein.set("last_regen_unix", now)
+	chunk.add_child(invalid_vein)
+	assert(not bool(invalid_vein.call("can_register")), "unknown mineral IDs fail the pure registration preflight")
+	assert(not controller.load_chunk("earth/mineral-preflight", chunk, now), "invalid mineral data rejects the whole chunk before crop binding")
+	assert(chunk.get_parent() == null, "rejected mineral chunk remains caller-owned and detached")
+	assert(crop_registry.get_saved_ids().is_empty(), "invalid mineral preflight prevents a sibling crop from creating a partial registry record")
+	assert(mineral_registry.get_registered_ids().is_empty(), "invalid mineral preflight does not register any vein")
+	assert(not controller.is_chunk_loaded("earth/mineral-preflight"), "invalid mineral preflight does not register a partial chunk")
+	chunk.free()
+
+	var adapter: Node = Adapter.new()
+	root.add_child(adapter)
+	await process_frame
+	assert(bool(adapter.call("bind_registry", mineral_registry)))
+	var valid_vein: Node3D = MiningNode.new()
+	valid_vein.name = "ValidVein"
+	valid_vein.set("mineral_id", "iron_ore")
+	valid_vein.set("max_units", 8)
+	valid_vein.set("remaining_units", 4)
+	valid_vein.set("last_regen_unix", now)
+	var adapter_invalid_vein: Node3D = MiningNode.new()
+	adapter_invalid_vein.name = "AdapterInvalidVein"
+	adapter_invalid_vein.set("mineral_id", "unknown_mineral")
+	adapter_invalid_vein.set("last_regen_unix", now)
+	assert(not bool(adapter.call("load_chunk", "earth/adapter-preflight", {"valid": valid_vein, "invalid": adapter_invalid_vein}, now)), "adapter independently preflights every vein before registering any")
+	assert(mineral_registry.get_registered_ids().is_empty(), "adapter preflight leaves no partial mineral registration")
+	var adapter_loaded_ids: PackedStringArray = adapter.call("get_loaded_chunk_ids")
+	assert(adapter_loaded_ids.is_empty(), "adapter preflight does not mark a rejected chunk as loaded")
+	valid_vein.free()
+	adapter_invalid_vein.free()
+	adapter.queue_free()
+	controller.queue_free()
+	crop_controller.queue_free()
+	crop_registry.queue_free()
 	mineral_registry.queue_free()
 	await process_frame
 

@@ -21,6 +21,23 @@ signal ore_mined(mineral_id: String, amount: int)
 var last_regen_unix: int = 0
 var _depleted_signal_sent := false
 
+## Pure preflight used by chunk streaming before it mutates registries or binds sibling assets.
+## Unlike _ready(), this rejects invalid values instead of silently clamping them.
+func can_register() -> bool:
+	if mineral_id.is_empty() or mineral_id != mineral_id.strip_edges() or not Catalog.has_mineral(mineral_id):
+		return false
+	if max_units < 1 or max_units > 10000:
+		return false
+	if remaining_units < 0 or remaining_units > max_units:
+		return false
+	if units_per_hit < 1 or units_per_hit > 20:
+		return false
+	if regen_interval_seconds < 1 or regen_interval_seconds > 86400:
+		return false
+	if last_regen_unix < 0 or last_regen_unix > 4000000000:
+		return false
+	return true
+
 func _ready() -> void:
 	max_units = clampi(max_units, 1, 10000)
 	remaining_units = clampi(remaining_units, 0, max_units)
