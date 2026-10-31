@@ -1348,3 +1348,41 @@
 - Terrain remains one 2 m patch per surface chunk, with three height levels and three materials; this is not arbitrary voxel sculpting or multi-tile blending.
 - Chunk streaming remains synchronous; bounded asynchronous streaming, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## 2026-10-31 Run 74 — KROLL Robotic Arm Operator and traversable terrain patch edges
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Robotic_Arm_Operator/`, a deterministic two-link pick-and-place game with shoulder/elbow joint limits and forward/inverse kinematics.
+- Three work orders: coolant cartridge, sensor cradle and sealed core sample. The player aligns the end effector, grips the payload, and delivers it inside the receiving dock.
+- Controls: A/D shoulder, W/S elbow, Space grip/release, R reset. On-screen joint-step, gripper and reset controls support mouse and touch.
+- Registered in the root Survival Test Hub; root smoke checks 19 launcher buttons and instantiates the scene.
+- Standalone/root-nested `main.gd` mirrors are byte-identical (blob SHA `fb694c38d0cdaf2716828ccee5b106d34e0eae55`); `rules.gd` mirrors are byte-identical (blob SHA `30a9a9ffe2ab6da0a34bb4712228b2159dd6dc49`).
+- No external assets, plugins, audio, network services or packages; Godot 4.3+.
+
+### Production SurfaceTerrainPatch edge ramps
+
+- Added four visual PlaneMesh ramps and matching 0.04 m BoxShape3D collision slabs, each with a 0.75 m horizontal run and the saved patch rise.
+- Each edge (East/West/North/South) owns an independent StaticBody3D on collision layer 1 / mask 0. The main terrain body retains only the raised patch top collision and visual meshes.
+- Ramp transforms are rebuilt through the same geometry path used by edits and state restoration.
+- Focused regression checks all four directions at all three saved heights (0.05 m, 0.30 m and 0.55 m), including slab dimensions, orientation, top-face endpoints and vertical physics-ray samples at 25%, 50% and 75%.
+- Production all-nine regression verifies independent ramp bodies and geometry after patch edits, chunk unload/reload and schema-1 restore.
+- Terrain state fields and world-save schema version 1 are unchanged.
+
+### Exact-head acceptance and merge
+
+- Feature PR [#185](https://github.com/qaqp980520-prog/2126-Survival/pull/185) merged as `7b0b4543d23970e6db23820d031e343e8f4bbb8a`.
+- Final feature HEAD: `3758546c77d6292526336952633cc2b5d1ae6546`.
+- Earlier exact-head Run #847 failed at step 319: geometry checks passed, but South/0.05 m physics rays missed at all three sample fractions. The failure history is retained; it was not treated as a pass.
+- Follow-up commit `3758546c77d6292526336952633cc2b5d1ae6546` adds a second physics-frame synchronization wait before focused ray queries. Exact-head Godot 4.3 [Run #848](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41217232246) passed all 322 job-step records with zero failures or skipped steps.
+- Run #848 passed Robotic Arm import/rules/runtime at steps 316–318 and the focused terrain edge physics regression at step 319, including all three South/0.05 m ray hits. Post-job cleanup succeeded.
+- Main at feature merge: `7b0b4543d23970e6db23820d031e343e8f4bbb8a`.
+
+### Known limits and next steps
+
+- Ramps currently bridge each patch to surrounding base ground; seamless patch-to-patch blending across neighboring patches with different heights remains out of scope.
+- Terrain remains one 2 m patch per surface chunk with three height levels and three material states; it is not arbitrary voxel sculpting.
+- Chunk streaming remains synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+- GitHub reports `main.protected=false` with required status checks off. Repository branch-protection hardening remains a separate owner-approved task.
