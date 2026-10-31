@@ -26,7 +26,7 @@ func _ready() -> void:
 	_timer.wait_time = 0.72
 	_timer.one_shot = false
 	add_child(_timer)
-	_timer.timeout.connect(step_once)
+	_timer.timeout.connect(_on_tick_timeout)
 	_timer.start()
 	_refresh_ui()
 
@@ -190,7 +190,7 @@ func reset_level() -> void:
 	_refresh_ui()
 
 func advance_level() -> bool:
-	if str(_state.get("status", "")) != "won":
+	if _campaign_complete or str(_state.get("status", "")) != "won":
 		return false
 	var next_index: int = int(_state.get("level_index", 0)) + 1
 	if next_index >= RulesScript.get_level_count():
@@ -238,7 +238,7 @@ func _refresh_ui() -> void:
 		RulesScript.PHASE_NS_GREEN:
 			_phase_light.color = Color("#45df91")
 		RulesScript.PHASE_EW_GREEN:
-			_phase_light.color = Color("#45df91")
+			_phase_light.color = Color("#63e5ff")
 		RulesScript.PHASE_CLEARANCE:
 			_phase_light.color = Color("#f4c65e")
 		_:
@@ -264,4 +264,4 @@ func _refresh_ui() -> void:
 	if _pause_button != null:
 		_pause_button.text = "RESUME" if _paused else "PAUSE"
 	if _next_button != null:
-		_next_button.disabled = str(_state.get("status", "")) != "won"
+		_next_button.disabled = str(_state.get("status", "")) != "won" or _campaign_complete
