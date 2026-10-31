@@ -10,7 +10,8 @@
 - [x] Different-seed restore forces a mine-window rebuild even when chunk IDs match. Injected chunk-factory failure restores the previous seed/window and exact mineral/world-object registry snapshots.
 - [x] Feature PR #160 merged as `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; exact candidate `ae887177633842a5d8a4ed3da3acb7b8fdc59906` passed Godot 4.3 [Run #699](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156096505): 263/263 total step records, zero failures, zero skipped. New game import/rules/runtime and production world-seed integration steps all passed.
 - [x] GitHub main was re-read at merge SHA `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; PR #160 is closed/merged.
-- [ ] Post-merge main-push workflow [Run #700](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156636725) was queued when this note was written; verify its exact main SHA and result before closing documentation PR.
+- [x] Post-merge main-push workflow [Run #700](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156636725) completed successfully on exact main SHA `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`: 263/263 step records successful, zero failures and zero skips.
+- [x] Documentation PR #161 exact candidate `09063ca83ef9f634ef47c32dc80fde34b60d5740` passed Godot 4.3 [Run #701](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156688464): 263/263 step records successful, zero failures and zero skips. Re-run after final documentation corrections before merge.
 - No local Godot executable was available. GUI/GPU/iPhone QA is not claimed.
 
 ### Remaining limits
