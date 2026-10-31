@@ -121,11 +121,15 @@ func _render() -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	# Headless CI verifies the state model and controls; avoid issuing draw commands
+	# against a zero-sized dummy viewport. The desktop/mobile build uses the full board.
+	if DisplayServer.get_name() == "headless" or size.x < 320.0 or size.y < 320.0:
+		return
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#07111c"), true)
 	if state.is_empty():
 		return
 	var font: Font = ThemeDB.fallback_font
-	var cell_size: float = minf(CELL_SIZE, minf((size.x - 220.0) / Rules.GRID_SIZE, (size.y - 250.0) / Rules.GRID_SIZE))
+	var cell_size: float = maxf(24.0, minf(CELL_SIZE, minf((size.x - 220.0) / Rules.GRID_SIZE, (size.y - 250.0) / Rules.GRID_SIZE)))
 	var board_size: float = cell_size * Rules.GRID_SIZE
 	var origin := Vector2((size.x - board_size) * 0.5, 132.0)
 	var walls: Array = state.get("walls", [])
