@@ -6,6 +6,7 @@ class_name MineralChunkController
 const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const CropPlotScript = preload("res://systems/CropPlotVisual.gd")
 const AdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
+const TerrainAdjacencyBinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 
 var registry: Node
 var adapter: Node
@@ -148,6 +149,23 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
 		return false
+	var existing_terrain_patches: Array[Node3D] = _collect_loaded_terrain_patches()
+	var candidate_terrain_patches: Array[Node3D] = _collect_terrain_patches(world_objects)
+	var all_terrain_patches: Array[Node3D] = existing_terrain_patches.duplicate()
+	all_terrain_patches.append_array(candidate_terrain_patches)
+	var adjacency_result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(all_terrain_patches)
+	if not bool(adjacency_result.get("ok", false)):
+		remove_child(chunk_root)
+		if not world_objects.is_empty():
+			_rollback_world_object_restore(initial_object_states, object_registry_snapshot)
+		if not crop_snapshot.is_empty():
+			crop_controller.call("restore_save_dict", crop_snapshot)
+			for plot_value in crops.values():
+				var plot_node: Node = plot_value as Node
+				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+					plot_node.call("refresh")
+		TerrainAdjacencyBinderScript.bind_patches(existing_terrain_patches)
+		return false
 	if not veins.is_empty() and not bool(adapter.load_chunk(chunk_id, veins, now_unix)):
 		# A failed registration must not consume the caller's scene. Detach it so the
 		# generator can inspect, repair, or retry the same root without reconstructing it.
@@ -162,6 +180,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
+		TerrainAdjacencyBinderScript.bind_patches(existing_terrain_patches)
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
@@ -209,6 +228,9 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	_chunk_objects.erase(chunk_id)
 	remove_child(chunk_root)
 	chunk_root.queue_free()
+	var adjacency_result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(_collect_loaded_terrain_patches())
+	if not bool(adjacency_result.get("ok", false)):
+		push_error("Terrain adjacency rebuild failed after chunk unload: %s" % str(adjacency_result.get("error", "unknown")))
 	return true
 
 func get_chunk_root(chunk_id: String) -> Node3D:
@@ -359,6 +381,23 @@ func restore_save_dict(payload: Dictionary, now_unix: int = -1) -> bool:
 	if registry == null:
 		return false
 	return bool(registry.restore_save_dict(payload, now_unix))
+
+func _collect_loaded_terrain_patches() -> Array[Node3D]:
+	var patches: Array[Node3D] = []
+	for chunk_objects in _chunk_objects.values():
+		for node_value in chunk_objects.values():
+			var node: Node3D = node_value as Node3D
+			if is_instance_valid(node) and node.is_inside_tree() and node.has_method("bind_neighbor_patch"):
+				patches.append(node)
+	return patches
+
+func _collect_terrain_patches(objects: Dictionary) -> Array[Node3D]:
+	var patches: Array[Node3D] = []
+	for node_value in objects.values():
+		var node: Node3D = node_value as Node3D
+		if is_instance_valid(node) and node.is_inside_tree() and node.has_method("bind_neighbor_patch"):
+			patches.append(node)
+	return patches
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:
 	if node is MiningNode:

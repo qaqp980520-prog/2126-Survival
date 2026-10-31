@@ -42,10 +42,10 @@ func _run() -> void:
 	_expect(_ramp_enabled(west_patch, "North") and _ramp_enabled(east_patch, "South"), "unrelated outer edges retain base-ground ramps")
 	var raised_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
 	_expect(bool(east_patch.call("apply_world_object_state", raised_state)), "neighbor patch accepts a higher persisted terrain state")
-	_expect(bool(west_patch.call("bind_neighbor_patch", "east", east_patch)), "west patch refreshes its neighbor height")
-	_expect(bool(east_patch.call("bind_neighbor_patch", "west", west_patch)), "east patch refreshes its neighbor height")
 	var west_policy: Dictionary = west_patch.call("get_edge_policy", "east")
 	var east_policy: Dictionary = east_patch.call("get_edge_policy", "west")
+	_expect(str(west_policy.get("mode", "")) == "neighbor_higher", "west patch receives a live neighbor-height update without rebinding")
+	_expect(str(east_policy.get("mode", "")) == "local_higher", "east patch retains its local higher-edge policy after a live edit")
 	_expect(str(west_policy.get("mode", "")) == "neighbor_higher", "lower west patch identifies its east neighbor as higher")
 	_expect(str(east_policy.get("mode", "")) == "local_higher", "raised east patch identifies itself as higher")
 	_expect(is_equal_approx(float(west_policy.get("height_delta", 0.0)), 0.5), "adjacent height difference is 0.5 m")

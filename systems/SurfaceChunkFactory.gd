@@ -38,6 +38,16 @@ static func make_chunk(coord: Vector2i, now_unix: int = -1) -> Node3D:
 	terrain_patch.name = "TerrainPatch"
 	terrain_patch.position = Vector3(8.0, 0.0, 8.0)
 	chunk.add_child(terrain_patch)
+	# A small two-tile terrace exercises real adjacency inside every production chunk.
+	# It is deliberately kept clear of the crop plots and salvage crate.
+	var adjacent_west: Node3D = TerrainPatchScript.new()
+	adjacent_west.name = "TerrainPatch_AdjacentWest"
+	adjacent_west.position = Vector3(1.0, 0.0, 6.0)
+	chunk.add_child(adjacent_west)
+	var adjacent_east: Node3D = TerrainPatchScript.new()
+	adjacent_east.name = "TerrainPatch_AdjacentEast"
+	adjacent_east.position = Vector3(3.0, 0.0, 6.0)
+	chunk.add_child(adjacent_east)
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var ore: Node3D = MiningNodeScript.new()
 	ore.name = "Ore_%d_%d" % [coord.x, coord.y]
