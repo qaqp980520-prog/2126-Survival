@@ -58,7 +58,7 @@ func _run() -> void:
         return
     var plant_result: Dictionary = original_crop.call("interact")
     _expect(bool(plant_result.get("ok", false)) and str(plant_result.get("action", "")) == "planted", "production crop plot plants through its bound controller")
-    _expect(bool(crop_controller.call("water_crop", crop_stable_id, 40.0)), "crop controller accepts a valid water operation before unload")
+    _expect(bool(crop_controller.call("water_crop", crop_stable_id, 20.0)), "crop controller accepts a valid water operation before unload")
     _expect(bool(crop_controller.call("advance_crop", crop_stable_id, 120.0)), "crop controller advances a deterministic growth interval before unload")
     original_crop.call("refresh")
     var crop_before_unload: Dictionary = crop_controller.call("get_crop", crop_stable_id)
