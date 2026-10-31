@@ -1076,3 +1076,45 @@
 - The molecule model is a 2D orthogonal single-bond puzzle, not a chemistry simulator; bond order, 3D geometry, charge and reaction kinetics are not modelled.
 - The new production reload regression covers the stateful salvage crate in the production surface-grid factory. It does not yet prove every future interactable factory, terrain-edit persistence or asynchronous streaming cancellation.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## Run 66 documentation closeout correction — 2026-10-31
+
+- Run 66 feature PR #168 merged as `87a0ca940a1f4269fc8919e9bf1292c5be29de15`.
+- Run 66 documentation PR [#169](https://github.com/qaqp980520-prog/2126-Survival/pull/169) subsequently merged as `3c38d492acc5d5c00d0e9de876336516a1881002`.
+- Exact-head Godot 4.3 Run #753 on the documentation candidate passed 283/283 total step records, zero failures/skips: [CI](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41172325019). Earlier Run 66 pending snapshots are historical only.
+
+## 2026-10-31 Run 67 — KROLL Hex Frontier + crop plot binding and production chunk reload
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Hex_Frontier/`, a turn-based axial radius-two territory strategy game with 19 hexes and three deterministic resource layouts: Dockside, Ridge and Floodplain.
+- Player and deterministic KROLL AI expand from opposite headquarters. A faction may perform one claim or upgrade action per turn; claiming a connected neutral hex costs 1 energy, upgrading an owned hex costs 2 and increases its income yield up to 3. Energy caps at 9; first faction to control 10 hexes wins.
+- Mouse/touch hex selection, C claim, U upgrade, Enter end turn, R reset and N next map. Legal action cells are highlighted.
+- Registered in the root Survival Test Hub. A nested script shim and dynamic rules path allow both standalone project import and root-project launch. No external assets/audio/plugins/network dependency.
+- Files: `project.godot`, `main.tscn`, `main.gd`, `rules.gd`, standalone shim, `README.md`, `tests/rules_test.gd`, `tests/game_smoke_test.gd`.
+
+### Crop plot binding hardening
+
+- `systems/CropPlotVisual.gd` adds `can_configure()` to validate a live CropPlotController interface, deterministic stable-ID shape/length, supported crop ID and positive plot index. `configure()` now returns false without binding invalid data.
+- `systems/MineralChunkController.gd` preflights every discovered crop plot before catch-up/registration and defensively restores the captured CropRegistry snapshot if a later configure call rejects.
+- `tests/mineral_chunk_controller_test.gd` covers unsupported crop IDs, repeated stable-ID separators, non-positive indices, incomplete controller interfaces and atomic chunk rejection with no partial registry/chunk state.
+
+### Production chunk reload regression
+
+- Extended `tests/production_surface_world_interaction_stream_reload_test.gd` using the real SurfaceWorld and streaming director. It plants, waters and advances a real crop plot, unloads the origin chunk, verifies the exact CropRegistry record remains, reloads a new scene instance with the same stable ID, verifies a fresh Area3D interaction proxy and confirms production camera-ray selection plus E interaction after reload.
+- Existing salvage-crate state/proxy unload/reload assertions remain in the same test. CropRegistry remains the source of crop state; world-save schema remains version 1, with no migration.
+
+### Exact GitHub evidence
+
+- Feature PR [#170](https://github.com/qaqp980520-prog/2126-Survival/pull/170) merged as `34112f2f478174d78e8f419c5bf825bfa94f86fb`.
+- Exact feature HEAD `a3c28e92f7225fc84165ae24e60f2e9ce900898f` passed Godot 4.3 [Run #760](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41173732144): 287/287 total step records successful, zero failures and zero skipped.
+- New acceptance steps: root Test Hub smoke #8; mineral chunk controller integration #41; crop plot controller integration #132; crop plot visual interaction #133; production SurfaceWorld crop/salvage chunk reload #280; Hex Frontier input verification/import/rules/runtime #281–284.
+- Documentation closeout is tracked separately in PR #171; its exact-head full CI must pass before merge.
+
+### Known limits and next steps
+
+- Hex Frontier AI is deterministic and intentionally lightweight; no campaign save/load, multiplayer, audio or adaptive difficulty.
+- Crop binding preflight currently covers CropPlotVisual/MineralChunkController. It does not prove every other formal interactable factory (mineral veins/caches, lift and future KROLL devices) is fully integrated.
+- Terrain-edit persistence and asynchronous/cancellable chunk streaming remain unfinished.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
