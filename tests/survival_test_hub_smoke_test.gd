@@ -16,6 +16,7 @@ const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 const THERMAL_GLIDER_SCENE := "res://daily_games/KROLL_Thermal_Glider/main.tscn"
 const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tscn"
 const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
+const VECTOR_RALLY_SCENE := "res://daily_games/KROLL_Vector_Rally/main.tscn"
 
 var failures: Array[String] = []
 
@@ -46,7 +47,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 15, "hub exposes the world entry and fourteen prototype launch buttons")
+	_expect(buttons.size() == 16, "hub exposes the world entry and fifteen prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -65,6 +66,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Thermal Glider"), "hub labels the Thermal Glider game")
 	_expect(labels.has("KROLL Gravity Foundry"), "hub labels the Gravity Foundry game")
 	_expect(labels.has("KROLL Echo Mapper"), "hub labels the Echo Mapper game")
+	_expect(labels.has("KROLL Vector Rally"), "hub labels the Vector Rally game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -151,6 +153,19 @@ func _run() -> void:
 			var echo_state: Dictionary = echo_mapper.call("get_current_state")
 			_expect(str(echo_state.get("level_id", "")) == "dockside_echo", "root-loaded Echo Mapper starts the Dockside Echo mission")
 		echo_mapper.queue_free()
+		await process_frame
+
+	var vector_rally_scene := load(VECTOR_RALLY_SCENE) as PackedScene
+	_expect(vector_rally_scene != null, "root hub can load the Vector Rally scene")
+	if vector_rally_scene != null:
+		var vector_rally := vector_rally_scene.instantiate()
+		root.add_child(vector_rally)
+		await process_frame
+		_expect(vector_rally.has_method("get_current_state"), "root-loaded Vector Rally initializes its driving model")
+		if vector_rally.has_method("get_current_state"):
+			var rally_state: Dictionary = vector_rally.call("get_current_state")
+			_expect(str(rally_state.get("track_id", "")) == "dock_loop", "root-loaded Vector Rally starts the Dock Loop")
+		vector_rally.queue_free()
 		await process_frame
 
 	hub.queue_free()
