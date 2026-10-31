@@ -152,8 +152,13 @@ func _expect_edge_ramps(patch: Node3D, expected_height: float, label: String) ->
 	var slope_length: float = sqrt(PatchScript.EDGE_RAMP_RUN*PatchScript.EDGE_RAMP_RUN+expected_height*expected_height)
 	var angle: float = atan(expected_height/PatchScript.EDGE_RAMP_RUN)
 	for side in ["East", "West", "North", "South"]:
-		var ramp := body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
-		_expect(ramp != null, "%s has a %s edge ramp" % [label, side])
+		var ramp_body := patch.get_node_or_null("TerrainRampBody_" + side) as StaticBody3D
+		_expect(ramp_body != null, "%s has an independent %s ramp body" % [label, side])
+		if ramp_body == null:
+			continue
+		_expect(ramp_body != body and ramp_body.collision_layer == 1 and ramp_body.collision_mask == 0, "%s %s ramp body is isolated on the world collision layer" % [label, side])
+		var ramp := ramp_body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
+		_expect(ramp != null, "%s has a %s edge ramp collision shape" % [label, side])
 		if ramp == null:
 			continue
 		var ramp_box := ramp.shape as BoxShape3D
