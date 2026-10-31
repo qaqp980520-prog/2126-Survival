@@ -1,10 +1,10 @@
 extends Control
 
-const RulesScript = preload("res://rules.gd")
+const RULES_PATH: String = "res://daily_games/KROLL_Hex_Frontier/rules.gd"
 const HEX_SIZE: float = 48.0
 const HEX_SQRT3: float = 1.7320508
 
-var _rules: RefCounted = RulesScript.new()
+var _rules: RefCounted
 var _state: Dictionary = {}
 var _scenario: int = 0
 var _selected_action: String = "claim"
@@ -13,6 +13,14 @@ var _detail_label: Label
 var _action_buttons: Dictionary = {}
 
 func _ready() -> void:
+    var rules_path: String = RULES_PATH
+    if not ResourceLoader.exists(rules_path):
+        rules_path = "res://rules.gd"
+    var rules_script: Script = load(rules_path) as Script
+    if rules_script == null:
+        push_error("KROLL Hex Frontier could not load its rules module.")
+        return
+    _rules = rules_script.new()
     _state = _rules.call("new_game", _scenario)
     _build_ui()
     _refresh()
