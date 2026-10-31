@@ -768,3 +768,36 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - CropRegistry remains the authoritative crop state source; this run validates in-memory state across chunk scene unload/reload.
 - Hex Frontier is a small deterministic strategy prototype, not the main survival world or multiplayer campaign.
 - Local GUI/GPU/iPhone testing is not claimed.
+
+
+## Run 68 closeout — 2026-10-31
+
+### Completed and merged
+
+- KROLL Thermal Glider M0.1: three deterministic glider courses, ordered beacon route, thermal lift/battery recharge, pitch/boost/airbrake controls, safe landing constraints, deterministic all-course reference flights, standalone/root import, rules and runtime smoke tests.
+- Mineral registration hardening: pure `MineralMiningNode.can_register()` validation; controller and direct lifecycle adapter preflight every vein/stable ID before registry mutation or crop binding.
+- Atomicity regressions: malformed mineral input cannot leave a sibling crop record or partial vein registrations. Rejected chunk roots remain caller-owned and unbound.
+- Corrected the existing crop offline-growth integration assertion to match the new preflight order: CropRegistry remains unchanged and the rejected detached visual remains unbound.
+- Production SurfaceWorld mineral-vein reload regression: enters the real underground mine, mines a factory-created vein, unloads its chunk, verifies saved stable-ID stock and stale node/proxy disposal, reloads a fresh node/proxy with the same stock, and mines again through the production camera-ray interaction path.
+- World-save and mineral-registry schema remain version 1; no migration or second state store.
+
+### Exact CI and merge evidence
+
+- Feature PR [#172](https://github.com/qaqp980520-prog/2126-Survival/pull/172) merged as `5afefd60ff11a4170ceac6aae7abe682345ac5bc`; feature candidate HEAD `b1d0b09d6f05dda485f011e8c8dd7b228a237eca`.
+- Canonical Godot 4.3 exact-head [Run #770](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41179031212): 292/292 total workflow step records succeeded, zero failures and zero skipped. Thermal Glider import/rules/runtime and production mineral-vein chunk reload passed steps 286–289.
+- Supplemental mineral-regeneration [Run #40](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41179031107): 13/13 step records succeeded, zero failures and zero skipped.
+- Historical Run #769 failed at step 146 on a stale crop visual assertion. The new preflight rejects malformed mineral chunks before crop visual binding; the corrected test now asserts unchanged CropRegistry state and an unbound detached visual. This correction passed at step 146 on Run #770.
+- No local Godot executable was available; manual GUI, GPU and iPhone QA are not claimed.
+
+### Remaining work
+
+1. Extend stable-ID and fresh-proxy lifecycle tests to underground salvage caches and the mine lift.
+2. Add terrain-edit persistence across chunk unload/reload without breaking schema-v1 saves.
+3. Design bounded asynchronous chunk requests with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
+4. Add manual GUI, GPU performance and iPhone device QA when a local engine/device test environment is available.
+
+### Compatibility and limitations
+
+- No save-schema change; legacy schema-v1 payloads remain compatible.
+- Mineral vein coverage currently targets the generated underground origin chunk and its factory-created vein; it does not prove all mineral types/layers or all interactable factories.
+- Thermal Glider is an arcade flight prototype, not an aerodynamic simulator; no campaign save, replay, audio or controller remapping.
