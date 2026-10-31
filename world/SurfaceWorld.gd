@@ -31,6 +31,7 @@ var _sprint_active: bool = false
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
+var _camera_interaction_target_cache: Dictionary = {}
 var _jump_was_down: bool = false
 var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
 var _world_object_action_message: String = "F / CRATE: recover nearby salvage."
@@ -357,6 +358,7 @@ func _physics_process(delta: float) -> void:
 		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
 		if current_grid != _last_grid:
 			_sync_streaming(int(Time.get_unix_time_from_system()))
+	_camera_interaction_target_cache = _cast_camera_interaction_target()
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -614,6 +616,7 @@ func _toggle_mine_access() -> bool:
 		_world_object_action_message = "Entered mine level 01. V descends; G ascends."
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
+	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
 
@@ -654,6 +657,7 @@ func _descend_mine_layer() -> bool:
 	_last_mine_grid = mine_director.get_grid_coordinate(target_position)
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	_jump_was_down = false
+	_camera_interaction_target_cache.clear()
 	_world_object_action_message = "Lift descended to mine level %02d." % (_mine_layer_index + 1)
 	_refresh_hud()
 	return true
@@ -842,6 +846,9 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
 func get_camera_interaction_target() -> Dictionary:
+	return _camera_interaction_target_cache.duplicate()
+
+func _cast_camera_interaction_target() -> Dictionary:
 	if player == null or camera == null or not is_instance_valid(camera) or chunk_controller == null:
 		return {}
 	var world_3d: World3D = get_world_3d()
@@ -880,7 +887,6 @@ func get_camera_interaction_target() -> Dictionary:
 	target["distance"] = player_distance
 	target["hit_position"] = hit.get("position", ray_origin)
 	return target
-
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
