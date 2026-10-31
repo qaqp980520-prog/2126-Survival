@@ -1,0 +1,152 @@
+extends SceneTree
+
+const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const SURFACE_PREFIX: String = "surface/"
+var _test_time: int = 0
+var failures: Array[String] = []
+var world: Node3D
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _run() -> void:
+	_test_time = int(Time.get_unix_time_from_system()) + 20
+	world = WorldScene.instantiate() as Node3D
+	_expect(world != null, "production SurfaceWorld instantiates for all-chunk terrain coverage")
+	if world == null:
+		quit(1)
+		return
+	root.add_child(world)
+	await process_frame
+	await physics_frame
+
+	var controller: Node = world.get("chunk_controller") as Node
+	var registry: Node = world.get("object_state_registry") as Node
+	_expect(controller != null and registry != null, "world exposes chunk controller and object-state registry")
+	if controller == null or registry == null:
+		await _finish(1)
+		return
+
+	var entries: Array[Dictionary] = _collect_surface_patches(controller)
+	_expect(entries.size() == 9, "initial 3x3 active surface window contains nine terrain patches")
+	if entries.size() != 9:
+		await _finish(1)
+		return
+
+	var unique_ids: Dictionary = {}
+	for index in range(entries.size()):
+		var entry: Dictionary = entries[index]
+		var patch: Node3D = entry["patch"] as Node3D
+		var stable_id: String = str(entry["stable_id"])
+		_expect(not unique_ids.has(stable_id), "surface patch stable IDs are unique across the active window")
+		unique_ids[stable_id] = true
+		var proxy: Area3D = patch.get_node_or_null("InteractionArea") as Area3D
+		_expect(proxy != null and proxy.is_inside_tree(), "surface patch %d has a live interaction proxy" % index)
+		for edit_index in range((index % 3) + 1):
+			var edit: Dictionary = patch.call("cycle_terrain_edit")
+			_expect(bool(edit.get("ok", false)), "surface patch %d accepts deterministic edit %d" % [index, edit_index + 1])
+		entry["state"] = patch.call("get_world_object_state")
+		entry["patch_instance"] = patch.get_instance_id()
+		entry["proxy"] = proxy
+		entry["proxy_instance"] = proxy.get_instance_id()
+		entries[index] = entry
+
+	var save_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not save_payload.is_empty(), "world serialization captures all nine terrain patch states")
+	var saved_objects: Dictionary = save_payload.get("world_objects", {}).get("objects", {})
+	for entry in entries:
+		var stable_id: String = str(entry["stable_id"])
+		_expect(saved_objects.has(stable_id), "schema-1 save includes terrain patch %s" % stable_id)
+		if saved_objects.has(stable_id):
+			_expect(saved_objects[stable_id].get("state", {}) == entry["state"], "save contains the exact per-chunk terrain state")
+
+	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(41.5, 2.0, 41.5), _test_time))
+	_expect(moved_away, "production director moves to a disjoint surface window")
+	for entry in entries:
+		_expect(not bool(controller.call("is_chunk_loaded", str(entry["chunk_id"]))), "original surface chunk unloads")
+	await process_frame
+	await process_frame
+	for entry in entries:
+		var old_patch: Node3D = entry["patch"] as Node3D
+		var old_proxy: Area3D = entry["proxy"] as Area3D
+		_expect(not is_instance_valid(old_patch), "unloaded terrain node is released")
+		_expect(not is_instance_valid(old_proxy), "unloaded interaction proxy is released")
+		var record: Dictionary = registry.call("get_object_state", str(entry["stable_id"]))
+		_expect(record.get("state", {}) == entry["state"], "registry retains each edited state while its chunk is unloaded")
+
+	var returned: bool = bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), _test_time + 1))
+	_expect(returned, "production director reloads the original 3x3 surface window")
+	await process_frame
+	await physics_frame
+
+	for entry in entries:
+		var chunk_id: String = str(entry["chunk_id"])
+		var stable_id: String = str(entry["stable_id"])
+		_expect(bool(controller.call("is_chunk_loaded", chunk_id)), "original surface chunk is loaded again")
+		var fresh_patch: Node3D = _find_patch(controller, chunk_id)
+		_expect(fresh_patch != null, "reloaded chunk recreates its terrain patch")
+		if fresh_patch == null:
+			continue
+		_expect(fresh_patch.get_instance_id() != int(entry["patch_instance"]), "reloaded patch is a fresh node instance")
+		_expect(str(controller.call("_make_world_object_stable_id", chunk_id, "%s/TerrainPatch" % fresh_patch.get_parent().name)) == stable_id, "reloaded patch retains its deterministic stable ID")
+		_expect(fresh_patch.call("get_world_object_state") == entry["state"], "reloaded patch restores its unique height/material/revision")
+		var fresh_proxy: Area3D = fresh_patch.get_node_or_null("InteractionArea") as Area3D
+		_expect(fresh_proxy != null and fresh_proxy.is_inside_tree(), "reloaded patch rebuilds its interaction proxy")
+		if fresh_proxy != null:
+			_expect(fresh_proxy.get_instance_id() != int(entry["proxy_instance"]), "reloaded interaction proxy is a fresh instance")
+
+	var roundtrip_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not roundtrip_payload.is_empty(), "reloaded nine-patch window can be serialized again")
+	_expect(bool(world.call("restore_stream_state", save_payload, _test_time + 2)), "schema-1 save restores all nine surface terrain patches")
+	for entry in entries:
+		var restored_patch: Node3D = _find_patch(controller, str(entry["chunk_id"]))
+		_expect(restored_patch != null and restored_patch.call("get_world_object_state") == entry["state"], "schema-1 restore preserves each chunk's independent terrain state")
+
+	await _finish(0)
+
+func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var chunk_ids: Array = controller.call("get_loaded_chunk_ids")
+	for chunk_value in chunk_ids:
+		var chunk_id: String = str(chunk_value)
+		if not chunk_id.begins_with(SURFACE_PREFIX):
+			continue
+		var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
+		if chunk_root == null:
+			continue
+		var patch: Node3D = chunk_root.get_node_or_null("TerrainPatch") as Node3D
+		if patch == null:
+			continue
+		var local_path: String = "%s/TerrainPatch" % chunk_root.name
+		var stable_id: String = str(controller.call("_make_world_object_stable_id", chunk_id, local_path))
+		entries.append({
+			"chunk_id": chunk_id,
+			"stable_id": stable_id,
+			"patch": patch
+		})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a["chunk_id"]) < str(b["chunk_id"]))
+	return entries
+
+func _find_patch(controller: Node, chunk_id: String) -> Node3D:
+	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
+	return chunk_root.get_node_or_null("TerrainPatch") as Node3D if chunk_root != null else null
+
+func _finish(exit_code: int) -> void:
+	if world != null and is_instance_valid(world):
+		world.queue_free()
+	await process_frame
+	await process_frame
+	if failures.is_empty() and exit_code == 0:
+		print("Production SurfaceWorld all-chunk terrain patch reload tests passed.")
+		quit(0)
+	else:
+		for failure in failures:
+			push_error("FAILED: " + failure)
+		quit(1)
+
+func _expect(condition: bool, description: String) -> void:
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures.append(description)
+		push_error("FAIL: " + description)
