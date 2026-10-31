@@ -36,6 +36,8 @@ func _run() -> void:
 				continue
 			var convex := ramp.shape as ConvexPolygonShape3D
 			_expect(convex != null and convex.points.size() == 6,"%s ramp is a six-point convex wedge" % side)
+			if convex != null:
+				_expect(convex.margin <= 0.01,"%s ramp uses a narrow collision margin for shallow slopes" % side)
 			if convex == null or convex.points.size() != 6:
 				continue
 			var min_y: float = INF

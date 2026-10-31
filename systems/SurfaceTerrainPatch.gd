@@ -78,6 +78,7 @@ func _build_collision() -> void:
 		var ramp := CollisionShape3D.new()
 		ramp.name="TerrainRampCollision_"+side.capitalize()
 		var initial_ramp_shape := ConvexPolygonShape3D.new()
+		initial_ramp_shape.margin=0.005
 		initial_ramp_shape.points=_make_ramp_points(side,get_top_height())
 		ramp.shape=initial_ramp_shape
 		_collision_body.add_child(ramp)
@@ -149,6 +150,7 @@ func _refresh_geometry() -> void:
 		var ramp_collision: CollisionShape3D = _ramp_collisions.get(side) as CollisionShape3D
 		if ramp_collision != null:
 			var ramp_shape := ConvexPolygonShape3D.new()
+			ramp_shape.margin=0.005
 			ramp_shape.points=_make_ramp_points(side,height)
 			ramp_collision.shape=ramp_shape
 			ramp_collision.position=Vector3.ZERO
