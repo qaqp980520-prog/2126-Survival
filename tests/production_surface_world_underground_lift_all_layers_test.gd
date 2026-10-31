@@ -91,8 +91,8 @@ func _run() -> void:
 		var deepest_position: Vector3 = player.global_position
 		var deepest_ids: PackedStringArray = chunk_controller.call("get_loaded_chunk_ids")
 		_expect(not bool(world.call("_descend_mine_layer")), "V refuses to descend beyond the maximum supported depth")
-		_expect(world.player.global_position == deepest_position, "rejected maximum-depth descent leaves player position unchanged")
-		_expect(world.chunk_controller.call("get_loaded_chunk_ids") == deepest_ids, "rejected maximum-depth descent leaves the active chunk window unchanged")
+		_expect(player.global_position == deepest_position, "rejected maximum-depth descent leaves player position unchanged")
+		_expect(chunk_controller.call("get_loaded_chunk_ids") == deepest_ids, "rejected maximum-depth descent leaves the active chunk window unchanged")
 
 	for layer_index in range(MAX_LAYER_INDEX, 0, -1):
 		var current_root: Node3D = _get_chunk_root(_chunk_id(layer_index))
@@ -162,13 +162,13 @@ func _find_lift(layer_index: int) -> Node3D:
 
 func _stable_id(chunk_id: String, chunk_root: Node3D, lift: Node3D) -> String:
 	var local_path: String = "%s/%s" % [str(chunk_root.name), str(lift.name)]
-	return str(world.chunk_controller.call("_make_world_object_stable_id", chunk_id, local_path))
+	return str(chunk_controller.call("_make_world_object_stable_id", chunk_id, local_path))
 
 func _valid_proxy(proxy: Area3D) -> bool:
 	return proxy != null and is_instance_valid(proxy) and proxy.is_inside_tree() and (proxy.collision_layer & INTERACTION_LAYER) != 0
 
 func _aim_at(target: Node3D, player_offset: Vector3, target_offset: Vector3) -> void:
-	world.player.global_position = target.global_position + player_offset
+	player.global_position = target.global_position + player_offset
 	camera.look_at(target.global_position + target_offset, Vector3.UP)
 	await physics_frame
 	await physics_frame

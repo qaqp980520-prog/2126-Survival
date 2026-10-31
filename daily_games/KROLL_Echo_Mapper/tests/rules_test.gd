@@ -26,6 +26,12 @@ func _run() -> void:
 	_expect(Rules.is_cell_visible(ping_state, Vector2i(4, 1)), "sonar reveals a nearby wall")
 	_expect(not Rules.is_cell_visible(ping_state, Vector2i(7, 7)), "sonar does not reveal cells outside its Manhattan radius")
 
+	var expiring_state: Dictionary = ping_state
+	for _step in range(Rules.SONAR_DURATION + 1):
+		var blocked_step: Dictionary = Rules.apply_action(expiring_state, "up")
+		expiring_state = blocked_step.get("state", expiring_state)
+	_expect(not Rules.is_cell_visible(expiring_state, Vector2i(4, 1)), "sonar reveal expires after its configured duration")
+
 	var blocked: Dictionary = Rules.apply_action(initial, "left")
 	_expect(bool(blocked.get("ok", false)) and str(blocked.get("reason", "")) == "blocked", "unknown wall contact returns a useful blocked result")
 	_expect(blocked.get("state", {}).get("player") == Vector2i(1, 1), "blocked movement leaves the operator in place")
