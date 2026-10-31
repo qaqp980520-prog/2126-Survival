@@ -1312,3 +1312,39 @@
 - The current feature is one 2 m patch per surface chunk with three height levels and three material states; it is not arbitrary voxel sculpting, multi-tile blending or a smoothed terrain system.
 - Chunk streaming remains synchronous. Bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## 2026-10-31 Run 73 — KROLL Neon Climber and all-nine terrain patch lifecycle regression
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Neon_Climber/`, a three-sector side-scrolling platformer: Maintenance Shaft, Reactor Scaffold and Signal Tower.
+- Mechanics: horizontal movement, double jump, short dash with cooldown, three unique data-core pickups per sector, checkpoint respawn, laser hazards, locked/unlocked exits and next-sector progression.
+- Controls: A/D or arrows move; Space/W/Up jumps; X dashes; R resets; N advances after completion. On-screen LEFT/RIGHT/JUMP/DASH controls support touch.
+- Checkpoint anchors are platform-supported and hazard-safe. Runtime activation verifies the authored checkpoint ID/position, platform support and hazard clearance before mutating progression.
+- Rules/runtime tests cover invalid embedded checkpoints, laser overlap rejection, grounded respawn, core collection, exit gating, sector progression and reset. The smoke test reacquires the player after sector-root rebuilds.
+- Registered in the root Survival Test Hub. Root smoke verifies the launch entry and instantiates Neon Climber.
+- No external assets, plugins, audio or network dependencies; Godot 4.3+.
+
+### Production all-nine terrain patch lifecycle regression
+
+- Added `tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd` using the real SurfaceWorld, chunk controller and WorldObjectStateRegistry.
+- Applies distinct deterministic edit/revision patterns to all nine terrain patches in the active 3×3 surface window.
+- Serializes all nine stable IDs and independent states, streams to a disjoint window, verifies old terrain nodes and interaction proxies are released while registry states remain, then returns and verifies fresh nodes/proxies restore each patch's state.
+- Performs a schema-1 save/restore roundtrip for the full nine-patch set.
+- Verifies collision shape type, collision height and grounded vertical offset after edits, chunk reload and schema-1 restore for every patch.
+- Run #825 exposed a test-only freed-reference assertion: the chunk controller had correctly freed the nodes, but the test attempted to cast the old references. Commit `80e5d71f26eaffaaceabd970af7147cf9fd96490` captures WeakRef handles before unload and checks `get_ref() == null`, while retaining fresh-instance, stable-ID, state and geometry assertions.
+
+### Exact-head acceptance and merge
+
+- Feature PR [#183](https://github.com/qaqp980520-prog/2126-Survival/pull/183) merged as `04b3615d7ff1514031817fda0ae08ce7f51e29ca`.
+- Exact feature HEAD `80e5d71f26eaffaaceabd970af7147cf9fd96490` passed canonical Godot 4.3 [Run #826](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41209679698): all 314 primary validation steps succeeded, zero failures and zero skipped; checkout, container shutdown and job completion also succeeded.
+- Run #826 passed Neon Climber import/rules/runtime at steps 311–313 and the all-nine terrain patch reload regression at step 314.
+- Main at documentation-branch creation: `04b3615d7ff1514031817fda0ae08ce7f51e29ca`.
+
+### Known limits and next steps
+
+- Neon Climber uses three fixed authored sectors; no procedural campaign, progression save, audio, animation or controller remapping.
+- Terrain remains one 2 m patch per surface chunk, with three height levels and three materials; this is not arbitrary voxel sculpting or multi-tile blending.
+- Chunk streaming remains synchronous; bounded asynchronous streaming, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
