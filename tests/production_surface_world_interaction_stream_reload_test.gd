@@ -2,6 +2,7 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const INTERACTION_LAYER: int = 1 << 1
+const CHUNK_ID: String = "surface/chunk_0_0"
 var failures: Array[String] = []
 var world: Node3D
 
@@ -18,7 +19,6 @@ func _run() -> void:
     await process_frame
     await physics_frame
 
-    const CHUNK_ID: String = "surface/chunk_0_0"
     var original_root: Node3D = world.chunk_controller.call("get_chunk_root", CHUNK_ID) as Node3D
     var original_crate: Node3D = _find_crate(CHUNK_ID)
     _expect(original_root != null and original_crate != null, "origin chunk exposes a real stateful salvage crate")
