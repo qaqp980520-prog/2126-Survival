@@ -15,6 +15,8 @@ func _run() -> void:
 	var state: Dictionary = Rules.new_game(0)
 	var first_hint: Vector2i = Rules.solution_next_move(state)
 	_expect(first_hint == Vector2i(2,1), "first level hint points to the next legal tour square")
+	var diverged: Dictionary = Rules.move(state, Vector2i(1,2))
+	_expect(Rules.solution_next_move(diverged) == Vector2i(-1,-1), "hint refuses to mislead after the player diverges from the built-in route")
 	_expect(Rules.can_move(state, first_hint), "authored hint is a legal knight move")
 	var moved: Dictionary = Rules.move(state, first_hint)
 	_expect(int(moved["moves"]) == 1 and moved["visited"].size() == 2, "legal knight move records one new visited square")
@@ -40,6 +42,9 @@ func _run() -> void:
 	var blocked: Dictionary = Rules.next_level(Rules.new_game(0))
 	_expect(int(blocked["level_index"]) == 0, "unfinished circuit cannot be skipped")
 	_expect(not Rules.is_in_bounds(Vector2i(-1,0)) and not Rules.is_in_bounds(Vector2i(5,5)), "out-of-board coordinates are rejected")
+	var malformed_solution: Array = Rules.get_level(0)["solution"].duplicate()
+	malformed_solution[1] = malformed_solution[0]
+	_expect(not Rules.validate_solution(malformed_solution), "duplicate-square tour is rejected")
 	if failures.is_empty():
 		print("KROLL Knight Circuit rules tests passed.")
 		quit(0)

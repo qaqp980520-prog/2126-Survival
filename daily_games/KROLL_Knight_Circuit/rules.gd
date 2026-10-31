@@ -73,9 +73,11 @@ static func validate_solution(solution: Array) -> bool:
 	var seen: Dictionary = {}
 	for index in range(solution.size()):
 		var cell_value: Variant = solution[index]
-		if not (cell_value is Vector2i) or not is_in_bounds(cell_value):
+		if typeof(cell_value) != TYPE_VECTOR2I:
 			return false
 		var cell: Vector2i = cell_value
+		if not is_in_bounds(cell):
+			return false
 		if seen.has(cell):
 			return false
 		seen[cell] = true

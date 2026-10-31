@@ -6,6 +6,8 @@ const MAX_LAYER_INDEX: int = Factory.MAX_LAYER_INDEX
 const SAMPLE_MIN: int = -2
 const SAMPLE_MAX: int = 2
 const INTERACTION_LAYER: int = 1 << 1
+const EXPECTED_CACHE_COUNTS: Array[int] = [18, 17, 16, 17, 17, 16, 17, 17, 16]
+const EXPECTED_CACHE_TOTAL: int = 151
 var failures: Array[String] = []
 var world: Node3D
 var controller: Node
@@ -19,6 +21,7 @@ var all_stable_ids: Array[String] = []
 
 class TestInventoryBridge extends Node:
 	var inventory: Dictionary = {"seed": 1}
+	var collected_units: int = 0
 	func serialize_inventory() -> Dictionary:
 		return inventory.duplicate(true)
 	func restore_inventory(snapshot: Dictionary) -> bool:
@@ -28,6 +31,7 @@ class TestInventoryBridge extends Node:
 		if item_id.is_empty() or amount <= 0:
 			return false
 		inventory[item_id] = int(inventory.get(item_id, 0)) + amount
+		collected_units += amount
 		return true
 
 func _initialize() -> void:
@@ -144,8 +148,9 @@ func _run() -> void:
 				layer_cache_counts[layer_index] = int(layer_cache_counts[layer_index]) + cache_records.size()
 	_expect(chunks_checked > 0 and caches_checked > 0, "sample contains generated cache placements")
 	for layer_index in range(MAX_LAYER_INDEX + 1):
-		_expect(int(layer_cache_counts.get(layer_index, 0)) > 0, "all mine layer %d has cache lifecycle coverage" % layer_index)
-	_expect(caches_checked >= 100, "five-by-five sample across nine layers covers at least one hundred generated caches")
+		_expect(int(layer_cache_counts.get(layer_index, 0)) == EXPECTED_CACHE_COUNTS[layer_index], "layer %d covers exactly %d deterministic cache placements" % [layer_index, EXPECTED_CACHE_COUNTS[layer_index]])
+	_expect(caches_checked == EXPECTED_CACHE_TOTAL, "five-by-five sample across nine layers covers all 151 deterministic cache placements")
+	_expect(int(inventory_bridge.get("collected_units")) == EXPECTED_CACHE_TOTAL * 2, "inventory transaction adapter accepted exactly two units for every sampled cache")
 	var save_payload: Dictionary = registry.call("to_save_dict")
 	var registry_copy = RegistryScript.new()
 	_expect(bool(registry_copy.call("restore_save_dict", save_payload)), "schema-1 registry payload restores into a fresh registry")
@@ -153,7 +158,6 @@ func _run() -> void:
 		var copied: Dictionary = registry_copy.call("get_object_state", stable_id)
 		var copied_state: Dictionary = copied.get("state", {})
 		_expect(int(copied_state.get("loot_remaining", -1)) == 0 and bool(copied_state.get("opened", false)), "schema-1 registry roundtrip preserves exhausted cache %s" % stable_id)
-	registry_copy.free()
 	await _finish(0 if failures.is_empty() else 1)
 func _collect_cache(cache: Node) -> bool:
 	var result: Dictionary = cache.call("interact_with_inventory", inventory_bridge)
