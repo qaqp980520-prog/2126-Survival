@@ -2,6 +2,23 @@
 
 這份清單是目前的開發追蹤文件，與 GitHub Issues 功能不同；之後可逐項搬成正式 Issues。
 
+## Run 62 verification — 2026-10-31
+
+- [x] KROLL Shadow Courier M0.1 added at `daily_games/KROLL_Shadow_Courier/`: three authored 8×8 stealth missions, rotating patrol sight, walls, three data shards, two decoys, extraction, keyboard/touch controls, and a tested winning route for each mission.
+- [x] Optional SurfaceWorld `world_seed` persisted in schema-1 saves. Missing legacy field falls back to seed 0; no schema bump.
+- [x] Underground cache generation is deterministic per seed; seed 0 preserves prior cache formulas and layer-zero service caches.
+- [x] Different-seed restore forces a mine-window rebuild even when chunk IDs match. Injected chunk-factory failure restores the previous seed/window and exact mineral/world-object registry snapshots.
+- [x] Feature PR #160 merged as `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; exact candidate `ae887177633842a5d8a4ed3da3acb7b8fdc59906` passed Godot 4.3 [Run #699](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156096505): 263/263 total step records, zero failures, zero skipped. New game import/rules/runtime and production world-seed integration steps all passed.
+- [x] GitHub main was re-read at merge SHA `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; PR #160 is closed/merged.
+- [ ] Post-merge main-push workflow [Run #700](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156636725) was queued when this note was written; verify its exact main SHA and result before closing documentation PR.
+- No local Godot executable was available. GUI/GPU/iPhone QA is not claimed.
+
+### Remaining limits
+- World seed currently changes underground salvage-cache spawn/item/position only. Mineral vein identities and terrain generation remain coordinate/layer deterministic.
+- No in-game new-world seed picker yet; seed is configurable on SurfaceWorld.
+- Continue stable-ID state restoration across all production world-object factories, then terrain/object persistence and vertical mine streaming.
+- Add stamina/food balancing and complete manual GUI, GPU and iPhone testing.
+
 ## Run 26 verification note — 2026-10-27
 
 - PR #86 is merged as adaf93ab255bff720d3bc70af1221ea4cc58f727. Exact candidate HEAD 453358cfae88a4f62511dd33bb40a807d04a2f6d passed Godot 4.3 CI Run #406 (40527501347), with 108/108 job steps successful; focused Run #11 (40527501336) passed 13/13.
