@@ -26,7 +26,7 @@ func _run() -> void:
 			var item_id: String = str(entry.get("item_id", ""))
 			var weight_value: Variant = entry.get("weight", null)
 			_expect(MineralCatalog.has_mineral(item_id), "table item exists in MineralCatalog: " + item_id)
-			_expect(weight_value is int and int(weight_value) > 0, "table weight is a positive integer")
+			_expect((weight_value is int or weight_value is float) and float(weight_value) > 0.0 and is_equal_approx(float(weight_value), roundf(float(weight_value))), "table weight is a positive integer")
 			_expect(not seen.has(item_id), "table does not repeat an item ID")
 			seen[item_id] = true
 			all_items[item_id] = true
@@ -43,6 +43,9 @@ func _run() -> void:
 	var zero_weight: Dictionary = tables.duplicate(true)
 	zero_weight["west"][0]["weight"] = 0
 	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": zero_weight}).is_empty(), "zero weights fail closed")
+	var fractional_weight: Dictionary = tables.duplicate(true)
+	fractional_weight["west"][0]["weight"] = 2.5
+	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": fractional_weight}).is_empty(), "fractional weights fail closed")
 	var duplicate_item: Dictionary = tables.duplicate(true)
 	duplicate_item["west"].append(duplicate_item["west"][0].duplicate(true))
 	_expect(Factory.validate_cache_tables({"schema_version": 1, "tables": duplicate_item}).is_empty(), "duplicate item IDs in one table fail closed")
