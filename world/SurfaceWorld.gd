@@ -14,6 +14,9 @@ const MINE_ACCESS_RANGE: float = 2.75
 const MINE_INTERACTION_RANGE: float = 3.5
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
+const LEGACY_WORLD_SEED: int = 0
+const MAX_WORLD_SEED: int = 2147483647
+@export_range(0, MAX_WORLD_SEED, 1) var world_seed: int = LEGACY_WORLD_SEED
 var stamina: RefCounted = StaminaScript.new()
 var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
@@ -472,7 +475,7 @@ func _build_underground_mine() -> bool:
 	return _mine_chunk_ready
 
 func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
-	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index)
+	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
 func _build_mine_entrance_visual() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -658,6 +661,7 @@ func serialize_stream_state() -> Dictionary:
 		return {}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
 	payload["mine_depth"] = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
+	payload["world_seed"] = world_seed
 	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
 	payload["quick_use"] = quick_use.call("to_save_dict") if quick_use != null else {"schema_version": 1, "slots": ["berries", "herbs", "meat", "food"], "selected_slot": 0}
 	payload["surface_return_position"] = [
@@ -668,6 +672,10 @@ func serialize_stream_state() -> Dictionary:
 	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
+	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
+		return false
+	var next_world_seed: int = int(roundf(float(world_seed_value)))
 	var has_stamina: bool = payload.has("stamina")
 	var stamina_value: Variant = payload.get("stamina", null)
 	if has_stamina:
@@ -719,13 +727,20 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	var previous_position: Vector3 = player.global_position
 	var previous_underground: bool = _is_underground
+	var previous_world_seed: int = world_seed
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
+	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
+		world_seed = previous_world_seed
+		var failed_sync_rollback_target: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
+		if not mine_director.recover_to_world_position(failed_sync_rollback_target, now):
+			push_error("Underground mine window rollback failed after world-seed stream rejection.")
 		return false
 	if not super.restore_stream_state(payload, now):
+		world_seed = previous_world_seed
 		var rollback_target: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
-		if not mine_director.sync_to_world_position(rollback_target, now):
+		if not mine_director.recover_to_world_position(rollback_target, now):
 			push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if has_stamina:
