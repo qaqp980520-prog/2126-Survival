@@ -1,9 +1,11 @@
 extends RefCounted
 
-## Deterministic 10m underground room factory. Adjacent rooms share aligned open doorways.
+## Deterministic 10m underground room factory with explicit vertical mine layers.
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const CHUNK_SIZE: float = 10.0
+const LAYER_SPACING: float = 20.0
+const MAX_LAYER_INDEX: int = 8
 const MINERAL_IDS: Array[String] = [
 	"iron_ore", "copper_ore", "gold_ore", "silver_ore",
 	"aluminium_ore", "coal_ore", "uranium_ore"
@@ -37,12 +39,13 @@ const CACHE_TABLES: Dictionary = {
 	]
 }
 
-## Returns deterministic, room-specific cache entries without mutating a scene.
-## The origin remains the two-cache service room; other rooms use weighted tables
-## and a coordinate hash so unloading/reloading never rerolls their contents.
-static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
+## Returns deterministic room-specific cache entries. Layer zero's service caches
+## retain their original names and contents for save compatibility.
+static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
-	if coord == Vector2i.ZERO:
+	if layer_index < 0 or layer_index > MAX_LAYER_INDEX:
+		return entries
+	if coord == Vector2i.ZERO and layer_index == 0:
 		entries.append({
 			"node_name": "MineCache_Gold",
 			"item_id": "gold_ore",
@@ -57,12 +60,11 @@ static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
 		})
 		return entries
 
-	# One third of non-origin rooms are intentionally cache-free. The decision
-	# is stable per coordinate and keeps loot density below one cache per room.
-	if posmod(coord.x * 31 + coord.y * 17 + 1009, 3) == 0:
+	var spawn_hash: int = coord.x * 31 + coord.y * 17 + layer_index * 43 + 1009
+	if posmod(spawn_hash, 3) == 0:
 		return entries
 
-	var table_id: String = _get_cache_table_id(coord)
+	var table_id: String = _get_cache_table_id(coord, layer_index)
 	var table_value: Variant = CACHE_TABLES.get(table_id, [])
 	if not (table_value is Array) or table_value.is_empty():
 		return entries
@@ -73,7 +75,7 @@ static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
 	if total_weight <= 0:
 		return entries
 
-	var roll: int = posmod(coord.x * 97 + coord.y * 53 + 2029, total_weight)
+	var roll: int = posmod(coord.x * 97 + coord.y * 53 + layer_index * 101 + 2029, total_weight)
 	var selected_item_id: String = ""
 	for entry_value in table_value:
 		if not (entry_value is Dictionary):
@@ -86,7 +88,7 @@ static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
 	if selected_item_id.is_empty() or not MINERAL_IDS.has(selected_item_id):
 		return entries
 
-	var position_index: int = posmod(coord.x * 7 + coord.y * 11 + 1, CACHE_POSITIONS.size())
+	var position_index: int = posmod(coord.x * 7 + coord.y * 11 + layer_index * 3 + 1, CACHE_POSITIONS.size())
 	entries.append({
 		"node_name": "MineCache_%s" % selected_item_id,
 		"item_id": selected_item_id,
@@ -95,16 +97,20 @@ static func get_cache_spawn_data(coord: Vector2i) -> Array[Dictionary]:
 	})
 	return entries
 
-static func _get_cache_table_id(coord: Vector2i) -> String:
+static func _get_cache_table_id(coord: Vector2i, layer_index: int = 0) -> String:
+	if coord == Vector2i.ZERO:
+		return "north" if posmod(layer_index, 2) == 1 else "south"
 	if abs(coord.x) >= abs(coord.y):
 		return "west" if coord.x < 0 else "east"
 	return "north" if coord.y < 0 else "south"
 
-## Keep timestamp as the first argument for compatibility with Run 52 callers.
-static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> Node3D:
+## Keep timestamp first and coordinate second for Run 52 callers; layer is optional.
+static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO, layer_index: int = 0) -> Node3D:
+	if layer_index < 0 or layer_index > MAX_LAYER_INDEX:
+		return null
 	var root := Node3D.new()
-	root.name = "UndergroundMine_%d_%d" % [coord.x, coord.y]
-	root.position = Vector3(float(coord.x) * CHUNK_SIZE, 0.0, float(coord.y) * CHUNK_SIZE)
+	root.name = "UndergroundMine_%d_%d" % [coord.x, coord.y] if layer_index == 0 else "UndergroundMine_L%d_%d_%d" % [layer_index, coord.x, coord.y]
+	root.position = Vector3(float(coord.x) * CHUNK_SIZE, -float(layer_index) * LAYER_SPACING, float(coord.y) * CHUNK_SIZE)
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	_add_box_body(root, "MineFloor", Vector3(5.0, -8.5, 5.0), Vector3(10.0, 0.5, 10.0), Color(0.12, 0.14, 0.17))
 	_add_box_body(root, "MineCeiling", Vector3(5.0, -4.0, 5.0), Vector3(10.0, 0.5, 10.0), Color(0.065, 0.075, 0.09))
@@ -121,7 +127,7 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 	lamp.shadow_enabled = false
 	root.add_child(lamp)
 
-	var seed_value: int = posmod(coord.x * 31 + coord.y * 17 + 1009, MINERAL_IDS.size())
+	var seed_value: int = posmod(coord.x * 31 + coord.y * 17 + layer_index * 43 + 1009, MINERAL_IDS.size())
 	var positions: Array[Vector3] = [
 		Vector3(2.5, -8.0, 6.0),
 		Vector3(6.5, -8.0, 6.0),
@@ -140,7 +146,7 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 		vein.position = positions[index]
 		root.add_child(vein)
 
-	for cache_data in get_cache_spawn_data(coord):
+	for cache_data in get_cache_spawn_data(coord, layer_index):
 		var cache_position_value: Variant = cache_data.get("position", null)
 		if not (cache_position_value is Vector3):
 			root.free()
@@ -149,7 +155,41 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO) -> N
 		if not _add_salvage_cache(root, str(cache_data.get("node_name", "")), str(cache_data.get("item_id", "")), cache_position):
 			root.free()
 			return null
+
+	if coord == Vector2i.ZERO:
+		_add_lift_anchor(root, layer_index)
 	return root
+
+static func _add_lift_anchor(parent: Node3D, layer_index: int) -> void:
+	var anchor := Node3D.new()
+	anchor.name = "MineLiftAnchor"
+	anchor.position = Vector3(1.5, -8.25, 7.5)
+	parent.add_child(anchor)
+	if DisplayServer.get_name() == "headless":
+		return
+	var platform := MeshInstance3D.new()
+	platform.name = "LiftPlatform"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 1.05
+	mesh.bottom_radius = 1.05
+	mesh.height = 0.12
+	platform.mesh = mesh
+	platform.position.y = 0.08
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.08, 0.32, 0.42)
+	material.metallic = 0.8
+	material.emission_enabled = true
+	material.emission = Color(0.02, 0.35, 0.55)
+	material.emission_energy_multiplier = 0.85
+	platform.material_override = material
+	anchor.add_child(platform)
+	var label := Label3D.new()
+	label.name = "LiftLabel"
+	label.text = "KROLL LIFT · LEVEL %02d · V DOWN / G UP" % (layer_index + 1)
+	label.position = Vector3(0.0, 1.35, 0.0)
+	label.font_size = 24
+	label.modulate = Color(0.55, 0.92, 1.0)
+	anchor.add_child(label)
 
 static func _add_salvage_cache(parent: Node3D, node_name: String, item_id: String, position: Vector3) -> bool:
 	var cache: Node3D = StatefulPropScript.new()
