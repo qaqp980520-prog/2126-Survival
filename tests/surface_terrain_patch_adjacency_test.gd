@@ -28,6 +28,11 @@ func _run() -> void:
 	_expect(str(west_patch.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "same-height patches resolve to a flush shared edge")
 	_expect(not _ramp_enabled(west_patch, "East"), "west patch disables its overlapping east ground ramp")
 	_expect(not _ramp_enabled(east_patch, "West"), "east patch disables its overlapping west ground ramp")
+	await physics_frame
+	var equal_west_hit: Dictionary = _ray_height_at(0.99)
+	var equal_east_hit: Dictionary = _ray_height_at(1.01)
+	_expect(not equal_west_hit.is_empty() and absf(float(equal_west_hit.get("position", Vector3.ZERO).y) - 0.05) <= 0.01, "equal-height west patch collision reaches the shared seam")
+	_expect(not equal_east_hit.is_empty() and absf(float(equal_east_hit.get("position", Vector3.ZERO).y) - 0.05) <= 0.01, "equal-height east patch collision reaches the shared seam")
 	_expect(_ramp_enabled(west_patch, "North") and _ramp_enabled(east_patch, "South"), "unrelated outer edges retain base-ground ramps")
 	var raised_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
 	_expect(bool(east_patch.call("apply_world_object_state", raised_state)), "neighbor patch accepts a higher persisted terrain state")
@@ -39,6 +44,11 @@ func _run() -> void:
 	_expect(str(east_policy.get("mode", "")) == "local_higher", "raised east patch identifies itself as higher")
 	_expect(is_equal_approx(float(west_policy.get("height_delta", 0.0)), 0.5), "adjacent height difference is 0.5 m")
 	_expect(not _ramp_enabled(west_patch, "East") and not _ramp_enabled(east_patch, "West"), "different-height shared edge suppresses both conflicting ramps")
+	await physics_frame
+	var step_west_hit: Dictionary = _ray_height_at(0.99)
+	var step_east_hit: Dictionary = _ray_height_at(1.01)
+	_expect(not step_west_hit.is_empty() and absf(float(step_west_hit.get("position", Vector3.ZERO).y) - 0.05) <= 0.01, "lower patch retains its collision height up to the step")
+	_expect(not step_east_hit.is_empty() and absf(float(step_east_hit.get("position", Vector3.ZERO).y) - 0.55) <= 0.01, "higher patch retains its collision height beyond the step")
 	_expect(west_patch.call("get_world_object_state") == west_state, "neighbor binding does not mutate west saved state")
 	_expect(east_patch.call("get_world_object_state") == raised_state, "neighbor binding does not mutate east saved state")
 	var invalid_state := {"height_level": "bad", "surface_type": "soil", "revision": 0}
@@ -71,3 +81,12 @@ func _expect(condition: bool, description: String) -> void:
 	else:
 		failures.append(description)
 		push_error("FAIL: " + description)
+
+func _ray_height_at(x: float) -> Dictionary:
+	var space_state: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(Vector3(x, 2.0, 0.0), Vector3(x, -1.0, 0.0))
+	query.collision_mask = 1
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	return space_state.intersect_ray(query)
+
