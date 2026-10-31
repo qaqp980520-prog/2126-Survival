@@ -128,7 +128,7 @@ func _draw() -> void:
 		draw_circle(center, 20.0, Color(0.22, 0.24, 0.3) if disabled else Color(0.55, 0.12, 0.14))
 		draw_circle(center, 13.0, Color(0.55, 0.72, 0.8) if disabled else Color(1.0, 0.36, 0.31))
 		var facing: Vector2i = guard.get("facing", Vector2i.UP)
-		draw_line(center, center + Vector2(facing) * 22.0, Color(0.96, 0.98, 1.0), 4.0)
+		draw_line(center, center + Vector2(float(facing.x), float(facing.y)) * 22.0, Color(0.96, 0.98, 1.0), 4.0)
 		if disabled:
 			draw_string(ThemeDB.fallback_font, center + Vector2(-6.0, 5.0), "Z", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, Color(0.05, 0.1, 0.15))
 
