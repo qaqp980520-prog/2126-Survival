@@ -2459,3 +2459,48 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld all-layer cache lifecycle tests passed."
 
+
+      - name: Verify Run 72 Atmosphere Lab and terrain patch persistence inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Atmosphere_Lab/project.godot
+          test -f daily_games/KROLL_Atmosphere_Lab/main.tscn
+          test -f daily_games/KROLL_Atmosphere_Lab/main.gd
+          test -f daily_games/KROLL_Atmosphere_Lab/rules.gd
+          test -f daily_games/KROLL_Atmosphere_Lab/daily_games/KROLL_Atmosphere_Lab/main.gd
+          test -f daily_games/KROLL_Atmosphere_Lab/daily_games/KROLL_Atmosphere_Lab/rules.gd
+          test -f daily_games/KROLL_Atmosphere_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Atmosphere_Lab/tests/game_smoke_test.gd
+          test -f systems/SurfaceTerrainPatch.gd
+          test -f tests/production_surface_world_terrain_patch_reload_test.gd
+          grep -q 'ATMOSPHERE_LAB_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'SurfaceTerrainPatchScript' systems/SurfaceChunkFactory.gd
+          grep -q 'cycle_terrain_edit' world/SurfaceWorld.gd
+          grep -q 'TerrainPatch' tests/production_surface_world_terrain_patch_reload_test.gd
+      - name: Import and parse KROLL Atmosphere Lab
+        run: godot --headless --path daily_games/KROLL_Atmosphere_Lab --editor --quit
+      - name: Run KROLL Atmosphere Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 25s godot --headless --path daily_games/KROLL_Atmosphere_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Atmosphere Lab rules tests passed."
+      - name: Run KROLL Atmosphere Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Atmosphere_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Atmosphere Lab runtime smoke test passed."
+      - name: Run production SurfaceWorld terrain patch persistence regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/production_surface_world_terrain_patch_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld terrain patch reload tests passed."
