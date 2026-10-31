@@ -2624,6 +2624,7 @@ jobs:
           test -f tests/surface_terrain_edge_policy_test.gd
           test -f tests/surface_terrain_patch_adjacency_test.gd
           grep -q 'set_neighbor_edge_state' systems/SurfaceTerrainPatch.gd
+          grep -q 'bind_neighbor_patch' systems/SurfaceTerrainPatch.gd
           grep -q 'classify_edge' systems/SurfaceTerrainEdgePolicy.gd
       - name: Import and parse KROLL Conveyor Architect
         run: godot --headless --path daily_games/KROLL_Conveyor_Architect --editor --quit
