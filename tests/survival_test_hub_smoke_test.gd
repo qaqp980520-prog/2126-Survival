@@ -47,6 +47,18 @@ func _run() -> void:
 	_expect(labels.has("KROLL Star Chart"), "hub labels the Star Chart game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
+	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
+	_expect(star_chart_scene != null, "root hub can load the nested Star Chart scene script")
+	if star_chart_scene != null:
+		var star_chart := star_chart_scene.instantiate()
+		root.add_child(star_chart)
+		await process_frame
+		_expect(star_chart.has_method("get_current_mission"), "root-loaded Star Chart initializes its rules module")
+		var star_chart_mission: Dictionary = star_chart.call("get_current_mission")
+		_expect(str(star_chart_mission.get("id", "")) == "dockside", "root-loaded Star Chart can execute its rules module")
+		star_chart.queue_free()
+		await process_frame
+
 	hub.queue_free()
 	await process_frame
 	if failures.is_empty():
