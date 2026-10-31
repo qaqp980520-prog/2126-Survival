@@ -24,7 +24,7 @@ func _run() -> void:
     var original_crate: Node3D = _find_crate(CHUNK_ID)
     _expect(original_root != null and original_crate != null, "origin chunk exposes a real stateful salvage crate")
     if original_root == null or original_crate == null:
-        _finish(1)
+        await _finish(1)
         return
     var stable_id: String = world.chunk_controller.call(
         "_make_world_object_stable_id",
@@ -38,7 +38,7 @@ func _run() -> void:
     _expect(str(original_target.get("kind", "")) == "prop" and original_target.get("node") == original_crate, "camera ray selects the original crate")
     _expect(original_proxy != null and is_instance_valid(original_proxy) and original_proxy.is_inside_tree(), "original crate has a registered interaction proxy")
     if original_proxy == null or not is_instance_valid(original_proxy):
-        _finish(1)
+        await _finish(1)
         return
     var old_crate_instance: int = original_crate.get_instance_id()
     var old_proxy_instance: int = original_proxy.get_instance_id()
@@ -65,7 +65,7 @@ func _run() -> void:
     var restored_crate: Node3D = _find_crate(CHUNK_ID)
     _expect(restored_root != null and restored_crate != null, "reloaded origin chunk registers a new stateful crate")
     if restored_root == null or restored_crate == null:
-        _finish(1)
+        await _finish(1)
         return
     _expect(restored_crate.get_instance_id() != old_crate_instance, "reloaded crate is a new node instance, not the stale node")
     _expect(bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "controller applies the saved state to the new crate instance")
@@ -83,7 +83,7 @@ func _run() -> void:
     _expect(restored_target.get("proxy") == restored_proxy, "cached target references the reloaded proxy, not the stale proxy")
     var action_result: Dictionary = world.call("_interact_nearest_world_prop", now_unix + 2)
     _expect(bool(action_result.get("ok", false)) and int(action_result.get("remaining", -1)) == 0, "F interaction works after controller-driven unload and reload")
-    _finish(0 if failures.is_empty() else 1)
+    await _finish(0 if failures.is_empty() else 1)
 
 func _find_crate(chunk_id: String) -> Node3D:
     var nodes: Array = world.chunk_controller.call("get_loaded_world_state_nodes")
