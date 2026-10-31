@@ -32,7 +32,7 @@ func _run() -> void:
         var level: Dictionary = Rules.get_level(level_index)
         var state: Dictionary = Rules.new_state(level_index)
         for entry_value in solutions[level_index]:
-            var entry: Dictionary = entry_value as Dictionary
+            var entry: Dictionary = entry_value
             var result: Dictionary = Rules.place_atom(state, str(entry["element"]), entry["cell"])
             _expect(bool(result.get("ok", false)), "%s accepts a valid atom placement" % str(level.get("name", level_index)))
             state = result.get("state", state)
@@ -61,7 +61,9 @@ func _run() -> void:
     over_valence = Rules.place_atom(over_valence, "H", Vector2i(2, 2)).get("state", over_valence)
     var blocked_bond: Dictionary = Rules.place_atom(over_valence, "O", Vector2i(3, 2))
     _expect(not bool(blocked_bond.get("ok", false)) and str(blocked_bond.get("reason", "")) == "valence_exceeded", "a new bond cannot exceed an existing hydrogen's valence")
-    _expect((blocked_bond.get("state", {}).get("atoms", []) as Array).size() == 2, "a rejected bond leaves the board unchanged")
+    var blocked_state: Dictionary = blocked_bond.get("state", {})
+    var blocked_atoms: Array = blocked_state.get("atoms", [])
+    _expect(blocked_atoms.size() == 2, "a rejected bond leaves the board unchanged")
 
     var disconnected: Dictionary = Rules.new_state(0)
     disconnected = Rules.place_atom(disconnected, "O", Vector2i(0, 0)).get("state", disconnected)
@@ -72,8 +74,10 @@ func _run() -> void:
     _expect(not bool(disconnected_report.get("connected", true)) and not bool(disconnected_report.get("complete", false)), "a correct formula is not accepted while atoms remain disconnected")
 
     var removed: Dictionary = Rules.remove_atom(disconnected, Vector2i(4, 4))
-    _expect(bool(removed.get("ok", false)) and (removed.get("state", {}).get("atoms", []) as Array).size() == 2, "removing a selected atom updates the board")
-    var empty_remove: Dictionary = Rules.remove_atom(removed.get("state", {}), Vector2i(4, 4))
+    var removed_state: Dictionary = removed.get("state", {})
+    var removed_atoms: Array = removed_state.get("atoms", [])
+    _expect(bool(removed.get("ok", false)) and removed_atoms.size() == 2, "removing a selected atom updates the board")
+    var empty_remove: Dictionary = Rules.remove_atom(removed_state, Vector2i(4, 4))
     _expect(not bool(empty_remove.get("ok", false)) and str(empty_remove.get("reason", "")) == "empty_cell", "removing an empty cell is a no-op")
 
     if failures.is_empty():
