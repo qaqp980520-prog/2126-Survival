@@ -11,8 +11,10 @@ func _run() -> void:
 	_expect(rules.get_course_count() == 3, "three deterministic glider courses are available")
 	for index in range(rules.get_course_count()):
 		var course: Dictionary = rules.get_course(index)
-		_expect((course.get("beacons", []) as Array).size() == 3, "each course has three survey beacons")
-		_expect(not (course.get("thermals", []) as Array).is_empty(), "each course has at least one thermal zone")
+		var beacons: Array = course.get("beacons", [])
+		var thermals: Array = course.get("thermals", [])
+		_expect(beacons.size() == 3, "each course has three survey beacons")
+		_expect(not thermals.is_empty(), "each course has at least one thermal zone")
 
 	var initial: Dictionary = rules.new_run(0)
 	_expect(str(initial.get("status", "")) == "flying", "new run starts in the flying state")
@@ -57,7 +59,7 @@ func _run() -> void:
 
 	var landing_course: Dictionary = rules.get_course(0)
 	var landing_state: Dictionary = rules.new_run(0)
-	landing_state["position"] = Vector2(float(landing_course["runway_x"]) - 40.0, float(landing_course["runway_y"]))
+	landing_state["position"] = Vector2(float(landing_course["runway_x"]) - 38.0, float(landing_course["runway_y"]))
 	landing_state["velocity"] = Vector2(100.0, 0.0)
 	landing_state["pitch"] = 0.0
 	landing_state["checkpoint"] = 3
@@ -65,7 +67,7 @@ func _run() -> void:
 	_expect(str(landed.get("status", "")) == "landed", "valid approach after all beacons completes a safe landing")
 
 	var unsafe_state: Dictionary = landing_state.duplicate(true)
-	unsafe_state["position"] = Vector2(float(landing_course["runway_x"]) - 40.0, float(landing_course["runway_y"]) + 90.0)
+	unsafe_state["position"] = Vector2(float(landing_course["runway_x"]) - 38.0, float(landing_course["runway_y"]) + 90.0)
 	var unsafe: Dictionary = rules.step(unsafe_state, {}, 0.05)
 	_expect(str(unsafe.get("status", "")) == "crashed", "runway approach outside the altitude window is rejected")
 	var incomplete_state: Dictionary = landing_state.duplicate(true)
