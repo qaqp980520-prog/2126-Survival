@@ -1159,3 +1159,41 @@
 - Terrain-edit persistence across chunk unload/reload remains unfinished.
 - Chunk streaming is still synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## 2026-10-31 Run 69 — KROLL Gravity Foundry and underground cache/lift lifecycle
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Gravity_Foundry/`, a self-contained 7×7 turn-based gravity puzzle with three sectors: Reactor Bay, Coolant Vault and Core Archive.
+- Move the operator, push a loose energy core, rotate gravity with Q/E, settle the core on a pressure plate and reach the exit. Invalid moves do not consume a turn; the 30-turn limit is enforced.
+- Keyboard: WASD/arrow keys move, Q/E rotate gravity, R restart, N advance after a win. Eight on-screen buttons provide equivalent touch actions.
+- Includes deterministic winning sequences for all three sectors, rules coverage for movement/pushing/gravity/terminal states, and a runtime smoke test that emits a real touch-button action and completes all three sectors.
+- No external assets, plugins, audio or network dependencies; Godot 4.3+.
+
+### Stateful underground mine lift
+
+- Added `systems/UndergroundMineLift.gd` as a stateful world object with validated `layer_index` payload and stable-ID registration.
+- UndergroundMineFactory now creates a lift anchor per streamed mine layer; each anchor owns a fresh Area3D interaction proxy and preserves its authored layer index.
+- SurfaceWorld resolves `MineLiftAnchor` before generic stateful props so dedicated G/V ascent/descent routing is not swallowed by generic cache interaction. Stale/unloaded proxies are rejected.
+
+### Production cache/lift unload and reload regression
+
+- Added `tests/production_surface_world_underground_cache_lift_reload_test.gd` using the real SurfaceWorld, mine shaft, UndergroundMineDirector/Factory, WorldObjectStateRegistry, salvage cache, lift and camera-ray interaction.
+- The test enters the mine, collects from the real gold cache, descends to layer 1, verifies saved cache state and lift layer identity, unloads the origin chunk and invalidates old nodes/proxies, ascends, then confirms fresh cache/lift instances with the same stable IDs and new proxies. It collects the remaining unit and returns to the surface.
+- World-save schema remains version 1; no migration or second state store.
+
+### Exact GitHub acceptance and merge
+
+- Feature PR [#175](https://github.com/qaqp980520-prog/2126-Survival/pull/175) merged as `20411a02205f33cdfe5a9aa2340923d861c417c0`.
+- Exact feature HEAD `ae0179d95424c1389a4d706a5c7c775cc0794752` passed canonical Godot 4.3 [Run #787](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41193133433): 294/294 main validation steps succeeded, zero failures and zero skipped; job cleanup completed successfully.
+- Run #787 acceptance highlights: root project/Test Hub smoke steps 7–8; production SurfaceWorld inventory and hub smoke steps 204–205; production underground mining and mine director steps 210–211; world-seed/cache/lift identity step 260; KROLL Gravity Foundry import/rules/runtime steps 291–293; production cache/lift unload/reload step 294.
+- Historical Run #786 passed 293/294 but failed the cache camera-ray fixture because the test player was placed against the south wall. Fix commit `ae0179d95424c1389a4d706a5c7c775cc0794752` moved both initial/reloaded cache approach positions to the open room side (Z -2); Run #787 passed the exact-head test.
+- Earlier Run #785 world-seed test failure was corrected by commit `addab83ed7d0952743a24cbdf25844d6152367b0`: cache identity helpers now filter `MineCache_*` and assert lift identity separately across seed restore, rollback, unload/reload and legacy schema-1 fallback.
+
+### Known limits and next steps
+
+- Cache/lift lifecycle is now covered end-to-end, but the same contract is not yet proven for every future stateful KROLL interactable and every mine layer.
+- Terrain-edit persistence across chunk unload/reload remains unfinished.
+- Chunk streaming remains synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.

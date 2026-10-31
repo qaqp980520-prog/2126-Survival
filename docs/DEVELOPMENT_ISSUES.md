@@ -801,3 +801,36 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - No save-schema change; legacy schema-v1 payloads remain compatible.
 - Mineral vein coverage currently targets the generated underground origin chunk and its factory-created vein; it does not prove all mineral types/layers or all interactable factories.
 - Thermal Glider is an arcade flight prototype, not an aerodynamic simulator; no campaign save, replay, audio or controller remapping.
+
+
+## Run 69 closeout — 2026-10-31
+
+### Completed and merged
+
+- KROLL Gravity Foundry M0.1: three deterministic 7×7 gravity-puzzle sectors, operator movement, core pushing/sliding, Q/E gravity rotation, pressure-plate/exit win state, 30-turn budget, keyboard and touch controls.
+- Added stateful `UndergroundMineLift.gd` with validated `layer_index`, stable-ID registration and a fresh interaction proxy per streamed layer.
+- SurfaceWorld camera-target resolution now prioritizes lift anchors before generic stateful props, preserving dedicated G/V ascent/descent routing and rejecting stale proxies.
+- Added production SurfaceWorld cache/lift unload-reload regression: collect a real underground cache item, descend, stream out the origin layer, return, verify fresh node/proxy instances with the same stable IDs and persisted remaining loot, collect the final unit and return to surface.
+- Corrected world-seed test classification: `MineCache_*` IDs and `MineLiftAnchor` identity are now asserted separately.
+- Corrected cache-ray test fixture to approach from the open room side (Z -2), not the south wall side (Z +2).
+
+### Exact acceptance and merge
+
+- Feature PR [#175](https://github.com/qaqp980520-prog/2126-Survival/pull/175) merged as `20411a02205f33cdfe5a9aa2340923d861c417c0`; feature HEAD `ae0179d95424c1389a4d706a5c7c775cc0794752`.
+- Exact-head Godot 4.3 [Run #787](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41193133433): 294/294 main steps successful, zero failures, zero skipped. Job cleanup completed.
+- Key production regressions passed: world-seed/cache/lift identity step 260; underground cache/lift camera-ray, state persistence, stable ID, fresh proxy and G/V transition step 294.
+- Historical Run #786 failed at step 294 because the test camera approach position overlapped the south wall; moving both cache aim fixtures to Z -2 resolved it on the exact final candidate.
+- No world-save schema bump; legacy schema-1 fallback remains covered.
+
+### Remaining engineering work
+
+1. Extend stable-ID/state/proxy lifecycle coverage to every formal interactable factory and all generated mine layers.
+2. Add terrain-edit persistence across chunk unload/reload without breaking schema-v1 saves or stable chunk IDs.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
+4. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
+
+### Compatibility and limitations
+
+- The lift persists its layer index in the existing world-object registry; world-save schema remains version 1.
+- Gravity Foundry is a deterministic grid puzzle prototype, not a continuous physics simulation; no campaign save, audio, animation or controller remapping.
+- No local GUI/GPU/iPhone test is claimed; only exact-head Godot 4.3 CI is verified.
