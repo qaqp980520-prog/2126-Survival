@@ -937,3 +937,35 @@
 - Cache/ore distribution remains deterministic coordinate hashing and fixed tables, not a saved world seed or editable data resource.
 - Chunk generation and rollback remain synchronous; no asynchronous request queue is claimed.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
+
+
+## Run 61 — KROLL Tether Recovery M0.1 + data-driven underground cache tables M0.2 (2026-10-31)
+
+### New Godot 4 game
+- Project: `daily_games/KROLL_Tether_Recovery/`.
+- Top-down inertial salvage drone, three authored missions, three cargo pods per mission, WASD thrust, Shift brake, Space tether attach/release, hazard/hull damage, fuel/time limits, dock delivery, score, reset/next mission.
+- On-screen hold/action buttons support mouse/touch. Rules are deterministic manual 2D integration; no external assets/audio/plugins/network dependencies.
+- Import via `daily_games/KROLL_Tether_Recovery/project.godot` with Godot 4.3+.
+- Added rules and runtime smoke tests; Survival Test Hub exposes the game and its smoke test verifies the new entry.
+
+### Data-driven underground cache tables
+- `systems/data/underground_loot_tables.json` stores schema-v1 west/east/north/south weighted tables.
+- `UndergroundMineFactory.load_cache_tables()` loads the JSON and `validate_cache_tables()` rejects unsupported schema, missing/extra regions, unknown mineral IDs, non-numeric/non-integral/non-positive weights, duplicate item IDs and empty tables.
+- Godot's JSON parser represents integer-looking numeric values as numeric Variants; validation accepts int or integral float, while rejecting fractional values.
+- Existing coordinate/layer hash formulas, layer-zero service cache pair and representative output identities remain unchanged. No world-save schema change or cache-ID migration.
+- No persisted world seed yet; this is a data externalization step only.
+
+### Regression coverage
+- `tests/underground_loot_tables_resource_test.gd`: resource presence, four regions, all seven MineralCatalog IDs, positive integral weights, malformed resource rejection, golden cache identities and deterministic 13×13 samples across layers 0–8.
+- Workflow adds Tether Recovery import/rules/runtime and loot-table resource compatibility steps.
+
+### Exact GitHub evidence
+- Feature PR [#158](https://github.com/qaqp980520-prog/2126-Survival/pull/158) merged as `dd23ce770df08a0e93403ee6942ab36bd98484af`.
+- Final exact feature HEAD `b8c33dd301179158cc4c82bc26c5501d9322f439` passed Godot 4.3 [Run #685](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41153746104): 258/258 total step records successful, zero failures, zero skipped.
+- Failed historical candidate Run #683 (`c3270da44b130f0925a2b663b9913ad9a2f14cc6`) is retained: step 204 failed because the loader rejected integral JSON numeric values parsed as floats. The validator was corrected and Run #685 passed; do not cite #683 as a pass.
+- GitHub refs/heads/main was re-read and confirmed at merge SHA `dd23ce770df08a0e93403ee6942ab36bd98484af`; PR #158 is closed/merged.
+
+### Known limits
+- Tether Recovery uses deterministic manual integration, not a physical rope joint; no persistent campaign, audio, multiplayer or haptics.
+- Mine loot tables are data-driven but still use the legacy deterministic coordinate/layer hash; no persisted world seed, loot-table editor or weighted authoring UI.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
