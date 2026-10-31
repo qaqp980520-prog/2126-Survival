@@ -35,7 +35,12 @@ static func load_cache_tables(force_reload: bool = false) -> Dictionary:
 	var parser := JSON.new()
 	if parser.parse(file.get_as_text()) != OK:
 		return {}
-	var payload: Variant = parser.get_data()
+	_cache_tables_cache = validate_cache_tables(parser.get_data())
+	return _cache_tables_cache.duplicate(true)
+
+## Pure validation entry point so malformed authoring data can be regression-tested
+## without mutating the shipped resource file.
+static func validate_cache_tables(payload: Variant) -> Dictionary:
 	if not (payload is Dictionary) or int(payload.get("schema_version", 0)) != 1:
 		return {}
 	var raw_tables: Variant = payload.get("tables", null)
@@ -54,8 +59,7 @@ static func load_cache_tables(force_reload: bool = false) -> Dictionary:
 			if not MINERAL_IDS.has(item_id) or not (weight_value is int) or int(weight_value) <= 0 or seen_items.has(item_id):
 				return {}
 			seen_items[item_id] = true
-	_cache_tables_cache = raw_tables.duplicate(true)
-	return _cache_tables_cache.duplicate(true)
+	return raw_tables.duplicate(true)
 
 
 ## Returns deterministic room-specific cache entries. Layer zero's service caches
