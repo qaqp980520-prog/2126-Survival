@@ -70,6 +70,14 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	var crops: Dictionary = {}
 	if not _collect_mineral_nodes(chunk_root, str(chunk_root.name), veins):
 		return false
+	var registered_mineral_ids: PackedStringArray = registry.call("get_registered_ids")
+	for local_path in veins.keys():
+		var stable_id: String = AdapterScript.make_stable_id(chunk_id, str(local_path))
+		var vein: Node = veins[local_path] as Node
+		if stable_id.is_empty() or registered_mineral_ids.has(stable_id):
+			return false
+		if not vein.has_method("can_register") or not bool(vein.call("can_register")):
+			return false
 	if not _collect_crop_plots(chunk_root, str(chunk_root.name), crops):
 		return false
 	if not crops.is_empty() and crop_controller == null:
