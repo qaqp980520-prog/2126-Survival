@@ -31,9 +31,13 @@ func _run() -> void:
     touch_place.pressed = true
     touch_place.position = center_rect.get_center()
     game.call("_unhandled_input", touch_place)
-    _expect((game.call("get_state").get("atoms", []) as Array).size() == 1, "touch grid tap places the selected atom")
+    var touch_state: Dictionary = game.call("get_state")
+    var touch_atoms: Array = touch_state.get("atoms", [])
+    _expect(touch_atoms.size() == 1, "touch grid tap places the selected atom")
     _expect(bool(game.call("_undo")), "undo accepts the previous board edit")
-    _expect((game.call("get_state").get("atoms", []) as Array).is_empty(), "undo restores the prior empty board")
+    var undone_state: Dictionary = game.call("get_state")
+    var undone_atoms: Array = undone_state.get("atoms", [])
+    _expect(undone_atoms.is_empty(), "undo restores the prior empty board")
 
     var water_solution: Array = [
         ["O", Vector2i(2, 2)],
@@ -65,7 +69,9 @@ func _run() -> void:
     var reset_rect: Rect2 = game.call("_action_button_rect", "reset")
     touch_reset.position = reset_rect.get_center()
     game.call("_unhandled_input", touch_reset)
-    _expect((game.call("get_state").get("atoms", []) as Array).is_empty(), "touch RESET clears the current molecule")
+    var reset_state: Dictionary = game.call("get_state")
+    var reset_atoms: Array = reset_state.get("atoms", [])
+    _expect(reset_atoms.is_empty(), "touch RESET clears the current molecule")
     game.queue_free()
     await process_frame
     if failures.is_empty():
