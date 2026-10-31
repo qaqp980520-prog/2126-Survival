@@ -866,3 +866,33 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-object and world-save schema remain version 1; all nine mine lift layer indices and stable IDs survive the tested save/load roundtrip.
 - Echo Mapper is a deterministic fixed-map prototype, not a procedural sonar simulation; no campaign save, audio, animation or controller remapping.
 - No local Godot executable was available; manual GUI, GPU and iPhone QA are not claimed. Exact-head cloud Godot 4.3 CI is verified.
+
+
+## Run 71 closeout — 2026-10-31
+
+### Completed and merged
+
+- Added KROLL Knight Circuit M0.1: a 5×5 knight's-tour puzzle with three distinct authored 25-square circuits, legal L-shaped moves, no revisits, undo, reset, route-prefix hint, keyboard, mouse and touch controls.
+- Registered Knight Circuit in the root Survival Test Hub and added root-project import/runtime smoke coverage.
+- Added a production SurfaceWorld all-layer cache lifecycle regression covering 151 deterministic cache placements in a 5×5 sample across mine layers 0–8. It verifies real controller load/unload, stable IDs, opened/remaining loot state, fresh nodes and Area3D proxies after reload, second collection, exhausted-state persistence and schema-1 registry roundtrip.
+- Verified exactly 302 accepted inventory units across 151 two-unit caches. No production runtime or save-schema change.
+
+### Failure history and fixes
+
+- Run #801 step 304 failed because the production mine director already owned the origin 3×3 window; the test's first overlapping sample room was (-1,-1). The corrected test moves the director to grid (100,100) and checks zero overlap before direct loading.
+- Run #802 completed every cache lifecycle assertion but exited 1 due to an unfreed standalone registry-copy Node and Godot shutdown resource warnings. The test now explicitly frees the registry copy and waits two process frames after queuing world teardown.
+- Final feature PR [#179](https://github.com/qaqp980520-prog/2126-Survival/pull/179) merged as \`ca458c1ace507bbee78bc03c69093077dadfba0d\`.
+- Exact feature HEAD \`76b19dff907f8f88ecba1354991eed3c4f81e6fa\` passed Godot 4.3 [Run #803](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41199269383): 307/307 successful, zero failed, zero skipped, clean checkout/container cleanup.
+
+### Remaining engineering work
+
+1. Extend state/ID/proxy lifecycle coverage from the finite 151-cache sample to other generated cache placements and all formal stateful interactables.
+2. Add terrain-edit persistence across chunk unload/reload without breaking schema-v1 saves or stable IDs.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership and deterministic rollback; current streaming remains synchronous.
+4. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
+
+### Compatibility and limitations
+
+- World-object/world-save schema remains version 1.
+- Cache lifecycle coverage is deterministic and finite (5×5 sample × nine layers); it does not claim exhaustive coverage of an unbounded procedural world.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
