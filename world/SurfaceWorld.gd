@@ -903,7 +903,7 @@ func _cast_camera_interaction_target() -> Dictionary:
 	if player_distance > max_range:
 		return {}
 	target["distance"] = player_distance
-	target["hit_position"] = hit.get("position", ray_origin)
+	target["hit_position"] = target_hit.get("position", ray_origin)
 	return target
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
