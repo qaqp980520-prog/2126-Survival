@@ -56,7 +56,9 @@ func _run() -> void:
 	var stock_before: int = int(nearest.get("remaining_units"))
 	var now: int = int(Time.get_unix_time_from_system())
 	var weight_before: float = float(world.inventory_bridge.call("get_summary").get("weight_kg", 0.0))
-	await _aim_at(nearest, Vector3(0.0, 1.0, 2.0), Vector3.ZERO)
+	await _aim_at(nearest, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.55, 0.0))
+	var first_target: Dictionary = world.call("get_camera_interaction_target")
+	_expect(str(first_target.get("kind", "")) == "vein" and first_target.get("node") == nearest, "test aims at the selected vein from a clear side of the lift proxy")
 	var first_mine: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first_mine.get("ok", false)) and int(first_mine.get("amount", 0)) == 1, "F interaction routes to underground mining and grants one ore")
 	_expect(int(nearest.get("remaining_units")) == stock_before - 1, "successful mining consumes exactly one vein unit")
@@ -72,7 +74,9 @@ func _run() -> void:
 	var cache_item_id: String = str(gold_cache.get("loot_item_id"))
 	_expect(cache_item_id == "gold_ore" and int(gold_cache.get("loot_remaining")) == 2, "gold cache starts with its deterministic item identity and two units")
 	var cache_stable_id: String = MINE_ID + "/object/UndergroundMine_0_0/MineCache_Gold"
-	await _aim_at(gold_cache)
+	await _aim_at(gold_cache, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.55, 0.0))
+	var gold_cache_target: Dictionary = world.call("get_camera_interaction_target")
+	_expect(str(gold_cache_target.get("kind", "")) == "prop" and gold_cache_target.get("node") == gold_cache, "camera ray selects the gold cache from a clear approach")
 	var cache_result: Dictionary = world.call("_interact_nearest_world_prop", now + 1)
 	_expect(bool(cache_result.get("ok", false)) and str(cache_result.get("item_id", "")) == "gold_ore", "F interaction selects a nearer underground cache over a more distant vein")
 	_expect(int(cache_result.get("remaining", -1)) == 1 and _inventory_count("gold_ore") == 1, "cache transaction grants exactly one gold ore and leaves one unit")
@@ -152,7 +156,9 @@ func _run() -> void:
 	var layer_one_item: String = str(layer_one_vein.get("mineral_id")) if layer_one_vein != null else ""
 	var layer_one_stock: int = int(layer_one_vein.get("remaining_units")) if layer_one_vein != null else 0
 	if layer_one_vein != null:
-		await _aim_at(layer_one_vein, Vector3(0.0, 1.0, 2.0), Vector3.ZERO)
+		await _aim_at(layer_one_vein, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.55, 0.0))
+		var deep_target: Dictionary = world.call("get_camera_interaction_target")
+		_expect(str(deep_target.get("kind", "")) == "vein" and deep_target.get("node") == layer_one_vein, "deeper-level ray selects the aimed vein from a clear approach")
 		var deep_mine_result: Dictionary = world.call("_interact_nearest_mineral", now + 5)
 		_expect(bool(deep_mine_result.get("ok", false)), "player can mine a real vein on the deeper level")
 		_expect(int(layer_one_vein.get("remaining_units")) == layer_one_stock - 1, "deeper-level mining consumes exactly one unit")
