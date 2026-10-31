@@ -84,6 +84,7 @@ static func step(state: Dictionary, target_x: float, delta: float) -> Dictionary
 		ai_x = move_toward(ai_x, puck_position.x, AI_SPEED * dt)
 	ai_x = clampf(ai_x, LEFT + PADDLE_HALF_WIDTH, RIGHT - PADDLE_HALF_WIDTH)
 
+	var previous_puck_position: Vector2 = puck_position
 	puck_position += puck_velocity * dt
 	if puck_position.x < LEFT + PUCK_RADIUS:
 		puck_position.x = LEFT + PUCK_RADIUS
@@ -108,14 +109,16 @@ static func step(state: Dictionary, target_x: float, delta: float) -> Dictionary
 			if puck_velocity.dot(normal) < 0.0:
 				puck_velocity = puck_velocity.bounce(normal)
 
-	if puck_velocity.y > 0.0 and puck_position.y + PUCK_RADIUS >= PLAYER_PADDLE_Y - PADDLE_HALF_HEIGHT and puck_position.y < PLAYER_PADDLE_Y and absf(puck_position.x - player_x) <= PADDLE_HALF_WIDTH + PUCK_RADIUS:
+	var player_paddle_plane: float = PLAYER_PADDLE_Y - PADDLE_HALF_HEIGHT - PUCK_RADIUS
+	if puck_velocity.y > 0.0 and previous_puck_position.y <= player_paddle_plane and puck_position.y >= player_paddle_plane and absf(puck_position.x - player_x) <= PADDLE_HALF_WIDTH + PUCK_RADIUS:
 		var player_offset: float = clampf((puck_position.x - player_x) / PADDLE_HALF_WIDTH, -1.0, 1.0)
-		puck_position.y = PLAYER_PADDLE_Y - PADDLE_HALF_HEIGHT - PUCK_RADIUS
+		puck_position.y = player_paddle_plane
 		var player_bounce: Vector2 = Vector2(player_offset * 260.0, -maxf(absf(puck_velocity.y), 180.0)).normalized()
 		puck_velocity = player_bounce * minf(MAX_PUCK_SPEED, maxf(260.0, puck_velocity.length() * 1.035))
-	elif puck_velocity.y < 0.0 and puck_position.y - PUCK_RADIUS <= AI_PADDLE_Y + PADDLE_HALF_HEIGHT and puck_position.y > AI_PADDLE_Y and absf(puck_position.x - ai_x) <= PADDLE_HALF_WIDTH + PUCK_RADIUS:
+	var ai_paddle_plane: float = AI_PADDLE_Y + PADDLE_HALF_HEIGHT + PUCK_RADIUS
+	if puck_velocity.y < 0.0 and previous_puck_position.y >= ai_paddle_plane and puck_position.y <= ai_paddle_plane and absf(puck_position.x - ai_x) <= PADDLE_HALF_WIDTH + PUCK_RADIUS:
 		var ai_offset: float = clampf((puck_position.x - ai_x) / PADDLE_HALF_WIDTH, -1.0, 1.0)
-		puck_position.y = AI_PADDLE_Y + PADDLE_HALF_HEIGHT + PUCK_RADIUS
+		puck_position.y = ai_paddle_plane
 		var ai_bounce: Vector2 = Vector2(ai_offset * 210.0, maxf(absf(puck_velocity.y), 180.0)).normalized()
 		puck_velocity = ai_bounce * minf(MAX_PUCK_SPEED, maxf(250.0, puck_velocity.length() * 1.025))
 
