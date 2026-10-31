@@ -12,6 +12,7 @@ const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
 const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
 const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 const MOLECULE_FORGE_SCENE := "res://daily_games/KROLL_Molecule_Forge/main.tscn"
+const HEX_FRONTIER_SCENE := "res://daily_games/KROLL_Hex_Frontier/main.tscn"
 
 var failures: Array[String] = []
 
@@ -30,6 +31,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(STAR_CHART_SCENE), "Star Chart game scene exists")
 	_expect(ResourceLoader.exists(CORE_DRILL_SCENE), "Core Drill game scene exists")
 	_expect(ResourceLoader.exists(MOLECULE_FORGE_SCENE), "Molecule Forge game scene exists")
+	_expect(ResourceLoader.exists(HEX_FRONTIER_SCENE), "Hex Frontier game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -38,7 +40,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 11, "hub exposes the world entry and ten prototype launch buttons")
+	_expect(buttons.size() == 12, "hub exposes the world entry and eleven prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -53,6 +55,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Star Chart"), "hub labels the Star Chart game")
 	_expect(labels.has("KROLL Core Drill"), "hub labels the Core Drill game")
 	_expect(labels.has("KROLL Molecule Forge"), "hub labels the Molecule Forge game")
+	_expect(labels.has("KROLL Hex Frontier"), "hub labels the Hex Frontier game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -89,6 +92,18 @@ func _run() -> void:
 		var first_molecule: Dictionary = molecule_forge.call("get_current_level")
 		_expect(str(first_molecule.get("id", "")) == "water", "root-loaded Molecule Forge can execute its water rules")
 		molecule_forge.queue_free()
+		await process_frame
+
+	var hex_frontier_scene := load(HEX_FRONTIER_SCENE) as PackedScene
+	_expect(hex_frontier_scene != null, "root hub can load the Hex Frontier scene")
+	if hex_frontier_scene != null:
+		var hex_frontier := hex_frontier_scene.instantiate()
+		root.add_child(hex_frontier)
+		await process_frame
+		_expect(hex_frontier.has_method("get_current_state"), "root-loaded Hex Frontier initializes its rules module")
+		var hex_state: Dictionary = hex_frontier.call("get_current_state")
+		_expect(int(hex_state.get("tiles", {}).size()) == 19, "root-loaded Hex Frontier builds the nineteen-hex board")
+		hex_frontier.queue_free()
 		await process_frame
 
 	hub.queue_free()
