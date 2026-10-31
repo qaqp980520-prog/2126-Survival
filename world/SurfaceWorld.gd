@@ -728,20 +728,29 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var previous_position: Vector3 = player.global_position
 	var previous_underground: bool = _is_underground
 	var previous_world_seed: int = world_seed
+	var previous_mine_position: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
+	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
+		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
-		world_seed = previous_world_seed
-		var failed_sync_rollback_target: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
-		if not mine_director.recover_to_world_position(failed_sync_rollback_target, now):
-			push_error("Underground mine window rollback failed after world-seed stream rejection.")
+		if next_world_seed != previous_world_seed:
+			if not _recover_underground_window(previous_world_seed, previous_mine_position, now):
+				push_error("Underground mine window rollback failed after world-seed stream rejection.")
+		else:
+			world_seed = previous_world_seed
+			if not mine_director.recover_to_world_position(previous_mine_position, now):
+				push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if not super.restore_stream_state(payload, now):
-		world_seed = previous_world_seed
-		var rollback_target: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
-		if not mine_director.recover_to_world_position(rollback_target, now):
-			push_error("Underground mine window rollback failed after world-session restore rejection.")
+		if next_world_seed != previous_world_seed:
+			if not _recover_underground_window(previous_world_seed, previous_mine_position, now):
+				push_error("Underground mine window rollback failed after world-session restore rejection.")
+		else:
+			world_seed = previous_world_seed
+			if not mine_director.recover_to_world_position(previous_mine_position, now):
+				push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
@@ -763,6 +772,28 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	_refresh_hud()
 	return true
+
+func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> bool:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or mine_director == null:
+		return false
+	var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
+	if not (raw_ids is Array or raw_ids is PackedStringArray):
+		return false
+	for raw_id in raw_ids:
+		var chunk_id: String = str(raw_id)
+		if not chunk_id.begins_with("underground/") or not chunk_controller.is_chunk_loaded(chunk_id):
+			continue
+		if not bool(chunk_controller.call("unload_chunk", chunk_id, now_unix)):
+			if not mine_director.recover_to_world_position(recovery_position, now_unix):
+				push_error("Underground window could not recover after a seed-change unload rejection.")
+			return false
+	return true
+
+func _recover_underground_window(previous_seed: int, recovery_position: Vector3, now_unix: int) -> bool:
+	world_seed = previous_seed
+	if not _clear_underground_window(recovery_position, now_unix):
+		return false
+	return bool(mine_director.recover_to_world_position(recovery_position, now_unix))
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
