@@ -2416,3 +2416,46 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld all mine-layers lift lifecycle tests passed."
+
+
+      - name: Verify Run 71 Knight Circuit and all-layer cache lifecycle inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Knight_Circuit/project.godot
+          test -f daily_games/KROLL_Knight_Circuit/main.tscn
+          test -f daily_games/KROLL_Knight_Circuit/main.gd
+          test -f daily_games/KROLL_Knight_Circuit/rules.gd
+          test -f daily_games/KROLL_Knight_Circuit/tests/rules_test.gd
+          test -f daily_games/KROLL_Knight_Circuit/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_underground_cache_all_layers_test.gd
+          grep -q 'KNIGHT_CIRCUIT_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'get_cache_spawn_data' tests/production_surface_world_underground_cache_all_layers_test.gd
+          grep -q 'MAX_LAYER_INDEX' tests/production_surface_world_underground_cache_all_layers_test.gd
+      - name: Import and parse KROLL Knight Circuit
+        run: godot --headless --path daily_games/KROLL_Knight_Circuit --editor --quit
+      - name: Run KROLL Knight Circuit rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 25s godot --headless --path daily_games/KROLL_Knight_Circuit --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Knight Circuit rules tests passed."
+      - name: Run KROLL Knight Circuit runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Knight_Circuit --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Knight Circuit runtime smoke test passed."
+      - name: Run production SurfaceWorld all-layer cache lifecycle test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/production_surface_world_underground_cache_all_layers_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld all-layer cache lifecycle tests passed."
+
