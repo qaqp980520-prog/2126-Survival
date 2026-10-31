@@ -56,7 +56,7 @@ static func validate_cache_tables(payload: Variant) -> Dictionary:
 				return {}
 			var item_id: String = str(raw_entry.get("item_id", ""))
 			var weight_value: Variant = raw_entry.get("weight", null)
-			if not MINERAL_IDS.has(item_id) or not (weight_value is int) or int(weight_value) <= 0 or seen_items.has(item_id):
+			if not MINERAL_IDS.has(item_id) or not (weight_value is int or weight_value is float) or float(weight_value) <= 0.0 or not is_equal_approx(float(weight_value), roundf(float(weight_value))) or seen_items.has(item_id):
 				return {}
 			seen_items[item_id] = true
 	return raw_tables.duplicate(true)
