@@ -930,3 +930,30 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-object and world-save schema remain version 1.
 - Terrain patch is a persistence/interaction foundation, not a voxel terrain engine or arbitrary mesh editor.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+
+## Run 73 closeout — 2026-10-31
+
+### Completed and merged
+
+- Added KROLL Neon Climber M0.1: a three-sector 2D platformer with double jump, dash cooldown, data-core collection, grounded/hazard-safe checkpoints, laser hazards, exit gating, reset and progression. Registered in the root Survival Test Hub with import/rules/runtime and root smoke coverage.
+- Added a production all-nine surface terrain patch lifecycle regression. It edits all nine patches in the active 3×3 window with distinct height/material/revision states, serializes stable IDs, streams away, verifies old nodes/proxies are released while registry states remain, reloads fresh instances, and performs schema-1 save/restore.
+- Added collision geometry assertions for every patch after edit, unload/reload and schema-1 restore, including BoxShape3D height and grounded offset.
+- Corrected the test's freed-object assertion by capturing WeakRef handles before chunk unload and checking that references resolve to null after the controller releases the nodes. The runtime unload behavior itself was correct.
+- Feature PR [#183](https://github.com/qaqp980520-prog/2126-Survival/pull/183) merged as `04b3615d7ff1514031817fda0ae08ce7f51e29ca`.
+- Exact feature HEAD `80e5d71f26eaffaaceabd970af7147cf9fd96490` passed Godot 4.3 [Run #826](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41209679698): 314/314 primary steps succeeded, zero failures, zero skipped; all three cleanup steps succeeded.
+
+### Remaining engineering work
+
+1. Extend terrain collision/transition tests to adjacent patches with different heights and materials; define edge continuity before adding multi-tile blending.
+2. Design bounded asynchronous chunk streaming with cancellation-safe ownership, stale-request invalidation and deterministic rollback; current streaming remains synchronous.
+3. Continue applying stable-ID/state/fresh-proxy lifecycle coverage to remaining formal interactables.
+4. Add campaign progression persistence to Neon Climber only if it becomes a maintained prototype rather than a one-run game.
+5. Add local GUI, GPU performance and iPhone hardware QA when a suitable test environment is available.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1; no migration was introduced.
+- Terrain regression covers all nine patches in the active 3×3 window and a schema-1 roundtrip, not every coordinate in the unbounded procedural world.
+- Neon Climber uses fixed authored sectors and has no audio, animation, campaign save or controller remapping.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
