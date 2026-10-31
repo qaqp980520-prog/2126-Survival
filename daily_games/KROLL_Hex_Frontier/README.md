@@ -11,6 +11,7 @@ Expand from your blue headquarters and control ten of the nineteen hexes before 
 - The board is an axial radius-two hex map (19 cells).
 - A neutral hex can only be claimed if it touches one of your owned hexes.
 - Claiming costs 1 energy.
+- Each faction may perform only one claim or upgrade action per turn.
 - Upgrading an owned hex costs 2 energy and increases its future energy yield by one, up to +3.
 - At the end of your turn the AI claims its best connected resource hex (or upgrades if no claim is available), then both sides receive income from owned hexes.
 - Energy is capped at 9. First faction to control 10 hexes wins.
