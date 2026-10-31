@@ -145,6 +145,7 @@ func _finish(exit_code: int) -> void:
 		world.queue_free()
 	await process_frame
 	if exit_code == 0 and failures.is_empty():
+		print("Production SurfaceWorld interaction prompt tests passed.")
 		print("Production SurfaceWorld camera-ray interaction tests passed.")
 		quit(0)
 	else:
