@@ -4,7 +4,7 @@ const MISSION_COUNT: int = 3
 const MIN_ZOOM: int = 0
 const MAX_ZOOM: int = 4
 
-var rules: Script
+var rules: Variant
 
 var mission_index: int = 0
 var target_index: int = 0
@@ -21,7 +21,7 @@ func _ready() -> void:
 	var rules_path: String = "res://rules.gd"
 	if not ResourceLoader.exists(rules_path):
 		rules_path = "res://daily_games/KROLL_Star_Chart/rules.gd"
-	rules = load(rules_path) as Script
+	rules = load(rules_path)
 	if rules == null:
 		push_error("KROLL Star Chart could not load its rules module.")
 		set_process(false)
