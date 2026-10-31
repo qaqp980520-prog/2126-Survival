@@ -6,6 +6,7 @@ const LEGACY_SEED: int = 0
 const MAX_SEED: int = 2147483647
 
 var failures: Array[String] = []
+var _fail_factory_once: bool = true
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -59,6 +60,15 @@ func _run() -> void:
 	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "same-window cache identities are regenerated from the saved seed")
 
+	var original_factory: Callable = mine_director.get("chunk_factory")
+	mine_director.set("chunk_factory", Callable(self, "_fail_once_factory").bind(original_factory))
+	var failed_seed_save: Dictionary = saved.duplicate(true)
+	failed_seed_save["world_seed"] = 84
+	_expect(not bool(world.call("restore_stream_state", failed_seed_save, 1793400015)), "failed target-seed chunk creation rejects the restore")
+	_expect(int(world.get("world_seed")) == 42, "failed seed restore rolls the previous world seed back")
+	_expect(_loaded_cache_ids(world) == original_cache_ids, "failed seed restore rebuilds the previous cache window")
+	mine_director.set("chunk_factory", original_factory)
+
 	var away := Vector3(21.5, -8.25, 7.5)
 	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400020)), "mine director can unload the saved origin window before seed restore")
 	_expect(not chunk_controller.is_chunk_loaded("underground/mine_0_0"), "origin room is unloaded before restoring the saved seed")
@@ -91,6 +101,13 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+func _fail_once_factory(coord: Vector2i, layer_index: int, now_unix: int, original_factory: Callable) -> Node3D:
+	if _fail_factory_once:
+		_fail_factory_once = false
+		return null
+	var candidate: Variant = original_factory.call(coord, layer_index, now_unix)
+	return candidate as Node3D
 
 func _loaded_cache_ids(world: Node) -> Array[String]:
 	var result: Array[String] = []
