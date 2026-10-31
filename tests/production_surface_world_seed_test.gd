@@ -54,12 +54,17 @@ func _run() -> void:
 	invalid_large["world_seed"] = MAX_SEED + 1
 	_expect(not bool(world.call("restore_stream_state", invalid_large, 1793400002)), "out-of-range world seeds are rejected")
 
+	world.set("world_seed", 7)
+	_expect(bool(world.call("restore_stream_state", saved, 1793400010)), "same-window restore rebuilds caches with the saved seed")
+	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
+	_expect(_loaded_cache_ids(world) == original_cache_ids, "same-window cache identities are regenerated from the saved seed")
+
 	var away := Vector3(21.5, -8.25, 7.5)
-	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400010)), "mine director can unload the saved origin window before seed restore")
+	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400020)), "mine director can unload the saved origin window before seed restore")
 	_expect(not chunk_controller.is_chunk_loaded("underground/mine_0_0"), "origin room is unloaded before restoring the saved seed")
 	world.set("world_seed", 7)
-	_expect(bool(world.call("restore_stream_state", saved, 1793400011)), "world restore regenerates the mine window using the saved seed")
-	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
+	_expect(bool(world.call("restore_stream_state", saved, 1793400021)), "world restore regenerates the mine window after an unload")
+	_expect(int(world.get("world_seed")) == 42, "unload/reload restore applies the saved world seed")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "seeded cache identities are stable across unload, restore and reload")
 
 	var legacy_world: Node3D = WorldScene.instantiate() as Node3D
@@ -72,9 +77,8 @@ func _run() -> void:
 	_expect(not legacy_save.has("world_seed"), "legacy compatibility fixture omits the newly optional world_seed field")
 	legacy_world.queue_free()
 	await process_frame
-	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400020)), "legacy compatibility fixture unloads the origin window")
 	world.set("world_seed", 84)
-	_expect(bool(world.call("restore_stream_state", legacy_save, 1793400021)), "legacy schema-1 save without world_seed remains loadable")
+	_expect(bool(world.call("restore_stream_state", legacy_save, 1793400030)), "legacy schema-1 save without world_seed remains loadable")
 	_expect(int(world.get("world_seed")) == LEGACY_SEED, "legacy saves without world_seed fall back to the original deterministic seed")
 	_expect(_loaded_cache_ids(world) == _expected_cache_ids(LEGACY_SEED), "legacy fallback recreates the original cache identities")
 
