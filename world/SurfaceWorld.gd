@@ -13,6 +13,8 @@ const MINE_ENTRY_UNDERGROUND: Vector3 = Vector3(1.5, -8.25, 7.5)
 const MINE_ACCESS_RANGE: float = 2.75
 const MINE_INTERACTION_RANGE: float = 3.5
 const INTERACTION_RAY_DISTANCE: float = 5.0
+const INTERACTION_PROXY_COLLISION_MASK: int = 1 << 1
+const WORLD_GEOMETRY_COLLISION_MASK: int = 1
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
 const LEGACY_WORLD_SEED: int = 0
@@ -859,19 +861,33 @@ func _cast_camera_interaction_target() -> Dictionary:
 	var ray_direction: Vector3 = (-camera.global_basis.z).normalized()
 	if ray_direction.length_squared() <= 0.0001:
 		return {}
-	var query := PhysicsRayQueryParameters3D.create(
-		ray_origin,
-		ray_origin + ray_direction * INTERACTION_RAY_DISTANCE
-	)
-	query.collision_mask = 0xFFFFFFFF
-	query.collide_with_areas = true
-	query.collide_with_bodies = true
-	query.hit_from_inside = true
-	query.exclude = [player.get_rid()]
-	var hit: Dictionary = world_3d.direct_space_state.intersect_ray(query)
-	if hit.is_empty():
+	var ray_end: Vector3 = ray_origin + ray_direction * INTERACTION_RAY_DISTANCE
+	# Interactable proxies live on physics layer 2. Query only those areas so
+	# unrelated trigger areas cannot hide a valid target farther down the ray.
+	var target_query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	target_query.collision_mask = INTERACTION_PROXY_COLLISION_MASK
+	target_query.collide_with_areas = true
+	target_query.collide_with_bodies = false
+	target_query.hit_from_inside = true
+	target_query.exclude = [player.get_rid()]
+	var target_hit: Dictionary = world_3d.direct_space_state.intersect_ray(target_query)
+	if target_hit.is_empty():
 		return {}
-	var target: Dictionary = _resolve_camera_interaction_target(hit.get("collider"))
+	# World collision bodies remain opaque. A second body-only ray preserves
+	# occlusion without allowing non-interactive Area3D triggers to steal the hit.
+	var occlusion_query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	occlusion_query.collision_mask = WORLD_GEOMETRY_COLLISION_MASK
+	occlusion_query.collide_with_areas = false
+	occlusion_query.collide_with_bodies = true
+	occlusion_query.hit_from_inside = true
+	occlusion_query.exclude = [player.get_rid()]
+	var occlusion_hit: Dictionary = world_3d.direct_space_state.intersect_ray(occlusion_query)
+	if not occlusion_hit.is_empty():
+		var target_hit_distance: float = ray_origin.distance_to(target_hit.get("position", ray_origin))
+		var occlusion_distance: float = ray_origin.distance_to(occlusion_hit.get("position", ray_origin))
+		if occlusion_distance <= target_hit_distance + 0.001:
+			return {}
+	var target: Dictionary = _resolve_camera_interaction_target(target_hit.get("collider"))
 	if target.is_empty():
 		return {}
 	var target_node: Node3D = target.get("node") as Node3D
