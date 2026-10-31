@@ -900,3 +900,40 @@
 - Underground world remains a single elevation with synchronous chunk streaming. Vertical floors, ladders/elevators and asynchronous load/recovery remain pending.
 - Cargo Audit has three fixed cases only; no generated manifests, persistent campaign scores or multiplayer.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone device testing are not claimed.
+
+
+## Run 60 — KROLL Orbital Pinball M0.1 + vertical underground mine layers M0.1 (2026-10-31)
+
+### New Godot 4 game
+- Project: `daily_games/KROLL_Orbital_Pinball/`.
+- Three authored bumper layouts, three balls, deterministic 2D ball integration, launch, rail/bumper/flipper collisions, scoring, drain/life loss, reset and next-table progression.
+- Keyboard controls: A/D hold flippers, Space launches, R resets, N advances the table. On-screen buttons provide mouse/touch input.
+- No external assets, audio, plugins or network dependencies. Import via `daily_games/KROLL_Orbital_Pinball/project.godot` with Godot 4.3+.
+- Rules and runtime smoke tests are included and the Survival Test Hub exposes the game.
+
+### Vertical underground mine layers
+- `systems/UndergroundMineDirector.gd` now manages a bounded 3×3 chunk window at one active depth, supporting layer 0–8.
+- Layer 0 keeps legacy IDs `underground/mine_x_z`; deeper floors use `underground/layer_N/mine_x_z`.
+- `systems/UndergroundMineFactory.gd` offsets each floor by 20m, creates a stable `MineLiftAnchor` in the origin room on every layer, and includes depth in deterministic mineral/cache placement.
+- `world/SurfaceWorld.gd` exposes V / DOWN ONE to descend at the lift and G / UP ONE to ascend; returning from layer 0 uses the surface shaft. HUD reports the current level.
+- The schema-v1 world payload adds optional `mine_depth`. Legacy saves without it infer depth from player Y; surface saves default to zero.
+- Failed depth transitions roll back both MineralVeinRegistry and WorldObjectStateRegistry snapshots, including partial factory-load failure. The old layer window and exact registry IDs are preserved.
+
+### Regression coverage
+- `tests/underground_mine_layers_test.gd`: depth mapping, layer bounds, legacy/deep stable IDs, factory root offsets, lift anchors and deterministic cache data.
+- `tests/underground_mine_director_test.gd`: layer 0↔1 switching, bounded window, legacy ID compatibility and injected partial-load rollback.
+- `tests/production_surface_world_mining_test.gd`: descend, mine, stream/unload/reload, ascend, return to surface, depth save/restore and legacy schema-v1 save without `mine_depth`.
+- Workflow adds Orbital Pinball import/rules/runtime smoke tests.
+
+### Exact GitHub evidence
+- Feature PR [#156](https://github.com/qaqp980520-prog/2126-Survival/pull/156) merged as `857c8a9cccd4dda380a8dd893750d6f6b91d409a`.
+- Exact feature HEAD `87c249bc2844b744190c1c413b5a85dadefe3ae8` passed Godot 4.3 [Run #678](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41149499503): 253/253 total step records successful, zero failures, zero skipped.
+- Post-merge main-push [Run #679](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41150013939) also completed successfully with 253 steps.
+- Main at feature closeout equals merge commit `857c8a9cccd4dda380a8dd893750d6f6b91d409a`; PR #156 is closed/merged and no open PR remained before this documentation closeout.
+
+### Known limits
+- Only one depth window is active at a time; maximum supported depth is layer 8.
+- Lift travel is an immediate layer transition at the origin anchor; no continuous elevator animation or visible full-height shaft yet.
+- Cache/ore distribution remains deterministic coordinate hashing and fixed tables, not a saved world seed or editable data resource.
+- Chunk generation and rollback remain synchronous; no asynchronous request queue is claimed.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
