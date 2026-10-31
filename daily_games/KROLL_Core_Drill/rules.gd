@@ -118,7 +118,7 @@ static func apply_drill(state: Dictionary, lane: int) -> Dictionary:
     var current_lane: int = int(next.get("lane", 2))
     if row < 0 or row >= ROW_COUNT:
         return {"ok": false, "state": next, "reason": "depth_limit", "tile": ""}
-    if lane < 0 or lane >= COLUMN_COUNT or absi(lane - current_lane) > 1:
+    if lane < 0 or lane >= COLUMN_COUNT or abs(lane - current_lane) > 1:
         return {"ok": false, "state": next, "reason": "lane_out_of_reach", "tile": ""}
     var energy: int = int(next.get("energy", 0))
     if energy <= 0:
