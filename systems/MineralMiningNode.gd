@@ -30,6 +30,7 @@ func _ready() -> void:
 		return
 	if last_regen_unix <= 0:
 		last_regen_unix = Time.get_unix_time_from_system()
+	_build_interaction_area()
 	# Dedicated/headless servers do not need renderer resources. Keep gameplay and
 	# persistence logic active while avoiding dummy-renderer mesh errors in CI.
 	if DisplayServer.get_name() != "headless":
@@ -48,6 +49,28 @@ func _ready() -> void:
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
 	apply_elapsed_regeneration()
+	_set_interaction_area_enabled(remaining_units > 0)
+
+func _build_interaction_area() -> void:
+	if get_node_or_null("InteractionArea") != null:
+		return
+	var area := Area3D.new()
+	area.name = "InteractionArea"
+	area.collision_layer = 2
+	area.collision_mask = 0
+	area.monitoring = false
+	var collision := CollisionShape3D.new()
+	var shape := SphereShape3D.new()
+	shape.radius = 0.85
+	collision.shape = shape
+	collision.position = Vector3(0.0, 0.0, 0.0)
+	area.add_child(collision)
+	add_child(area)
+
+func _set_interaction_area_enabled(enabled: bool) -> void:
+	var area := get_node_or_null("InteractionArea") as Area3D
+	if area != null:
+		area.collision_layer = 2 if enabled else 0
 
 func _process(_delta: float) -> void:
 	apply_elapsed_regeneration()
@@ -69,6 +92,7 @@ func apply_elapsed_regeneration(now_unix: int = -1) -> int:
 		last_regen_unix = now
 		visible = true
 		_depleted_signal_sent = false
+		_set_interaction_area_enabled(true)
 		return 0
 	var elapsed_seconds := now - last_regen_unix
 	var intervals := int(elapsed_seconds / regen_interval_seconds)
@@ -83,6 +107,7 @@ func apply_elapsed_regeneration(now_unix: int = -1) -> int:
 	if remaining_units > 0:
 		visible = true
 		_depleted_signal_sent = false
+		_set_interaction_area_enabled(true)
 	return remaining_units - previous
 
 ## Call from the tool's confirmed hit event. Returns actual units transferred.
@@ -109,6 +134,7 @@ func mine_hit(hit_position: Vector3 = Vector3.ZERO) -> int:
 		vfx.play_hit(mineral_id, to_global(hit_position))
 	if remaining_units <= 0:
 		visible = false
+		_set_interaction_area_enabled(false)
 		if not _depleted_signal_sent:
 			_depleted_signal_sent = true
 			ore_depleted.emit(mineral_id)
@@ -133,6 +159,7 @@ func restore_vein(units: int, now_unix: int = -1) -> int:
 	last_regen_unix = now
 	_depleted_signal_sent = false
 	visible = true
+	_set_interaction_area_enabled(true)
 	return restored_units
 
 func to_save_dict() -> Dictionary:
@@ -196,6 +223,7 @@ func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = 
 	last_regen_unix = saved_timestamp
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
+	_set_interaction_area_enabled(remaining_units > 0)
 	if apply_elapsed:
 		apply_elapsed_regeneration(now)
 	return true
