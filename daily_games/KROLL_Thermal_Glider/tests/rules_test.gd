@@ -15,6 +15,7 @@ func _run() -> void:
 		var thermals: Array = course.get("thermals", [])
 		_expect(beacons.size() == 3, "each course has three survey beacons")
 		_expect(not thermals.is_empty(), "each course has at least one thermal zone")
+		_expect(_run_reference_flight(rules, index) == "landed", "reference flight can collect all beacons and land on course %d" % index)
 
 	var initial: Dictionary = rules.new_run(0)
 	_expect(str(initial.get("status", "")) == "flying", "new run starts in the flying state")
@@ -82,6 +83,48 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+
+func _run_reference_flight(rules: RefCounted, course_index: int) -> String:
+	var state: Dictionary = rules.call("new_run", course_index)
+	var course: Dictionary = rules.call("get_course", course_index)
+	for _step_index in range(1200):
+		var position: Vector2 = state.get("position", Vector2.ZERO)
+		var velocity: Vector2 = state.get("velocity", Vector2.ZERO)
+		var checkpoint: int = int(state.get("checkpoint", 0))
+		var beacons: Array = course.get("beacons", [])
+		var target: Vector2
+		if checkpoint < beacons.size():
+			target = beacons[checkpoint]
+		else:
+			target = Vector2(float(course.get("runway_x", 1700.0)) - 20.0, float(course.get("runway_y", 300.0)))
+		var desired_vertical_acceleration: float = clampf(0.3 * (target.y - position.y) - 0.7 * velocity.y, -28.0, 28.0)
+		var thermal_lift: float = 0.0
+		for thermal_value in course.get("thermals", []):
+			var thermal: Dictionary = thermal_value
+			var center: Vector2 = thermal.get("position", Vector2.ZERO)
+			var radius: float = maxf(1.0, float(thermal.get("radius", 1.0)))
+			var strength: float = clampf(1.0 - position.distance_to(center) / radius, 0.0, 1.0)
+			thermal_lift += float(thermal.get("lift", 0.0)) * strength
+		var gust: float = 0.0
+		for gust_value in course.get("gusts", []):
+			var gust_data: Dictionary = gust_value
+			if absf(position.x - float(gust_data.get("x", -10000.0))) < 90.0:
+				gust += float(gust_data.get("strength", 0.0))
+		var needed_lift: float = 32.0 + gust - desired_vertical_acceleration
+		var pitch_ratio: float = (needed_lift - velocity.x * 0.14 - thermal_lift) / (maxf(velocity.x, 1.0) * 0.85)
+		var desired_pitch: float = clampf(rad_to_deg(asin(clampf(pitch_ratio, -1.0, 1.0))), -28.0, 28.0)
+		var current_pitch: float = float(state.get("pitch", 0.0))
+		var pitch_input: int = 1 if desired_pitch > current_pitch + 1.2 else (-1 if desired_pitch < current_pitch - 1.2 else 0)
+		var battery: float = float(state.get("battery", 0.0))
+		state = rules.call("step", state, {
+			"pitch": pitch_input,
+			"boost": velocity.x < 140.0 and battery > 2.0,
+			"brake": velocity.x > 160.0
+		}, 0.05)
+		if str(state.get("status", "")) != "flying":
+			return str(state.get("status", ""))
+	return str(state.get("status", "timeout"))
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
