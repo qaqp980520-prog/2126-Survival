@@ -86,7 +86,7 @@ static func place_atom(state: Dictionary, element: String, cell: Vector2i) -> Di
     if int(current_counts.get(element, 0)) >= int(formula.get(element, 0)):
         return {"ok": false, "reason": "atom_limit", "state": state.duplicate(true)}
     for atom_value in atoms:
-        var atom: Dictionary = atom_value as Dictionary
+        var atom: Dictionary = atom_value
         if atom.get("cell", Vector2i(-1, -1)) == cell:
             return {"ok": false, "reason": "occupied_cell", "state": state.duplicate(true)}
     atoms.append({"element": element, "cell": cell})
@@ -105,7 +105,7 @@ static func remove_atom(state: Dictionary, cell: Vector2i) -> Dictionary:
     var next: Dictionary = state.duplicate(true)
     var atoms: Array = next.get("atoms", []).duplicate(true)
     for index in range(atoms.size()):
-        var atom: Dictionary = atoms[index] as Dictionary
+        var atom: Dictionary = atoms[index]
         if atom.get("cell", Vector2i(-1, -1)) == cell:
             atoms.remove_at(index)
             next["atoms"] = atoms
@@ -130,7 +130,7 @@ static func evaluate(state: Dictionary) -> Dictionary:
     var saturated: bool = true
     var degrees: Array = analysis.get("degrees", [])
     for index in range(atoms.size()):
-        var atom: Dictionary = atoms[index] as Dictionary
+        var atom: Dictionary = atoms[index]
         var element: String = str(atom.get("element", ""))
         if index >= degrees.size() or int(degrees[index]) != get_valence(element):
             saturated = false
@@ -165,7 +165,7 @@ static func analyze_atoms(atoms: Array) -> Dictionary:
         var atom_value: Variant = atoms[index]
         if not (atom_value is Dictionary):
             return {"ok": false, "reason": "invalid_atom"}
-        var atom: Dictionary = atom_value as Dictionary
+        var atom: Dictionary = atom_value
         var element: String = str(atom.get("element", ""))
         var cell_value: Variant = atom.get("cell", null)
         if not ELEMENTS.has(element) or not (cell_value is Vector2i):
@@ -182,7 +182,7 @@ static func analyze_atoms(atoms: Array) -> Dictionary:
         adjacency.append([])
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(0, 1)]
     for index in range(atoms.size()):
-        var atom: Dictionary = atoms[index] as Dictionary
+        var atom: Dictionary = atoms[index]
         var cell: Vector2i = atom["cell"]
         for direction in directions:
             var neighbor_cell: Vector2i = cell + direction
@@ -195,7 +195,7 @@ static func analyze_atoms(atoms: Array) -> Dictionary:
             adjacency[index].append(neighbor_index)
             adjacency[neighbor_index].append(index)
     for index in range(atoms.size()):
-        var element: String = str((atoms[index] as Dictionary).get("element", ""))
+        var element: String = str((atoms[index]).get("element", ""))
         if int(degrees[index]) > get_valence(element):
             return {"ok": false, "reason": "valence_exceeded", "counts": counts, "degrees": degrees, "edges": edges}
     return {
@@ -211,7 +211,7 @@ static func _count_elements(atoms: Array) -> Dictionary:
     var counts: Dictionary = {"H": 0, "O": 0, "N": 0, "C": 0}
     for atom_value in atoms:
         if atom_value is Dictionary:
-            var element: String = str((atom_value as Dictionary).get("element", ""))
+            var element: String = str((atom_value).get("element", ""))
             if counts.has(element):
                 counts[element] = int(counts[element]) + 1
     return counts
