@@ -37,6 +37,25 @@ func _run() -> void:
 		var facing_away: Dictionary = world.call("get_camera_interaction_target")
 		_expect(facing_away.is_empty(), "a nearby crate is not selected when the camera faces away")
 		await _aim_at(surface_crate)
+		var unrelated_area := Area3D.new()
+		unrelated_area.name = "NonInteractionTriggerArea"
+		unrelated_area.collision_layer = 1
+		unrelated_area.collision_mask = 0
+		unrelated_area.monitoring = false
+		var unrelated_collision := CollisionShape3D.new()
+		var unrelated_shape := BoxShape3D.new()
+		unrelated_shape.size = Vector3(1.2, 1.2, 1.2)
+		unrelated_collision.shape = unrelated_shape
+		unrelated_area.add_child(unrelated_collision)
+		unrelated_area.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
+		world.add_child(unrelated_area)
+		await physics_frame
+		await physics_frame
+		var target_through_trigger: Dictionary = world.call("get_camera_interaction_target")
+		_expect(str(target_through_trigger.get("kind", "")) == "prop" and target_through_trigger.get("node") == surface_crate, "unrelated trigger areas do not block a valid interaction target")
+		unrelated_area.queue_free()
+		await physics_frame
+		await physics_frame
 		var blocker := StaticBody3D.new()
 		blocker.name = "RaycastOcclusionTestBlocker"
 		blocker.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
