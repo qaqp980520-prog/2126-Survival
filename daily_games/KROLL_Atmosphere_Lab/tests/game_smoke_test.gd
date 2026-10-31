@@ -17,9 +17,9 @@ func _run() -> void:
 	_expect(game.has_method("get_current_state"), "game exposes its deterministic station state")
 	var initial: Dictionary = game.call("get_current_state")
 	_expect(str(initial.get("level_id", "")) == "coastal_front", "game starts at Coastal Front")
-	_expect(game.get_node_or_null("TemperatureMinus") != null, "temperature decrement control exists")
-	_expect(game.get_node_or_null("PressurePlus") != null, "pressure increment control exists")
-	var minus := game.get_node_or_null("TemperatureMinus") as Button
+	_expect(game.find_child("TemperatureMinus", true, false) != null, "temperature decrement control exists")
+	_expect(game.find_child("PressurePlus", true, false) != null, "pressure increment control exists")
+	var minus := game.find_child("TemperatureMinus", true, false) as Button
 	if minus != null:
 		minus.emit_signal("pressed")
 	var adjusted: Dictionary = game.call("get_current_state")
@@ -38,7 +38,7 @@ func _run() -> void:
 			current = int(solved["readings"][instrument])
 	game.set("_state", solved)
 	game.call("_refresh")
-	var next_button := game.get_node_or_null("NextButton") as Button
+	var next_button := game.find_child("NextButton", true, false) as Button
 	_expect(next_button != null and not next_button.disabled, "stable forecast unlocks the next-station control")
 	if next_button != null:
 		next_button.emit_signal("pressed")
