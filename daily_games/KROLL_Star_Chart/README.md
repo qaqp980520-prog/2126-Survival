@@ -23,7 +23,7 @@ A small Godot 4 telescope-alignment puzzle. Track four stars in each of three au
 
 ## Import
 
-Open `project.godot` in Godot 4.3 or later. The project uses only built-in 2D drawing and has no external assets or add-ons.
+Open `project.godot` in Godot 4.3 or later, or launch KROLL Star Chart from the repository's Survival Test Hub. A small scene-script shim supports both the nested standalone project root and the repository root. The project uses only built-in 2D drawing and has no external assets or add-ons.
 
 ## Tests
 
