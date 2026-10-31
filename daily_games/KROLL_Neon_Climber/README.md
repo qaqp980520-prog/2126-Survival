@@ -27,7 +27,7 @@ A three-sector 2D side-scrolling platformer prototype.
 
 ## Import
 
-Open this folder as a standalone Godot 4.3+ project, or run the scene from the root 2126 Survival project after the files are added to its Test Hub.
+Open this folder as a standalone Godot 4.3+ project. The nested mirror paths keep the same scene and rules references valid when the root 2126 Survival project launches it from the Test Hub.
 
 No external assets, plugins, audio or network dependencies are required.
 
