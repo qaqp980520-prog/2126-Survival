@@ -21,6 +21,7 @@ var stamina: RefCounted = StaminaScript.new()
 var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
 var hud: Label
+var interaction_prompt: Label
 var touch_buttons: Dictionary = {}
 var _touch_directions: Dictionary = {}
 var _touch_jump: bool = false
@@ -110,6 +111,24 @@ func _build_hud() -> void:
 	hud.add_theme_color_override("font_color", Color(0.62, 0.94, 1.0))
 	hud.add_theme_font_size_override("font_size", 15)
 	layer.add_child(hud)
+	interaction_prompt = Label.new()
+	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.anchor_left = 0.5
+	interaction_prompt.anchor_right = 0.5
+	interaction_prompt.anchor_top = 1.0
+	interaction_prompt.anchor_bottom = 1.0
+	interaction_prompt.offset_left = -260.0
+	interaction_prompt.offset_right = 260.0
+	interaction_prompt.offset_top = -282.0
+	interaction_prompt.offset_bottom = -250.0
+	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interaction_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	interaction_prompt.add_theme_color_override("font_color", Color(0.88, 0.98, 1.0))
+	interaction_prompt.add_theme_font_size_override("font_size", 18)
+	interaction_prompt.add_theme_color_override("font_shadow_color", Color(0.01, 0.05, 0.08, 0.9))
+	interaction_prompt.add_theme_constant_override("shadow_offset_x", 2)
+	interaction_prompt.add_theme_constant_override("shadow_offset_y", 2)
+	layer.add_child(interaction_prompt)
 	var panel := PanelContainer.new()
 	panel.name = "TouchControls"
 	panel.anchor_left = 0.5
@@ -813,9 +832,64 @@ func _recover_underground_window(previous_seed: int, recovery_position: Vector3,
 func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
+func get_interaction_prompt_text() -> String:
+	if player == null or chunk_controller == null:
+		return ""
+	var nearest_prop: Node3D = null
+	var nearest_prop_distance: float = 3.25
+	for prop in chunk_controller.get_loaded_world_state_nodes():
+		if not is_instance_valid(prop):
+			continue
+		var distance: float = player.global_position.distance_to(prop.global_position)
+		if distance <= nearest_prop_distance:
+			nearest_prop = prop
+			nearest_prop_distance = distance
+	if _is_underground:
+		var nearest_vein: Node3D = _get_nearest_mineable_vein()
+		if nearest_vein != null:
+			var vein_distance: float = player.global_position.distance_to(nearest_vein.global_position)
+			if nearest_prop == null or vein_distance < nearest_prop_distance:
+				var vein_id: String = str(nearest_vein.get("mineral_id"))
+				var vein_data: Dictionary = MineralCatalogScript.get_mineral(vein_id)
+				return "F  MINE %s" % str(vein_data.get("display_name", vein_id)).to_upper()
+		if nearest_prop != null:
+			var cache_id: String = str(nearest_prop.get("loot_item_id"))
+			var cache_data: Dictionary = MineralCatalogScript.get_mineral(cache_id)
+			return "F  OPEN %s CACHE · %d LEFT" % [str(cache_data.get("display_name", cache_id)).to_upper(), int(nearest_prop.get("loot_remaining"))]
+		var mine_lift_distance := Vector2(
+			player.global_position.x - MINE_ENTRY_UNDERGROUND.x,
+			player.global_position.z - MINE_ENTRY_UNDERGROUND.z
+		).length()
+		if mine_lift_distance <= MINE_ACCESS_RANGE:
+			var current_layer: int = mine_director.get_layer_index(player.global_position) if mine_director != null else 0
+			return "G  ASCEND · V  DESCEND" if current_layer > 0 else "G  SURFACE · V  DESCEND"
+		return "NO CACHE OR VEIN IN REACH"
+	var nearest_crop: Node3D = null
+	var nearest_crop_distance: float = 3.25
+	for plot in chunk_controller.get_loaded_crop_plots():
+		if not is_instance_valid(plot):
+			continue
+		var crop_distance: float = player.global_position.distance_to(plot.global_position)
+		if crop_distance <= nearest_crop_distance:
+			nearest_crop = plot
+			nearest_crop_distance = crop_distance
+	if nearest_crop != null and (nearest_prop == null or nearest_crop_distance < nearest_prop_distance):
+		return "E  MANAGE CROP PLOT"
+	if nearest_prop != null:
+		return "F  OPEN SALVAGE CRATE"
+	var surface_lift_distance := Vector2(
+		player.global_position.x - MINE_ENTRY_SURFACE.x,
+		player.global_position.z - MINE_ENTRY_SURFACE.z
+	).length()
+	if surface_lift_distance <= MINE_ACCESS_RANGE:
+		return "G  ENTER KROLL MINE LIFT"
+	return "NO INTERACTION IN REACH"
+
 func _refresh_hud() -> void:
 	if hud == null:
 		return
+	if interaction_prompt != null:
+		interaction_prompt.text = get_interaction_prompt_text()
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
 	var grid_text := str(mine_director.get_grid_coordinate(player.global_position)) if _is_underground and mine_director != null and player != null else (str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a")
