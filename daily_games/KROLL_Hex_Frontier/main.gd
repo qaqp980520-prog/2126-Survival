@@ -33,7 +33,10 @@ func _draw() -> void:
         for point in points:
             outline.append(point)
         outline.append(points[0])
-        draw_polyline(outline, Color("#9bb3c6"), 2.0, true)
+        var legal_cells: Array = _rules.call("get_legal_claims", _state, 1) if _selected_action == "claim" else _rules.call("get_legal_upgrades", _state, 1)
+        var outline_color: Color = Color("#f4d36f") if legal_cells.has(coord) else Color("#9bb3c6")
+        var outline_width: float = 4.0 if legal_cells.has(coord) else 2.0
+        draw_polyline(outline, outline_color, outline_width, true)
         var owner: int = int(tile.get("owner", 0))
         var label: String = "HQ" if bool(tile.get("base", false)) else "+%d" % int(tile.get("yield", 0))
         var label_color: Color = Color("#f7fbff") if owner != 0 else Color("#d8e5ed")
