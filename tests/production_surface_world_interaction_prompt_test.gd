@@ -112,6 +112,7 @@ func _aim_at(target: Node3D, player_offset: Vector3 = Vector3(0.0, 1.0, 2.0), ta
 	world.player.global_position = target.global_position + player_offset
 	world.camera.look_at(target.global_position + target_offset, Vector3.UP)
 	await physics_frame
+	await physics_frame
 
 func _find_world_prop(node_name: String, chunk_name: String) -> Node3D:
 	var candidates: Array = world.chunk_controller.call("get_loaded_world_state_nodes")
