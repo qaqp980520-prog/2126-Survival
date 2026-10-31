@@ -50,9 +50,10 @@ func _run() -> void:
 	_expect(origin.get_node_or_null("CropPlot_0") != null and origin.get_node_or_null("CropPlot_1") != null, "shared factory creates both crop plots")
 	var original_id: int = crate.get_instance_id()
 	var item_id: String = str(crate.get("loot_item_id"))
-	var near_crate: Vector3 = crate.global_position + Vector3(0.0, 1.0, 2.0)
+	var crate_position: Vector3 = crate.global_position
+	var near_crate: Vector3 = crate_position + Vector3(0.0, 1.0, 2.0)
 	world.player.global_position = near_crate
-	world.camera.look_at(crate.global_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
+	world.camera.look_at(crate_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
 	await physics_frame
 	var now: int = int(Time.get_unix_time_from_system())
 	var first: Dictionary = world.call("_interact_nearest_world_prop", now)
@@ -65,7 +66,7 @@ func _run() -> void:
 	_expect(not world.chunk_controller.is_chunk_loaded(ORIGIN_CHUNK_ID), "origin chunk unloads outside the radius")
 	_expect(bool(world.call("debug_move_player_to", near_crate, now + 2)), "returning to origin reloads the chunk")
 	await process_frame
-	world.camera.look_at(crate.global_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
+	world.camera.look_at(crate_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
 	await physics_frame
 	var restored_root: Node3D = world.chunk_controller.get_chunk_root(ORIGIN_CHUNK_ID)
 	var restored_crate: Node = restored_root.get_node_or_null("SalvageCrate") if restored_root != null else null
