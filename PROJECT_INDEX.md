@@ -987,3 +987,21 @@
 - Tether Recovery uses deterministic manual integration, not a physical rope joint; no persistent campaign, audio, multiplayer or haptics.
 - Mine loot tables are data-driven but still use the legacy deterministic coordinate/layer hash; no persisted world seed, loot-table editor or weighted authoring UI.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
+
+
+## 2026-10-31 Run 63 — Flux Hockey + contextual mine interaction prompts (feature merged / exact-head CI passed)
+
+- Start-of-run reconciliation: Run 62 feature PR #160 and documentation PR #161 were merged; main was `fe52f342038971780f1bbaa712a8ad752bd9562e`. Run 63 began with one open feature PR (#162) and 168 repository branches after full pagination.
+- New game: `daily_games/KROLL_Flux_Hockey/`, a real-time air-hockey arcade game with an AI upper paddle, player-controlled lower paddle, three bumper arenas (Dock Ring, Reactor Pair, Split Orbit), first-to-five scoring, mouse/touch drag and A/D or arrow-key movement, R reset and N next arena. Godot 4.3+, procedural vector drawing, no external assets/audio/add-ons/network dependencies.
+- Game tests: deterministic rules cover paddle movement, bounds, side-wall and bumper reflection, goal detection, first-to-five lock, arena progression/reset and swept collision protection against high-speed puck tunneling through either paddle. Runtime smoke test covers scene instantiation, touch-drag, arena progression and reset.
+- Existing system: `world/SurfaceWorld.gd` now displays contextual interaction guidance. Surface targets distinguish crop plots (E), salvage crates (F) and the mine lift (G). Underground targets compare the nearest stateful cache and mineral vein; cache prompts include MineralCatalog display name and remaining stock, vein prompts identify the mineral, and lift/no-target states explain available controls. Existing transaction rejection messages remain authoritative. World-save schema remains version 1; no migration.
+- Production regression: `tests/production_surface_world_interaction_prompt_test.gd` instantiates the real SurfaceWorld, verifies the surface crate/lift, enters the actual mine, checks the gold cache prompt and remaining stock, checks nearest-vein selection, and checks the out-of-range state.
+- Exact candidate HEAD `c887e82b92874765a42be298b5e1a384b374bdc8` passed Godot 4.3 exact-head [Run #710](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41159492726): 268/268 total step records successful, zero failures and zero skipped. Flux Hockey import/rules/runtime passed steps 262–264; production interaction prompt passed step 265.
+- Historical failed candidate Run #709 targeted superseded HEAD `fef2607d9e2bbc1475843c2e0f449da2db79a21f` and failed only at step 265 because the test expected English `GOLD ORE` while the canonical catalog display name is `金礦`. The test was corrected to derive the expected name from MineralCatalog and assert remaining stock; production prompt logic and save schema were not changed. Run #709 remains historical failure evidence, not a pass.
+- Feature PR [#162](https://github.com/qaqp980520-prog/2126-Survival/pull/162) merged as `ceccc7ea1bcb0c46fb72af6a9c1fec29b131f05d`. GitHub compare confirms main is identical to that merge SHA. The only PR #162 branch-behind commit was the docs-only Run 62 closeout; comparison showed it changed only `PROJECT_INDEX.md` and `docs/DEVELOPMENT_ISSUES.md`, with no overlap with feature files.
+- No local Godot executable was available. Manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+### Known limits and next steps
+- Interaction target selection is distance-based rather than camera-raycast-based; cache lid animation and a dedicated inventory-full modal are not included.
+- Flux Hockey opponent is a simple paddle-following AI; no adaptive difficulty, audio, haptics or saved high scores.
+- Next: consider raycast-based interaction targeting and animated cache feedback as separate increments; add adaptive opponent behavior only after play-balance testing; complete manual GUI/GPU/iPhone QA when devices and a local Godot executable are available.
