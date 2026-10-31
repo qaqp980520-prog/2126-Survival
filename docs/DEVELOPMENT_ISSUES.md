@@ -2,6 +2,24 @@
 
 這份清單是目前的開發追蹤文件，與 GitHub Issues 功能不同；之後可逐項搬成正式 Issues。
 
+## Run 64 verification — 2026-10-31
+
+- [x] KROLL Star Chart M0.1 added at `daily_games/KROLL_Star_Chart/`: three authored sectors, four ordered targets per sector, zoom-sensitive alignment, time/score rules, keyboard/mouse and partial touch support.
+- [x] Camera-ray interaction selection integrated into production `world/SurfaceWorld.gd`; the same target drives the HUD prompt and E/F/G/V actions.
+- [x] Registered non-blocking interaction proxies use physics layer 2; separate body-only layer-1 ray preserves solid world occlusion and ignores unrelated trigger Area3D nodes.
+- [x] Regression tests cover unrelated trigger areas, solid occlusion, surface/underground props, mineral veins, lift transitions and exact aimed-target selection for mining/cache actions.
+- [x] Feature PR #164 merged as `4ab93b8aaeac2392b5d464afdfdb77b1cec477dd`.
+- [x] Exact candidate HEAD `5fc815dfbabf0b993c824fba12b0e012b4140907` passed Godot 4.3 [Run #736](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41166102103): 273/273 step records successful, zero failures and zero skips. New Run 64 steps 265–270 all passed.
+- [x] Supplementary Runs #33 (12/12) and #35 (13/13) passed; they do not replace the full Run #736 evidence.
+- [x] No save schema change; existing stable IDs and inventory transaction APIs remain unchanged.
+- No local Godot executable was available. Manual GUI/GPU/iPhone QA is not claimed.
+
+### Remaining limits
+- Touch-only campaign navigation is incomplete: touch can aim/drag/lock, but RESTART/NEXT controls are keyboard-only in M0.1.
+- The Star Chart README now lists WASD and arrow keys, but full touch-only navigation still needs implementation and testing.
+- Manual GUI/GPU/iPhone acceptance remains open.
+- Continue camera-ray feedback/lifecycle coverage, stable-ID world-object factory integration, terrain/object persistence and vertical mine streaming.
+
 ## Run 62 verification — 2026-10-31
 
 - [x] KROLL Shadow Courier M0.1 added at `daily_games/KROLL_Shadow_Courier/`: three authored 8×8 stealth missions, rotating patrol sight, walls, three data shards, two decoys, extraction, keyboard/touch controls, and a tested winning route for each mission.
