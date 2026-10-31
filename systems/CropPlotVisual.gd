@@ -33,7 +33,7 @@ func can_configure(value: Node, id: String, kind: String, index: int) -> bool:
             return false
     if id.is_empty() or id != id.strip_edges() or id.length() > 160:
         return false
-    if id.find("/") <= 0 or id.contains(" ") or id.contains("\\t") or id.contains("\\n") or id.contains("\\\\") or id.contains(".."):
+    if id.find("/") <= 0 or id.contains(" ") or id.contains("\t") or id.contains("\n") or id.contains("\r") or id.contains("//") or id.contains(".."):
         return false
     if not CropRegistryScript.SUPPORTED_CROP_IDS.has(kind) or index < 1:
         return false
