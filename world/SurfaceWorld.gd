@@ -866,6 +866,7 @@ func _cast_camera_interaction_target() -> Dictionary:
 	query.collision_mask = 0xFFFFFFFF
 	query.collide_with_areas = true
 	query.collide_with_bodies = true
+	query.hit_from_inside = true
 	query.exclude = [player.get_rid()]
 	var hit: Dictionary = world_3d.direct_space_state.intersect_ray(query)
 	if hit.is_empty():
