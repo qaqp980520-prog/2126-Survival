@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "tables": {
+    "west": [
+      {"item_id": "iron_ore", "weight": 4},
+      {"item_id": "coal_ore", "weight": 3},
+      {"item_id": "copper_ore", "weight": 2}
+    ],
+    "east": [
+      {"item_id": "copper_ore", "weight": 4},
+      {"item_id": "silver_ore", "weight": 2},
+      {"item_id": "aluminium_ore", "weight": 3}
+    ],
+    "north": [
+      {"item_id": "aluminium_ore", "weight": 4},
+      {"item_id": "silver_ore", "weight": 3},
+      {"item_id": "gold_ore", "weight": 1}
+    ],
+    "south": [
+      {"item_id": "coal_ore", "weight": 4},
+      {"item_id": "gold_ore", "weight": 2},
+      {"item_id": "uranium_ore", "weight": 1}
+    ]
+  }
+}
