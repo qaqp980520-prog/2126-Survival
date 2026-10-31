@@ -101,10 +101,11 @@ func _draw() -> void:
 
 	var font: Font = ThemeDB.fallback_font
 	if font != null:
-		var title := "KROLL FLUX HOCKEY  ·  " + Rules.get_arena_name(int(game_state.get("arena_index", 0))).to_upper()
-		draw_string(font, Vector2(40.0, 30.0), title, HORIZONTAL_ALIGNMENT_LEFT, 720.0, 20, Color("#b9e9f4"))
+		draw_string(font, Vector2(40.0, 30.0), "KROLL FLUX HOCKEY", HORIZONTAL_ALIGNMENT_LEFT, 240.0, 20, Color("#b9e9f4"))
 		var score := "%d   :   %d" % [int(game_state.get("player_score", 0)), int(game_state.get("ai_score", 0))]
-		draw_string(font, Vector2(330.0, 32.0), score, HORIZONTAL_ALIGNMENT_CENTER, 140.0, 24, Color("#ffffff"))
+		draw_string(font, Vector2(320.0, 32.0), score, HORIZONTAL_ALIGNMENT_CENTER, 160.0, 24, Color("#ffffff"))
+		var arena_label := Rules.get_arena_name(int(game_state.get("arena_index", 0))).to_upper()
+		draw_string(font, Vector2(560.0, 30.0), arena_label, HORIZONTAL_ALIGNMENT_RIGHT, 200.0, 17, Color("#e9b66a"))
 		draw_string(font, Vector2(40.0, 580.0), _message, HORIZONTAL_ALIGNMENT_LEFT, 720.0, 15, Color("#9bc0d0"))
 		draw_string(font, Vector2(40.0, 558.0), "DRAG / A-D MOVE  ·  R RESET  ·  N NEXT ARENA  ·  FIRST TO 5", HORIZONTAL_ALIGNMENT_LEFT, 720.0, 13, Color("#7899a8"))
 		var winner: String = str(game_state.get("winner", ""))
