@@ -22,7 +22,7 @@ func _run() -> void:
 	var spawn: Vector2 = player.global_position
 	_expect(game.collect_core("core_a"), "first core can be collected")
 	_expect(not game.collect_core("core_a"), "duplicate collection is rejected")
-	_expect(game.activate_checkpoint("midway", Vector2(650, 400)), "checkpoint activation succeeds")
+	_expect(game.activate_checkpoint("midway", Vector2(760, 400)), "checkpoint activation succeeds")
 	_expect(game.get_checkpoint_position() == Vector2(650, 400), "checkpoint stores the respawn position")
 	game.hit_hazard()
 	_expect(int(game.get_run_state()["deaths"]) == 1, "hazard increments the fall counter")
