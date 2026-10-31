@@ -3,7 +3,7 @@ extends RefCounted
 
 const MOVE_SPEED: float = 260.0
 const GRAVITY: float = 980.0
-const JUMP_SPEED: float = 420.0
+const JUMP_SPEED: float = 480.0
 const DASH_SPEED: float = 560.0
 const DASH_DURATION: float = 0.18
 const DASH_COOLDOWN: float = 0.85
