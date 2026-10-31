@@ -62,8 +62,16 @@ func _run() -> void:
 	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "seeded cache identities are stable across unload, restore and reload")
 
-	var legacy_save: Dictionary = saved.duplicate(true)
+	var legacy_world: Node3D = WorldScene.instantiate() as Node3D
+	legacy_world.set("world_seed", LEGACY_SEED)
+	root.add_child(legacy_world)
+	await process_frame
+	await physics_frame
+	var legacy_save: Dictionary = legacy_world.call("serialize_stream_state")
 	legacy_save.erase("world_seed")
+	_expect(not legacy_save.has("world_seed"), "legacy compatibility fixture omits the newly optional world_seed field")
+	legacy_world.queue_free()
+	await process_frame
 	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400020)), "legacy compatibility fixture unloads the origin window")
 	world.set("world_seed", 84)
 	_expect(bool(world.call("restore_stream_state", legacy_save, 1793400021)), "legacy schema-1 save without world_seed remains loadable")
