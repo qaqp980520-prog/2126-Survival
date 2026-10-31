@@ -25,6 +25,9 @@ func _run() -> void:
 	var saved: Dictionary = world.call("serialize_stream_state")
 	_expect(int(saved.get("world_seed", -1)) == 42, "schema-1 world save includes the configured world seed")
 	var original_cache_ids: Array[String] = _loaded_cache_ids(world)
+	var mine_director: Node = world.get("mine_director") as Node
+	var chunk_controller: Node3D = world.get("chunk_controller") as Node3D
+	var player: CharacterBody3D = world.get("player") as CharacterBody3D
 	_expect(original_cache_ids == _expected_cache_ids(42), "production mine cache identities match the saved world seed")
 
 	var same_seed_first: Array[Dictionary] = Factory.get_cache_spawn_data(Vector2i(-2, 3), 2, 42)
@@ -41,7 +44,7 @@ func _run() -> void:
 
 	var invalid_fractional: Dictionary = saved.duplicate(true)
 	invalid_fractional["world_seed"] = 42.5
-	var position_before: Vector3 = world.player.global_position
+	var position_before: Vector3 = player.global_position
 	_expect(not bool(world.call("restore_stream_state", invalid_fractional, 1793400000)), "fractional world seeds are rejected before mutation")
 	_expect(int(world.get("world_seed")) == 42 and world.player.global_position.is_equal_approx(position_before), "fractional seed rejection preserves the live world")
 	var invalid_negative: Dictionary = saved.duplicate(true)
@@ -52,8 +55,8 @@ func _run() -> void:
 	_expect(not bool(world.call("restore_stream_state", invalid_large, 1793400002)), "out-of-range world seeds are rejected")
 
 	var away := Vector3(21.5, -8.25, 7.5)
-	_expect(bool(world.mine_director.call("sync_to_world_position", away, 1793400010)), "mine director can unload the saved origin window before seed restore")
-	_expect(not world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "origin room is unloaded before restoring the saved seed")
+	_expect(bool(mine_director.call("sync_to_world_position", away, 1793400010)), "mine director can unload the saved origin window before seed restore")
+	_expect(not chunk_controller.is_chunk_loaded("underground/mine_0_0"), "origin room is unloaded before restoring the saved seed")
 	world.set("world_seed", 7)
 	_expect(bool(world.call("restore_stream_state", saved, 1793400011)), "world restore regenerates the mine window using the saved seed")
 	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
@@ -79,7 +82,8 @@ func _run() -> void:
 
 func _loaded_cache_ids(world: Node) -> Array[String]:
 	var result: Array[String] = []
-	for prop in world.chunk_controller.get_loaded_world_state_nodes():
+	var chunk_controller: Node3D = world.get("chunk_controller") as Node3D
+	for prop in chunk_controller.get_loaded_world_state_nodes():
 		if not is_instance_valid(prop) or prop.global_position.y >= -7.0:
 			continue
 		var parent_node: Node = prop.get_parent()
