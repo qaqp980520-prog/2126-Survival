@@ -723,7 +723,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			if not (component is int or component is float) or not is_finite(float(component)):
 				return false
 		next_return_position = Vector3(float(return_value[0]), float(return_value[1]), float(return_value[2]))
-	if player == null or mine_director == null:
+	if player == null or mine_director == null or chunk_controller == null or object_state_registry == null:
 		return false
 	if chunk_controller.has_method("capture_loaded_world_object_states") and not bool(chunk_controller.call("capture_loaded_world_object_states")):
 		return false
