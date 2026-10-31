@@ -2,6 +2,24 @@
 
 這份清單是目前的開發追蹤文件，與 GitHub Issues 功能不同；之後可逐項搬成正式 Issues。
 
+## Run 65 verification — 2026-10-31
+
+- [x] Added KROLL Core Drill M0.1 at `daily_games/KROLL_Core_Drill/`: three eight-row/five-lane sites, ore quota, lane-adjacent drilling, energy/heat/hull management, coolant vent, keyboard and touch controls.
+- [x] Registered Core Drill in Survival Test Hub and made the launch list scrollable; root smoke test verifies the ScrollContainer, 10 launch buttons, scene instantiation and rules initialization.
+- [x] Added stale camera-ray target guard in production SurfaceWorld. The exact Area3D proxy and target are validated for lifetime, collision layer, tree/ancestor state and active loaded-object membership before HUD/action access.
+- [x] Added `tests/production_surface_world_interaction_lifecycle_test.gd`: queued proxy and queued chunk ancestor must immediately invalidate the cached target; HUD clears and E/F actions return out-of-reach rather than invoking stale nodes.
+- [x] Feature PR #166 merged as `3e74a20cc312da04d6197e6747bced715734af83`.
+- [x] Exact candidate `45f15c93c91991602807f642c4bc8b0bfccac153` passed Godot 4.3 [Run #742](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41167697452): 278/278 step records successful, zero failures, zero skipped.
+- [x] No world-save schema change. Local Godot executable unavailable; manual GUI/GPU/iPhone QA is not claimed.
+
+### Remaining work
+1. Add controller-driven chunk unload/reload coverage that proves the same stable object ID is restored and its interaction proxy is re-registered.
+2. Add cache lid animation and a dedicated inventory-full interaction modal.
+3. Complete touch-only RESTART/NEXT controls for Star Chart M0.1.
+4. Continue stable-ID factory integration, terrain/object persistence and cancellation-safe asynchronous chunk streaming.
+5. Keep Core Drill as an authored arcade prototype until mineral yield, inventory rewards and procedural mine integration have explicit balancing/compatibility tests.
+6. Manual GUI, GPU performance and iPhone device QA remain outstanding.
+
 ## Run 64 verification — 2026-10-31
 
 - [x] KROLL Star Chart M0.1 added at `daily_games/KROLL_Star_Chart/`: three authored sectors, four ordered targets per sector, zoom-sensitive alignment, time/score rules, keyboard/mouse and partial touch support.
