@@ -44,6 +44,36 @@ func _run() -> void:
     _expect(bool(original_crate.call("interact")), "crate state changes before the controller unload")
     _expect(bool(original_crate.get("opened")) and int(original_crate.get("loot_remaining")) == 1, "pre-unload crate state is opened with one item remaining")
 
+    var original_crop: Node3D = _find_crop_plot(CHUNK_ID, "CropPlot_0")
+    _expect(original_crop != null, "origin chunk exposes a real scene-backed crop plot")
+    if original_crop == null:
+        await _finish(1)
+        return
+    var crop_stable_id: String = str(original_crop.get("stable_id"))
+    _expect(crop_stable_id == "surface/chunk_0_0/crop/Chunk_0_0/CropPlot_0", "crop plot uses its deterministic chunk/local-path stable ID")
+    var crop_controller: Node = original_crop.get("controller") as Node
+    _expect(crop_controller != null, "production chunk controller binds the crop plot to CropPlotController")
+    if crop_controller == null:
+        await _finish(1)
+        return
+    var plant_result: Dictionary = original_crop.call("interact")
+    _expect(bool(plant_result.get("ok", false)) and str(plant_result.get("action", "")) == "planted", "production crop plot plants through its bound controller")
+    _expect(bool(crop_controller.call("water_crop", crop_stable_id, 20.0)), "crop controller accepts a valid water operation before unload")
+    _expect(bool(crop_controller.call("advance_crop", crop_stable_id, 120.0)), "crop controller advances a deterministic growth interval before unload")
+    original_crop.call("refresh")
+    var crop_before_unload: Dictionary = crop_controller.call("get_crop", crop_stable_id)
+    _expect(int(crop_before_unload.get("growth_stage", -1)) == 1 and is_equal_approx(float(crop_before_unload.get("moisture", -1.0)), 30.0), "pre-unload crop record contains the expected stage and moisture")
+    await _aim_at(original_crop)
+    var original_crop_target: Dictionary = world.call("get_camera_interaction_target")
+    var original_crop_proxy: Area3D = original_crop_target.get("proxy") as Area3D
+    _expect(str(original_crop_target.get("kind", "")) == "crop" and original_crop_target.get("node") == original_crop, "camera ray selects the original crop plot")
+    _expect(original_crop_proxy != null and is_instance_valid(original_crop_proxy) and original_crop_proxy.is_inside_tree(), "original crop plot has an in-tree interaction proxy")
+    if original_crop_proxy == null or not is_instance_valid(original_crop_proxy):
+        await _finish(1)
+        return
+    var old_crop_instance: int = original_crop.get_instance_id()
+    var old_crop_proxy_instance: int = original_crop_proxy.get_instance_id()
+
     var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5)))
     _expect(moved_away, "production streaming director moves the active window away from the origin")
     _expect(not bool(world.chunk_controller.call("is_chunk_loaded", CHUNK_ID)), "controller unloads the origin chunk through the director")
@@ -57,15 +87,30 @@ func _run() -> void:
     _expect(stale_target.is_empty(), "cached target is cleared when its streamed chunk is unloaded")
     await process_frame
     _expect(not is_instance_valid(original_root) and not is_instance_valid(original_crate) and not is_instance_valid(original_proxy), "old chunk, crate and proxy are freed after the unload frame")
+    _expect(not is_instance_valid(original_crop) and not is_instance_valid(original_crop_proxy), "old crop plot and its interaction proxy are freed after the unload frame")
+    var crop_after_unload: Dictionary = crop_controller.call("get_crop", crop_stable_id)
+    _expect(crop_after_unload == crop_before_unload, "CropRegistry retains the exact crop record while its chunk scene is unloaded")
 
     var returned: bool = bool(world.call("debug_move_player_to", Vector3(1.5, 2.0, 7.5)))
     _expect(returned, "production streaming director reloads the origin window")
     var restored_root: Node3D = world.chunk_controller.call("get_chunk_root", CHUNK_ID) as Node3D
     var restored_crate: Node3D = _find_crate(CHUNK_ID)
+    var restored_crop: Node3D = _find_crop_plot(CHUNK_ID, "CropPlot_0")
     _expect(restored_root != null and restored_crate != null, "reloaded origin chunk registers a new stateful crate")
-    if restored_root == null or restored_crate == null:
+    _expect(restored_crop != null, "reloaded origin chunk registers a new crop plot instance")
+    if restored_root == null or restored_crate == null or restored_crop == null:
         await _finish(1)
         return
+    _expect(restored_crop.get_instance_id() != old_crop_instance, "reloaded crop plot is a new node instance, not the stale node")
+    _expect(str(restored_crop.get("stable_id")) == crop_stable_id, "reloaded crop plot receives the same deterministic stable ID")
+    _expect(restored_crop.get("controller") == crop_controller, "reloaded crop plot is rebound to the live CropPlotController")
+    var restored_crop_record: Dictionary = crop_controller.call("get_crop", crop_stable_id)
+    _expect(int(restored_crop_record.get("growth_stage", -1)) == 1 and is_equal_approx(float(restored_crop_record.get("moisture", -1.0)), 30.0), "reloaded crop visual reads the persisted registry growth state")
+    var restored_crop_proxy: Area3D = restored_crop.get_node_or_null("InteractionArea") as Area3D
+    _expect(restored_crop_proxy != null and is_instance_valid(restored_crop_proxy) and restored_crop_proxy.is_inside_tree(), "reloaded crop plot recreates an in-tree interaction proxy")
+    if restored_crop_proxy != null and is_instance_valid(restored_crop_proxy):
+        _expect(restored_crop_proxy.get_instance_id() != old_crop_proxy_instance, "reloaded crop plot registers a fresh proxy instance")
+        _expect((restored_crop_proxy.collision_layer & INTERACTION_LAYER) != 0, "reloaded crop proxy remains on the interaction collision layer")
     _expect(restored_crate.get_instance_id() != old_crate_instance, "reloaded crate is a new node instance, not the stale node")
     _expect(bool(restored_crate.get("opened")) and int(restored_crate.get("loot_remaining")) == 1, "controller applies the saved state to the new crate instance")
     var restored_record: Dictionary = world.object_state_registry.call("get_object_state", stable_id)
@@ -82,6 +127,14 @@ func _run() -> void:
     _expect(restored_target.get("proxy") == restored_proxy, "cached target references the reloaded proxy, not the stale proxy")
     var action_result: Dictionary = world.call("_interact_nearest_world_prop")
     _expect(bool(action_result.get("ok", false)) and int(action_result.get("remaining", -1)) == 0, "F interaction works after controller-driven unload and reload")
+
+    await _aim_at(restored_crop)
+    var restored_crop_target: Dictionary = world.call("get_camera_interaction_target")
+    _expect(str(restored_crop_target.get("kind", "")) == "crop" and restored_crop_target.get("node") == restored_crop, "camera ray selects the reloaded crop plot through its new proxy")
+    _expect(restored_crop_target.get("proxy") == restored_crop_proxy, "crop target cache references the new proxy, not the stale proxy")
+    var crop_action: Dictionary = world.call("_interact_nearest_crop_plot")
+    _expect(bool(crop_action.get("ok", false)) and str(crop_action.get("action", "")) == "advanced", "E interaction advances the crop after controller-driven unload and reload")
+    _expect(int(crop_controller.call("get_crop", crop_stable_id).get("growth_stage", -1)) == 2, "post-reload crop interaction mutates the same stable registry record")
     await _finish(0 if failures.is_empty() else 1)
 
 func _find_crate(chunk_id: String) -> Node3D:
@@ -89,6 +142,19 @@ func _find_crate(chunk_id: String) -> Node3D:
     var chunk_root: Node = world.chunk_controller.call("get_chunk_root", chunk_id)
     for candidate in nodes:
         if not is_instance_valid(candidate) or candidate.name != "SalvageCrate":
+            continue
+        var ancestor: Node = candidate.get_parent()
+        while ancestor != null and ancestor != world.chunk_controller:
+            if ancestor == chunk_root:
+                return candidate as Node3D
+            ancestor = ancestor.get_parent()
+    return null
+
+func _find_crop_plot(chunk_id: String, plot_name: String) -> Node3D:
+    var plots: Array = world.chunk_controller.call("get_loaded_crop_plots")
+    var chunk_root: Node = world.chunk_controller.call("get_chunk_root", chunk_id)
+    for candidate in plots:
+        if not is_instance_valid(candidate) or candidate.name != plot_name:
             continue
         var ancestor: Node = candidate.get_parent()
         while ancestor != null and ancestor != world.chunk_controller:
