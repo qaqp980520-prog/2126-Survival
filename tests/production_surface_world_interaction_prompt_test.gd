@@ -33,6 +33,7 @@ func _run() -> void:
 		_expect(prompt.text.begins_with("F  OPEN ") and prompt.text.contains("CACHE"), "surface HUD prompts F for the crate under the reticle")
 		world.camera.rotate_y(PI)
 		await physics_frame
+		await physics_frame
 		var facing_away: Dictionary = world.call("get_camera_interaction_target")
 		_expect(facing_away.is_empty(), "a nearby crate is not selected when the camera faces away")
 		await _aim_at(surface_crate)
@@ -46,9 +47,11 @@ func _run() -> void:
 		blocker.add_child(blocker_collision)
 		world.add_child(blocker)
 		await physics_frame
+		await physics_frame
 		var blocked_target: Dictionary = world.call("get_camera_interaction_target")
 		_expect(blocked_target.is_empty(), "solid world geometry blocks the interaction ray")
 		blocker.queue_free()
+		await physics_frame
 		await physics_frame
 		await _aim_at(surface_crate)
 		var crate_before: int = int(surface_crate.get("loot_remaining"))
@@ -103,6 +106,7 @@ func _run() -> void:
 		_expect(bool(mine_result.get("ok", false)) and int(mine_result.get("amount", 0)) == 1, "F mines the vein selected by the camera ray")
 
 	world.player.global_position = Vector3(100.0, -8.25, 100.0)
+	await physics_frame
 	await physics_frame
 	world.call("_refresh_hud")
 	_expect(prompt.text == "NO INTERACTION IN SIGHT", "HUD reports when no target is visible within interaction range")
