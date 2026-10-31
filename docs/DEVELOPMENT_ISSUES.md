@@ -991,3 +991,37 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Terrain edge ramps bridge to surrounding base ground; seamless adjacent-patch blending is not implemented.
 - Robotic Arm Operator is a deterministic 2D presentation, not a full 3D robot physics simulation; it has no audio, animation or campaign save.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+
+## Run 75 closeout — 2026-11-01
+
+### Completed and merged
+
+- Added KROLL Conveyor Architect M0.1: a standalone/root-loadable 6×6 deterministic cargo-routing game with three work orders, bounded conveyor placement, stall recovery, wall/out-of-bounds/loop handling, keyboard/mouse/touch controls, rules tests, runtime smoke test and root Test Hub registration.
+- Added SurfaceTerrainEdgePolicy and integrated it into SurfaceTerrainPatch. Isolated patches retain base-ground ramps; equal-height neighbors flush-join with both shared ramps disabled; unequal-height neighbors remain a clear step with both conflicting ramps disabled.
+- Added position-validated neighbor binding. The requested neighbor must be a live distinct Node3D exposing valid world-object state and exactly PATCH_SIZE away on the requested world axis within 0.01 m.
+- Added pure edge-policy tests and real two-patch physics-ray regression covering equal and unequal heights, distant-neighbor rejection, invalid state and ramp restoration.
+- Persistent terrain fields and world-save schema remain version 1.
+- Feature PR #187 merged as `e2ca4bea28cfa6b815796907662f877b663f6b67`.
+
+### Exact validation
+
+- Candidate HEAD: `73d481ed5d471b0e5da4d51f1fb4c11c5480fa37`.
+- Exact-head Godot 4.3 Run [#859](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41220074968): 328/328 job-step records successful, zero failures, zero skipped; root import and updated Test Hub smoke passed; Conveyor Architect import/rules/runtime, edge policy and adjacent-patch physics-ray regression all passed; cleanup succeeded.
+- Superseded runs #852, #853, #854 and #857 are retained as history and are not the final acceptance source. Run #857 was cancelled after branch advancement; it had no failed steps but skipped later steps.
+
+### Remaining work
+
+1. Automatically bind neighbors only when a future production layout actually places patches edge-to-edge; current SurfaceChunkFactory patch centers are separated by 10 m.
+2. Design a single-owner shared transition collider for unequal-height neighboring patches; until then the boundary remains a vertical step.
+3. Continue bounded asynchronous chunk-streaming design with cancellation-safe ownership, stale-request invalidation and deterministic rollback; current streaming remains synchronous.
+4. Continue stable-ID/state/fresh-proxy lifecycle coverage for remaining formal interactables.
+5. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device environment is available.
+6. Review branch protection separately: main is currently unprotected and required status checks are off; no repository governance settings were changed in Run 75.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1; no migration was introduced.
+- Conveyor Architect is a deterministic one-cell-per-command puzzle, not real-time conveyor physics; no campaign save, audio, animation or procedural levels in M0.1.
+- Unequal-height terrain adjacency is intentionally a step until a safe shared transition collider exists.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
