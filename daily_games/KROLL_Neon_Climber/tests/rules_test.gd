@@ -12,8 +12,11 @@ func _run() -> void:
 		_expect(Rules.required_core_count(level_index) == 3, "sector %d requires three data cores" % level_index)
 		var level: Dictionary = Rules.get_level(level_index)
 		var checkpoint: Vector2 = level.get("checkpoint_position", Vector2.ZERO)
-		_expect(Rules.is_checkpoint_supported(checkpoint, level.get("platforms", [])), "sector %d checkpoint respawn is grounded on a platform" % level_index)
-		_expect(not Rules.is_checkpoint_supported(checkpoint + Vector2(0.0, 22.0), level.get("platforms", [])), "sector %d rejects a checkpoint embedded in the platform" % level_index)
+		var hazards: Array = level.get("hazards", [])
+		_expect(Rules.is_checkpoint_supported(checkpoint, level.get("platforms", []), hazards), "sector %d checkpoint respawn is grounded and hazard-free" % level_index)
+		_expect(not Rules.is_checkpoint_supported(checkpoint + Vector2(0.0, 22.0), level.get("platforms", []), hazards), "sector %d rejects a checkpoint embedded in the platform" % level_index)
+		if level_index == 1:
+			_expect(not Rules.is_checkpoint_supported(Vector2(880, 278), level.get("platforms", []), hazards), "Reactor Scaffold rejects a grounded checkpoint overlapping its laser hazard")
 	var state: Dictionary = Rules.new_run(0)
 	_expect(str(state.get("level_id", "")) == "maintenance_shaft", "first sector starts at Maintenance Shaft")
 	_expect(not Rules.can_exit(state), "exit remains locked before collecting the data cores")

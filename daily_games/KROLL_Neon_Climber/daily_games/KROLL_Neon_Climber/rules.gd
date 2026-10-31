@@ -45,7 +45,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1440, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "reactor_mid",
-		"checkpoint_position": Vector2(870, 278),
+		"checkpoint_position": Vector2(820, 278),
 		"exit": Rect2(1320, 500, 72, 160),
 		"platforms": [
 			Rect2(0, 660, 1440, 60),
@@ -103,7 +103,7 @@ const LEVELS: Array[Dictionary] = [
 static func level_count() -> int:
 	return LEVELS.size()
 
-static func is_checkpoint_supported(position: Vector2, platforms: Array) -> bool:
+static func is_checkpoint_supported(position: Vector2, platforms: Array, hazards: Array = []) -> bool:
 	for platform_value in platforms:
 		if not (platform_value is Rect2):
 			continue
@@ -113,6 +113,17 @@ static func is_checkpoint_supported(position: Vector2, platforms: Array) -> bool
 		if position.x + PLAYER_HALF_WIDTH > platform.end.x:
 			continue
 		if not is_equal_approx(position.y + PLAYER_HALF_HEIGHT, platform.position.y):
+			continue
+		var player_bounds := Rect2(position - Vector2(PLAYER_HALF_WIDTH, PLAYER_HALF_HEIGHT), Vector2(PLAYER_HALF_WIDTH * 2.0, PLAYER_HALF_HEIGHT * 2.0))
+		var overlaps_hazard: bool = false
+		for hazard_value in hazards:
+			if not (hazard_value is Rect2):
+				continue
+			var hazard: Rect2 = hazard_value
+			if hazard.intersects(player_bounds, true):
+				overlaps_hazard = true
+				break
+		if overlaps_hazard:
 			continue
 		return true
 	return false
@@ -203,8 +214,15 @@ static func is_valid_level(level_index: int) -> bool:
 		var rect: Rect2 = platform
 		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 			return false
+	var hazards: Array = level.get("hazards", [])
+	for hazard_value in hazards:
+		if not (hazard_value is Rect2):
+			return false
+		var hazard: Rect2 = hazard_value
+		if hazard.size.x <= 0.0 or hazard.size.y <= 0.0:
+			return false
 	var checkpoint_position: Vector2 = level.get("checkpoint_position", Vector2(-1.0, -1.0))
-	if not is_checkpoint_supported(checkpoint_position, platforms):
+	if not is_checkpoint_supported(checkpoint_position, platforms, hazards):
 		return false
 	var core_ids: Dictionary = {}
 	var cores: Array = level.get("cores", [])

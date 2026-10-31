@@ -354,7 +354,7 @@ func activate_checkpoint(checkpoint_id: String, position: Vector2) -> bool:
 	var expected_position: Vector2 = level.get("checkpoint_position", Vector2(-1.0, -1.0))
 	if checkpoint_id != expected_id:
 		return false
-	if not Rules.is_checkpoint_supported(position, level.get("platforms", [])):
+	if not Rules.is_checkpoint_supported(position, level.get("platforms", []), level.get("hazards", [])):
 		return false
 	if not is_equal_approx(position.x, expected_position.x) or not is_equal_approx(position.y, expected_position.y):
 		return false
