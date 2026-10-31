@@ -18,6 +18,7 @@ const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
+const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
 
 var status_label: Label
 
@@ -181,6 +182,12 @@ func _build_ui() -> void:
 		"KROLL Neon Climber",
 		"以雙重跳躍和短距衝刺穿越三座設施，回收資料核心並啟動出口。",
 		NEON_CLIMBER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Robotic Arm Operator",
+		"校準雙關節機械手臂，精準夾取三件貨物並放入指定接收區；支援鍵盤與觸控。",
+		ROBOTIC_ARM_OPERATOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,

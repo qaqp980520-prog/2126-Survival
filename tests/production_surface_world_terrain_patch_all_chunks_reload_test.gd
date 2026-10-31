@@ -2,6 +2,7 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const SURFACE_PREFIX: String = "surface/"
+const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 var _test_time: int = 0
 var failures: Array[String] = []
 var world: Node3D
@@ -141,6 +142,40 @@ func _expect_patch_geometry(patch: Node3D, state: Dictionary, label: String) -> 
 	var box: BoxShape3D = collision.shape as BoxShape3D
 	_expect(is_equal_approx(box.size.y, expected_height), "%s collision height matches its saved state" % label)
 	_expect(is_equal_approx(collision.position.y, expected_height * 0.5), "%s collision remains grounded" % label)
+	_expect_edge_ramps(patch, expected_height, label)
+
+func _expect_edge_ramps(patch: Node3D, expected_height: float, label: String) -> void:
+	var body := patch.get_node_or_null("TerrainCollisionBody") as StaticBody3D
+	_expect(body != null, "%s retains its terrain collision body" % label)
+	if body == null:
+		return
+	var slope_length: float = sqrt(PatchScript.EDGE_RAMP_RUN*PatchScript.EDGE_RAMP_RUN+expected_height*expected_height)
+	var angle: float = atan(expected_height/PatchScript.EDGE_RAMP_RUN)
+	for side in ["East", "West", "North", "South"]:
+		var ramp_body := patch.get_node_or_null("TerrainRampBody_" + side) as StaticBody3D
+		_expect(ramp_body != null, "%s has an independent %s ramp body" % [label, side])
+		if ramp_body == null:
+			continue
+		_expect(ramp_body != body and ramp_body.collision_layer == 1 and ramp_body.collision_mask == 0, "%s %s ramp body is isolated on the world collision layer" % [label, side])
+		var ramp := ramp_body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
+		_expect(ramp != null, "%s has a %s edge ramp collision shape" % [label, side])
+		if ramp == null:
+			continue
+		var ramp_box := ramp.shape as BoxShape3D
+		_expect(ramp_box != null, "%s %s ramp uses a box collision slab" % [label, side])
+		if ramp_box == null:
+			continue
+		var expected_size := Vector3(slope_length,PatchScript.EDGE_RAMP_COLLISION_THICKNESS,PatchScript.PATCH_SIZE) if side == "East" or side == "West" else Vector3(PatchScript.PATCH_SIZE,PatchScript.EDGE_RAMP_COLLISION_THICKNESS,slope_length)
+		_expect(ramp_box.size.distance_to(expected_size) <= 0.0001, "%s %s ramp collision dimensions match saved height" % [label, side])
+		var expected_rotation := Vector3.ZERO
+		match side:
+			"East": expected_rotation=Vector3(0.0,0.0,-angle)
+			"West": expected_rotation=Vector3(0.0,0.0,angle)
+			"North": expected_rotation=Vector3(-angle,0.0,0.0)
+			"South": expected_rotation=Vector3(angle,0.0,0.0)
+		_expect(ramp.rotation.distance_to(expected_rotation) <= 0.0001, "%s %s ramp keeps its edge orientation" % [label, side])
+		var top_center: Vector3 = ramp.transform*Vector3(0.0,ramp_box.size.y*0.5,0.0)
+		_expect(absf(top_center.y-expected_height*0.5) <= 0.0001, "%s %s ramp top face stays centered on the visual slope" % [label, side])
 
 func _find_patch(controller: Node, chunk_id: String) -> Node3D:
 	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
