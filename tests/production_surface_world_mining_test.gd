@@ -166,6 +166,7 @@ func _run() -> void:
 	var legacy: Dictionary = saved.duplicate(true)
 	legacy.erase("location_layer")
 	legacy.erase("surface_return_position")
+	legacy.erase("mine_depth")
 	legacy["player_position"] = [1.5, 2.0, 7.5]
 	_expect(bool(world.call("restore_stream_state", legacy, now + 4)), "legacy schema-1 surface save without layer metadata still loads")
 	_expect(not bool(world.get("_is_underground")) and world.player.global_position.y > 0.0, "legacy save defaults to the surface layer")
