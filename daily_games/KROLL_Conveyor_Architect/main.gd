@@ -61,7 +61,7 @@ func _build_ui() -> void:
 		for x in range(RulesScript.GRID_WIDTH):
 			var cell := Vector2i(x, y)
 			var button := Button.new()
-			button.custom_minimum_size = Vector2(112.0, 68.0)
+			button.custom_minimum_size = Vector2(112.0, 58.0)
 			button.add_theme_font_size_override("font_size", 17)
 			button.pressed.connect(_on_cell_pressed.bind(cell))
 			board.add_child(button)
@@ -103,9 +103,9 @@ func _build_ui() -> void:
 	column.add_child(help)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
 	var key_event := event as InputEventKey
+	if key_event == null or not key_event.pressed or key_event.echo:
+		return
 	match key_event.keycode:
 		KEY_UP, KEY_W:
 			_set_selected_direction(RulesScript.DIRECTION_UP)
