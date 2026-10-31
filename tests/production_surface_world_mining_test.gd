@@ -41,10 +41,16 @@ func _run() -> void:
 	_expect(bool(world.call("_toggle_mine_access")), "player can descend through the aimed mine shaft")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "player enters the underground layer")
 	var underground_cache_count: int = 0
+	var underground_lift_count: int = 0
 	for prop in world.chunk_controller.get_loaded_world_state_nodes():
-		if is_instance_valid(prop) and prop.global_position.y < -7.0:
+		if not is_instance_valid(prop):
+			continue
+		if prop.name == "MineLiftAnchor":
+			underground_lift_count += 1
+		elif prop.global_position.y < -7.0 and str(prop.name).begins_with("MineCache_"):
 			underground_cache_count += 1
 	_expect(underground_cache_count == 7, "initial mine window registers two origin caches and five deterministic regional caches")
+	_expect(underground_lift_count == 1, "origin mine chunk registers one stateful lift anchor")
 	var underground_buttons: Dictionary = world.get("touch_buttons")
 	_expect((underground_buttons["crate"] as Button).text == "CACHE", "underground touch action is relabeled for salvage caches")
 	var nearest: Node3D = _nearest_mine_vein()
