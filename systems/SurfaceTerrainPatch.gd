@@ -76,10 +76,15 @@ func _build_collision() -> void:
 	_collision_shape.name="TerrainCollisionShape"
 	_collision_body.add_child(_collision_shape)
 	for side in RAMP_SIDES:
+		var ramp_body := StaticBody3D.new()
+		ramp_body.name="TerrainRampBody_"+side.capitalize()
+		ramp_body.collision_layer=1
+		ramp_body.collision_mask=0
 		var ramp := CollisionShape3D.new()
 		ramp.name="TerrainRampCollision_"+side.capitalize()
 		_configure_ramp_collision(ramp,side,get_top_height())
-		_collision_body.add_child(ramp)
+		ramp_body.add_child(ramp)
+		add_child(ramp_body)
 		_ramp_collisions[side]=ramp
 
 func _build_interaction_area() -> void:
