@@ -7,6 +7,7 @@ const MAX_HEIGHT_LEVEL: int = 2
 const MAX_REVISION: int = 1000000
 const PATCH_SIZE: float = 2.0
 const EDGE_RAMP_RUN: float = 0.75
+const EDGE_RAMP_COLLISION_THICKNESS: float = 0.04
 const RAMP_SIDES: Array[String] = ["east", "west", "north", "south"]
 
 var _height_level: int = 0
@@ -77,11 +78,7 @@ func _build_collision() -> void:
 	for side in RAMP_SIDES:
 		var ramp := CollisionShape3D.new()
 		ramp.name="TerrainRampCollision_"+side.capitalize()
-		ramp.rotation.y=_ramp_rotation_y(side)
-		var initial_ramp_shape := ConvexPolygonShape3D.new()
-		initial_ramp_shape.margin=0.005
-		initial_ramp_shape.points=_make_ramp_points(get_top_height())
-		ramp.shape=initial_ramp_shape
+		_configure_ramp_collision(ramp,side,get_top_height())
 		_collision_body.add_child(ramp)
 		_ramp_collisions[side]=ramp
 
@@ -113,23 +110,30 @@ func _build_visual() -> void:
 		_collision_body.add_child(ramp_mesh)
 		_ramp_visuals[side]=ramp_mesh
 
-## One canonical +X wedge is rotated for all four edges. Keeping a single local
-## vertex ordering avoids direction-dependent convex-hull degeneracy on shallow ramps.
-func _make_ramp_points(height: float) -> PackedVector3Array:
+## A thin BoxShape3D slab gives the static terrain ramp a stable top face at every
+## height, including the shallow 5 cm step that proved numerically fragile as a convex wedge.
+func _configure_ramp_collision(ramp: CollisionShape3D,side: String,height: float) -> void:
+	var angle: float = atan(height/EDGE_RAMP_RUN)
+	var slope_length: float = sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+height*height)
 	var half: float = PATCH_SIZE*0.5
-	var outer: float = half+EDGE_RAMP_RUN
-	return PackedVector3Array([
-		Vector3(half,0.0,-half),Vector3(half,height,-half),Vector3(outer,0.0,-half),
-		Vector3(half,0.0,half),Vector3(half,height,half),Vector3(outer,0.0,half)
-	])
-
-func _ramp_rotation_y(side: String) -> float:
+	var offset: float = half+EDGE_RAMP_RUN*0.5
+	var half_thickness: float = EDGE_RAMP_COLLISION_THICKNESS*0.5
+	var box := BoxShape3D.new()
+	box.size=Vector3(slope_length,EDGE_RAMP_COLLISION_THICKNESS,PATCH_SIZE) if side == "east" or side == "west" else Vector3(PATCH_SIZE,EDGE_RAMP_COLLISION_THICKNESS,slope_length)
+	ramp.shape=box
 	match side:
-		"east": return 0.0
-		"south": return -PI*0.5
-		"west": return PI
-		"north": return PI*0.5
-	return 0.0
+		"east":
+			ramp.rotation=Vector3(0.0,0.0,-angle)
+			ramp.position=Vector3(offset-sin(angle)*half_thickness,height*0.5-cos(angle)*half_thickness,0.0)
+		"west":
+			ramp.rotation=Vector3(0.0,0.0,angle)
+			ramp.position=Vector3(-offset+sin(angle)*half_thickness,height*0.5-cos(angle)*half_thickness,0.0)
+		"north":
+			ramp.rotation=Vector3(-angle,0.0,0.0)
+			ramp.position=Vector3(0.0,height*0.5-cos(angle)*half_thickness,-offset+sin(angle)*half_thickness)
+		"south":
+			ramp.rotation=Vector3(angle,0.0,0.0)
+			ramp.position=Vector3(0.0,height*0.5-cos(angle)*half_thickness,offset-sin(angle)*half_thickness)
 
 func _refresh_geometry() -> void:
 	var height: float = get_top_height()
@@ -141,12 +145,7 @@ func _refresh_geometry() -> void:
 	for side in RAMP_SIDES:
 		var ramp_collision: CollisionShape3D = _ramp_collisions.get(side) as CollisionShape3D
 		if ramp_collision != null:
-			var ramp_shape := ConvexPolygonShape3D.new()
-			ramp_shape.margin=0.005
-			ramp_shape.points=_make_ramp_points(height)
-			ramp_collision.shape=ramp_shape
-			ramp_collision.rotation.y=_ramp_rotation_y(side)
-			ramp_collision.position=Vector3.ZERO
+			_configure_ramp_collision(ramp_collision,side,height)
 	if _surface_mesh == null or not is_instance_valid(_surface_mesh):
 		return
 	var material := StandardMaterial3D.new()
@@ -191,5 +190,6 @@ func get_edge_ramp_profile() -> Dictionary:
 		"run":EDGE_RAMP_RUN,
 		"rise":rise,
 		"slope_length":sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+rise*rise),
+		"collision_thickness":EDGE_RAMP_COLLISION_THICKNESS,
 		"sides":RAMP_SIDES.duplicate()
 	}
