@@ -1955,3 +1955,44 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Underground cache distribution tests passed."
+
+      - name: Run underground mine layer model tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 30s godot --headless --path . --script res://tests/underground_mine_layers_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Underground mine layer tests passed."
+
+      - name: Verify Run 60 KROLL Orbital Pinball and vertical mine layer inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Orbital_Pinball/project.godot
+          test -f daily_games/KROLL_Orbital_Pinball/main.tscn
+          test -f daily_games/KROLL_Orbital_Pinball/main.gd
+          test -f daily_games/KROLL_Orbital_Pinball/rules.gd
+          test -f daily_games/KROLL_Orbital_Pinball/tests/rules_test.gd
+          test -f daily_games/KROLL_Orbital_Pinball/tests/game_smoke_test.gd
+          test -f tests/underground_mine_layers_test.gd
+          test -f tests/production_surface_world_mining_test.gd
+      - name: Import and parse KROLL Orbital Pinball
+        run: godot --headless --path daily_games/KROLL_Orbital_Pinball --editor --quit
+      - name: Run KROLL Orbital Pinball rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Pinball --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Pinball rules tests passed."
+      - name: Run KROLL Orbital Pinball runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Orbital_Pinball --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Pinball runtime smoke test passed."
+

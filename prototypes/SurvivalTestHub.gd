@@ -4,6 +4,7 @@ const WORLD_SCENE := "res://world/SurfaceWorld.tscn"
 const SURFACE_SCENE := "res://prototypes/SurfaceChunkStreamingPlayground.tscn"
 const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
 const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
+const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
 
 var status_label: Label
 
@@ -70,6 +71,12 @@ func _build_ui() -> void:
 		"地下礦坑／採礦與共用背包",
 		"進入地下洞穴，開採銅、鐵與鈾礦，驗證礦脈持久化及負重即時更新。",
 		UNDERGROUND_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Orbital Pinball",
+		"三張彈珠台、三顆球、碰撞反彈與雙側擋板；支援鍵盤、滑鼠與觸控。",
+		PINBALL_SCENE
 	)
 	_add_scene_button(
 		column,

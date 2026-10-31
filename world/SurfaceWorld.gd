@@ -33,6 +33,8 @@ var _is_underground: bool = false
 var _mine_chunk_ready: bool = false
 var mine_director: Node
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
+var _mine_layer_index: int = 0
+var _last_mine_layer_index: int = 0
 var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 
 func _ready() -> void:
@@ -129,6 +131,7 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "crop", "CROP")
 	_add_touch_button(grid, "crate", "CRATE")
 	_add_touch_button(grid, "shaft", "DESCEND")
+	_add_touch_button(grid, "deeper", "DOWN ONE")
 	_add_touch_button(grid, "sprint", "SPRINT")
 	_add_touch_button(grid, "quick_1", "1 BERRIES")
 	_add_touch_button(grid, "quick_2", "2 HERBS")
@@ -157,6 +160,8 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_on_touch_crate_pressed)
 		"shaft":
 			button.pressed.connect(_on_touch_shaft_pressed)
+		"deeper":
+			button.pressed.connect(_on_touch_deeper_pressed)
 		"sprint":
 			button.button_down.connect(_set_touch_sprint.bind(true))
 			button.button_up.connect(_set_touch_sprint.bind(false))
@@ -172,6 +177,9 @@ func _on_touch_crate_pressed() -> void:
 
 func _on_touch_shaft_pressed() -> void:
 	_toggle_mine_access()
+
+func _on_touch_deeper_pressed() -> void:
+	_descend_mine_layer()
 
 func _set_touch_direction(direction: String) -> void:
 	_touch_directions[direction] = true
@@ -311,9 +319,13 @@ func _physics_process(delta: float) -> void:
 	player.move_and_slide()
 	if _is_underground:
 		var current_mine_grid: Vector2i = mine_director.get_grid_coordinate(player.global_position)
-		if current_mine_grid != _last_mine_grid:
+		var current_mine_layer: int = mine_director.get_layer_index(player.global_position)
+		if current_mine_grid != _last_mine_grid or current_mine_layer != _last_mine_layer_index:
 			if mine_director.sync_to_world_position(player.global_position, int(Time.get_unix_time_from_system())):
 				_last_mine_grid = current_mine_grid
+				_last_mine_layer_index = current_mine_layer
+				_mine_layer_index = current_mine_layer
+				_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 			else:
 				player.global_position = previous_position
 				player.velocity = Vector3.ZERO
@@ -344,6 +356,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_interact_nearest_world_prop()
 			elif key_event.keycode == KEY_G:
 				_toggle_mine_access()
+			elif key_event.keycode == KEY_V:
+				_descend_mine_layer()
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -452,11 +466,13 @@ func _build_underground_mine() -> bool:
 	if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
 		return false
 	_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
+	_mine_layer_index = 0
+	_last_mine_layer_index = 0
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	return _mine_chunk_ready
 
-func _make_underground_chunk(coord: Vector2i, now_unix: int) -> Node3D:
-	return UndergroundMineFactoryScript.make_chunk(now_unix, coord)
+func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
+	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index)
 
 func _build_mine_entrance_visual() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -511,28 +527,50 @@ func _toggle_mine_access() -> bool:
 		player.global_position.z - MINE_ENTRY_SURFACE.z
 	).length()
 	if horizontal_distance > MINE_ACCESS_RANGE:
-		_world_object_action_message = "Return to the KROLL mine shaft before changing layers."
+		_world_object_action_message = "Return to the KROLL mine lift before changing levels."
 		_refresh_hud()
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	if _is_underground:
-		var previous_underground_position: Vector3 = player.global_position
-		if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
-			_world_object_action_message = "Could not restore the mine-shaft area."
+		var current_layer: int = mine_director.get_layer_index(player.global_position)
+		if current_layer < 0 or absf(player.global_position.y - mine_director.get_layer_floor_y(current_layer)) > 3.0:
+			_world_object_action_message = "Stand on the KROLL lift platform before ascending."
 			_refresh_hud()
 			return false
-		_is_underground = false
-		player.global_position = _surface_return_position
-		if not _sync_streaming(now):
-			_is_underground = true
-			player.global_position = previous_underground_position
-			if not mine_director.sync_to_world_position(previous_underground_position, now):
-				push_error("Underground window rollback failed after surface return streaming rejection.")
-			_world_object_action_message = "Surface streaming failed; the layer transition was rolled back."
-			_refresh_hud()
-			return false
-		_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
-		_world_object_action_message = "Returned to the surface."
+		if current_layer > 0:
+			var target_position: Vector3 = player.global_position
+			target_position.y = mine_director.get_layer_floor_y(current_layer - 1)
+			if not mine_director.sync_to_world_position(target_position, now):
+				_world_object_action_message = "The upper mine level could not be loaded."
+				_refresh_hud()
+				return false
+			player.global_position = target_position
+			_mine_layer_index = current_layer - 1
+			_last_mine_layer_index = _mine_layer_index
+			_last_mine_grid = mine_director.get_grid_coordinate(target_position)
+			_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+			_world_object_action_message = "Lift ascended to mine level %02d." % (_mine_layer_index + 1)
+		else:
+			var previous_underground_position: Vector3 = player.global_position
+			if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
+				_world_object_action_message = "Could not restore the mine-shaft area."
+				_refresh_hud()
+				return false
+			_is_underground = false
+			_mine_layer_index = 0
+			player.global_position = _surface_return_position
+			if not _sync_streaming(now):
+				_is_underground = true
+				player.global_position = previous_underground_position
+				if not mine_director.sync_to_world_position(previous_underground_position, now):
+					push_error("Underground window rollback failed after surface return streaming rejection.")
+				_world_object_action_message = "Surface streaming failed; the layer transition was rolled back."
+				_refresh_hud()
+				return false
+			_last_mine_grid = mine_director.get_grid_coordinate(MINE_ENTRY_UNDERGROUND)
+			_last_mine_layer_index = 0
+			_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+			_world_object_action_message = "Returned to the surface."
 	else:
 		if not _mine_chunk_ready or not chunk_controller.is_chunk_loaded(MINE_CHUNK_ID):
 			_world_object_action_message = "Mine shaft is unavailable."
@@ -540,6 +578,7 @@ func _toggle_mine_access() -> bool:
 			return false
 		_surface_return_position = player.global_position
 		_is_underground = true
+		_mine_layer_index = 0
 		player.global_position = MINE_ENTRY_UNDERGROUND
 		if not mine_director.sync_to_world_position(MINE_ENTRY_UNDERGROUND, now):
 			_is_underground = false
@@ -548,10 +587,47 @@ func _toggle_mine_access() -> bool:
 			_refresh_hud()
 			return false
 		_last_mine_grid = mine_director.get_grid_coordinate(player.global_position)
-		_world_object_action_message = "Entered the underground mine. F opens nearby caches or mines the closest vein."
-	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+		_last_mine_layer_index = 0
+		_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+		_world_object_action_message = "Entered mine level 01. V descends; G ascends."
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
+	_refresh_hud()
+	return true
+
+func _descend_mine_layer() -> bool:
+	if not _is_underground or player == null or mine_director == null:
+		_world_object_action_message = "The deeper lift is only available underground."
+		_refresh_hud()
+		return false
+	var current_layer: int = mine_director.get_layer_index(player.global_position)
+	if current_layer < 0 or current_layer >= UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+		_world_object_action_message = "The maximum supported mine depth has been reached."
+		_refresh_hud()
+		return false
+	var horizontal_distance := Vector2(
+		player.global_position.x - MINE_ENTRY_UNDERGROUND.x,
+		player.global_position.z - MINE_ENTRY_UNDERGROUND.z
+	).length()
+	if horizontal_distance > MINE_ACCESS_RANGE or absf(player.global_position.y - mine_director.get_layer_floor_y(current_layer)) > 3.0:
+		_world_object_action_message = "Return to the KROLL lift platform before descending."
+		_refresh_hud()
+		return false
+	var target_position: Vector3 = player.global_position
+	target_position.y = mine_director.get_layer_floor_y(current_layer + 1)
+	var now: int = int(Time.get_unix_time_from_system())
+	if not mine_director.sync_to_world_position(target_position, now):
+		_world_object_action_message = "The next mine level could not be loaded; the current level was preserved."
+		_refresh_hud()
+		return false
+	player.global_position = target_position
+	player.velocity = Vector3.ZERO
+	_mine_layer_index = current_layer + 1
+	_last_mine_layer_index = _mine_layer_index
+	_last_mine_grid = mine_director.get_grid_coordinate(target_position)
+	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+	_jump_was_down = false
+	_world_object_action_message = "Lift descended to mine level %02d." % (_mine_layer_index + 1)
 	_refresh_hud()
 	return true
 
@@ -581,6 +657,7 @@ func serialize_stream_state() -> Dictionary:
 	if payload.is_empty():
 		return {}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
+	payload["mine_depth"] = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
 	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
 	payload["quick_use"] = quick_use.call("to_save_dict") if quick_use != null else {"schema_version": 1, "slots": ["berries", "herbs", "meat", "food"], "selected_slot": 0}
 	payload["surface_return_position"] = [
@@ -616,6 +693,19 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	var target_underground: bool = str(layer_value) == "underground"
+	var target_depth: int = 0
+	if target_underground:
+		if payload.has("mine_depth"):
+			var depth_value: Variant = payload.get("mine_depth")
+			if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+				return false
+			target_depth = int(depth_value)
+		else:
+			target_depth = mine_director.get_layer_index(target_position) if mine_director != null else -1
+		if mine_director == null or target_depth < 0 or mine_director.get_layer_index(target_position) != target_depth:
+			return false
+	elif payload.has("mine_depth") and (not (payload.get("mine_depth") is int) or int(payload.get("mine_depth")) != 0):
+		return false
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
 		var return_value: Variant = payload.get("surface_return_position")
@@ -651,8 +741,10 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	else:
 		quick_use.call("reset")
 	_is_underground = target_underground
+	_mine_layer_index = target_depth
 	_surface_return_position = next_return_position
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
+	_last_mine_layer_index = target_depth
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	_refresh_hud()
 	return true
@@ -681,11 +773,14 @@ func _refresh_hud() -> void:
 		jump_status = "JUMP LOCKED (LOW STAMINA)"
 	var stamina_value: float = float(movement_profile.get("stamina", 100.0))
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
-	var layer_name: String = "UNDERGROUND MINE" if _is_underground else "SURFACE WORLD"
+	_mine_layer_index = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
+	var layer_name: String = "UNDERGROUND MINE · LEVEL %02d" % (_mine_layer_index + 1) if _is_underground else "SURFACE WORLD"
 	if touch_buttons.has("crate"):
 		(touch_buttons["crate"] as Button).text = "CACHE" if _is_underground else "CRATE"
 	if touch_buttons.has("shaft"):
-		(touch_buttons["shaft"] as Button).text = "ASCEND" if _is_underground else "DESCEND"
+		(touch_buttons["shaft"] as Button).text = ("UP ONE LEVEL" if _mine_layer_index > 0 else "SURFACE") if _is_underground else "DESCEND"
+	if touch_buttons.has("deeper"):
+		(touch_buttons["deeper"] as Button).disabled = not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
 	if touch_buttons.has("crop"):
 		(touch_buttons["crop"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):
@@ -700,7 +795,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G shaft · 1-4 ration · C use"
+	var action_help: String = "E crop · F crate · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),

@@ -131,14 +131,47 @@ func _run() -> void:
 	_expect(bool(world.call("restore_stream_state", saved, now + 3)), "world save restores the underground location")
 	_expect(bool(world.get("_is_underground")) and world.player.global_position.y < -7.0, "restored player returns to the underground layer")
 	_expect(_inventory_count(item_id) == 1, "world restore preserves the saved mining inventory count")
+	world.player.global_position = Vector3(1.5, -8.25, 7.5)
+	_expect(bool(world.call("_descend_mine_layer")), "player can descend from the origin lift to the second underground level")
+	_expect(int(world.get("_mine_layer_index")) == 1 and world.player.global_position.y < -27.0, "player is positioned on underground level two")
+	_expect(world.chunk_controller.is_chunk_loaded("underground/layer_1/mine_0_0"), "production world loads the layer-qualified origin room")
+	var layer_one_vein: Node3D = _nearest_mine_vein()
+	_expect(layer_one_vein != null, "deeper mine layer exposes real mineral veins")
+	var layer_one_item: String = str(layer_one_vein.get("mineral_id")) if layer_one_vein != null else ""
+	var layer_one_stock: int = int(layer_one_vein.get("remaining_units")) if layer_one_vein != null else 0
+	if layer_one_vein != null:
+		var deep_mine_result: Dictionary = world.call("_interact_nearest_mineral", now + 5)
+		_expect(bool(deep_mine_result.get("ok", false)), "player can mine a real vein on the deeper level")
+		_expect(int(layer_one_vein.get("remaining_units")) == layer_one_stock - 1, "deeper-level mining consumes exactly one unit")
+	var deep_save: Dictionary = world.call("serialize_stream_state")
+	_expect(int(deep_save.get("mine_depth", -1)) == 1, "world save records the exact underground depth")
+	world.player.global_position = Vector3(21.5, -28.25, 7.5)
+	await physics_frame
+	await process_frame
+	_expect(world.chunk_controller.is_chunk_loaded("underground/layer_1/mine_2_0"), "walking in the deeper level streams deeper-layer room IDs")
+	_expect(not world.chunk_controller.is_chunk_loaded(MINE_ID), "deeper-layer streaming does not retain the layer-zero origin")
+	world.player.global_position = Vector3(1.5, -28.25, 7.5)
+	await physics_frame
+	await process_frame
+	var reloaded_deep_vein: Node3D = _nearest_mine_vein()
+	_expect(reloaded_deep_vein != null and str(reloaded_deep_vein.get("mineral_id")) == layer_one_item, "deeper-layer mineral identity survives a real unload/reload")
+	_expect(reloaded_deep_vein != null and int(reloaded_deep_vein.get("remaining_units")) == layer_one_stock - 1, "deeper-layer mineral stock survives unload/reload")
+	_expect(bool(world.call("_toggle_mine_access")), "G ascends one level from the deeper mine")
+	_expect(int(world.get("_mine_layer_index")) == 0 and world.player.global_position.y > -10.0, "lift returns the player to mine level one")
+	_expect(bool(world.call("_toggle_mine_access")), "G from mine level one returns to the surface")
+	_expect(not bool(world.get("_is_underground")), "surface return exits the underground state")
+	_expect(bool(world.call("restore_stream_state", deep_save, now + 6)), "world save restores the player to the deeper mine level")
+	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == 1, "restored world keeps the exact underground depth")
+	_expect(world.player.global_position.y < -27.0, "restored player returns to the saved deeper floor")
 	var legacy: Dictionary = saved.duplicate(true)
 	legacy.erase("location_layer")
 	legacy.erase("surface_return_position")
+	legacy.erase("mine_depth")
 	legacy["player_position"] = [1.5, 2.0, 7.5]
 	_expect(bool(world.call("restore_stream_state", legacy, now + 4)), "legacy schema-1 surface save without layer metadata still loads")
 	_expect(not bool(world.get("_is_underground")) and world.player.global_position.y > 0.0, "legacy save defaults to the surface layer")
 	var buttons: Dictionary = world.get("touch_buttons")
-	_expect(buttons.has("shaft") and buttons.has("crate"), "touch HUD exposes shaft and mining action buttons")
+	_expect(buttons.has("shaft") and buttons.has("crate") and buttons.has("deeper"), "touch HUD exposes shaft, deeper-level and mining action buttons")
 	_expect((buttons["crate"] as Button).text == "CRATE" and not (buttons["crop"] as Button).disabled, "surface HUD restores crate and crop controls")
 	_finish(0 if failures.is_empty() else 1)
 

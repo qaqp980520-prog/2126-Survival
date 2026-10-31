@@ -8,6 +8,7 @@ const ObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd"
 
 var failures: Array[String] = []
 var fail_coordinate: Vector2i = Vector2i(999, 999)
+var fail_layer: int = 0
 var registry: Node
 var controller: Node3D
 var director: Node
@@ -66,6 +67,7 @@ func _run() -> void:
 	_expect(restored_vein != null and int(restored_vein.get("remaining_units")) == 5, "mineral stock survives a real director unload/reload")
 	var previous_ids: PackedStringArray = director.call("get_managed_chunk_ids")
 	var previous_saved_ids: PackedStringArray = registry.call("get_saved_ids")
+	var previous_object_ids: PackedStringArray = object_registry.call("get_saved_ids")
 	var previous_regen_timestamp: int = int(restored_vein.get("last_regen_unix"))
 	_expect(not bool(director.call("sync_to_world_position", Vector3(INF, -8.25, 7.5), 1002)), "non-finite underground positions are rejected")
 	_expect(director.call("get_managed_chunk_ids") == previous_ids, "invalid position leaves the active mine window unchanged")
@@ -81,14 +83,37 @@ func _run() -> void:
 	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_2_-1")), "failed sync rolls back a partial new load")
 	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_3_-1")), "failed factory chunk is never registered")
 	_expect(registry.call("get_saved_ids") == previous_saved_ids, "failed window generation leaves no orphan mineral records")
+	_expect(object_registry.call("get_saved_ids") == previous_object_ids, "failed window generation leaves no orphan world-object records")
 	var report: Dictionary = director.call("get_last_sync_report")
 	_expect(bool(report.get("rollback_complete", false)), "failed sync reports a complete rollback")
+	var pre_deeper_mineral_ids: PackedStringArray = registry.call("get_saved_ids")
+	var pre_deeper_object_ids: PackedStringArray = object_registry.call("get_saved_ids")
+	fail_coordinate = Vector2i(1, 0)
+	fail_layer = 1
+	_expect(not bool(director.call("sync_to_world_position", Vector3(1.5, -28.25, 7.5), 1004)), "injected deeper-layer factory failure rejects the vertical transition")
+	_expect(bool(controller.call("is_chunk_loaded", "underground/mine_0_0")), "failed deeper-layer transition preserves the previous layer-zero window")
+	_expect(not bool(controller.call("is_chunk_loaded", "underground/layer_1/mine_0_0")), "failed deeper-layer transition removes its partially loaded origin")
+	_expect(registry.call("get_saved_ids") == pre_deeper_mineral_ids, "deeper-layer rollback restores the exact mineral registry snapshot")
+	_expect(object_registry.call("get_saved_ids") == pre_deeper_object_ids, "deeper-layer rollback restores the exact world-object registry snapshot")
+	var deeper_failure_report: Dictionary = director.call("get_last_sync_report")
+	_expect(bool(deeper_failure_report.get("rollback_complete", false)), "deeper-layer failure reports a complete two-registry rollback")
+	fail_coordinate = Vector2i(999, 999)
+	fail_layer = 0
+	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -28.25, 7.5), 1005)), "director switches transactionally to the second vertical mine layer")
+	_expect(director.call("get_managed_chunk_ids").size() == 9, "deeper mine window remains bounded to nine chunks")
+	_expect(controller.call("is_chunk_loaded", "underground/layer_1/mine_0_0"), "deeper origin chunk uses its layer-qualified stable ID")
+	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_0_0")), "switching depth unloads the old layer-zero window")
+	var deeper_root: Node3D = controller.call("get_chunk_root", "underground/layer_1/mine_0_0")
+	_expect(deeper_root != null and is_equal_approx(deeper_root.position.y, -20.0), "deeper chunk root is placed at the expected vertical offset")
+	_expect(deeper_root != null and deeper_root.get_node_or_null("MineLiftAnchor") != null, "deeper origin chunk contains the lift anchor")
+	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -8.25, 7.5), 1006)), "director can return to the legacy layer-zero window")
+	_expect(bool(controller.call("is_chunk_loaded", "underground/mine_0_0")) and not bool(controller.call("is_chunk_loaded", "underground/layer_1/mine_0_0")), "returning to layer zero unloads the deeper window")
 	_finish(0 if failures.is_empty() else 1)
 
-func _make_chunk(coord: Vector2i, now_unix: int) -> Node3D:
-	if coord == fail_coordinate:
+func _make_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
+	if coord == fail_coordinate and layer_index == fail_layer:
 		return null
-	return Factory.make_chunk(now_unix, coord)
+	return Factory.make_chunk(now_unix, coord, layer_index)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
