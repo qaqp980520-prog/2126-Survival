@@ -45,7 +45,7 @@ func _run() -> void:
 	game.call("_reset")
 	var reset_state: Dictionary = game.call("get_current_state")
 	_expect(int(reset_state.get("day",0)) == 1 and int(Rules.get_stats(reset_state).get("plants",0)) == 3,"reset restores the starter ecosystem")
-	var solved: Dictionary = _solve_first_mission()
+	var solved: Dictionary = _solve_mission(0)
 	game.set("_state",solved)
 	game.call("_refresh")
 	if next_button != null:
@@ -53,6 +53,13 @@ func _run() -> void:
 		next_button.emit_signal("pressed")
 	var next_state: Dictionary = game.call("get_current_state")
 	_expect(int(next_state.get("mission_index",-1)) == 1,"next dome button loads Orchid Bay")
+	var final_state: Dictionary = _solve_mission(2)
+	game.set("_state",final_state)
+	game.call("_refresh")
+	if next_button != null:
+		_expect(next_button.disabled,"the final dome does not offer a nonexistent next mission")
+	var message_label := game.find_child("MessageLabel",true,false) as Label
+	_expect(message_label != null and message_label.text.contains("ALL THREE DOMES RESTORED"),"final dome displays campaign completion feedback")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
@@ -63,11 +70,18 @@ func _run() -> void:
 			push_error("FAILED: "+failure)
 		quit(1)
 
-func _solve_first_mission() -> Dictionary:
-	var state: Dictionary = Rules.new_game(0)
+func _solve_mission(mission_index: int) -> Dictionary:
+	var state: Dictionary = Rules.new_game(mission_index)
 	state=Rules.perform_action(state,"release_pollinators")
 	state=Rules.perform_action(state,"release_pollinators")
-	state=Rules.perform_action(state,"plant",0,"fern")
+	var mission: Dictionary = Rules.get_mission(mission_index)
+	var direct_plants: int = maxi(0,int(mission["target_plants"])-3-4)
+	var positions: Array[int] = [0,5,24,29,2]
+	var species: Array[String] = ["fern","moss","bloom","fern","moss"]
+	for index in range(direct_plants):
+		if int(state.get("actions_left",0)) <= 0:
+			state=Rules.advance_day(state)
+		state=Rules.perform_action(state,"plant",positions[index],species[index])
 	while str(state.get("status","")) == "playing":
 		state=Rules.advance_day(state)
 	return state

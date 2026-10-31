@@ -36,10 +36,14 @@ func _build_ui() -> void:
 	column.add_child(title)
 	_mission_label=Label.new()
 	_mission_label.add_theme_font_size_override("font_size",22)
+	_mission_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	_mission_label.custom_minimum_size=Vector2(0.0,42.0)
 	_mission_label.add_theme_color_override("font_color",Color("#f0f6df"))
 	column.add_child(_mission_label)
 	_stats_label=Label.new()
 	_stats_label.add_theme_font_size_override("font_size",16)
+	_stats_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	_stats_label.custom_minimum_size=Vector2(0.0,32.0)
 	_stats_label.add_theme_color_override("font_color",Color("#a9d5c3"))
 	column.add_child(_stats_label)
 	var body := HBoxContainer.new()
@@ -121,6 +125,7 @@ func _build_ui() -> void:
 	hint.add_theme_color_override("font_color",Color("#8eb8a9"))
 	right.add_child(hint)
 	_message_label=Label.new()
+	_message_label.name="MessageLabel"
 	_message_label.custom_minimum_size=Vector2(0.0,42.0)
 	_message_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	_message_label.add_theme_color_override("font_color",Color("#f1d88d"))
@@ -200,9 +205,9 @@ func _refresh() -> void:
 	var stats: Dictionary = Rules.get_stats(_state)
 	var status: String = str(_state.get("status","playing"))
 	var cells: Array = _state.get("cells",[])
-	_mission_label.text="DOME %02d  //  %s" % [int(_state.get("mission_index",0))+1,str(mission.get("name","RESTORATION DOME"))]
-	_stats_label.text="DAY %d/%d   ACTIONS %d/%d   PLANTS %d/%d   SPECIES %d/%d   POLLINATORS %d/%d   PESTS %d/%d" % [
-		int(_state.get("day",1)),Rules.DAYS,int(_state.get("actions_left",0)),Rules.ACTIONS_PER_DAY,
+	_mission_label.text="DOME %02d  //  %s — %s" % [int(_state.get("mission_index",0))+1,str(mission.get("name","RESTORATION DOME")),str(mission.get("brief",""))]
+	_stats_label.text="DAY %d/%d   ACTIONS %d/%d   SEEDS %d   PLANTS %d/%d   SPECIES %d/%d   POLLINATORS %d/%d   PESTS %d/%d" % [
+		int(_state.get("day",1)),Rules.DAYS,int(_state.get("actions_left",0)),Rules.ACTIONS_PER_DAY,int(_state.get("seed_bank",0)),
 		int(stats.get("plants",0)),int(stats.get("target_plants",0)),int(stats.get("species",0)),int(stats.get("target_species",0)),
 		int(stats.get("pollinators",0)),int(stats.get("target_pollinators",0)),int(stats.get("pests",0)),int(stats.get("max_pests",0))
 	]
@@ -255,7 +260,11 @@ func _refresh() -> void:
 	_action_buttons["NextDomeButton"].disabled=status != "complete" or int(_state.get("mission_index",0)) >= Rules.MISSIONS.size()-1
 	if status == "campaign_complete":
 		_message_label.text="ALL THREE DOMES RESTORED  //  KROLL ECOLOGY NETWORK ONLINE."
+	elif status == "complete" and int(_state.get("mission_index",0)) >= Rules.MISSIONS.size()-1:
+		_message_label.text="ALL THREE DOMES RESTORED  //  KROLL ECOLOGY NETWORK ONLINE."
 	elif status == "complete":
 		_message_label.text="DOME RESTORED  //  NEXT DOME UNLOCKED."
 	elif status == "failed":
 		_message_label.text="DOME UNSTABLE  //  RESET TO RETRY."
+	elif _message_label.text.is_empty():
+		_message_label.text="Plant three species, release pollinators and restore the dome before day six."
