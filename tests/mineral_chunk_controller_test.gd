@@ -6,6 +6,9 @@ const Controller = preload("res://systems/MineralChunkController.gd")
 const Adapter = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 const ObjectRegistry = preload("res://systems/WorldObjectStateRegistry.gd")
 const StatefulProp = preload("res://systems/WorldObjectStatefulProp.gd")
+const CropRegistry = preload("res://systems/CropRegistry.gd")
+const CropController = preload("res://systems/CropPlotController.gd")
+const CropPlot = preload("res://systems/CropPlotVisual.gd")
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -22,6 +25,8 @@ func _run_tests() -> void:
 	await _test_stateful_object_survives_unload_reload()
 	await process_frame
 	await _test_failed_object_state_application_is_atomic()
+	await process_frame
+	await _test_invalid_crop_binding_rejected_before_chunk_registration()
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
@@ -216,6 +221,39 @@ func _test_failed_object_state_application_is_atomic() -> void:
 	incoming.free()
 	controller.queue_free()
 	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_invalid_crop_binding_rejected_before_chunk_registration() -> void:
+	var mineral_registry: Node = Registry.new()
+	var crop_registry: Node = CropRegistry.new()
+	var crop_controller: Node = CropController.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(crop_registry)
+	root.add_child(crop_controller)
+	root.add_child(controller)
+	await process_frame
+	assert(crop_controller.bind_registry(crop_registry))
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_crop_controller(crop_controller))
+	var chunk_id := "earth/crop-sector"
+	var chunk := Node3D.new()
+	chunk.name = "ChunkRoot"
+	var plot: Node3D = CropPlot.new()
+	plot.name = "CropPlot_0"
+	plot.set("crop_id", "unknown_crop")
+	plot.set("plot_index", 1)
+	chunk.add_child(plot)
+	assert(not bool(plot.call("can_configure", crop_controller, chunk_id + "/crop/ChunkRoot/CropPlot_0", "unknown_crop", 1)), "unsupported crop kinds fail the binding preflight")
+	assert(not controller.load_chunk(chunk_id, chunk), "chunk loading rejects an invalid crop binding before registration")
+	assert(chunk.get_parent() == null, "rejected crop chunk remains caller-owned and detached")
+	assert(crop_registry.get_saved_ids().is_empty(), "rejected crop binding does not create a partial crop record")
+	assert(not controller.is_chunk_loaded(chunk_id), "rejected crop binding does not register a partial chunk")
+	chunk.free()
+	controller.queue_free()
+	crop_controller.queue_free()
+	crop_registry.queue_free()
 	mineral_registry.queue_free()
 	await process_frame
 
