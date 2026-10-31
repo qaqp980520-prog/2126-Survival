@@ -4,7 +4,7 @@ A small Godot 4 telescope-alignment puzzle. Track four stars in each of three au
 
 ## Controls
 
-- `A/D` or arrow keys: adjust azimuth/elevation.
+- `W/A/S/D` or arrow keys: adjust the reticle vertically and horizontally.
 - `Q/E`: zoom out/in. Higher zoom gives a tighter lock tolerance.
 - `Space`: lock the current star.
 - `R`: restart the current sector.
@@ -12,6 +12,8 @@ A small Godot 4 telescope-alignment puzzle. Track four stars in each of three au
 - Left mouse click: place the reticle.
 - Right mouse click: lock the current star.
 - Touch: tap to aim, drag to fine-adjust, tap the on-screen LOCK TARGET control.
+
+**Touch limitation:** M0.1 does not yet expose touch buttons for restart or next sector. A touch-only player can aim and lock, but needs a keyboard for full campaign navigation.
 
 ## Rules
 
@@ -29,5 +31,6 @@ Open `project.godot` in Godot 4.3 or later, or launch KROLL Star Chart from the 
 
 - `tests/rules_test.gd`: mission data, normalized bounds, lock tolerance and progress rules.
 - `tests/game_smoke_test.gd`: scene instantiation, target locking, retry behavior and touch-drag input.
+- Root CI also tests the Survival Test Hub launch path and production SurfaceWorld camera-ray interaction integration.
 
 Cloud CI runs the import, rules and runtime smoke tests. Manual GUI, GPU and iPhone QA are separate and are not implied by headless CI.
