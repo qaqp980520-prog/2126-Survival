@@ -2475,7 +2475,7 @@ jobs:
           test -f systems/SurfaceTerrainPatch.gd
           test -f tests/production_surface_world_terrain_patch_reload_test.gd
           grep -q 'ATMOSPHERE_LAB_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'SurfaceTerrainPatchScript' systems/SurfaceChunkFactory.gd
+          grep -q 'TerrainPatchScript' systems/SurfaceChunkFactory.gd
           grep -q 'cycle_terrain_edit' world/SurfaceWorld.gd
           grep -q 'TerrainPatch' tests/production_surface_world_terrain_patch_reload_test.gd
       - name: Import and parse KROLL Atmosphere Lab
