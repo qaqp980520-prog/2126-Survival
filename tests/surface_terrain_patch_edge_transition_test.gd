@@ -26,6 +26,8 @@ func _run() -> void:
 		_expect(is_equal_approx(float(profile.get("slope_length",-1.0)),slope_length),"visual slope length preserves exact horizontal run and vertical rise")
 		_expect(is_equal_approx(float(profile.get("collision_thickness",-1.0)),PatchScript.EDGE_RAMP_COLLISION_THICKNESS),"collision ramp thickness is explicit and stable")
 		await physics_frame
+		# Let newly added/reconfigured edge bodies finish their physics-server registration before ray queries.
+		await physics_frame
 		var space_state: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
 		var body := patch.get_node_or_null("TerrainCollisionBody") as StaticBody3D
 		_expect(body != null,"terrain collision body exists")
