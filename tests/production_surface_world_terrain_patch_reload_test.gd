@@ -36,6 +36,13 @@ func _run() -> void:
 	_expect(not bool(original_patch.call("validate_world_object_state", {"height_level": 3, "surface_type": "soil", "revision": 0})), "terrain state rejects an out-of-range height")
 	_expect(not bool(original_patch.call("validate_world_object_state", {"height_level": 0, "surface_type": "lava", "revision": 0})), "terrain state rejects an unknown surface material")
 	_expect(original_state == {"height_level": 0, "surface_type": "soil", "revision": 0}, "terrain patch starts from its legacy-safe default state")
+	_expect(not bool(original_patch.call("apply_world_object_state", {"height_level": 3, "surface_type": "soil", "revision": 0})), "invalid terrain state cannot be applied")
+	_expect(original_patch.call("get_world_object_state") == original_state, "rejected terrain state leaves the live patch unchanged")
+	var base_collision: CollisionShape3D = original_patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+	_expect(base_collision != null and base_collision.shape is BoxShape3D, "terrain patch exposes a box collision shape")
+	if base_collision != null and base_collision.shape is BoxShape3D:
+		var base_box: BoxShape3D = base_collision.shape as BoxShape3D
+		_expect(is_equal_approx(base_box.size.y, 0.05), "default terrain collision has the base 0.05m height")
 	var original_proxy: Area3D = original_patch.get_node_or_null("InteractionArea") as Area3D
 	_expect(original_proxy != null and original_proxy.is_inside_tree(), "terrain patch registers an in-tree camera interaction proxy")
 	if original_proxy == null:
@@ -65,6 +72,12 @@ func _run() -> void:
 			touch_button.emit_signal("pressed")
 	var edited_state: Dictionary = original_patch.call("get_world_object_state")
 	_expect(edited_state == {"height_level": 1, "surface_type": "rock", "revision": 1}, "touch interaction changes height, material and revision together")
+	var edited_collision: CollisionShape3D = original_patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+	_expect(edited_collision != null and edited_collision.shape is BoxShape3D, "edited terrain retains a box collision shape")
+	if edited_collision != null and edited_collision.shape is BoxShape3D:
+		var edited_box: BoxShape3D = edited_collision.shape as BoxShape3D
+		_expect(is_equal_approx(edited_box.size.y, 0.3), "terrain collision height follows the first raised level")
+		_expect(is_equal_approx(edited_collision.position.y, 0.15), "terrain collision remains grounded after the first edit")
 	var save_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not save_payload.is_empty(), "world serialization captures terrain patch state")
 	var saved_objects: Dictionary = save_payload.get("world_objects", {}).get("objects", {})
@@ -75,6 +88,13 @@ func _run() -> void:
 	_expect(int(original_patch.call("get_world_object_state").get("height_level", -1)) == 2, "second edit changes the live terrain before restore")
 	_expect(bool(world.call("restore_stream_state", save_payload, _test_time)), "schema-1 world restore accepts the saved terrain state")
 	_expect(original_patch.call("get_world_object_state") == edited_state, "world save restore reapplies terrain height and material atomically")
+	_expect(is_equal_approx((original_patch.get_node("TerrainCollisionBody/TerrainCollisionShape").shape as BoxShape3D).size.y, 0.3), "same-window restore rebuilds collision geometry from saved height")
+	var capped_state := {"height_level": 2, "surface_type": "metal", "revision": 1000000}
+	_expect(bool(original_patch.call("apply_world_object_state", capped_state)), "maximum valid terrain revision can be restored")
+	var capped_edit: Dictionary = original_patch.call("cycle_terrain_edit")
+	_expect(not bool(capped_edit.get("ok", true)) and str(capped_edit.get("reason", "")) == "revision_limit", "terrain editing rejects revision overflow")
+	_expect(original_patch.call("get_world_object_state") == capped_state, "revision-limit rejection does not mutate terrain state")
+	_expect(bool(original_patch.call("apply_world_object_state", edited_state)), "terrain patch returns to the saved playable state after revision-boundary coverage")
 
 	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(21.5, 2.0, 7.5), _test_time))
 	_expect(moved_away, "production director moves the active window away from the origin")
@@ -96,6 +116,12 @@ func _run() -> void:
 		var reloaded_proxy: Area3D = reloaded_patch.get_node_or_null("InteractionArea") as Area3D
 		_expect(reloaded_patch.get_instance_id() != old_patch_instance, "reload creates a new terrain node instance")
 		_expect(reloaded_patch.call("get_world_object_state") == edited_state, "fresh terrain patch restores the edited height/material/revision")
+		var reloaded_collision: CollisionShape3D = reloaded_patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+		_expect(reloaded_collision != null and reloaded_collision.shape is BoxShape3D, "fresh terrain patch rebuilds its collision shape")
+		if reloaded_collision != null and reloaded_collision.shape is BoxShape3D:
+			var reloaded_box: BoxShape3D = reloaded_collision.shape as BoxShape3D
+			_expect(is_equal_approx(reloaded_box.size.y, 0.3), "reloaded terrain collision preserves the saved raised height")
+			_expect(is_equal_approx(reloaded_collision.position.y, 0.15), "reloaded terrain collision remains grounded")
 		_expect(reloaded_proxy != null and reloaded_proxy.is_inside_tree(), "fresh terrain patch rebuilds its interaction proxy")
 		_expect(reloaded_proxy != null and reloaded_proxy.get_instance_id() != old_proxy_instance, "reload creates a new interaction proxy instance")
 		var retarget: Dictionary = world.call("_cast_camera_interaction_target")
