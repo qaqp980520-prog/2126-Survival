@@ -1,6 +1,7 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -39,7 +40,14 @@ func _run() -> void:
 	if gold_cache != null:
 		world.player.global_position = gold_cache.global_position + Vector3(0.0, 1.0, 0.0)
 		world.call("_refresh_hud")
-		_expect(prompt.text.contains("OPEN GOLD ORE CACHE"), "underground HUD identifies the nearest cache and its remaining loot")
+		var gold_data: Dictionary = MineralCatalogScript.get_mineral("gold_ore")
+		var expected_cache_name: String = str(gold_data.get("display_name", "gold_ore")).to_upper()
+		var expected_remaining: int = int(gold_cache.get("loot_remaining"))
+		var expected_cache_prompt: String = "OPEN %s CACHE" % expected_cache_name
+		_expect(
+			prompt.text.contains(expected_cache_prompt) and prompt.text.contains("%d LEFT" % expected_remaining),
+			"underground HUD identifies the nearest cache using its catalog display name and remaining stock; actual: %s" % prompt.text
+		)
 
 	var origin_vein: Node3D = _find_world_prop(world, "Vein_0", "UndergroundMine_0_0", true)
 	_expect(origin_vein != null, "origin mine room exposes a mineral vein")
