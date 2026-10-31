@@ -738,7 +738,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
 	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
-		_restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		if not _restore_mine_snapshots(previous_minerals, previous_world_objects, now):
+			push_error("Mine registry snapshot restoration failed after a seed-change unload rejection.")
 		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
