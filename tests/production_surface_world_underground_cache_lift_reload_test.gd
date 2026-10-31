@@ -62,7 +62,7 @@ func _run() -> void:
 	var original_lift_proxy_instance: int = original_lift_proxy.get_instance_id()
 	_expect(int(original_cache.get("loot_remaining")) == 2, "gold cache starts with two recoverable units")
 
-	await _aim_at(original_cache, Vector3(0.0, 1.0, 2.0), Vector3(0.0, 0.6, 0.0))
+	await _aim_at(original_cache, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.6, 0.0))
 	var cache_target: Dictionary = world.call("get_camera_interaction_target")
 	_expect(str(cache_target.get("kind", "")) == "prop" and cache_target.get("node") == original_cache, "camera ray selects the underground cache as a prop")
 	_expect(cache_target.get("proxy") == original_cache_proxy, "cache target stores its exact interaction proxy")
@@ -122,7 +122,7 @@ func _run() -> void:
 		_expect(restored_lift_proxy.get_instance_id() != original_lift_proxy_instance, "reloaded lift receives a fresh proxy instance")
 		_expect((restored_lift_proxy.collision_layer & INTERACTION_LAYER) != 0, "reloaded lift proxy remains on the interaction layer")
 
-	await _aim_at(restored_cache, Vector3(0.0, 1.0, 2.0), Vector3(0.0, 0.6, 0.0))
+	await _aim_at(restored_cache, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.6, 0.0))
 	var restored_cache_target: Dictionary = world.call("get_camera_interaction_target")
 	_expect(str(restored_cache_target.get("kind", "")) == "prop" and restored_cache_target.get("node") == restored_cache, "camera ray selects the reloaded cache")
 	_expect(restored_cache_target.get("proxy") == restored_cache_proxy, "reloaded cache target references only the new proxy")
