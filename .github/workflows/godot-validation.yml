@@ -2504,3 +2504,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld terrain patch reload tests passed."
+
+
+      - name: Verify Run 73 Neon Climber and all-chunk terrain persistence inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Neon_Climber/project.godot
+          test -f daily_games/KROLL_Neon_Climber/main.tscn
+          test -f daily_games/KROLL_Neon_Climber/main.gd
+          test -f daily_games/KROLL_Neon_Climber/rules.gd
+          test -f daily_games/KROLL_Neon_Climber/tests/rules_test.gd
+          test -f daily_games/KROLL_Neon_Climber/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/main.gd
+          test -f daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/rules.gd
+          cmp -s daily_games/KROLL_Neon_Climber/main.gd daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/main.gd
+          cmp -s daily_games/KROLL_Neon_Climber/rules.gd daily_games/KROLL_Neon_Climber/daily_games/KROLL_Neon_Climber/rules.gd
+          grep -q "res://daily_games/KROLL_Neon_Climber/main.gd" daily_games/KROLL_Neon_Climber/main.tscn
+          grep -q "res://daily_games/KROLL_Neon_Climber/rules.gd" daily_games/KROLL_Neon_Climber/main.gd
+          test -f tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
+          grep -q 'NEON_CLIMBER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Neon Climber' tests/survival_test_hub_smoke_test.gd
+          grep -q 'get_loaded_chunk_ids' tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
+          grep -q 'restore_stream_state' tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
+      - name: Import and parse KROLL Neon Climber
+        run: godot --headless --path daily_games/KROLL_Neon_Climber --editor --quit
+      - name: Run KROLL Neon Climber rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 25s godot --headless --path daily_games/KROLL_Neon_Climber --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Neon Climber rules tests passed."
+      - name: Run KROLL Neon Climber runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Neon_Climber --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Neon Climber runtime smoke test passed."
+      - name: Run production SurfaceWorld all-chunk terrain patch reload test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld all-chunk terrain patch reload tests passed."

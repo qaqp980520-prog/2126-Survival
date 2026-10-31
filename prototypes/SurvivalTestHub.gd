@@ -17,6 +17,7 @@ const GRAVITY_FOUNDRY_SCENE := "res://daily_games/KROLL_Gravity_Foundry/main.tsc
 const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
+const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
 
 var status_label: Label
 
@@ -174,6 +175,12 @@ func _build_ui() -> void:
 		"KROLL Atmosphere Lab",
 		"調整溫度、濕度、氣壓與風速，在有限操作次數內穩定三個氣象站。",
 		ATMOSPHERE_LAB_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Neon Climber",
+		"以雙重跳躍和短距衝刺穿越三座設施，回收資料核心並啟動出口。",
+		NEON_CLIMBER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
