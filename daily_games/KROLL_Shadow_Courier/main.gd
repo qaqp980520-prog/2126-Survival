@@ -150,7 +150,7 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, Vector2(266.0, 348.0), status.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 28, Color(0.42, 0.92, 1.0) if status == "complete" else Color(1.0, 0.42, 0.35))
 
 func _tile_rect(tile: Vector2i) -> Rect2:
-	return Rect2(BOARD_ORIGIN + Vector2(tile) * TILE_SIZE, Vector2(TILE_SIZE - 2.0, TILE_SIZE - 2.0))
+	return Rect2(BOARD_ORIGIN + Vector2(float(tile.x), float(tile.y)) * TILE_SIZE, Vector2(TILE_SIZE - 2.0, TILE_SIZE - 2.0))
 
 func _tile_center(tile: Vector2i) -> Vector2:
-	return BOARD_ORIGIN + (Vector2(tile) + Vector2(0.5, 0.5)) * TILE_SIZE
+	return BOARD_ORIGIN + (Vector2(float(tile.x), float(tile.y)) + Vector2(0.5, 0.5)) * TILE_SIZE
