@@ -18,6 +18,7 @@ const ECHO_MAPPER_SCENE := "res://daily_games/KROLL_Echo_Mapper/main.tscn"
 const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
+const BIODOME_KEEPER_SCENE := "res://daily_games/KROLL_BioDome_Keeper/main.tscn"
 
 var status_label: Label
 
@@ -181,6 +182,12 @@ func _build_ui() -> void:
 		"KROLL Neon Climber",
 		"以雙重跳躍和短距衝刺穿越三座設施，回收資料核心並啟動出口。",
 		NEON_CLIMBER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL BioDome Keeper",
+		"修復三座生態穹頂，管理植物、水分、養分、授粉者與害蟲；支援鍵盤與觸控。",
+		BIODOME_KEEPER_SCENE
 	)
 	_add_scene_button(
 		launch_list,

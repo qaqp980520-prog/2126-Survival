@@ -212,9 +212,15 @@ func _refresh() -> void:
 		var short_name: String = "EMPTY"
 		var color: Color = Color("#244247")
 		match species:
-			"fern": short_name="FERN"; color=Color("#286b4b")
-			"moss": short_name="MOSS"; color=Color("#477c58")
-			"bloom": short_name="BLOOM"; color=Color("#8a5c91")
+			"fern":
+				short_name="FERN"
+				color=Color("#286b4b")
+			"moss":
+				short_name="MOSS"
+				color=Color("#477c58")
+			"bloom":
+				short_name="BLOOM"
+				color=Color("#8a5c91")
 		var selected_mark: String = "▶ " if index == _selected_cell else ""
 		var button: Button = _cell_buttons[index]
 		button.text="%s%s\nW%d  N%d" % [selected_mark,short_name,int(cell.get("moisture",0)),int(cell.get("nutrients",0))]
@@ -228,8 +234,11 @@ func _refresh() -> void:
 		button.add_theme_stylebox_override("normal",style)
 		button.disabled=status == "campaign_complete"
 	var selected: Dictionary = cells[_selected_cell]
+	var selected_species: String = str(selected.get("species",""))
+	if selected_species.is_empty():
+		selected_species="EMPTY"
 	_selected_label.text="PLOT %02d  //  %s\nMoisture %d/5 · Nutrients %d/5 · Health %d/3 · Pests %d" % [
-		_selected_cell+1,str(selected.get("species","empty")).to_upper(),int(selected.get("moisture",0)),
+		_selected_cell+1,selected_species.to_upper(),int(selected.get("moisture",0)),
 		int(selected.get("nutrients",0)),int(selected.get("health",0)),int(selected.get("pests",0))
 	]
 	var can_act: bool = status == "playing" and int(_state.get("actions_left",0)) > 0
