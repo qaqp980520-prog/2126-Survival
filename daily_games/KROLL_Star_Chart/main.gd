@@ -1,6 +1,10 @@
 extends Node2D
 
-const Rules = preload("res://rules.gd")
+const MISSION_COUNT: int = 3
+const MIN_ZOOM: int = 0
+const MAX_ZOOM: int = 4
+
+var rules: Script
 
 var mission_index: int = 0
 var target_index: int = 0
@@ -14,6 +18,14 @@ var campaign_complete: bool = false
 var failed: bool = false
 
 func _ready() -> void:
+	var rules_path: String = "res://rules.gd"
+	if not ResourceLoader.exists(rules_path):
+		rules_path = "res://daily_games/KROLL_Star_Chart/rules.gd"
+	rules = load(rules_path) as Script
+	if rules == null:
+		push_error("KROLL Star Chart could not load its rules module.")
+		set_process(false)
+		return
 	set_process(true)
 	queue_redraw()
 
@@ -26,10 +38,10 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func get_current_mission() -> Dictionary:
-	return Rules.get_mission(mission_index)
+	return rules.get_mission(mission_index)
 
 func set_aim(value: Vector2) -> void:
-	aim = Rules.clamp_aim(value)
+	aim = rules.clamp_aim(value)
 	queue_redraw()
 
 func attempt_lock() -> bool:
@@ -40,7 +52,7 @@ func attempt_lock() -> bool:
 	if target_index >= targets.size():
 		return false
 	var target: Vector2 = targets[target_index]
-	if not Rules.can_lock(aim, target, zoom_level):
+	if not rules.can_lock(aim, target, zoom_level):
 		status_text = "NO LOCK · ADJUST AZIMUTH / ELEVATION"
 		time_left = maxf(0.0, time_left - 1.5)
 		if time_left <= 0.0:
@@ -49,8 +61,8 @@ func attempt_lock() -> bool:
 		queue_redraw()
 		return false
 	score += 100 + zoom_level * 15 + int(time_left)
-	target_index = Rules.advance_target(target_index, targets.size())
-	if Rules.is_mission_complete(target_index, targets.size()):
+	target_index = rules.advance_target(target_index, targets.size())
+	if rules.is_mission_complete(target_index, targets.size()):
 		mission_complete = true
 		status_text = "CONSTELLATION LOCKED · N FOR NEXT SECTOR"
 	else:
@@ -61,7 +73,7 @@ func attempt_lock() -> bool:
 func next_mission() -> bool:
 	if not mission_complete or campaign_complete:
 		return false
-	if mission_index >= Rules.MISSION_COUNT - 1:
+	if mission_index >= MISSION_COUNT - 1:
 		campaign_complete = true
 		status_text = "SURVEY COMPLETE · ALL THREE SIGNALS MAPPED"
 		queue_redraw()
@@ -97,10 +109,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_S, KEY_DOWN:
 				_nudge_aim(Vector2(0.0, 0.012))
 			KEY_Q:
-				zoom_level = maxi(Rules.MIN_ZOOM, zoom_level - 1)
+				zoom_level = maxi(MIN_ZOOM, zoom_level - 1)
 				queue_redraw()
 			KEY_E:
-				zoom_level = mini(Rules.MAX_ZOOM, zoom_level + 1)
+				zoom_level = mini(MAX_ZOOM, zoom_level + 1)
 				queue_redraw()
 			KEY_SPACE:
 				attempt_lock()
