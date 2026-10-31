@@ -48,8 +48,10 @@ func _run() -> void:
 		entry["state"] = patch.call("get_world_object_state")
 		_expect_patch_geometry(patch, entry["state"], "edited patch %d" % index)
 		entry["patch_instance"] = patch.get_instance_id()
-		entry["proxy"] = proxy
 		entry["proxy_instance"] = proxy.get_instance_id()
+		entry["patch_weak"] = weakref(patch)
+		entry["proxy_weak"] = weakref(proxy)
+		entry.erase("patch")
 		entries[index] = entry
 
 	var save_payload: Dictionary = world.call("serialize_stream_state")
@@ -68,10 +70,10 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	for entry in entries:
-		var old_patch: Node3D = entry["patch"] as Node3D
-		var old_proxy: Area3D = entry["proxy"] as Area3D
-		_expect(not is_instance_valid(old_patch), "unloaded terrain node is released")
-		_expect(not is_instance_valid(old_proxy), "unloaded interaction proxy is released")
+		var old_patch_weak: WeakRef = entry["patch_weak"] as WeakRef
+		var old_proxy_weak: WeakRef = entry["proxy_weak"] as WeakRef
+		_expect(old_patch_weak.get_ref() == null, "unloaded terrain node is released")
+		_expect(old_proxy_weak.get_ref() == null, "unloaded interaction proxy is released")
 		var record: Dictionary = registry.call("get_object_state", str(entry["stable_id"]))
 		_expect(record.get("state", {}) == entry["state"], "registry retains each edited state while its chunk is unloaded")
 
