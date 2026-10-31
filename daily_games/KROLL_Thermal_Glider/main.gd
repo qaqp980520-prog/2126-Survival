@@ -60,6 +60,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_ui() -> void:
 	_status_label = Label.new()
+	_status_label.name = "StatusLabel"
 	_status_label.position = Vector2(22.0, 16.0)
 	_status_label.size = Vector2(1040.0, 32.0)
 	_status_label.add_theme_font_size_override("font_size", 20)
@@ -166,8 +167,8 @@ func _refresh() -> void:
 	_status_label.text = "KROLL THERMAL GLIDER  |  %s  |  BEACONS %d/3  |  BATTERY %03d%%" % [
 		str(course.get("name", "FLIGHT")).to_upper(), checkpoint, roundi(battery)
 	]
-	_detail_label.text = str(_rules.call("get_status_message", _state")) + "  |  SPEED %.0f  |  VERTICAL %.0f  |  PITCH %.0f°" % [
-		velocity.x, velocity.y, float(_state.get("pitch", 0.0))
+	_detail_label.text = "%s  |  SPEED %.0f  |  VERTICAL %.0f  |  PITCH %.0f°" % [
+		str(_rules.call("get_status_message", _state)), velocity.x, velocity.y, float(_state.get("pitch", 0.0))
 	]
 	if str(_state.get("status", "")) != "flying":
 		_detail_label.text = str(_rules.call("get_status_message", _state))
@@ -176,6 +177,9 @@ func _refresh() -> void:
 			(_buttons[key] as Button).disabled = str(_state.get("status", "")) != "flying"
 
 func _draw() -> void:
+	if _rules != null:
+		var current_position: Vector2 = _state.get("position", Vector2.ZERO)
+		_camera_x = maxf(0.0, current_position.x - size.x * 0.28)
 	draw_rect(Rect2(Vector2.ZERO, size), Color("#071624"))
 	draw_rect(Rect2(Vector2(0.0, 0.0), Vector2(size.x, 7.0)), Color("#4bd5d0"))
 	for grid_x in range(0, 2200, 100):
@@ -218,7 +222,6 @@ func _draw() -> void:
 	if _rules != null:
 		var position: Vector2 = _state.get("position", Vector2.ZERO)
 		var velocity: Vector2 = _state.get("velocity", Vector2.ZERO)
-		_camera_x = maxf(0.0, position.x - size.x * 0.28)
 		var plane_position: Vector2 = position - Vector2(_camera_x, 0.0)
 		var angle: float = deg_to_rad(-float(_state.get("pitch", 0.0)))
 		var forward: Vector2 = Vector2(cos(angle), sin(angle))
