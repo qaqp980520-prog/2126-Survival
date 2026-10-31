@@ -80,6 +80,20 @@ func _run() -> void:
 	_expect(Rules.wait_turn(extraction_state), "final extraction turn is accepted")
 	_expect(str(extraction_state.get("status", "")) == "complete", "all shards plus extraction completes the mission")
 
+	var solutions: Array = [
+		["R", "D", "U", "D", "D", "D", "R", "R", "U", "R", "D", "L", "L", "L", "D", "D", "D", "R", "R", "R", "D", "R", "R", "U", "R", "D"],
+		["U", "U", "U", "R", "R", "R", "R", "W", "U", "U", "U", "R", "R", "U", "R"],
+		["R", "D", "D", "R", "R", "D", "R", "E", "D", "U", "L", "U", "L", "L", "D", "D", "D", "D", "D", "R", "R", "R", "U", "R", "R", "R", "D"]
+	]
+	for level_index in range(solutions.size()):
+		var solution_state: Dictionary = Rules.create_state(level_index)
+		var solution_valid: bool = true
+		for action in solutions[level_index]:
+			if not _apply_action(solution_state, str(action)):
+				solution_valid = false
+				break
+		_expect(solution_valid and str(solution_state.get("status", "")) == "complete", "authored mission has a verified winning route")
+
 	var reset_state: Dictionary = Rules.create_state(1)
 	reset_state["turn"] = 5
 	reset_state["decoys"] = 0
@@ -95,6 +109,22 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+func _apply_action(state: Dictionary, action: String) -> bool:
+	match action:
+		"U":
+			return Rules.move_player(state, Vector2i.UP)
+		"R":
+			return Rules.move_player(state, Vector2i.RIGHT)
+		"D":
+			return Rules.move_player(state, Vector2i.DOWN)
+		"L":
+			return Rules.move_player(state, Vector2i.LEFT)
+		"W":
+			return Rules.wait_turn(state)
+		"E":
+			return Rules.use_decoy(state)
+	return false
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
