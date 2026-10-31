@@ -11,6 +11,33 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-31 Run 65 — KROLL Core Drill + stale camera-ray target lifecycle guard (feature merged / exact-head CI passed)
+
+### New Godot 4 game
+- Project: `daily_games/KROLL_Core_Drill/`, a lane-planning mining arcade game with three authored eight-row/five-lane sites.
+- Controls: A/D or arrows shift one lane; Space drills one row; V vents heat once per row; R restarts; N advances after meeting the ore quota. Touch users can tap a lane and use on-screen LEFT/RIGHT/VENT/DRILL/RESTART/NEXT controls.
+- Tile systems: rock, copper, iron, titanium, gas, coolant ice, lava and hard rock. Energy, thermal load and drill-hull integrity constrain the route. No external assets, audio, plugins or network dependencies; Godot 4.3+.
+- Registered in `prototypes/SurvivalTestHub.gd`. The hub launch list now uses a bounded vertical ScrollContainer so all 10 launch buttons remain reachable on smaller screens; the root hub smoke test checks scrolling and Core Drill scene/rules initialization.
+- Independent route-model check: Copper Spine reaches 8 ore with 8 energy, 84 heat and 5 hull; Ion Vein reaches 6 ore with 8 energy, 42 heat and 5 hull; Mantle Edge reaches 6 ore with 12 energy, 40 heat and 5 hull. This supplements but does not replace Godot tests.
+
+### Existing-system change
+- `world/SurfaceWorld.gd` caches the exact Area3D interaction proxy with each camera-ray target.
+- Before returning a cached target, validate the target/proxy instance, tree membership, queued-for-deletion state, interaction collision layer, target/proxy ancestry, active loaded-object membership and mineral-vein visibility/remaining stock.
+- A queued proxy, removed proxy, queued streamed-chunk ancestor or no-longer-loaded object invalidates the cache immediately. HUD prompts and E/F/G/V actions cannot invoke a stale node.
+- Added `tests/production_surface_world_interaction_lifecycle_test.gd` for proxy removal and streamed-chunk subtree teardown. No world-save schema change; interaction cache remains transient.
+
+### Exact GitHub evidence
+- Feature PR [#166](https://github.com/qaqp980520-prog/2126-Survival/pull/166) merged as `3e74a20cc312da04d6197e6747bced715734af83`.
+- Exact candidate HEAD `45f15c93c91991602807f642c4bc8b0bfccac153` passed Godot 4.3 [Run #742](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41167697452): 278/278 step records successful, zero failures and zero skipped.
+- Run #742 includes root project import, Survival Test Hub scroll/launch smoke, Core Drill standalone import/rules/runtime, existing game/world regressions and production interaction lifecycle test.
+- Main was re-read at feature merge SHA `3e74a20cc312da04d6197e6747bced715734af83`; PR #166 is closed/merged.
+
+### Known limits and next steps
+- The lifecycle test injects proxy removal and a queued chunk ancestor; a controller-driven unload/reload cycle with same stable ID and proxy re-registration remains next.
+- Star Chart M0.1 still lacks touch-only RESTART/NEXT navigation, although Core Drill has complete on-screen touch controls.
+- Cache lid animation, inventory-full modal, procedural mine generation, terrain/object persistence and asynchronous chunk streaming remain incomplete.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
+
 ## 2026-10-31 Run 64 — KROLL Star Chart + camera-ray world interactions (feature merged / exact-head CI passed)
 
 - Start-of-run reconciliation: main before this work was `5a797a19e0694a56f95db82bfa1f4316c3efc929`; PR #164 was the only open PR. Full branch pagination returned 170 branches. PR #164 feature HEAD `5fc815dfbabf0b993c824fba12b0e012b4140907` was 45 commits ahead / 0 behind main, 19 changed files.
