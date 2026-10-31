@@ -660,3 +660,23 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-save schema remains version 1; no new save fields.
 - Layer-zero service caches and deterministic coordinate/layer outputs remain compatible.
 - No local GUI/GPU/iPhone pass is claimed.
+
+
+## Run 63 verification — 2026-10-31
+
+- [x] Added `daily_games/KROLL_Flux_Hockey/`: real-time air-hockey game with three bumper arenas, first-to-five scoring, keyboard and mouse/touch controls, deterministic rules tests and runtime smoke test.
+- [x] Added production SurfaceWorld contextual prompts for surface crop plots, salvage crates and mine lift; underground cache/vein selection, cache identity/remaining stock, lift guidance and explicit no-target states.
+- [x] Added `tests/production_surface_world_interaction_prompt_test.gd` using the real SurfaceWorld scene and real surface/underground objects. Existing transaction feedback and world-save schema 1 remain unchanged.
+- [x] Corrected a brittle test expectation: the gold cache uses MineralCatalog display name `金礦`, not English `GOLD ORE`. The test now derives the expected localized label from the catalog and checks remaining stock.
+- [x] Feature PR [#162](https://github.com/qaqp980520-prog/2126-Survival/pull/162) merged as `ceccc7ea1bcb0c46fb72af6a9c1fec29b131f05d`. Exact candidate `c887e82b92874765a42be298b5e1a384b374bdc8` passed Godot 4.3 [Run #710](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41159492726): 268/268 total step records successful, zero failures, zero skips. Main was re-read and compare confirms it equals the merge SHA.
+- [x] Run #709 is retained as a failed historical candidate: only the old interaction-prompt assertion failed; the corrected exact-head Run #710 passed.
+
+### Remaining limits
+- Interaction prompt chooses targets by distance, not camera raycast. Cache lid animation and a dedicated inventory-full modal are not included.
+- Flux Hockey AI is a simple paddle follower; no adaptive difficulty, audio, haptics or persistent high scores.
+- Local GUI/GPU/iPhone QA remains unperformed because no local Godot executable/device test environment is available.
+
+### Next
+- Evaluate camera-raycast interaction prompts and cache lid animation as separate changes.
+- Add adaptive AI only with deterministic difficulty tests and play-balance evidence.
+- Complete manual GUI, GPU and iPhone testing when the required local engine/device environment is available.
