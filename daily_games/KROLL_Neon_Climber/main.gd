@@ -1,6 +1,6 @@
 extends Node2D
 
-const Rules = preload("res://rules.gd")
+const Rules = preload("res://daily_games/KROLL_Neon_Climber/rules.gd")
 
 var _state: Dictionary = {}
 var _level_root: Node2D
