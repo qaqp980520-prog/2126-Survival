@@ -28,6 +28,8 @@ func load_chunk(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int =
 		var vein: Variant = veins_by_local_id[local_id]
 		if not is_instance_valid(vein) or not (vein is MiningNode):
 			return false
+		if not vein.has_method("can_register") or not bool(vein.call("can_register")):
+			return false
 		var stable_id: String = make_stable_id(chunk_id, local_id)
 		if stable_ids.has(stable_id) or registered_ids.has(stable_id):
 			return false
