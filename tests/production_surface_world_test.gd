@@ -55,6 +55,7 @@ func _run() -> void:
 	world.player.global_position = near_crate
 	world.camera.look_at(crate_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
 	await physics_frame
+	await physics_frame
 	var now: int = int(Time.get_unix_time_from_system())
 	var first: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first.get("ok", false)), "salvage interaction grants an item through the shared inventory bridge")
