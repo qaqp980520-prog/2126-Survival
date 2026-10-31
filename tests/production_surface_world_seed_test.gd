@@ -26,6 +26,8 @@ func _run() -> void:
 	var saved: Dictionary = world.call("serialize_stream_state")
 	_expect(int(saved.get("world_seed", -1)) == 42, "schema-1 world save includes the configured world seed")
 	var original_cache_ids: Array[String] = _loaded_cache_ids(world)
+	var original_lift_ids: Array[String] = _loaded_lift_ids(world)
+	_expect(original_lift_ids.size() == 1, "origin layer-zero lift is registered separately from seeded caches")
 	var mine_director: Node = world.get("mine_director") as Node
 	var chunk_controller: Node3D = world.get("chunk_controller") as Node3D
 	var player: CharacterBody3D = world.get("player") as CharacterBody3D
@@ -59,6 +61,7 @@ func _run() -> void:
 	_expect(bool(world.call("restore_stream_state", saved, 1793400010)), "same-window restore rebuilds caches with the saved seed")
 	_expect(int(world.get("world_seed")) == 42, "successful restore applies the saved world seed")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "same-window cache identities are regenerated from the saved seed")
+	_expect(_loaded_lift_ids(world) == original_lift_ids, "same-window seed restore preserves the stateful lift identity")
 
 	var original_factory: Callable = mine_director.get("chunk_factory")
 	var object_registry: Node = world.get("object_state_registry") as Node
@@ -70,6 +73,7 @@ func _run() -> void:
 	_expect(not bool(world.call("restore_stream_state", failed_seed_save, 1793400015)), "failed target-seed chunk creation rejects the restore")
 	_expect(int(world.get("world_seed")) == 42, "failed seed restore rolls the previous world seed back")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "failed seed restore rebuilds the previous cache window")
+	_expect(_loaded_lift_ids(world) == original_lift_ids, "failed seed restore preserves the stateful lift identity")
 	_expect(chunk_controller.call("to_save_dict") == previous_mineral_snapshot, "failed seed restore preserves the exact mineral registry snapshot")
 	_expect(object_registry.call("to_save_dict") == previous_object_snapshot, "failed seed restore removes candidate-seed object records and restores the exact prior registry")
 	mine_director.set("chunk_factory", original_factory)
@@ -81,6 +85,7 @@ func _run() -> void:
 	_expect(bool(world.call("restore_stream_state", saved, 1793400021)), "world restore regenerates the mine window after an unload")
 	_expect(int(world.get("world_seed")) == 42, "unload/reload restore applies the saved world seed")
 	_expect(_loaded_cache_ids(world) == original_cache_ids, "seeded cache identities are stable across unload, restore and reload")
+	_expect(_loaded_lift_ids(world) == original_lift_ids, "seed restore after chunk unload rebuilds the same lift identity")
 
 	var legacy_world: Node3D = WorldScene.instantiate() as Node3D
 	legacy_world.set("world_seed", LEGACY_SEED)
@@ -96,6 +101,7 @@ func _run() -> void:
 	_expect(bool(world.call("restore_stream_state", legacy_save, 1793400030)), "legacy schema-1 save without world_seed remains loadable")
 	_expect(int(world.get("world_seed")) == LEGACY_SEED, "legacy saves without world_seed fall back to the original deterministic seed")
 	_expect(_loaded_cache_ids(world) == _expected_cache_ids(LEGACY_SEED), "legacy fallback recreates the original cache identities")
+	_expect(_loaded_lift_ids(world) == original_lift_ids, "legacy schema-1 fallback preserves the origin lift identity")
 
 	world.queue_free()
 	await process_frame
@@ -118,7 +124,19 @@ func _loaded_cache_ids(world: Node) -> Array[String]:
 	var result: Array[String] = []
 	var chunk_controller: Node3D = world.get("chunk_controller") as Node3D
 	for prop in chunk_controller.get_loaded_world_state_nodes():
-		if not is_instance_valid(prop) or prop.global_position.y >= -7.0:
+		if not is_instance_valid(prop) or not str(prop.name).begins_with("MineCache_") or prop.global_position.y >= -7.0:
+			continue
+		var parent_node: Node = prop.get_parent()
+		if is_instance_valid(parent_node):
+			result.append("%s/%s" % [str(parent_node.name), str(prop.name)])
+	result.sort()
+	return result
+
+func _loaded_lift_ids(world: Node) -> Array[String]:
+	var result: Array[String] = []
+	var chunk_controller: Node3D = world.get("chunk_controller") as Node3D
+	for prop in chunk_controller.get_loaded_world_state_nodes():
+		if not is_instance_valid(prop) or str(prop.name) != "MineLiftAnchor":
 			continue
 		var parent_node: Node = prop.get_parent()
 		if is_instance_valid(parent_node):
