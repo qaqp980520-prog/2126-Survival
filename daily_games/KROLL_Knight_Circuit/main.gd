@@ -171,5 +171,5 @@ func _draw() -> void:
 		draw_string(font, current_rect.get_center() + Vector2(-7.0, 7.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22, Color("#10212a"))
 	for index in range(Rules.BOARD_SIZE):
 		if font != null:
-			draw_string(font, BOARD_ORIGIN + Vector2(index * CELL_SIZE + 42.0, -10.0), char(65 + index), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color("#c5d9e0"))
+			draw_string(font, BOARD_ORIGIN + Vector2(index * CELL_SIZE + 42.0, -10.0), ["A", "B", "C", "D", "E"][index], HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color("#c5d9e0"))
 			draw_string(font, BOARD_ORIGIN + Vector2(-18.0, index * CELL_SIZE + 54.0), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, Color("#c5d9e0"))
