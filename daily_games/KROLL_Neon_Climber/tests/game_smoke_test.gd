@@ -41,7 +41,11 @@ func _run() -> void:
 	_expect(game.try_complete_level(), "unlocked exit completes the sector")
 	_expect(game.next_level() and game.get_current_level_index() == 1, "N progression loads Reactor Scaffold")
 	game.reset_level()
+	await process_frame
+	await physics_frame
+	player = game.get_player()
 	_expect(game.get_current_level_index() == 1 and (game.get_run_state()["collected"] as Array).is_empty(), "reset restarts the current sector")
+	_expect(player != null and player.is_inside_tree(), "sector reset exposes the newly created player body")
 	var reactor_checkpoint: Vector2 = Rules.get_level(1).get("checkpoint_position", Vector2.ZERO)
 	_expect(reactor_checkpoint == Vector2(820, 278), "Reactor Scaffold checkpoint is positioned away from the laser")
 	_expect(game.activate_checkpoint("reactor_mid", reactor_checkpoint), "Reactor Scaffold checkpoint activates at the safe platform anchor")
