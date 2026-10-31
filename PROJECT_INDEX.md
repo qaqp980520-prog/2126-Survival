@@ -1425,3 +1425,38 @@
 - World-save schema remains version 1.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
 - GitHub reports `main.protected=false` with required status checks off. Branch-protection hardening remains a separate owner-approved task.
+
+
+## Run 76 — KROLL Crossflow Controller and live terrain adjacency (2026-11-01)
+
+### KROLL Crossflow Controller M0.1
+
+- Added a standalone/root-loadable Godot 4.3 project at `daily_games/KROLL_Crossflow_Controller/`.
+- Real-time four-way traffic signal management across three deterministic shifts: Depot Rush, Rain Shift and Freight Window.
+- Signal changes require an all-red clearance interval; the rules model includes queue limits, per-approach queues, alternating tie fairness, delivery quotas, timeouts and reset/next-shift progression.
+- Keyboard, mouse and touch controls; standalone rules/runtime tests and root Survival Test Hub registration.
+- Vehicles are represented as queue counters in M0.1; animated vehicle sprites and campaign persistence are not included.
+
+### SurfaceTerrainAdjacencyBinder M0.1
+
+- Added `systems/SurfaceTerrainAdjacencyBinder.gd` to derive cardinal neighbors from live world positions and rebuild bindings after chunk load/unload.
+- Validates live supported nodes, unique instances and positions, uniform patch size and exact cardinal spacing before replacing current links.
+- SurfaceTerrainPatch uses weak neighbor references and propagates live height changes to the reciprocal edge without persisting derived adjacency metadata.
+- MineralChunkController binds existing plus candidate patches on load, restores previous adjacency after failed registration, and rebuilds remaining links after unload.
+- SurfaceChunkFactory retains the original isolated patch and adds a two-tile adjacent terrace in each surface chunk. The active 3×3 window now contains 27 terrain patches; world-save schema remains version 1.
+- Production lifecycle coverage verifies 27 independent patches through edits, live edge-policy updates, chunk unload/reload, fresh node/proxy instances, stable IDs and schema-1 restoration.
+
+### Exact-head validation and merge
+
+- Feature PR [#189](https://github.com/qaqp980520-prog/2126-Survival/pull/189) merged as `777225c1cd80a89d8c888c0703ef0e462fa03f34`.
+- Final feature HEAD: `efb61375b9b2dee0397a1b56f4db3d0cbf356d55`.
+- Exact-head Godot 4.3 workflow [Run #41252504326](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41252504326) completed successfully: all 332 workflow steps passed, zero failures, zero skipped; repository checkout and container cleanup succeeded.
+- Run 76-specific Crossflow import/rules/runtime and SurfaceTerrainAdjacencyBinder tests passed at steps 327–330. The workflow also passed the expanded 27-patch production lifecycle test and all preceding game/world regressions.
+
+### Remaining work and limitations
+
+- The current production adjacent pairs are within each chunk; a dedicated cross-chunk adjacency integration case remains to be added.
+- Unequal-height shared edges remain explicit steps; a single-owner shared transition collider is not implemented.
+- Chunk streaming remains synchronous; bounded asynchronous streaming, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+- GitHub reports `main.protected=false` with required status checks off. Branch-protection hardening remains a separate repository-governance task.
