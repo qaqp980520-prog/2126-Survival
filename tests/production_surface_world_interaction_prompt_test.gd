@@ -60,7 +60,10 @@ func _run() -> void:
 		quit(1)
 
 func _find_world_prop(world: Node, node_name: String, chunk_name: String, mineral: bool = false) -> Node3D:
-	var candidates: Array = world.chunk_controller.get_loaded_mineral_nodes() if mineral else world.chunk_controller.get_loaded_world_state_nodes()
+	var controller: Node = world.get("chunk_controller") as Node
+	if controller == null:
+		return null
+	var candidates: Array = controller.call("get_loaded_mineral_nodes") if mineral else controller.call("get_loaded_world_state_nodes")
 	for candidate in candidates:
 		if not is_instance_valid(candidate) or candidate.name != node_name:
 			continue
