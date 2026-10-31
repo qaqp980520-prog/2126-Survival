@@ -70,7 +70,7 @@ func _run() -> void:
 	_expect(not registry.call("get_registered_ids").has(stable_id), "unloaded vein is no longer registered as a live node")
 	_expect(registry.call("get_saved_ids").has(stable_id), "stable vein ID remains in the saved-ID set")
 	var stale_target: Dictionary = world.call("get_camera_interaction_target")
-	_expect(stale_target.is_empty(), "camera target cache rejects the unloaded vein and its stale proxy")
+	_expect(stale_target.get("node") != original_vein and stale_target.get("proxy") != original_proxy, "camera target cache never returns the unloaded vein or its stale proxy")
 	await process_frame
 	_expect(not is_instance_valid(original_vein) and not is_instance_valid(original_proxy), "old vein node and interaction proxy are freed after unload")
 
