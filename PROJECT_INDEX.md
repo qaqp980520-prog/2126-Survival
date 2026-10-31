@@ -1269,3 +1269,46 @@
 - Bounded asynchronous chunk streaming, cancellation-safe ownership and deterministic rollback remain future work; current streaming remains synchronous.
 - Other formal stateful interactables still need the same factory/ID/state/proxy lifecycle proof.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## 2026-10-31 Run 72 — KROLL Atmosphere Lab and persistent surface terrain patches
+
+### New playable Godot 4 game
+
+- Added `daily_games/KROLL_Atmosphere_Lab/`, a deterministic weather-station balancing puzzle with three stations: Coastal Front, Desert Thermal and Polar Calm.
+- Four instruments (temperature, humidity, pressure and wind) are adjusted in ±5 steps. Each station has a 14-action budget and a deterministic storm-load limit.
+- Controls: click/tap the instrument ±5 buttons; keyboard 1–4 selects an instrument, Left/Right adjusts, R resets and N advances after a stable forecast.
+- The authored solution routes require 13, 11 and 12 adjustments respectively; target storm loads are 5, 0 and 0, all below the limit of 25.
+- Added deterministic rules tests and a runtime smoke test covering adjustment, reset, stable completion and station progression. Registered the game in the root Survival Test Hub.
+- No external assets, plugins, audio or network dependencies; Godot 4.3+.
+- The storm-load equation is an arcade puzzle model, not a meteorological forecast.
+
+### Production surface terrain patch
+
+- Added `systems/SurfaceTerrainPatch.gd`; every generated surface chunk now owns one 2 m terrain patch.
+- Stateful fields: `height_level` (0–2), `surface_type` (soil/rock/metal) and `revision`.
+- The patch rebuilds its collision and visual geometry when edited or restored. T-key and touch TERRAIN controls use a dedicated camera-ray target kind and only act on loaded registered patches; terrain editing is disabled underground.
+- Stable ID example: `surface/chunk_0_0/object/Chunk_0_0/TerrainPatch`.
+- State is collected and restored by the existing WorldObjectStateRegistry; world-save schema remains version 1.
+
+### Production regression coverage
+
+- Added `tests/production_surface_world_terrain_patch_reload_test.gd` using the real SurfaceWorld, chunk controller, camera-ray target resolver and world-object registry.
+- Covers invalid-state rejection without mutation, touch editing, collision height/grounding, same-window save/restore, revision-limit rejection, chunk unload, old node/proxy release, stable-ID state retention, fresh node/proxy reconstruction and T-key editing after reload.
+- Added 15 collision/state boundary assertions in the final candidate.
+- Updated the world-session controller test for 9 salvage crates + 9 terrain patches = 18 stateful objects. The production SurfaceWorld test accounts for 9 crates + 9 terrain patches + 7 underground caches + 1 lift = 26.
+
+### Exact-head failures, corrections and acceptance
+
+- Superseded Run #810 failed step 150 because the world-session test expected nine crates but did not account for the nine new terrain patches. Commit `6631f8f37123d6cd29b49b3db72caf441c78a146` corrected the count to 9 crates + 9 patches.
+- Run #811 passed steps 1–304, then failed step 305 because the workflow grep expected `SurfaceTerrainPatchScript`; the actual factory constant is `TerrainPatchScript`. Commit `b6234ecf32d21057d2fb387e7d95c91f58c24aec` corrected the workflow assertion without changing production factory code.
+- Commit `6b33d9f5ab249f43666e99f42f9527a54d38741e` added collision-geometry, invalid-state and revision-boundary assertions.
+- Feature PR [#181](https://github.com/qaqp980520-prog/2126-Survival/pull/181) merged as `cfedc9ea03f953cf1b508c13bd120e16a762a61d`.
+- Exact feature HEAD `6b33d9f5ab249f43666e99f42f9527a54d38741e` passed canonical Godot 4.3 [Run #813](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41206050265): 309/309 primary validation steps succeeded, zero failures and zero skipped; all three post-job cleanup steps also succeeded.
+- Main was rechecked and is identical to the feature merge SHA before this documentation-only follow-up.
+
+### Known limits and next steps
+
+- The current feature is one 2 m patch per surface chunk with three height levels and three material states; it is not arbitrary voxel sculpting, multi-tile blending or a smoothed terrain system.
+- Chunk streaming remains synchronous. Bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
