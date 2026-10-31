@@ -21,6 +21,7 @@ const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
 const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
 const CONVEYOR_ARCHITECT_SCENE := "res://daily_games/KROLL_Conveyor_Architect/main.tscn"
+const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controller/main.tscn"
 
 var failures: Array[String] = []
 
@@ -47,6 +48,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(NEON_CLIMBER_SCENE), "Neon Climber game scene exists")
 	_expect(ResourceLoader.exists(ROBOTIC_ARM_OPERATOR_SCENE), "Robotic Arm Operator game scene exists")
 	_expect(ResourceLoader.exists(CONVEYOR_ARCHITECT_SCENE), "Conveyor Architect game scene exists")
+	_expect(ResourceLoader.exists(CROSSFLOW_CONTROLLER_SCENE), "Crossflow Controller game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -55,7 +57,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 20, "hub exposes the world entry and nineteen prototype launch buttons")
+	_expect(buttons.size() == 21, "hub exposes the world entry and twenty prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -219,6 +221,7 @@ func _run() -> void:
 		await process_frame
 
 	_expect(labels.has("KROLL Conveyor Architect"), "hub labels the Conveyor Architect game")
+	_expect(labels.has("KROLL Crossflow Controller"), "hub labels the Crossflow Controller game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -230,6 +233,18 @@ func _run() -> void:
 			var conveyor_state: Dictionary = conveyor_game.call("get_current_state")
 			_expect(str(conveyor_state.get("level_id", "")) == "dock_line", "root-loaded Conveyor Architect starts Dock Line")
 		conveyor_game.queue_free()
+		await process_frame
+	var crossflow_scene := load(CROSSFLOW_CONTROLLER_SCENE) as PackedScene
+	_expect(crossflow_scene != null, "root hub can load the Crossflow Controller scene")
+	if crossflow_scene != null:
+		var crossflow_game := crossflow_scene.instantiate()
+		root.add_child(crossflow_game)
+		await process_frame
+		_expect(crossflow_game.has_method("get_current_state"), "root-loaded Crossflow Controller initializes its traffic model")
+		if crossflow_game.has_method("get_current_state"):
+			var crossflow_state: Dictionary = crossflow_game.call("get_current_state")
+			_expect(str(crossflow_state.get("level_id", "")) == "depot_rush", "root-loaded Crossflow Controller starts Depot Rush")
+		crossflow_game.queue_free()
 		await process_frame
 	hub.queue_free()
 	await process_frame

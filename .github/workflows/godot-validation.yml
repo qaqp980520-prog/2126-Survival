@@ -2660,3 +2660,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Surface terrain patch adjacency tests passed."
+
+      - name: Verify Run 76 Crossflow Controller and terrain adjacency inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Crossflow_Controller/project.godot
+          test -f daily_games/KROLL_Crossflow_Controller/main.tscn
+          test -f daily_games/KROLL_Crossflow_Controller/main.gd
+          test -f daily_games/KROLL_Crossflow_Controller/rules.gd
+          test -f daily_games/KROLL_Crossflow_Controller/tests/rules_test.gd
+          test -f daily_games/KROLL_Crossflow_Controller/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Crossflow_Controller/daily_games/KROLL_Crossflow_Controller/main.gd
+          test -f daily_games/KROLL_Crossflow_Controller/daily_games/KROLL_Crossflow_Controller/rules.gd
+          cmp -s daily_games/KROLL_Crossflow_Controller/main.gd daily_games/KROLL_Crossflow_Controller/daily_games/KROLL_Crossflow_Controller/main.gd
+          cmp -s daily_games/KROLL_Crossflow_Controller/rules.gd daily_games/KROLL_Crossflow_Controller/daily_games/KROLL_Crossflow_Controller/rules.gd
+          grep -q 'CROSSFLOW_CONTROLLER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Crossflow Controller' tests/survival_test_hub_smoke_test.gd
+          grep -q 'TerrainAdjacencyBinderScript' systems/MineralChunkController.gd
+          grep -q 'TerrainPatch_AdjacentWest' systems/SurfaceChunkFactory.gd
+          grep -q '_refresh_bound_neighbors' systems/SurfaceTerrainPatch.gd
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f tests/surface_terrain_adjacency_binder_test.gd
+          grep -q 'Surface terrain adjacency binder tests passed.' tests/surface_terrain_adjacency_binder_test.gd
+      - name: Import and parse KROLL Crossflow Controller
+        run: godot --headless --path daily_games/KROLL_Crossflow_Controller --editor --quit
+      - name: Run KROLL Crossflow Controller rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Crossflow_Controller --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Crossflow Controller rules tests passed."
+      - name: Run KROLL Crossflow Controller runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Crossflow_Controller --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Crossflow Controller runtime smoke test passed."
+      - name: Run SurfaceTerrainAdjacencyBinder tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency binder tests passed."

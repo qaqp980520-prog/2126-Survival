@@ -20,6 +20,7 @@ const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
 const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
 const CONVEYOR_ARCHITECT_SCENE := "res://daily_games/KROLL_Conveyor_Architect/main.tscn"
+const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controller/main.tscn"
 
 var status_label: Label
 
@@ -195,6 +196,12 @@ func _build_ui() -> void:
 		"KROLL Conveyor Architect",
 		"在六乘六工廠格配置方向輸送帶，避開障礙並將貨物送達接收區；支援鍵盤與觸控。",
 		CONVEYOR_ARCHITECT_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Crossflow Controller",
+		"即時管理四向路口號誌，在全紅清空時間內切換車流，避免排隊溢出並完成三個班次。",
+		CROSSFLOW_CONTROLLER_SCENE
 	)
 	_add_scene_button(
 		launch_list,

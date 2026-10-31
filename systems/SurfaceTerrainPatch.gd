@@ -21,6 +21,7 @@ var _interaction_area: Area3D
 var _ramp_collisions: Dictionary = {}
 var _ramp_visuals: Dictionary = {}
 var _neighbor_edge_states: Dictionary = {}
+var _neighbor_patches: Dictionary = {}
 
 func _ready() -> void:
 	_build_collision()
@@ -53,6 +54,7 @@ func apply_world_object_state(state: Dictionary) -> bool:
 	_surface_type=str(state["surface_type"])
 	_revision=int(state["revision"])
 	_refresh_geometry()
+	_refresh_bound_neighbors()
 	return true
 
 func cycle_terrain_edit() -> Dictionary:
@@ -63,6 +65,7 @@ func cycle_terrain_edit() -> Dictionary:
 	_surface_type=SURFACE_TYPES[posmod(surface_index+1,SURFACE_TYPES.size())]
 	_revision+=1
 	_refresh_geometry()
+	_refresh_bound_neighbors()
 	return {"ok":true,"reason":"edited","state":get_world_object_state()}
 
 func get_top_height() -> float:
@@ -196,6 +199,7 @@ func _refresh_geometry() -> void:
 func get_edge_ramp_profile() -> Dictionary:
 	var rise: float = get_top_height()
 	return {
+		"patch_size":PATCH_SIZE,
 		"run":EDGE_RAMP_RUN,
 		"rise":rise,
 		"slope_length":sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+rise*rise),
@@ -206,7 +210,9 @@ func get_edge_ramp_profile() -> Dictionary:
 func bind_neighbor_patch(side: String, neighbor_patch: Node3D) -> bool:
 	if not RAMP_SIDES.has(side) or not is_instance_valid(neighbor_patch) or neighbor_patch == self:
 		return false
-	if not neighbor_patch.has_method("get_world_object_state"):
+	if not neighbor_patch.is_inside_tree() or neighbor_patch.is_queued_for_deletion():
+		return false
+	if not neighbor_patch.has_method("get_world_object_state") or not neighbor_patch.has_method("set_neighbor_edge_state"):
 		return false
 	var expected_offset := Vector3.ZERO
 	match side:
@@ -222,9 +228,10 @@ func bind_neighbor_patch(side: String, neighbor_patch: Node3D) -> bool:
 	if absf(actual_offset.x - expected_offset.x) > 0.01 or absf(actual_offset.y) > 0.01 or absf(actual_offset.z - expected_offset.z) > 0.01:
 		return false
 	var neighbor_state: Variant = neighbor_patch.call("get_world_object_state")
-	if not (neighbor_state is Dictionary):
+	if not (neighbor_state is Dictionary) or not set_neighbor_edge_state(side, neighbor_state):
 		return false
-	return set_neighbor_edge_state(side, neighbor_state)
+	_neighbor_patches[side] = weakref(neighbor_patch)
+	return true
 
 func set_neighbor_edge_state(side: String, neighbor_state: Dictionary) -> bool:
 	if not RAMP_SIDES.has(side) or not validate_world_object_state(neighbor_state):
@@ -236,9 +243,40 @@ func set_neighbor_edge_state(side: String, neighbor_state: Dictionary) -> bool:
 func clear_neighbor_edge_state(side: String) -> bool:
 	if not RAMP_SIDES.has(side):
 		return false
+	var reference: WeakRef = _neighbor_patches.get(side) as WeakRef
+	var neighbor: Node3D = null
+	if reference != null:
+		neighbor = reference.get_ref() as Node3D
+	_clear_neighbor_edge_state_local(side)
+	if is_instance_valid(neighbor) and neighbor.has_method("_clear_neighbor_edge_state_local"):
+		neighbor.call("_clear_neighbor_edge_state_local", _opposite_side(side))
+	return true
+
+func _clear_neighbor_edge_state_local(side: String) -> void:
+	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
 	_refresh_edge_ramp_state(side)
-	return true
+
+func _refresh_bound_neighbors() -> void:
+	var local_state: Dictionary = get_world_object_state()
+	for side in RAMP_SIDES:
+		var reference: WeakRef = _neighbor_patches.get(side) as WeakRef
+		if reference == null:
+			continue
+		var neighbor: Node3D = reference.get_ref() as Node3D
+		if not is_instance_valid(neighbor) or neighbor.is_queued_for_deletion() or not neighbor.is_inside_tree():
+			_clear_neighbor_edge_state_local(side)
+			continue
+		if not neighbor.has_method("set_neighbor_edge_state") or not bool(neighbor.call("set_neighbor_edge_state", _opposite_side(side), local_state)):
+			_clear_neighbor_edge_state_local(side)
+
+func _opposite_side(side: String) -> String:
+	match side:
+		"east": return "west"
+		"west": return "east"
+		"north": return "south"
+		"south": return "north"
+		_: return ""
 
 func get_edge_policy(side: String) -> Dictionary:
 	if not RAMP_SIDES.has(side):
