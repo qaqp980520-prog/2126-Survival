@@ -9,6 +9,7 @@ const PATCH_SIZE: float = 2.0
 const EDGE_RAMP_RUN: float = 0.75
 const EDGE_RAMP_COLLISION_THICKNESS: float = 0.04
 const RAMP_SIDES: Array[String] = ["east", "west", "north", "south"]
+const EdgePolicyScript = preload("res://systems/SurfaceTerrainEdgePolicy.gd")
 
 var _height_level: int = 0
 var _surface_type: String = "soil"
@@ -19,6 +20,7 @@ var _surface_mesh: MeshInstance3D
 var _interaction_area: Area3D
 var _ramp_collisions: Dictionary = {}
 var _ramp_visuals: Dictionary = {}
+var _neighbor_edge_states: Dictionary = {}
 
 func _ready() -> void:
 	_build_collision()
@@ -151,6 +153,8 @@ func _refresh_geometry() -> void:
 		var ramp_collision: CollisionShape3D = _ramp_collisions.get(side) as CollisionShape3D
 		if ramp_collision != null:
 			_configure_ramp_collision(ramp_collision,side,height)
+	for side in RAMP_SIDES:
+		_refresh_edge_ramp_state(side)
 	if _surface_mesh == null or not is_instance_valid(_surface_mesh):
 		return
 	var material := StandardMaterial3D.new()
@@ -198,3 +202,60 @@ func get_edge_ramp_profile() -> Dictionary:
 		"collision_thickness":EDGE_RAMP_COLLISION_THICKNESS,
 		"sides":RAMP_SIDES.duplicate()
 	}
+
+func bind_neighbor_patch(side: String, neighbor_patch: Node3D) -> bool:
+	if not RAMP_SIDES.has(side) or not is_instance_valid(neighbor_patch) or neighbor_patch == self:
+		return false
+	if not neighbor_patch.has_method("get_world_object_state"):
+		return false
+	var expected_offset := Vector3.ZERO
+	match side:
+		"east":
+			expected_offset = Vector3(PATCH_SIZE, 0.0, 0.0)
+		"west":
+			expected_offset = Vector3(-PATCH_SIZE, 0.0, 0.0)
+		"north":
+			expected_offset = Vector3(0.0, 0.0, -PATCH_SIZE)
+		"south":
+			expected_offset = Vector3(0.0, 0.0, PATCH_SIZE)
+	var actual_offset: Vector3 = neighbor_patch.global_position - global_position
+	if absf(actual_offset.x - expected_offset.x) > 0.01 or absf(actual_offset.y) > 0.01 or absf(actual_offset.z - expected_offset.z) > 0.01:
+		return false
+	var neighbor_state: Variant = neighbor_patch.call("get_world_object_state")
+	if not (neighbor_state is Dictionary):
+		return false
+	return set_neighbor_edge_state(side, neighbor_state)
+
+func set_neighbor_edge_state(side: String, neighbor_state: Dictionary) -> bool:
+	if not RAMP_SIDES.has(side) or not validate_world_object_state(neighbor_state):
+		return false
+	_neighbor_edge_states[side] = neighbor_state.duplicate(true)
+	_refresh_edge_ramp_state(side)
+	return true
+
+func clear_neighbor_edge_state(side: String) -> bool:
+	if not RAMP_SIDES.has(side):
+		return false
+	_neighbor_edge_states.erase(side)
+	_refresh_edge_ramp_state(side)
+	return true
+
+func get_edge_policy(side: String) -> Dictionary:
+	if not RAMP_SIDES.has(side):
+		return {"valid": false, "mode": "invalid", "reason": "invalid_side", "ramp_enabled": false}
+	var neighbor_state: Dictionary = _neighbor_edge_states.get(side, {})
+	return EdgePolicyScript.classify_edge(get_world_object_state(), neighbor_state)
+
+func _refresh_edge_ramp_state(side: String) -> void:
+	var policy: Dictionary = get_edge_policy(side)
+	var ramp_enabled: bool = bool(policy.get("valid", false)) and bool(policy.get("ramp_enabled", false))
+	var ramp_body := get_node_or_null("TerrainRampBody_" + side.capitalize()) as StaticBody3D
+	if ramp_body != null:
+		ramp_body.collision_layer = 1 if ramp_enabled else 0
+		var collision := ramp_body.get_node_or_null("TerrainRampCollision_" + side.capitalize()) as CollisionShape3D
+		if collision != null:
+			collision.disabled = not ramp_enabled
+	var visual: MeshInstance3D = _ramp_visuals.get(side) as MeshInstance3D
+	if visual != null:
+		visual.visible = ramp_enabled
+

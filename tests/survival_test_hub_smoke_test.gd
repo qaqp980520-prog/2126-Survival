@@ -20,6 +20,7 @@ const KNIGHT_CIRCUIT_SCENE := "res://daily_games/KROLL_Knight_Circuit/main.tscn"
 const ATMOSPHERE_LAB_SCENE := "res://daily_games/KROLL_Atmosphere_Lab/main.tscn"
 const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
 const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
+const CONVEYOR_ARCHITECT_SCENE := "res://daily_games/KROLL_Conveyor_Architect/main.tscn"
 
 var failures: Array[String] = []
 
@@ -45,6 +46,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(ATMOSPHERE_LAB_SCENE), "Atmosphere Lab game scene exists")
 	_expect(ResourceLoader.exists(NEON_CLIMBER_SCENE), "Neon Climber game scene exists")
 	_expect(ResourceLoader.exists(ROBOTIC_ARM_OPERATOR_SCENE), "Robotic Arm Operator game scene exists")
+	_expect(ResourceLoader.exists(CONVEYOR_ARCHITECT_SCENE), "Conveyor Architect game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -53,7 +55,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 19, "hub exposes the world entry and eighteen prototype launch buttons")
+	_expect(buttons.size() == 20, "hub exposes the world entry and nineteen prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -214,6 +216,20 @@ func _run() -> void:
 			var arm_state: Dictionary = arm_game.call("get_current_state")
 			_expect(str(arm_state.get("status", "")) == "playing", "root-loaded Robotic Arm Operator starts its first work order")
 		arm_game.queue_free()
+		await process_frame
+
+	_expect(labels.has("KROLL Conveyor Architect"), "hub labels the Conveyor Architect game")
+	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
+	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
+	if conveyor_scene != null:
+		var conveyor_game := conveyor_scene.instantiate()
+		root.add_child(conveyor_game)
+		await process_frame
+		_expect(conveyor_game.has_method("get_current_state"), "root-loaded Conveyor Architect initializes its routing model")
+		if conveyor_game.has_method("get_current_state"):
+			var conveyor_state: Dictionary = conveyor_game.call("get_current_state")
+			_expect(str(conveyor_state.get("level_id", "")) == "dock_line", "root-loaded Conveyor Architect starts Dock Line")
+		conveyor_game.queue_free()
 		await process_frame
 	hub.queue_free()
 	await process_frame
