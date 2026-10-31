@@ -224,6 +224,13 @@ func _expect_edge_ramps(patch: Node3D, expected_height: float, label: String, di
 		var top_center: Vector3 = ramp.transform*Vector3(0.0,ramp_box.size.y*0.5,0.0)
 		_expect(absf(top_center.y-expected_height*0.5) <= 0.0001, "%s %s ramp top face stays centered on the visual slope" % [label, side])
 
+func _ramp_enabled(patch: Node3D, side: String) -> bool:
+	var body := patch.get_node_or_null("TerrainRampBody_" + side) as StaticBody3D
+	if body == null:
+		return false
+	var collision := body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
+	return body.collision_layer == 1 and collision != null and not collision.disabled
+
 func _find_patch(controller: Node, chunk_id: String, node_name: String) -> Node3D:
 	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
 	return chunk_root.get_node_or_null(node_name) as Node3D if chunk_root != null else null

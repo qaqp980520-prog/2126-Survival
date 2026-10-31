@@ -36,10 +36,19 @@ func _run() -> void:
 	fair["target_deliveries"] = 99
 	fair["queues"]["north"] = [1, 2]
 	fair["queues"]["south"] = [3, 4]
+	fair["last_served"]["ns"] = "north"
 	fair = Rules.advance_tick(fair)
-	_expect(int(fair.get("delivered", 0)) == 1 and fair.get("last_served", {}).get("ns", "") == "north", "north/south queue tie starts with north")
-	fair = Rules.advance_tick(fair)
-	_expect(int(fair.get("delivered", 0)) == 2 and fair.get("last_served", {}).get("ns", "") == "south", "north/south queue tie alternates fairly")
+	var fair_last: Dictionary = fair.get("last_served", {})
+	_expect(int(fair.get("delivered", 0)) == 1 and fair_last.get("ns", "") == "south", "equal north/south queues alternate away from the last-served approach")
+	var fair_reverse := Rules.create_state(0)
+	fair_reverse["arrivals"] = []
+	fair_reverse["target_deliveries"] = 99
+	fair_reverse["queues"]["north"] = [1, 2]
+	fair_reverse["queues"]["south"] = [3, 4]
+	fair_reverse["last_served"]["ns"] = "south"
+	fair_reverse = Rules.advance_tick(fair_reverse)
+	var reverse_last: Dictionary = fair_reverse.get("last_served", {})
+	_expect(int(fair_reverse.get("delivered", 0)) == 1 and reverse_last.get("ns", "") == "north", "queue tie fairness alternates in the opposite direction")
 	var overflow := Rules.create_state(0)
 	overflow["tick"] = 1
 	overflow["queues"]["east"] = [1, 2, 3, 4, 5]
