@@ -11,6 +11,23 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-31 Run 64 — KROLL Star Chart + camera-ray world interactions (feature merged / exact-head CI passed)
+
+- Start-of-run reconciliation: main before this work was `5a797a19e0694a56f95db82bfa1f4316c3efc929`; PR #164 was the only open PR. Full branch pagination returned 170 branches. PR #164 feature HEAD `5fc815dfbabf0b993c824fba12b0e012b4140907` was 45 commits ahead / 0 behind main, 19 changed files.
+- New game: `daily_games/KROLL_Star_Chart/`, a telescope-alignment puzzle with three authored sectors and four ordered stars per sector. Zoom tightens lock tolerance; missed locks cost time; score reflects zoom and remaining time. Keyboard, mouse and partial touch aiming/locking are supported. Godot 4.3+, no external assets/add-ons; import through `daily_games/KROLL_Star_Chart/project.godot` or launch from SurvivalTestHub.
+- Game controls: WASD/arrows adjust aim, Q/E zoom, Space/right mouse lock, R restart and N advance after completing a sector. Touch supports tap-to-aim, drag fine-adjustment and the on-screen lock control; touch-only restart/next-sector navigation is not yet implemented.
+- Existing-system change: `world/SurfaceWorld.gd` now selects interaction targets with a camera-forward physics ray and reuses the same selected target for the prompt and E/F/G/V actions. Registered non-blocking Area3D proxies are on physics layer 2; a separate body-only layer-1 ray preserves solid world occlusion while ignoring unrelated trigger areas. Depleted mineral veins disable their interaction proxy. No world-save schema change; stable IDs and existing inventory transaction APIs are unchanged.
+- Regression coverage: `tests/production_surface_world_interaction_prompt_test.gd` covers aim-based surface/underground prompts, unrelated trigger-area filtering and solid-body occlusion. `tests/production_surface_world_mining_test.gd` verifies the exact aimed vein/cache target before inventory actions, including clear approaches around the mine lift proxy. Existing production SurfaceWorld and underground mining tests remain in the workflow.
+- Feature PR [#164](https://github.com/qaqp980520-prog/2126-Survival/pull/164) merged as `4ab93b8aaeac2392b5d464afdfdb77b1cec477dd`; exact candidate HEAD `5fc815dfbabf0b993c824fba12b0e012b4140907`.
+- Exact-head Godot 4.3 CI [Run #736](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41166102103) completed successfully: 273/273 step records, zero failures and zero skips. Run 64 steps 265–270 (production prompt test, input verification, Star Chart import/rules/runtime and camera-ray production integration) all passed. Supplementary Runs #33 (12/12) and #35 (13/13) also passed.
+- Historical candidates #731/#734/#735 had test failures and were superseded; only exact-head Run #736 is accepted as final feature evidence. The runtime smoke-test helper and prompt-test physics-node setup were corrected before final CI.
+- No local Godot executable was available. Manual GUI, GPU performance and iPhone device testing are not claimed.
+
+### Known limits and next steps
+- Touch-only users cannot yet restart or advance sectors; add on-screen RESTART/NEXT controls and test a complete touch-only campaign.
+- Add manual GUI/GPU/iPhone acceptance when a suitable device/runtime is available.
+- Continue improving camera-ray feedback and interaction-target lifecycle validation, then proceed with stable-ID world-object factory integration, terrain/object persistence and vertical mine streaming.
+
 ## 2026-10-31 Run 62 — Shadow Courier + persisted underground world seed (feature merged / exact-head CI passed)
 
 - Start-of-run reconciliation: Run 61 PRs #158/#159 were merged; final main was `01d1b30120f568b7e99e8d2045212dbd55a3249e`. Post-merge main workflow Run #688 completed successfully with 258/258 step records, zero failures and zero skips. Before Run 62 there were no open PRs and 165 branches.
