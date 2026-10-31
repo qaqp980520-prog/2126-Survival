@@ -33,6 +33,8 @@ func _run() -> void:
 	var hub := HubScene.instantiate()
 	root.add_child(hub)
 	await process_frame
+	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
+	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
 	_expect(buttons.size() == 10, "hub exposes the world entry and nine prototype launch buttons")
 	var labels: Array[String] = []
