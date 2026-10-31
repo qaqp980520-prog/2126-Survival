@@ -9,6 +9,7 @@ const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
 const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
+const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 
 var status_label: Label
 
@@ -105,6 +106,12 @@ func _build_ui() -> void:
 		"KROLL Star Chart",
 		"操控望遠鏡方位與倍率，依序鎖定四顆恆星，完成三個星區測繪任務。",
 		STAR_CHART_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Core Drill",
+		"規劃五條鑽探軌道，採集礦物並管理能源、熱量與鑽頭完整度。",
+		CORE_DRILL_SCENE
 	)
 	_add_scene_button(
 		column,
