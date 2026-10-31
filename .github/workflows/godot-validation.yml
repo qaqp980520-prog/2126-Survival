@@ -2289,6 +2289,9 @@ jobs:
           test -f daily_games/KROLL_Thermal_Glider/tests/game_smoke_test.gd
           test -f tests/production_surface_world_mineral_vein_chunk_reload_test.gd
           grep -q 'get_loaded_mineral_nodes' systems/MineralChunkController.gd
+          grep -q 'can_register' systems/MineralMiningNode.gd
+          grep -q 'can_register' systems/MineralChunkLifecycleAdapter.gd
+          grep -q 'can_register' systems/MineralChunkController.gd
           grep -q 'InteractionArea' systems/MineralMiningNode.gd
           grep -q 'sync_to_world_position' tests/production_surface_world_mineral_vein_chunk_reload_test.gd
       - name: Import and parse KROLL Thermal Glider
