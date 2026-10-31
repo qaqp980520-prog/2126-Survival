@@ -2,6 +2,7 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const SURFACE_PREFIX: String = "surface/"
+const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 var _test_time: int = 0
 var failures: Array[String] = []
 var world: Node3D
@@ -66,7 +67,7 @@ func _run() -> void:
 	var moved_away: bool = bool(world.call("debug_move_player_to", Vector3(41.5, 2.0, 41.5), _test_time))
 	_expect(moved_away, "production director moves to a disjoint surface window")
 	for entry in entries:
-		_expect(not bool(controller.call("is_chunk_loaded", str(entry["chunk_id"])), "original surface chunk unloads")
+		_expect(not bool(controller.call("is_chunk_loaded", str(entry["chunk_id"]))), "original surface chunk unloads")
 	await process_frame
 	await process_frame
 	for entry in entries:
