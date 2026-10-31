@@ -1,6 +1,6 @@
 extends Control
 
-const RulesScript = preload("res://rules.gd")
+const RulesScript = preload("res://daily_games/KROLL_Conveyor_Architect/rules.gd")
 
 var _state: Dictionary = {}
 var _cell_buttons: Dictionary = {}
