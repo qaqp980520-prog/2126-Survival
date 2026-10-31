@@ -1025,3 +1025,37 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Conveyor Architect is a deterministic one-cell-per-command puzzle, not real-time conveyor physics; no campaign save, audio, animation or procedural levels in M0.1.
 - Unequal-height terrain adjacency is intentionally a step until a safe shared transition collider exists.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+
+## Run 76 closeout — 2026-11-01
+
+### Completed
+
+- Added KROLL Crossflow Controller M0.1, a real-time four-way traffic management game with three deterministic shifts, all-red signal clearance, bounded queues, delivery quotas, timeout/retry, keyboard/mouse/touch controls, rules tests, runtime smoke test and root Test Hub registration.
+- Added SurfaceTerrainAdjacencyBinder to rebuild derived cardinal-neighbor links from live world positions during chunk load/unload. Binding validates the entire candidate set before replacing links and rejects invalid nodes, duplicate positions/instances, mixed patch sizes and non-cardinal/distant pairs.
+- Added reciprocal weak neighbor references to SurfaceTerrainPatch; state edits propagate live edge policy to neighbors without changing persisted state.
+- Integrated binder rebuild/rollback into MineralChunkController and added two adjacent production terrain patches per surface chunk while preserving the original isolated patch and stable ID.
+- Expanded the production 3×3 terrain lifecycle regression to 27 patches, including independent edits, live edge policy, collision geometry, unload/reload, fresh nodes/proxies, stable IDs and schema-1 restore.
+- World-save schema remains version 1; adjacency is derived runtime metadata and is not serialized.
+
+### Exact validation and merge
+
+- Feature PR [#189](https://github.com/qaqp980520-prog/2126-Survival/pull/189) merged as `777225c1cd80a89d8c888c0703ef0e462fa03f34` from exact HEAD `efb61375b9b2dee0397a1b56f4db3d0cbf356d55`.
+- Godot 4.3 exact-head [Run #41252504326](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41252504326) passed all 332 workflow steps, zero failures and zero skipped; repository checkout, container shutdown and job completion succeeded.
+- Run 76-specific steps 327–330 passed: Crossflow project import, rules, runtime smoke and SurfaceTerrainAdjacencyBinder tests.
+
+### Remaining engineering work
+
+1. Add a production cross-chunk adjacency integration case; current factory-created adjacent pairs are local to each chunk even though the binder can link any exact cardinal neighbors in the loaded set.
+2. Design a single-owner shared transition collider for unequal-height adjacent patches; current policy deliberately keeps a step and disables conflicting shared-edge ramps.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership, stale-request invalidation and deterministic rollback; current streaming remains synchronous.
+4. Continue stable-ID/state/fresh-proxy lifecycle coverage for other formal world objects.
+5. Add local GUI, GPU performance and iPhone hardware QA when a suitable environment is available.
+6. Review branch protection separately: GitHub reports main is unprotected and required status checks are off; no repository governance settings were changed in Run 76.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1; no migration was introduced.
+- Crossflow M0.1 models traffic as queue counters; animated vehicles, audio, multiplayer and campaign persistence are not included.
+- Unequal-height terrain adjacency remains a deliberate step until a safe shared transition collider is designed.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
