@@ -2158,3 +2158,44 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld camera-ray interaction tests passed."
+
+      - name: Verify Run 65 KROLL Core Drill and camera-ray target lifecycle inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Core_Drill/project.godot
+          test -f daily_games/KROLL_Core_Drill/main.tscn
+          test -f daily_games/KROLL_Core_Drill/main.gd
+          test -f daily_games/KROLL_Core_Drill/daily_games/KROLL_Core_Drill/main.gd
+          test -f daily_games/KROLL_Core_Drill/rules.gd
+          test -f daily_games/KROLL_Core_Drill/tests/rules_test.gd
+          test -f daily_games/KROLL_Core_Drill/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_interaction_lifecycle_test.gd
+          grep -q '_is_camera_interaction_target_current' world/SurfaceWorld.gd
+          grep -q 'target\["proxy"\]' world/SurfaceWorld.gd
+      - name: Import and parse KROLL Core Drill
+        run: godot --headless --path daily_games/KROLL_Core_Drill --editor --quit
+      - name: Run KROLL Core Drill rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Core_Drill --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Core Drill rules tests passed."
+      - name: Run KROLL Core Drill runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Core_Drill --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Core Drill runtime smoke test passed."
+      - name: Run production SurfaceWorld interaction lifecycle test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld interaction lifecycle tests passed."

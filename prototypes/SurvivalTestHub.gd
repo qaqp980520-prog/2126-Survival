@@ -9,6 +9,7 @@ const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
 const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
+const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 
 var status_label: Label
 
@@ -58,56 +59,75 @@ func _build_ui() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(note)
 
+	var scroll := ScrollContainer.new()
+	scroll.name = "LaunchListScroll"
+	scroll.custom_minimum_size = Vector2(0.0, 470.0)
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+
+	var launch_list := VBoxContainer.new()
+	launch_list.add_theme_constant_override("separation", 12)
+	launch_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(launch_list)
+
 	_add_scene_button(
-		column,
+		launch_list,
 		"主世界／地表生存",
 		"進入可遊玩的地表世界：WASD 移動、E 管理作物、F 回收打撈箱；支援鍵盤與觸控操作。",
 		WORLD_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"地表探索／區塊與礦物串流",
 		"測試第一人稱移動、地表區塊載入與卸載、礦脈資料和串流存檔。",
 		SURFACE_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"地下礦坑／採礦與共用背包",
 		"進入地下洞穴，開採銅、鐵與鈾礦，驗證礦脈持久化及負重即時更新。",
 		UNDERGROUND_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"KROLL Orbital Pinball",
 		"三張彈珠台、三顆球、碰撞反彈與雙側擋板；支援鍵盤、滑鼠與觸控。",
 		PINBALL_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"KROLL Tether Recovery",
 		"駕駛回收無人機，使用繫索拖運三件貨物返回停靠區；支援推進、煞車與觸控。",
 		TETHER_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"KROLL Shadow Courier",
 		"回收三份資料、避開旋轉巡邏視線，使用誘餌穿越 KROLL 設施；支援鍵盤與觸控。",
 		SHADOW_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"KROLL Flux Hockey",
 		"操控下方擋板，把能量球打進上方球門；三座競技場，支援拖曳與鍵盤。",
 		FLUX_HOCKEY_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
 		"KROLL Star Chart",
 		"操控望遠鏡方位與倍率，依序鎖定四顆恆星，完成三個星區測繪任務。",
 		STAR_CHART_SCENE
 	)
 	_add_scene_button(
-		column,
+		launch_list,
+		"KROLL Core Drill",
+		"規劃五條鑽探軌道，採集礦物並管理能源、熱量與鑽頭完整度。",
+		CORE_DRILL_SCENE
+	)
+	_add_scene_button(
+		launch_list,
 		"後室傳送門實驗場",
 		"測試後室無限迷宮、傳送門、背包負重、設定與存檔。",
 		BACKROOMS_SCENE

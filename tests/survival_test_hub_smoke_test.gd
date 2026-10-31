@@ -10,6 +10,7 @@ const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
 const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
+const CORE_DRILL_SCENE := "res://daily_games/KROLL_Core_Drill/main.tscn"
 
 var failures: Array[String] = []
 
@@ -26,13 +27,16 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(SHADOW_SCENE), "Shadow Courier game scene exists")
 	_expect(ResourceLoader.exists(FLUX_HOCKEY_SCENE), "Flux Hockey game scene exists")
 	_expect(ResourceLoader.exists(STAR_CHART_SCENE), "Star Chart game scene exists")
+	_expect(ResourceLoader.exists(CORE_DRILL_SCENE), "Core Drill game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
 	root.add_child(hub)
 	await process_frame
+	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
+	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 9, "hub exposes the world entry and eight prototype launch buttons")
+	_expect(buttons.size() == 10, "hub exposes the world entry and nine prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -45,6 +49,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Shadow Courier"), "hub labels the Shadow Courier game")
 	_expect(labels.has("KROLL Flux Hockey"), "hub labels the Flux Hockey game")
 	_expect(labels.has("KROLL Star Chart"), "hub labels the Star Chart game")
+	_expect(labels.has("KROLL Core Drill"), "hub labels the Core Drill game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -57,6 +62,18 @@ func _run() -> void:
 		var star_chart_mission: Dictionary = star_chart.call("get_current_mission")
 		_expect(str(star_chart_mission.get("id", "")) == "dockside", "root-loaded Star Chart can execute its rules module")
 		star_chart.queue_free()
+		await process_frame
+
+	var core_drill_scene := load(CORE_DRILL_SCENE) as PackedScene
+	_expect(core_drill_scene != null, "root hub can load the nested Core Drill scene script")
+	if core_drill_scene != null:
+		var core_drill := core_drill_scene.instantiate()
+		root.add_child(core_drill)
+		await process_frame
+		_expect(core_drill.has_method("get_current_mission"), "root-loaded Core Drill initializes its rules module")
+		var drill_mission: Dictionary = core_drill.call("get_current_mission")
+		_expect(str(drill_mission.get("id", "")) == "copper_spine", "root-loaded Core Drill can execute its rules module")
+		core_drill.queue_free()
 		await process_frame
 
 	hub.queue_free()
