@@ -22,6 +22,7 @@ func _run() -> void:
 		var profile: Dictionary = patch.call("get_edge_ramp_profile")
 		_expect(is_equal_approx(float(profile.get("rise",-1.0)),expected_height),"profile rise matches saved terrain height")
 		_expect(is_equal_approx(float(profile.get("run",-1.0)),PatchScript.EDGE_RAMP_RUN),"all edge ramps use the same run")
+		_expect(is_equal_approx(float(profile.get("slope_length",-1.0)),sqrt(PatchScript.EDGE_RAMP_RUN*PatchScript.EDGE_RAMP_RUN+expected_height*expected_height)),"visual slope length preserves exact horizontal run and vertical rise")
 		var body := patch.get_node_or_null("TerrainCollisionBody") as StaticBody3D
 		_expect(body != null,"terrain collision body exists")
 		if body == null:

@@ -163,6 +163,7 @@ func _refresh_geometry() -> void:
 	_surface_mesh.position=_collision_shape.position
 	_surface_mesh.material_override=material
 	var angle: float = atan(height/EDGE_RAMP_RUN)
+	var slope_length: float = sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+height*height)
 	var half: float = PATCH_SIZE*0.5
 	var offset: float = half+EDGE_RAMP_RUN*0.5
 	for side in RAMP_SIDES:
@@ -170,6 +171,9 @@ func _refresh_geometry() -> void:
 		if ramp_visual == null:
 			continue
 		ramp_visual.material_override=material
+		var plane := ramp_visual.mesh as PlaneMesh
+		if plane != null:
+			plane.size=Vector2(slope_length,PATCH_SIZE) if side == "east" or side == "west" else Vector2(PATCH_SIZE,slope_length)
 		match side:
 			"east":
 				ramp_visual.position=Vector3(offset,height*0.5,0.0)
@@ -185,4 +189,10 @@ func _refresh_geometry() -> void:
 				ramp_visual.rotation=Vector3(angle,0.0,0.0)
 
 func get_edge_ramp_profile() -> Dictionary:
-	return {"run":EDGE_RAMP_RUN,"rise":get_top_height(),"sides":RAMP_SIDES.duplicate()}
+	var rise: float = get_top_height()
+	return {
+		"run":EDGE_RAMP_RUN,
+		"rise":rise,
+		"slope_length":sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+rise*rise),
+		"sides":RAMP_SIDES.duplicate()
+	}
