@@ -11,6 +11,24 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-10-31 Run 62 — Shadow Courier + persisted underground world seed (feature merged / exact-head CI passed)
+
+- Start-of-run reconciliation: Run 61 PRs #158/#159 were merged; final main was `01d1b30120f568b7e99e8d2045212dbd55a3249e`. Post-merge main workflow Run #688 completed successfully with 258/258 step records, zero failures and zero skips. Before Run 62 there were no open PRs and 165 branches.
+- New game: `daily_games/KROLL_Shadow_Courier/`, a deterministic 8×8 turn-based stealth game with three authored missions, rotating patrol sight lines, walls that block sight, three data shards per mission, two decoys, extraction objective, keyboard and touch controls. All three authored missions have verified winning action sequences. Godot 4.3+, no external assets/add-ons; import through `daily_games/KROLL_Shadow_Courier/project.godot`.
+- Existing-system change: `world/SurfaceWorld.gd` now persists an optional bounded `world_seed` field in the existing schema-1 stream-save envelope. `systems/UndergroundMineFactory.gd` uses the seed for deterministic underground salvage-cache spawn, item identity and position. Seed 0 preserves the prior coordinate/layer formulas and fixed layer-zero service caches; schema-1 legacy saves without the field fall back to seed 0.
+- Seed restore safety: when a save uses a different seed, the active underground window is unloaded/rebuilt even if chunk IDs are unchanged. Failed target-seed streaming or base restore resets the prior seed, rebuilds the prior mine window and reapplies exact mineral and world-object registry snapshots.
+- Regression coverage: `tests/production_surface_world_seed_test.gd` covers same-seed determinism, cross-seed variation, invalid values, same-window rebuild, unload/reload, legacy fallback, and injected factory failure with exact registry rollback. Shadow Courier rules tests verify all three mission solutions; scene smoke tests exercise touch buttons and keyboard input.
+- Feature PR [#160](https://github.com/qaqp980520-prog/2126-Survival/pull/160) merged as `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; exact candidate HEAD `ae887177633842a5d8a4ed3da3acb7b8fdc59906`.
+- Exact-head Godot 4.3 CI [Run #699](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156096505) completed successfully: 263/263 total step records succeeded, zero failures, zero skips. Shadow Courier steps 256–259 and production world-seed integration step 260 all passed.
+- Main was re-read at merge SHA `cd76c87f888e8cc4606ffed3fffc1fb22a81552d`; PR #160 is closed/merged. Post-merge main workflow [Run #700](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41156636725) was queued at documentation closeout time and remains separate from the exact-head feature evidence.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone device testing are not claimed.
+
+### Known limits and next steps
+- The seed currently affects underground salvage caches only; mineral vein identities and terrain generation remain coordinate/layer deterministic.
+- There is no in-game new-world seed picker; the value is configurable on SurfaceWorld and persisted in saves.
+- Continue integrating stable-ID state restoration into all production world-object factories; then complete terrain/object persistence and vertical underground streaming.
+- Add stamina/food balancing and complete device QA. Do not treat cloud headless CI as GUI/GPU/iPhone evidence.
+
 ## 2026-10-27 Run 26 — Orbit Warden + mineral restore contract (merged / exact-head CI passed)
 
 - Start-of-run reconciliation: actual main was a48ec761f2b36cee44e6eb5022cda2b3c39aeca4. Run 25 PRs #84/#85 were merged; exact-head Godot 4.3 Runs #395 and #397 succeeded with 102 workflow validation steps each. Open PR search was empty. The Notion asset index still showed stale Run 23 pending snapshots; a correction was appended to the fixed Notion index and the Run 26 records.
