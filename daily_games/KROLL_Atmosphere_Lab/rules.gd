@@ -137,5 +137,5 @@ static func required_actions(level_index: int) -> int:
 	var level: Dictionary = get_level(level_index)
 	var total: int = 0
 	for instrument in INSTRUMENTS:
-		total += absi(int(level["target"][instrument]) - int(level["initial"][instrument])) / STEP
+		total += int(absi(int(level["target"][instrument]) - int(level["initial"][instrument])) / STEP)
 	return total
