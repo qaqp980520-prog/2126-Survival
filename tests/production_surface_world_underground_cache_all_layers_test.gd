@@ -11,10 +11,25 @@ var world: Node3D
 var controller: Node
 var registry: Node
 var mine_director: Node
+var inventory_bridge: Node
 var chunks_checked: int = 0
 var caches_checked: int = 0
 var layer_cache_counts: Dictionary = {}
 var all_stable_ids: Array[String] = []
+
+class TestInventoryBridge extends Node:
+	var inventory: Dictionary = {"seed": 1}
+	func serialize_inventory() -> Dictionary:
+		return inventory.duplicate(true)
+	func restore_inventory(snapshot: Dictionary) -> bool:
+		inventory = snapshot.duplicate(true)
+		return true
+	func collect_world_item(item_id: String, amount: int) -> bool:
+		if item_id.is_empty() or amount <= 0:
+			return false
+		inventory[item_id] = int(inventory.get(item_id, 0)) + amount
+		return true
+
 func _initialize() -> void:
 	call_deferred("_run")
 func _run() -> void:
@@ -29,8 +44,10 @@ func _run() -> void:
 	controller = world.get("chunk_controller") as Node
 	registry = world.get("object_state_registry") as Node
 	mine_director = world.get("mine_director") as Node
-	_expect(controller != null and registry != null and mine_director != null, "production world binds chunk controller, object registry and mine director")
-	if controller == null or registry == null or mine_director == null:
+	inventory_bridge = TestInventoryBridge.new()
+	world.add_child(inventory_bridge)
+	_expect(controller != null and registry != null and mine_director != null and inventory_bridge != null, "production world binds chunk controller, object registry, mine director and deterministic inventory adapter")
+	if controller == null or registry == null or mine_director == null or inventory_bridge == null:
 		await _finish(1)
 		return
 	var now: int = int(Time.get_unix_time_from_system())
@@ -72,7 +89,7 @@ func _run() -> void:
 					_expect(int(cache.get("loot_remaining")) == 2, "cache %s begins with two recoverable units" % cache.name)
 					var old_node_id: int = cache.get_instance_id()
 					var old_proxy_id: int = proxy.get_instance_id() if proxy != null else 0
-					_expect(bool(cache.call("interact")), "cache %s records its first recovered unit" % cache.name)
+					_expect(_collect_cache(cache), "cache %s records its first recovered unit" % cache.name)
 					_expect(int(cache.get("loot_remaining")) == 1 and bool(cache.get("opened")), "cache %s enters its opened one-unit state" % cache.name)
 					cache_records.append({"name":str(cache.name),"stable_id":stable_id,"item_id":item_id,"node":cache,"proxy":proxy,"node_id":old_node_id,"proxy_id":old_proxy_id})
 					all_stable_ids.append(stable_id)
@@ -112,7 +129,7 @@ func _run() -> void:
 						_expect((restored_proxy.collision_layer & INTERACTION_LAYER) != 0, "cache %s proxy keeps the interaction collision layer" % record["name"])
 					_expect(bool(restored_cache.get("opened")) and int(restored_cache.get("loot_remaining")) == 1, "cache %s restores its opened state and exact remaining stock" % record["name"])
 					_expect(str(restored_cache.get("loot_item_id")) == str(record["item_id"]), "cache %s restores its original loot item" % record["name"])
-					_expect(bool(restored_cache.call("interact")), "reloaded cache %s can be collected again" % record["name"])
+					_expect(_collect_cache(restored_cache), "reloaded cache %s can be collected again" % record["name"])
 					_expect(int(restored_cache.get("loot_remaining")) == 0, "reloaded cache %s reaches zero remaining stock" % record["name"])
 				var second_unload: bool = bool(controller.call("unload_chunk", chunk_id, now + 3))
 				_expect(second_unload, "controller unloads completed cache room at layer %d" % layer_index)
@@ -138,6 +155,10 @@ func _run() -> void:
 		_expect(int(copied_state.get("loot_remaining", -1)) == 0 and bool(copied_state.get("opened", false)), "schema-1 registry roundtrip preserves exhausted cache %s" % stable_id)
 	registry_copy.free()
 	await _finish(0 if failures.is_empty() else 1)
+func _collect_cache(cache: Node) -> bool:
+	var result: Dictionary = cache.call("interact_with_inventory", inventory_bridge)
+	return bool(result.get("ok", false))
+
 func _get_cache_nodes(chunk_root: Node3D) -> Array[Node3D]:
 	var result: Array[Node3D] = []
 	for child in chunk_root.get_children():
