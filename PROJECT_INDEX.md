@@ -1233,3 +1233,39 @@
 - Chunk streaming is still synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
 - Echo Mapper is a fixed-map prototype with no campaign save, audio, animation, randomized map generation or controller remapping.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+
+
+## 2026-10-31 Run 71 — KROLL Knight Circuit and all-layer cache lifecycle
+
+### New playable Godot 4 game
+
+- Added \`daily_games/KROLL_Knight_Circuit/\`, a 5×5 knight's-tour puzzle with three authored 25-square circuits.
+- Every move follows the chess knight's L-shaped rule; visited squares cannot be revisited. Includes undo, reset, route-prefix hint, keyboard cursor/Enter, mouse and touch input.
+- Deterministic route tests validate bounds, uniqueness and legal consecutive jumps for all three circuits; malformed duplicate-square routes are rejected.
+- Registered the game in the root Survival Test Hub with root-project scene-load smoke coverage.
+- No external assets, plugins, audio or network dependencies; Godot 4.3+.
+
+### Production underground cache lifecycle regression
+
+- Added \`tests/production_surface_world_underground_cache_all_layers_test.gd\`.
+- Exercises the real SurfaceWorld, UndergroundMineDirector, UndergroundMineFactory, MineralChunkController, WorldObjectStateRegistry and inventory transaction contract.
+- Covers the deterministic 5×5 sample across mine layers 0–8: exactly 151 cache placements, with per-layer counts \`[18, 17, 16, 17, 17, 16, 17, 17, 16]\`.
+- For every cache: load/register, collect one unit, unload and release the original node/proxy, verify stable ID and opened/remaining state, recreate a fresh node/proxy, collect the second unit, unload again, and verify the exhausted state survives schema-1 registry roundtrip.
+- Inventory transaction adapter accepted exactly 302 units across the 151 two-unit caches.
+- No production runtime or save-schema change; this is lifecycle regression coverage, not a claim that every coordinate in the unbounded procedural world was exhaustively enumerated.
+
+### Exact-head failures, corrections and acceptance
+
+- Superseded Run #801 failed at step 304 because SurfaceWorld initially creates the director-owned origin 3×3 mine window; the direct sample's first overlapping room was (-1,-1). Commit \`107a51677ca9251a1cafbf83faaa1c84301057d4\` moved the real director to a disjoint grid region centered at (100,100) and asserted zero overlap across all 151 sample IDs.
+- Run #802 passed all 151 cache lifecycle and schema-roundtrip assertions but exited 1 due an unfreed standalone registry-copy Node and shutdown resource warnings. Commit \`76b19dff907f8f88ecba1354991eed3c4f81e6fa\` explicitly frees the temporary registry and waits two process frames after world teardown.
+- Feature PR [#179](https://github.com/qaqp980520-prog/2126-Survival/pull/179) merged as \`ca458c1ace507bbee78bc03c69093077dadfba0d\`.
+- Exact final feature HEAD \`76b19dff907f8f88ecba1354991eed3c4f81e6fa\` passed canonical Godot 4.3 [Run #803](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41199269383): 307/307 steps succeeded, zero failures, zero skipped; checkout and container cleanup succeeded.
+- Run #803 verified root project import and Test Hub smoke, all pre-existing game and production integration tests, Run 70 Echo Mapper/all-layer lift lifecycle, Knight Circuit import/rules/runtime, and the new 151-cache all-layer lifecycle regression.
+
+### Known limits and next steps
+
+- The cache test covers a deterministic finite 5×5 sample across all nine supported layers, not every possible procedural coordinate.
+- Terrain-edit persistence across chunk unload/reload remains unfinished.
+- Bounded asynchronous chunk streaming, cancellation-safe ownership and deterministic rollback remain future work; current streaming remains synchronous.
+- Other formal stateful interactables still need the same factory/ID/state/proxy lifecycle proof.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
