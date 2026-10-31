@@ -24,6 +24,7 @@ func _run() -> void:
 	_expect(int(ping_state.get("sonar_charges", -1)) == Rules.MAX_SONAR_CHARGES - 1, "sonar pulse consumes exactly one charge")
 	_expect(int(ping_state.get("turns", -1)) == 1, "sonar pulse consumes one turn")
 	_expect(Rules.is_cell_visible(ping_state, Vector2i(4, 1)), "sonar reveals a nearby wall")
+	_expect(Rules.is_cell_visible(ping_state, Vector2i(3, 1)), "sonar reveals a nearby signal beacon")
 	_expect(not Rules.is_cell_visible(ping_state, Vector2i(7, 7)), "sonar does not reveal cells outside its Manhattan radius")
 
 	var expiring_state: Dictionary = ping_state

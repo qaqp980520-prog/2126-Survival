@@ -144,7 +144,7 @@ func _draw() -> void:
 		return
 	var cell_size: float = minf(46.0, minf((size.x - 100.0) / float(GRID_SIZE), (size.y - 220.0) / float(GRID_SIZE)))
 	var board_size: float = cell_size * float(GRID_SIZE)
-	var origin := Vector2((size.x - board_size) * 0.5, 142.0)
+	var origin := Vector2((size.x - board_size) * 0.5, 126.0)
 	var player: Vector2i = state.get("player", Vector2i.ZERO)
 	var exit_cell: Vector2i = state.get("exit", Vector2i.ZERO)
 	var beacons: Array = state.get("beacons", [])
@@ -183,4 +183,4 @@ func _draw() -> void:
 			elif collected.has(cell):
 				draw_circle(rect.get_center(), cell_size * 0.12, Color("#68d5b0"))
 
-	draw_string(font, Vector2(24.0, 536.0), "UNKNOWN CELLS ARE HIDDEN  ·  PING REVEALS WALLS AND SIGNALS FOR A SHORT TIME", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#8ea9b8"))
+	draw_string(font, Vector2(24.0, 552.0), "UNKNOWN CELLS ARE HIDDEN  ·  PING REVEALS WALLS AND SIGNALS FOR A SHORT TIME", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#8ea9b8"))
