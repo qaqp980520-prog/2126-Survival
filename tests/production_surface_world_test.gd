@@ -69,6 +69,7 @@ func _run() -> void:
 	await process_frame
 	world.camera.look_at(crate_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
 	await physics_frame
+	await physics_frame
 	var restored_root: Node3D = world.chunk_controller.get_chunk_root(ORIGIN_CHUNK_ID)
 	var restored_crate: Node = restored_root.get_node_or_null("SalvageCrate") if restored_root != null else null
 	_expect(restored_crate != null, "factory recreates the crate")
@@ -91,6 +92,7 @@ func _run() -> void:
 	if not plots.is_empty():
 		world.player.global_position = plots[0].global_position + Vector3(0.0, 1.0, 2.0)
 		world.camera.look_at(plots[0].global_position + Vector3(0.0, 0.9, 0.0), Vector3.UP)
+		await physics_frame
 		await physics_frame
 		var crop_result: Dictionary = world.call("_interact_nearest_crop_plot", now + 5)
 		_expect(bool(crop_result.get("ok", false)), "E interaction plants or advances a crop")
