@@ -6,6 +6,7 @@ const BACKROOMS_SCENE := "res://prototypes/BackroomsPortalPlayground.tscn"
 const UNDERGROUND_SCENE := "res://prototypes/UndergroundMiningPlayground.tscn"
 const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
 const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
+const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 
 var status_label: Label
 
@@ -84,6 +85,12 @@ func _build_ui() -> void:
 		"KROLL Tether Recovery",
 		"駕駛回收無人機，使用繫索拖運三件貨物返回停靠區；支援推進、煞車與觸控。",
 		TETHER_SCENE
+	)
+	_add_scene_button(
+		column,
+		"KROLL Shadow Courier",
+		"回收三份資料、避開旋轉巡邏視線，使用誘餌穿越 KROLL 設施；支援鍵盤與觸控。",
+		SHADOW_SCENE
 	)
 	_add_scene_button(
 		column,

@@ -17,6 +17,8 @@ const CACHE_POSITIONS: Array[Vector3] = [
 	Vector3(1.2, -8.25, 8.0)
 ]
 const CACHE_TABLE_RESOURCE_PATH: String = "res://systems/data/underground_loot_tables.json"
+const LEGACY_WORLD_SEED: int = 0
+const MAX_WORLD_SEED: int = 2147483647
 static var _cache_tables_initialized: bool = false
 static var _cache_tables_cache: Dictionary = {}
 
@@ -64,9 +66,9 @@ static func validate_cache_tables(payload: Variant) -> Dictionary:
 
 ## Returns deterministic room-specific cache entries. Layer zero's service caches
 ## retain their original names and contents for save compatibility.
-static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array[Dictionary]:
+static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0, world_seed: int = LEGACY_WORLD_SEED) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
-	if layer_index < 0 or layer_index > MAX_LAYER_INDEX:
+	if layer_index < 0 or layer_index > MAX_LAYER_INDEX or world_seed < 0 or world_seed > MAX_WORLD_SEED:
 		return entries
 	if coord == Vector2i.ZERO and layer_index == 0:
 		entries.append({
@@ -83,7 +85,7 @@ static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array
 		})
 		return entries
 
-	var spawn_hash: int = coord.x * 31 + coord.y * 17 + layer_index * 43 + 1009
+	var spawn_hash: int = coord.x * 31 + coord.y * 17 + layer_index * 43 + world_seed * 13 + 1009
 	if posmod(spawn_hash, 3) == 0:
 		return entries
 
@@ -98,7 +100,7 @@ static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array
 	if total_weight <= 0:
 		return entries
 
-	var roll: int = posmod(coord.x * 97 + coord.y * 53 + layer_index * 101 + 2029, total_weight)
+	var roll: int = posmod(coord.x * 97 + coord.y * 53 + layer_index * 101 + world_seed * 193 + 2029, total_weight)
 	var selected_item_id: String = ""
 	for entry_value in table_value:
 		if not (entry_value is Dictionary):
@@ -111,7 +113,7 @@ static func get_cache_spawn_data(coord: Vector2i, layer_index: int = 0) -> Array
 	if selected_item_id.is_empty() or not MINERAL_IDS.has(selected_item_id):
 		return entries
 
-	var position_index: int = posmod(coord.x * 7 + coord.y * 11 + layer_index * 3 + 1, CACHE_POSITIONS.size())
+	var position_index: int = posmod(coord.x * 7 + coord.y * 11 + layer_index * 3 + world_seed * 7 + 1, CACHE_POSITIONS.size())
 	entries.append({
 		"node_name": "MineCache_%s" % selected_item_id,
 		"item_id": selected_item_id,
@@ -128,8 +130,8 @@ static func _get_cache_table_id(coord: Vector2i, layer_index: int = 0) -> String
 	return "north" if coord.y < 0 else "south"
 
 ## Keep timestamp first and coordinate second for Run 52 callers; layer is optional.
-static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO, layer_index: int = 0) -> Node3D:
-	if layer_index < 0 or layer_index > MAX_LAYER_INDEX:
+static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO, layer_index: int = 0, world_seed: int = LEGACY_WORLD_SEED) -> Node3D:
+	if layer_index < 0 or layer_index > MAX_LAYER_INDEX or world_seed < 0 or world_seed > MAX_WORLD_SEED:
 		return null
 	var root := Node3D.new()
 	root.name = "UndergroundMine_%d_%d" % [coord.x, coord.y] if layer_index == 0 else "UndergroundMine_L%d_%d_%d" % [layer_index, coord.x, coord.y]
@@ -169,7 +171,7 @@ static func make_chunk(now_unix: int = -1, coord: Vector2i = Vector2i.ZERO, laye
 		vein.position = positions[index]
 		root.add_child(vein)
 
-	for cache_data in get_cache_spawn_data(coord, layer_index):
+	for cache_data in get_cache_spawn_data(coord, layer_index, world_seed):
 		var cache_position_value: Variant = cache_data.get("position", null)
 		if not (cache_position_value is Vector3):
 			root.free()
