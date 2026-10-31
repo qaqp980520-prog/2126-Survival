@@ -47,8 +47,8 @@ func _run() -> void:
 		unrelated_shape.size = Vector3(1.2, 1.2, 1.2)
 		unrelated_collision.shape = unrelated_shape
 		unrelated_area.add_child(unrelated_collision)
-		unrelated_area.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
 		world.add_child(unrelated_area)
+		unrelated_area.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
 		await physics_frame
 		await physics_frame
 		var target_through_trigger: Dictionary = world.call("get_camera_interaction_target")
@@ -58,13 +58,13 @@ func _run() -> void:
 		await physics_frame
 		var blocker := StaticBody3D.new()
 		blocker.name = "RaycastOcclusionTestBlocker"
-		blocker.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
 		var blocker_collision := CollisionShape3D.new()
 		var blocker_shape := BoxShape3D.new()
 		blocker_shape.size = Vector3(1.2, 1.2, 1.2)
 		blocker_collision.shape = blocker_shape
 		blocker.add_child(blocker_collision)
 		world.add_child(blocker)
+		blocker.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
 		await physics_frame
 		await physics_frame
 		var blocked_target: Dictionary = world.call("get_camera_interaction_target")
@@ -101,7 +101,7 @@ func _run() -> void:
 	var gold_cache: Node3D = _find_world_prop("MineCache_Gold", "UndergroundMine_0_0")
 	_expect(gold_cache != null, "origin mine room exposes its stateful gold cache")
 	if gold_cache != null:
-		await _aim_at(gold_cache)
+		await _aim_at(gold_cache, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.55, 0.0))
 		var cache_target: Dictionary = world.call("get_camera_interaction_target")
 		var gold_data: Dictionary = MineralCatalogScript.get_mineral("gold_ore")
 		var expected_cache_name: String = str(gold_data.get("display_name", "gold_ore")).to_upper()
@@ -116,7 +116,7 @@ func _run() -> void:
 	var origin_vein: Node3D = _find_mineral_node("Vein_0", "UndergroundMine_0_0")
 	_expect(origin_vein != null, "origin mine room exposes a mineral vein")
 	if origin_vein != null:
-		await _aim_at(origin_vein)
+		await _aim_at(origin_vein, Vector3(0.0, 1.0, -2.0), Vector3(0.0, 0.55, 0.0))
 		var vein_target: Dictionary = world.call("get_camera_interaction_target")
 		_expect(str(vein_target.get("kind", "")) == "vein" and vein_target.get("node") == origin_vein, "camera ray selects the mineral vein under the reticle")
 		world.call("_refresh_hud")
