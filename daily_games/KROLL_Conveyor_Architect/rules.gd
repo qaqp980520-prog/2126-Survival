@@ -1,5 +1,4 @@
 extends RefCounted
-class_name ConveyorArchitectRules
 
 const GRID_WIDTH: int = 6
 const GRID_HEIGHT: int = 6
