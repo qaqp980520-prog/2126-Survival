@@ -13,9 +13,9 @@ var campaign_complete: bool = false
 var status_text: String = "SELECT A SAFE LANE, THEN DRILL DOWN"
 
 func _ready() -> void:
-    var rules_path: String = "res://rules.gd"
+    var rules_path: String = "res://daily_games/KROLL_Core_Drill/rules.gd"
     if not ResourceLoader.exists(rules_path):
-        rules_path = "res://daily_games/KROLL_Core_Drill/rules.gd"
+        rules_path = "res://rules.gd"
     rules = load(rules_path)
     if rules == null:
         push_error("KROLL Core Drill could not load its rules module.")
