@@ -1049,3 +1049,30 @@
 - Interaction target selection is distance-based rather than camera-raycast-based; cache lid animation and a dedicated inventory-full modal are not included.
 - Flux Hockey opponent is a simple paddle-following AI; no adaptive difficulty, audio, haptics or saved high scores.
 - Next: consider raycast-based interaction targeting and animated cache feedback as separate increments; add adaptive opponent behavior only after play-balance testing; complete manual GUI/GPU/iPhone QA when devices and a local Godot executable are available.
+
+
+## 2026-10-31 Run 66 — KROLL Molecule Forge + production world-object chunk reload regression
+
+### New playable Godot 4 game
+- Added `daily_games/KROLL_Molecule_Forge/`, a 5×5 molecular construction puzzle for Water (H2O), Ammonia (NH3) and Methane (CH4).
+- Orthogonally adjacent atoms form single bonds. Valence limits are H=1, O=2, N=3 and C=4. Over-valence placements are rejected without mutating the board.
+- Completion requires the exact formula, a single connected graph, the exact target bond count and saturated valence for every atom.
+- Keyboard, mouse and touch placement; atom removal, undo, reset and next-level progression. No external assets, audio, add-ons or network dependency.
+- Standalone project: open `daily_games/KROLL_Molecule_Forge/project.godot` in Godot 4.3+. Registered in the root Survival Test Hub; root hub smoke test confirms the 11-entry launch list and instantiates the game from the repository root.
+- Main files: `main.gd`, `main.tscn`, `rules.gd`, standalone path shim, `README.md`, `tests/rules_test.gd`, `tests/game_smoke_test.gd`.
+
+### Production world-object lifecycle regression
+- Added `tests/production_surface_world_interaction_stream_reload_test.gd` against the real `world/SurfaceWorld.tscn` and production streaming director/controller.
+- The test selects a real stateful salvage crate through the production camera ray, mutates it, moves the player so the director unloads `surface/chunk_0_0`, and verifies the controller writes the state under the deterministic ID `surface/chunk_0_0/object/Chunk_0_0/SalvageCrate`.
+- It verifies the old crate and Area3D proxy are freed, the same chunk reload creates a new crate instance with the saved opened/remaining state, a fresh Area3D proxy is registered on collision layer 2, the camera target cache references the new proxy, and F interaction still succeeds after reload.
+- This is an end-to-end regression for the existing SurfaceChunkFactory/MineralChunkController/WorldObjectStateRegistry path. No production runtime logic or world-save schema change was needed.
+
+### Exact GitHub evidence
+- Feature PR [#168](https://github.com/qaqp980520-prog/2126-Survival/pull/168) merged as `87a0ca940a1f4269fc8919e9bf1292c5be29de15`.
+- Exact feature HEAD `79647c9083b0369e86ba22ce24a23500920fa58d` passed Godot 4.3 [Run #751](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41171780488): 283/283 total workflow step records successful, zero failures, zero skipped. New-game standalone import, rules and runtime smoke tests passed steps 277–279; production SurfaceWorld chunk unload/reload passed step 280.
+- Historical superseded candidate runs #746–#750 are not final evidence. The exact-head Run #751 is authoritative.
+
+### Known limits
+- The molecule model is a 2D orthogonal single-bond puzzle, not a chemistry simulator; bond order, 3D geometry, charge and reaction kinetics are not modelled.
+- The new production reload regression covers the stateful salvage crate in the production surface-grid factory. It does not yet prove every future interactable factory, terrain-edit persistence or asynchronous streaming cancellation.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
