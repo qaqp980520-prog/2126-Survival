@@ -44,6 +44,26 @@ func _run() -> void:
 	var bumper_velocity: Vector2 = bumper_result.get("puck_velocity", Vector2.ZERO)
 	_expect(bumper_velocity.y > 0.0, "arena bumper reflects an approaching puck")
 
+	var player_hit_state: Dictionary = Rules.create_state()
+	player_hit_state["puck_position"] = Vector2(Rules.CENTER_X, 490.0)
+	player_hit_state["puck_velocity"] = Vector2(0.0, 300.0)
+	var player_hit_result: Dictionary = Rules.step(player_hit_state, Rules.CENTER_X, 0.05)
+	var player_hit_velocity: Vector2 = player_hit_result.get("puck_velocity", Vector2.ZERO)
+	_expect(player_hit_velocity.y < 0.0, "swept collision prevents a fast puck tunneling through the player paddle")
+
+	var ai_hit_state: Dictionary = Rules.create_state()
+	ai_hit_state["puck_position"] = Vector2(Rules.CENTER_X, 110.0)
+	ai_hit_state["puck_velocity"] = Vector2(0.0, -300.0)
+	var ai_hit_result: Dictionary = Rules.step(ai_hit_state, Rules.CENTER_X, 0.05)
+	var ai_hit_velocity: Vector2 = ai_hit_result.get("puck_velocity", Vector2.ZERO)
+	_expect(ai_hit_velocity.y > 0.0, "swept collision prevents a fast puck tunneling through the AI paddle")
+
+	var bottom_goal_state: Dictionary = Rules.create_state()
+	bottom_goal_state["puck_position"] = Vector2(Rules.CENTER_X, Rules.BOTTOM - 1.0)
+	bottom_goal_state["puck_velocity"] = Vector2(0.0, 300.0)
+	var bottom_goal_result: Dictionary = Rules.step(bottom_goal_state, Rules.CENTER_X, 0.05)
+	_expect(int(bottom_goal_result.get("ai_score", 0)) == 1, "puck crossing the lower goal awards the opponent")
+
 	var win_state: Dictionary = Rules.create_state()
 	for _index in range(Rules.TARGET_SCORE):
 		win_state = Rules.award_goal(win_state, true)
