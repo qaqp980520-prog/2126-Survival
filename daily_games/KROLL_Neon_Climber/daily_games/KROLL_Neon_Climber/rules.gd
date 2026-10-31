@@ -8,6 +8,8 @@ const DASH_SPEED: float = 560.0
 const DASH_DURATION: float = 0.18
 const DASH_COOLDOWN: float = 0.85
 const MAX_JUMPS: int = 2
+const PLAYER_HALF_WIDTH: float = 14.0
+const PLAYER_HALF_HEIGHT: float = 22.0
 
 const LEVELS: Array[Dictionary] = [
 	{
@@ -16,7 +18,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1280, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "midway",
-		"checkpoint_position": Vector2(760, 400),
+		"checkpoint_position": Vector2(760, 368),
 		"exit": Rect2(1160, 520, 72, 140),
 		"platforms": [
 			Rect2(0, 660, 1280, 60),
@@ -43,7 +45,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1440, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "reactor_mid",
-		"checkpoint_position": Vector2(870, 330),
+		"checkpoint_position": Vector2(870, 278),
 		"exit": Rect2(1320, 500, 72, 160),
 		"platforms": [
 			Rect2(0, 660, 1440, 60),
@@ -72,7 +74,7 @@ const LEVELS: Array[Dictionary] = [
 		"size": Vector2i(1600, 720),
 		"spawn": Vector2(70, 590),
 		"checkpoint_id": "upper_tower",
-		"checkpoint_position": Vector2(940, 270),
+		"checkpoint_position": Vector2(940, 268),
 		"exit": Rect2(1490, 430, 72, 230),
 		"platforms": [
 			Rect2(0, 660, 1600, 60),
@@ -100,6 +102,20 @@ const LEVELS: Array[Dictionary] = [
 
 static func level_count() -> int:
 	return LEVELS.size()
+
+static func is_checkpoint_supported(position: Vector2, platforms: Array) -> bool:
+	for platform_value in platforms:
+		if not (platform_value is Rect2):
+			continue
+		var platform: Rect2 = platform_value
+		if position.x - PLAYER_HALF_WIDTH < platform.position.x:
+			continue
+		if position.x + PLAYER_HALF_WIDTH > platform.end.x:
+			continue
+		if not is_equal_approx(position.y + PLAYER_HALF_HEIGHT, platform.position.y):
+			continue
+		return true
+	return false
 
 static func get_level(level_index: int) -> Dictionary:
 	return LEVELS[clampi(level_index, 0, LEVELS.size() - 1)].duplicate(true)
@@ -187,6 +203,9 @@ static func is_valid_level(level_index: int) -> bool:
 		var rect: Rect2 = platform
 		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 			return false
+	var checkpoint_position: Vector2 = level.get("checkpoint_position", Vector2(-1.0, -1.0))
+	if not is_checkpoint_supported(checkpoint_position, platforms):
+		return false
 	var core_ids: Dictionary = {}
 	var cores: Array = level.get("cores", [])
 	if cores.size() < 3:

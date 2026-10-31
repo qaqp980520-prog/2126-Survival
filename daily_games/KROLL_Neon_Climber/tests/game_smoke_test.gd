@@ -1,5 +1,6 @@
 extends SceneTree
 const GameScene = preload("res://main.tscn")
+const Rules = preload("res://rules.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -22,11 +23,17 @@ func _run() -> void:
 	var spawn: Vector2 = player.global_position
 	_expect(game.collect_core("core_a"), "first core can be collected")
 	_expect(not game.collect_core("core_a"), "duplicate collection is rejected")
-	_expect(game.activate_checkpoint("midway", Vector2(760, 400)), "checkpoint activation succeeds")
-	_expect(game.get_checkpoint_position() == Vector2(650, 400), "checkpoint stores the respawn position")
+	var checkpoint: Vector2 = Rules.get_level(0).get("checkpoint_position", Vector2.ZERO)
+	_expect(not game.activate_checkpoint("midway", Vector2(760, 400)), "unsafe checkpoint position inside platform is rejected")
+	_expect(str(game.get_run_state()["checkpoint_id"]) == "start", "rejected checkpoint does not mutate progress")
+	_expect(game.activate_checkpoint("midway", checkpoint), "authored safe checkpoint activation succeeds")
+	_expect(game.get_checkpoint_position() == checkpoint, "checkpoint stores the authored grounded respawn position")
 	game.hit_hazard()
+	await physics_frame
+	await physics_frame
 	_expect(int(game.get_run_state()["deaths"]) == 1, "hazard increments the fall counter")
-	_expect(player.global_position == Vector2(650, 400), "hazard respawns player at the checkpoint")
+	_expect(player.global_position.is_equal_approx(checkpoint), "hazard respawns player at the checkpoint")
+	_expect(player.is_on_floor(), "checkpoint respawn leaves the player grounded on its platform")
 	_expect((game.get_run_state()["collected"] as Array).size() == 1, "hazard respawn preserves recovered cores")
 	_expect(not game.try_complete_level(), "exit rejects incomplete core collection")
 	_expect(game.collect_core("core_b") and game.collect_core("core_c"), "remaining data cores can be collected")

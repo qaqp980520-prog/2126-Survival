@@ -349,6 +349,15 @@ func collect_core(core_id: String) -> bool:
 	return true
 
 func activate_checkpoint(checkpoint_id: String, position: Vector2) -> bool:
+	var level: Dictionary = Rules.get_level(int(_state.get("level_index", 0)))
+	var expected_id: String = str(level.get("checkpoint_id", ""))
+	var expected_position: Vector2 = level.get("checkpoint_position", Vector2(-1.0, -1.0))
+	if checkpoint_id != expected_id:
+		return false
+	if not Rules.is_checkpoint_supported(position, level.get("platforms", [])):
+		return false
+	if not is_equal_approx(position.x, expected_position.x) or not is_equal_approx(position.y, expected_position.y):
+		return false
 	var previous: String = str(_state.get("checkpoint_id", ""))
 	_state = Rules.activate_checkpoint(_state, checkpoint_id)
 	if str(_state.get("checkpoint_id", "")) != checkpoint_id or previous == checkpoint_id:
