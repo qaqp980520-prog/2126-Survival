@@ -1193,7 +1193,43 @@
 
 ### Known limits and next steps
 
-- Cache/lift lifecycle is now covered end-to-end, but the same contract is not yet proven for every future stateful KROLL interactable and every mine layer.
+- Run 69 verified the origin cache/lift cycle; Run 70 verifies lift anchors across all supported mine layers 0–8, including stable IDs, fresh proxies and schema-1 world save/load roundtrip. Cache loot lifecycle across every generated cache placement and every future stateful KROLL interactable is still not proven.
 - Terrain-edit persistence across chunk unload/reload remains unfinished.
 - Chunk streaming remains synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone device QA are not claimed.
+
+
+## 2026-10-31 Run 70 — KROLL Echo Mapper and all-layer underground lift lifecycle
+
+### New playable Godot 4 game
+
+- Added \`daily_games/KROLL_Echo_Mapper/\`, a top-down sonar exploration puzzle with three missions: Dockside Echo, Coolant Echo and Archive Echo.
+- The 9×9 grid hides unvisited cells; sonar uses Manhattan radius 3 and reveals nearby walls/signals for five turns. Each mission has six sonar charges, a 60-turn budget, three signal beacons and an extraction hatch.
+- Keyboard: WASD/arrow keys move, Space pings sonar, R restarts and N advances after extraction. Seven on-screen controls provide touch input.
+- Added deterministic route tests for all three missions, sonar range/expiry/charge tests, runtime smoke coverage that emits real touch-button signals, and root Survival Test Hub registration.
+- Root hub now exposes 15 launch buttons and its smoke test loads Echo Mapper from the root project.
+- No external assets, plugins, audio or network dependencies; Godot 4.3+.
+
+### All-layer underground mine lift lifecycle and save/load regression
+
+- Added \`tests/production_surface_world_underground_lift_all_layers_test.gd\` using the real SurfaceWorld, UndergroundMineDirector, UndergroundMineFactory, WorldObjectStateRegistry, camera-ray selection and G/V interaction paths.
+- Traverses every supported mine layer 0–8, verifying each MineLiftAnchor layer payload, deterministic stable ID, live Area3D proxy, camera selection, old root/node/proxy release after streaming out, and fresh node/proxy recreation with the same stable ID on return.
+- Verifies maximum-depth descent is rejected without moving the player or changing the active chunk window.
+- After the full round trip, verifies all nine lift records appear in the world save and survive the production schema-1 \`restore_stream_state\` roundtrip with the correct layer index.
+- No world-save schema change; remains version 1.
+
+### Exact GitHub acceptance and merge
+
+- Feature PR [#177](https://github.com/qaqp980520-prog/2126-Survival/pull/177) merged as \`dff16b375c19a01ec8d39257dd3fe793493c2c08\`.
+- Exact feature HEAD \`4c3e537a1228bcac55e771e0135d15615e21f3b5\` passed canonical Godot 4.3 [Run #793](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41195456289): 299/299 main validation steps succeeded, zero failures and zero skipped; checkout and container cleanup also succeeded.
+- Run #793 acceptance highlights: root SurfaceWorld integration step 204; root Test Hub smoke step 205; mine cache distribution and layer model steps 245–246; Run 69 cache/lift regression step 294; Run 70 input verification, Echo Mapper import/rules/runtime and all-layer lift lifecycle steps 295–299.
+- Superseded candidate runs #791 and #792 were cancelled after newer commits, with no failed steps; neither is used as final acceptance evidence.
+- PR #177 was merged only after the exact current HEAD completed the full workflow.
+
+### Known limits and next steps
+
+- All nine mine lift anchors are covered, but cache inventory lifecycle is not yet proven for every generated cache placement and every mine layer; other future stateful interactables also need the same contract.
+- Terrain-edit persistence across chunk unload/reload remains unfinished.
+- Chunk streaming is still synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- Echo Mapper is a fixed-map prototype with no campaign save, audio, animation, randomized map generation or controller remapping.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
