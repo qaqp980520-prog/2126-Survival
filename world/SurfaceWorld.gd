@@ -727,8 +727,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	if chunk_controller.has_method("capture_loaded_world_object_states") and not bool(chunk_controller.call("capture_loaded_world_object_states")):
 		return false
-	var previous_minerals: Dictionary = chunk_controller.to_save_dict()
-	var previous_world_objects: Dictionary = object_state_registry.to_save_dict() if object_state_registry != null else {}
+	var previous_minerals: Dictionary = chunk_controller.call("to_save_dict")
+	var previous_world_objects: Dictionary = object_state_registry.call("to_save_dict") if object_state_registry != null else {}
 	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins") or not previous_world_objects.has("schema_version") or not previous_world_objects.has("objects"):
 		return false
 	var previous_position: Vector3 = player.global_position
