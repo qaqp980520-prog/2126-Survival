@@ -216,13 +216,13 @@ func _draw() -> void:
     var edges: Array = analysis.get("edges", [])
     for edge_value in edges:
         var edge: Vector2i = edge_value
-        var atom_a: Dictionary = atoms[edge.x] as Dictionary
-        var atom_b: Dictionary = atoms[edge.y] as Dictionary
+        var atom_a: Dictionary = atoms[edge.x]
+        var atom_b: Dictionary = atoms[edge.y]
         var cell_a: Vector2i = atom_a.get("cell", Vector2i.ZERO)
         var cell_b: Vector2i = atom_b.get("cell", Vector2i.ZERO)
         draw_line(_cell_rect(cell_a).get_center(), _cell_rect(cell_b).get_center(), Color("#f1d78b"), 8.0, true)
     for atom_value in atoms:
-        var atom: Dictionary = atom_value as Dictionary
+        var atom: Dictionary = atom_value
         var element: String = str(atom.get("element", ""))
         var cell: Vector2i = atom.get("cell", Vector2i.ZERO)
         var center: Vector2 = _cell_rect(cell).get_center()
