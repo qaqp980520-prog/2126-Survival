@@ -31,6 +31,11 @@ func _run() -> void:
 		_expect(str(target.get("kind", "")) == "prop" and target.get("node") == surface_crate, "camera ray selects the salvage crate rather than the nearest object by distance")
 		world.call("_refresh_hud")
 		_expect(prompt.text.begins_with("F  OPEN ") and prompt.text.contains("CACHE"), "surface HUD prompts F for the crate under the reticle")
+		world.camera.rotate_y(PI)
+		await physics_frame
+		var facing_away: Dictionary = world.call("get_camera_interaction_target")
+		_expect(facing_away.is_empty(), "a nearby crate is not selected when the camera faces away")
+		await _aim_at(surface_crate)
 		var blocker := StaticBody3D.new()
 		blocker.name = "RaycastOcclusionTestBlocker"
 		blocker.global_position = world.camera.global_position.lerp(surface_crate.global_position + Vector3(0.0, 0.55, 0.0), 0.5)
