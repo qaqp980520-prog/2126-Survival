@@ -1634,7 +1634,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Survival test hub smoke test passed."
@@ -2345,7 +2345,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path daily_games/KROLL_Gravity_Foundry --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path daily_games/KROLL_Gravity_Foundry --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Gravity Foundry rules tests passed."
@@ -2353,7 +2353,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 25s godot --headless --path daily_games/KROLL_Gravity_Foundry --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 25s godot --headless --path daily_games/KROLL_Gravity_Foundry --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Gravity Foundry runtime smoke test passed."
@@ -2361,7 +2361,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 75s godot --headless --path . --script res://tests/production_surface_world_underground_cache_lift_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 75s godot --headless --path . --script res://tests/production_surface_world_underground_cache_lift_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld underground cache/lift reload tests passed."
