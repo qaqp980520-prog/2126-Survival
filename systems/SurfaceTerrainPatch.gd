@@ -77,9 +77,10 @@ func _build_collision() -> void:
 	for side in RAMP_SIDES:
 		var ramp := CollisionShape3D.new()
 		ramp.name="TerrainRampCollision_"+side.capitalize()
+		ramp.rotation.y=_ramp_rotation_y(side)
 		var initial_ramp_shape := ConvexPolygonShape3D.new()
 		initial_ramp_shape.margin=0.005
-		initial_ramp_shape.points=_make_ramp_points(side,get_top_height())
+		initial_ramp_shape.points=_make_ramp_points(get_top_height())
 		ramp.shape=initial_ramp_shape
 		_collision_body.add_child(ramp)
 		_ramp_collisions[side]=ramp
@@ -112,32 +113,23 @@ func _build_visual() -> void:
 		_collision_body.add_child(ramp_mesh)
 		_ramp_visuals[side]=ramp_mesh
 
-func _make_ramp_points(side: String,height: float) -> PackedVector3Array:
+## One canonical +X wedge is rotated for all four edges. Keeping a single local
+## vertex ordering avoids direction-dependent convex-hull degeneracy on shallow ramps.
+func _make_ramp_points(height: float) -> PackedVector3Array:
 	var half: float = PATCH_SIZE*0.5
 	var outer: float = half+EDGE_RAMP_RUN
-	var points := PackedVector3Array()
+	return PackedVector3Array([
+		Vector3(half,0.0,-half),Vector3(half,height,-half),Vector3(outer,0.0,-half),
+		Vector3(half,0.0,half),Vector3(half,height,half),Vector3(outer,0.0,half)
+	])
+
+func _ramp_rotation_y(side: String) -> float:
 	match side:
-		"east":
-			points.append_array(PackedVector3Array([
-				Vector3(half,0.0,-half),Vector3(half,height,-half),Vector3(outer,0.0,-half),
-				Vector3(half,0.0,half),Vector3(half,height,half),Vector3(outer,0.0,half)
-			]))
-		"west":
-			points.append_array(PackedVector3Array([
-				Vector3(-half,0.0,-half),Vector3(-half,height,-half),Vector3(-outer,0.0,-half),
-				Vector3(-half,0.0,half),Vector3(-half,height,half),Vector3(-outer,0.0,half)
-			]))
-		"north":
-			points.append_array(PackedVector3Array([
-				Vector3(-half,0.0,-half),Vector3(-half,height,-half),Vector3(-half,0.0,-outer),
-				Vector3(half,0.0,-half),Vector3(half,height,-half),Vector3(half,0.0,-outer)
-			]))
-		"south":
-			points.append_array(PackedVector3Array([
-				Vector3(-half,0.0,half),Vector3(-half,height,half),Vector3(-half,0.0,outer),
-				Vector3(half,0.0,half),Vector3(half,height,half),Vector3(half,0.0,outer)
-			]))
-	return points
+		"east": return 0.0
+		"south": return -PI*0.5
+		"west": return PI
+		"north": return PI*0.5
+	return 0.0
 
 func _refresh_geometry() -> void:
 	var height: float = get_top_height()
@@ -151,8 +143,9 @@ func _refresh_geometry() -> void:
 		if ramp_collision != null:
 			var ramp_shape := ConvexPolygonShape3D.new()
 			ramp_shape.margin=0.005
-			ramp_shape.points=_make_ramp_points(side,height)
+			ramp_shape.points=_make_ramp_points(height)
 			ramp_collision.shape=ramp_shape
+			ramp_collision.rotation.y=_ramp_rotation_y(side)
 			ramp_collision.position=Vector3.ZERO
 	if _surface_mesh == null or not is_instance_valid(_surface_mesh):
 		return
