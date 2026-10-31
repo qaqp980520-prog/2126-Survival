@@ -25,6 +25,7 @@ func _run() -> void:
 	_expect(int(status.get("saved_vein_count", 0)) == 36, "nine surface veins plus twenty-seven underground mine veins are registered")
 	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "dedicated underground mine chunk loads with the playable surface world")
 	var surface_crate_count: int = 0
+	var terrain_patch_count: int = 0
 	var underground_cache_count: int = 0
 	var underground_lift_count: int = 0
 	for prop in world.chunk_controller.get_loaded_world_state_nodes():
@@ -32,15 +33,20 @@ func _run() -> void:
 			continue
 		if prop.name == "MineLiftAnchor":
 			underground_lift_count += 1
+		elif prop.name == "TerrainPatch":
+			terrain_patch_count += 1
+			_expect(prop.has_method("get_world_object_state"), "surface terrain patch participates in the world-object state contract")
 		elif prop.global_position.y < -7.0:
 			if str(prop.name).begins_with("MineCache_"):
 				underground_cache_count += 1
 		else:
-			surface_crate_count += 1
+			if str(prop.name).begins_with("SalvageCrate"):
+				surface_crate_count += 1
 	_expect(surface_crate_count == 9, "nine surface chunks retain one stable salvage crate each")
+	_expect(terrain_patch_count == 9, "nine loaded surface chunks register one persistent terrain patch each")
 	_expect(underground_cache_count == 7, "nine-room underground window contributes two origin caches and five regional caches")
 	_expect(underground_lift_count == 1, "origin underground chunk registers one stateful lift anchor")
-	_expect(int(status.get("saved_world_object_count", 0)) == 17, "world-object registry counts nine surface crates, seven underground caches and one mine lift")
+	_expect(int(status.get("saved_world_object_count", 0)) == 26, "world-object registry counts nine crates, nine terrain patches, seven underground caches and one mine lift")
 	var initial_plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(initial_plots.size() == 18, "two crop plot visuals are bound per loaded chunk")
 	_expect(int(status.get("saved_crop_count", 0)) == 0, "empty plots are not prematurely written as planted crop records")
