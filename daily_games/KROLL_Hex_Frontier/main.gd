@@ -167,7 +167,7 @@ func _refresh() -> void:
     elif winner == 2:
         _detail_label.text = "KROLL AI CONTROLLED TEN HEXES. RESET OR TRY ANOTHER MAP."
     else:
-        _detail_label.text = "%s  |  Selected action: %s. Click a highlighted adjacent hex; upgrades improve future energy income." % [
+        _detail_label.text = "%s  |  Selected action: %s. One strategic action per turn; upgrades improve future energy income." % [
             str(_state.get("last_action", "")),
             _selected_action.to_upper()
         ]
