@@ -15,19 +15,25 @@ func _run() -> void:
 	var east_patch: Node3D = PatchScript.new()
 	east_patch.name = "EastPatch"
 	east_patch.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	var far_patch: Node3D = PatchScript.new()
+	far_patch.name = "FarPatch"
+	far_patch.position = Vector3(PatchScript.PATCH_SIZE * 3.0, 0.0, 0.0)
 	holder.add_child(west_patch)
 	holder.add_child(east_patch)
+	holder.add_child(far_patch)
 	await process_frame
 	await physics_frame
 	var west_state: Dictionary = west_patch.call("get_world_object_state")
 	var east_state: Dictionary = east_patch.call("get_world_object_state")
 	_expect(_ramp_enabled(west_patch, "East"), "isolated west patch initially exposes its east ground ramp")
 	_expect(_ramp_enabled(east_patch, "West"), "isolated east patch initially exposes its west ground ramp")
-	_expect(bool(west_patch.call("set_neighbor_edge_state", "east", east_state)), "west patch accepts its east neighbor state")
-	_expect(bool(east_patch.call("set_neighbor_edge_state", "west", west_state)), "east patch accepts its west neighbor state")
+	_expect(bool(west_patch.call("bind_neighbor_patch", "east", east_patch)), "west patch accepts its east neighbor state")
+	_expect(bool(east_patch.call("bind_neighbor_patch", "west", west_patch)), "east patch accepts its west neighbor state")
 	_expect(str(west_patch.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "same-height patches resolve to a flush shared edge")
 	_expect(not _ramp_enabled(west_patch, "East"), "west patch disables its overlapping east ground ramp")
 	_expect(not _ramp_enabled(east_patch, "West"), "east patch disables its overlapping west ground ramp")
+	_expect(not bool(west_patch.call("bind_neighbor_patch", "east", far_patch)), "non-adjacent patch cannot be bound as a neighbor")
+	_expect(str(west_patch.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "rejected distant neighbor leaves the existing binding unchanged")
 	await physics_frame
 	var equal_west_hit: Dictionary = _ray_height_at(0.99)
 	var equal_east_hit: Dictionary = _ray_height_at(1.01)
@@ -36,8 +42,8 @@ func _run() -> void:
 	_expect(_ramp_enabled(west_patch, "North") and _ramp_enabled(east_patch, "South"), "unrelated outer edges retain base-ground ramps")
 	var raised_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
 	_expect(bool(east_patch.call("apply_world_object_state", raised_state)), "neighbor patch accepts a higher persisted terrain state")
-	_expect(bool(west_patch.call("set_neighbor_edge_state", "east", east_patch.call("get_world_object_state"))), "west patch refreshes its neighbor height")
-	_expect(bool(east_patch.call("set_neighbor_edge_state", "west", west_patch.call("get_world_object_state"))), "east patch refreshes its neighbor height")
+	_expect(bool(west_patch.call("bind_neighbor_patch", "east", east_patch)), "west patch refreshes its neighbor height")
+	_expect(bool(east_patch.call("bind_neighbor_patch", "west", west_patch)), "east patch refreshes its neighbor height")
 	var west_policy: Dictionary = west_patch.call("get_edge_policy", "east")
 	var east_policy: Dictionary = east_patch.call("get_edge_policy", "west")
 	_expect(str(west_policy.get("mode", "")) == "neighbor_higher", "lower west patch identifies its east neighbor as higher")
