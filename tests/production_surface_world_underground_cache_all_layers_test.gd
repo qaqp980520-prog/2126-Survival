@@ -55,6 +55,31 @@ func _run() -> void:
 		await _finish(1)
 		return
 	var now: int = int(Time.get_unix_time_from_system())
+	# SurfaceWorld may already own the origin mine window when this production scene
+	# starts. Move the real director to a disjoint region before directly exercising
+	# the finite sample, otherwise load_chunk correctly rejects a duplicate live ID.
+	var isolation_y: float = float(mine_director.call("get_layer_floor_y", 0))
+	var isolated: bool = bool(mine_director.call("sync_to_world_position", Vector3(1000.0, isolation_y, 1000.0), now))
+	_expect(isolated, "moves the production mine director outside the sampled cache grid")
+	if not isolated:
+		await _finish(1)
+		return
+	await process_frame
+	var live_chunk_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
+	var sample_id_collision_count: int = 0
+	for sample_layer in range(MAX_LAYER_INDEX + 1):
+		for sample_z in range(SAMPLE_MIN, SAMPLE_MAX + 1):
+			for sample_x in range(SAMPLE_MIN, SAMPLE_MAX + 1):
+				var sample_coord := Vector2i(sample_x, sample_z)
+				if Factory.get_cache_spawn_data(sample_coord, sample_layer, 0).is_empty():
+					continue
+				var sample_id: String = str(mine_director.call("get_chunk_id", sample_coord, sample_layer))
+				if live_chunk_ids.has(sample_id):
+					sample_id_collision_count += 1
+	_expect(sample_id_collision_count == 0, "all 151 sampled cache chunks are disjoint from the director-owned live window")
+	if sample_id_collision_count != 0:
+		await _finish(1)
+		return
 	for layer_index in range(MAX_LAYER_INDEX + 1):
 		layer_cache_counts[layer_index] = 0
 		for z in range(SAMPLE_MIN, SAMPLE_MAX + 1):
