@@ -2,7 +2,7 @@ extends SceneTree
 
 const Rules = preload("res://rules.gd")
 const SOLUTIONS: Array = [
-	["right", "right", "down", "down", "right", "right", "down", "down", "right", "right", "down", "down"],
+	["right", "right", "down", "down", "right", "right", "down", "down", "down", "right", "right", "up", "down", "down"],
 	["right", "right", "down", "down", "down", "right", "right", "down", "right", "right", "down", "down"],
 	["down", "down", "right", "right", "left", "left", "up", "up", "right", "right", "right", "right", "down", "down", "down", "down", "right", "right", "down", "down"]
 ]

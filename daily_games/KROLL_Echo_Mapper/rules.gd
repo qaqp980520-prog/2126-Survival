@@ -145,7 +145,8 @@ static func apply_action(state: Dictionary, action: String) -> Dictionary:
 		_:
 			return _result(false, "invalid_action", state)
 
-	var destination: Vector2i = Vector2i(state["player"]) + direction
+	var current_player: Vector2i = state.get("player", Vector2i.ZERO)
+	var destination: Vector2i = current_player + direction
 	next["turns"] = int(next.get("turns", 0)) + 1
 	if is_wall(state, destination):
 		var revealed_until: Dictionary = next.get("revealed_until", {})

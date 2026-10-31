@@ -8,6 +8,10 @@ const MAX_LAYER_INDEX: int = DirectorScript.MAX_LAYER_INDEX
 
 var failures: Array[String] = []
 var world: Node3D
+var player: CharacterBody3D
+var camera: Camera3D
+var chunk_controller: Node
+var mine_director: Node
 var stable_ids: Array[String] = []
 var first_node_ids: Array[int] = []
 var first_proxy_ids: Array[int] = []
@@ -24,6 +28,14 @@ func _run() -> void:
 	root.add_child(world)
 	await process_frame
 	await physics_frame
+	player = world.get("player") as CharacterBody3D
+	camera = world.get("camera") as Camera3D
+	chunk_controller = world.get("chunk_controller") as Node
+	mine_director = world.get("mine_director") as Node
+	_expect(player != null and camera != null and chunk_controller != null and mine_director != null, "production world binds player, camera, chunk controller and mine director")
+	if player == null or camera == null or chunk_controller == null or mine_director == null:
+		await _finish(1)
+		return
 
 	var shaft: Node3D = world.get_node_or_null("KrollMineShaftEntrance") as Node3D
 	_expect(shaft != null, "surface world exposes the production mine shaft")
@@ -70,14 +82,14 @@ func _run() -> void:
 			_expect(not is_instance_valid(chunk_root) and not is_instance_valid(lift) and not is_instance_valid(proxy), "layer %d root, lift and proxy are freed after streaming out" % layer_index)
 			var saved_record: Dictionary = registry.call("get_object_state", stable_id)
 			_expect(int(saved_record.get("state", {}).get("layer_index", -1)) == layer_index, "layer %d lift state is saved under its stable ID" % layer_index)
-			_expect(int(world.mine_director.get_layer_index(world.player.global_position)) == layer_index + 1, "player arrives at the next authored mine depth")
+			_expect(int(mine_director.call("get_layer_index", player.global_position)) == layer_index + 1, "player arrives at the next authored mine depth")
 
 	var deepest_lift: Node3D = _find_lift(MAX_LAYER_INDEX)
 	_expect(deepest_lift != null, "maximum supported mine layer is loaded")
 	if deepest_lift != null:
 		await _aim_at(deepest_lift, Vector3(0.0, 1.0, 2.0), Vector3(0.0, 0.9, 0.0))
-		var deepest_position: Vector3 = world.player.global_position
-		var deepest_ids: PackedStringArray = world.chunk_controller.call("get_loaded_chunk_ids")
+		var deepest_position: Vector3 = player.global_position
+		var deepest_ids: PackedStringArray = chunk_controller.call("get_loaded_chunk_ids")
 		_expect(not bool(world.call("_descend_mine_layer")), "V refuses to descend beyond the maximum supported depth")
 		_expect(world.player.global_position == deepest_position, "rejected maximum-depth descent leaves player position unchanged")
 		_expect(world.chunk_controller.call("get_loaded_chunk_ids") == deepest_ids, "rejected maximum-depth descent leaves the active chunk window unchanged")
@@ -131,7 +143,8 @@ func _run() -> void:
 		_expect(int(record.get("state", {}).get("layer_index", -1)) == layer_index, "world registry retains layer %d payload after full traversal" % layer_index)
 
 	var save_payload: Dictionary = world.call("serialize_stream_state")
-	var saved_objects: Dictionary = save_payload.get("world_objects", {}).get("objects", {})
+	var world_object_payload: Dictionary = save_payload.get("world_objects", {})
+	var saved_objects: Dictionary = world_object_payload.get("objects", {})
 	for stable_id in stable_ids:
 		_expect(saved_objects.has(stable_id), "world save contains lift state %s" % stable_id)
 
@@ -141,7 +154,7 @@ func _chunk_id(layer_index: int) -> String:
 	return MINE_CHUNK_ID if layer_index == 0 else "underground/layer_%d/mine_0_0" % layer_index
 
 func _get_chunk_root(chunk_id: String) -> Node3D:
-	return world.chunk_controller.call("get_chunk_root", chunk_id) as Node3D
+	return chunk_controller.call("get_chunk_root", chunk_id) as Node3D
 
 func _find_lift(layer_index: int) -> Node3D:
 	var chunk_root: Node3D = _get_chunk_root(_chunk_id(layer_index))
@@ -156,7 +169,7 @@ func _valid_proxy(proxy: Area3D) -> bool:
 
 func _aim_at(target: Node3D, player_offset: Vector3, target_offset: Vector3) -> void:
 	world.player.global_position = target.global_position + player_offset
-	world.camera.look_at(target.global_position + target_offset, Vector3.UP)
+	camera.look_at(target.global_position + target_offset, Vector3.UP)
 	await physics_frame
 	await physics_frame
 
