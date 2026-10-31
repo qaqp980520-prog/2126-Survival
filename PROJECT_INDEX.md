@@ -1386,3 +1386,42 @@
 - Chunk streaming remains synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
 - GitHub reports `main.protected=false` with required status checks off. Repository branch-protection hardening remains a separate owner-approved task.
+
+
+## Run 75 — KROLL Conveyor Architect and adjacent terrain edge policy (2026-11-01)
+
+### KROLL Conveyor Architect M0.1
+
+- Added a standalone/root-loadable Godot 4.3 project at `daily_games/KROLL_Conveyor_Architect/`.
+- 6×6 deterministic factory-routing puzzle with three authored work orders: Dock Line, Coolant Bend and Core Archive.
+- Fixed conveyor placement budget; click/tap an empty cell to place the selected direction, click an existing conveyor to rotate it, use WASD/arrow keys to set direction, Space to advance cargo, R to reset and N to advance after delivery.
+- Missing conveyors stall safely and can be repaired; out-of-bounds, wall collisions and route loops jam the cargo.
+- Includes project.godot, main.tscn, main.gd, rules.gd, README, rules tests, runtime smoke test, nested mirrors and root Survival Test Hub registration.
+- Root/standalone scene and script paths were verified by the exact-head root import and Test Hub smoke test.
+
+### SurfaceTerrainEdgePolicy M0.1
+
+- Added `systems/SurfaceTerrainEdgePolicy.gd` and integrated it into `systems/SurfaceTerrainPatch.gd`.
+- An isolated patch keeps its existing ramp to base ground.
+- Equal-height adjacent patches resolve to a flush join and disable both overlapping shared-edge ramps.
+- Different-height neighbors report which patch is higher and the height delta; both shared-edge ramps are disabled and the boundary remains a deliberate step until a single-owner shared transition collider is designed.
+- Added `bind_neighbor_patch(side, neighbor_patch)`, which rejects invalid/distant nodes and validates exact world-axis adjacency at PATCH_SIZE with 0.01 m tolerance before copying neighbor state.
+- Neighbor binding is runtime metadata only; saved patch fields and world-save schema version 1 are unchanged.
+- Added pure policy tests and a two-patch runtime regression. The runtime test verifies equal-height collision at 0.05 m, a 0.05 m / 0.55 m unequal-height step, distant-neighbor rejection, invalid-state rejection and ramp restoration after clearing bindings.
+
+### Exact-head acceptance and merge
+
+- Feature PR [#187](https://github.com/qaqp980520-prog/2126-Survival/pull/187) merged as `e2ca4bea28cfa6b815796907662f877b663f6b67`.
+- Final feature HEAD: `73d481ed5d471b0e5da4d51f1fb4c11c5480fa37`.
+- Exact-head Godot 4.3 [Run #859](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41220074968) passed all 328 job-step records, including root project import, updated Test Hub smoke, all existing game and world regressions, Conveyor Architect import/rules/runtime, pure edge-policy tests, adjacent-patch physics-ray regression and successful container cleanup. Zero failures and zero skipped steps.
+- PR #187 was merged only after the exact candidate and cleanup succeeded.
+- Static Python route audit independently confirms the three authored paths are orthogonal, in-bounds, wall-free and non-repeating, requiring 7/10/10 conveyors. This is supplementary static evidence, not a replacement for Godot CI.
+
+### Limitations and next steps
+
+- Current `SurfaceChunkFactory` places terrain patches 10 m apart, so the new neighbor binder is not automatically invoked by the current production layout; it is ready for a future edge-to-edge patch layout.
+- Unequal-height adjacent patches intentionally remain a vertical step. A shared transition collider needs a single ownership and collision design before ramps can cross the seam safely.
+- Chunk streaming remains synchronous; bounded asynchronous requests, cancellation-safe ownership and deterministic rollback remain future work.
+- World-save schema remains version 1.
+- No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
+- GitHub reports `main.protected=false` with required status checks off. Branch-protection hardening remains a separate owner-approved task.
