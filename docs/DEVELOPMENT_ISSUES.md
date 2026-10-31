@@ -742,3 +742,29 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - This test covers one production surface salvage crate and its Area3D proxy; it is not proof that all future object factories are integrated.
 - Molecule Forge is an educational 2D orthogonal single-bond puzzle, not a molecular geometry/chemistry simulator.
 - No local GUI/GPU/iPhone test is claimed; only the exact-head Godot 4.3 CI run is verified.
+
+
+## Run 67 closeout candidate — 2026-10-31
+
+### Completed and merged feature
+- Crop plot factory binding now has a preflight contract: live controller with required lifecycle methods, supported crop kind, positive plot index and validated stable ID. MineralChunkController rejects malformed plots before registering a chunk and restores crop state if a defensive configure failure occurs.
+- Unit regression covers unsupported crop ID, repeated separators, invalid plot index, incomplete controller interface and atomic no-partial-registration behavior.
+- Production SurfaceWorld regression now covers both the stateful salvage crate and a crop plot across actual chunk unload/reload. It verifies CropRegistry state, deterministic crop ID, fresh Area3D proxy and post-reload camera/E interaction.
+- KROLL Hex Frontier M0.1 is registered in the Test Hub and supports standalone/root import, 19-hex territory control, one strategic action per turn, energy claims/upgrades and deterministic AI.
+
+### Exact acceptance
+- Feature PR [#170](https://github.com/qaqp980520-prog/2126-Survival/pull/170) merged as `34112f2f478174d78e8f419c5bf825bfa94f86fb`.
+- Exact candidate `a3c28e92f7225fc84165ae24e60f2e9ce900898f` passed Godot 4.3 [Run #760](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41173732144): 287/287 total step records, zero failures/skips.
+- Documentation PR #171 is a separate closeout gate; do not treat this candidate document revision as merged until its exact-head workflow succeeds.
+
+### Remaining engineering work
+1. Extend the same stable-ID/proxy lifecycle contract to mineral veins/caches, the underground lift and future stateful KROLL interactables.
+2. Add terrain-edit persistence across chunk unload/reload while preserving legacy chunk IDs and schema-v1 compatibility.
+3. Design bounded asynchronous chunk requests with cancellation-safe ownership and deterministic rollback; current chunk load/rollback is synchronous.
+4. Add manual GUI, GPU performance and iPhone device QA when a local Godot/device test environment is available.
+
+### Compatibility and limitations
+- World-save schema remains version 1; no new persisted fields or migration.
+- CropRegistry remains the authoritative crop state source; this run validates in-memory state across chunk scene unload/reload.
+- Hex Frontier is a small deterministic strategy prototype, not the main survival world or multiplayer campaign.
+- Local GUI/GPU/iPhone testing is not claimed.
