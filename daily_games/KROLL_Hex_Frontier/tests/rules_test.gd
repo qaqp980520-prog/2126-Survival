@@ -27,19 +27,30 @@ func _run() -> void:
     state = claim_result.get("state", state)
     _expect(int(rules.call("territory_count", state, 1)) == 2, "claim adds exactly one territory")
     _expect(int(rules.call("get_energy", state, 1)) == 3, "claim spends one energy")
+    _expect(bool(state.get("action_used", false)), "a successful claim consumes the faction's one action for the turn")
+    _expect(rules.call("get_legal_claims", state, 1).is_empty() and rules.call("get_legal_upgrades", state, 1).is_empty(), "no second strategic action is offered in the same turn")
+    var second_action: Dictionary = rules.call("apply_claim", state, Vector2i(-1, 0))
+    _expect(not bool(second_action.get("ok", false)) and str(second_action.get("reason", "")) == "action_already_used", "a second action is rejected without mutating the turn state")
 
-    var base_upgrade: Dictionary = rules.call("apply_upgrade", state, Vector2i(-2, 0))
-    _expect(bool(base_upgrade.get("ok", false)), "owned headquarters can be upgraded")
+    var first_round: Dictionary = rules.call("advance_round", state)
+    _expect(bool(first_round.get("ok", false)), "player can end a valid turn")
+    var player_turn_state: Dictionary = first_round.get("state", {})
+    _expect(int(player_turn_state.get("current_player", 0)) == 1 and int(player_turn_state.get("turn", 0)) == 2, "AI resolves and control returns to the player on the next round")
+    _expect(int(rules.call("territory_count", player_turn_state, 2)) == 2, "AI claims a connected resource hex deterministically")
+    _expect(not bool(player_turn_state.get("action_used", true)), "new player turn resets the one-action guard")
+    _expect(int(rules.call("get_energy", player_turn_state, 1)) >= 1, "owned tile yields restore player energy at the next turn")
+
+    var energy_before_upgrade: int = int(rules.call("get_energy", player_turn_state, 1))
+    var base_upgrade: Dictionary = rules.call("apply_upgrade", player_turn_state, Vector2i(-2, 0))
+    _expect(bool(base_upgrade.get("ok", false)), "owned headquarters can be upgraded on the new turn")
     var upgraded_state: Dictionary = base_upgrade.get("state", {})
-    _expect(int(rules.call("get_energy", upgraded_state, 1)) == 1, "upgrade spends two energy")
+    _expect(int(rules.call("get_energy", upgraded_state, 1)) == energy_before_upgrade - 2, "upgrade spends exactly two energy")
     _expect(int(rules.call("get_tile", upgraded_state, Vector2i(-2, 0)).get("yield", 0)) == 2, "upgrade increases tile energy yield by one")
 
     var round_result: Dictionary = rules.call("advance_round", upgraded_state)
-    _expect(bool(round_result.get("ok", false)), "player can end a valid turn")
+    _expect(bool(round_result.get("ok", false)), "upgraded turn can be ended")
     var round_state: Dictionary = round_result.get("state", {})
-    _expect(int(round_state.get("current_player", 0)) == 1 and int(round_state.get("turn", 0)) == 2, "AI resolves and control returns to the player on the next round")
-    _expect(int(rules.call("territory_count", round_state, 2)) == 2, "AI claims a connected resource hex deterministically")
-    _expect(int(rules.call("get_energy", round_state, 1)) >= 1, "owned tile yields restore player energy at the next turn")
+    _expect(int(round_state.get("current_player", 0)) == 1 and int(round_state.get("turn", 0)) == 3, "second AI response returns control for turn three")
 
     var scenario_a: Dictionary = rules.call("new_game", 0)
     var scenario_b: Dictionary = rules.call("new_game", 1)
@@ -59,6 +70,7 @@ func _run() -> void:
         if not bool(result.get("ok", false)):
             break
         win_state = result["state"]
+        win_state["action_used"] = false
         safety += 1
     _expect(int(rules.call("territory_count", win_state, 1)) == 10 and int(win_state.get("winner", 0)) == 1, "controlling ten connected hexes wins the campaign")
 
