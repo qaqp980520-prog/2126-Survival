@@ -957,3 +957,37 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Terrain regression covers all nine patches in the active 3×3 window and a schema-1 roundtrip, not every coordinate in the unbounded procedural world.
 - Neon Climber uses fixed authored sectors and has no audio, animation, campaign save or controller remapping.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+
+## Run 74 closeout — 2026-10-31
+
+### Completed and merged
+
+- Added KROLL Robotic Arm Operator M0.1, a deterministic two-link pick-and-place game with three work orders, joint limits, forward/inverse kinematics, pickup/delivery radius checks, keyboard and touch controls, rules tests, runtime smoke coverage and root Test Hub registration.
+- Added traversable terrain ramps to SurfaceTerrainPatch: four independent StaticBody3D ramp bodies, each with a thin BoxShape3D slab aligned to its visual slope.
+- Added focused edge-transition regression for four directions, three height levels and three vertical physics-ray samples per side.
+- Extended the production all-nine terrain lifecycle regression to verify ramp bodies and geometry after edit, unload/reload and schema-1 restore.
+- No world-save schema migration; schema remains version 1.
+
+### Failure history and exact correction
+
+- Exact-head Run #847 on candidate `ca9b2c07f494b4879325a63047580f4f95f05896` failed at step 319: only South ramp physics rays at the lowest 0.05 m height missed at 25%, 50% and 75%; all geometric assertions, other directions and higher heights passed. Cleanup succeeded.
+- The final candidate added one additional physics-frame synchronization wait before focused direct-space ray queries. This avoids querying the newly reconfigured edge bodies before the physics server has settled.
+- Exact-head candidate `3758546c77d6292526336952633cc2b5d1ae6546` passed [Run #848](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41217232246): all 322 job-step records succeeded, zero failures, zero skipped; Robotic Arm import/rules/runtime passed at steps 316–318, terrain edge regression passed at step 319, and cleanup succeeded.
+- Feature PR [#185](https://github.com/qaqp980520-prog/2126-Survival/pull/185) merged as `7b0b4543d23970e6db23820d031e343e8f4bbb8a`.
+
+### Remaining engineering work
+
+1. Define adjacent patch-to-patch edge continuity for neighboring patches with different heights/materials.
+2. Extend terrain editing beyond the current 2 m patch and three saved height levels without breaking stable IDs or schema-v1 saves.
+3. Design bounded asynchronous chunk streaming with cancellation-safe ownership, stale-request invalidation and deterministic rollback; current streaming remains synchronous.
+4. Continue applying the stable-ID/state/fresh-proxy lifecycle contract to remaining formal interactables.
+5. Add manual GUI, GPU performance and iPhone hardware QA when a local Godot/device test environment is available.
+6. Review GitHub branch protection: main is currently unprotected and required status checks are off. This was not changed during Run 74.
+
+### Compatibility and limitations
+
+- World-object and world-save schema remain version 1.
+- Terrain edge ramps bridge to surrounding base ground; seamless adjacent-patch blending is not implemented.
+- Robotic Arm Operator is a deterministic 2D presentation, not a full 3D robot physics simulation; it has no audio, animation or campaign save.
+- No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
