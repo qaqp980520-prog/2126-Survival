@@ -30,9 +30,26 @@ var _body_mesh: MeshInstance3D
 var _lid_mesh: MeshInstance3D
 
 func _ready() -> void:
+	_build_interaction_area()
 	if DisplayServer.get_name() != "headless":
 		_build_visuals()
 	_refresh_visuals()
+
+func _build_interaction_area() -> void:
+	if get_node_or_null("InteractionArea") != null:
+		return
+	var area := Area3D.new()
+	area.name = "InteractionArea"
+	area.collision_layer = 2
+	area.collision_mask = 0
+	area.monitoring = false
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.55, 1.4, 1.25)
+	collision.shape = shape
+	collision.position = Vector3(0.0, 0.68, 0.0)
+	area.add_child(collision)
+	add_child(area)
 
 func get_world_object_state() -> Dictionary:
 	return {

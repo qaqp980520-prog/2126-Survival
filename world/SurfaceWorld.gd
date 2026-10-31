@@ -12,6 +12,9 @@ const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
 const MINE_ENTRY_UNDERGROUND: Vector3 = Vector3(1.5, -8.25, 7.5)
 const MINE_ACCESS_RANGE: float = 2.75
 const MINE_INTERACTION_RANGE: float = 3.5
+const INTERACTION_RAY_DISTANCE: float = 5.0
+const INTERACTION_PROXY_COLLISION_MASK: int = 1 << 1
+const WORLD_GEOMETRY_COLLISION_MASK: int = 1
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
 const LEGACY_WORLD_SEED: int = 0
@@ -30,6 +33,7 @@ var _sprint_active: bool = false
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
+var _camera_interaction_target_cache: Dictionary = {}
 var _jump_was_down: bool = false
 var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
 var _world_object_action_message: String = "F / CRATE: recover nearby salvage."
@@ -356,6 +360,7 @@ func _physics_process(delta: float) -> void:
 		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
 		if current_grid != _last_grid:
 			_sync_streaming(int(Time.get_unix_time_from_system()))
+	_camera_interaction_target_cache = _cast_camera_interaction_target()
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -398,49 +403,32 @@ func _unhandled_input(event: InputEvent) -> void:
 func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
 		return {"ok": false, "action": "unavailable", "message": "Crop interaction is unavailable."}
-	var nearest: Node3D = null
-	var nearest_distance: float = 3.25
-	for plot in chunk_controller.get_loaded_crop_plots():
-		if not is_instance_valid(plot):
-			continue
-		var distance: float = player.global_position.distance_to(plot.global_position)
-		if distance <= nearest_distance:
-			nearest = plot
-			nearest_distance = distance
-	if nearest == null:
-		_crop_action_message = "No crop plot within reach."
+	var target: Dictionary = get_camera_interaction_target()
+	var selected_plot: Node3D = null
+	if str(target.get("kind", "")) == "crop":
+		selected_plot = target.get("node") as Node3D
+	if selected_plot == null:
+		_crop_action_message = "Aim at a crop plot within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _crop_action_message}
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
-	var result: Dictionary = nearest.call("interact", timestamp)
+	var result: Dictionary = selected_plot.call("interact", timestamp)
 	_crop_action_message = str(result.get("message", "Crop action completed."))
 	_refresh_hud()
 	return result
-
 func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null:
 		return {"ok": false, "action": "unavailable", "message": "World-object interaction is unavailable."}
-	var nearest: Node3D = null
-	var nearest_distance: float = 3.25
-	for prop in chunk_controller.get_loaded_world_state_nodes():
-		if not is_instance_valid(prop):
-			continue
-		var distance: float = player.global_position.distance_to(prop.global_position)
-		if distance <= nearest_distance:
-			nearest = prop
-			nearest_distance = distance
-	# In mines, F selects the closest valid target: a salvage cache or a mineral vein.
-	if _is_underground:
-		var nearest_vein: Node3D = _get_nearest_mineable_vein()
-		if nearest_vein != null:
-			var vein_distance: float = player.global_position.distance_to(nearest_vein.global_position)
-			if nearest == null or vein_distance < nearest_distance:
-				return _interact_nearest_mineral(now_unix)
-	if nearest == null:
-		_world_object_action_message = "No salvage cache or mineable vein within reach." if _is_underground else "No salvage crate within reach."
+	var target: Dictionary = get_camera_interaction_target()
+	var target_kind: String = str(target.get("kind", ""))
+	var selected: Node3D = target.get("node") as Node3D
+	if target_kind == "vein":
+		return _interact_nearest_mineral(now_unix, selected)
+	if target_kind != "prop" or selected == null:
+		_world_object_action_message = "Aim at a salvage cache or mineable vein within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
-	var result: Dictionary = nearest.call("interact_with_inventory", inventory_bridge)
+	var result: Dictionary = selected.call("interact_with_inventory", inventory_bridge)
 	var ok: bool = bool(result.get("ok", false))
 	var reason: String = str(result.get("reason", "unknown"))
 	var item_id: String = str(result.get("item_id", "iron_ore"))
@@ -458,7 +446,6 @@ func _interact_nearest_world_prop(now_unix: int = -1) -> Dictionary:
 	result["message"] = _world_object_action_message
 	_refresh_hud()
 	return result
-
 func _get_nearest_mineable_vein() -> Node3D:
 	if not _is_underground or player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
 		return null
@@ -497,12 +484,25 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
 func _build_mine_entrance_visual() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
 	var marker := Node3D.new()
 	marker.name = "KrollMineShaftEntrance"
 	marker.position = MINE_ENTRY_SURFACE
+	var interaction_area := Area3D.new()
+	interaction_area.name = "InteractionArea"
+	interaction_area.collision_layer = 2
+	interaction_area.collision_mask = 0
+	interaction_area.monitoring = false
+	var interaction_collision := CollisionShape3D.new()
+	var interaction_shape := CylinderShape3D.new()
+	interaction_shape.radius = 1.4
+	interaction_shape.height = 2.2
+	interaction_collision.shape = interaction_shape
+	interaction_collision.position.y = 0.9
+	interaction_area.add_child(interaction_collision)
+	marker.add_child(interaction_area)
 	add_child(marker)
+	if DisplayServer.get_name() == "headless":
+		return
 	var hatch := MeshInstance3D.new()
 	hatch.name = "ShaftHatch"
 	var hatch_mesh := BoxMesh.new()
@@ -538,7 +538,6 @@ func _build_mine_entrance_visual() -> void:
 	lamp.omni_range = 7.0
 	lamp.shadow_enabled = false
 	marker.add_child(lamp)
-
 func _toggle_mine_access() -> bool:
 	if player == null or mine_director == null:
 		_world_object_action_message = "Mine shaft is unavailable."
@@ -550,6 +549,11 @@ func _toggle_mine_access() -> bool:
 	).length()
 	if horizontal_distance > MINE_ACCESS_RANGE:
 		_world_object_action_message = "Return to the KROLL mine lift before changing levels."
+		_refresh_hud()
+		return false
+	var aimed_target: Dictionary = get_camera_interaction_target()
+	if str(aimed_target.get("kind", "")) != "lift":
+		_world_object_action_message = "Aim at the KROLL mine lift before changing levels."
 		_refresh_hud()
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
@@ -614,6 +618,7 @@ func _toggle_mine_access() -> bool:
 		_world_object_action_message = "Entered mine level 01. V descends; G ascends."
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
+	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
 
@@ -623,6 +628,11 @@ func _descend_mine_layer() -> bool:
 		_refresh_hud()
 		return false
 	var current_layer: int = mine_director.get_layer_index(player.global_position)
+	var aimed_target: Dictionary = get_camera_interaction_target()
+	if str(aimed_target.get("kind", "")) != "lift":
+		_world_object_action_message = "Aim at the KROLL lift platform before descending."
+		_refresh_hud()
+		return false
 	if current_layer < 0 or current_layer >= UndergroundMineDirectorScript.MAX_LAYER_INDEX:
 		_world_object_action_message = "The maximum supported mine depth has been reached."
 		_refresh_hud()
@@ -649,18 +659,24 @@ func _descend_mine_layer() -> bool:
 	_last_mine_grid = mine_director.get_grid_coordinate(target_position)
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
 	_jump_was_down = false
+	_camera_interaction_target_cache.clear()
 	_world_object_action_message = "Lift descended to mine level %02d." % (_mine_layer_index + 1)
 	_refresh_hud()
 	return true
 
-func _interact_nearest_mineral(_now_unix: int = -1) -> Dictionary:
+func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null) -> Dictionary:
 	if not _is_underground:
 		return {"ok": false, "action": "underground_only", "message": "Mineral veins can only be mined underground."}
 	if player == null or chunk_controller == null or not chunk_controller.has_method("get_loaded_mineral_nodes"):
 		return {"ok": false, "action": "unavailable", "message": "Underground mining is unavailable."}
-	var nearest: Node3D = _get_nearest_mineable_vein()
+	var nearest: Node3D = selected_vein
 	if nearest == null:
-		_world_object_action_message = "No mineable vein within reach."
+		var target: Dictionary = get_camera_interaction_target()
+		if str(target.get("kind", "")) == "vein":
+			nearest = target.get("node") as Node3D
+	var loaded_veins: Array = chunk_controller.call("get_loaded_mineral_nodes")
+	if nearest == null or not loaded_veins.has(nearest):
+		_world_object_action_message = "Aim at a mineable vein within reach."
 		_refresh_hud()
 		return {"ok": false, "action": "out_of_reach", "message": _world_object_action_message}
 	var accepted: int = int(nearest.call("mine_hit", Vector3.ZERO))
@@ -673,7 +689,6 @@ func _interact_nearest_mineral(_now_unix: int = -1) -> Dictionary:
 		_world_object_action_message = "Mining rejected: inventory full or vein depleted."
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
-
 func serialize_stream_state() -> Dictionary:
 	var payload: Dictionary = super.serialize_stream_state()
 	if payload.is_empty():
@@ -797,6 +812,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
 	_last_mine_layer_index = target_depth
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
 
@@ -832,59 +848,107 @@ func _recover_underground_window(previous_seed: int, recovery_position: Vector3,
 func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
-func get_interaction_prompt_text() -> String:
-	if player == null or chunk_controller == null:
-		return ""
-	var nearest_prop: Node3D = null
-	var nearest_prop_distance: float = 3.25
-	for prop in chunk_controller.get_loaded_world_state_nodes():
-		if not is_instance_valid(prop):
-			continue
-		var distance: float = player.global_position.distance_to(prop.global_position)
-		if distance <= nearest_prop_distance:
-			nearest_prop = prop
-			nearest_prop_distance = distance
-	if _is_underground:
-		var nearest_vein: Node3D = _get_nearest_mineable_vein()
-		if nearest_vein != null:
-			var vein_distance: float = player.global_position.distance_to(nearest_vein.global_position)
-			if nearest_prop == null or vein_distance < nearest_prop_distance:
-				var vein_id: String = str(nearest_vein.get("mineral_id"))
-				var vein_data: Dictionary = MineralCatalogScript.get_mineral(vein_id)
-				return "F  MINE %s" % str(vein_data.get("display_name", vein_id)).to_upper()
-		if nearest_prop != null:
-			var cache_id: String = str(nearest_prop.get("loot_item_id"))
-			var cache_data: Dictionary = MineralCatalogScript.get_mineral(cache_id)
-			return "F  OPEN %s CACHE · %d LEFT" % [str(cache_data.get("display_name", cache_id)).to_upper(), int(nearest_prop.get("loot_remaining"))]
-		var mine_lift_distance := Vector2(
-			player.global_position.x - MINE_ENTRY_UNDERGROUND.x,
-			player.global_position.z - MINE_ENTRY_UNDERGROUND.z
-		).length()
-		if mine_lift_distance <= MINE_ACCESS_RANGE:
-			var current_layer: int = mine_director.get_layer_index(player.global_position) if mine_director != null else 0
-			return "G  ASCEND · V  DESCEND" if current_layer > 0 else "G  SURFACE · V  DESCEND"
-		return "NO CACHE OR VEIN IN REACH"
-	var nearest_crop: Node3D = null
-	var nearest_crop_distance: float = 3.25
-	for plot in chunk_controller.get_loaded_crop_plots():
-		if not is_instance_valid(plot):
-			continue
-		var crop_distance: float = player.global_position.distance_to(plot.global_position)
-		if crop_distance <= nearest_crop_distance:
-			nearest_crop = plot
-			nearest_crop_distance = crop_distance
-	if nearest_crop != null and (nearest_prop == null or nearest_crop_distance < nearest_prop_distance):
-		return "E  MANAGE CROP PLOT"
-	if nearest_prop != null:
-		return "F  OPEN SALVAGE CRATE"
-	var surface_lift_distance := Vector2(
-		player.global_position.x - MINE_ENTRY_SURFACE.x,
-		player.global_position.z - MINE_ENTRY_SURFACE.z
-	).length()
-	if surface_lift_distance <= MINE_ACCESS_RANGE:
-		return "G  ENTER KROLL MINE LIFT"
-	return "NO INTERACTION IN REACH"
+func get_camera_interaction_target() -> Dictionary:
+	return _camera_interaction_target_cache.duplicate()
 
+func _cast_camera_interaction_target() -> Dictionary:
+	if player == null or camera == null or not is_instance_valid(camera) or chunk_controller == null:
+		return {}
+	var world_3d: World3D = get_world_3d()
+	if world_3d == null:
+		return {}
+	var ray_origin: Vector3 = camera.global_position
+	var ray_direction: Vector3 = (-camera.global_basis.z).normalized()
+	if ray_direction.length_squared() <= 0.0001:
+		return {}
+	var ray_end: Vector3 = ray_origin + ray_direction * INTERACTION_RAY_DISTANCE
+	# Interactable proxies live on physics layer 2. Query only those areas so
+	# unrelated trigger areas cannot hide a valid target farther down the ray.
+	var target_query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	target_query.collision_mask = INTERACTION_PROXY_COLLISION_MASK
+	target_query.collide_with_areas = true
+	target_query.collide_with_bodies = false
+	target_query.hit_from_inside = true
+	target_query.exclude = [player.get_rid()]
+	var target_hit: Dictionary = world_3d.direct_space_state.intersect_ray(target_query)
+	if target_hit.is_empty():
+		return {}
+	# World collision bodies remain opaque. A second body-only ray preserves
+	# occlusion without allowing non-interactive Area3D triggers to steal the hit.
+	var occlusion_query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	occlusion_query.collision_mask = WORLD_GEOMETRY_COLLISION_MASK
+	occlusion_query.collide_with_areas = false
+	occlusion_query.collide_with_bodies = true
+	occlusion_query.hit_from_inside = true
+	occlusion_query.exclude = [player.get_rid()]
+	var occlusion_hit: Dictionary = world_3d.direct_space_state.intersect_ray(occlusion_query)
+	if not occlusion_hit.is_empty():
+		var target_hit_distance: float = ray_origin.distance_to(target_hit.get("position", ray_origin))
+		var occlusion_distance: float = ray_origin.distance_to(occlusion_hit.get("position", ray_origin))
+		if occlusion_distance <= target_hit_distance + 0.001:
+			return {}
+	var target: Dictionary = _resolve_camera_interaction_target(target_hit.get("collider"))
+	if target.is_empty():
+		return {}
+	var target_node: Node3D = target.get("node") as Node3D
+	if target_node == null or not is_instance_valid(target_node):
+		return {}
+	var max_range: float = 3.25
+	match str(target.get("kind", "")):
+		"vein":
+			max_range = MINE_INTERACTION_RANGE
+		"lift":
+			max_range = MINE_ACCESS_RANGE
+	var player_distance: float = player.global_position.distance_to(target_node.global_position)
+	if player_distance > max_range:
+		return {}
+	target["distance"] = player_distance
+	target["hit_position"] = target_hit.get("position", ray_origin)
+	return target
+func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
+	var candidate: Node = collider as Node
+	while candidate != null and candidate != self:
+		if chunk_controller != null:
+			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
+			if crop_plots.has(candidate):
+				return {"kind": "crop", "node": candidate}
+			var world_props: Array = chunk_controller.call("get_loaded_world_state_nodes")
+			if world_props.has(candidate):
+				return {"kind": "prop", "node": candidate}
+			if chunk_controller.has_method("get_loaded_mineral_nodes"):
+				var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
+				if mineral_nodes.has(candidate) and bool(candidate.get("visible")) and int(candidate.get("remaining_units")) > 0:
+					return {"kind": "vein", "node": candidate}
+		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
+			return {"kind": "lift", "node": candidate}
+		candidate = candidate.get_parent()
+	return {}
+
+func get_interaction_prompt_text() -> String:
+	var target: Dictionary = get_camera_interaction_target()
+	if target.is_empty():
+		return "NO INTERACTION IN SIGHT"
+	var target_node: Node3D = target.get("node") as Node3D
+	match str(target.get("kind", "")):
+		"crop":
+			return "E  MANAGE CROP PLOT"
+		"vein":
+			var vein_id: String = str(target_node.get("mineral_id"))
+			var vein_data: Dictionary = MineralCatalogScript.get_mineral(vein_id)
+			return "F  MINE %s" % str(vein_data.get("display_name", vein_id)).to_upper()
+		"prop":
+			var cache_id: String = str(target_node.get("loot_item_id"))
+			var cache_data: Dictionary = MineralCatalogScript.get_mineral(cache_id)
+			return "F  OPEN %s CACHE · %d LEFT" % [
+				str(cache_data.get("display_name", cache_id)).to_upper(),
+				int(target_node.get("loot_remaining"))
+			]
+		"lift":
+			if _is_underground:
+				var current_layer: int = mine_director.get_layer_index(player.global_position) if mine_director != null else 0
+				return "G  ASCEND · V  DESCEND" if current_layer > 0 else "G  SURFACE · V  DESCEND"
+			return "G  ENTER KROLL MINE LIFT"
+	return "NO INTERACTION IN SIGHT"
 func _refresh_hud() -> void:
 	if hud == null:
 		return

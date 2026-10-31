@@ -2115,3 +2115,46 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld interaction prompt tests passed."
+
+
+      - name: Verify Run 64 KROLL Star Chart and camera-ray interaction inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Star_Chart/project.godot
+          test -f daily_games/KROLL_Star_Chart/main.tscn
+          test -f daily_games/KROLL_Star_Chart/main.gd
+          test -f daily_games/KROLL_Star_Chart/daily_games/KROLL_Star_Chart/main.gd
+          test -f daily_games/KROLL_Star_Chart/rules.gd
+          test -f daily_games/KROLL_Star_Chart/tests/rules_test.gd
+          test -f daily_games/KROLL_Star_Chart/tests/game_smoke_test.gd
+          grep -q 'get_camera_interaction_target' world/SurfaceWorld.gd
+          grep -q 'InteractionArea' systems/WorldObjectStatefulProp.gd
+          grep -q 'InteractionArea' systems/MineralMiningNode.gd
+          grep -q 'InteractionArea' systems/CropPlotVisual.tscn
+      - name: Import and parse KROLL Star Chart
+        run: godot --headless --path daily_games/KROLL_Star_Chart --editor --quit
+      - name: Run KROLL Star Chart rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Star_Chart --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Star Chart rules tests passed."
+      - name: Run KROLL Star Chart runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 20s godot --headless --path daily_games/KROLL_Star_Chart --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Star Chart runtime smoke test passed."
+      - name: Run production SurfaceWorld camera-ray interaction test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld camera-ray interaction tests passed."

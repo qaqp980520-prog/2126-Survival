@@ -9,6 +9,7 @@ const PINBALL_SCENE := "res://daily_games/KROLL_Orbital_Pinball/main.tscn"
 const TETHER_SCENE := "res://daily_games/KROLL_Tether_Recovery/main.tscn"
 const SHADOW_SCENE := "res://daily_games/KROLL_Shadow_Courier/main.tscn"
 const FLUX_HOCKEY_SCENE := "res://daily_games/KROLL_Flux_Hockey/main.tscn"
+const STAR_CHART_SCENE := "res://daily_games/KROLL_Star_Chart/main.tscn"
 
 var failures: Array[String] = []
 
@@ -24,13 +25,14 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(TETHER_SCENE), "Tether Recovery game scene exists")
 	_expect(ResourceLoader.exists(SHADOW_SCENE), "Shadow Courier game scene exists")
 	_expect(ResourceLoader.exists(FLUX_HOCKEY_SCENE), "Flux Hockey game scene exists")
+	_expect(ResourceLoader.exists(STAR_CHART_SCENE), "Star Chart game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
 	root.add_child(hub)
 	await process_frame
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 8, "hub exposes the world entry and seven prototype launch buttons")
+	_expect(buttons.size() == 9, "hub exposes the world entry and eight prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -42,7 +44,20 @@ func _run() -> void:
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
 	_expect(labels.has("KROLL Shadow Courier"), "hub labels the Shadow Courier game")
 	_expect(labels.has("KROLL Flux Hockey"), "hub labels the Flux Hockey game")
+	_expect(labels.has("KROLL Star Chart"), "hub labels the Star Chart game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
+
+	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
+	_expect(star_chart_scene != null, "root hub can load the nested Star Chart scene script")
+	if star_chart_scene != null:
+		var star_chart := star_chart_scene.instantiate()
+		root.add_child(star_chart)
+		await process_frame
+		_expect(star_chart.has_method("get_current_mission"), "root-loaded Star Chart initializes its rules module")
+		var star_chart_mission: Dictionary = star_chart.call("get_current_mission")
+		_expect(str(star_chart_mission.get("id", "")) == "dockside", "root-loaded Star Chart can execute its rules module")
+		star_chart.queue_free()
+		await process_frame
 
 	hub.queue_free()
 	await process_frame
