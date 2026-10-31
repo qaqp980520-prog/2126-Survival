@@ -183,6 +183,7 @@ func _run() -> void:
 		var copied: Dictionary = registry_copy.call("get_object_state", stable_id)
 		var copied_state: Dictionary = copied.get("state", {})
 		_expect(int(copied_state.get("loot_remaining", -1)) == 0 and bool(copied_state.get("opened", false)), "schema-1 registry roundtrip preserves exhausted cache %s" % stable_id)
+	registry_copy.free()
 	await _finish(0 if failures.is_empty() else 1)
 func _collect_cache(cache: Node) -> bool:
 	var result: Dictionary = cache.call("interact_with_inventory", inventory_bridge)
@@ -210,6 +211,8 @@ func _expect(condition: bool, description: String) -> void:
 func _finish(exit_code: int) -> void:
 	if is_instance_valid(world):
 		world.queue_free()
+	# Let queued world/child teardown finish before Godot checks ObjectDB/resources at exit.
+	await process_frame
 	await process_frame
 	if exit_code == 0 and failures.is_empty():
 		print("Production SurfaceWorld all-layer cache lifecycle tests passed.")
