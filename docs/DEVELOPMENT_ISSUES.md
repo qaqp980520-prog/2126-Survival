@@ -591,3 +591,29 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Feature PR #154 merged as `63913a4cfea8da1af0e05242373a0a0d1226f455`.
 - Exact candidate `6394fe6c8c686ec91656c5a7bdefdc5555f4e4de` passed Godot 4.3 [Run #672](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41146228476): 245/245 numbered steps plus setup/cleanup/completion (248/248 total successful step records), zero failures and zero skipped steps.
 - No world save schema migration was required; schema remains version 1.
+
+
+## Run 60 closeout — 2026-10-31
+
+### Completed
+- **Vertical underground mine layers:** Run 60 closes the Run 58/59 follow-up requesting multi-depth floors and lift transitions. The director supports layer 0–8, preserves layer-zero stable IDs, namespaces deeper IDs, and keeps a bounded active 3×3 window per depth.
+- **Production lift integration:** SurfaceWorld supports descent/ascent at the origin lift, displays the current level, persists optional `mine_depth` in schema-v1 saves, and infers depth for legacy saves without the field.
+- **Failure safety:** partial deeper-layer factory failure restores both mineral and world-object registry snapshots and the prior loaded window.
+- **KROLL Orbital Pinball M0.1:** three bumper tables, deterministic ball simulation, flippers, scoring, lives, reset/table progression, keyboard and mouse/touch controls.
+
+### Exact validation
+- Feature PR [#156](https://github.com/qaqp980520-prog/2126-Survival/pull/156) merged as `857c8a9cccd4dda380a8dd893750d6f6b91d409a`.
+- Exact feature HEAD `87c249bc2844b744190c1c413b5a85dadefe3ae8` passed Godot 4.3 [Run #678](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41149499503): 253/253 total step records successful, zero failures/skips.
+- Post-merge main-push [Run #679](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41150013939) completed successfully with 253 steps.
+
+### Remaining work
+1. **Elevator presentation:** replace instant layer repositioning with a safe, cancellable transition/animation and a visible vertical shaft; preserve rollback if the target floor cannot load.
+2. **Data-driven mine generation:** move fixed regional cache/ore tables into validated data resources and introduce a persisted world seed without changing existing stable IDs or old save behavior.
+3. **Underground interaction feedback:** add a live target prompt, cache-open feedback and inventory-full messaging.
+4. **Asynchronous chunk streaming:** current loading and rollback remain synchronous. Add a bounded request queue, cancellation-safe ownership and deterministic failure recovery before claiming background streaming.
+5. **Device QA:** local GUI, GPU performance and iPhone tests remain outstanding.
+
+### Compatibility
+- World-save envelope remains schema 1; `mine_depth` is optional.
+- Legacy layer-zero chunk IDs and origin cache identities remain unchanged.
+- No local GUI/GPU/iPhone test is claimed.
