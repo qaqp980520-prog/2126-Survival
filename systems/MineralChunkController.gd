@@ -16,6 +16,7 @@ var _chunk_roots: Dictionary = {} # chunk ID -> Node3D root
 var _chunk_veins: Dictionary = {} # chunk ID -> local vein ID -> MineralMiningNode
 var _chunk_crops: Dictionary = {} # chunk ID -> local crop path -> CropPlotVisual
 var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful Node3D
+var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
 
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
@@ -153,7 +154,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	var candidate_terrain_patches: Array[Node3D] = _collect_terrain_patches(world_objects)
 	var all_terrain_patches: Array[Node3D] = existing_terrain_patches.duplicate()
 	all_terrain_patches.append_array(candidate_terrain_patches)
-	var adjacency_result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(all_terrain_patches)
+	var adjacency_result: Dictionary = _rebind_terrain_patches(all_terrain_patches, chunk_id, world_objects)
 	if not bool(adjacency_result.get("ok", false)):
 		remove_child(chunk_root)
 		if not world_objects.is_empty():
@@ -164,7 +165,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
-		TerrainAdjacencyBinderScript.bind_patches(existing_terrain_patches)
+		_rebind_terrain_patches(existing_terrain_patches)
 		return false
 	if not veins.is_empty() and not bool(adapter.load_chunk(chunk_id, veins, now_unix)):
 		# A failed registration must not consume the caller's scene. Detach it so the
@@ -180,7 +181,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
-		TerrainAdjacencyBinderScript.bind_patches(existing_terrain_patches)
+		_rebind_terrain_patches(existing_terrain_patches)
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
@@ -190,6 +191,12 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	for local_path in world_objects.keys():
 		stable_objects[_make_world_object_stable_id(chunk_id, str(local_path))] = world_objects[local_path]
 	_chunk_objects[chunk_id] = stable_objects
+	for node_value in stable_objects.values():
+		var stateful_node: Node = node_value as Node
+		if is_instance_valid(stateful_node) and stateful_node.has_signal("terrain_state_changed"):
+			var callback := Callable(self, "_on_terrain_patch_state_changed")
+			if not stateful_node.is_connected("terrain_state_changed", callback):
+				stateful_node.connect("terrain_state_changed", callback)
 	return true
 
 ## Captures mineral state before freeing a chunk. Crop records remain in CropRegistry;
@@ -228,7 +235,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	_chunk_objects.erase(chunk_id)
 	remove_child(chunk_root)
 	chunk_root.queue_free()
-	var adjacency_result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(_collect_loaded_terrain_patches())
+	var adjacency_result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 	if not bool(adjacency_result.get("ok", false)):
 		push_error("Terrain adjacency rebuild failed after chunk unload: %s" % str(adjacency_result.get("error", "unknown")))
 	return true
@@ -398,6 +405,35 @@ func _collect_terrain_patches(objects: Dictionary) -> Array[Node3D]:
 		if is_instance_valid(node) and node.is_inside_tree() and node.has_method("bind_neighbor_patch"):
 			patches.append(node)
 	return patches
+
+## Returns the current derived seam descriptors; these are never part of world-save payloads.
+func get_terrain_transition_descriptors() -> Dictionary:
+	return _terrain_transition_descriptors.duplicate(true)
+
+func refresh_terrain_adjacency() -> bool:
+	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	return bool(result.get("ok", false))
+
+func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
+	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	if not bool(result.get("ok", false)):
+		push_error("Terrain transition descriptor rebuild failed after terrain edit: %s" % str(result.get("error", "unknown")))
+
+func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String = "", candidate_objects: Dictionary = {}) -> Dictionary:
+	var stable_ids_by_instance: Dictionary = {}
+	for chunk_objects in _chunk_objects.values():
+		for stable_id in chunk_objects.keys():
+			var node: Node = chunk_objects[stable_id] as Node
+			if is_instance_valid(node) and node.has_method("bind_neighbor_patch"):
+				stable_ids_by_instance[node.get_instance_id()] = str(stable_id)
+	for local_path in candidate_objects.keys():
+		var candidate: Node = candidate_objects[local_path] as Node
+		if is_instance_valid(candidate) and candidate.has_method("bind_neighbor_patch"):
+			stable_ids_by_instance[candidate.get_instance_id()] = _make_world_object_stable_id(candidate_chunk_id, str(local_path))
+	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance)
+	if bool(result.get("ok", false)):
+		_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
+	return result
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:
 	if node is MiningNode:

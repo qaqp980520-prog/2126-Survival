@@ -64,6 +64,20 @@ func _run() -> void:
 	var second_root: Node3D = controller.call("get_chunk_root", second_chunk) as Node3D
 	var first_id: String = _stable_id(controller, first_chunk, first_root, first)
 	var second_id: String = _stable_id(controller, second_chunk, second_root, second)
+	var descriptor_before_unload: Dictionary = {}
+	for descriptor_value in controller.call("get_terrain_transition_descriptors").values():
+		var candidate_descriptor: Dictionary = descriptor_value
+		var matches_pair: bool = (
+			str(candidate_descriptor.get("first_stable_id", "")) == first_id and str(candidate_descriptor.get("second_stable_id", "")) == second_id
+		) or (
+			str(candidate_descriptor.get("first_stable_id", "")) == second_id and str(candidate_descriptor.get("second_stable_id", "")) == first_id
+		)
+		if matches_pair:
+			descriptor_before_unload = candidate_descriptor
+	_expect(not descriptor_before_unload.is_empty(), "production controller exposes a descriptor for the live cross-chunk seam")
+	_expect(str(descriptor_before_unload.get("mode", "")) == "unequal_height", "production descriptor reflects the live unequal-height edge")
+	_expect(str(descriptor_before_unload.get("higher_stable_id", "")) == first_id and str(descriptor_before_unload.get("lower_stable_id", "")) == second_id, "production descriptor uses registry-backed Stable IDs for high and low patches")
+	_expect(is_equal_approx(float(descriptor_before_unload.get("height_delta", 0.0)), 0.5), "production descriptor reports the exact cross-chunk rise")
 	var first_instance: int = first.get_instance_id()
 	var second_instance: int = second.get_instance_id()
 	var first_proxy: Area3D = first.get_node_or_null("InteractionArea") as Area3D
@@ -118,6 +132,18 @@ func _run() -> void:
 			_expect(fresh_first_proxy.get_instance_id() != first_proxy_instance and fresh_second_proxy.get_instance_id() != second_proxy_instance, "reloaded interaction proxies are fresh instances")
 		_expect(str(fresh_first.call("get_edge_policy", "east").get("mode", "")) == "local_higher", "left cross-chunk edge policy is rebuilt after reload")
 		_expect(str(fresh_second.call("get_edge_policy", "west").get("mode", "")) == "neighbor_higher", "right cross-chunk edge policy is rebuilt reciprocally")
+		var descriptor_after_reload: Dictionary = {}
+		for descriptor_value in controller.call("get_terrain_transition_descriptors").values():
+			var candidate_descriptor: Dictionary = descriptor_value
+			var matches_pair: bool = (
+				str(candidate_descriptor.get("first_stable_id", "")) == first_id and str(candidate_descriptor.get("second_stable_id", "")) == second_id
+			) or (
+				str(candidate_descriptor.get("first_stable_id", "")) == second_id and str(candidate_descriptor.get("second_stable_id", "")) == first_id
+			)
+			if matches_pair:
+				descriptor_after_reload = candidate_descriptor
+		_expect(str(descriptor_after_reload.get("edge_key", "")) == str(descriptor_before_unload.get("edge_key", "")), "derived edge key remains stable across chunk unload and reload")
+		_expect(str(descriptor_after_reload.get("higher_stable_id", "")) == first_id, "reloaded descriptor restores the same higher-patch owner identity")
 	_expect(_count_cross_chunk_pairs(controller) == 12, "all twelve cross-chunk seams are rebuilt after reload")
 
 	_expect(bool(world.call("restore_stream_state", payload, _test_time + 2)), "schema-1 world restore accepts the cross-chunk terrain snapshot")

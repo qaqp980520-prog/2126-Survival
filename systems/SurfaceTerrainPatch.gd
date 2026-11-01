@@ -1,6 +1,8 @@
 extends Node3D
 class_name SurfaceTerrainPatch
 
+signal terrain_state_changed(patch: Node3D)
+
 ## Raised 2 m terrain tile with four traversable ramps and persistent material/height state.
 const SURFACE_TYPES: Array[String] = ["soil", "rock", "metal"]
 const MAX_HEIGHT_LEVEL: int = 2
@@ -55,6 +57,7 @@ func apply_world_object_state(state: Dictionary) -> bool:
 	_revision=int(state["revision"])
 	_refresh_geometry()
 	_refresh_bound_neighbors()
+	terrain_state_changed.emit(self)
 	return true
 
 func cycle_terrain_edit() -> Dictionary:
@@ -66,6 +69,7 @@ func cycle_terrain_edit() -> Dictionary:
 	_revision+=1
 	_refresh_geometry()
 	_refresh_bound_neighbors()
+	terrain_state_changed.emit(self)
 	return {"ok":true,"reason":"edited","state":get_world_object_state()}
 
 func get_top_height() -> float:
