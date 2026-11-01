@@ -154,7 +154,8 @@ func _test_production_surface_world_async_movement() -> void:
 
     var rollback_position: Vector3 = player.global_position
     var target_position := Vector3(35.0, 2.0, 35.0)
-    var started: bool = bool(world.call("_request_surface_streaming", rollback_position, target_position, Vector3.ZERO))
+    var target_velocity := Vector3(2.5, 0.0, -1.5)
+    var started: bool = bool(world.call("_request_surface_streaming", rollback_position, target_position, target_velocity))
     _expect(started and bool(world.get("_surface_stream_pending")), "production movement starts a bounded async window request")
     _expect(player.global_position.is_equal_approx(rollback_position), "player is held at the last safe position while chunks stage")
     var request_id: int = int(world.get("_surface_stream_request_id"))
@@ -162,6 +163,7 @@ func _test_production_surface_world_async_movement() -> void:
     _expect(bool(success_report.get("success", false)), "production surface request completes successfully")
     # Check the callback's resume position before the next physics tick applies gravity.
     _expect(player.global_position.is_equal_approx(target_position), "player resumes at the requested position after commit")
+    _expect(player.velocity.is_equal_approx(target_velocity), "player resumes with the saved movement velocity after commit")
     _expect(world.get("_last_grid") == Vector2i(3, 3), "production world advances its last-grid coordinate only after commit")
     _expect(not bool(world.get("_surface_stream_pending")), "production world clears its pending flag after completion")
     await process_frame
