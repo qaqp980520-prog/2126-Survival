@@ -38,11 +38,12 @@ func _run() -> void:
 	_expect(str(invalid.get("reason", "")) == "invalid_crew", "invalid crew index is rejected")
 	invalid = rules.set_assignment(initial, 0, 4)
 	_expect(str(invalid.get("reason", "")) == "invalid_station", "invalid station index is rejected")
-	invalid = rules.set_assignment(initial, 0, 0)
-	var duplicate_state: Dictionary = invalid.get("state", {})
-	invalid = rules.set_assignment(duplicate_state, 1, 0)
-	var duplicate_result: Dictionary = rules.submit_case(invalid.get("state", {}))
-	_expect(str(duplicate_result.get("reason", "")) == "duplicate_station", "duplicate station assignment is rejected before clue evaluation")
+	var duplicate_state: Dictionary = rules.create_state(0, 0)
+	var duplicate_values: Array = [0, 0, 1, 2]
+	for crew_index in range(4):
+		duplicate_state = rules.set_assignment(duplicate_state, crew_index, int(duplicate_values[crew_index])).get("state", {})
+	var duplicate_result: Dictionary = rules.submit_case(duplicate_state)
+	_expect(str(duplicate_result.get("reason", "")) == "duplicate_station", "complete manifest with a duplicate station is rejected before clue evaluation")
 
 	var wrong_state: Dictionary = rules.create_state(0, 40)
 	for crew_index in range(4):
