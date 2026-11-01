@@ -24,13 +24,17 @@ On-screen hold buttons support mouse and touch.
 
 Docking requires all three conditions to remain true for one second: distance within 25 units, relative speed no greater than 15 units/s, and heading error within 0.32 radians.
 
+## Reference-route validation
+
+The rules suite also runs deterministic waypoint controllers against all three authored trials. This guards against scenario changes that accidentally make a berth unreachable within the fuel and time limits.
+
 ## Files
 
 - `project.godot`, `main.tscn`: standalone project.
 - `main_root.tscn`: root-project scene entry.
 - `main.gd`: drawing, UI, keyboard and touch controls.
 - `rules.gd`: pure deterministic flight and docking model.
-- `tests/rules_test.gd`: physics, fuel, collision, boundary and docking rules.
+- `tests/rules_test.gd`: physics, fuel, collision, boundary, docking rules and three reference-route reachability checks.
 - `tests/game_smoke_test.gd`: scene and input integration smoke test.
 
 No external assets or plugins are required. Physics are deliberately simplified; no orbital gravity, multiplayer, save data, audio or hardware performance claims are included.

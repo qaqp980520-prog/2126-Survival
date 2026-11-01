@@ -13,6 +13,7 @@ func _run() -> void:
 	_test_braking_and_moving_target(rules)
 	_test_collision_and_bounds(rules)
 	_test_docking_and_campaign(rules)
+	_test_reference_routes(rules)
 	_test_invalid_inputs(rules)
 	if failures.is_empty():
 		print("KROLL Inertial Docking rules tests passed.")
@@ -108,6 +109,67 @@ func _test_docking_and_campaign(rules: RefCounted) -> void:
 			break
 	var completed: Dictionary = rules.advance_state(last)["state"]
 	_expect(str(completed.get("status", "")) == "campaign_complete", "third successful docking completes the campaign")
+
+func _test_reference_routes(rules: RefCounted) -> void:
+	var routes: Array = [
+		[Vector2(0.0,0.0), Vector2(200.0,110.0), Vector2(260.0,140.0)],
+		[Vector2(-120.0,175.0), Vector2(0.0,140.0), Vector2(180.0,70.0), Vector2(240.0,-80.0)],
+		[Vector2(-160.0,100.0), Vector2(0.0,150.0), Vector2(180.0,150.0), Vector2(260.0,70.0)]
+	]
+	for scenario_index in range(routes.size()):
+		var final_state: Dictionary = _run_reference_route(rules, scenario_index, routes[scenario_index])
+		_expect(str(final_state.get("status", "")) == "docked", "authored reference route completes %s" % str(rules.get_scenario(scenario_index).get("name", scenario_index)))
+
+func _run_reference_route(rules: RefCounted, scenario_index: int, waypoints: Array) -> Dictionary:
+	var state: Dictionary = rules.make_state(scenario_index)
+	var waypoint_index: int = 0
+	for _frame in range(2400):
+		var target: Vector2 = rules.call("get_target_position", state)
+		var waypoint: Vector2 = waypoints[waypoint_index] if waypoint_index < waypoints.size() else target
+		var position: Vector2 = state["position"]
+		var velocity: Vector2 = state["velocity"]
+		var offset: Vector2 = waypoint - position
+		var distance: float = offset.length()
+		if distance < 28.0 and waypoint_index < waypoints.size():
+			waypoint_index += 1
+			waypoint = waypoints[waypoint_index] if waypoint_index < waypoints.size() else target
+			offset = waypoint - position
+			distance = offset.length()
+		var desired_speed: float = minf(55.0, sqrt(maxf(0.0, 44.0 * distance)))
+		var desired_velocity: Vector2 = offset.normalized() * desired_speed
+		var acceleration: Vector2 = (desired_velocity - velocity) * 0.45
+		var controls: Dictionary = {}
+		if acceleration.length() > 1.0:
+			var acceleration_direction: Vector2 = acceleration.normalized()
+			var forward := Vector2(cos(float(state["angle"])), sin(float(state["angle"])))
+			var reversing: bool = acceleration_direction.dot(forward) < 0.0
+			var aim_direction: Vector2 = acceleration_direction * (-1.0 if reversing else 1.0)
+			var angle_error: float = wrapf(atan2(aim_direction.y, aim_direction.x) - float(state["angle"]), -PI, PI)
+			controls = {
+				"left":angle_error < -0.035,
+				"right":angle_error > 0.035,
+				"thrust":not reversing and absf(angle_error) < 0.25 and float(state["fuel"]) > 0.0 and acceleration.length() > 1.8,
+				"reverse":reversing and absf(angle_error) < 0.25 and float(state["fuel"]) > 0.0 and acceleration.length() > 1.8,
+				"brake":false
+			}
+		else:
+			var relative_speed_for_brake: float = (velocity - state["target_velocity"]).length()
+			controls = {"left":false,"right":false,"thrust":false,"reverse":false,"brake":relative_speed_for_brake > 3.0 and distance < 70.0}
+		if waypoint_index >= waypoints.size() and distance < 75.0:
+			var docking_error: float = wrapf(float(state["target_heading"]) - float(state["angle"]), -PI, PI)
+			var relative_speed_for_docking: float = (velocity - state["target_velocity"]).length()
+			controls["left"] = docking_error < -0.035
+			controls["right"] = docking_error > 0.035
+			controls["thrust"] = false
+			controls["reverse"] = false
+			controls["brake"] = relative_speed_for_docking > 2.5
+		var result: Dictionary = rules.step(state, controls, 0.05)
+		if not bool(result.get("ok", false)):
+			return {}
+		state = result["state"]
+		if str(state.get("status", "")) != "flying":
+			break
+	return state
 
 func _test_invalid_inputs(rules: RefCounted) -> void:
 	_expect(not bool(rules.step({}, {}, 0.05).get("ok", false)), "empty state is rejected")
