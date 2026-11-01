@@ -2756,3 +2756,47 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld cross-chunk terrain adjacency tests passed."
+
+      - name: Verify Run 78 Raster Survey and partial-window terrain inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Raster_Survey/project.godot
+          test -f daily_games/KROLL_Raster_Survey/main.tscn
+          test -f daily_games/KROLL_Raster_Survey/main_root.tscn
+          test -f daily_games/KROLL_Raster_Survey/main.gd
+          test -f daily_games/KROLL_Raster_Survey/rules.gd
+          test -f daily_games/KROLL_Raster_Survey/tests/rules_test.gd
+          test -f daily_games/KROLL_Raster_Survey/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_partial_window_terrain_shift_test.gd
+          grep -q 'RASTER_SURVEY_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Raster Survey' tests/survival_test_hub_smoke_test.gd
+          grep -q 'centers: Array\[Vector2i\]' tests/production_surface_world_partial_window_terrain_shift_test.gd
+          grep -q 'Production SurfaceWorld partial-window terrain shift tests passed.' tests/production_surface_world_partial_window_terrain_shift_test.gd
+
+      - name: Import and parse KROLL Raster Survey
+        run: godot --headless --path daily_games/KROLL_Raster_Survey --editor --quit
+      - name: Run KROLL Raster Survey rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Raster_Survey --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Raster Survey rules tests passed."
+      - name: Run KROLL Raster Survey runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Raster_Survey --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Raster Survey runtime smoke test passed."
+      - name: Run production partial-window terrain shift regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 100s godot --headless --path . --script res://tests/production_surface_world_partial_window_terrain_shift_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld partial-window terrain shift tests passed."
