@@ -24,7 +24,7 @@ var _active_async_request_id: int = -1
 var _async_staged_roots_by_request: Dictionary = {}
 
 func bind_controller(candidate: Node3D) -> bool:
-	if candidate == null:
+	if candidate == null or not is_instance_valid(candidate) or not candidate.is_inside_tree() or candidate.is_queued_for_deletion():
 		return false
 	for method_name in ["load_chunk", "unload_chunk", "is_chunk_loaded"]:
 		if not candidate.has_method(method_name):
@@ -154,7 +154,7 @@ func _exit_tree() -> void:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
-	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
+	if not _async_dependencies_available():
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
 		return -1
@@ -196,6 +196,13 @@ func get_active_async_request_id() -> int:
 func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix: int, max_staged_per_frame: int) -> void:
 	var staged_roots: Dictionary = {}
 	_async_staged_roots_by_request[request_id] = staged_roots
+	if request_id != _active_async_request_id:
+		_release_async_staged_roots(request_id, staged_roots)
+		_emit_async_cancelled(request_id, 0)
+		return
+	if not _async_dependencies_available():
+		_abort_async_sync_request(request_id, staged_roots, 0)
+		return
 	var desired_ids: Dictionary = {}
 	var to_load: Array[Dictionary] = []
 	for coord in desired:
@@ -210,6 +217,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if request_id != _active_async_request_id:
 			_release_async_staged_roots(request_id, staged_roots)
 			_emit_async_cancelled(request_id, staged_count)
+			return
+		if not _async_dependencies_available():
+			_abort_async_sync_request(request_id, staged_roots, staged_count)
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
@@ -231,16 +241,25 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				_release_async_staged_roots(request_id, staged_roots)
 				_emit_async_cancelled(request_id, staged_count)
 				return
+			if not _async_dependencies_available():
+				_abort_async_sync_request(request_id, staged_roots, staged_count)
+				return
 
 	if request_id != _active_async_request_id:
 		_release_async_staged_roots(request_id, staged_roots)
 		_emit_async_cancelled(request_id, staged_count)
+		return
+	if not _async_dependencies_available():
+		_abort_async_sync_request(request_id, staged_roots, staged_count)
 		return
 
 	# Commit is deliberately non-yielding: no newer request can interleave with registration,
 	# adjacency rebuilding, and stale-root retirement.
 	var newly_loaded: Array[String] = []
 	for entry in to_load:
+		if not _async_dependencies_available():
+			_abort_async_sync_request(request_id, staged_roots, staged_count)
+			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = staged_roots.get(id)
@@ -268,6 +287,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	stale_ids.sort()
 	var unloaded_stale: Array[Dictionary] = []
 	for id in stale_ids:
+		if not _async_dependencies_available():
+			_abort_async_sync_request(request_id, staged_roots, staged_count)
+			return
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		if not chunk_controller.unload_chunk(id, now_unix):
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
@@ -294,6 +316,49 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		"newly_loaded_ids": newly_loaded.duplicate(),
 		"unloaded_stale_count": unloaded_stale.size()
 	})
+
+func _async_dependencies_available() -> bool:
+	return (
+		is_inside_tree()
+		and not is_queued_for_deletion()
+		and chunk_controller != null
+		and is_instance_valid(chunk_controller)
+		and chunk_controller.is_inside_tree()
+		and not chunk_controller.is_queued_for_deletion()
+		and chunk_factory.is_valid()
+	)
+
+func _abort_async_sync_request(request_id: int, staged_roots: Dictionary, staged_count: int) -> void:
+	var released_count: int = _release_async_staged_roots(request_id, staged_roots)
+	var controller_destroyed: bool = (
+		chunk_controller == null
+		or not is_instance_valid(chunk_controller)
+		or chunk_controller.is_queued_for_deletion()
+	)
+	var controller_detached: bool = controller_destroyed
+	if not controller_destroyed and is_instance_valid(chunk_controller):
+		controller_detached = not chunk_controller.is_inside_tree()
+	if controller_destroyed:
+		# The controller owns every committed root. Once it is destroyed, its active
+		# window no longer exists and the director must be allowed to bind a replacement.
+		_managed_chunk_ids.clear()
+	if request_id != _active_async_request_id:
+		_emit_async_cancelled(request_id, staged_count)
+		return
+	_finish_async_sync_request(
+		request_id,
+		false,
+		"dependency_unavailable",
+		"Async chunk staging lost its controller or factory before commit.",
+		not controller_destroyed,
+		{
+			"staged_count": staged_count,
+			"staged_roots_released": released_count,
+			"controller_destroyed": controller_destroyed,
+			"controller_detached": controller_detached,
+			"factory_valid": chunk_factory.is_valid()
+		}
+	)
 
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
@@ -474,7 +539,7 @@ func _set_sync_report(success: bool, phase: String, message: String, rollback_co
 
 func _get_controller_loaded_ids() -> PackedStringArray:
 	var ids := PackedStringArray()
-	if chunk_controller != null and is_instance_valid(chunk_controller) and chunk_controller.has_method("get_loaded_chunk_ids"):
+	if chunk_controller != null and is_instance_valid(chunk_controller) and not chunk_controller.is_queued_for_deletion() and chunk_controller.has_method("get_loaded_chunk_ids"):
 		var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
 		if raw_ids is Array or raw_ids is PackedStringArray:
 			for item in raw_ids:

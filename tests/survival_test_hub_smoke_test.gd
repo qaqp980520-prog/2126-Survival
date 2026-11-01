@@ -28,6 +28,7 @@ const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/ma
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
+const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -60,6 +61,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
 	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
 	_expect(ResourceLoader.exists(FAULTLINE_CARTOGRAPHER_SCENE), "Faultline Cartographer game scene exists")
+	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -68,7 +70,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 27, "hub exposes twenty-seven world, prototype and game launch buttons")
+	_expect(buttons.size() == 28, "hub exposes twenty-eight world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -239,6 +241,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Inertial Docking game")
 	_expect(labels.has("KROLL Microbe Scope"), "hub labels the Microbe Scope game")
 	_expect(labels.has("KROLL Faultline Cartographer"), "hub labels the Faultline Cartographer game")
+	_expect(labels.has("KROLL Paleo Track Lab"), "hub labels the Paleo Track Lab game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -349,6 +352,22 @@ func _run() -> void:
 			_expect(str(survey_state.get("survey_id", "")) == "iron_vein", "root-loaded Faultline Cartographer starts the Iron Vein survey")
 		faultline_game.queue_free()
 		await process_frame
+
+
+    var paleo_scene := load(PALEO_TRACK_LAB_SCENE) as PackedScene
+    _expect(paleo_scene != null, "root hub can load the Paleo Track Lab scene")
+    if paleo_scene != null:
+        var paleo_game := paleo_scene.instantiate()
+        root.add_child(paleo_game)
+        await process_frame
+        _expect(paleo_game.has_method("get_current_state"), "root-loaded Paleo Track Lab initializes its trackway rules")
+        _expect(paleo_game.call("get_title_text") == "KROLL // PALEO TRACK LAB", "root-loaded Paleo Track Lab displays its title")
+        _expect(paleo_game.call("get_answer_button_count") == 13, "root-loaded Paleo Track Lab builds thirteen answer controls")
+        if paleo_game.has_method("get_current_state"):
+            var paleo_state: Dictionary = paleo_game.call("get_current_state")
+            _expect(str(paleo_state.get("site_id", "")) == "fern_basin", "root-loaded Paleo Track Lab starts the Fern Basin survey")
+        paleo_game.queue_free()
+        await process_frame
 
 	hub.queue_free()
 	await process_frame

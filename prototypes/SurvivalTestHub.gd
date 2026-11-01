@@ -27,6 +27,7 @@ const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/ma
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
+const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 
 var status_label: Label
 
@@ -244,6 +245,12 @@ func _build_ui() -> void:
 		"KROLL Faultline Cartographer",
 		"發射三個地震探針，利用回波距離交會定位地下礦脈；支援鍵盤與觸控。",
 		FAULTLINE_CARTOGRAPHER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Paleo Track Lab",
+		"量測足印長寬、步幅、步道寬度與趾向，判讀三條恐龍足跡路線的造跡者與移動方式；支援鍵盤與觸控。",
+		PALEO_TRACK_LAB_SCENE
 	)
 	_add_scene_button(
 		launch_list,

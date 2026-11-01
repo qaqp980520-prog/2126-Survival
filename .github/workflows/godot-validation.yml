@@ -2996,3 +2996,48 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Faultline Cartographer runtime smoke test passed."
+
+      - name: Verify Run 83 controller lifecycle and Paleo Track Lab inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q '_async_dependencies_available' systems/MineralGridStreamingDirector.gd
+          grep -q 'controller_destroyed' systems/MineralGridStreamingDirector.gd
+          grep -q 'controller-teardown' tests/mineral_grid_streaming_async_test.gd
+          test -f daily_games/KROLL_Paleo_Track_Lab/project.godot
+          test -f daily_games/KROLL_Paleo_Track_Lab/main.tscn
+          test -f daily_games/KROLL_Paleo_Track_Lab/main_root.tscn
+          test -f daily_games/KROLL_Paleo_Track_Lab/main.gd
+          test -f daily_games/KROLL_Paleo_Track_Lab/rules.gd
+          test -f daily_games/KROLL_Paleo_Track_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Paleo_Track_Lab/tests/game_smoke_test.gd
+          grep -q 'PALEO_TRACK_LAB_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Paleo Track Lab' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run async controller teardown regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/mineral_grid_streaming_async_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid bounded async streaming tests passed."
+
+      - name: Import and parse KROLL Paleo Track Lab
+        run: godot --headless --path daily_games/KROLL_Paleo_Track_Lab --editor --quit
+      - name: Run KROLL Paleo Track Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Paleo_Track_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Paleo Track Lab rules tests passed."
+      - name: Run KROLL Paleo Track Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Paleo_Track_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Paleo Track Lab runtime smoke test passed."
