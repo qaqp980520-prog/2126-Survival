@@ -27,6 +27,7 @@ const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.ts
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
+const REACTOR_BALANCER_SCENE := "res://daily_games/KROLL_Reactor_Balancer/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -58,6 +59,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(RASTER_SURVEY_SCENE), "Raster Survey game scene exists")
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
 	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
+	_expect(ResourceLoader.exists(REACTOR_BALANCER_SCENE), "Reactor Balancer game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -66,7 +68,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 26, "hub exposes the world entry and twenty-four prototype launch buttons")
+	_expect(buttons.size() == 27, "hub exposes twenty-seven world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -235,7 +237,8 @@ func _run() -> void:
 	_expect(labels.has("KROLL Raster Survey"), "hub labels the Raster Survey game")
 	_expect(labels.has("KROLL Wind Farm Dispatch"), "hub labels the Wind Farm Dispatch game")
 	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Inertial Docking game")
-	_expect(labels.has("KROLL Microbe Scope"), "hub labels the Fossil Assembly game")
+	_expect(labels.has("KROLL Microbe Scope"), "hub labels the Microbe Scope game")
+	_expect(labels.has("KROLL Reactor Balancer"), "hub labels the Reactor Balancer game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -329,6 +332,21 @@ func _run() -> void:
 			var microbe_state: Dictionary = microbe_game.call("get_current_state")
 			_expect(str(microbe_state.get("specimen_id", "")) == "diatom", "root-loaded Microbe Scope starts Diatom Valve")
 		microbe_game.queue_free()
+		await process_frame
+
+	var reactor_scene := load(REACTOR_BALANCER_SCENE) as PackedScene
+	_expect(reactor_scene != null, "root hub can load the Reactor Balancer scene")
+	if reactor_scene != null:
+		var reactor_game := reactor_scene.instantiate()
+		root.add_child(reactor_game)
+		await process_frame
+		_expect(reactor_game.has_method("get_current_state"), "root-loaded Reactor Balancer initializes its process model")
+		_expect(reactor_game.get_title_text() == "KROLL // REACTOR BALANCER", "root-loaded Reactor Balancer displays its title")
+		_expect(reactor_game.get_action_button_count() == 6, "root-loaded Reactor Balancer builds six process controls")
+		if reactor_game.has_method("get_current_state"):
+			var reactor_state: Dictionary = reactor_game.call("get_current_state")
+			_expect(str(reactor_state.get("scenario_id", "")) == "polymer_batch", "root-loaded Reactor Balancer starts Polymer Batch")
+		reactor_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
