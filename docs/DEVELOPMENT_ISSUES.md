@@ -1059,3 +1059,24 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Crossflow M0.1 models traffic as queue counters; animated vehicles, audio, multiplayer and campaign persistence are not included.
 - Unequal-height terrain adjacency remains a deliberate step until a safe shared transition collider is designed.
 - No local Godot executable was available; only exact-head cloud Godot 4.3 CI is verified. Manual GUI/GPU/iPhone QA is not claimed.
+
+## Run 77 closeout — cross-chunk terrain and Strata Mapper
+
+### Completed
+- Production SurfaceChunkFactory now emits four boundary patches per chunk. The 3×3 surface window contains 63 terrain patches and 12 cross-chunk seams.
+- SurfaceTerrainAdjacencyBinder rebuilds the derived seams as neighboring chunks load/unload. The 63-patch lifecycle test verifies state retention and schema-1 restoration.
+- A dedicated production test validates an unequal-height east/west seam, reciprocal local/neighbor edge policy, shared-ramp suppression, stable IDs, fresh node and interaction-proxy instances after unload/reload, and schema-1 restore.
+- KROLL Strata Mapper M0.1 is integrated into the Survival Test Hub with standalone Godot 4 project, rules, three survey sites, 18-swap budget, rules tests and runtime smoke test.
+- Existing production SurfaceWorld, WorldSessionController, camera-ray interaction, interaction lifecycle, mineral/cache/lift lifecycle and SurfaceTerrainPatch edge-transition tests all passed after the factory expansion.
+- Exact-head Godot 4.3 workflow Run #870 passed 338/338 job steps with zero failures and zero skips. PR #191 was merged as edc9de7650af090e705b93ee9cf218e654bd8ead.
+
+### Remaining issues
+1. Unequal-height neighboring patches currently use a conservative step with both shared-edge ramps suppressed. A single-owner shared transition collider and matching visual transition remain unimplemented.
+2. Chunk streaming is still synchronous. Cancellation, stale-request protection and ownership-safe asynchronous loading remain future work.
+3. Local editor GUI, GPU performance and iPhone device validation remain untested; cloud headless CI does not replace these checks.
+4. Main branch protection and required status checks remain a repository-governance follow-up; no settings were changed during Run 77.
+
+### Next recommended work
+- Design and test one deterministic owner for each unequal-height cross-chunk transition, including collision/visual ownership and unload rollback.
+- Add partial-window streaming tests that shift one chunk at a time and verify seam rebinding without full-window replacement.
+- Continue to preserve schema 1 unless a concrete migration requirement is identified.
