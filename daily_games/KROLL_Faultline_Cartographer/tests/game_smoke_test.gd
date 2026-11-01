@@ -15,9 +15,9 @@ func _run() -> void:
     root.add_child(game)
     await process_frame
     _expect(game.has_method("get_current_state"), "game exposes its survey state")
-    _expect(game.get_title_text() == "KROLL // FAULTLINE CARTOGRAPHER", "game displays the correct title")
-    _expect(game.get_probe_button_count() == 3, "game builds three seismic probe controls")
-    _expect(game.get_grid_button_count() == 49, "game builds a 7x7 survey grid")
+    _expect(game.call("get_title_text") == "KROLL // FAULTLINE CARTOGRAPHER", "game displays the correct title")
+    _expect(game.call("get_probe_button_count") == 3, "game builds three seismic probe controls")
+    _expect(game.call("get_grid_button_count") == 49, "game builds a 7x7 survey grid")
     if game.has_method("get_current_state"):
         for probe_id in ["NW", "NE", "SW"]:
             _expect(bool(game.call("perform_probe", probe_id)), "runtime accepts probe %s" % probe_id)
