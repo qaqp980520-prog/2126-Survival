@@ -363,6 +363,7 @@ func _run() -> void:
 		_expect(paleo_game.has_method("get_current_state"), "root-loaded Paleo Track Lab initializes its trackway rules")
 		_expect(paleo_game.call("get_title_text") == "KROLL // PALEO TRACK LAB", "root-loaded Paleo Track Lab displays its title")
 		_expect(paleo_game.call("get_answer_button_count") == 13, "root-loaded Paleo Track Lab builds thirteen answer controls")
+		_expect(paleo_game.call("get_field_guide_text").contains("8.5"), "root-loaded Paleo Track Lab displays the field guide")
 		if paleo_game.has_method("get_current_state"):
 			var paleo_state: Dictionary = paleo_game.call("get_current_state")
 			_expect(str(paleo_state.get("site_id", "")) == "fern_basin", "root-loaded Paleo Track Lab starts the Fern Basin survey")
