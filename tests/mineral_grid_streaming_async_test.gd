@@ -64,8 +64,30 @@ func _test_playground_async_requests() -> void:
     await process_frame
     await process_frame
     _expect(not is_instance_valid(original_root), "chunks leaving the committed window release their previous root instances")
+
+    var cancel_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time + 3, 1))
+    await process_frame
+    await process_frame
+    await process_frame
+    var cancel_refs: Array = director.call("get_async_staged_root_weakrefs", cancel_request)
+    _expect(int(director.call("get_async_staged_root_count", cancel_request)) > 0 and not cancel_refs.is_empty(), "explicit cancellation test has detached roots staged")
+    _expect(bool(director.call("cancel_async_sync_request", cancel_request)), "explicit async cancellation is accepted")
+    for reference in cancel_refs:
+        _expect(reference.get_ref() == null, "explicit cancellation immediately frees a staged root")
+    var cancel_report: Dictionary = await _wait_for_request(director, cancel_request)
+    _expect(str(cancel_report.get("phase", "")) == "cancelled", "explicit cancellation emits a terminal cancellation report")
+    _expect(controller.call("get_loaded_chunk_ids") == director.call("get_managed_chunk_ids"), "explicit cancellation leaves the committed window unchanged")
+
+    var teardown_request: int = int(director.call("request_sync_to_world_position_async", Vector3(85.0, 0.0, 85.0), _test_time + 4, 1))
+    await process_frame
+    await process_frame
+    await process_frame
+    var teardown_refs: Array = director.call("get_async_staged_root_weakrefs", teardown_request)
+    _expect(not teardown_refs.is_empty(), "director teardown test has detached roots staged")
     playground.queue_free()
     await process_frame
+    for reference in teardown_refs:
+        _expect(reference.get_ref() == null, "director exit frees every detached staged root")
 
 func _test_production_surface_world_async_movement() -> void:
     var world := WorldScene.instantiate()
