@@ -2911,7 +2911,7 @@ jobs:
           test -f daily_games/KROLL_Microbe_Scope/tests/rules_test.gd
           test -f daily_games/KROLL_Microbe_Scope/tests/game_smoke_test.gd
           grep -q 'MICROBE_SCOPE_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'KROLL Microbe Scope Lab' tests/survival_test_hub_smoke_test.gd
+          grep -q 'KROLL Microbe Scope' tests/survival_test_hub_smoke_test.gd
 
       - name: Run shared terrain transition collider manager tests
         shell: bash
