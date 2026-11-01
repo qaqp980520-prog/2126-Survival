@@ -1,119 +1,125 @@
 extends SceneTree
 
 const Rules = preload("res://rules.gd")
-var failures: Array[String] = []
 
 func _initialize() -> void:
-	call_deferred("_run")
+	call_deferred("_run_tests")
 
-func _run() -> void:
-	var rules := Rules.new()
-	_test_scenarios(rules)
-	_test_thrusters_and_immutability(rules)
-	_test_braking_and_moving_target(rules)
-	_test_collision_and_bounds(rules)
-	_test_docking_and_campaign(rules)
-	_test_invalid_inputs(rules)
-	if failures.is_empty():
-		print("KROLL Orbital Docking rules tests passed.")
-		quit(0)
-	else:
-		for failure in failures:
-			push_error("FAIL: " + failure)
-		quit(1)
+func _run_tests() -> void:
+	_test_scenarios()
+	_test_rotation_and_thrust()
+	_test_reverse_thruster()
+	_test_docking_constraints()
+	_test_docking_success_and_terminal_lock()
+	_test_timeout_and_invalid_delta()
+	_test_all_scenarios_have_reference_solutions()
+	print("KROLL Orbital Docking rules tests passed.")
+	quit(0)
 
-func _test_scenarios(rules: RefCounted) -> void:
-	_expect(rules.get_scenario_count() == 3, "three docking trials are authored")
-	_expect(rules.get_scenario(-1).is_empty() and rules.get_scenario(3).is_empty(), "invalid trial indices are rejected")
-	var ids: Array[String] = []
-	for index in range(rules.get_scenario_count()):
-		var scenario: Dictionary = rules.get_scenario(index)
-		ids.append(str(scenario.get("id", "")))
-		var state: Dictionary = rules.make_state(index)
-		_expect(str(state.get("status", "")) == "flying", "trial %d starts in flight" % index)
-		_expect(state.get("position") is Vector2 and state.get("target_base") is Vector2, "trial %d uses vector position state" % index)
-	_expect(ids.size() == 3 and ids[0] != ids[1] and ids[1] != ids[2], "all three trials have distinct identifiers")
-	_expect(rules.make_state(-1).is_empty(), "invalid trial creation returns an empty state")
+func _test_scenarios() -> void:
+	assert(Rules.get_scenario_count() == 3)
+	var names: Array[String] = []
+	for index in range(Rules.get_scenario_count()):
+		var scenario: Dictionary = Rules.get_scenario(index)
+		var state: Dictionary = Rules.create_state(index)
+		assert(Rules.validate_state(state))
+		names.append(str(scenario["name"]))
+		var target_position: Vector2 = scenario["target_position"]
+		var ship_position: Vector2 = state["position"]
+		assert(target_position.distance_to(ship_position) > 100.0)
+	assert(names.size() == 3)
 
-func _test_thrusters_and_immutability(rules: RefCounted) -> void:
-	var state: Dictionary = rules.make_state(0)
-	var original: Dictionary = state.duplicate(true)
-	var result: Dictionary = rules.step(state, {"thrust":true,"right":true}, 0.05)
-	_expect(bool(result.get("ok", false)), "valid thruster step succeeds")
-	if bool(result.get("ok", false)):
-		var updated: Dictionary = result["state"]
-		var updated_velocity: Vector2 = updated["velocity"]
-		_expect(updated_velocity.length() > 0.0, "main thruster accelerates the craft")
-		_expect(float(updated["angle"]) > 0.0, "right yaw input rotates the craft")
-		_expect(float(updated["fuel"]) < float(original["fuel"]), "thrusters consume finite fuel")
-		_expect((state["position"] as Vector2).is_equal_approx(original["position"]), "step does not mutate caller position")
-		_expect(float(state["fuel"]) == float(original["fuel"]), "step does not mutate caller fuel")
+func _test_rotation_and_thrust() -> void:
+	var scenario: Dictionary = Rules.get_scenario(0)
+	var state: Dictionary = Rules.create_state(0)
+	var before_angle: float = float(state["angle"])
+	var before_fuel: float = float(state["fuel"])
+	var next: Dictionary = Rules.step(state, {"left": true, "thrust": true}, 0.1, scenario)
+	assert(float(next["angle"]) < before_angle)
+	assert(float(next["fuel"]) < before_fuel)
+	var next_velocity: Vector2 = next["velocity"]
+	var original_velocity: Vector2 = state["velocity"]
+	assert(next_velocity.length() > original_velocity.length())
+	assert(float(state["fuel"]) == before_fuel)
 
-func _test_braking_and_moving_target(rules: RefCounted) -> void:
-	var state: Dictionary = rules.make_state(0)
-	state["velocity"] = Vector2(70.0, 0.0)
-	var result: Dictionary = rules.step(state, {"brake":true}, 0.05)
-	_expect(bool(result.get("ok", false)), "braking step succeeds")
-	if bool(result.get("ok", false)):
-		var braked_velocity: Vector2 = result["state"]["velocity"]
-		_expect(braked_velocity.length() < 70.0, "retro-brake reduces relative speed")
-	var moving: Dictionary = rules.make_state(1)
-	var before: Vector2 = rules.call("get_target_position", moving)
-	var advanced: Dictionary = rules.step(moving, {}, 0.05)
-	_expect(bool(advanced.get("ok", false)), "unpowered drift step succeeds")
-	if bool(advanced.get("ok", false)):
-		var after_state: Dictionary = advanced["state"]
-		var after: Vector2 = rules.call("get_target_position", after_state)
-		_expect(before.distance_to(after) > 0.001, "moving berth position advances with elapsed time")
+func _test_reverse_thruster() -> void:
+	var scenario: Dictionary = Rules.get_scenario(0)
+	var state: Dictionary = Rules.create_state(0)
+	state["angle"] = 0.0
+	state["velocity"] = Vector2(100.0, 0.0)
+	var next: Dictionary = Rules.step(state, {"reverse": true}, 0.1, scenario)
+	var next_velocity: Vector2 = next["velocity"]
+	assert(next_velocity.x < 100.0)
+	assert(float(next["fuel"]) < float(state["fuel"]))
 
-func _test_collision_and_bounds(rules: RefCounted) -> void:
-	var collision_state: Dictionary = rules.make_state(2)
-	var obstacle: Dictionary = collision_state["obstacles"][0]
-	collision_state["position"] = obstacle["position"]
-	var collision_result: Dictionary = rules.step(collision_state, {}, 0.016)
-	_expect(bool(collision_result.get("ok", false)), "collision step is valid")
-	_expect(str(collision_result.get("state", {}).get("status", "")) == "crashed", "debris collision ends the trial")
-	var boundary_state: Dictionary = rules.make_state(0)
-	boundary_state["position"] = Vector2(361.0, 0.0)
-	var boundary_result: Dictionary = rules.step(boundary_state, {}, 0.016)
-	_expect(str(boundary_result.get("state", {}).get("status", "")) == "lost", "leaving the navigation envelope ends the trial")
-
-func _test_docking_and_campaign(rules: RefCounted) -> void:
-	var state: Dictionary = rules.make_state(0)
-	state["position"] = rules.call("get_target_position", state)
+func _test_docking_constraints() -> void:
+	var scenario: Dictionary = Rules.get_scenario(0)
+	var state: Dictionary = Rules.create_state(0)
+	state["position"] = scenario["target_position"] + Vector2(10.0, 0.0)
+	state["velocity"] = Vector2(90.0, 0.0)
+	state["angle"] = float(scenario["target_angle"])
+	assert(not Rules.can_dock(state, scenario))
 	state["velocity"] = Vector2.ZERO
-	state["angle"] = float(state["target_heading"])
-	for _index in range(22):
-		var result: Dictionary = rules.step(state, {}, 0.05)
-		_expect(bool(result.get("ok", false)), "docking dwell step remains valid")
-		state = result["state"]
-		if str(state["status"]) == "docked":
-			break
-	_expect(str(state["status"]) == "docked", "stable low-speed aligned craft docks after the dwell interval")
-	var second: Dictionary = rules.advance_state(state)["state"]
-	_expect(int(second.get("scenario_index", -1)) == 1, "successful docking advances to the moving berth")
-	var last: Dictionary = rules.make_state(2)
-	last["position"] = rules.call("get_target_position", last)
-	last["velocity"] = Vector2.ZERO
-	last["angle"] = float(last["target_heading"])
-	for _index in range(22):
-		last = rules.step(last, {}, 0.05)["state"]
-		if str(last["status"]) == "docked":
-			break
-	var completed: Dictionary = rules.advance_state(last)["state"]
-	_expect(str(completed.get("status", "")) == "campaign_complete", "third successful docking completes the campaign")
+	state["angle"] = float(scenario["target_angle"]) + 0.8
+	assert(not Rules.can_dock(state, scenario))
+	state["angle"] = float(scenario["target_angle"])
+	state["position"] = scenario["target_position"] + Vector2(100.0, 0.0)
+	assert(not Rules.can_dock(state, scenario))
 
-func _test_invalid_inputs(rules: RefCounted) -> void:
-	_expect(not bool(rules.step({}, {}, 0.05).get("ok", false)), "empty state is rejected")
-	var state: Dictionary = rules.make_state(0)
-	_expect(not bool(rules.step(state, {}, 0.0).get("ok", false)), "zero delta is rejected")
-	_expect(not bool(rules.step(state, {}, -0.1).get("ok", false)), "negative delta is rejected")
-	state["fuel"] = -1.0
-	_expect(not bool(rules.step(state, {}, 0.05).get("ok", false)), "negative fuel state is rejected")
+func _test_docking_success_and_terminal_lock() -> void:
+	var scenario: Dictionary = Rules.get_scenario(0)
+	var state: Dictionary = Rules.create_state(0)
+	state["position"] = scenario["target_position"] + Vector2(10.0, 0.0)
+	state["velocity"] = Vector2.ZERO
+	state["angle"] = float(scenario["target_angle"])
+	var docked: Dictionary = Rules.step(state, {}, 0.016, scenario)
+	assert(str(docked["status"]) == "docked")
+	var locked: Dictionary = Rules.step(docked, {"thrust": true, "left": true}, 0.1, scenario)
+	assert(locked == docked)
 
-func _expect(condition: bool, description: String) -> void:
-	if condition:
-		print("PASS: " + description)
-	else:
-		failures.append(description)
-		push_error("FAIL: " + description)
+func _test_timeout_and_invalid_delta() -> void:
+	var scenario: Dictionary = Rules.get_scenario(0)
+	var state: Dictionary = Rules.create_state(0)
+	var unchanged: Dictionary = Rules.step(state, {"thrust": true}, -0.1, scenario)
+	assert(unchanged == state)
+	state["elapsed"] = float(scenario["time_limit"])
+	var failed: Dictionary = Rules.step(state, {}, 0.016, scenario)
+	assert(str(failed["status"]) == "failed")
+
+
+func _test_all_scenarios_have_reference_solutions() -> void:
+	for index in range(Rules.get_scenario_count()):
+		var scenario: Dictionary = Rules.get_scenario(index)
+		var state: Dictionary = Rules.create_state(index)
+		for frame in range(6600):
+			if str(state["status"]) != "active":
+				break
+			var position: Vector2 = state["position"]
+			var velocity: Vector2 = state["velocity"]
+			var to_target: Vector2 = scenario["target_position"] - position
+			var distance: float = to_target.length()
+			var desired_speed: float = minf(220.0, sqrt(2.0 * Rules.REVERSE_ACCELERATION * maxf(0.0, distance - 20.0)))
+			var desired_velocity: Vector2 = to_target.normalized() * desired_speed
+			var error_vector: Vector2 = desired_velocity - velocity
+			var desired_angle: float = float(state["angle"])
+			var reverse: bool = false
+			if error_vector.length() > 4.0:
+				desired_angle = atan2(error_vector.y, error_vector.x)
+				var initial_difference: float = wrapf(desired_angle - float(state["angle"]), -PI, PI)
+				reverse = absf(initial_difference) > 2.2
+				if reverse:
+					desired_angle = wrapf(desired_angle + PI, -PI, PI)
+			else:
+				desired_angle = float(scenario["target_angle"])
+			var difference: float = wrapf(desired_angle - float(state["angle"]), -PI, PI)
+			var left: bool = difference < -0.04
+			var right: bool = difference > 0.04
+			var thrust: bool = absf(difference) < 0.15 and not reverse and float(state["fuel"]) > 0.0
+			var reverse_thrust: bool = absf(difference) < 0.15 and reverse and float(state["fuel"]) > 0.0
+			state = Rules.step(state, {
+				"left": left,
+				"right": right,
+				"thrust": thrust,
+				"reverse": reverse_thrust
+			}, 1.0 / 60.0, scenario)
+		assert(str(state["status"]) == "docked", "scenario %d must have a deterministic reference docking solution" % index)

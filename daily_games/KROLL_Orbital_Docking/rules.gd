@@ -1,226 +1,143 @@
 extends RefCounted
 
-const THRUST_ACCEL: float = 44.0
-const REVERSE_ACCEL: float = 24.0
-const BRAKE_ACCEL: float = 58.0
-const TURN_RATE: float = 1.8
-const THRUST_FUEL_RATE: float = 16.0
-const REVERSE_FUEL_RATE: float = 10.0
-const BRAKE_FUEL_RATE: float = 5.0
-const DRAG_RATE: float = 0.045
-const DOCK_RADIUS: float = 25.0
-const DOCK_SPEED: float = 15.0
-const DOCK_ANGLE: float = 0.32
-const DOCK_DWELL: float = 1.0
-const SHIP_RADIUS: float = 9.0
-const MAX_STEP: float = 0.05
+## Inertial 2D docking model. Thrust changes velocity; position is never snapped.
+const TURN_RATE: float = 2.25
+const THRUST_ACCELERATION: float = 105.0
+const REVERSE_ACCELERATION: float = 72.0
+const THRUST_BURN_RATE: float = 16.0
+const REVERSE_BURN_RATE: float = 11.0
+const LINEAR_DRAG: float = 0.55
+const DOCK_RADIUS: float = 30.0
+const MAX_DOCK_SPEED: float = 26.0
+const MAX_ANGLE_ERROR: float = 0.22
 
-const SCENARIOS: Array[Dictionary] = [
-	{
-		"id":"cargo_bay",
-		"name":"Cargo Bay",
-		"brief":"Approach the fixed cargo berth with low relative speed and a level docking nose.",
-		"start_position":Vector2(-280.0,-140.0),
-		"start_velocity":Vector2(0.0,0.0),
-		"target_position":Vector2(260.0,140.0),
-		"target_velocity":Vector2(0.0,0.0),
-		"target_heading":0.0,
-		"fuel":180.0,
-		"time_limit":100.0,
-		"bounds":Vector2(360.0,220.0),
-		"obstacles":[]
-	},
-	{
-		"id":"rotating_ring",
-		"name":"Rotating Ring",
-		"brief":"Intercept a slowly drifting ring. Its motion means the berth will not wait for you.",
-		"start_position":Vector2(-300.0,150.0),
-		"start_velocity":Vector2(4.0,-2.0),
-		"target_position":Vector2(280.0,-120.0),
-		"target_velocity":Vector2(-2.0,1.2),
-		"target_heading":0.15,
-		"fuel":190.0,
-		"time_limit":110.0,
-		"bounds":Vector2(360.0,220.0),
-		"obstacles":[
-			{"position":Vector2(-5.0,55.0),"radius":42.0},
-			{"position":Vector2(125.0,-25.0),"radius":34.0}
-		]
-	},
-	{
-		"id":"debris_corridor",
-		"name":"Debris Corridor",
-		"brief":"Thread the central debris field and brake before entering the final docking envelope.",
-		"start_position":Vector2(-300.0,0.0),
-		"start_velocity":Vector2(0.0,0.0),
-		"target_position":Vector2(300.0,0.0),
-		"target_velocity":Vector2(0.0,0.0),
-		"target_heading":0.0,
-		"fuel":220.0,
-		"time_limit":120.0,
-		"bounds":Vector2(360.0,220.0),
-		"obstacles":[
-			{"position":Vector2(-70.0,0.0),"radius":38.0},
-			{"position":Vector2(70.0,88.0),"radius":36.0},
-			{"position":Vector2(70.0,-88.0),"radius":36.0}
-		]
-	}
-]
+static func get_scenario_count() -> int:
+	return 3
 
-func get_scenario_count() -> int:
-	return SCENARIOS.size()
+static func get_scenario(index: int) -> Dictionary:
+	var scenarios: Array[Dictionary] = [
+		{
+			"name": "TRAINING RING",
+			"ship_position": Vector2(140.0, 520.0),
+			"ship_velocity": Vector2(12.0, -8.0),
+			"ship_angle": -0.25,
+			"target_position": Vector2(820.0, 320.0),
+			"target_angle": 0.0,
+			"fuel": 100.0,
+			"time_limit": 90.0
+		},
+		{
+			"name": "CROSSWIND APPROACH",
+			"ship_position": Vector2(160.0, 160.0),
+			"ship_velocity": Vector2(18.0, 10.0),
+			"ship_angle": 0.8,
+			"target_position": Vector2(790.0, 500.0),
+			"target_angle": 0.5,
+			"fuel": 120.0,
+			"time_limit": 100.0
+		},
+		{
+			"name": "DEEP ORBIT",
+			"ship_position": Vector2(820.0, 520.0),
+			"ship_velocity": Vector2(-12.0, -16.0),
+			"ship_angle": -2.2,
+			"target_position": Vector2(180.0, 170.0),
+			"target_angle": -2.4,
+			"fuel": 135.0,
+			"time_limit": 110.0
+		}
+	]
+	return scenarios[posmod(index, scenarios.size())].duplicate(true)
 
-func get_scenario(index: int) -> Dictionary:
-	if index < 0 or index >= SCENARIOS.size():
-		return {}
-	return SCENARIOS[index].duplicate(true)
-
-func make_state(index: int) -> Dictionary:
+static func create_state(index: int) -> Dictionary:
 	var scenario: Dictionary = get_scenario(index)
-	if scenario.is_empty():
-		return {}
 	return {
-		"scenario_index":index,
-		"position":scenario["start_position"],
-		"velocity":scenario["start_velocity"],
-		"angle":0.0,
-		"fuel":float(scenario["fuel"]),
-		"elapsed":0.0,
-		"target_base":scenario["target_position"],
-		"target_velocity":scenario["target_velocity"],
-		"target_heading":float(scenario["target_heading"]),
-		"obstacles":scenario["obstacles"].duplicate(true),
-		"bounds":scenario["bounds"],
-		"time_limit":float(scenario["time_limit"]),
-		"dock_progress":0.0,
-		"status":"flying",
-		"last_event":"launch"
+		"position": scenario["ship_position"],
+		"velocity": scenario["ship_velocity"],
+		"angle": float(scenario["ship_angle"]),
+		"fuel": float(scenario["fuel"]),
+		"elapsed": 0.0,
+		"status": "active"
 	}
 
-func get_target_position(state: Dictionary) -> Vector2:
-	if not _valid_state(state):
-		return Vector2.ZERO
-	return state["target_base"] + state["target_velocity"] * float(state["elapsed"])
-
-func step(state: Dictionary, controls: Dictionary, delta: float) -> Dictionary:
-	if not _valid_state(state) or is_nan(delta) or is_inf(delta) or delta <= 0.0:
-		return {"ok":false,"reason":"invalid_state_or_delta"}
-	var updated: Dictionary = state.duplicate(true)
-	if str(updated["status"]) != "flying":
-		return {"ok":true,"state":updated,"event":"inactive"}
-	var dt: float = minf(delta, MAX_STEP)
-	var fuel: float = float(updated["fuel"])
-	var angle: float = float(updated["angle"])
-	var turn_direction: float = 0.0
-	if bool(controls.get("left", false)):
-		turn_direction -= 1.0
-	if bool(controls.get("right", false)):
-		turn_direction += 1.0
-	angle = wrapf(angle + turn_direction * TURN_RATE * dt, -PI, PI)
-	updated["angle"] = angle
-
-	var velocity: Vector2 = updated["velocity"]
-	var forward := Vector2(cos(angle), sin(angle))
-	var thrusting: bool = bool(controls.get("thrust", false)) and fuel > 0.0
-	var reversing: bool = bool(controls.get("reverse", false)) and fuel > 0.0
-	var braking: bool = bool(controls.get("brake", false)) and fuel > 0.0
-	if thrusting:
-		velocity += forward * THRUST_ACCEL * dt
-		fuel = maxf(0.0, fuel - THRUST_FUEL_RATE * dt)
-	if reversing:
-		velocity -= forward * REVERSE_ACCEL * dt
-		fuel = maxf(0.0, fuel - REVERSE_FUEL_RATE * dt)
-	if braking:
-		velocity = velocity.move_toward(Vector2.ZERO, BRAKE_ACCEL * dt)
-		fuel = maxf(0.0, fuel - BRAKE_FUEL_RATE * dt)
-	if not thrusting and not reversing and not braking:
-		velocity *= exp(-DRAG_RATE * dt)
-	updated["velocity"] = velocity
-	updated["fuel"] = fuel
-	updated["position"] = updated["position"] + velocity * dt
-	updated["elapsed"] = float(updated["elapsed"]) + dt
-
-	var position: Vector2 = updated["position"]
-	var bounds: Vector2 = updated["bounds"]
-	if absf(position.x) > bounds.x or absf(position.y) > bounds.y:
-		updated["status"] = "lost"
-		updated["last_event"] = "boundary"
-		return {"ok":true,"state":updated,"event":"boundary"}
-	for obstacle_value in updated["obstacles"]:
-		var obstacle: Dictionary = obstacle_value
-		if position.distance_to(obstacle["position"]) <= float(obstacle["radius"]) + SHIP_RADIUS:
-			updated["status"] = "crashed"
-			updated["last_event"] = "collision"
-			return {"ok":true,"state":updated,"event":"collision"}
-
-	var target_position: Vector2 = get_target_position(updated)
-	var relative_velocity: Vector2 = velocity - updated["target_velocity"]
-	var angle_error: float = absf(wrapf(angle - float(updated["target_heading"]), -PI, PI))
-	var dock_ready: bool = (
-		position.distance_to(target_position) <= DOCK_RADIUS
-		and relative_velocity.length() <= DOCK_SPEED
-		and angle_error <= DOCK_ANGLE
-	)
-	if dock_ready:
-		updated["dock_progress"] = float(updated["dock_progress"]) + dt
-		if float(updated["dock_progress"]) >= DOCK_DWELL:
-			updated["status"] = "docked"
-			updated["last_event"] = "docked"
-	else:
-		updated["dock_progress"] = maxf(0.0, float(updated["dock_progress"]) - dt * 1.5)
-		updated["last_event"] = "flying"
-	if str(updated["status"]) == "flying" and float(updated["elapsed"]) >= float(updated["time_limit"]):
-		updated["status"] = "timeout"
-		updated["last_event"] = "timeout"
-	return {"ok":true,"state":updated,"event":str(updated["last_event"])}
-
-func reset_state(state: Dictionary) -> Dictionary:
-	if not _valid_state(state):
-		return {}
-	return make_state(int(state["scenario_index"]))
-
-func advance_state(state: Dictionary) -> Dictionary:
-	if not _valid_state(state) or str(state["status"]) != "docked":
-		return {"ok":false,"reason":"docking_not_complete"}
-	var next_index: int = int(state["scenario_index"]) + 1
-	if next_index >= SCENARIOS.size():
-		var finished: Dictionary = state.duplicate(true)
-		finished["status"] = "campaign_complete"
-		return {"ok":true,"state":finished}
-	return {"ok":true,"state":make_state(next_index)}
-
-func get_status_summary(state: Dictionary) -> Dictionary:
-	if not _valid_state(state):
-		return {"valid":false,"speed":0.0,"fuel":0.0,"dock_progress":0.0}
-	return {
-		"valid":true,
-		"speed":(state["velocity"] - state["target_velocity"]).length(),
-		"fuel":float(state["fuel"]),
-		"dock_progress":float(state["dock_progress"]),
-		"status":str(state["status"])
-	}
-
-func _valid_state(state: Dictionary) -> bool:
-	for key in ["scenario_index","position","velocity","angle","fuel","elapsed","target_base","target_velocity","target_heading","obstacles","bounds","time_limit","dock_progress","status"]:
-		if not state.has(key):
-			return false
-	if not (state["scenario_index"] is int) or int(state["scenario_index"]) < 0 or int(state["scenario_index"]) >= SCENARIOS.size():
+static func validate_state(state: Dictionary) -> bool:
+	if not (state.get("position", null) is Vector2) or not (state.get("velocity", null) is Vector2):
 		return false
-	for key in ["position","velocity","target_base","target_velocity","bounds"]:
-		if not (state[key] is Vector2):
+	for key in ["angle", "fuel", "elapsed"]:
+		var value: Variant = state.get(key, null)
+		if not (value is int or value is float) or not is_finite(float(value)):
 			return false
-		var vector: Vector2 = state[key]
-		if is_nan(vector.x) or is_inf(vector.x) or is_nan(vector.y) or is_inf(vector.y):
-			return false
-	if not (state["obstacles"] is Array) or not (state["angle"] is float or state["angle"] is int):
+	if not ["active", "docked", "failed", "stranded"].has(str(state.get("status", ""))):
 		return false
-	if is_nan(float(state["angle"])) or is_inf(float(state["angle"])):
+	var position: Vector2 = state["position"]
+	var velocity: Vector2 = state["velocity"]
+	return _is_finite_vector(position) and _is_finite_vector(velocity) and float(state["fuel"]) >= 0.0 and float(state["elapsed"]) >= 0.0
+
+static func step(state: Dictionary, input_state: Dictionary, delta: float, scenario: Dictionary) -> Dictionary:
+	if not validate_state(state) or not _validate_scenario(scenario) or not is_finite(delta) or delta <= 0.0 or delta > 0.25:
+		return state.duplicate(true)
+	var next: Dictionary = state.duplicate(true)
+	if str(next["status"]) != "active":
+		return next
+	var dt: float = delta
+	var turn: float = 0.0
+	if bool(input_state.get("right", false)):
+		turn += 1.0
+	if bool(input_state.get("left", false)):
+		turn -= 1.0
+	next["angle"] = wrapf(float(next["angle"]) + turn * TURN_RATE * dt, -PI, PI)
+	var direction := Vector2(cos(float(next["angle"])), sin(float(next["angle"])))
+	var velocity: Vector2 = next["velocity"]
+	var fuel: float = float(next["fuel"])
+	if bool(input_state.get("thrust", false)) and fuel > 0.0:
+		var active_dt: float = minf(dt, fuel / THRUST_BURN_RATE)
+		velocity += direction * THRUST_ACCELERATION * active_dt
+		fuel = maxf(0.0, fuel - THRUST_BURN_RATE * active_dt)
+	elif bool(input_state.get("reverse", false)) and fuel > 0.0:
+		var active_dt: float = minf(dt, fuel / REVERSE_BURN_RATE)
+		velocity -= direction * REVERSE_ACCELERATION * active_dt
+		fuel = maxf(0.0, fuel - REVERSE_BURN_RATE * active_dt)
+	velocity = velocity.move_toward(Vector2.ZERO, LINEAR_DRAG * dt)
+	var position: Vector2 = next["position"] + velocity * dt
+	next["position"] = position
+	next["velocity"] = velocity
+	next["fuel"] = fuel
+	next["elapsed"] = float(next["elapsed"]) + dt
+	if can_dock(next, scenario):
+		next["status"] = "docked"
+	elif float(next["elapsed"]) >= float(scenario["time_limit"]):
+		next["status"] = "failed"
+	elif fuel <= 0.0 and velocity.length() < 1.5 and distance_to_target(next, scenario) > DOCK_RADIUS:
+		next["status"] = "stranded"
+	return next
+
+static func can_dock(state: Dictionary, scenario: Dictionary) -> bool:
+	if not validate_state(state) or not _validate_scenario(scenario):
 		return false
-	for key in ["fuel","elapsed","target_heading","time_limit","dock_progress"]:
-		if not (state[key] is float or state[key] is int):
+	if str(state["status"]) != "active":
+		return str(state["status"]) == "docked"
+	var distance: float = distance_to_target(state, scenario)
+	var velocity: Vector2 = state["velocity"]
+	var speed: float = velocity.length()
+	var angle_error: float = absf(wrapf(float(state["angle"]) - float(scenario["target_angle"]), -PI, PI))
+	return distance <= DOCK_RADIUS and speed <= MAX_DOCK_SPEED and angle_error <= MAX_ANGLE_ERROR
+
+static func distance_to_target(state: Dictionary, scenario: Dictionary) -> float:
+	if not (state.get("position", null) is Vector2) or not (scenario.get("target_position", null) is Vector2):
+		return INF
+	var position: Vector2 = state["position"]
+	var target_position: Vector2 = scenario["target_position"]
+	return position.distance_to(target_position)
+
+static func _validate_scenario(scenario: Dictionary) -> bool:
+	for key in ["ship_position", "ship_velocity", "target_position"]:
+		if not (scenario.get(key, null) is Vector2) or not _is_finite_vector(scenario[key]):
 			return false
-		if is_nan(float(state[key])) or is_inf(float(state[key])):
+	for key in ["ship_angle", "target_angle", "fuel", "time_limit"]:
+		var value: Variant = scenario.get(key, null)
+		if not (value is int or value is float) or not is_finite(float(value)):
 			return false
-	if float(state["fuel"]) < 0.0 or float(state["elapsed"]) < 0.0 or float(state["time_limit"]) <= 0.0 or float(state["dock_progress"]) < 0.0:
-		return false
-	return str(state["status"]) in ["flying","docked","crashed","lost","timeout","campaign_complete"]
+	return float(scenario["fuel"]) > 0.0 and float(scenario["time_limit"]) > 0.0
+
+static func _is_finite_vector(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)

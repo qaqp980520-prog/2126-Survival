@@ -1,218 +1,168 @@
-extends Control
+extends Node2D
 
-const ROOT_RULES_PATH: String = "res://daily_games/KROLL_Orbital_Docking/rules.gd"
-const LOCAL_RULES_PATH: String = "res://rules.gd"
+const Rules = preload("res://rules.gd")
+const BACKGROUND := Color(0.012, 0.022, 0.04)
+const CYAN := Color(0.25, 0.88, 1.0)
+const AMBER := Color(1.0, 0.68, 0.24)
 
-var _rules: RefCounted
-var _state: Dictionary = {}
-var _manual_controls: Dictionary = {}
-var _mission_label: Label
-var _stats_label: Label
-var _status_label: Label
-var _next_button: Button
-var _field_rect: Rect2
-var _world_scale: float = 1.0
+var scenario_index: int = 0
+var scenario: Dictionary = {}
+var state: Dictionary = {}
+var hud: Label
+var status_label: Label
+var touch_buttons: Dictionary = {}
+var _touch_input: Dictionary = {"left": false, "right": false, "thrust": false, "reverse": false}
 
 func _ready() -> void:
-	var rules_path: String = ROOT_RULES_PATH if ResourceLoader.exists(ROOT_RULES_PATH) else LOCAL_RULES_PATH
-	var rules_script: Script = load(rules_path) as Script
-	if rules_script == null:
-		push_error("KROLL Orbital Docking could not load its rules module.")
-		return
-	_rules = rules_script.new() as RefCounted
-	_state = _rules.call("make_state", 0)
-	_build_ui()
-	_refresh_ui()
-	queue_redraw()
+	_build_hud()
+	_load_scenario(0)
 
-func _process(delta: float) -> void:
-	var controls: Dictionary = _manual_controls.duplicate(true)
-	controls["thrust"] = bool(controls.get("thrust", false)) or Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)
-	controls["reverse"] = bool(controls.get("reverse", false)) or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)
-	controls["left"] = bool(controls.get("left", false)) or Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT)
-	controls["right"] = bool(controls.get("right", false)) or Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)
-	controls["brake"] = bool(controls.get("brake", false)) or Input.is_key_pressed(KEY_SPACE)
-	step_simulation(minf(delta, 0.05), controls)
+func _build_hud() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "HUD"
+	add_child(layer)
+	hud = Label.new()
+	hud.name = "FlightStatus"
+	hud.position = Vector2(18.0, 14.0)
+	hud.size = Vector2(920.0, 76.0)
+	hud.add_theme_color_override("font_color", Color(0.72, 0.92, 1.0))
+	hud.add_theme_font_size_override("font_size", 18)
+	layer.add_child(hud)
+	status_label = Label.new()
+	status_label.name = "FlightMessage"
+	status_label.position = Vector2(18.0, 92.0)
+	status_label.size = Vector2(920.0, 32.0)
+	status_label.add_theme_color_override("font_color", AMBER)
+	layer.add_child(status_label)
+	var panel := PanelContainer.new()
+	panel.name = "TouchControls"
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 1.0
+	panel.anchor_bottom = 1.0
+	panel.offset_left = -330.0
+	panel.offset_right = 330.0
+	panel.offset_top = -78.0
+	panel.offset_bottom = -8.0
+	layer.add_child(panel)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	panel.add_child(row)
+	_add_control(row, "left", "ROTATE ◀")
+	_add_control(row, "right", "ROTATE ▶")
+	_add_control(row, "thrust", "THRUST")
+	_add_control(row, "reverse", "REVERSE")
+	_add_action_button(row, "reset", "RESET", _restart)
+	_add_action_button(row, "next", "NEXT", _next_scenario)
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	if event.keycode == KEY_R:
-		reset_scenario()
-	elif event.keycode == KEY_N:
-		advance_scenario()
-
-func _build_ui() -> void:
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	add_child(margin)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	margin.add_child(column)
-	var title := Label.new()
-	title.text = "KROLL // ORBITAL DOCKING"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color("#83e6f2"))
-	column.add_child(title)
-	_mission_label = Label.new()
-	_mission_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mission_label.add_theme_font_size_override("font_size", 19)
-	_mission_label.add_theme_color_override("font_color", Color("#f0d49b"))
-	column.add_child(_mission_label)
-	_stats_label = Label.new()
-	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stats_label.add_theme_color_override("font_color", Color("#c6dce4"))
-	column.add_child(_stats_label)
-	var field_space := Control.new()
-	field_space.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	field_space.custom_minimum_size = Vector2(0.0, 360.0)
-	column.add_child(field_space)
-	_status_label = Label.new()
-	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status_label.add_theme_color_override("font_color", Color("#a8e5cb"))
-	column.add_child(_status_label)
-	var controls := HBoxContainer.new()
-	controls.alignment = BoxContainer.ALIGNMENT_CENTER
-	controls.add_theme_constant_override("separation", 8)
-	column.add_child(controls)
-	_add_hold_button(controls, "ROTATE LEFT", "left")
-	_add_hold_button(controls, "THRUST", "thrust")
-	_add_hold_button(controls, "BRAKE", "brake")
-	_add_hold_button(controls, "REVERSE", "reverse")
-	_add_hold_button(controls, "ROTATE RIGHT", "right")
-	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 8)
-	column.add_child(actions)
-	var reset_button := Button.new()
-	reset_button.text = "RESET (R)"
-	reset_button.custom_minimum_size = Vector2(140.0, 42.0)
-	reset_button.pressed.connect(reset_scenario)
-	actions.add_child(reset_button)
-	_next_button = Button.new()
-	_next_button.text = "NEXT BERTH (N)"
-	_next_button.custom_minimum_size = Vector2(170.0, 42.0)
-	_next_button.pressed.connect(advance_scenario)
-	actions.add_child(_next_button)
-
-func _add_hold_button(parent: HBoxContainer, label_text: String, control_name: String) -> void:
+func _add_control(parent: HBoxContainer, key: String, label_text: String) -> void:
 	var button := Button.new()
+	button.name = "Touch_" + key
 	button.text = label_text
-	button.custom_minimum_size = Vector2(132.0, 46.0)
-	button.button_down.connect(_set_control.bind(control_name, true))
-	button.button_up.connect(_set_control.bind(control_name, false))
+	button.custom_minimum_size = Vector2(100.0, 52.0)
 	parent.add_child(button)
+	touch_buttons[key] = button
+	button.button_down.connect(_set_touch_input.bind(key, true))
+	button.button_up.connect(_set_touch_input.bind(key, false))
 
-func _set_control(control_name: String, enabled: bool) -> void:
-	set_control(control_name, enabled)
+func _add_action_button(parent: HBoxContainer, key: String, label_text: String, callback: Callable) -> void:
+	var button := Button.new()
+	button.name = "Action_" + key
+	button.text = label_text
+	button.custom_minimum_size = Vector2(88.0, 52.0)
+	parent.add_child(button)
+	touch_buttons[key] = button
+	button.pressed.connect(callback)
 
-func set_control(control_name: String, enabled: bool) -> bool:
-	if not ["thrust","reverse","brake","left","right"].has(control_name):
-		return false
-	_manual_controls[control_name] = enabled
-	return true
+func _set_touch_input(key: String, value: bool) -> void:
+	_touch_input[key] = value
 
-func step_simulation(delta: float, controls_override: Dictionary = {}) -> bool:
-	if _rules == null or _state.is_empty():
-		return false
-	var controls: Dictionary = _manual_controls.duplicate(true)
-	for key in controls_override.keys():
-		controls[str(key)] = controls_override[key]
-	var result: Dictionary = _rules.call("step", _state, controls, delta)
-	if not bool(result.get("ok", false)):
-		return false
-	_state = result.get("state", _state)
-	_refresh_ui()
-	queue_redraw()
-	return true
+func _physics_process(delta: float) -> void:
+	_advance_simulation(delta)
 
-func reset_scenario() -> void:
-	if _rules == null or _state.is_empty():
+func _advance_simulation(delta: float) -> void:
+	if state.is_empty() or scenario.is_empty():
 		return
-	_state = _rules.call("reset_state", _state)
-	_manual_controls.clear()
-	_refresh_ui()
+	var input_state := {
+		"left": Input.is_key_pressed(KEY_A) or bool(_touch_input.get("left", false)),
+		"right": Input.is_key_pressed(KEY_D) or bool(_touch_input.get("right", false)),
+		"thrust": Input.is_key_pressed(KEY_W) or bool(_touch_input.get("thrust", false)),
+		"reverse": Input.is_key_pressed(KEY_S) or bool(_touch_input.get("reverse", false))
+	}
+	state = Rules.step(state, input_state, delta, scenario)
+	_refresh_hud()
 	queue_redraw()
 
-func advance_scenario() -> bool:
-	if _rules == null or _state.is_empty():
-		return false
-	var result: Dictionary = _rules.call("advance_state", _state)
-	if not bool(result.get("ok", false)):
-		return false
-	_state = result["state"]
-	_manual_controls.clear()
-	_refresh_ui()
+func _load_scenario(index: int) -> void:
+	scenario_index = posmod(index, Rules.get_scenario_count())
+	scenario = Rules.get_scenario(scenario_index)
+	state = Rules.create_state(scenario_index)
+	_touch_input = {"left": false, "right": false, "thrust": false, "reverse": false}
+	_refresh_hud()
 	queue_redraw()
-	return true
 
-func get_current_state() -> Dictionary:
-	return _state.duplicate(true)
+func _restart() -> void:
+	_load_scenario(scenario_index)
 
-func get_current_scenario() -> Dictionary:
-	if _rules == null or _state.is_empty():
-		return {}
-	return _rules.call("get_scenario", int(_state.get("scenario_index", -1)))
+func _next_scenario() -> void:
+	_load_scenario(scenario_index + 1)
 
-func get_control_button_count() -> int:
-	return 5
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_R:
+				_restart()
+			elif key_event.keycode == KEY_N:
+				_next_scenario()
 
-func _refresh_ui() -> void:
-	if _rules == null or _state.is_empty():
+func _refresh_hud() -> void:
+	if hud == null or status_label == null or state.is_empty():
 		return
-	var scenario: Dictionary = get_current_scenario()
-	var summary: Dictionary = _rules.call("get_status_summary", _state)
-	_mission_label.text = "%s  //  BERTH %d / 3" % [str(scenario.get("name", "UNKNOWN")), int(_state.get("scenario_index", 0)) + 1]
-	_stats_label.text = "FUEL %03d  |  RELATIVE SPEED %05.1f  |  TIME %05.1f" % [int(round(float(summary.get("fuel", 0.0)))), float(summary.get("speed", 0.0)), float(_state.get("elapsed", 0.0))]
-	var status: String = str(_state.get("status", "unknown"))
-	var progress: float = float(_state.get("dock_progress", 0.0))
-	_status_label.text = "%s  |  DOCK ALIGNMENT %d%%  |  %s" % [status.to_upper(), int(round(progress / 1.0 * 100.0)), str(scenario.get("brief", ""))]
-	_next_button.disabled = status != "docked"
+	var distance: float = Rules.distance_to_target(state, scenario)
+	var velocity: Vector2 = state["velocity"]
+	var speed: float = velocity.length()
+	hud.text = "KROLL ORBITAL DOCKING // %s\nFUEL %.1f   SPEED %.1f   DISTANCE %.1f   TIME %.1f" % [
+		str(scenario["name"]), float(state["fuel"]), speed, distance, float(state["elapsed"])
+	]
+	var status: String = str(state["status"])
+	match status:
+		"docked":
+			status_label.text = "DOCKING SUCCESS — velocity and alignment stabilized"
+		"failed":
+			status_label.text = "MISSION TIME EXPIRED — press R to retry or N for next approach"
+		"stranded":
+			status_label.text = "FUEL DEPLETED — use the next approach to try again"
+		_:
+			status_label.text = "A/D rotate · W thrust · S reverse · match speed, range and port angle"
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color("#06131d"))
-	_field_rect = Rect2(Vector2(18.0, 112.0), Vector2(maxf(100.0, size.x - 36.0), maxf(180.0, size.y - 255.0)))
-	draw_rect(_field_rect, Color("#0a202d"), true)
-	draw_rect(_field_rect, Color("#285263"), false, 2.0)
-	_world_scale = minf(_field_rect.size.x / 760.0, _field_rect.size.y / 470.0)
-	for x_index in range(13):
-		var x: float = _field_rect.position.x + _field_rect.size.x * float(x_index) / 12.0
-		draw_line(Vector2(x, _field_rect.position.y), Vector2(x, _field_rect.end.y), Color(0.18,0.35,0.42,0.28), 1.0)
-	for y_index in range(9):
-		var y: float = _field_rect.position.y + _field_rect.size.y * float(y_index) / 8.0
-		draw_line(Vector2(_field_rect.position.x, y), Vector2(_field_rect.end.x, y), Color(0.18,0.35,0.42,0.28), 1.0)
-	if _state.is_empty() or _rules == null:
+	draw_rect(Rect2(Vector2.ZERO, Vector2(960.0, 640.0)), BACKGROUND)
+	for index in range(52):
+		var star := Vector2(float((index * 193) % 950 + 5), float((index * 79) % 620 + 5))
+		draw_circle(star, 1.0 + float(index % 3) * 0.35, Color(0.42, 0.62, 0.78, 0.45))
+	if scenario.is_empty() or state.is_empty():
 		return
-	for obstacle_value in _state.get("obstacles", []):
-		var obstacle: Dictionary = obstacle_value
-		var obstacle_center: Vector2 = _world_to_screen(obstacle["position"])
-		draw_circle(obstacle_center, float(obstacle["radius"]) * _world_scale, Color("#6b4650"))
-		draw_arc(obstacle_center, float(obstacle["radius"]) * _world_scale, 0.0, TAU, 48, Color("#d88b79"), 2.0)
-	var target_world: Vector2 = _rules.call("get_target_position", _state)
-	var target: Vector2 = _world_to_screen(target_world)
-	draw_circle(target, 27.0 * _world_scale, Color(0.2,0.8,0.65,0.08))
-	draw_arc(target, 27.0 * _world_scale, 0.0, TAU, 64, Color("#7ce9c4"), 3.0)
-	draw_arc(target, 18.0 * _world_scale, 0.0, TAU, 64, Color("#d5f4e8"), 1.5)
-	var target_forward := Vector2(cos(float(_state["target_heading"])), -sin(float(_state["target_heading"])))
-	draw_line(target, target + target_forward * 36.0 * _world_scale, Color("#f0d49b"), 3.0)
-	var ship: Vector2 = _world_to_screen(_state["position"])
-	var forward := Vector2(cos(float(_state["angle"])), -sin(float(_state["angle"])))
-	var side := Vector2(-forward.y, forward.x)
+	var target: Vector2 = scenario["target_position"]
+	var target_angle: float = float(scenario["target_angle"])
+	var target_forward := Vector2(cos(target_angle), sin(target_angle))
+	draw_circle(target, 48.0, Color(0.08, 0.28, 0.36, 0.22))
+	draw_arc(target, Rules.DOCK_RADIUS, 0.0, TAU, 64, Color(0.28, 0.92, 1.0, 0.9), 2.0)
+	draw_arc(target, 48.0, 0.0, TAU, 64, Color(0.22, 0.48, 0.62, 0.55), 1.0)
+	draw_line(target - target_forward * 58.0, target + target_forward * 58.0, AMBER, 3.0)
+	draw_circle(target, 5.0, AMBER)
+	var ship_position: Vector2 = state["position"]
+	var ship_angle: float = float(state["angle"])
+	var forward := Vector2(cos(ship_angle), sin(ship_angle))
+	var side := forward.rotated(PI * 0.5)
 	var points := PackedVector2Array([
-		ship + forward * 14.0 * _world_scale,
-		ship - forward * 9.0 * _world_scale + side * 8.0 * _world_scale,
-		ship - forward * 9.0 * _world_scale - side * 8.0 * _world_scale
+		ship_position + forward * 20.0,
+		ship_position - forward * 13.0 + side * 11.0,
+		ship_position - forward * 8.0,
+		ship_position - forward * 13.0 - side * 11.0
 	])
-	draw_colored_polygon(points, Color("#83e6f2"))
-	var velocity: Vector2 = _state["velocity"]
+	draw_colored_polygon(points, CYAN)
+	draw_polyline(PackedVector2Array([points[0], points[1], points[2], points[3], points[0]]), Color(0.88, 0.98, 1.0), 2.0)
+	var velocity: Vector2 = state["velocity"]
 	if velocity.length() > 1.0:
-		draw_line(ship, ship + Vector2(velocity.x, -velocity.y) * 2.2 * _world_scale, Color("#f0d49b"), 2.0)
-
-func _world_to_screen(position: Vector2) -> Vector2:
-	return _field_rect.position + _field_rect.size * 0.5 + Vector2(position.x, -position.y) * _world_scale
+		draw_line(ship_position, ship_position + velocity * 0.65, Color(1.0, 0.74, 0.28, 0.8), 2.0)
