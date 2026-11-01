@@ -191,18 +191,19 @@ func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
     box.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
     collision.shape = box
     body.add_child(collision)
-    var visual := MeshInstance3D.new()
-    visual.name = "SharedTransitionVisual"
-    var ramp_mesh := BoxMesh.new()
-    ramp_mesh.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
-    visual.mesh = ramp_mesh
-    var material := StandardMaterial3D.new()
-    material.albedo_color = Color("#9bb7b5")
-    material.roughness = 0.82
-    material.metallic = 0.12
-    material.cull_mode = BaseMaterial3D.CULL_DISABLED
-    visual.material_override = material
-    body.add_child(visual)
+    if DisplayServer.get_name() != "headless":
+        var visual := MeshInstance3D.new()
+        visual.name = "SharedTransitionVisual"
+        var ramp_mesh := BoxMesh.new()
+        ramp_mesh.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
+        visual.mesh = ramp_mesh
+        var material := StandardMaterial3D.new()
+        material.albedo_color = Color("#9bb7b5")
+        material.roughness = 0.82
+        material.metallic = 0.12
+        material.cull_mode = BaseMaterial3D.CULL_DISABLED
+        visual.material_override = material
+        body.add_child(visual)
     body.set_meta("terrain_edge_key", edge_key)
     body.set_meta("terrain_edge_owner", str(edge["first_id"]))
     add_child(body)
