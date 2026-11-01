@@ -20,6 +20,7 @@ var _managed_chunk_ids: Dictionary = {} # chunk ID -> Vector2i coordinate
 var _last_sync_report: Dictionary = {}
 var _next_async_request_id: int = 1
 var _active_async_request_id: int = -1
+var _async_staged_roots_by_request: Dictionary = {}
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null:
@@ -144,6 +145,13 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 ## Start a bounded async window shift. Missing roots are generated over multiple frames;
 ## controller registration and stale-chunk retirement are committed only after staging succeeds.
 ## A newer request supersedes any request that is still in its staging phase.
+func _exit_tree() -> void:
+	_active_async_request_id = -1
+	var request_ids: Array = _async_staged_roots_by_request.keys()
+	for raw_request_id in request_ids:
+		var request_id: int = int(raw_request_id)
+		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
+
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
 		return -1
@@ -152,6 +160,9 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
 		return -1
 
+	if _active_async_request_id >= 0:
+		var superseded_request_id: int = _active_async_request_id
+		_release_async_staged_roots(superseded_request_id, _async_staged_roots_by_request.get(superseded_request_id, {}))
 	var request_id: int = _next_async_request_id
 	_next_async_request_id += 1
 	_active_async_request_id = request_id
@@ -173,13 +184,17 @@ func cancel_async_sync_request(request_id: int = -1) -> bool:
 		return false
 	if request_id >= 0 and request_id != _active_async_request_id:
 		return false
+	var cancelled_request_id: int = _active_async_request_id
 	_active_async_request_id = -1
+	_release_async_staged_roots(cancelled_request_id, _async_staged_roots_by_request.get(cancelled_request_id, {}))
 	return true
 
 func get_active_async_request_id() -> int:
 	return _active_async_request_id
 
 func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix: int, max_staged_per_frame: int) -> void:
+	var staged_roots: Dictionary = {}
+	_async_staged_roots_by_request[request_id] = staged_roots
 	var desired_ids: Dictionary = {}
 	var to_load: Array[Dictionary] = []
 	for coord in desired:
@@ -189,11 +204,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			continue
 		to_load.append({"id": id, "coord": coord})
 
-	var staged_roots: Dictionary = {}
 	var staged_count: int = 0
 	for entry in to_load:
 		if request_id != _active_async_request_id:
-			_free_staged_roots(staged_roots)
+			_release_async_staged_roots(request_id, staged_roots)
 			_emit_async_cancelled(request_id, staged_count)
 			return
 		var id: String = str(entry["id"])
@@ -201,7 +215,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		var candidate: Variant = chunk_factory.call(coord)
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
-			_free_staged_roots(staged_roots)
+			_release_async_staged_roots(request_id, staged_roots)
 			_finish_async_sync_request(request_id, false, "load_factory", "Chunk factory returned an invalid staged root.", true, {
 				"failed_chunk_id": id,
 				"staged_count": staged_count,
@@ -213,12 +227,12 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if staged_count % max_staged_per_frame == 0:
 			await get_tree().process_frame
 			if request_id != _active_async_request_id:
-				_free_staged_roots(staged_roots)
+				_release_async_staged_roots(request_id, staged_roots)
 				_emit_async_cancelled(request_id, staged_count)
 				return
 
 	if request_id != _active_async_request_id:
-		_free_staged_roots(staged_roots)
+		_release_async_staged_roots(request_id, staged_roots)
 		_emit_async_cancelled(request_id, staged_count)
 		return
 
@@ -232,7 +246,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not is_instance_valid(candidate) or not chunk_controller.load_chunk(id, candidate, now_unix):
 			_free_unowned_root(candidate)
 			staged_roots.erase(id)
-			_free_staged_roots(staged_roots)
+			_release_async_staged_roots(request_id, staged_roots)
 			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
 			_finish_async_sync_request(request_id, false, "load_registration", "Chunk controller rejected a staged chunk.", rollback_ok, {
 				"failed_chunk_id": id,
@@ -245,7 +259,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		_managed_chunk_ids[id] = coord
 		newly_loaded.append(id)
 
-	_free_staged_roots(staged_roots)
+	_release_async_staged_roots(request_id, staged_roots)
 	var stale_ids: Array[String] = []
 	for id in _managed_chunk_ids.keys():
 		if not desired_ids.has(id):
@@ -282,6 +296,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
+		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 		_emit_async_cancelled(request_id, 0)
 		return
 	_set_sync_report(success, phase, message, rollback_complete, details)
@@ -300,9 +315,31 @@ func _emit_async_cancelled(request_id: int, staged_count: int = 0) -> void:
 		"controller_chunk_ids": _get_controller_loaded_ids()
 	})
 
+func get_async_staged_root_count(request_id: int) -> int:
+	var roots: Dictionary = _async_staged_roots_by_request.get(request_id, {})
+	return roots.size()
+
+func get_async_staged_root_weakrefs(request_id: int) -> Array[WeakRef]:
+	var references: Array[WeakRef] = []
+	var roots: Dictionary = _async_staged_roots_by_request.get(request_id, {})
+	for candidate in roots.values():
+		if is_instance_valid(candidate):
+			references.append(weakref(candidate))
+	return references
+
+func _release_async_staged_roots(request_id: int, staged_roots: Dictionary) -> int:
+	var roots: Dictionary = staged_roots
+	if roots.is_empty() and _async_staged_roots_by_request.has(request_id):
+		roots = _async_staged_roots_by_request[request_id]
+	var released_count: int = roots.size()
+	_free_staged_roots(roots)
+	_async_staged_roots_by_request.erase(request_id)
+	return released_count
+
 func _free_staged_roots(staged_roots: Dictionary) -> void:
 	for candidate in staged_roots.values():
 		_free_unowned_root(candidate)
+	staged_roots.clear()
 
 ## Reconcile the managed map from the controller's actual IDs, then retry the target window.
 ## This is intended for recovery after a previous sync reported an incomplete rollback.
