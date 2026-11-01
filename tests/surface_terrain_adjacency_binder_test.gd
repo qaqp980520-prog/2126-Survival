@@ -61,6 +61,13 @@ func _run() -> void:
 	_expect(not bool(duplicate_id_report.get("ok", true)) and str(duplicate_id_report.get("error", "")) == "duplicate_stable_id", "duplicate Stable IDs are rejected before live edges are cleared")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "duplicate Stable ID rejection preserves the previous adjacency")
 
+	# Invalid persisted patch state must be rejected before the binder clears any live edge.
+	east.set("_surface_type", "unsupported_material")
+	var invalid_state_report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
+	_expect(not bool(invalid_state_report.get("ok", true)) and str(invalid_state_report.get("error", "")) == "invalid_patch_state", "invalid terrain material is rejected during binder preflight")
+	east.set("_surface_type", "soil")
+	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "invalid terrain-state rejection preserves the previous live adjacency")
+
 	var raised := {"height_level": 2, "surface_type": "metal", "revision": 1}
 	_expect(bool(west.call("apply_world_object_state", raised)), "live terrain edit accepts a higher persisted state")
 	var raised_report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
