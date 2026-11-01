@@ -191,7 +191,12 @@ func _capture_sample() -> void:
         _status_label.text = "SPECIMEN CAPTURED / CLARITY %d%%" % int(result["evaluation"]["clarity"])
     else:
         var errors: Array = result["evaluation"].get("errors", [])
-        _status_label.text = "CALIBRATION MISS / %s / %d ATTEMPTS LEFT" % [", ".join(errors).to_upper(), int(_state["attempts_left"])]
+        var error_text: String = ""
+        for error in errors:
+            if not error_text.is_empty():
+                error_text += ", "
+            error_text += str(error).to_upper()
+        _status_label.text = "CALIBRATION MISS / %s / %d ATTEMPTS LEFT" % [error_text, int(_state["attempts_left"])]
         if str(_state["status"]) == "failed":
             _status_label.text = "SPECIMEN LOST / RESET TO RETRY"
     _refresh_ui()
@@ -226,7 +231,6 @@ func _refresh_ui() -> void:
     _view.call(
         "set_specimen_data",
         str(_state.get("specimen_id", "")),
-        int(_state.get("focus", 0)),
         int(_state.get("magnification", 1)),
         int(_state.get("illumination", 0)),
         int(_state.get("stain", 0)),
