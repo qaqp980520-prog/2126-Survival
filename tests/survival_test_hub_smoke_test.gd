@@ -27,7 +27,7 @@ const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.ts
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
-const REACTOR_BALANCER_SCENE := "res://daily_games/KROLL_Reactor_Balancer/main_root.tscn"
+const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -59,7 +59,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(RASTER_SURVEY_SCENE), "Raster Survey game scene exists")
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
 	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
-	_expect(ResourceLoader.exists(REACTOR_BALANCER_SCENE), "Reactor Balancer game scene exists")
+	_expect(ResourceLoader.exists(FAULTLINE_CARTOGRAPHER_SCENE), "Faultline Cartographer game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -238,7 +238,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Wind Farm Dispatch"), "hub labels the Wind Farm Dispatch game")
 	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Inertial Docking game")
 	_expect(labels.has("KROLL Microbe Scope"), "hub labels the Microbe Scope game")
-	_expect(labels.has("KROLL Reactor Balancer"), "hub labels the Reactor Balancer game")
+	_expect(labels.has("KROLL Faultline Cartographer"), "hub labels the Faultline Cartographer game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -334,19 +334,20 @@ func _run() -> void:
 		microbe_game.queue_free()
 		await process_frame
 
-	var reactor_scene := load(REACTOR_BALANCER_SCENE) as PackedScene
-	_expect(reactor_scene != null, "root hub can load the Reactor Balancer scene")
-	if reactor_scene != null:
-		var reactor_game := reactor_scene.instantiate()
-		root.add_child(reactor_game)
+	var faultline_scene := load(FAULTLINE_CARTOGRAPHER_SCENE) as PackedScene
+	_expect(faultline_scene != null, "root hub can load the Faultline Cartographer scene")
+	if faultline_scene != null:
+		var faultline_game := faultline_scene.instantiate()
+		root.add_child(faultline_game)
 		await process_frame
-		_expect(reactor_game.has_method("get_current_state"), "root-loaded Reactor Balancer initializes its process model")
-		_expect(reactor_game.get_title_text() == "KROLL // REACTOR BALANCER", "root-loaded Reactor Balancer displays its title")
-		_expect(reactor_game.get_action_button_count() == 6, "root-loaded Reactor Balancer builds six process controls")
-		if reactor_game.has_method("get_current_state"):
-			var reactor_state: Dictionary = reactor_game.call("get_current_state")
-			_expect(str(reactor_state.get("scenario_id", "")) == "polymer_batch", "root-loaded Reactor Balancer starts Polymer Batch")
-		reactor_game.queue_free()
+		_expect(faultline_game.has_method("get_current_state"), "root-loaded Faultline Cartographer initializes its survey model")
+		_expect(faultline_game.get_title_text() == "KROLL // FAULTLINE CARTOGRAPHER", "root-loaded Faultline Cartographer displays its title")
+		_expect(faultline_game.get_probe_button_count() == 3, "root-loaded Faultline Cartographer builds three seismic probe controls")
+		_expect(faultline_game.get_grid_button_count() == 49, "root-loaded Faultline Cartographer builds a 7x7 map")
+		if faultline_game.has_method("get_current_state"):
+			var survey_state: Dictionary = faultline_game.call("get_current_state")
+			_expect(str(survey_state.get("survey_id", "")) == "iron_vein", "root-loaded Faultline Cartographer starts the Iron Vein survey")
+		faultline_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
