@@ -69,6 +69,11 @@ func _run() -> void:
 	var first_proxy: Area3D = first.get_node_or_null("InteractionArea") as Area3D
 	var second_proxy: Area3D = second.get_node_or_null("InteractionArea") as Area3D
 	_expect(first_proxy != null and second_proxy != null, "both cross-chunk patches expose live interaction proxies")
+	if first_proxy == null or second_proxy == null:
+		await _finish(1)
+		return
+	var first_proxy_instance: int = first_proxy.get_instance_id()
+	var second_proxy_instance: int = second_proxy.get_instance_id()
 	var first_proxy_weak: WeakRef = weakref(first_proxy)
 	var second_proxy_weak: WeakRef = weakref(second_proxy)
 	var first_weak: WeakRef = weakref(first)
@@ -107,7 +112,7 @@ func _run() -> void:
 		var fresh_first_proxy: Area3D = fresh_first.get_node_or_null("InteractionArea") as Area3D
 		var fresh_second_proxy: Area3D = fresh_second.get_node_or_null("InteractionArea") as Area3D
 		_expect(fresh_first_proxy != null and fresh_second_proxy != null, "reloaded patches rebuild both interaction proxies")
-		_expect(fresh_first_proxy != first_proxy and fresh_second_proxy != second_proxy, "reloaded interaction proxies are fresh instances")
+		_expect(fresh_first_proxy.get_instance_id() != first_proxy_instance and fresh_second_proxy.get_instance_id() != second_proxy_instance, "reloaded interaction proxies are fresh instances")
 		_expect(str(fresh_first.call("get_edge_policy", "east").get("mode", "")) == "local_higher", "left cross-chunk edge policy is rebuilt after reload")
 		_expect(str(fresh_second.call("get_edge_policy", "west").get("mode", "")) == "neighbor_higher", "right cross-chunk edge policy is rebuilt reciprocally")
 	_expect(_count_cross_chunk_pairs(controller) == 12, "all twelve cross-chunk seams are rebuilt after reload")
