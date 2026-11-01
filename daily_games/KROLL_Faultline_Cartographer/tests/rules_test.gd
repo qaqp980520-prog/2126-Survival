@@ -20,7 +20,15 @@ func _run() -> void:
         var premature_submit: Dictionary = rules.call("submit_guess", state)
         _expect(not bool(premature_submit.get("ok", true)), "guess is rejected before all probes are fired")
         var previous_count: int = 49
-        for probe_id in ["NW", "NE", "SW"]:
+        var first_probe: Dictionary = rules.call("activate_probe", state, "NW")
+        _expect(bool(first_probe.get("ok", false)), "survey %d accepts the first NW probe" % index)
+        state = first_probe["state"]
+        var duplicate_probe: Dictionary = rules.call("activate_probe", state, "NW")
+        _expect(not bool(duplicate_probe.get("ok", true)) and str(duplicate_probe.get("reason", "")) == "probe_already_used", "survey %d rejects duplicate probe activation" % index)
+        var first_candidates: Array[Vector2i] = rules.call("get_candidate_cells", state)
+        _expect(first_candidates.size() < previous_count, "survey %d first probe narrows the candidate set" % index)
+        previous_count = first_candidates.size()
+        for probe_id in ["NE", "SW"]:
             var result: Dictionary = rules.call("activate_probe", state, probe_id)
             _expect(bool(result.get("ok", false)), "survey %d accepts probe %s" % [index, probe_id])
             state = result["state"]
@@ -30,8 +38,6 @@ func _run() -> void:
         var final_candidates: Array[Vector2i] = rules.call("get_candidate_cells", state)
         _expect(str(state.get("status", "")) == "locate" and final_candidates.size() == 1, "survey %d triangulates to exactly one cell" % index)
         _expect(final_candidates[0] == expected_targets[index], "survey %d identifies the authored deposit coordinate" % index)
-        var duplicate: Dictionary = rules.call("activate_probe", state, "NW")
-        _expect(not bool(duplicate.get("ok", true)), "completed probe set rejects duplicate activation")
         var selected: Dictionary = rules.call("select_cell", state, final_candidates[0])
         _expect(bool(selected.get("ok", false)), "survey %d allows selecting the unique candidate" % index)
         state = selected["state"]
