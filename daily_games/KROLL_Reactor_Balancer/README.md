@@ -11,7 +11,7 @@ Scenarios:
 - Cryo Solvent
 - Ceramic Sinter
 
-Each batch has 12 control actions. Safety interlocks fail the batch if pH, temperature or pressure leaves the safe operating envelope.
+Each batch has 12 control actions. Four stable stir cycles award a 100-point batch bonus; partial cycles do not award reusable score. Safety interlocks fail the batch if pH, temperature or pressure leaves the safe operating envelope.
 
 ## Controls
 
