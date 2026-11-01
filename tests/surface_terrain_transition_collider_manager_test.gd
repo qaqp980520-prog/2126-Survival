@@ -125,10 +125,10 @@ func _test_single_shared_transition() -> void:
 
 func _test_all_cardinal_directions() -> void:
     var cases: Array[Dictionary] = [
-        {"side": "east", "offset": Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.RIGHT, "cut_x": 2, "cut_z": -1},
-        {"side": "west", "offset": Vector3(-PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.LEFT, "cut_x": 0, "cut_z": -1},
-        {"side": "north", "offset": Vector3(0.0, 0.0, -PatchScript.PATCH_SIZE), "direction": Vector3.FORWARD, "cut_x": -1, "cut_z": 0},
-        {"side": "south", "offset": Vector3(0.0, 0.0, PatchScript.PATCH_SIZE), "direction": Vector3.BACK, "cut_x": -1, "cut_z": 2}
+        {"side": "east", "offset": Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.RIGHT},
+        {"side": "west", "offset": Vector3(-PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.LEFT},
+        {"side": "north", "offset": Vector3(0.0, 0.0, -PatchScript.PATCH_SIZE), "direction": Vector3.FORWARD},
+        {"side": "south", "offset": Vector3(0.0, 0.0, PatchScript.PATCH_SIZE), "direction": Vector3.BACK}
     ]
     for case in cases:
         var holder := Node3D.new()
@@ -158,7 +158,12 @@ func _test_all_cardinal_directions() -> void:
         var report: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
         _expect(bool(report.get("ok", false)) and int(report.get("active_count", -1)) == 1, "%s seam creates one shared ramp" % str(case["side"]))
         var side: String = str(case["side"])
-        var opposite: String = "west" if side == "east" else "east" if side == "west" else "south" if side == "north" else "north"
+        var opposite: String = ""
+        match side:
+            "east": opposite = "west"
+            "west": opposite = "east"
+            "north": opposite = "south"
+            "south": opposite = "north"
         _expect(bool(lower.call("is_shared_transition_active", side)), "%s lower edge is segmented" % side)
         _expect(bool(higher.call("is_shared_transition_active", opposite)), "%s higher edge is segmented" % side)
         var lower_base: CollisionShape3D = lower.get_node("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
