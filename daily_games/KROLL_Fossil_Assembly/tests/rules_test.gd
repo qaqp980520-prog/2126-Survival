@@ -14,6 +14,10 @@ func _run() -> void:
         _expect(not state.is_empty(), "specimen %d creates a valid state" % level_index)
         var definition: Dictionary = rules.call("get_level_definition", level_index)
         _expect(definition.get("target_cells", []).size() == 12, "specimen %d has twelve target cells" % level_index)
+        var unique_targets: Dictionary = {}
+        for target_cell in definition.get("target_cells", []):
+            unique_targets[target_cell] = true
+        _expect(unique_targets.size() == 12, "specimen %d target silhouette contains no duplicate cells" % level_index)
         var solution: Array = rules.call("get_reference_solution", level_index)
         _expect(solution.size() == 3, "specimen %d has three fragments" % level_index)
         for step in solution:
@@ -45,6 +49,12 @@ func _run() -> void:
     _expect(bool(removed.get("ok", false)), "placed fragment can be removed")
     state = removed["state"]
     _expect(state.get("occupied", {}).is_empty(), "removing a fragment frees all four cells")
+    var first_placement: Dictionary = rules.call("place_piece", state, "horn", Vector2i(0, 0), 0)
+    var second_placement: Dictionary = rules.call("place_piece", first_placement["state"], "jaw", Vector2i(0, 2), 0)
+    var ordered_state: Dictionary = second_placement["state"]
+    _expect(str(rules.call("get_last_placed_piece", ordered_state)) == "jaw", "placement history identifies the most recent fragment")
+    var undo_result: Dictionary = rules.call("remove_piece", ordered_state, str(rules.call("get_last_placed_piece", ordered_state)))
+    _expect(undo_result.get("state", {}).get("occupied", {}).size() == 4, "undo removes only the most recently placed fragment")
     var rotated: Array = rules.call(
         "transformed_cells",
         [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1)],
