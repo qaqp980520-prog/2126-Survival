@@ -202,8 +202,14 @@ func _capture_sample() -> void:
     _refresh_ui()
 
 func _reset_specimen() -> void:
-    _state = _rules.call("reset_specimen", _state)
-    _status_label.text = "CURRENT SPECIMEN RESET"
+    var previous_status: String = str(_state.get("status", ""))
+    var result: Dictionary = _rules.call("reset_specimen", _state)
+    if not bool(result.get("ok", false)):
+        _status_label.text = "CAMPAIGN COMPLETE / RESET DISABLED" if str(result.get("reason", "")) == "campaign_complete" else "RESET UNAVAILABLE"
+        _refresh_ui()
+        return
+    _state = result["state"]
+    _status_label.text = "CAPTURE CREDIT REVERSED / SPECIMEN RESET" if previous_status == "captured" else "CURRENT SPECIMEN RESET"
     _refresh_ui()
 
 func _next_specimen() -> void:
