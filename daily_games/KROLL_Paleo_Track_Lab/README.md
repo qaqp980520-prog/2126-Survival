@@ -9,7 +9,7 @@ Inspect three fossil trackways and submit a field report identifying the trackma
 Sites: Fern Basin, Ridge Pass and River Plain.
 Trackmaker categories: Small Ornithopod, Large Theropod and Sauropod.
 
-Each correct report awards 100 points. A wrong report fails the current site; reset it to retry without losing score earned at earlier sites.
+Each correct report awards 100 points. A wrong report fails the current site; reset it to retry without losing score earned at earlier sites. The in-game field guide shows the simplified footprint-size, trackway-gauge, stride-ratio and heading thresholds.
 
 ## Controls
 
