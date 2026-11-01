@@ -159,11 +159,12 @@ func _test_production_surface_world_async_movement() -> void:
     _expect(player.global_position.is_equal_approx(rollback_position), "player is held at the last safe position while chunks stage")
     var request_id: int = int(world.get("_surface_stream_request_id"))
     var success_report: Dictionary = await _wait_for_request(director, request_id)
-    await process_frame
     _expect(bool(success_report.get("success", false)), "production surface request completes successfully")
+    # Check the callback's resume position before the next physics tick applies gravity.
     _expect(player.global_position.is_equal_approx(target_position), "player resumes at the requested position after commit")
     _expect(world.get("_last_grid") == Vector2i(3, 3), "production world advances its last-grid coordinate only after commit")
     _expect(not bool(world.get("_surface_stream_pending")), "production world clears its pending flag after completion")
+    await process_frame
 
     var before_failure_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
     var failed_rollback_position: Vector3 = player.global_position
