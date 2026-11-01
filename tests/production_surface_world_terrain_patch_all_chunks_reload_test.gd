@@ -59,7 +59,7 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "edited %s" % chunk_id)
-		_expect_cross_chunk_adjacency(controller, "edited")
+	_expect_cross_chunk_adjacency(controller, "edited")
 
 	var save_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not save_payload.is_empty(), "world serialization captures all sixty-three terrain patch states")
@@ -110,7 +110,7 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "reloaded %s" % chunk_id)
-		_expect_cross_chunk_adjacency(controller, "reloaded")
+	_expect_cross_chunk_adjacency(controller, "reloaded")
 
 	var roundtrip_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not roundtrip_payload.is_empty(), "reloaded sixty-three-patch window can be serialized again")
@@ -125,7 +125,7 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "schema-1 restored %s" % chunk_id)
-		_expect_cross_chunk_adjacency(controller, "schema-1 restored")
+	_expect_cross_chunk_adjacency(controller, "schema-1 restored")
 
 	await _finish(0)
 
@@ -151,8 +151,10 @@ func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 			var stable_id: String = str(controller.call("_make_world_object_stable_id", chunk_id, local_path))
 			var disabled_sides: Array[String] = []
 			match node_name:
-				"TerrainPatch_AdjacentWest": disabled_sides.append("East")
-				"TerrainPatch_AdjacentEast": disabled_sides.append("West")
+				"TerrainPatch_AdjacentWest":
+					disabled_sides.append("East")
+				"TerrainPatch_AdjacentEast":
+					disabled_sides.append("West")
 				"TerrainPatch_CrossEast":
 					if loaded_chunks.has(_offset_surface_chunk(chunk_id, 1, 0)):
 						disabled_sides.append("East")
