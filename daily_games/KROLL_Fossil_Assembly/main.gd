@@ -196,18 +196,17 @@ func _place_at_cursor() -> void:
         _place_piece(_selected_piece_id, _cursor, _selected_rotation)
 
 func _undo_last() -> void:
-    for piece in _rules.call("get_level_definition", int(_state["level_index"]))["pieces"]:
-        var piece_id: String = str(piece["id"])
-        if bool(_state["pieces"][piece_id].get("placed", false)):
-            var result: Dictionary = _rules.call("remove_piece", _state, piece_id)
-            if bool(result.get("ok", false)):
-                _state = result["state"]
-                _selected_piece_id = piece_id
-                _selected_rotation = 0
-                _status_label.text = "LAST FRAGMENT REMOVED"
-            _refresh_ui()
-            return
-    _status_label.text = "NO FRAGMENT TO UNDO"
+    var piece_id: String = str(_rules.call("get_last_placed_piece", _state))
+    if piece_id.is_empty():
+        _status_label.text = "NO FRAGMENT TO UNDO"
+        _refresh_ui()
+        return
+    var result: Dictionary = _rules.call("remove_piece", _state, piece_id)
+    if bool(result.get("ok", false)):
+        _state = result["state"]
+        _selected_piece_id = piece_id
+        _selected_rotation = 0
+        _status_label.text = "LAST FRAGMENT REMOVED"
     _refresh_ui()
 
 func _reset_level() -> void:
