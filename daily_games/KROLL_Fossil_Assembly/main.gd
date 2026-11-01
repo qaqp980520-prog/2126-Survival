@@ -102,7 +102,7 @@ func _build_ui() -> void:
     piece_title.add_theme_color_override("font_color", Color("#8fe3dc"))
     side_panel.add_child(piece_title)
 
-    var definition: Dictionary = _rules.get_level_definition(int(_state["level_index"]))
+    var definition: Dictionary = _rules.call("get_level_definition", int(_state["level_index"]))
     for piece in definition["pieces"]:
         var piece_id: String = str(piece["id"])
         var button := Button.new()
@@ -154,7 +154,7 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 func _on_piece_pressed(piece_id: String) -> void:
     var piece_state: Dictionary = _state.get("pieces", {}).get(piece_id, {})
     if bool(piece_state.get("placed", false)):
-        var removed: Dictionary = _rules.remove_piece(_state, piece_id)
+        var removed: Dictionary = _rules.call("remove_piece", _state, piece_id)
         if bool(removed.get("ok", false)):
             _state = removed["state"]
             _selected_piece_id = piece_id
@@ -167,7 +167,7 @@ func _on_piece_pressed(piece_id: String) -> void:
     _refresh_ui()
 
 func _place_piece(piece_id: String, origin: Vector2i, rotation: int) -> void:
-    var result: Dictionary = _rules.place_piece(_state, piece_id, origin, rotation)
+    var result: Dictionary = _rules.call("place_piece", _state, piece_id, origin, rotation)
     if bool(result.get("ok", false)):
         _state = result["state"]
         _selected_piece_id = ""
@@ -196,10 +196,10 @@ func _place_at_cursor() -> void:
         _place_piece(_selected_piece_id, _cursor, _selected_rotation)
 
 func _undo_last() -> void:
-    for piece in _rules.get_level_definition(int(_state["level_index"]))["pieces"]:
+    for piece in _rules.call("get_level_definition", int(_state["level_index"]))["pieces"]:
         var piece_id: String = str(piece["id"])
         if bool(_state["pieces"][piece_id].get("placed", false)):
-            var result: Dictionary = _rules.remove_piece(_state, piece_id)
+            var result: Dictionary = _rules.call("remove_piece", _state, piece_id)
             if bool(result.get("ok", false)):
                 _state = result["state"]
                 _selected_piece_id = piece_id
@@ -211,7 +211,7 @@ func _undo_last() -> void:
     _refresh_ui()
 
 func _reset_level() -> void:
-    _state = _rules.create_state(int(_state.get("level_index", 0)))
+    _state = _rules.call("create_state", int(_state.get("level_index", 0)))
     _selected_piece_id = ""
     _selected_rotation = 0
     _cursor = Vector2i.ZERO
@@ -222,9 +222,9 @@ func _next_level() -> void:
     if str(_state.get("status", "")) != "won":
         return
     var next_index: int = int(_state["level_index"]) + 1
-    if next_index >= _rules.level_count():
+    if next_index >= int(_rules.call("level_count")):
         next_index = 0
-    _state = _rules.create_state(next_index)
+    _state = _rules.call("create_state", next_index)
     _selected_piece_id = ""
     _selected_rotation = 0
     _cursor = Vector2i.ZERO
