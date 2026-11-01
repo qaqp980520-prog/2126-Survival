@@ -84,6 +84,7 @@ func _build_ui() -> void:
     _add_readout(readouts, "PRESSURE", "pressure")
     _add_readout(readouts, "TURN", "turn")
     _add_readout(readouts, "STABLE CYCLES", "streak")
+    _add_readout(readouts, "SCORE", "score")
 
     var progress_title := Label.new()
     progress_title.text = "STABILIZATION PROGRESS"
@@ -201,6 +202,7 @@ func _refresh_ui() -> void:
     _readout_labels["pressure"].text = "%.2f bar  /  %.2f ± 0.35" % [float(_state.get("pressure", 0.0)), float(target.get("pressure", 0.0))]
     _readout_labels["turn"].text = "%d / %d" % [int(_state.get("turn", 0)), int(_state.get("max_turns", 0))]
     _readout_labels["streak"].text = "%d / 4" % int(_state.get("stable_streak", 0))
+    _readout_labels["score"].text = str(int(_state.get("score", 0)))
     _progress_bar.value = float(_state.get("progress", 0))
     _status_label.text = str(_state.get("last_message", ""))
     var active: bool = str(_state.get("status", "")) == "active"
