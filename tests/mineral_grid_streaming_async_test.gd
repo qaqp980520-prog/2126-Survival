@@ -99,7 +99,7 @@ func _test_production_surface_world_async_movement() -> void:
     var failed_target := Vector3(65.0, 2.0, 65.0)
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
-    _fail_coordinate = Vector2i(8, 8)
+    _fail_coordinate = Vector2i(7, 7)
     director.set("chunk_factory", Callable(self, "_make_fault_injected_chunk"))
     var failure_started: bool = bool(world.call("_request_surface_streaming", failed_rollback_position, failed_target, Vector3.ZERO))
     _expect(failure_started, "production world accepts the fault-injected request for rollback testing")
