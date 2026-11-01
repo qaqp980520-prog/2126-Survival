@@ -29,8 +29,8 @@ func _run() -> void:
 		return
 
 	var entries: Array[Dictionary] = _collect_surface_patches(controller)
-	_expect(entries.size() == 27, "initial 3x3 active surface window contains three terrain patches per chunk")
-	if entries.size() != 27:
+	_expect(entries.size() == 63, "initial 3x3 active surface window contains seven terrain patches per chunk")
+	if entries.size() != 63:
 		await _finish(1)
 		return
 
@@ -59,9 +59,10 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "edited %s" % chunk_id)
+		_expect_cross_chunk_adjacency(controller, "edited")
 
 	var save_payload: Dictionary = world.call("serialize_stream_state")
-	_expect(not save_payload.is_empty(), "world serialization captures all twenty-seven terrain patch states")
+	_expect(not save_payload.is_empty(), "world serialization captures all sixty-three terrain patch states")
 	var saved_objects: Dictionary = save_payload.get("world_objects", {}).get("objects", {})
 	for entry in entries:
 		var stable_id: String = str(entry["stable_id"])
@@ -109,10 +110,11 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "reloaded %s" % chunk_id)
+		_expect_cross_chunk_adjacency(controller, "reloaded")
 
 	var roundtrip_payload: Dictionary = world.call("serialize_stream_state")
-	_expect(not roundtrip_payload.is_empty(), "reloaded twenty-seven-patch window can be serialized again")
-	_expect(bool(world.call("restore_stream_state", save_payload, _test_time + 2)), "schema-1 save restores all twenty-seven surface terrain patches")
+	_expect(not roundtrip_payload.is_empty(), "reloaded sixty-three-patch window can be serialized again")
+	_expect(bool(world.call("restore_stream_state", save_payload, _test_time + 2)), "schema-1 save restores all sixty-three surface terrain patches")
 	for entry in entries:
 		var restored_patch: Node3D = _find_patch(controller, str(entry["chunk_id"]), str(entry["node_name"]))
 		_expect(restored_patch != null and restored_patch.call("get_world_object_state") == entry["state"], "schema-1 restore preserves each chunk's independent terrain state")
@@ -123,12 +125,16 @@ func _run() -> void:
 		var chunk_id: String = str(chunk_id_value)
 		if chunk_id.begins_with(SURFACE_PREFIX):
 			_expect_adjacency_pair(controller, chunk_id, "schema-1 restored %s" % chunk_id)
+		_expect_cross_chunk_adjacency(controller, "schema-1 restored")
 
 	await _finish(0)
 
 func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
 	var chunk_ids: Array = controller.call("get_loaded_chunk_ids")
+	var loaded_chunks: Dictionary = {}
+	for chunk_value in chunk_ids:
+		loaded_chunks[str(chunk_value)] = true
 	for chunk_value in chunk_ids:
 		var chunk_id: String = str(chunk_value)
 		if not chunk_id.begins_with(SURFACE_PREFIX):
@@ -144,10 +150,21 @@ func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 			var local_path: String = "%s/%s" % [chunk_root.name, node_name]
 			var stable_id: String = str(controller.call("_make_world_object_stable_id", chunk_id, local_path))
 			var disabled_sides: Array[String] = []
-			if node_name == "TerrainPatch_AdjacentWest":
-				disabled_sides.append("East")
-			elif node_name == "TerrainPatch_AdjacentEast":
-				disabled_sides.append("West")
+			match node_name:
+				"TerrainPatch_AdjacentWest": disabled_sides.append("East")
+				"TerrainPatch_AdjacentEast": disabled_sides.append("West")
+				"TerrainPatch_CrossEast":
+					if loaded_chunks.has(_offset_surface_chunk(chunk_id, 1, 0)):
+						disabled_sides.append("East")
+				"TerrainPatch_CrossWest":
+					if loaded_chunks.has(_offset_surface_chunk(chunk_id, -1, 0)):
+						disabled_sides.append("West")
+				"TerrainPatch_CrossNorth":
+					if loaded_chunks.has(_offset_surface_chunk(chunk_id, 0, -1)):
+						disabled_sides.append("North")
+				"TerrainPatch_CrossSouth":
+					if loaded_chunks.has(_offset_surface_chunk(chunk_id, 0, 1)):
+						disabled_sides.append("South")
 			entries.append({
 				"chunk_id": chunk_id,
 				"stable_id": stable_id,
@@ -156,6 +173,13 @@ func _collect_surface_patches(controller: Node) -> Array[Dictionary]:
 				"patch": patch
 			})
 	return entries
+
+func _offset_surface_chunk(chunk_id: String, dx: int, dy: int) -> String:
+	var coordinate_text: String = chunk_id.trim_prefix(SURFACE_PREFIX).trim_prefix("chunk_")
+	var parts: PackedStringArray = coordinate_text.split("_")
+	if parts.size() != 2:
+		return ""
+	return SURFACE_PREFIX + "chunk_%d_%d" % [int(parts[0]) + dx, int(parts[1]) + dy]
 
 func _expect_adjacency_pair(controller: Node, chunk_id: String, label: String) -> void:
 	var west: Node3D = _find_patch(controller, chunk_id, "TerrainPatch_AdjacentWest")
@@ -176,6 +200,55 @@ func _expect_adjacency_pair(controller: Node, chunk_id: String, label: String) -
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == expected_west_mode, "%s west tile tracks the live east-neighbor height" % label)
 	_expect(str(east.call("get_edge_policy", "west").get("mode", "")) == expected_east_mode, "%s east tile tracks the live west-neighbor height" % label)
 	_expect(not _ramp_enabled(west, "East") and not _ramp_enabled(east, "West"), "%s disables both ramps on the shared edge" % label)
+
+func _expect_cross_chunk_adjacency(controller: Node, label: String) -> void:
+	var loaded_chunks: Dictionary = {}
+	var surface_ids: Array[String] = []
+	for chunk_value in controller.call("get_loaded_chunk_ids"):
+		var chunk_id: String = str(chunk_value)
+		loaded_chunks[chunk_id] = true
+		if chunk_id.begins_with(SURFACE_PREFIX):
+			surface_ids.append(chunk_id)
+	var pair_count: int = 0
+	for chunk_id in surface_ids:
+		var east_id: String = _offset_surface_chunk(chunk_id, 1, 0)
+		if loaded_chunks.has(east_id):
+			_expect_cross_pair(
+				_find_patch(controller, chunk_id, "TerrainPatch_CrossEast"),
+				_find_patch(controller, east_id, "TerrainPatch_CrossWest"),
+				Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0),
+				"east", "west", "%s %s -> %s" % [label, chunk_id, east_id]
+			)
+			pair_count += 1
+		var south_id: String = _offset_surface_chunk(chunk_id, 0, 1)
+		if loaded_chunks.has(south_id):
+			_expect_cross_pair(
+				_find_patch(controller, chunk_id, "TerrainPatch_CrossSouth"),
+				_find_patch(controller, south_id, "TerrainPatch_CrossNorth"),
+				Vector3(0.0, 0.0, PatchScript.PATCH_SIZE),
+				"south", "north", "%s %s -> %s" % [label, chunk_id, south_id]
+			)
+			pair_count += 1
+	_expect(pair_count == 12, "%s rebuilds all twelve cross-chunk seams in the 3x3 window" % label)
+
+func _expect_cross_pair(first: Node3D, second: Node3D, expected_offset: Vector3, first_side: String, second_side: String, label: String) -> void:
+	_expect(first != null and second != null, "%s has both cross-chunk terrain patches" % label)
+	if first == null or second == null:
+		return
+	_expect((second.global_position - first.global_position).distance_to(expected_offset) <= 0.01, "%s patches meet at exact cardinal PATCH_SIZE spacing" % label)
+	var first_state: Dictionary = first.call("get_world_object_state")
+	var second_state: Dictionary = second.call("get_world_object_state")
+	var expected_first_mode: String = "flush_join"
+	var expected_second_mode: String = "flush_join"
+	if int(second_state.get("height_level", 0)) > int(first_state.get("height_level", 0)):
+		expected_first_mode = "neighbor_higher"
+		expected_second_mode = "local_higher"
+	elif int(first_state.get("height_level", 0)) > int(second_state.get("height_level", 0)):
+		expected_first_mode = "local_higher"
+		expected_second_mode = "neighbor_higher"
+	_expect(str(first.call("get_edge_policy", first_side).get("mode", "")) == expected_first_mode, "%s first patch sees the correct neighbor height" % label)
+	_expect(str(second.call("get_edge_policy", second_side).get("mode", "")) == expected_second_mode, "%s second patch sees the reciprocal height" % label)
+	_expect(not _ramp_enabled(first, first_side.capitalize()) and not _ramp_enabled(second, second_side.capitalize()), "%s suppresses both shared-edge ramps" % label)
 
 func _expect_patch_geometry(patch: Node3D, state: Dictionary, label: String, disabled_sides: Array = []) -> void:
 	var collision: CollisionShape3D = patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
