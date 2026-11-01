@@ -219,7 +219,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			_emit_async_cancelled(request_id, staged_count)
 			return
 		if not _async_dependencies_available():
-			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, [])
+			_abort_async_sync_request(request_id, staged_roots, staged_count)
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
@@ -258,7 +258,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	var newly_loaded: Array[String] = []
 	for entry in to_load:
 		if not _async_dependencies_available():
-			_abort_async_sync_request(request_id, staged_roots, staged_count)
+			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, [])
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
