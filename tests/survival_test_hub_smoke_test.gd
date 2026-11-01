@@ -341,9 +341,9 @@ func _run() -> void:
 		root.add_child(faultline_game)
 		await process_frame
 		_expect(faultline_game.has_method("get_current_state"), "root-loaded Faultline Cartographer initializes its survey model")
-		_expect(faultline_game.get_title_text() == "KROLL // FAULTLINE CARTOGRAPHER", "root-loaded Faultline Cartographer displays its title")
-		_expect(faultline_game.get_probe_button_count() == 3, "root-loaded Faultline Cartographer builds three seismic probe controls")
-		_expect(faultline_game.get_grid_button_count() == 49, "root-loaded Faultline Cartographer builds a 7x7 map")
+		_expect(faultline_game.call("get_title_text") == "KROLL // FAULTLINE CARTOGRAPHER", "root-loaded Faultline Cartographer displays its title")
+		_expect(faultline_game.call("get_probe_button_count") == 3, "root-loaded Faultline Cartographer builds three seismic probe controls")
+		_expect(faultline_game.call("get_grid_button_count") == 49, "root-loaded Faultline Cartographer builds a 7x7 map")
 		if faultline_game.has_method("get_current_state"):
 			var survey_state: Dictionary = faultline_game.call("get_current_state")
 			_expect(str(survey_state.get("survey_id", "")) == "iron_vein", "root-loaded Faultline Cartographer starts the Iron Vein survey")
