@@ -131,7 +131,9 @@ func step(state: Dictionary, controls: Dictionary, delta: float) -> Dictionary:
 		velocity -= forward * REVERSE_ACCEL * dt
 		fuel = maxf(0.0, fuel - REVERSE_FUEL_RATE * dt)
 	if braking:
-		velocity = velocity.move_toward(Vector2.ZERO, BRAKE_ACCEL * dt)
+		var relative_velocity: Vector2 = velocity - updated["target_velocity"]
+		relative_velocity = relative_velocity.move_toward(Vector2.ZERO, BRAKE_ACCEL * dt)
+		velocity = updated["target_velocity"] + relative_velocity
 		fuel = maxf(0.0, fuel - BRAKE_FUEL_RATE * dt)
 	if not thrusting and not reversing and not braking:
 		velocity *= exp(-DRAG_RATE * dt)

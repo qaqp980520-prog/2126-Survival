@@ -57,6 +57,12 @@ func _test_braking_and_moving_target(rules: RefCounted) -> void:
 	if bool(result.get("ok", false)):
 		var braked_velocity: Vector2 = result["state"]["velocity"]
 		_expect(braked_velocity.length() < 70.0, "retro-brake reduces relative speed")
+	var moving_brake_state: Dictionary = rules.make_state(1)
+	moving_brake_state["velocity"] = moving_brake_state["target_velocity"]
+	var moving_brake: Dictionary = rules.step(moving_brake_state, {"brake":true}, 0.05)
+	var target_velocity: Vector2 = moving_brake_state["target_velocity"]
+	var braked_moving_velocity: Vector2 = moving_brake["state"]["velocity"]
+	_expect(braked_moving_velocity.distance_to(target_velocity) < 0.001, "retro-brake does not introduce drift when already matching a moving berth")
 	var moving: Dictionary = rules.make_state(1)
 	var before: Vector2 = rules.call("get_target_position", moving)
 	var advanced: Dictionary = rules.step(moving, {}, 0.05)
