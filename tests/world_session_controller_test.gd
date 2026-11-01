@@ -39,8 +39,8 @@ func _run() -> void:
         elif str(stateful_node.name).begins_with("TerrainPatch"):
             loaded_terrain_patch_count += 1
     _check(loaded_crate_count == 9, "Each active surface chunk retains one stable salvage crate")
-    _check(loaded_terrain_patch_count == 27, "Each active surface chunk registers three persistent terrain patches")
-    _check(int(status.get("saved_world_object_count", -1)) == 36, "World-session registry counts nine salvage crates and twenty-seven terrain patches")
+    _check(loaded_terrain_patch_count == 63, "The active 3x3 window registers seven terrain patches per surface chunk")
+    _check(int(status.get("saved_world_object_count", -1)) == 72, "World-session registry counts nine salvage crates and sixty-three terrain patches")
     _check(status.has("inventory") and status.has("player_position"), "Status snapshot must expose inventory and player position")
 
     var world_player: CharacterBody3D = world.get("player") as CharacterBody3D
