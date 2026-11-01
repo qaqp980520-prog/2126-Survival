@@ -194,7 +194,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	for entry in to_load:
 		if request_id != _active_async_request_id:
 			_free_staged_roots(staged_roots)
-			_emit_async_cancelled(request_id)
+			_emit_async_cancelled(request_id, staged_count)
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
@@ -214,12 +214,12 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			await get_tree().process_frame
 			if request_id != _active_async_request_id:
 				_free_staged_roots(staged_roots)
-				_emit_async_cancelled(request_id)
+				_emit_async_cancelled(request_id, staged_count)
 				return
 
 	if request_id != _active_async_request_id:
 		_free_staged_roots(staged_roots)
-		_emit_async_cancelled(request_id)
+		_emit_async_cancelled(request_id, staged_count)
 		return
 
 	# Commit is deliberately non-yielding: no newer request can interleave with registration,
@@ -282,20 +282,20 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
-		_emit_async_cancelled(request_id)
+		_emit_async_cancelled(request_id, staged_count)
 		return
 	_set_sync_report(success, phase, message, rollback_complete, details)
 	_last_sync_report["request_id"] = request_id
 	_active_async_request_id = -1
 	async_sync_completed.emit(request_id, _last_sync_report.duplicate(true))
 
-func _emit_async_cancelled(request_id: int) -> void:
+func _emit_async_cancelled(request_id: int, staged_count: int = 0) -> void:
 	async_sync_completed.emit(request_id, {
 		"success": false,
 		"phase": "cancelled",
 		"message": "Async chunk request was superseded or cancelled before commit.",
 		"rollback_complete": true,
-		"details": {"request_id": request_id},
+		"details": {"request_id": request_id, "staged_count": staged_count, "staged_roots_released": staged_count},
 		"managed_chunk_ids": get_managed_chunk_ids(),
 		"controller_chunk_ids": _get_controller_loaded_ids()
 	})
