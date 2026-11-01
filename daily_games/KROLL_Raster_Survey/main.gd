@@ -75,7 +75,8 @@ func _build_ui() -> void:
 	var row_header := Label.new()
 	row_header.text = "ROW"
 	row_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	row_header.custom_minimum_size = Vector2(76.0, 34.0)
+	row_header.custom_minimum_size = Vector2(76.0, 68.0)
+	row_header.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	row_column.add_child(row_header)
 	for _y in range(GRID_SIZE):
 		var clue := Label.new()
@@ -94,7 +95,7 @@ func _build_ui() -> void:
 	grid_column.add_child(top_clues)
 	for _x in range(GRID_SIZE):
 		var clue := Label.new()
-		clue.custom_minimum_size = Vector2(58.0, 52.0)
+		clue.custom_minimum_size = Vector2(58.0, 68.0)
 		clue.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		clue.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		clue.add_theme_color_override("font_color", Color("#d7e7ed"))
