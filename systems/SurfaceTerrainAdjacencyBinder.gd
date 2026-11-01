@@ -19,7 +19,7 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 	for patch in patches:
 		if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
 			return {"ok": false, "error": "invalid_patch"}
-		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("get_edge_ramp_profile") or not patch.has_method("get_world_object_state"):
+		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("get_edge_ramp_profile") or not patch.has_method("get_world_object_state") or not patch.has_method("validate_world_object_state"):
 			return {"ok": false, "error": "unsupported_patch"}
 		var instance_id: int = patch.get_instance_id()
 		if seen_instances.has(instance_id):
@@ -50,7 +50,9 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		positions.append(patch.global_position)
 
 		var state: Variant = patch.call("get_world_object_state")
-		if not (state is Dictionary) or not state.has("height_level") or not state.has("revision"):
+		if not (state is Dictionary) or not bool(patch.call("validate_world_object_state", state)):
+			return {"ok": false, "error": "invalid_patch_state"}
+		if not state.has("height_level") or not state.has("revision"):
 			return {"ok": false, "error": "invalid_patch_state"}
 		var snapshot: Dictionary = {
 			"stable_id": stable_id,
