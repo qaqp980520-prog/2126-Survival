@@ -1460,3 +1460,16 @@
 - Chunk streaming remains synchronous; bounded asynchronous streaming, cancellation-safe ownership and deterministic rollback remain future work.
 - No local Godot executable was available; manual GUI, GPU performance and iPhone hardware QA are not claimed.
 - GitHub reports `main.protected=false` with required status checks off. Branch-protection hardening remains a separate repository-governance task.
+
+## Run 77 — 2026-11-01
+
+- New playable Godot 4 game: KROLL Strata Mapper M0.1. Three survey sites each contain three four-sample borehole columns; adjacent swaps must arrange oldest beds at the base and align the volcanic-ash marker at depth index 2. The 18-swap budget is verified by deterministic solutions requiring 11, 12 and 13 swaps.
+- Production surface chunks now create four additional boundary terrain patches: CrossEast, CrossWest, CrossNorth and CrossSouth. A 3×3 active surface window contains 63 terrain patches (seven per chunk) and 12 derived cross-chunk seams (six east/west and six north/south).
+- Existing world-object counts are updated: 80 total objects in production SurfaceWorld (nine crates, 63 terrain patches, seven underground caches and one lift); 72 objects in the surface-only WorldSessionController test.
+- Added tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd to verify reciprocal edge policies, unequal-height step behavior, shared-ramp suppression, stable IDs, node/proxy release and recreation, unload/reload and schema-1 restoration.
+- Expanded tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd to validate all 63 patches and all 12 cross-chunk seams after edits, reload and schema-1 restore.
+- Root Survival Test Hub now launches KROLL Strata Mapper; standalone rules and runtime smoke tests are included.
+- World-save schema remains version 1; adjacency is derived runtime data and is not serialized.
+- Validation: exact-head Godot 4.3 workflow Run #870 passed 338/338 job steps, zero failures and zero skipped steps. This includes production world counts, Test Hub smoke, the 63-patch lifecycle regression, standalone Strata Mapper import/rules/runtime and the dedicated cross-chunk regression.
+- GitHub: PR #191 merged. Feature merge commit: edc9de7650af090e705b93ee9cf218e654bd8ead.
+- Remaining engineering issues: unequal-height cross-chunk edges remain steps (no shared transition collider); chunk streaming is synchronous; local GUI/GPU/iPhone QA has not been performed.
