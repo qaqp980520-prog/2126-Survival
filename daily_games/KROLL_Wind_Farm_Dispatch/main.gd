@@ -3,6 +3,8 @@ extends Control
 const ROOT_RULES_PATH: String = "res://daily_games/KROLL_Wind_Farm_Dispatch/rules.gd"
 const LOCAL_RULES_PATH: String = "res://rules.gd"
 const DIRECTIONS: Array[String] = ["N", "E", "S", "W"]
+const BATTERY_CAPACITY: int = 8
+const TRIP_HEAT: int = 6
 
 var _rules: RefCounted
 var _state: Dictionary = {}
@@ -138,7 +140,8 @@ func _build_ui() -> void:
 	column.add_child(actions)
 	_commit_button = _make_button("COMMIT ROUND", actions, commit_current_round)
 	_commit_button.custom_minimum_size = Vector2(180.0, 48.0)
-	_make_button("RESET ARRAY", actions, _reset_scenario).custom_minimum_size = Vector2(150.0, 48.0)
+	var reset_button := _make_button("RESET ARRAY", actions, _reset_scenario)
+	reset_button.custom_minimum_size = Vector2(150.0, 48.0)
 	_next_button = _make_button("NEXT ARRAY", actions, advance_to_next_scenario)
 	_next_button.custom_minimum_size = Vector2(180.0, 48.0)
 	var help := Label.new()
@@ -237,7 +240,7 @@ func _refresh_ui() -> void:
 		]
 	_battery_label.text = "BATTERY %d / %d    ROUND %d / %d" % [
 		int(_state["battery"]),
-		int(_rules.BATTERY_CAPACITY),
+		BATTERY_CAPACITY,
 		int(progress["round"]),
 		int(progress["total_rounds"])
 	]
@@ -250,7 +253,7 @@ func _refresh_ui() -> void:
 		card["heading"].text = "TURBINE %d%s" % [index + 1, "  ◀ SELECTED" if index == _selected_turbine else ""]
 		card["yaw"].text = "YAW: %s" % DIRECTIONS[int(turbine["yaw"])]
 		card["pitch"].text = "BLADE PITCH: %d / 3" % int(turbine["pitch"])
-		card["heat"].text = "HEAT: %d / %d  ·  %s" % [int(turbine["heat"]), int(_rules.TRIP_HEAT), "ONLINE" if online else "TRIPPED"]
+		card["heat"].text = "HEAT: %d / %d  ·  %s" % [int(turbine["heat"]), TRIP_HEAT, "ONLINE" if online else "TRIPPED"]
 		card["output"].text = "ESTIMATED OUTPUT: %d" % int(outputs[index]) if index < outputs.size() else "ESTIMATED OUTPUT: —"
 		for key in ["yaw_left","yaw_right","pitch_down","pitch_up"]:
 			card[key].disabled = str(_state["status"]) != "playing" or not online
