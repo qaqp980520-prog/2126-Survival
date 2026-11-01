@@ -8,7 +8,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var game := GameScene.instantiate()
-	_expect(game != null, "Orbital Docking scene instantiates")
+	_expect(game != null, "Inertial Docking scene instantiates")
 	if game == null:
 		quit(1)
 		return
