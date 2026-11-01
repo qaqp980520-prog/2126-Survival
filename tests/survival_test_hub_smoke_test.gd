@@ -354,20 +354,20 @@ func _run() -> void:
 		await process_frame
 
 
-    var paleo_scene := load(PALEO_TRACK_LAB_SCENE) as PackedScene
-    _expect(paleo_scene != null, "root hub can load the Paleo Track Lab scene")
-    if paleo_scene != null:
-        var paleo_game := paleo_scene.instantiate()
-        root.add_child(paleo_game)
-        await process_frame
-        _expect(paleo_game.has_method("get_current_state"), "root-loaded Paleo Track Lab initializes its trackway rules")
-        _expect(paleo_game.call("get_title_text") == "KROLL // PALEO TRACK LAB", "root-loaded Paleo Track Lab displays its title")
-        _expect(paleo_game.call("get_answer_button_count") == 13, "root-loaded Paleo Track Lab builds thirteen answer controls")
-        if paleo_game.has_method("get_current_state"):
-            var paleo_state: Dictionary = paleo_game.call("get_current_state")
-            _expect(str(paleo_state.get("site_id", "")) == "fern_basin", "root-loaded Paleo Track Lab starts the Fern Basin survey")
-        paleo_game.queue_free()
-        await process_frame
+	var paleo_scene := load(PALEO_TRACK_LAB_SCENE) as PackedScene
+	_expect(paleo_scene != null, "root hub can load the Paleo Track Lab scene")
+	if paleo_scene != null:
+		var paleo_game := paleo_scene.instantiate()
+		root.add_child(paleo_game)
+		await process_frame
+		_expect(paleo_game.has_method("get_current_state"), "root-loaded Paleo Track Lab initializes its trackway rules")
+		_expect(paleo_game.call("get_title_text") == "KROLL // PALEO TRACK LAB", "root-loaded Paleo Track Lab displays its title")
+		_expect(paleo_game.call("get_answer_button_count") == 13, "root-loaded Paleo Track Lab builds thirteen answer controls")
+		if paleo_game.has_method("get_current_state"):
+			var paleo_state: Dictionary = paleo_game.call("get_current_state")
+			_expect(str(paleo_state.get("site_id", "")) == "fern_basin", "root-loaded Paleo Track Lab starts the Fern Basin survey")
+		paleo_game.queue_free()
+		await process_frame
 
 	hub.queue_free()
 	await process_frame
