@@ -132,7 +132,7 @@ func _build_ui() -> void:
     data_column.add_child(_metrics_label)
 
     _field_guide_label = Label.new()
-    _field_guide_label.text = "FIELD GUIDE\nSmall Ornithopod: foot < 32 cm\nLarge Theropod: 32–55 cm\nSauropod: foot >= 56 cm and gauge >= 80 cm\nGait: stride / foot >= 8.5 = RUN; otherwise WALK\nHeading: round toe bearing to nearest 45 degrees."
+    _field_guide_label.text = "FIELD GUIDE\nSmall Ornithopod: foot < 32 cm\nLarge Theropod: foot >= 32 cm unless Sauropod rule matches\nSauropod: foot >= 56 cm and gauge >= 80 cm\nGait: stride / foot >= 8.5 = RUN; otherwise WALK\nHeading: round toe bearing to nearest 45 degrees."
     _field_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _field_guide_label.add_theme_color_override("font_color", Color(0.68, 0.76, 0.72))
     data_column.add_child(_field_guide_label)
