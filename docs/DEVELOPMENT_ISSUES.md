@@ -1210,3 +1210,26 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - PR #201 merge commit: `a7d970bf20f2f1ef2a5d249d71cd1bb1abf2bfd2`.
 - Local Godot GUI/GPU/iPhone validation remains outstanding; no local executable was available.
 - Repository rulesets query returned an empty list; classic branch-protection read returned 403, so protection settings remain unverified from this connection.
+
+
+## Run 83 — async controller teardown and partial-commit rollback (2026-11-01)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Controller destroyed during staging | Detached staged roots could outlive the controller and stale managed IDs could prevent rebinding. | Validate director/controller/factory/tree dependencies around frame yields; release staged roots; clear stale IDs; report `dependency_unavailable`; replacement-controller binding is regression-tested. |
+| Controller detaches during partial commit | Releasing only remaining staged roots could leave newly committed chunks registered and previously unloaded chunks missing. | Track `newly_loaded` and `unloaded_stale` journal entries; unload new roots, restore stale roots, report rollback completeness, reattach controller and retry. |
+| Controller destroyed during commit | The old controller no longer owns a recoverable active window. | Do not claim successful restoration; clear stale director IDs and report `rollback_complete=false`. |
+| Stale cancellation isolation | A late cancellation from an old request must not cancel or overwrite a newer request. | Keep request identity checks and regression coverage. |
+
+### Run 83 validation and merge
+- New game: `daily_games/KROLL_Paleo_Track_Lab/`; three authored trackway sites, classification/gait/eight-way heading, visible field guide, keyboard/mouse/touch controls, rules and runtime smoke tests.
+- Feature PR [#203](https://github.com/qaqp980520-prog/2126-Survival/pull/203) merged from exact HEAD `383d443b20330e551211bdcb1a52b291625f2a88`; merge commit `2f9ecb10e4ceaa15f180539b5135853447764bfb`.
+- Exact-head Godot 4.3 [Run #971](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41310414805): 370 successful job step records, zero failures, zero skips; cleanup, container shutdown and job completion succeeded.
+- World-save schema remains version 1. Async request state, commit journal and staged roots are transient and are not serialized.
+- Local Godot GUI/GPU/iPhone QA was not available; no device-level validation is claimed.
+
+### Next engineering work
+1. Add bounded stress tests for repeated controller detach/reattach and overlapping requests under longer multi-window traversal.
+2. Improve streaming diagnostics with request IDs, phase, cancellation reason and rollback outcome.
+3. Preserve the distinction between destroyed-controller incomplete rollback and live-detached-controller complete rollback.
+4. Continue corner-junction terrain work and local GUI/GPU/iPhone QA when a suitable runtime/device is available.

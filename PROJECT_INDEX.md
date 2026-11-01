@@ -1578,3 +1578,30 @@
 - **Playable mini-game:** `daily_games/KROLL_Faultline_Cartographer` is a 7×7 rounded-Euclidean triangulation game with three fixed surveys. M0.2 hides the target cell, permits all 49 guesses after the three probes, fails incorrect guesses, and supports reset/retry.
 - **Exact-head validation:** PR #201 was validated at `3b9a78bec5fa6df256c41bf8962cca26b51a29f6` by Godot headless workflow Run #960 (364/364 successful workflow entries, zero failures/skips), then merged as `a7d970bf20f2f1ef2a5d249d71cd1bb1abf2bfd2`.
 - **Remaining QA:** local GUI, GPU performance and iPhone touch/device validation were not performed; the available environment had no Godot executable.
+
+
+## 2026-11-01 Run 83 — Paleo Track Lab and async controller teardown recovery (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Paleo_Track_Lab/`, a deterministic three-site dinosaur trackway interpretation game: Fern Basin, Ridge Pass and River Plain.
+- Players infer trackmaker class, gait and one of eight headings from footprint length/width, stride, trackway gauge and toe bearing. The in-game field guide states the simplified category precedence, the 8.5 stride/foot-length gait threshold and 45-degree heading quantization.
+- Includes standalone project/root scenes, procedural footprint sketch, 13 answer controls, keyboard/mouse/touch interaction, retry/progression, rules tests, runtime smoke test and Survival Test Hub integration. No external art, audio, plugin or network dependencies; Godot 4.3+.
+- The thresholds are an educational game model, not a scientific fossil-identification standard.
+
+### Existing-system change
+- Hardened `systems/MineralGridStreamingDirector.gd` against director/controller/factory teardown across async frame yields and before/after commit.
+- If the controller is destroyed during staging, detached staged roots are released and stale managed IDs are cleared so a replacement controller can bind. The report does not claim restoration of an active window owned by a destroyed controller.
+- If a live controller detaches during partial commit, the director rolls back newly loaded chunks, restores stale chunks, reports rollback completeness, and supports controller reattachment and retry.
+- Added regressions for stale-cancellation isolation, controller destruction during staging, partial-commit detach/rollback, staged-root release, reattachment and successful retry.
+- World-save schema remains version 1; async requests and staging journals are transient runtime state.
+
+### Exact validation and merge
+- Feature PR [#203](https://github.com/qaqp980520-prog/2126-Survival/pull/203) merged as `2f9ecb10e4ceaa15f180539b5135853447764bfb` from exact candidate HEAD `383d443b20330e551211bdcb1a52b291625f2a88`.
+- Exact-head Godot 4.3 workflow [Run #971](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41310414805) completed successfully. The validate job reported 370 successful step records, zero failures and zero skipped steps; post-checkout cleanup, container shutdown and job completion succeeded.
+- Run #971 passed root Test Hub smoke, async controller teardown/partial-commit rollback regression, Paleo Track Lab standalone import, rules tests, runtime smoke and classification-boundary/field-guide checks, along with the existing full regression suite.
+- PR #203 is closed/merged. Post-merge main is `2f9ecb10e4ceaa15f180539b5135853447764bfb`.
+
+### Remaining work and limitations
+- Local Godot executable is unavailable; editor GUI, renderer appearance, GPU performance and iPhone hardware QA were not performed. Cloud headless CI is not device QA.
+- A controller destroyed after owning active chunks cannot have that former window restored; the director explicitly reports incomplete rollback for this case. Live detached controllers are covered by full rollback and reattachment tests.
+- Continue with request diagnostics/stress tests, longer multi-window traversal, and local GUI/GPU/iPhone QA when available.
