@@ -1495,3 +1495,25 @@
 - Chunk streaming remains synchronous; bounded asynchronous loading, stale-request invalidation, cancellation-safe ownership and deterministic rollback remain future work.
 - Local editor GUI, GPU performance and iPhone hardware QA were not performed. Cloud headless CI does not replace these checks.
 - GitHub branch-protection status could not be verified through the connected API because the endpoint returned 403; do not infer that protection is enabled. Review repository governance separately.
+
+
+## Run 79 — 2026-11-01
+
+- Added KROLL Wind Farm Dispatch M0.1, a standalone and Survival Test Hub-integrated deterministic management game with three four-round arrays, three independently controlled turbines, yaw alignment, blade pitch, heat trips, automatic battery dispatch and grid-demand outcomes.
+- Added standalone project, root scene, keyboard/mouse/touch controls, rules tests, runtime smoke test and root Test Hub integration. The deterministic pitch-two/aligned-yaw strategy completes all 12 authored rounds; Polar Array ends with the battery exactly at zero.
+- Added pure `SurfaceTerrainTransitionDescriptor.gd` M0.2 foundation. It canonicalizes pair ordering and length-prefixed stable edge keys; derives cardinal side/opposite side, stable owner, high/low patch IDs, top heights, rise and transition requirement; rejects invalid snapshots and non-cardinal/mixed-size pairs.
+- The descriptor is not yet wired into the production adjacency binder/controller and does not create a collider. Unequal-height cross-chunk edges still use the existing conservative step policy. No world-save schema change; schema remains version 1.
+
+### Exact-head validation and merge
+
+- Feature PR [#195](https://github.com/qaqp980520-prog/2126-Survival/pull/195) merged as `1be9bbdc47b88a16bff4281921aa0e39399c8eea` from exact candidate `a5cf951a1970ddc1893461bb8fcd37f4179ef3a9`.
+- Exact-head Godot 4.3 workflow [Run #41267982022](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41267982022) completed successfully: 348 job step entries succeeded, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- Run #41267982022 passed descriptor cardinality/order/invalid-input tests, Wind Farm Dispatch standalone import, rules tests, runtime smoke and root Test Hub registration/smoke.
+
+### Remaining work and limitations
+
+- Integrate descriptor maps transactionally into SurfaceTerrainAdjacencyBinder/MineralChunkController using persistent Stable IDs.
+- Implement single-owner unequal-height transition colliders only after patch edge collision strips are segmented; do not overlay a ramp on the current full BoxShape3D.
+- Chunk streaming remains synchronous; bounded async loading, stale-request invalidation, cancellation-safe ownership and rollback remain future work.
+- Local editor GUI, GPU performance and iPhone hardware QA were not performed. Cloud headless CI does not replace those checks.
+- Repository rulesets API returned an empty array; classic branch-protection endpoint returned 403 to the connected integration, so classic protection status remains unverified.
