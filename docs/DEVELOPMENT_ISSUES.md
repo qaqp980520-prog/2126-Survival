@@ -1105,3 +1105,30 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - World-save schema remains version 1; no migration was introduced.
 - Raster Survey M0.1 uses fixed authored 6×6 puzzles; generated puzzles, campaign persistence, audio, animations and scoring are not included.
 - No local Godot GUI/GPU/iPhone testing is claimed; only exact-head cloud Godot 4.3 validation is verified.
+
+
+## Run 79 closeout — Wind Farm Dispatch and terrain transition descriptor
+
+### Completed
+- KROLL Wind Farm Dispatch M0.1 is integrated into Survival Test Hub. It contains three deterministic four-round arrays, three turbines, yaw/pitch controls, wind-alignment output, heat accumulation/trip, battery charge/discharge, grid demand, retry and campaign completion.
+- Added standalone project, root scene, README, rules tests, runtime smoke test, hub launch entry and CI import/rules/runtime gates.
+- Added pure SurfaceTerrainTransitionDescriptor M0.2. It canonicalizes adjacent patch pairs by Stable ID, creates deterministic length-prefixed edge keys, derives cardinal side/opposite side, one stable owner, high/low patch IDs, top heights, rise and transition requirement, and rejects invalid/non-neighbor pairs.
+- Deterministic independent simulation verified an aligned-yaw/pitch-two route completes all 12 authored rounds. Exact engine tests are separately recorded below.
+
+### Exact validation and merge
+- Feature PR [#195](https://github.com/qaqp980520-prog/2126-Survival/pull/195) merged as `1be9bbdc47b88a16bff4281921aa0e39399c8eea` from exact HEAD `a5cf951a1970ddc1893461bb8fcd37f4179ef3a9`.
+- Exact-head Godot 4.3 [Run #41267982022](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41267982022) completed successfully: 348 successful job entries, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- New gates passed: Run 79 source-input verification; SurfaceTerrainTransitionDescriptor tests; Wind Farm Dispatch import, rules tests and runtime smoke; root Test Hub resource/button/instantiation smoke.
+
+### Remaining engineering work
+1. Integrate descriptor generation into the production adjacency binder/controller with Stable ID lookup and transactional rebuild/rollback.
+2. Segment patch edge collision strips, then implement one shared transition collider/visual per unequal-height edge with deterministic owner and lifecycle tests in all four directions.
+3. Preserve derived transition descriptors outside world-save payloads; keep schema version 1 until an explicit migration is justified.
+4. Design bounded asynchronous chunk streaming with cancellation-safe ownership, stale-request invalidation and deterministic rollback.
+5. Add local editor GUI, GPU performance and iPhone hardware QA when available.
+6. Review branch protection: repository rulesets API returned empty; classic protection endpoint returned 403 to the connected integration, so status remains unverified.
+
+### Limitations
+- Descriptor M0.2 is a pure tested foundation, not yet used to create runtime colliders.
+- Wind Farm Dispatch uses fixed authored scenarios and simplified turbine physics; no save, random weather, animations, audio or multiplayer.
+- Local GUI/GPU/iPhone tests are not claimed; only exact-head cloud Godot 4.3 validation passed.
