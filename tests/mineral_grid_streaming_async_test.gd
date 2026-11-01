@@ -53,10 +53,12 @@ func _test_playground_async_requests() -> void:
     director.set("chunk_factory", original_factory)
     var first_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time + 1, 1))
     await process_frame
+    await process_frame
     var second_request: int = int(director.call("request_sync_to_world_position_async", Vector3(-25.0, 0.0, -25.0), _test_time + 2, 2))
     var first_report: Dictionary = await _wait_for_request(director, first_request)
     var second_report: Dictionary = await _wait_for_request(director, second_request)
-    _expect(str(first_report.get("phase", "")) == "cancelled" and bool(first_report.get("rollback_complete", false)), "newer request cancels and releases the older staged window")
+    _expect(str(first_report.get("phase", "")) == "cancelled" and bool(first_report.get("rollback_complete", false)), "newer request cancels the older staging request")
+    _expect(int(first_report.get("details", {}).get("staged_roots_released", 0)) > 0, "superseded request releases roots already staged across earlier frames")
     _expect(bool(second_report.get("success", false)) and str(second_report.get("phase", "")) == "complete", "latest async request commits its target window")
     _expect(controller.call("get_loaded_chunk_ids") == director.call("get_managed_chunk_ids"), "async commit keeps controller and director IDs synchronized")
     _expect(controller.call("get_loaded_chunk_ids").size() == 9, "async commit retains exactly nine active surface chunks")
