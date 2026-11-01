@@ -1517,3 +1517,27 @@
 - Chunk streaming remains synchronous; bounded async loading, stale-request invalidation, cancellation-safe ownership and rollback remain future work.
 - Local editor GUI, GPU performance and iPhone hardware QA were not performed. Cloud headless CI does not replace those checks.
 - Repository rulesets API returned an empty array; classic branch-protection endpoint returned 403 to the connected integration, so classic protection status remains unverified.
+
+## Run 80 — 2026-11-01
+
+- Added KROLL Inertial Docking M0.1, a standalone and Survival Test Hub-integrated inertial spacecraft docking game with three authored trials (Cargo Bay, Rotating Ring and Debris Corridor), a moving berth, debris hazards, finite fuel, thrust/reverse/yaw/retro-brake controls, keyboard and touch UI, deterministic rules tests and runtime smoke coverage.
+- The physics model brakes relative to the moving target velocity. A dedicated regression confirms that braking while already matching the berth velocity does not introduce relative drift. Deterministic waypoint routes complete all three trials within their time/fuel limits.
+- Integrated SurfaceTerrainTransitionDescriptor into SurfaceTerrainAdjacencyBinder and MineralChunkController. Production controller supplies registry-backed Stable IDs and keeps derived edge descriptors in memory; descriptors are refreshed after terrain edits and chunk load/unload and are not serialized.
+- Binder now preflights every patch's complete persisted state with validate_world_object_state before clearing or rebinding any live adjacency. Added malformed-material atomicity coverage proving invalid state is rejected while existing adjacency remains intact.
+- Restored Run 53 CI import/rules/runtime coverage for the original KROLL Orbital Docking project while retaining separate Run 80 gates for KROLL Inertial Docking. Six legacy Orbital Docking files were verified byte-for-byte identical to main.
+- Corrected the Inertial Docking visible title and Test Hub scene constant; runtime smoke now asserts the title.
+- World-save schema remains version 1. Transition descriptors are derived runtime data and are not serialized.
+
+### Exact-head validation and merge
+
+- Feature PR [#197](https://github.com/qaqp980520-prog/2126-Survival/pull/197) merged as `57799255acaef7e7b6308b7f357331058dcbf3c4` from exact candidate HEAD `033be2ba23a80b6bb80dbf968bbaab6c4b294bd6`.
+- Exact-head Godot 4.3 workflow [Run #892](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41277023667) passed all 353/353 step entries, zero failures, zero skipped; post-checkout cleanup, container shutdown and job completion succeeded.
+- Run #892 passed restored legacy Orbital Docking import/rules/runtime at steps 213–215; binder atomicity suite at step 330; production cross-chunk descriptor-binding regression at step 347; and Inertial Docking standalone import/rules/runtime at steps 348–350.
+- The root Test Hub smoke passed earlier in the same run, including the Inertial Docking scene registration.
+
+### Remaining work and limitations
+
+- Unequal-height shared transition colliders are still not implemented. Next work is patch edge collision-strip segmentation, then one owner-managed ramp collider/visual per unequal-height edge; do not overlay a ramp on the existing full BoxShape3D.
+- Chunk streaming remains synchronous; bounded asynchronous loading, stale-request invalidation, cancellation-safe ownership and deterministic rollback remain future work.
+- Local Godot GUI, GPU performance and iPhone hardware QA were not performed; cloud headless CI does not replace these checks.
+- GitHub branch API reports `main.protected=false` and repository rulesets are empty. Main is not visibly protected; branch protection should be configured by a repository owner/admin.
