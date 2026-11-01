@@ -131,5 +131,19 @@ func next_specimen(state: Dictionary) -> Dictionary:
 func reset_specimen(state: Dictionary) -> Dictionary:
     var index: int = int(state.get("specimen_index", -1))
     if index < 0 or index >= SPECIMENS.size():
-        return {}
-    return create_state(index, int(state.get("score", 0)), int(state.get("captures", 0)))
+        return {"ok": false, "reason": "invalid_specimen", "state": state.duplicate(true)}
+    var status: String = str(state.get("status", ""))
+    if status == "complete":
+        return {"ok": false, "reason": "campaign_complete", "state": state.duplicate(true)}
+    if not ["active", "failed", "captured"].has(status):
+        return {"ok": false, "reason": "invalid_status", "state": state.duplicate(true)}
+    var carried_score: int = maxi(0, int(state.get("score", 0)))
+    var carried_captures: int = maxi(0, int(state.get("captures", 0)))
+    if status == "captured":
+        var credited_clarity: int = clampi(int(state.get("last_clarity", 0)), 0, 100)
+        carried_score = maxi(0, carried_score - credited_clarity)
+        carried_captures = maxi(0, carried_captures - 1)
+    return {
+        "ok": true,
+        "state": create_state(index, carried_score, carried_captures)
+    }
