@@ -133,8 +133,20 @@ func _build_geometry(first_patch: Node3D, second_patch: Node3D, descriptor: Dict
     var horizontal_delta := Vector3(second_position.x - first_position.x, 0.0, second_position.z - first_position.z)
     if absf(first_position.y - second_position.y) > POSITION_TOLERANCE or absf(horizontal_delta.length() - patch_size) > POSITION_TOLERANCE:
         return {"ok": false, "error": "patches_not_level_cardinal_neighbors"}
+    if not first_patch.has_method("get_top_height") or not second_patch.has_method("get_top_height") or not first_patch.has_method("get_edge_ramp_profile") or not second_patch.has_method("get_edge_ramp_profile"):
+        return {"ok": false, "error": "patch_missing_geometry_profile"}
+    var first_profile: Dictionary = first_patch.call("get_edge_ramp_profile")
+    var second_profile: Dictionary = second_patch.call("get_edge_ramp_profile")
+    var run: float = float(first_profile.get("run", 0.0))
+    var thickness: float = float(first_profile.get("collision_thickness", 0.0))
+    if absf(run - float(second_profile.get("run", -1.0))) > POSITION_TOLERANCE or absf(thickness - float(second_profile.get("collision_thickness", -1.0))) > POSITION_TOLERANCE:
+        return {"ok": false, "error": "mixed_patch_transition_profiles"}
+    if absf(run - EDGE_RUN_PER_PATCH) > POSITION_TOLERANCE or absf(thickness - COLLISION_THICKNESS) > POSITION_TOLERANCE:
+        return {"ok": false, "error": "unsupported_patch_transition_profile"}
     var first_top: float = float(descriptor["first_top_height"])
     var second_top: float = float(descriptor["second_top_height"])
+    if absf(float(first_patch.call("get_top_height")) - first_top) > POSITION_TOLERANCE or absf(float(second_patch.call("get_top_height")) - second_top) > POSITION_TOLERANCE:
+        return {"ok": false, "error": "stale_transition_descriptor"}
     var height_delta: float = absf(first_top - second_top)
     if height_delta <= POSITION_TOLERANCE or absf(height_delta - float(descriptor["height_delta"])) > POSITION_TOLERANCE:
         return {"ok": false, "error": "descriptor_height_mismatch"}
@@ -145,7 +157,6 @@ func _build_geometry(first_patch: Node3D, second_patch: Node3D, descriptor: Dict
     var horizontal_direction := high_patch.global_position - low_patch.global_position
     horizontal_direction.y = 0.0
     horizontal_direction = horizontal_direction.normalized()
-    var run: float = minf(EDGE_RUN_PER_PATCH, patch_size * 0.45)
     var total_run: float = run * 2.0
     var tangent := (horizontal_direction * total_run + Vector3.UP * height_delta).normalized()
     var width_axis := tangent.cross(Vector3.UP).normalized()
