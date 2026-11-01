@@ -21,6 +21,7 @@ const NEON_CLIMBER_SCENE := "res://daily_games/KROLL_Neon_Climber/main.tscn"
 const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operator/main.tscn"
 const CONVEYOR_ARCHITECT_SCENE := "res://daily_games/KROLL_Conveyor_Architect/main.tscn"
 const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controller/main.tscn"
+const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.tscn"
 
 var status_label: Label
 
@@ -202,6 +203,12 @@ func _build_ui() -> void:
 		"KROLL Crossflow Controller",
 		"即時管理四向路口號誌，在全紅清空時間內切換車流，避免排隊溢出並完成三個班次。",
 		CROSSFLOW_CONTROLLER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Strata Mapper",
+		"重排三組鑽芯地層，讓火山灰標記層在三個核心柱中對齊；每個測站有十八次相鄰交換額度。",
+		STRATA_MAPPER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
