@@ -109,7 +109,56 @@ func _run() -> void:
 		_expect(saved_objects[first_id].get("state", {}) == saved_first_state, "save contains the exact left boundary patch state")
 		_expect(saved_objects[second_id].get("state", {}) == saved_second_state, "save contains the exact right boundary patch state")
 
-	_expect(bool(world.call("debug_move_player_to", Vector3(41.5, 2.0, 41.5), _test_time)), "moving away unloads the original surface window")
+	# Exercise a one-sided unload before the full-window shift. The surviving
+	# patch must return to its local ground ramp, then rebuild one fresh shared
+	# collider when the missing neighbor is streamed back into the same window.
+	var partial_second_position: Vector3 = second.global_position
+	var partial_second_weak: WeakRef = weakref(second)
+	var partial_second_proxy_weak: WeakRef = weakref(second_proxy)
+	var first_base_collision: CollisionShape3D = first.get_node("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+	_expect(bool(controller.call("unload_chunk", second_chunk, _test_time + 1)), "unloading only the lower boundary chunk succeeds")
+	await process_frame
+	await physics_frame
+	_expect(bool(controller.call("is_chunk_loaded", first_chunk)) and not bool(controller.call("is_chunk_loaded", second_chunk)), "one-sided unload preserves the neighboring chunk only")
+	_expect(partial_second_weak.get_ref() == null and partial_second_proxy_weak.get_ref() == null, "one-sided unload releases the removed patch and its interaction proxy")
+	_expect(controller.call("get_terrain_transition_collider_count") == 0, "one-sided unload retires the shared transition collider")
+	_expect(str(first.call("get_edge_policy", "east").get("mode", "")) == "ground_ramp", "surviving patch returns to its local ground-ramp edge policy")
+	_expect(_ramp_enabled(first, "East"), "surviving patch re-enables its local ground ramp")
+	_expect(first_base_collision != null and not first_base_collision.disabled, "surviving patch restores its full base collision")
+	_expect(not bool(first.call("is_shared_transition_active", "east")), "surviving patch clears its shared-edge segmentation flag")
+
+	_expect(bool(world.call("debug_move_player_to", partial_second_position + Vector3(0.0, 2.0, 0.0), _test_time + 2)), "moving back to the neighbor streams the missing chunk into the active window")
+	await process_frame
+	await physics_frame
+	var partial_reloaded_second: Node3D = _find_patch(controller, second_chunk, "TerrainPatch_CrossWest")
+	_expect(partial_reloaded_second != null, "one-sided streaming reload recreates the missing boundary patch")
+	if partial_reloaded_second != null:
+		_expect(bool(controller.call("is_chunk_loaded", first_chunk)), "surviving chunk remains loaded during neighbor reload")
+		_expect(first.get_instance_id() == first_instance, "surviving patch keeps its original node instance")
+		second = partial_reloaded_second
+		second_root = controller.call("get_chunk_root", second_chunk) as Node3D
+		second_instance = second.get_instance_id()
+		second_weak = weakref(second)
+		_expect(_stable_id(controller, second_chunk, second_root, second) == second_id, "partially reloaded patch keeps its original Stable ID")
+		_expect(second.call("get_world_object_state") == saved_second_state, "partially reloaded patch restores its saved height, material and revision")
+		var partial_second_proxy: Area3D = second.get_node_or_null("InteractionArea") as Area3D
+		_expect(partial_second_proxy != null, "partially reloaded patch rebuilds its interaction proxy")
+		if partial_second_proxy != null:
+			_expect(partial_second_proxy.get_instance_id() != second_proxy_instance, "partially reloaded patch receives a fresh interaction proxy")
+			second_proxy = partial_second_proxy
+			second_proxy_instance = second_proxy.get_instance_id()
+			second_proxy_weak = weakref(second_proxy)
+		_expect(str(first.call("get_edge_policy", "east").get("mode", "")) == "local_higher", "surviving patch rebinds the higher side after neighbor reload")
+		_expect(str(second.call("get_edge_policy", "west").get("mode", "")) == "neighbor_higher", "reloaded patch rebinds the lower side after neighbor reload")
+		var partial_transition_body: StaticBody3D = controller.call("get_terrain_transition_collider", transition_edge_key) as StaticBody3D
+		_expect(partial_transition_body != null and partial_transition_body.get_instance_id() != original_transition_instance, "one-sided reload creates a fresh shared transition body")
+		_expect(controller.call("get_terrain_transition_collider_count") == 1, "one-sided reload restores exactly one shared transition collider")
+		if partial_transition_body != null:
+			original_transition_body = partial_transition_body
+			original_transition_instance = partial_transition_body.get_instance_id()
+			original_transition_weak = weakref(partial_transition_body)
+
+	_expect(bool(world.call("debug_move_player_to", Vector3(41.5, 2.0, 41.5), _test_time + 3)), "moving away unloads the original surface window")
 	await process_frame
 	await process_frame
 	_expect(not bool(controller.call("is_chunk_loaded", first_chunk)) and not bool(controller.call("is_chunk_loaded", second_chunk)), "both original chunks unload together")
