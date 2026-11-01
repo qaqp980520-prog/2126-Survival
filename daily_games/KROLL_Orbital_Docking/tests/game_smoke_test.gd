@@ -1,60 +1,45 @@
 extends SceneTree
 
-const MainScene = preload("res://main.tscn")
+const GameScene = preload("res://main.tscn")
 var failures: Array[String] = []
-var game: Node2D
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	game = MainScene.instantiate() as Node2D
-	_expect(game != null, "main scene instantiates")
+	var game := GameScene.instantiate()
+	_expect(game != null, "Orbital Docking scene instantiates")
 	if game == null:
-		_finish(1)
+		quit(1)
 		return
 	root.add_child(game)
 	await process_frame
-	_expect(game.get("hud") != null and game.get("status_label") != null, "flight HUD is created")
-	var buttons: Dictionary = game.get("touch_buttons")
-	_expect(buttons.has("left") and buttons.has("right") and buttons.has("thrust") and buttons.has("reverse"), "touch controls expose all four flight inputs")
-	var before_fuel: float = float(game.get("state").get("fuel", 0.0))
-	(buttons["thrust"] as Button).emit_signal("button_down")
-	game.call("_advance_simulation", 0.1)
-	(buttons["thrust"] as Button).emit_signal("button_up")
-	var after_state: Dictionary = game.get("state")
-	_expect(float(after_state.get("fuel", before_fuel)) < before_fuel, "touch thrust consumes fuel")
-	var after_velocity: Vector2 = after_state.get("velocity", Vector2.ZERO)
-	_expect(after_velocity.length() > 0.0, "touch thrust changes inertial velocity")
-	var scenario: Dictionary = game.get("scenario")
-	var dock_state: Dictionary = game.get("state").duplicate(true)
-	dock_state["position"] = scenario["target_position"] + Vector2(10.0, 0.0)
-	dock_state["velocity"] = Vector2.ZERO
-	dock_state["angle"] = float(scenario["target_angle"])
-	game.set("state", dock_state)
-	game.call("_advance_simulation", 0.016)
-	_expect(str(game.get("state").get("status", "")) == "docked", "runtime simulation completes a valid docking approach")
-	game.call("_restart")
-	_expect(str(game.get("state").get("status", "")) == "active", "restart resets the current approach")
-	game.call("_next_scenario")
-	_expect(int(game.get("scenario_index")) == 1, "next button advances to the next approach")
-	_finish(0 if failures.is_empty() else 1)
-
-func _expect(condition: bool, message: String) -> void:
-	if condition:
-		print("PASS: " + message)
-	else:
-		failures.append(message)
-		push_error("FAIL: " + message)
-
-func _finish(exit_code: int) -> void:
-	if is_instance_valid(game):
-		game.queue_free()
+	_expect(game.has_method("get_current_state"), "game exposes its flight state")
+	_expect(game.has_method("set_control") and game.has_method("step_simulation"), "game exposes deterministic input and simulation hooks")
+	_expect(game.get_control_button_count() == 5, "game creates five hold-to-control thruster buttons")
+	_expect(str(game.call("get_current_scenario").get("id", "")) == "cargo_bay", "game starts at Cargo Bay")
+	var before: Dictionary = game.call("get_current_state")
+	_expect(bool(game.call("set_control", "thrust", true)), "public thrust control accepts a valid action")
+	_expect(bool(game.call("step_simulation", 0.05)), "game simulation advances one bounded frame")
+	var after: Dictionary = game.call("get_current_state")
+	_expect((after["velocity"] as Vector2).length() > (before["velocity"] as Vector2).length(), "root scene applies thrust to the craft")
+	_expect(bool(game.call("set_control", "thrust", false)), "public thrust control can be released")
+	_expect(not bool(game.call("set_control", "warp", true)), "unknown control names are rejected")
+	game.call("reset_scenario")
+	_expect(float(game.call("get_current_state").get("elapsed", -1.0)) == 0.0, "reset action restores the starting flight state")
+	game.queue_free()
 	await process_frame
-	if exit_code == 0 and failures.is_empty():
+	if failures.is_empty():
 		print("KROLL Orbital Docking runtime smoke test passed.")
 		quit(0)
 	else:
 		for failure in failures:
-			push_error("FAILED: " + failure)
+			push_error("FAIL: " + failure)
 		quit(1)
+
+func _expect(condition: bool, description: String) -> void:
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures.append(description)
+		push_error("FAIL: " + description)

@@ -1,36 +1,36 @@
 # KROLL Orbital Docking M0.1
 
-A compact 2D inertial spacecraft-docking simulator built with Godot 4.3+.
+A deterministic top-down spacecraft docking trial for Godot 4.3+.
 
-## Objective
+## Play
 
-Reach the station's docking ring with all three conditions satisfied:
+Open this folder as a standalone Godot project or launch the root-integrated scene from the Survival Test Hub.
 
-- distance at or below 30 world units;
-- relative speed at or below 26 units/second;
-- heading error at or below 0.22 radians.
+- W / Up: main thruster
+- S / Down: reverse thruster
+- A / Left: rotate left
+- D / Right: rotate right
+- Space: retro-brake
+- R: reset current berth
+- N: advance after a successful dock
 
-The craft has limited fuel and a time limit. Thrust accelerates; reverse thrust reduces forward velocity. The craft is never snapped to the target.
+On-screen hold buttons support mouse and touch.
 
-## Controls
+## Trials
 
-- A / D: rotate left / right
-- W: forward thrust
-- S: reverse thruster
-- R: restart current approach
-- N: next approach
-- On-screen buttons support mouse and touch.
+1. Cargo Bay — fixed berth and open approach.
+2. Rotating Ring — moving target and two debris hazards.
+3. Debris Corridor — narrow central route with three hazards.
 
-## Scenarios
+Docking requires all three conditions to remain true for one second: distance within 25 units, relative speed no greater than 15 units/s, and heading error within 0.32 radians.
 
-Training Ring, Crosswind Approach and Deep Orbit use fixed initial conditions for repeatable practice.
+## Files
 
-## Import and verification
+- `project.godot`, `main.tscn`: standalone project.
+- `main_root.tscn`: root-project scene entry.
+- `main.gd`: drawing, UI, keyboard and touch controls.
+- `rules.gd`: pure deterministic flight and docking model.
+- `tests/rules_test.gd`: physics, fuel, collision, boundary and docking rules.
+- `tests/game_smoke_test.gd`: scene and input integration smoke test.
 
-Open `project.godot` in Godot Project Manager. No external assets, audio, plugins or network access are required.
-
-Run the rules suite with `tests/rules_test.gd` and the scene smoke test with `tests/game_smoke_test.gd`.
-
-## Limits
-
-M0.1 is a single-screen 2D prototype with deterministic inertial movement. It has no orbital gravity field, campaign save or multiplayer.
+No external assets or plugins are required. Physics are deliberately simplified; no orbital gravity, multiplayer, save data, audio or hardware performance claims are included.

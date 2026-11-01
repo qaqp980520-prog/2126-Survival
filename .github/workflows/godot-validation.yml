@@ -2844,3 +2844,51 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Wind Farm Dispatch runtime smoke test passed."
+
+
+      - name: Verify Run 80 Orbital Docking and descriptor-binding inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/MineralChunkController.gd
+          test -f tests/surface_terrain_adjacency_binder_test.gd
+          test -f tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd
+          test -f daily_games/KROLL_Orbital_Docking/project.godot
+          test -f daily_games/KROLL_Orbital_Docking/main.tscn
+          test -f daily_games/KROLL_Orbital_Docking/main_root.tscn
+          test -f daily_games/KROLL_Orbital_Docking/main.gd
+          test -f daily_games/KROLL_Orbital_Docking/rules.gd
+          test -f daily_games/KROLL_Orbital_Docking/tests/rules_test.gd
+          test -f daily_games/KROLL_Orbital_Docking/tests/game_smoke_test.gd
+          grep -q 'ORBITAL_DOCKING_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Orbital Docking' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run production cross-chunk transition descriptor binding regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 100s godot --headless --path . --script res://tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld cross-chunk terrain adjacency tests passed."
+
+      - name: Import and parse KROLL Orbital Docking
+        run: godot --headless --path daily_games/KROLL_Orbital_Docking --editor --quit
+      - name: Run KROLL Orbital Docking rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Orbital_Docking --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Docking rules tests passed."
+      - name: Run KROLL Orbital Docking runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Orbital_Docking --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Docking runtime smoke test passed."

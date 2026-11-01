@@ -24,6 +24,7 @@ const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controlle
 const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.tscn"
 const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
+const ORBITAL_DOCKING_SCENE := "res://daily_games/KROLL_Orbital_Docking/main_root.tscn"
 
 var status_label: Label
 
@@ -223,6 +224,12 @@ func _build_ui() -> void:
 		"KROLL Wind Farm Dispatch",
 		"調整三座風機的偏航與葉片角度，平衡電網需求、電池儲備與過熱風險；支援鍵盤與觸控。",
 		WIND_FARM_DISPATCH_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Orbital Docking",
+		"使用慣性推進、反向推力與煞車，穿越碎片並以低相對速度完成三個太空泊位對接；支援鍵盤與觸控。",
+		ORBITAL_DOCKING_SCENE
 	)
 	_add_scene_button(
 		launch_list,

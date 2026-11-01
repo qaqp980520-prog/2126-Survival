@@ -25,6 +25,7 @@ const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controlle
 const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.tscn"
 const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
+const ORBITAL_DOCKING_SCENE := "res://daily_games/KROLL_Orbital_Docking/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -55,6 +56,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(STRATA_MAPPER_SCENE), "Strata Mapper game scene exists")
 	_expect(ResourceLoader.exists(RASTER_SURVEY_SCENE), "Raster Survey game scene exists")
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
+	_expect(ResourceLoader.exists(ORBITAL_DOCKING_SCENE), "Orbital Docking game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -63,7 +65,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 24, "hub exposes the world entry and twenty-three prototype launch buttons")
+	_expect(buttons.size() == 25, "hub exposes the world entry and twenty-three prototype launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -231,6 +233,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Strata Mapper"), "hub labels the Strata Mapper game")
 	_expect(labels.has("KROLL Raster Survey"), "hub labels the Raster Survey game")
 	_expect(labels.has("KROLL Wind Farm Dispatch"), "hub labels the Wind Farm Dispatch game")
+	_expect(labels.has("KROLL Orbital Docking"), "hub labels the Orbital Docking game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -294,6 +297,20 @@ func _run() -> void:
 			var wind_state: Dictionary = wind_farm_game.call("get_current_state")
 			_expect(str(wind_state.get("status", "")) == "playing", "root-loaded Wind Farm Dispatch starts North Array")
 		wind_farm_game.queue_free()
+		await process_frame
+
+	var orbital_docking_scene := load(ORBITAL_DOCKING_SCENE) as PackedScene
+	_expect(orbital_docking_scene != null, "root hub can load the Orbital Docking scene")
+	if orbital_docking_scene != null:
+		var orbital_docking_game := orbital_docking_scene.instantiate()
+		root.add_child(orbital_docking_game)
+		await process_frame
+		_expect(orbital_docking_game.has_method("get_current_state"), "root-loaded Orbital Docking initializes its flight model")
+		_expect(orbital_docking_game.get_control_button_count() == 5, "root-loaded Orbital Docking builds five thruster controls")
+		if orbital_docking_game.has_method("get_current_scenario"):
+			var docking_scenario: Dictionary = orbital_docking_game.call("get_current_scenario")
+			_expect(str(docking_scenario.get("id", "")) == "cargo_bay", "root-loaded Orbital Docking starts Cargo Bay")
+		orbital_docking_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
