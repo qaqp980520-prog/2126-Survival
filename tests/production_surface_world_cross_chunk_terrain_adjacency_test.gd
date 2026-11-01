@@ -169,7 +169,7 @@ func _run() -> void:
 	_expect(controller.call("get_terrain_transition_collider_count") == 0, "shared transition collider is retired when both boundary chunks unload")
 	_expect(original_transition_weak == null or original_transition_weak.get_ref() == null, "old shared transition body is released with the unloaded seam")
 
-	_expect(bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), _test_time + 1)), "returning reloads the original 3x3 surface window")
+	_expect(bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), _test_time + 4)), "returning reloads the original 3x3 surface window")
 	await process_frame
 	await physics_frame
 	var fresh_first: Node3D = _find_patch(controller, first_chunk, "TerrainPatch_CrossEast")
@@ -207,7 +207,7 @@ func _run() -> void:
 		_expect(controller.call("get_terrain_transition_collider_count") == 1, "reloaded production window rebuilds exactly one shared transition collider")
 	_expect(_count_cross_chunk_pairs(controller) == 12, "all twelve cross-chunk seams are rebuilt after reload")
 
-	_expect(bool(world.call("restore_stream_state", payload, _test_time + 2)), "schema-1 world restore accepts the cross-chunk terrain snapshot")
+	_expect(bool(world.call("restore_stream_state", payload, _test_time + 5)), "schema-1 world restore accepts the cross-chunk terrain snapshot")
 	var restored_first: Node3D = _find_patch(controller, first_chunk, "TerrainPatch_CrossEast")
 	var restored_second: Node3D = _find_patch(controller, second_chunk, "TerrainPatch_CrossWest")
 	_expect(restored_first != null and restored_second != null, "schema-1 restore recreates both boundary patches")
