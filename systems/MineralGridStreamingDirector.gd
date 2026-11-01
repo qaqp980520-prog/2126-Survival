@@ -3,7 +3,8 @@ class_name MineralGridStreamingDirector
 
 ## Spatial streaming coordinator for chunks supplied by a generator callback.
 ## It selects a square grid around a world position and delegates chunk ownership to
-## MineralChunkController. It does not generate terrain or perform async loading itself.
+## MineralChunkController. Bounded async requests stage factory roots across frames; terrain
+## generation stays in the factory and committed chunk ownership stays in the controller.
 signal sync_failed(report: Dictionary)
 signal async_sync_completed(request_id: int, report: Dictionary)
 

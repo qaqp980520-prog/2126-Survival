@@ -105,9 +105,7 @@ func select_cell(state: Dictionary, cell: Vector2i) -> Dictionary:
         return {"ok": false, "reason": "triangulation_incomplete", "state": state.duplicate(true)}
     if cell.x < 0 or cell.y < 0 or cell.x >= GRID_SIZE or cell.y >= GRID_SIZE:
         return {"ok": false, "reason": "out_of_bounds", "state": state.duplicate(true)}
-    var candidates: Array[Vector2i] = get_candidate_cells(state)
-    if not candidates.has(cell):
-        return {"ok": false, "reason": "not_a_candidate", "state": state.duplicate(true)}
+    # Allow any in-bounds guess so an incorrect triangulation can fail the survey.
     var next_state: Dictionary = state.duplicate(true)
     next_state["selected_cell"] = cell
     next_state["last_message"] = "Candidate selected at (%d, %d). Submit to confirm the survey." % [cell.x, cell.y]

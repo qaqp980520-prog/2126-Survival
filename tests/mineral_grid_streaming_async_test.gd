@@ -168,6 +168,38 @@ func _test_production_surface_world_async_movement() -> void:
     _expect(not bool(world.get("_surface_stream_pending")), "production world clears its pending flag after completion")
     await process_frame
 
+    # A synchronous restore/debug move must cancel an in-flight surface request and clear
+    # the pending gate, otherwise the stale async completion can leave the player frozen.
+    var supersession_rollback_position: Vector3 = player.global_position
+    var superseded_target := Vector3(95.0, 2.0, 95.0)
+    world.set("_camera_interaction_target_cache", {"kind": "lift"})
+    var supersession_started: bool = bool(world.call(
+        "_request_surface_streaming", supersession_rollback_position, superseded_target, Vector3(1.0, 0.0, 0.5)
+    ))
+    _expect(supersession_started, "production world starts a second async request before synchronous supersession")
+    _expect((world.get("_camera_interaction_target_cache") as Dictionary).is_empty(), "starting async streaming clears stale interaction targets")
+    var superseded_request_id: int = int(world.get("_surface_stream_request_id"))
+    world.set("_camera_interaction_target_cache", {"kind": "lift"})
+    _expect((world.call("get_camera_interaction_target") as Dictionary).is_empty(), "pending streaming suppresses even a stale cached interaction target")
+    var staged_ready: bool = await _wait_for_staged_root_count(director, superseded_request_id, 1)
+    _expect(staged_ready, "synchronous supersession test observes at least one detached staged root")
+    var superseded_refs: Array = director.call("get_async_staged_root_weakrefs", superseded_request_id)
+    var synchronous_target := Vector3(45.0, 2.0, 35.0)
+    var synchronous_move: bool = bool(world.call("debug_move_player_to", synchronous_target, _test_time + 4))
+    _expect(synchronous_move, "synchronous world move succeeds while an async request is staging")
+    _expect(not bool(world.get("_surface_stream_pending")), "synchronous world move clears the pending async movement gate")
+    _expect(int(world.get("_surface_stream_request_id")) == -1, "synchronous world move invalidates the old SurfaceWorld request ID")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "synchronous world move cancels the director request")
+    _expect(player.global_position.is_equal_approx(synchronous_target), "synchronous world move retains its requested position")
+    player.velocity = Vector3.ZERO
+    var superseded_report: Dictionary = await _wait_for_request(director, superseded_request_id)
+    _expect(str(superseded_report.get("phase", "")) == "cancelled" and bool(superseded_report.get("rollback_complete", false)), "superseded async movement emits a terminal cancellation report")
+    for reference in superseded_refs:
+        _expect(reference.get_ref() == null, "synchronous supersession releases every detached staged root")
+    _expect(Vector2(player.global_position.x, player.global_position.z).is_equal_approx(Vector2(synchronous_target.x, synchronous_target.z)), "late cancellation cannot overwrite the synchronous destination")
+    _expect(not bool(world.get("_surface_stream_pending")), "late cancellation leaves the SurfaceWorld movement gate clear")
+    await process_frame
+
     var before_failure_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
     var failed_rollback_position: Vector3 = player.global_position
     var failed_target := Vector3(65.0, 2.0, 65.0)
@@ -179,11 +211,12 @@ func _test_production_surface_world_async_movement() -> void:
     _expect(failure_started, "production world accepts the fault-injected request for rollback testing")
     var failure_id: int = int(world.get("_surface_stream_request_id"))
     var failure_report: Dictionary = await _wait_for_request(director, failure_id)
-    await process_frame
     _expect(not bool(failure_report.get("success", true)) and bool(failure_report.get("rollback_complete", false)), "production failed request reports a complete rollback")
+    # Assert rollback before the next physics tick can apply gravity to the restored player.
     _expect(player.global_position.is_equal_approx(failed_rollback_position), "production player remains at the previous safe position after load failure")
     _expect(controller.call("get_loaded_chunk_ids") == before_failure_ids, "production load failure preserves the previous active chunk window")
     _expect(not bool(world.get("_surface_stream_pending")), "production failure clears the pending flag")
+    await process_frame
     director.set("chunk_factory", original_factory)
     world.queue_free()
     await process_frame

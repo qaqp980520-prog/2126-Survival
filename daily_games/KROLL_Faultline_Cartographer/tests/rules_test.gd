@@ -38,6 +38,12 @@ func _run() -> void:
         var final_candidates: Array[Vector2i] = rules.call("get_candidate_cells", state)
         _expect(str(state.get("status", "")) == "locate" and final_candidates.size() == 1, "survey %d triangulates to exactly one cell" % index)
         _expect(final_candidates[0] == expected_targets[index], "survey %d identifies the authored deposit coordinate" % index)
+        var wrong_cell := Vector2i(0, 0)
+        _expect(not final_candidates.has(wrong_cell), "survey %d wrong-guess fixture is not the hidden deposit" % index)
+        var wrong_selection: Dictionary = rules.call("select_cell", state, wrong_cell)
+        _expect(bool(wrong_selection.get("ok", false)), "survey %d allows a deliberate non-candidate guess" % index)
+        var wrong_guess: Dictionary = rules.call("submit_guess", wrong_selection["state"])
+        _expect(str(wrong_guess["state"].get("status", "")) == "failed", "survey %d incorrect coordinate fails the survey" % index)
         var selected: Dictionary = rules.call("select_cell", state, final_candidates[0])
         _expect(bool(selected.get("ok", false)), "survey %d allows selecting the unique candidate" % index)
         state = selected["state"]
@@ -59,12 +65,6 @@ func _run() -> void:
     var reset: Dictionary = rules.call("reset_survey", partial)
     _expect(bool(reset.get("ok", false)) and (reset["state"]["readings"] as Dictionary).is_empty(), "reset clears partial probe readings")
     _expect(int(reset["state"].get("score", -1)) == 100, "reset preserves credit from earlier completed surveys")
-    var wrong_state: Dictionary = rules.call("create_state", 0)
-    wrong_state["status"] = "locate"
-    wrong_state["selected_cell"] = Vector2i(1, 1)
-    var wrong_guess: Dictionary = rules.call("submit_guess", wrong_state)
-    _expect(str(wrong_guess["state"].get("status", "")) == "failed", "incorrect coordinate closes the survey")
-
     if failures.is_empty():
         print("KROLL Faultline Cartographer rules tests passed.")
         quit(0)

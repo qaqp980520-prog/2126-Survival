@@ -384,6 +384,23 @@ func _physics_process(delta: float) -> void:
 	_refresh_hud()
 
 
+func _sync_streaming(now_unix: int = -1) -> bool:
+	var superseded_async: bool = _surface_stream_pending
+	if superseded_async:
+		if director != null and _surface_stream_request_id >= 0 and director.has_method("cancel_async_sync_request"):
+			director.call("cancel_async_sync_request", _surface_stream_request_id)
+		_surface_stream_pending = false
+		_surface_stream_request_id = -1
+		_surface_stream_target_velocity = Vector3.ZERO
+		_camera_interaction_target_cache.clear()
+		_world_object_action_message = "Synchronizing surface chunks..."
+	var success: bool = super._sync_streaming(now_unix)
+	if superseded_async:
+		_world_object_action_message = "Surface chunks synchronized." if success else "Synchronous surface streaming failed."
+		_refresh_hud()
+	return success
+
+
 func _request_surface_streaming(rollback_position: Vector3, target_position: Vector3, target_velocity: Vector3) -> bool:
 	if player == null or director == null or not director.has_method("request_sync_to_world_position_async"):
 		if player != null:
@@ -393,6 +410,7 @@ func _request_surface_streaming(rollback_position: Vector3, target_position: Vec
 		_refresh_hud()
 		return false
 	_surface_stream_pending = true
+	_camera_interaction_target_cache.clear()
 	_surface_stream_rollback_position = rollback_position
 	_surface_stream_target_position = target_position
 	_surface_stream_target_velocity = target_velocity
@@ -936,6 +954,8 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
 func get_camera_interaction_target() -> Dictionary:
+	if _surface_stream_pending:
+		return {}
 	var target: Dictionary = _camera_interaction_target_cache.duplicate()
 	if target.is_empty():
 		return {}

@@ -14,6 +14,7 @@ var _candidate_label: Label
 var _selected_label: Label
 var _score_label: Label
 var _status_label: Label
+var _rule_hint: Label
 var _submit_button: Button
 var _reset_button: Button
 var _next_button: Button
@@ -76,10 +77,17 @@ func _build_ui() -> void:
     map_column.add_theme_constant_override("separation", 6)
     map_panel.add_child(map_column)
     var map_hint := Label.new()
-    map_hint.text = "GRID COORDINATES // X → EAST // Y → SOUTH"
+    map_hint.text = "ORIGIN (0,0) // X → EAST // Y → SOUTH"
     map_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     map_hint.add_theme_color_override("font_color", Color("#9eb2c2"))
     map_column.add_child(map_hint)
+    _rule_hint = Label.new()
+    _rule_hint.text = "Each pulse reports rounded Euclidean grid distance to the hidden deposit."
+    _rule_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _rule_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _rule_hint.add_theme_font_size_override("font_size", 12)
+    _rule_hint.add_theme_color_override("font_color", Color("#8298aa"))
+    map_column.add_child(_rule_hint)
 
     var grid := GridContainer.new()
     grid.columns = 7
@@ -248,16 +256,14 @@ func _refresh_ui() -> void:
     for index_in_grid in range(_cell_buttons.size()):
         var cell := Vector2i(index_in_grid % 7, int(index_in_grid / 7))
         var button: Button = _cell_buttons[index_in_grid]
-        var is_candidate: bool = candidates.has(cell)
-        button.disabled = not locate_mode or not is_candidate
+        button.disabled = not locate_mode
         if selected == cell:
             button.text = "O"
-        elif is_candidate and locate_mode:
-            button.text = "+"
-        elif is_candidate:
-            button.text = "?"
+        elif locate_mode:
+            # Keep the hidden deposit private; players must infer its coordinate from readings.
+            button.text = "."
         else:
-            button.text = "X"
+            button.text = "?"
     var status: String = str(_state.get("status", ""))
     _submit_button.disabled = not locate_mode or selected.x < 0
     _reset_button.disabled = status in ["complete", "campaign_complete"]
@@ -275,6 +281,21 @@ func get_probe_button_count() -> int:
 
 func get_grid_button_count() -> int:
     return _cell_buttons.size()
+
+func get_grid_button_disabled_count() -> int:
+    var count: int = 0
+    for button in _cell_buttons:
+        if button.disabled:
+            count += 1
+    return count
+
+func get_grid_button_text_at(cell: Vector2i) -> String:
+    if cell.x < 0 or cell.y < 0 or cell.x >= 7 or cell.y >= 7:
+        return ""
+    return _cell_buttons[cell.y * 7 + cell.x].text
+
+func get_rule_hint_text() -> String:
+    return _rule_hint.text if _rule_hint != null else ""
 
 func get_title_text() -> String:
     return "KROLL // FAULTLINE CARTOGRAPHER"
