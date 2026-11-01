@@ -1191,3 +1191,22 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Shared ramps currently support the fixed production profile only: 2.0 m patch size, 0.75 m run on each side of the seam and 0.04 m collision slab thickness.
 - Headless CI validates collision and logical visual visibility state; it does not certify actual rendered appearance.
 - World-save schema remains version 1; transition descriptors and colliders are derived runtime objects and are not serialized.
+
+
+## Run 82 — async streaming and gameplay follow-up (2026-11-01)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Async movement completion | The test compared the exact resumed player position after an extra physics frame, when gravity/collision had already updated it. | Test now checks position and saved velocity immediately after the completion signal, before the next physics tick. |
+| Failed async load rollback | The test had the same extra-frame timing issue after rollback. | Rollback position is asserted before the next physics tick; load-failure report and prior chunk-window preservation remain checked. |
+| Synchronous restore/debug during async streaming | The Director could cancel the async request while SurfaceWorld retained its pending flag, potentially freezing future movement. | SurfaceWorld synchronous streaming now cancels/releases staged roots, clears pending/request/cache state, then performs the normal synchronous sync. Regression covers staged-root release and late cancellation not overwriting the synchronous destination. |
+| Interaction target during streaming | A cached lift/crop/crate/terrain target could survive until the next physics tick. | Request start clears the cache; pending queries return no target. |
+| Faultline Cartographer answer visibility | M0.1 exposed the unique candidate after three readings, reducing the final action to a click. | M0.2 hides the target, allows any in-bounds guess, fails wrong coordinates and permits reset/retry; in-game instructions explain rounded Euclidean distance. |
+
+### Run 82 validation record
+
+- PR #201 exact HEAD: `3b9a78bec5fa6df256c41bf8962cca26b51a29f6`.
+- Godot headless validation: [Run #960](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41300396787) — 364/364 successful workflow entries, zero failures and zero skipped steps; checkout cleanup, container shutdown and job completion succeeded.
+- PR #201 merge commit: `a7d970bf20f2f1ef2a5d249d71cd1bb1abf2bfd2`.
+- Local Godot GUI/GPU/iPhone validation remains outstanding; no local executable was available.
+- Repository rulesets query returned an empty list; classic branch-protection read returned 403, so protection settings remain unverified from this connection.

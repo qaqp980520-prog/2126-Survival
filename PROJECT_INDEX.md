@@ -1567,3 +1567,14 @@
 - The shared ramp profile is constrained to the current production patch geometry (2.0 m patch, 0.75 m run per side, 0.04 m slab thickness). Profile changes must update segmentation, manager geometry and tests together.
 - Chunk streaming remains synchronous; bounded async loading, stale-request invalidation, cancellation-safe ownership and deterministic rollback remain future work.
 - Main branch protection/required status checks should be configured by a repository owner/admin; the connected integration does not manage repository security settings.
+
+
+## Run 82 — bounded async surface streaming and Faultline Cartographer M0.2 (2026-11-01)
+
+- **Main integration:** `MineralGridStreamingDirector` stages missing chunk roots in bounded frame batches and commits ownership through `MineralChunkController`. Cancellation, registration failure, stale-unload rollback and teardown are covered by the async regression suite.
+- **Synchronous supersession:** `SurfaceWorld._sync_streaming` now cancels an in-flight async request before a synchronous restore/debug move, releases detached roots, clears pending/request/cache state, and prevents a late cancellation signal from overwriting the synchronous destination.
+- **Interaction safety:** async window changes clear the cached camera target immediately; while streaming is pending, interaction-target queries return empty.
+- **Persistence compatibility:** async staging/request state remains transient. World save schema remains version 1.
+- **Playable mini-game:** `daily_games/KROLL_Faultline_Cartographer` is a 7×7 rounded-Euclidean triangulation game with three fixed surveys. M0.2 hides the target cell, permits all 49 guesses after the three probes, fails incorrect guesses, and supports reset/retry.
+- **Exact-head validation:** PR #201 was validated at `3b9a78bec5fa6df256c41bf8962cca26b51a29f6` by Godot headless workflow Run #960 (364/364 successful workflow entries, zero failures/skips), then merged as `a7d970bf20f2f1ef2a5d249d71cd1bb1abf2bfd2`.
+- **Remaining QA:** local GUI, GPU performance and iPhone touch/device validation were not performed; the available environment had no Godot executable.
