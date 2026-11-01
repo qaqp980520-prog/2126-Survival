@@ -14,6 +14,11 @@ func _run() -> void:
 		return
 	root.add_child(game)
 	await process_frame
+	var title_found: bool = false
+	for label_value in game.find_children("*", "Label", true, false):
+		if str((label_value as Label).text) == "KROLL // INERTIAL DOCKING":
+			title_found = true
+	_expect(title_found, "game UI identifies the project as Inertial Docking")
 	_expect(game.has_method("get_current_state"), "game exposes its flight state")
 	_expect(game.has_method("set_control") and game.has_method("step_simulation"), "game exposes deterministic input and simulation hooks")
 	_expect(game.get_control_button_count() == 5, "game creates five hold-to-control thruster buttons")
