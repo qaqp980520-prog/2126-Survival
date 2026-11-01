@@ -70,12 +70,27 @@ func _test_single_shared_transition() -> void:
     var body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
     _expect(body != null and body.collision_layer == 1, "one owner-managed shared static body is active")
     if body != null:
+        _expect(str(body.get_meta("terrain_edge_key", "")) == edge_key, "shared body stores its stable edge identity")
+        _expect(str(body.get_meta("terrain_edge_owner", "")) == str(binding["descriptors"][edge_key]["owner_stable_id"]), "shared body records the descriptor's canonical owner")
+    if body != null:
         var collision: CollisionShape3D = body.get_node("SharedTransitionCollision") as CollisionShape3D
         var box := collision.shape as BoxShape3D
         var expected_length: float = sqrt(1.5 * 1.5 + 0.5 * 0.5)
         _expect(box != null and absf(box.size.x - expected_length) <= 0.0001, "shared collider spans both 0.75 m edge strips and the 0.5 m rise")
         _expect(box != null and absf(box.size.z - PatchScript.PATCH_SIZE) <= 0.0001, "shared collider spans the full two-metre seam width")
         _expect(body.get_node_or_null("SharedTransitionVisual") is MeshInstance3D, "shared transition has a matching visible ramp mesh")
+        var visual := body.get_node("SharedTransitionVisual") as MeshInstance3D
+        var visual_box := visual.mesh as BoxMesh
+        _expect(visual_box != null and absf(visual_box.size.y - 0.04) <= 0.0001, "ramp visual includes side faces matching the collision slab")
+
+    var malformed_descriptors: Dictionary = binding.get("descriptors", {}).duplicate(true)
+    var malformed_descriptor: Dictionary = malformed_descriptors[edge_key].duplicate(true)
+    malformed_descriptor["height_delta"] = 0.25
+    malformed_descriptors[edge_key] = malformed_descriptor
+    var rejected_sync: Dictionary = manager.call("sync_transitions", malformed_descriptors, patches)
+    _expect(not bool(rejected_sync.get("ok", true)), "malformed transition geometry is rejected during preflight")
+    _expect(manager.call("get_transition_body", edge_key) == body and manager.call("get_transition_count") == 1, "failed preflight preserves the existing live shared ramp")
+    _expect(bool(lower.call("is_shared_transition_active", "east")) and bool(higher.call("is_shared_transition_active", "west")), "failed preflight preserves both segmented patch edges")
 
     await physics_frame
     await physics_frame
