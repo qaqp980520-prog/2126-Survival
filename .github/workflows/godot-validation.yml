@@ -2800,3 +2800,47 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld partial-window terrain shift tests passed."
+
+      - name: Verify Run 79 Wind Farm Dispatch and terrain transition descriptor inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f tests/surface_terrain_transition_descriptor_test.gd
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/project.godot
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/main.tscn
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/main.gd
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/rules.gd
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/tests/rules_test.gd
+          test -f daily_games/KROLL_Wind_Farm_Dispatch/tests/game_smoke_test.gd
+          grep -q 'WIND_FARM_DISPATCH_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Wind Farm Dispatch' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run SurfaceTerrainTransitionDescriptor tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/surface_terrain_transition_descriptor_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain transition descriptor tests passed."
+
+      - name: Import and parse KROLL Wind Farm Dispatch
+        run: godot --headless --path daily_games/KROLL_Wind_Farm_Dispatch --editor --quit
+      - name: Run KROLL Wind Farm Dispatch rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Wind_Farm_Dispatch --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Wind Farm Dispatch rules tests passed."
+      - name: Run KROLL Wind Farm Dispatch runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Wind_Farm_Dispatch --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Wind Farm Dispatch runtime smoke test passed."
