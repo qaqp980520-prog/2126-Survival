@@ -2949,3 +2949,50 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Microbe Scope runtime smoke test passed."
+
+      - name: Verify Run 82 async streaming and Reactor Balancer inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f world/SurfaceWorld.gd
+          grep -q 'request_sync_to_world_position_async' systems/MineralGridStreamingDirector.gd
+          grep -q '_request_surface_streaming' world/SurfaceWorld.gd
+          test -f tests/mineral_grid_streaming_async_test.gd
+          test -f daily_games/KROLL_Reactor_Balancer/project.godot
+          test -f daily_games/KROLL_Reactor_Balancer/main.tscn
+          test -f daily_games/KROLL_Reactor_Balancer/main_root.tscn
+          test -f daily_games/KROLL_Reactor_Balancer/main.gd
+          test -f daily_games/KROLL_Reactor_Balancer/rules.gd
+          test -f daily_games/KROLL_Reactor_Balancer/tests/rules_test.gd
+          test -f daily_games/KROLL_Reactor_Balancer/tests/game_smoke_test.gd
+          grep -q 'REACTOR_BALANCER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Reactor Balancer' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run bounded async chunk streaming regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/mineral_grid_streaming_async_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid bounded async streaming tests passed."
+
+      - name: Import and parse KROLL Reactor Balancer
+        run: godot --headless --path daily_games/KROLL_Reactor_Balancer --editor --quit
+      - name: Run KROLL Reactor Balancer rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Reactor_Balancer --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Reactor Balancer rules tests passed."
+      - name: Run KROLL Reactor Balancer runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Reactor_Balancer --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Reactor Balancer runtime smoke test passed."
