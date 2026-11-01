@@ -12,6 +12,7 @@ class FaultInjectingChunkController:
     var unload_attempts: int = 0
     var fail_load_at: int = -1
     var fail_unload_at: int = -1
+    var detach_on_load_at: int = -1
 
     func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
         load_attempts += 1
@@ -22,6 +23,11 @@ class FaultInjectingChunkController:
             return false
         add_child(chunk_root)
         roots[chunk_id] = chunk_root
+        if load_attempts == detach_on_load_at:
+            detach_on_load_at = -1
+            var current_parent := get_parent()
+            if current_parent != null:
+                current_parent.remove_child(self)
         return true
 
     func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
@@ -64,6 +70,8 @@ func _run() -> void:
     await _test_playground_async_requests()
     await _test_production_surface_world_async_movement()
     await _test_async_commit_rollback()
+    await _test_controller_teardown_during_staging()
+    await _test_controller_detach_during_commit()
     if failures.is_empty():
         print("Mineral grid bounded async streaming tests passed.")
         quit(0)
@@ -103,6 +111,7 @@ func _test_playground_async_requests() -> void:
     await process_frame
     await process_frame
     var second_request: int = int(director.call("request_sync_to_world_position_async", Vector3(-25.0, 0.0, -25.0), _test_time + 2, 2))
+    _expect(not bool(director.call("cancel_async_sync_request", first_request)), "stale cancellation cannot cancel the newer active request")
     var first_report: Dictionary = await _wait_for_request(director, first_request)
     var second_report: Dictionary = await _wait_for_request(director, second_request)
     _expect(str(first_report.get("phase", "")) == "cancelled" and bool(first_report.get("rollback_complete", false)), "newer request cancels the older staging request")
@@ -219,6 +228,84 @@ func _test_production_surface_world_async_movement() -> void:
     await process_frame
     director.set("chunk_factory", original_factory)
     world.queue_free()
+    await process_frame
+
+
+func _test_controller_teardown_during_staging() -> void:
+    var controller := FaultInjectingChunkController.new()
+    root.add_child(controller)
+    var director: Node = DirectorScript.new()
+    root.add_child(director)
+    _expect(bool(director.call("bind_controller", controller)), "controller-teardown fixture binds its initial controller")
+    _expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_transaction_chunk"))), "controller-teardown fixture binds a deterministic chunk factory")
+    _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 20)), "controller-teardown fixture creates its initial active window")
+    _expect(controller.get_loaded_chunk_ids().size() == 9, "controller-teardown fixture begins with nine committed roots")
+
+    var request_id: int = int(director.call(
+        "request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 21, 1
+    ))
+    _expect(request_id > 0, "async request is accepted before controller teardown")
+    var staged_ready: bool = await _wait_for_staged_root_count(director, request_id, 1)
+    _expect(staged_ready, "controller-teardown test observes a detached staged root")
+    var staged_refs: Array = director.call("get_async_staged_root_weakrefs", request_id)
+    _expect(not staged_refs.is_empty(), "controller-teardown test captures staged-root weak references")
+
+    controller.queue_free()
+    var report: Dictionary = await _wait_for_request(director, request_id)
+    _expect(str(report.get("phase", "")) == "dependency_unavailable", "controller destruction produces a terminal dependency-unavailable report")
+    _expect(not bool(report.get("success", true)), "controller destruction never reports a successful window commit")
+    _expect(not bool(report.get("rollback_complete", true)), "destroyed controller reports that its committed window cannot be restored")
+    _expect(bool(report.get("details", {}).get("controller_destroyed", false)), "report identifies the destroyed controller dependency")
+    _expect(int(report.get("details", {}).get("staged_roots_released", 0)) > 0, "report counts detached roots released during controller teardown")
+    _expect(director.call("get_managed_chunk_ids").is_empty(), "destroyed controller clears stale managed IDs")
+    for reference in staged_refs:
+        _expect(reference.get_ref() == null, "controller teardown releases every detached staged root")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "controller teardown closes the active async request")
+
+    var replacement := FaultInjectingChunkController.new()
+    root.add_child(replacement)
+    _expect(bool(director.call("bind_controller", replacement)), "director can bind a replacement after controller destruction")
+    _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 22)), "replacement controller can synchronously rebuild the active window")
+    _expect(replacement.get_loaded_chunk_ids().size() == 9, "replacement controller receives a complete nine-root window")
+    _expect(replacement.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "replacement controller and director ownership maps agree")
+
+    director.queue_free()
+    replacement.queue_free()
+    await process_frame
+
+
+func _test_controller_detach_during_commit() -> void:
+    var controller := FaultInjectingChunkController.new()
+    root.add_child(controller)
+    var director: Node = DirectorScript.new()
+    root.add_child(director)
+    _expect(bool(director.call("bind_controller", controller)), "controller-detach fixture binds its initial controller")
+    _expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_transaction_chunk"))), "controller-detach fixture binds a deterministic factory")
+    _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 30)), "controller-detach fixture creates its original window")
+    var original_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+    controller.detach_on_load_at = controller.load_attempts + 1
+
+    var request_id: int = int(director.call(
+        "request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 31, 1
+    ))
+    _expect(request_id > 0, "controller-detach async request is accepted")
+    var report: Dictionary = await _wait_for_request(director, request_id)
+    _expect(str(report.get("phase", "")) == "dependency_unavailable", "controller detachment during commit aborts the request")
+    _expect(not bool(report.get("success", true)), "detached controller cannot report a successful commit")
+    _expect(bool(report.get("rollback_complete", false)), "detached controller rolls back partially registered chunks")
+    _expect(bool(report.get("details", {}).get("controller_detached", false)), "report identifies a detached but live controller")
+    _expect(not bool(report.get("details", {}).get("controller_destroyed", true)), "detached controller is distinguished from destroyed controller")
+    _expect(controller.get_parent() == null, "fault-injected controller is outside the scene tree")
+    _expect(controller.get_loaded_chunk_ids() == original_ids, "rollback restores the controller's original active roots")
+    _expect(controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "rollback restores director/controller ownership agreement")
+
+    root.add_child(controller)
+    _expect(bool(director.call("bind_controller", controller)), "detached controller can be reattached and rebound")
+    _expect(bool(director.call("sync_to_world_position", Vector3(65.0, 0.0, 0.0), _test_time + 32)), "reattached controller can retry the target window")
+    _expect(controller.get_loaded_chunk_ids().size() == 9, "reattached controller completes a nine-root window")
+
+    director.queue_free()
+    controller.queue_free()
     await process_frame
 
 func _wait_for_request(director: Node, request_id: int) -> Dictionary:
