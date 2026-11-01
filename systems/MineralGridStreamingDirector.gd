@@ -273,7 +273,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		_managed_chunk_ids.erase(id)
 
 	_finish_async_sync_request(request_id, true, "complete", "", true, {
-		"center": desired[(desired.size() - 1) / 2] if not desired.is_empty() else Vector2i.ZERO,
+		"center": desired[int((desired.size() - 1) / 2)] if not desired.is_empty() else Vector2i.ZERO,
 		"desired_count": desired.size(),
 		"staged_count": staged_count,
 		"newly_loaded_ids": newly_loaded.duplicate(),
