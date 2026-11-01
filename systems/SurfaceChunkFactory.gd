@@ -48,6 +48,25 @@ static func make_chunk(coord: Vector2i, now_unix: int = -1) -> Node3D:
 	adjacent_east.name = "TerrainPatch_AdjacentEast"
 	adjacent_east.position = Vector3(3.0, 0.0, 6.0)
 	chunk.add_child(adjacent_east)
+	# Boundary tiles sit one metre inside each chunk edge. Matching tiles in the
+	# neighboring chunk are exactly PATCH_SIZE apart, so the live binder can form
+	# real cross-chunk seams without extending the saved patch schema.
+	var cross_east: Node3D = TerrainPatchScript.new()
+	cross_east.name = "TerrainPatch_CrossEast"
+	cross_east.position = Vector3(9.0, 0.0, 1.0)
+	chunk.add_child(cross_east)
+	var cross_west: Node3D = TerrainPatchScript.new()
+	cross_west.name = "TerrainPatch_CrossWest"
+	cross_west.position = Vector3(1.0, 0.0, 1.0)
+	chunk.add_child(cross_west)
+	var cross_north: Node3D = TerrainPatchScript.new()
+	cross_north.name = "TerrainPatch_CrossNorth"
+	cross_north.position = Vector3(4.0, 0.0, 1.0)
+	chunk.add_child(cross_north)
+	var cross_south: Node3D = TerrainPatchScript.new()
+	cross_south.name = "TerrainPatch_CrossSouth"
+	cross_south.position = Vector3(4.0, 0.0, 9.0)
+	chunk.add_child(cross_south)
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var ore: Node3D = MiningNodeScript.new()
 	ore.name = "Ore_%d_%d" % [coord.x, coord.y]
