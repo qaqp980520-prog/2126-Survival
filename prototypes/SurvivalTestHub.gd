@@ -22,6 +22,7 @@ const ROBOTIC_ARM_OPERATOR_SCENE := "res://daily_games/KROLL_Robotic_Arm_Operato
 const CONVEYOR_ARCHITECT_SCENE := "res://daily_games/KROLL_Conveyor_Architect/main.tscn"
 const CROSSFLOW_CONTROLLER_SCENE := "res://daily_games/KROLL_Crossflow_Controller/main.tscn"
 const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.tscn"
+const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 
 var status_label: Label
 
@@ -209,6 +210,12 @@ func _build_ui() -> void:
 		"KROLL Strata Mapper",
 		"重排三組鑽芯地層，讓火山灰標記層在三個核心柱中對齊；每個測站有十八次相鄰交換額度。",
 		STRATA_MAPPER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Raster Survey",
+		"依照列與欄的連續格數線索重建三幅 6×6 掃描圖；支援滑鼠、鍵盤與觸控。",
+		RASTER_SURVEY_SCENE
 	)
 	_add_scene_button(
 		launch_list,
