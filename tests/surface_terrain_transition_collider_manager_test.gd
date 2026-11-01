@@ -10,6 +10,7 @@ func _initialize() -> void:
 
 func _run() -> void:
     await _test_single_shared_transition()
+    await _test_all_cardinal_directions()
     await _test_perpendicular_conflict_falls_back_to_step()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
@@ -121,6 +122,70 @@ func _test_single_shared_transition() -> void:
     holder.queue_free()
     await process_frame
     await process_frame
+
+func _test_all_cardinal_directions() -> void:
+    var cases: Array[Dictionary] = [
+        {"side": "east", "offset": Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.RIGHT, "cut_x": 2, "cut_z": -1},
+        {"side": "west", "offset": Vector3(-PatchScript.PATCH_SIZE, 0.0, 0.0), "direction": Vector3.LEFT, "cut_x": 0, "cut_z": -1},
+        {"side": "north", "offset": Vector3(0.0, 0.0, -PatchScript.PATCH_SIZE), "direction": Vector3.FORWARD, "cut_x": -1, "cut_z": 0},
+        {"side": "south", "offset": Vector3(0.0, 0.0, PatchScript.PATCH_SIZE), "direction": Vector3.BACK, "cut_x": -1, "cut_z": 2}
+    ]
+    for case in cases:
+        var holder := Node3D.new()
+        holder.name = "TransitionDirection_" + str(case["side"])
+        root.add_child(holder)
+        var lower: Node3D = PatchScript.new()
+        lower.name = "Lower"
+        var higher: Node3D = PatchScript.new()
+        higher.name = "Higher"
+        higher.position = case["offset"]
+        holder.add_child(lower)
+        holder.add_child(higher)
+        await process_frame
+        lower.call("apply_world_object_state", {"height_level": 0, "surface_type": "soil", "revision": 1})
+        higher.call("apply_world_object_state", {"height_level": 2, "surface_type": "metal", "revision": 1})
+        var stable_ids := {
+            lower.get_instance_id(): "a/lower",
+            higher.get_instance_id(): "z/higher"
+        }
+        var binding: Dictionary = BinderScript.bind_patches([lower, higher], stable_ids)
+        var edge_key: String = ""
+        for key in binding.get("descriptors", {}).keys():
+            edge_key = str(key)
+        var manager: Node3D = ManagerScript.new()
+        holder.add_child(manager)
+        var patches := {"a/lower": lower, "z/higher": higher}
+        var report: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
+        _expect(bool(report.get("ok", false)) and int(report.get("active_count", -1)) == 1, "%s seam creates one shared ramp" % str(case["side"]))
+        var side: String = str(case["side"])
+        var opposite: String = "west" if side == "east" else "east" if side == "west" else "south" if side == "north" else "north"
+        _expect(bool(lower.call("is_shared_transition_active", side)), "%s lower edge is segmented" % side)
+        _expect(bool(higher.call("is_shared_transition_active", opposite)), "%s higher edge is segmented" % side)
+        var lower_base: CollisionShape3D = lower.get_node("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+        var higher_base: CollisionShape3D = higher.get_node("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+        _expect(lower_base.disabled and higher_base.disabled, "%s full base boxes are replaced by segmented collision" % side)
+        var body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+        _expect(body != null and body.collision_layer == 1, "%s shared collider is active" % side)
+        await physics_frame
+        await physics_frame
+        var direction: Vector3 = case["direction"]
+        for progress in [0.2, 0.5, 0.8]:
+            var point: Vector3 = direction * (0.25 + 1.5 * float(progress))
+            var query := PhysicsRayQueryParameters3D.create(
+                Vector3(point.x, 1.5, point.z),
+                Vector3(point.x, -0.5, point.z)
+            )
+            query.collision_mask = 1
+            query.collide_with_areas = false
+            query.collide_with_bodies = true
+            var hit: Dictionary = root.get_world_3d().direct_space_state.intersect_ray(query)
+            _expect(not hit.is_empty(), "%s ramp collision is queryable at progress %.1f" % [side, progress])
+            if not hit.is_empty():
+                var expected_y: float = 0.05 + 0.5 * float(progress)
+                _expect(absf(float(hit["position"].y) - expected_y) <= 0.015, "%s ramp surface height is continuous at progress %.1f" % [side, progress])
+        holder.queue_free()
+        await process_frame
+        await process_frame
 
 func _test_perpendicular_conflict_falls_back_to_step() -> void:
     var holder := Node3D.new()
