@@ -117,10 +117,10 @@ func apply_action(state: Dictionary, action: String) -> Dictionary:
         if is_within_target(next_state):
             next_state["stable_streak"] = int(next_state["stable_streak"]) + 1
             next_state["progress"] = mini(100, int(next_state["stable_streak"]) * 25)
-            next_state["score"] = int(next_state["score"]) + 25
             next_state["last_message"] = "Stable cycle %d / %d." % [int(next_state["stable_streak"]), STABLE_CYCLES_REQUIRED]
             if int(next_state["stable_streak"]) >= STABLE_CYCLES_REQUIRED:
                 next_state["status"] = "complete"
+                next_state["score"] = int(next_state["score"]) + 100
                 next_state["last_message"] = "Batch stabilized. Proceed to the next process."
         else:
             next_state["stable_streak"] = 0
