@@ -25,7 +25,7 @@ const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.ts
 const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
-const FOSSIL_ASSEMBLY_SCENE := "res://daily_games/KROLL_Fossil_Assembly/main_root.tscn"
+const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 
 var status_label: Label
 
@@ -234,9 +234,9 @@ func _build_ui() -> void:
 	)
 	_add_scene_button(
 		launch_list,
-		"KROLL Fossil Assembly Lab",
-		"旋轉並拼接恐龍與古生物化石碎片，將三件標本完整還原；支援滑鼠、鍵盤與觸控。",
-		FOSSIL_ASSEMBLY_SCENE
+		"KROLL Microbe Scope",
+		"調整顯微鏡焦距、倍率、照明與染色，捕捉三種微生物標本；支援滑鼠、鍵盤與觸控。",
+		MICROBE_SCOPE_SCENE
 	)
 	_add_scene_button(
 		launch_list,
