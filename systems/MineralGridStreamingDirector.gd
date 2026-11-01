@@ -5,6 +5,7 @@ class_name MineralGridStreamingDirector
 ## It selects a square grid around a world position and delegates chunk ownership to
 ## MineralChunkController. It does not generate terrain or perform async loading itself.
 signal sync_failed(report: Dictionary)
+signal async_sync_completed(request_id: int, report: Dictionary)
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MAX_SAFE_GRID_COORDINATE: float = 1000000000.0
@@ -17,6 +18,8 @@ var chunk_controller: Node3D
 var chunk_factory: Callable
 var _managed_chunk_ids: Dictionary = {} # chunk ID -> Vector2i coordinate
 var _last_sync_report: Dictionary = {}
+var _next_async_request_id: int = 1
+var _active_async_request_id: int = -1
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null:
@@ -38,6 +41,8 @@ func bind_chunk_factory(factory: Callable) -> bool:
 	return true
 
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
+	if _active_async_request_id >= 0:
+		cancel_async_sync_request(_active_async_request_id)
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller or chunk factory is unavailable.", true)
 		return false
@@ -134,6 +139,170 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		"newly_loaded_ids": newly_loaded.duplicate()
 	})
 	return true
+
+
+## Start a bounded async window shift. Missing roots are generated over multiple frames;
+## controller registration and stale-chunk retirement are committed only after staging succeeds.
+## A newer request supersedes any request that is still in its staging phase.
+func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
+		return -1
+	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
+		return -1
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+		return -1
+
+	var request_id: int = _next_async_request_id
+	_next_async_request_id += 1
+	_active_async_request_id = request_id
+	var center := Vector2i(
+		floori(world_position.x / chunk_size_x),
+		floori(world_position.z / chunk_size_z)
+	)
+	var desired: Array[Vector2i] = []
+	for z in range(center.y - load_radius, center.y + load_radius + 1):
+		for x in range(center.x - load_radius, center.x + load_radius + 1):
+			desired.append(Vector2i(x, z))
+	desired.sort_custom(_coordinate_less)
+	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	call_deferred("_run_async_sync_request", request_id, desired, timestamp, clampi(max_staged_per_frame, 1, 8))
+	return request_id
+
+func cancel_async_sync_request(request_id: int = -1) -> bool:
+	if _active_async_request_id < 0:
+		return false
+	if request_id >= 0 and request_id != _active_async_request_id:
+		return false
+	_active_async_request_id = -1
+	return true
+
+func get_active_async_request_id() -> int:
+	return _active_async_request_id
+
+func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix: int, max_staged_per_frame: int) -> void:
+	var desired_ids: Dictionary = {}
+	var to_load: Array[Dictionary] = []
+	for coord in desired:
+		var id: String = _chunk_id(coord)
+		desired_ids[id] = coord
+		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
+			continue
+		to_load.append({"id": id, "coord": coord})
+
+	var staged_roots: Dictionary = {}
+	var staged_count: int = 0
+	for entry in to_load:
+		if request_id != _active_async_request_id:
+			_free_staged_roots(staged_roots)
+			_emit_async_cancelled(request_id)
+			return
+		var id: String = str(entry["id"])
+		var coord: Vector2i = entry["coord"]
+		var candidate: Variant = chunk_factory.call(coord)
+		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
+			_free_unowned_root(candidate)
+			_free_staged_roots(staged_roots)
+			_finish_async_sync_request(request_id, false, "load_factory", "Chunk factory returned an invalid staged root.", true, {
+				"failed_chunk_id": id,
+				"staged_count": staged_count,
+				"desired_count": desired.size()
+			})
+			return
+		staged_roots[id] = candidate
+		staged_count += 1
+		if staged_count % max_staged_per_frame == 0:
+			await get_tree().process_frame
+			if request_id != _active_async_request_id:
+				_free_staged_roots(staged_roots)
+				_emit_async_cancelled(request_id)
+				return
+
+	if request_id != _active_async_request_id:
+		_free_staged_roots(staged_roots)
+		_emit_async_cancelled(request_id)
+		return
+
+	# Commit is deliberately non-yielding: no newer request can interleave with registration,
+	# adjacency rebuilding, and stale-root retirement.
+	var newly_loaded: Array[String] = []
+	for entry in to_load:
+		var id: String = str(entry["id"])
+		var coord: Vector2i = entry["coord"]
+		var candidate: Variant = staged_roots.get(id)
+		if not is_instance_valid(candidate) or not chunk_controller.load_chunk(id, candidate, now_unix):
+			_free_unowned_root(candidate)
+			staged_roots.erase(id)
+			_free_staged_roots(staged_roots)
+			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+			_finish_async_sync_request(request_id, false, "load_registration", "Chunk controller rejected a staged chunk.", rollback_ok, {
+				"failed_chunk_id": id,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"staged_count": staged_count,
+				"new_loads_rollback_ok": rollback_ok
+			})
+			return
+		staged_roots.erase(id)
+		_managed_chunk_ids[id] = coord
+		newly_loaded.append(id)
+
+	_free_staged_roots(staged_roots)
+	var stale_ids: Array[String] = []
+	for id in _managed_chunk_ids.keys():
+		if not desired_ids.has(id):
+			stale_ids.append(str(id))
+	stale_ids.sort()
+	var unloaded_stale: Array[Dictionary] = []
+	for id in stale_ids:
+		var stale_coord: Vector2i = _managed_chunk_ids[id]
+		if not chunk_controller.unload_chunk(id, now_unix):
+			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored
+			var unloaded_ids: Array[String] = []
+			for item in unloaded_stale:
+				unloaded_ids.append(str(item.get("id", "")))
+			_finish_async_sync_request(request_id, false, "stale_unload", "Controller failed to unload a stale chunk.", rollback_complete, {
+				"failed_chunk_id": id,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"unloaded_stale_ids": unloaded_ids,
+				"new_loads_rollback_ok": new_loads_restored,
+				"stale_restore_ok": old_chunks_restored
+			})
+			return
+		unloaded_stale.append({"id": id, "coord": stale_coord})
+		_managed_chunk_ids.erase(id)
+
+	_finish_async_sync_request(request_id, true, "complete", "", true, {
+		"center": desired[(desired.size() - 1) / 2] if not desired.is_empty() else Vector2i.ZERO,
+		"desired_count": desired.size(),
+		"staged_count": staged_count,
+		"newly_loaded_ids": newly_loaded.duplicate(),
+		"unloaded_stale_count": unloaded_stale.size()
+	})
+
+func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
+	if request_id != _active_async_request_id:
+		_emit_async_cancelled(request_id)
+		return
+	_set_sync_report(success, phase, message, rollback_complete, details)
+	_last_sync_report["request_id"] = request_id
+	_active_async_request_id = -1
+	async_sync_completed.emit(request_id, _last_sync_report.duplicate(true))
+
+func _emit_async_cancelled(request_id: int) -> void:
+	async_sync_completed.emit(request_id, {
+		"success": false,
+		"phase": "cancelled",
+		"message": "Async chunk request was superseded or cancelled before commit.",
+		"rollback_complete": true,
+		"details": {"request_id": request_id},
+		"managed_chunk_ids": get_managed_chunk_ids(),
+		"controller_chunk_ids": _get_controller_loaded_ids()
+	})
+
+func _free_staged_roots(staged_roots: Dictionary) -> void:
+	for candidate in staged_roots.values():
+		_free_unowned_root(candidate)
 
 ## Reconcile the managed map from the controller's actual IDs, then retry the target window.
 ## This is intended for recovery after a previous sync reported an incomplete rollback.
