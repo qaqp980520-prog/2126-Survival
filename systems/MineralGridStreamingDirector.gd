@@ -489,11 +489,10 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				failure_reason = "registration_rejected"
 			"stale_unload":
 				failure_reason = "stale_unload_failed"
-	_record_async_diagnostic(request_id, phase, {
-		"success": success,
-		"rollback_complete": rollback_complete,
-		"details": details.duplicate(true)
-	}, true, failure_reason)
+	var diagnostic_details: Dictionary = details.duplicate(true)
+	diagnostic_details["success"] = success
+	diagnostic_details["rollback_complete"] = rollback_complete
+	_record_async_diagnostic(request_id, phase, diagnostic_details, true, failure_reason)
 	_set_sync_report(success, phase, message, rollback_complete, details)
 	_last_sync_report["request_id"] = request_id
 	_last_sync_report["request_diagnostics"] = get_async_request_diagnostics(request_id)
