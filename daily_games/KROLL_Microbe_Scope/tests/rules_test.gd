@@ -48,7 +48,8 @@ func _run() -> void:
     _expect(not bool(locked_adjustment.get("ok", true)), "failed specimen cannot be adjusted")
     var reset: Dictionary = rules.call("reset_specimen", state)
     _expect(str(reset.get("status", "")) == "active" and int(reset["attempts_left"]) == 5 and int(reset["focus"]) == 50, "reset restores the current specimen calibration state")
-    _expect((rules.call("create_state", 99) as Dictionary).is_empty(), "unknown specimen index is rejected")
+    var invalid_index: Dictionary = rules.call("create_state", 99)
+    _expect(invalid_index.is_empty(), "unknown specimen index is rejected")
 
     if failures.is_empty():
         print("KROLL Microbe Scope rules tests passed.")
