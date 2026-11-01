@@ -115,6 +115,7 @@ func _test_single_shared_transition() -> void:
     report = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
     _expect(bool(report.get("ok", false)) and int(report.get("active_count", -1)) == 0, "equal-height seam removes the shared ramp")
     await process_frame
+    await process_frame
     _expect(manager.call("get_transition_body", edge_key) == null and body_weak.get_ref() == null, "retired shared body is released")
     _expect(not lower_base.disabled and not higher_base.disabled, "full base collision returns when the transition is removed")
     _expect(not bool(lower.call("is_shared_transition_active", "east")) and not bool(higher.call("is_shared_transition_active", "west")), "both patches restore their unsegmented collision policy")
