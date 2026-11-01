@@ -3041,3 +3041,11 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Paleo Track Lab runtime smoke test passed."
+
+      - name: Verify Paleo Track Lab field guide and classification boundaries
+        shell: bash
+        run: |
+          set -e
+          grep -q 'FIELD GUIDE' daily_games/KROLL_Paleo_Track_Lab/main.gd
+          grep -q 'get_field_guide_text' daily_games/KROLL_Paleo_Track_Lab/tests/game_smoke_test.gd
+          grep -q '8.5 ratio' daily_games/KROLL_Paleo_Track_Lab/tests/rules_test.gd
