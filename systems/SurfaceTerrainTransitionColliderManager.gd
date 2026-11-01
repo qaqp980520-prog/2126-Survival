@@ -24,9 +24,11 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         var second_side: String = str(descriptor.get("second_side", ""))
         var first_patch: Node3D = patches_by_stable_id.get(first_id) as Node3D
         var second_patch: Node3D = patches_by_stable_id.get(second_id) as Node3D
-        if first_id.is_empty() or second_id.is_empty() or first_id == second_id:
+        if first_id.is_empty() or second_id.is_empty() or first_id == second_id or first_id > second_id:
             return {"ok": false, "error": "invalid_stable_ids", "active_count": _managed_edges.size()}
-        if not VALID_SIDES.has(first_side) or not VALID_SIDES.has(second_side):
+        if str(descriptor.get("edge_key", "")) != edge_key or str(descriptor.get("owner_stable_id", "")) != first_id:
+            return {"ok": false, "error": "invalid_edge_owner", "active_count": _managed_edges.size()}
+        if not VALID_SIDES.has(first_side) or not VALID_SIDES.has(second_side) or _opposite_side(first_side) != second_side:
             return {"ok": false, "error": "invalid_edge_sides", "active_count": _managed_edges.size()}
         if not is_instance_valid(first_patch) or not is_instance_valid(second_patch):
             return {"ok": false, "error": "missing_live_patch", "active_count": _managed_edges.size()}
@@ -180,10 +182,9 @@ func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
     body.add_child(collision)
     var visual := MeshInstance3D.new()
     visual.name = "SharedTransitionVisual"
-    var plane := PlaneMesh.new()
-    plane.size = Vector2(float(geometry["slope_length"]), float(geometry["patch_size"]))
-    visual.mesh = plane
-    visual.position = Vector3(0.0, COLLISION_THICKNESS * 0.5, 0.0)
+    var ramp_mesh := BoxMesh.new()
+    ramp_mesh.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
+    visual.mesh = ramp_mesh
     var material := StandardMaterial3D.new()
     material.albedo_color = Color("#9bb7b5")
     material.roughness = 0.82
@@ -191,6 +192,8 @@ func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
     material.cull_mode = BaseMaterial3D.CULL_DISABLED
     visual.material_override = material
     body.add_child(visual)
+    body.set_meta("terrain_edge_key", edge_key)
+    body.set_meta("terrain_edge_owner", str(edge["first_id"]))
     add_child(body)
     var edge_basis: Basis = geometry["basis"]
     var body_origin: Vector3 = geometry["body_origin"]
