@@ -54,7 +54,7 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 8)
 	margin.add_child(column)
 	var title := Label.new()
-	title.text = "KROLL // ORBITAL DOCKING"
+	title.text = "KROLL // INERTIAL DOCKING"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
 	title.add_theme_color_override("font_color", Color("#83e6f2"))
