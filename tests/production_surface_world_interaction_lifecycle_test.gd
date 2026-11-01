@@ -60,7 +60,11 @@ func _run() -> void:
     _finish(0 if failures.is_empty() else 1)
 
 func _aim_at(target: Node3D, player_offset: Vector3 = Vector3(0.0, 1.0, 2.0), target_offset: Vector3 = Vector3(0.0, 0.55, 0.0)) -> void:
-    world.player.global_position = target.global_position + player_offset
+    var target_position: Vector3 = target.global_position + player_offset
+    var moved: bool = bool(world.call("debug_move_player_to", target_position, int(Time.get_unix_time_from_system())))
+    _expect(moved, "test setup synchronously prepares the target chunk window")
+    if moved:
+        world.player.velocity = Vector3.ZERO
     world.camera.look_at(target.global_position + target_offset, Vector3.UP)
     await physics_frame
     await physics_frame

@@ -44,10 +44,19 @@ var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
 var _mine_layer_index: int = 0
 var _last_mine_layer_index: int = 0
 var _surface_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
+var _surface_stream_pending: bool = false
+var _surface_stream_request_id: int = -1
+var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
+var _surface_stream_target_position: Vector3 = Vector3.ZERO
+var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
 
 func _ready() -> void:
 	if not initialize_world_session():
 		return
+	if director != null and director.has_signal("async_sync_completed"):
+		var stream_callback := Callable(self, "_on_surface_stream_completed")
+		if not director.is_connected("async_sync_completed", stream_callback):
+			director.connect("async_sync_completed", stream_callback)
 	if inventory_bridge != null and inventory_bridge.has_signal("inventory_changed"):
 		inventory_bridge.connect("inventory_changed", Callable(self, "_on_inventory_changed"))
 	_build_environment()
@@ -313,6 +322,11 @@ func _tick_stamina(delta: float, moving: bool, sprinting: bool = false) -> void:
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
 		return
+	if _surface_stream_pending:
+		player.velocity = Vector3.ZERO
+		_camera_interaction_target_cache = {}
+		_refresh_hud()
+		return
 	var move_input := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or _touch_directions.has("left"):
 		move_input.x -= 1.0
@@ -365,8 +379,73 @@ func _physics_process(delta: float) -> void:
 	else:
 		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
 		if current_grid != _last_grid:
-			_sync_streaming(int(Time.get_unix_time_from_system()))
+			_request_surface_streaming(previous_position, player.global_position, player.velocity)
 	_camera_interaction_target_cache = _cast_camera_interaction_target()
+	_refresh_hud()
+
+
+func _sync_streaming(now_unix: int = -1) -> bool:
+	var superseded_async: bool = _surface_stream_pending
+	if superseded_async:
+		if director != null and _surface_stream_request_id >= 0 and director.has_method("cancel_async_sync_request"):
+			director.call("cancel_async_sync_request", _surface_stream_request_id)
+		_surface_stream_pending = false
+		_surface_stream_request_id = -1
+		_surface_stream_target_velocity = Vector3.ZERO
+		_camera_interaction_target_cache.clear()
+		_world_object_action_message = "Synchronizing surface chunks..."
+	var success: bool = super._sync_streaming(now_unix)
+	if superseded_async:
+		_world_object_action_message = "Surface chunks synchronized." if success else "Synchronous surface streaming failed."
+		_refresh_hud()
+	return success
+
+
+func _request_surface_streaming(rollback_position: Vector3, target_position: Vector3, target_velocity: Vector3) -> bool:
+	if player == null or director == null or not director.has_method("request_sync_to_world_position_async"):
+		if player != null:
+			player.global_position = rollback_position
+			player.velocity = Vector3.ZERO
+		_world_object_action_message = "Surface streaming is unavailable; movement was rolled back."
+		_refresh_hud()
+		return false
+	_surface_stream_pending = true
+	_camera_interaction_target_cache.clear()
+	_surface_stream_rollback_position = rollback_position
+	_surface_stream_target_position = target_position
+	_surface_stream_target_velocity = target_velocity
+	player.global_position = rollback_position
+	player.velocity = Vector3.ZERO
+	_surface_stream_request_id = int(director.call(
+		"request_sync_to_world_position_async",
+		target_position,
+		int(Time.get_unix_time_from_system()),
+		1
+	))
+	if _surface_stream_request_id < 0:
+		_surface_stream_pending = false
+		_world_object_action_message = "Surface streaming request was rejected; movement was rolled back."
+		_refresh_hud()
+		return false
+	_world_object_action_message = "Loading adjacent surface chunks..."
+	_refresh_hud()
+	return true
+
+func _on_surface_stream_completed(request_id: int, report: Dictionary) -> void:
+	if not _surface_stream_pending or request_id != _surface_stream_request_id:
+		return
+	_surface_stream_pending = false
+	if bool(report.get("success", false)):
+		player.global_position = _surface_stream_target_position
+		player.velocity = _surface_stream_target_velocity
+		_last_grid = director.get_grid_coordinate(_surface_stream_target_position)
+		_world_object_action_message = "Adjacent surface chunks are ready."
+	else:
+		player.global_position = _surface_stream_rollback_position
+		player.velocity = Vector3.ZERO
+		_last_grid = director.get_grid_coordinate(_surface_stream_rollback_position)
+		_world_object_action_message = "Surface streaming failed; movement rolled back (%s)." % str(report.get("phase", "unknown"))
+	_camera_interaction_target_cache = {}
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -875,6 +954,8 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
 
 func get_camera_interaction_target() -> Dictionary:
+	if _surface_stream_pending:
+		return {}
 	var target: Dictionary = _camera_interaction_target_cache.duplicate()
 	if target.is_empty():
 		return {}

@@ -101,7 +101,8 @@ func _run() -> void:
 	var plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(not plots.is_empty(), "surface world exposes loaded crop plots")
 	if not plots.is_empty():
-		world.player.global_position = plots[0].global_position + Vector3(0.0, 1.0, 2.0)
+		var crop_approach_position: Vector3 = plots[0].global_position + Vector3(0.0, 1.0, 2.0)
+		_expect(bool(world.call("debug_move_player_to", crop_approach_position, now + 5)), "test setup synchronously prepares the crop interaction chunk window")
 		world.camera.look_at(plots[0].global_position + Vector3(0.0, 0.9, 0.0), Vector3.UP)
 		await physics_frame
 		await physics_frame

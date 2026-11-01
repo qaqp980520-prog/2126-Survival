@@ -124,7 +124,7 @@ func _run() -> void:
 		var mine_result: Dictionary = world.call("_interact_nearest_world_prop")
 		_expect(bool(mine_result.get("ok", false)) and int(mine_result.get("amount", 0)) == 1, "F mines the vein selected by the camera ray")
 
-	world.player.global_position = Vector3(100.0, -8.25, 100.0)
+	_expect(_move_player_to(Vector3(100.0, -8.25, 100.0)), "test setup moves beyond the mine interaction range with a prepared chunk window")
 	await physics_frame
 	await physics_frame
 	world.call("_refresh_hud")
@@ -132,10 +132,29 @@ func _run() -> void:
 	_finish(0 if failures.is_empty() else 1)
 
 func _aim_at(target: Node3D, player_offset: Vector3 = Vector3(0.0, 1.0, 2.0), target_offset: Vector3 = Vector3(0.0, 0.55, 0.0)) -> void:
-	world.player.global_position = target.global_position + player_offset
+	var target_position: Vector3 = target.global_position + player_offset
+	_expect(_move_player_to(target_position), "test setup synchronously prepares the interaction target chunk window")
 	world.camera.look_at(target.global_position + target_offset, Vector3.UP)
 	await physics_frame
 	await physics_frame
+
+func _move_player_to(position: Vector3) -> bool:
+	var now: int = int(Time.get_unix_time_from_system())
+	if bool(world.get("_is_underground")):
+		var mine_director: Node = world.get("mine_director") as Node
+		if mine_director == null or not bool(mine_director.call("sync_to_world_position", position, now)):
+			return false
+		world.player.global_position = position
+		world.player.velocity = Vector3.ZERO
+		var layer_index: int = int(mine_director.call("get_layer_index", position))
+		world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", position))
+		world.set("_last_mine_layer_index", layer_index)
+		world.set("_mine_layer_index", layer_index)
+		return true
+	var moved: bool = bool(world.call("debug_move_player_to", position, now))
+	if moved:
+		world.player.velocity = Vector3.ZERO
+	return moved
 
 func _find_world_prop(node_name: String, chunk_name: String) -> Node3D:
 	var candidates: Array = world.chunk_controller.call("get_loaded_world_state_nodes")

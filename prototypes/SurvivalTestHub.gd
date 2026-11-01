@@ -26,6 +26,7 @@ const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.ts
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
+const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
 
 var status_label: Label
 
@@ -237,6 +238,12 @@ func _build_ui() -> void:
 		"KROLL Microbe Scope",
 		"調整顯微鏡焦距、倍率、照明與染色，捕捉三種微生物標本；支援滑鼠、鍵盤與觸控。",
 		MICROBE_SCOPE_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Faultline Cartographer",
+		"發射三個地震探針，利用回波距離交會定位地下礦脈；支援鍵盤與觸控。",
+		FAULTLINE_CARTOGRAPHER_SCENE
 	)
 	_add_scene_button(
 		launch_list,

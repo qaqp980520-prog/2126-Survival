@@ -2949,3 +2949,50 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Microbe Scope runtime smoke test passed."
+
+      - name: Verify Run 82 async streaming and Faultline Cartographer inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f world/SurfaceWorld.gd
+          grep -q 'request_sync_to_world_position_async' systems/MineralGridStreamingDirector.gd
+          grep -q '_request_surface_streaming' world/SurfaceWorld.gd
+          test -f tests/mineral_grid_streaming_async_test.gd
+          test -f daily_games/KROLL_Faultline_Cartographer/project.godot
+          test -f daily_games/KROLL_Faultline_Cartographer/main.tscn
+          test -f daily_games/KROLL_Faultline_Cartographer/main_root.tscn
+          test -f daily_games/KROLL_Faultline_Cartographer/main.gd
+          test -f daily_games/KROLL_Faultline_Cartographer/rules.gd
+          test -f daily_games/KROLL_Faultline_Cartographer/tests/rules_test.gd
+          test -f daily_games/KROLL_Faultline_Cartographer/tests/game_smoke_test.gd
+          grep -q 'FAULTLINE_CARTOGRAPHER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Faultline Cartographer' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run bounded async chunk streaming regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/mineral_grid_streaming_async_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid bounded async streaming tests passed."
+
+      - name: Import and parse KROLL Faultline Cartographer
+        run: godot --headless --path daily_games/KROLL_Faultline_Cartographer --editor --quit
+      - name: Run KROLL Faultline Cartographer rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Faultline_Cartographer --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Faultline Cartographer rules tests passed."
+      - name: Run KROLL Faultline Cartographer runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Faultline_Cartographer --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Faultline Cartographer runtime smoke test passed."
