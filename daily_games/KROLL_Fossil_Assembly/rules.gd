@@ -47,15 +47,15 @@ const LEVELS: Array = [
     }
 ]
 
-static func level_count() -> int:
+func level_count() -> int:
     return LEVELS.size()
 
-static func get_level_definition(level_index: int) -> Dictionary:
+func get_level_definition(level_index: int) -> Dictionary:
     if level_index < 0 or level_index >= LEVELS.size():
         return {}
     return LEVELS[level_index].duplicate(true)
 
-static func create_state(level_index: int) -> Dictionary:
+func create_state(level_index: int) -> Dictionary:
     var definition: Dictionary = get_level_definition(level_index)
     if definition.is_empty():
         return {}
@@ -78,14 +78,14 @@ static func create_state(level_index: int) -> Dictionary:
         "moves": 0
     }
 
-static func get_piece_definition(level_index: int, piece_id: String) -> Dictionary:
+func get_piece_definition(level_index: int, piece_id: String) -> Dictionary:
     var definition: Dictionary = get_level_definition(level_index)
     for piece in definition.get("pieces", []):
         if str(piece["id"]) == piece_id:
             return piece.duplicate(true)
     return {}
 
-static func get_reference_solution(level_index: int) -> Array:
+func get_reference_solution(level_index: int) -> Array:
     var definition: Dictionary = get_level_definition(level_index)
     var solution: Array = []
     for piece in definition.get("pieces", []):
@@ -96,7 +96,7 @@ static func get_reference_solution(level_index: int) -> Array:
         })
     return solution
 
-static func transformed_cells(shape: Array, origin: Vector2i, rotation: int) -> Array[Vector2i]:
+func transformed_cells(shape: Array, origin: Vector2i, rotation: int) -> Array[Vector2i]:
     var points: Array[Vector2i] = []
     for cell in shape:
         var point: Vector2i = cell
@@ -115,7 +115,7 @@ static func transformed_cells(shape: Array, origin: Vector2i, rotation: int) -> 
         normalized.append(origin + Vector2i(point.x - min_x, point.y - min_y))
     return normalized
 
-static func can_place(state: Dictionary, piece_id: String, origin: Vector2i, rotation: int) -> Dictionary:
+func can_place(state: Dictionary, piece_id: String, origin: Vector2i, rotation: int) -> Dictionary:
     if state.get("status", "") != "playing":
         return {"ok": false, "reason": "not_playing"}
     var level_index: int = int(state.get("level_index", -1))
@@ -139,7 +139,7 @@ static func can_place(state: Dictionary, piece_id: String, origin: Vector2i, rot
             return {"ok": false, "reason": "overlap", "cells": cells}
     return {"ok": true, "cells": cells}
 
-static func place_piece(state: Dictionary, piece_id: String, origin: Vector2i, rotation: int) -> Dictionary:
+func place_piece(state: Dictionary, piece_id: String, origin: Vector2i, rotation: int) -> Dictionary:
     var check: Dictionary = can_place(state, piece_id, origin, rotation)
     if not bool(check.get("ok", false)):
         return {"ok": false, "reason": str(check.get("reason", "invalid_placement")), "state": state.duplicate(true)}
@@ -156,7 +156,7 @@ static func place_piece(state: Dictionary, piece_id: String, origin: Vector2i, r
         next_state["status"] = "won"
     return {"ok": true, "state": next_state, "cells": check["cells"]}
 
-static func remove_piece(state: Dictionary, piece_id: String) -> Dictionary:
+func remove_piece(state: Dictionary, piece_id: String) -> Dictionary:
     var piece_state: Dictionary = state.get("pieces", {}).get(piece_id, {})
     if piece_state.is_empty() or not bool(piece_state.get("placed", false)):
         return {"ok": false, "reason": "not_placed", "state": state.duplicate(true)}
@@ -173,7 +173,7 @@ static func remove_piece(state: Dictionary, piece_id: String) -> Dictionary:
     next_state["moves"] = int(next_state.get("moves", 0)) + 1
     return {"ok": true, "state": next_state}
 
-static func is_complete(state: Dictionary) -> bool:
+func is_complete(state: Dictionary) -> bool:
     var target_cells: Array = state.get("target_cells", [])
     var occupied: Dictionary = state.get("occupied", {})
     if target_cells.is_empty() or occupied.size() != target_cells.size():
