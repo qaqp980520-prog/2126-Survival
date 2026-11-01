@@ -1080,3 +1080,28 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Design and test one deterministic owner for each unequal-height cross-chunk transition, including collision/visual ownership and unload rollback.
 - Add partial-window streaming tests that shift one chunk at a time and verify seam rebinding without full-window replacement.
 - Continue to preserve schema 1 unless a concrete migration requirement is identified.
+
+
+## Run 78 closeout — Raster Survey and partial-window streaming
+
+### Completed
+- KROLL Raster Survey M0.1 is integrated into the Survival Test Hub. It contains three fixed 6×6 nonogram sites, explicit three-state cell marking, keyboard/mouse/touch controls, standalone rules/runtime tests and root-path smoke coverage.
+- Added a production 3×3 partial-window shift regression over east, south, west and north moves. Each shift validates three entering/three leaving chunks, six retained roots, stale root/patch/proxy release, 63 terrain patches, 12 cross-chunk seams, reciprocal rebinding, isolated-ramp restoration and registry-backed terrain state restoration.
+- Corrected underground accounting to preserve and compare all nine independent underground chunk IDs throughout surface-window shifts (nine surface + nine underground = 18 total loaded chunks).
+- World-save schema remains version 1; adjacency remains derived runtime metadata.
+
+### Exact validation and merge
+- Feature PR [#193](https://github.com/qaqp980520-prog/2126-Survival/pull/193) merged as `27ee08b4d5bc9b89c9753570dc1c2790dee39fdd` from exact candidate `0daf00ea31b7e7cc7243f2c3440a2b25947dabd1`.
+- Godot 4.3 exact-head [Run #876](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41262893391) passed all 343 job steps with zero failures and zero skipped steps. The standalone game import/rules/runtime, root Test Hub integration and production partial-window terrain regression all passed; cleanup and job completion succeeded.
+
+### Remaining engineering work
+1. Implement and validate a single-owner shared transition collider/visual for unequal-height cross-chunk terrain edges; current step policy remains conservative.
+2. Design bounded asynchronous chunk streaming with cancellation-safe ownership, stale-request invalidation and deterministic rollback; current streaming remains synchronous.
+3. Continue testing terrain state, stable IDs and interaction-proxy lifecycle through longer multi-window traversal and save/restore sequences.
+4. Add local editor GUI, GPU performance and iPhone hardware QA when an appropriate environment is available.
+5. Verify and, if desired, configure main branch protection and required status checks. The connected API's branch-protection read returned 403, so this run does not claim protection status.
+
+### Compatibility and limitations
+- World-save schema remains version 1; no migration was introduced.
+- Raster Survey M0.1 uses fixed authored 6×6 puzzles; generated puzzles, campaign persistence, audio, animations and scoring are not included.
+- No local Godot GUI/GPU/iPhone testing is claimed; only exact-head cloud Godot 4.3 validation is verified.

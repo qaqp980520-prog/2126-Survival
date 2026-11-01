@@ -1473,3 +1473,25 @@
 - Validation: exact-head Godot 4.3 workflow Run #870 passed 338/338 job steps, zero failures and zero skipped steps. This includes production world counts, Test Hub smoke, the 63-patch lifecycle regression, standalone Strata Mapper import/rules/runtime and the dedicated cross-chunk regression.
 - GitHub: PR #191 merged. Feature merge commit: edc9de7650af090e705b93ee9cf218e654bd8ead.
 - Remaining engineering issues: unequal-height cross-chunk edges remain steps (no shared transition collider); chunk streaming is synchronous; local GUI/GPU/iPhone QA has not been performed.
+
+
+## Run 78 — 2026-11-01
+
+- Added KROLL Raster Survey M0.1, a standalone and Survival Test Hub-integrated 6×6 nonogram with three authored scan sites, explicit filled/empty/unknown cell states, keyboard/mouse/touch input, deterministic rules tests and runtime smoke coverage. Each puzzle's row/column clues has a unique solution; this supplementary enumeration is separate from engine validation.
+- Added a production SurfaceWorld partial-window shift regression. The 3×3 surface window moves east, south, west and north one chunk at a time; each shift loads three and unloads three chunks while retaining six overlap roots. The test checks 63 surface terrain patches, 12 cross-chunk seams, fresh stale-node/proxy release, registry-backed state restoration, reciprocal seam rebinding and preservation of the independent nine-chunk underground window (18 total loaded chunks).
+- Corrected the regression's underground accounting: UndergroundMineDirector.load_radius is 1, so the independent underground window contains nine chunks, not one. The test compares the complete underground ID set after every surface shift.
+- Refined Raster Survey row/column clue header geometry to a shared 68 px height so row clues align with the six grid rows and three-run column clues fit.
+- World-save schema remains version 1; adjacency remains derived runtime state and is not serialized.
+
+### Exact-head validation and merge
+
+- Feature PR [#193](https://github.com/qaqp980520-prog/2126-Survival/pull/193) merged as `27ee08b4d5bc9b89c9753570dc1c2790dee39fdd` from exact HEAD `0daf00ea31b7e7cc7243f2c3440a2b25947dabd1`.
+- Exact-head Godot 4.3 workflow [Run #876](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41262893391) completed successfully: all 343 job steps passed, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- Run #876 specifically passed Raster Survey standalone import, rules tests, runtime smoke, root Test Hub integration smoke and the production partial-window terrain shift regression.
+
+### Remaining engineering work and limitations
+
+- Unequal-height cross-chunk edges still use the conservative step policy with shared-edge ramps suppressed; the single-owner transition collider remains design-only.
+- Chunk streaming remains synchronous; bounded asynchronous loading, stale-request invalidation, cancellation-safe ownership and deterministic rollback remain future work.
+- Local editor GUI, GPU performance and iPhone hardware QA were not performed. Cloud headless CI does not replace these checks.
+- GitHub branch-protection status could not be verified through the connected API because the endpoint returned 403; do not infer that protection is enabled. Review repository governance separately.
