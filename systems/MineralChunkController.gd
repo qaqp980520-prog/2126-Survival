@@ -7,6 +7,7 @@ const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const CropPlotScript = preload("res://systems/CropPlotVisual.gd")
 const AdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 const TerrainAdjacencyBinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
+const TerrainTransitionColliderManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 
 var registry: Node
 var adapter: Node
@@ -17,6 +18,7 @@ var _chunk_veins: Dictionary = {} # chunk ID -> local vein ID -> MineralMiningNo
 var _chunk_crops: Dictionary = {} # chunk ID -> local crop path -> CropPlotVisual
 var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful Node3D
 var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
+var _terrain_transition_collider_manager: Node3D
 
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
@@ -410,6 +412,27 @@ func _collect_terrain_patches(objects: Dictionary) -> Array[Node3D]:
 func get_terrain_transition_descriptors() -> Dictionary:
 	return _terrain_transition_descriptors.duplicate(true)
 
+func get_terrain_transition_collider_count() -> int:
+	if is_instance_valid(_terrain_transition_collider_manager) and _terrain_transition_collider_manager.has_method("get_transition_count"):
+		return int(_terrain_transition_collider_manager.call("get_transition_count"))
+	return 0
+
+func get_terrain_transition_collider(edge_key: String) -> StaticBody3D:
+	if not is_instance_valid(_terrain_transition_collider_manager) or not _terrain_transition_collider_manager.has_method("get_transition_body"):
+		return null
+	return _terrain_transition_collider_manager.call("get_transition_body", edge_key) as StaticBody3D
+
+func _ensure_transition_collider_manager() -> bool:
+	if is_instance_valid(_terrain_transition_collider_manager):
+		return true
+	var manager: Node3D = TerrainTransitionColliderManagerScript.new() as Node3D
+	if manager == null:
+		return false
+	manager.name = "SurfaceTerrainTransitionColliderManager"
+	add_child(manager)
+	_terrain_transition_collider_manager = manager
+	return true
+
 func refresh_terrain_adjacency() -> bool:
 	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 	return bool(result.get("ok", false))
@@ -421,18 +444,37 @@ func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
 
 func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String = "", candidate_objects: Dictionary = {}) -> Dictionary:
 	var stable_ids_by_instance: Dictionary = {}
+	var patches_by_stable_id: Dictionary = {}
 	for chunk_objects in _chunk_objects.values():
 		for stable_id in chunk_objects.keys():
 			var node: Node = chunk_objects[stable_id] as Node
 			if is_instance_valid(node) and node.has_method("bind_neighbor_patch"):
 				stable_ids_by_instance[node.get_instance_id()] = str(stable_id)
+				patches_by_stable_id[str(stable_id)] = node
 	for local_path in candidate_objects.keys():
 		var candidate: Node = candidate_objects[local_path] as Node
 		if is_instance_valid(candidate) and candidate.has_method("bind_neighbor_patch"):
-			stable_ids_by_instance[candidate.get_instance_id()] = _make_world_object_stable_id(candidate_chunk_id, str(local_path))
+			var candidate_stable_id: String = _make_world_object_stable_id(candidate_chunk_id, str(local_path))
+			stable_ids_by_instance[candidate.get_instance_id()] = candidate_stable_id
+			patches_by_stable_id[candidate_stable_id] = candidate
 	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance)
-	if bool(result.get("ok", false)):
-		_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
+	if not bool(result.get("ok", false)):
+		if is_instance_valid(_terrain_transition_collider_manager):
+			_terrain_transition_collider_manager.call("clear_all")
+		_terrain_transition_descriptors.clear()
+		return result
+	if not _ensure_transition_collider_manager():
+		return {"ok": false, "error": "transition_manager_unavailable"}
+	var transition_result: Dictionary = _terrain_transition_collider_manager.call(
+		"sync_transitions",
+		result.get("descriptors", {}),
+		patches_by_stable_id
+	)
+	if not bool(transition_result.get("ok", false)):
+		return {"ok": false, "error": "transition_collider_sync_failed:" + str(transition_result.get("error", "unknown"))}
+	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
+	result["transition_collider_count"] = int(transition_result.get("active_count", 0))
+	result["blocked_transition_count"] = int(transition_result.get("blocked_count", 0))
 	return result
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:

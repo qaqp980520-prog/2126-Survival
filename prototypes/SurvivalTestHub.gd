@@ -25,6 +25,7 @@ const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.ts
 const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
+const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 
 var status_label: Label
 
@@ -230,6 +231,12 @@ func _build_ui() -> void:
 		"KROLL Inertial Docking",
 		"使用慣性推進、反向推力與煞車，穿越碎片並以低相對速度完成三個太空泊位對接；支援鍵盤與觸控。",
 		INERTIAL_DOCKING_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Microbe Scope",
+		"調整顯微鏡焦距、倍率、照明與染色，捕捉三種微生物標本；支援滑鼠、鍵盤與觸控。",
+		MICROBE_SCOPE_SCENE
 	)
 	_add_scene_button(
 		launch_list,
