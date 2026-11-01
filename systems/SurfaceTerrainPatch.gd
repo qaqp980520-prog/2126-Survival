@@ -126,11 +126,17 @@ func _build_interaction_area() -> void:
 func _build_visual() -> void:
 	_surface_mesh=MeshInstance3D.new()
 	_surface_mesh.name="TerrainSurfaceMesh"
+	var initial_surface_mesh := BoxMesh.new()
+	initial_surface_mesh.size = Vector3(PATCH_SIZE, BOX_HEIGHT, PATCH_SIZE)
+	_surface_mesh.mesh = initial_surface_mesh
 	_collision_body.add_child(_surface_mesh)
 	for x_index in range(3):
 		for z_index in range(3):
 			var segment := MeshInstance3D.new()
 			segment.name = "TerrainSurfaceSegment_X%d_Z%d" % [x_index, z_index]
+			var initial_segment_mesh := BoxMesh.new()
+			initial_segment_mesh.size = Vector3(0.1, BOX_HEIGHT, 0.1)
+			segment.mesh = initial_segment_mesh
 			segment.visible = false
 			_collision_body.add_child(segment)
 			_surface_segments["%d:%d" % [x_index, z_index]] = segment
