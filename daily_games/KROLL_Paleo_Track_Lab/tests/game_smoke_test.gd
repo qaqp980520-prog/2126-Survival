@@ -18,6 +18,8 @@ func _run() -> void:
     _expect(game.call("get_answer_button_count") == 13, "game builds thirteen species, gait and heading controls")
     _expect(str(game.call("get_current_state").get("site_id", "")) == "fern_basin", "game starts at Fern Basin")
     _expect(game.call("get_metrics_text").contains("FOOT LENGTH"), "game displays measurable trackway evidence")
+    _expect(game.call("get_field_guide_text").contains("8.5"), "game displays the stride-ratio gait threshold")
+    _expect(game.call("get_field_guide_text").contains("Sauropod"), "game displays the trackmaker reference guide")
 
     _expect(bool(game.call("select_answer", "species", "sauropod")), "game accepts a trackmaker selection")
     _expect(bool(game.call("select_answer", "gait", "walk")), "game accepts a gait selection")
