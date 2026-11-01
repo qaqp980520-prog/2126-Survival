@@ -56,7 +56,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(STRATA_MAPPER_SCENE), "Strata Mapper game scene exists")
 	_expect(ResourceLoader.exists(RASTER_SURVEY_SCENE), "Raster Survey game scene exists")
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
-	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Orbital Docking game scene exists")
+	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
 
 	var hub := HubScene.instantiate()
@@ -233,7 +233,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Strata Mapper"), "hub labels the Strata Mapper game")
 	_expect(labels.has("KROLL Raster Survey"), "hub labels the Raster Survey game")
 	_expect(labels.has("KROLL Wind Farm Dispatch"), "hub labels the Wind Farm Dispatch game")
-	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Orbital Docking game")
+	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Inertial Docking game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -299,18 +299,18 @@ func _run() -> void:
 		wind_farm_game.queue_free()
 		await process_frame
 
-	var orbital_docking_scene := load(INERTIAL_DOCKING_SCENE) as PackedScene
-	_expect(orbital_docking_scene != null, "root hub can load the Orbital Docking scene")
-	if orbital_docking_scene != null:
-		var orbital_docking_game := orbital_docking_scene.instantiate()
-		root.add_child(orbital_docking_game)
+	var inertial_docking_scene := load(INERTIAL_DOCKING_SCENE) as PackedScene
+	_expect(inertial_docking_scene != null, "root hub can load the Inertial Docking scene")
+	if inertial_docking_scene != null:
+		var inertial_docking_game := inertial_docking_scene.instantiate()
+		root.add_child(inertial_docking_game)
 		await process_frame
-		_expect(orbital_docking_game.has_method("get_current_state"), "root-loaded Orbital Docking initializes its flight model")
-		_expect(orbital_docking_game.get_control_button_count() == 5, "root-loaded Orbital Docking builds five thruster controls")
-		if orbital_docking_game.has_method("get_current_scenario"):
-			var docking_scenario: Dictionary = orbital_docking_game.call("get_current_scenario")
-			_expect(str(docking_scenario.get("id", "")) == "cargo_bay", "root-loaded Orbital Docking starts Cargo Bay")
-		orbital_docking_game.queue_free()
+		_expect(inertial_docking_game.has_method("get_current_state"), "root-loaded Inertial Docking initializes its flight model")
+		_expect(inertial_docking_game.get_control_button_count() == 5, "root-loaded Inertial Docking builds five thruster controls")
+		if inertial_docking_game.has_method("get_current_scenario"):
+			var docking_scenario: Dictionary = inertial_docking_game.call("get_current_scenario")
+			_expect(str(docking_scenario.get("id", "")) == "cargo_bay", "root-loaded Inertial Docking starts Cargo Bay")
+		inertial_docking_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
