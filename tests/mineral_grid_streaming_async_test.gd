@@ -5,50 +5,50 @@ const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 
 class FaultInjectingChunkController:
-	extends Node3D
+    extends Node3D
 
-	var roots: Dictionary = {}
-	var load_attempts: int = 0
-	var unload_attempts: int = 0
-	var fail_load_at: int = -1
-	var fail_unload_at: int = -1
+    var roots: Dictionary = {}
+    var load_attempts: int = 0
+    var unload_attempts: int = 0
+    var fail_load_at: int = -1
+    var fail_unload_at: int = -1
 
-	func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
-		load_attempts += 1
-		if load_attempts == fail_load_at:
-			fail_load_at = -1
-			return false
-		if roots.has(chunk_id) or not is_instance_valid(chunk_root) or chunk_root.get_parent() != null:
-			return false
-		add_child(chunk_root)
-		roots[chunk_id] = chunk_root
-		return true
+    func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
+        load_attempts += 1
+        if load_attempts == fail_load_at:
+            fail_load_at = -1
+            return false
+        if roots.has(chunk_id) or not is_instance_valid(chunk_root) or chunk_root.get_parent() != null:
+            return false
+        add_child(chunk_root)
+        roots[chunk_id] = chunk_root
+        return true
 
-	func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
-		unload_attempts += 1
-		if unload_attempts == fail_unload_at:
-			fail_unload_at = -1
-			return false
-		if not roots.has(chunk_id):
-			return false
-		var chunk_root: Node3D = roots[chunk_id] as Node3D
-		roots.erase(chunk_id)
-		remove_child(chunk_root)
-		chunk_root.free()
-		return true
+    func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
+        unload_attempts += 1
+        if unload_attempts == fail_unload_at:
+            fail_unload_at = -1
+            return false
+        if not roots.has(chunk_id):
+            return false
+        var chunk_root: Node3D = roots[chunk_id] as Node3D
+        roots.erase(chunk_id)
+        remove_child(chunk_root)
+        chunk_root.free()
+        return true
 
-	func is_chunk_loaded(chunk_id: String) -> bool:
-		return roots.has(chunk_id)
+    func is_chunk_loaded(chunk_id: String) -> bool:
+        return roots.has(chunk_id)
 
-	func get_loaded_chunk_ids() -> PackedStringArray:
-		var ids := PackedStringArray()
-		for chunk_id in roots.keys():
-			ids.append(str(chunk_id))
-		ids.sort()
-		return ids
+    func get_loaded_chunk_ids() -> PackedStringArray:
+        var ids := PackedStringArray()
+        for chunk_id in roots.keys():
+            ids.append(str(chunk_id))
+        ids.sort()
+        return ids
 
-	func get_chunk_root(chunk_id: String) -> Node3D:
-		return roots.get(chunk_id) as Node3D
+    func get_chunk_root(chunk_id: String) -> Node3D:
+        return roots.get(chunk_id) as Node3D
 
 
 var failures: Array[String] = []
@@ -63,7 +63,7 @@ func _run() -> void:
     _test_time = int(Time.get_unix_time_from_system()) + 20
     await _test_playground_async_requests()
     await _test_production_surface_world_async_movement()
-	await _test_async_commit_rollback()
+    await _test_async_commit_rollback()
     if failures.is_empty():
         print("Mineral grid bounded async streaming tests passed.")
         quit(0)
@@ -208,68 +208,68 @@ func _expect(condition: bool, description: String) -> void:
 
 
 func _test_async_commit_rollback() -> void:
-	var controller := FaultInjectingChunkController.new()
-	root.add_child(controller)
-	var director: Node = DirectorScript.new()
-	root.add_child(director)
-	_expect(bool(director.call("bind_controller", controller)), "transaction fixture binds its fault-injecting chunk controller")
-	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_transaction_chunk"))), "transaction fixture binds a deterministic chunk factory")
-	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 10)), "transaction fixture creates its initial nine-chunk window")
-	var original_ids: PackedStringArray = controller.get_loaded_chunk_ids()
-	_expect(original_ids.size() == 9, "transaction fixture starts with nine committed chunks")
+    var controller := FaultInjectingChunkController.new()
+    root.add_child(controller)
+    var director: Node = DirectorScript.new()
+    root.add_child(director)
+    _expect(bool(director.call("bind_controller", controller)), "transaction fixture binds its fault-injecting chunk controller")
+    _expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_transaction_chunk"))), "transaction fixture binds a deterministic chunk factory")
+    _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 10)), "transaction fixture creates its initial nine-chunk window")
+    var original_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+    _expect(original_ids.size() == 9, "transaction fixture starts with nine committed chunks")
 
-	controller.fail_load_at = controller.load_attempts + 2
-	var registration_request: int = int(director.call(
-		"request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 11, 1
-	))
-	_expect(registration_request > 0, "async registration-failure request is accepted")
-	var staged_ready: bool = await _wait_for_staged_root_count(director, registration_request, 2)
-	_expect(staged_ready, "registration-failure test observes detached roots before commit")
-	var staged_refs: Array = director.call("get_async_staged_root_weakrefs", registration_request)
-	var registration_report: Dictionary = await _wait_for_request(director, registration_request)
-	_expect(str(registration_report.get("phase", "")) == "load_registration", "controller rejection is reported during the async commit phase")
-	_expect(not bool(registration_report.get("success", true)) and bool(registration_report.get("rollback_complete", false)), "registration rejection rolls back every newly registered chunk")
-	_expect(controller.get_loaded_chunk_ids() == original_ids, "registration rejection preserves the exact previous controller window")
-	_expect(director.call("get_managed_chunk_ids") == original_ids, "registration rejection preserves the director's managed ID map")
-	_expect(int(director.call("get_async_staged_root_count", registration_request)) == 0, "registration rejection releases all remaining staged roots")
-	for reference in staged_refs:
-		_expect(reference.get_ref() == null, "registration rejection frees every observed detached staging root")
+    controller.fail_load_at = controller.load_attempts + 2
+    var registration_request: int = int(director.call(
+        "request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 11, 1
+    ))
+    _expect(registration_request > 0, "async registration-failure request is accepted")
+    var staged_ready: bool = await _wait_for_staged_root_count(director, registration_request, 2)
+    _expect(staged_ready, "registration-failure test observes detached roots before commit")
+    var staged_refs: Array = director.call("get_async_staged_root_weakrefs", registration_request)
+    var registration_report: Dictionary = await _wait_for_request(director, registration_request)
+    _expect(str(registration_report.get("phase", "")) == "load_registration", "controller rejection is reported during the async commit phase")
+    _expect(not bool(registration_report.get("success", true)) and bool(registration_report.get("rollback_complete", false)), "registration rejection rolls back every newly registered chunk")
+    _expect(controller.get_loaded_chunk_ids() == original_ids, "registration rejection preserves the exact previous controller window")
+    _expect(director.call("get_managed_chunk_ids") == original_ids, "registration rejection preserves the director's managed ID map")
+    _expect(int(director.call("get_async_staged_root_count", registration_request)) == 0, "registration rejection releases all remaining staged roots")
+    for reference in staged_refs:
+        _expect(reference.get_ref() == null, "registration rejection frees every observed detached staging root")
 
-	var shift_request: int = int(director.call(
-		"request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 12, 8
-	))
-	var shift_report: Dictionary = await _wait_for_request(director, shift_request)
-	_expect(bool(shift_report.get("success", false)), "transaction fixture can commit a valid neighboring window after rollback")
-	var shifted_ids: PackedStringArray = controller.get_loaded_chunk_ids()
-	_expect(shifted_ids.size() == 9 and shifted_ids != original_ids, "successful async shift replaces only the departing edge of the active window")
+    var shift_request: int = int(director.call(
+        "request_sync_to_world_position_async", Vector3(65.0, 0.0, 0.0), _test_time + 12, 8
+    ))
+    var shift_report: Dictionary = await _wait_for_request(director, shift_request)
+    _expect(bool(shift_report.get("success", false)), "transaction fixture can commit a valid neighboring window after rollback")
+    var shifted_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+    _expect(shifted_ids.size() == 9 and shifted_ids != original_ids, "successful async shift replaces only the departing edge of the active window")
 
-	var stale_root: Node3D = controller.get_chunk_root("surface/chunk_2_-1")
-	var stale_root_ref: WeakRef = weakref(stale_root) if stale_root != null else null
-	controller.fail_unload_at = controller.unload_attempts + 2
-	var stale_request: int = int(director.call(
-		"request_sync_to_world_position_async", Vector3.ZERO, _test_time + 13, 8
-	))
-	var stale_report: Dictionary = await _wait_for_request(director, stale_request)
-	_expect(str(stale_report.get("phase", "")) == "stale_unload", "second stale-unload rejection is reported during async commit")
-	_expect(not bool(stale_report.get("success", true)) and bool(stale_report.get("rollback_complete", false)), "partial stale-unload failure restores the previous window")
-	_expect(controller.get_loaded_chunk_ids() == shifted_ids, "partial stale-unload failure restores the exact prior controller IDs")
-	_expect(director.call("get_managed_chunk_ids") == shifted_ids, "partial stale-unload failure restores the director's managed IDs")
-	_expect(controller.get_loaded_chunk_ids().size() == 9, "partial stale-unload rollback leaves exactly nine active chunks")
-	_expect(stale_root_ref != null and stale_root_ref.get_ref() == null, "the previously unloaded stale root is actually released before restoration")
-	_expect(controller.get_chunk_root("surface/chunk_2_-1") != null, "rollback creates a fresh root for the restored stale chunk")
+    var stale_root: Node3D = controller.get_chunk_root("surface/chunk_2_-1")
+    var stale_root_ref: WeakRef = weakref(stale_root) if stale_root != null else null
+    controller.fail_unload_at = controller.unload_attempts + 2
+    var stale_request: int = int(director.call(
+        "request_sync_to_world_position_async", Vector3.ZERO, _test_time + 13, 8
+    ))
+    var stale_report: Dictionary = await _wait_for_request(director, stale_request)
+    _expect(str(stale_report.get("phase", "")) == "stale_unload", "second stale-unload rejection is reported during async commit")
+    _expect(not bool(stale_report.get("success", true)) and bool(stale_report.get("rollback_complete", false)), "partial stale-unload failure restores the previous window")
+    _expect(controller.get_loaded_chunk_ids() == shifted_ids, "partial stale-unload failure restores the exact prior controller IDs")
+    _expect(director.call("get_managed_chunk_ids") == shifted_ids, "partial stale-unload failure restores the director's managed IDs")
+    _expect(controller.get_loaded_chunk_ids().size() == 9, "partial stale-unload rollback leaves exactly nine active chunks")
+    _expect(stale_root_ref != null and stale_root_ref.get_ref() == null, "the previously unloaded stale root is actually released before restoration")
+    _expect(controller.get_chunk_root("surface/chunk_2_-1") != null, "rollback creates a fresh root for the restored stale chunk")
 
-	director.queue_free()
-	controller.queue_free()
-	await process_frame
+    director.queue_free()
+    controller.queue_free()
+    await process_frame
 
 func _wait_for_staged_root_count(director: Node, request_id: int, minimum: int) -> bool:
-	for _frame in range(120):
-		if int(director.call("get_async_staged_root_count", request_id)) >= minimum:
-			return true
-		await process_frame
-	return false
+    for _frame in range(120):
+        if int(director.call("get_async_staged_root_count", request_id)) >= minimum:
+            return true
+        await process_frame
+    return false
 
 func _make_transaction_chunk(coord: Vector2i) -> Node3D:
-	var chunk := Node3D.new()
-	chunk.name = "transaction_chunk_%d_%d" % [coord.x, coord.y]
-	return chunk
+    var chunk := Node3D.new()
+    chunk.name = "transaction_chunk_%d_%d" % [coord.x, coord.y]
+    return chunk
