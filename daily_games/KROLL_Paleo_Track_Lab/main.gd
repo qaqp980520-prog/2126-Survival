@@ -48,6 +48,7 @@ var _track_view: TrackwayView
 var _title_label: Label
 var _site_label: Label
 var _metrics_label: Label
+var _field_guide_label: Label
 var _status_label: Label
 var _score_label: Label
 var _submit_button: Button
@@ -130,11 +131,11 @@ func _build_ui() -> void:
     _metrics_label.add_theme_font_size_override("font_size", 15)
     data_column.add_child(_metrics_label)
 
-    var note := Label.new()
-    note.text = "Compare footprint size, trackway gauge and stride ratio. Toe direction gives the heading."
-    note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    note.add_theme_color_override("font_color", Color(0.68, 0.76, 0.72))
-    data_column.add_child(note)
+    _field_guide_label = Label.new()
+    _field_guide_label.text = "FIELD GUIDE\nSmall Ornithopod: foot < 32 cm\nLarge Theropod: 32–55 cm\nSauropod: foot >= 56 cm and gauge >= 80 cm\nGait: stride / foot >= 8.5 = RUN; otherwise WALK\nHeading: round toe bearing to nearest 45 degrees."
+    _field_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _field_guide_label.add_theme_color_override("font_color", Color(0.68, 0.76, 0.72))
+    data_column.add_child(_field_guide_label)
 
     var answer_panel := PanelContainer.new()
     column.add_child(answer_panel)
@@ -253,6 +254,9 @@ func get_answer_button_count() -> int:
 
 func get_metrics_text() -> String:
     return _metrics_label.text if _metrics_label != null else ""
+
+func get_field_guide_text() -> String:
+    return _field_guide_label.text if _field_guide_label != null else ""
 
 func _refresh() -> void:
     if _rules == null or _state.is_empty():
