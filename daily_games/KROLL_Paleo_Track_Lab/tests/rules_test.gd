@@ -12,6 +12,12 @@ func _run() -> void:
     _expect(rules.get_site_definition(-1).is_empty(), "invalid site index returns no definition")
     _expect(rules.infer_heading({"bearing_deg": 359.0}) == "N", "heading quantization wraps bearings near north")
     _expect(rules.infer_heading({"bearing_deg": 315.0}) == "NW", "heading quantization identifies northwest")
+    _expect(rules.infer_species({"foot_length_cm": 31.9, "track_gauge_cm": 25.0}) == "small_ornithopod", "species classifier keeps footprints below 32 cm in the small category")
+    _expect(rules.infer_species({"foot_length_cm": 32.0, "track_gauge_cm": 40.0}) == "large_theropod", "species classifier enters the large theropod band at 32 cm")
+    _expect(rules.infer_species({"foot_length_cm": 56.0, "track_gauge_cm": 80.0}) == "sauropod", "species classifier recognizes the sauropod length and gauge boundary")
+    _expect(rules.infer_species({"foot_length_cm": 56.0, "track_gauge_cm": 79.0}) == "large_theropod", "wide-gauge condition is required for the sauropod category")
+    _expect(rules.infer_gait({"foot_length_cm": 10.0, "stride_cm": 84.9}) == "walk", "gait classifier stays walking just below the 8.5 ratio")
+    _expect(rules.infer_gait({"foot_length_cm": 10.0, "stride_cm": 85.0}) == "run", "gait classifier switches to running at the 8.5 ratio")
     _expect(rules.infer_gait({"foot_length_cm": 46.0, "stride_cm": 460.0}) == "run", "high stride-to-foot ratio identifies a running trackway")
     _expect(rules.infer_gait({"foot_length_cm": 68.0, "stride_cm": 408.0}) == "walk", "lower stride-to-foot ratio identifies a walking trackway")
 
