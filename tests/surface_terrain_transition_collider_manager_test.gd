@@ -91,10 +91,15 @@ func _test_single_shared_transition() -> void:
         var expected_length: float = sqrt(1.5 * 1.5 + 0.5 * 0.5)
         _expect(box != null and absf(box.size.x - expected_length) <= 0.0001, "shared collider spans both 0.75 m edge strips and the 0.5 m rise")
         _expect(box != null and absf(box.size.z - PatchScript.PATCH_SIZE) <= 0.0001, "shared collider spans the full two-metre seam width")
-        _expect(body.get_node_or_null("SharedTransitionVisual") is MeshInstance3D, "shared transition has a matching visible ramp mesh")
-        var visual := body.get_node("SharedTransitionVisual") as MeshInstance3D
-        var visual_box := visual.mesh as BoxMesh
-        _expect(visual_box != null and absf(visual_box.size.y - 0.04) <= 0.0001, "ramp visual includes side faces matching the collision slab")
+        var visual_node: Node = body.get_node_or_null("SharedTransitionVisual")
+        if DisplayServer.get_name() == "headless":
+            _expect(visual_node == null, "headless transition body omits render-only mesh while preserving collision")
+        else:
+            _expect(visual_node is MeshInstance3D, "shared transition has a matching visible ramp mesh")
+            if visual_node is MeshInstance3D:
+                var visual := visual_node as MeshInstance3D
+                var visual_box := visual.mesh as BoxMesh
+                _expect(visual_box != null and absf(visual_box.size.y - 0.04) <= 0.0001, "ramp visual includes side faces matching the collision slab")
 
     var malformed_descriptors: Dictionary = binding.get("descriptors", {}).duplicate(true)
     var malformed_descriptor: Dictionary = malformed_descriptors[edge_key].duplicate(true)
