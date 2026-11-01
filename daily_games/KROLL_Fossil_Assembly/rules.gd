@@ -74,6 +74,7 @@ func create_state(level_index: int) -> Dictionary:
         "target_cells": definition["target_cells"].duplicate(),
         "pieces": piece_states,
         "occupied": {},
+        "placement_order": [],
         "status": "playing",
         "moves": 0
     }
@@ -149,6 +150,7 @@ func place_piece(state: Dictionary, piece_id: String, origin: Vector2i, rotation
     piece_state["origin"] = origin
     piece_state["rotation"] = posmod(rotation, 4)
     next_state["pieces"][piece_id] = piece_state
+    next_state["placement_order"].append(piece_id)
     for cell in check["cells"]:
         next_state["occupied"][cell] = piece_id
     next_state["moves"] = int(next_state.get("moves", 0)) + 1
@@ -169,6 +171,7 @@ func remove_piece(state: Dictionary, piece_id: String) -> Dictionary:
     piece_state["origin"] = Vector2i.ZERO
     piece_state["rotation"] = 0
     next_state["pieces"][piece_id] = piece_state
+    next_state["placement_order"].erase(piece_id)
     next_state["status"] = "playing"
     next_state["moves"] = int(next_state.get("moves", 0)) + 1
     return {"ok": true, "state": next_state}
@@ -182,3 +185,7 @@ func is_complete(state: Dictionary) -> bool:
         if not occupied.has(cell):
             return false
     return true
+
+func get_last_placed_piece(state: Dictionary) -> String:
+    var order: Array = state.get("placement_order", [])
+    return str(order.back()) if not order.is_empty() else ""
