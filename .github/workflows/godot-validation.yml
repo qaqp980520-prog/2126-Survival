@@ -2893,7 +2893,7 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Inertial Docking runtime smoke test passed."
 
-      - name: Verify Run 81 shared terrain colliders and Fossil Assembly inputs
+      - name: Verify Run 81 shared terrain colliders and Microbe Scope inputs
         shell: bash
         run: |
           set -e
@@ -2903,15 +2903,15 @@ jobs:
           grep -q 'sync_transitions' systems/MineralChunkController.gd
           grep -q 'get_terrain_transition_collider_count' systems/MineralChunkController.gd
           test -f tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd
-          test -f daily_games/KROLL_Fossil_Assembly/project.godot
-          test -f daily_games/KROLL_Fossil_Assembly/main.tscn
-          test -f daily_games/KROLL_Fossil_Assembly/main_root.tscn
-          test -f daily_games/KROLL_Fossil_Assembly/main.gd
-          test -f daily_games/KROLL_Fossil_Assembly/rules.gd
-          test -f daily_games/KROLL_Fossil_Assembly/tests/rules_test.gd
-          test -f daily_games/KROLL_Fossil_Assembly/tests/game_smoke_test.gd
-          grep -q 'FOSSIL_ASSEMBLY_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'KROLL Fossil Assembly Lab' tests/survival_test_hub_smoke_test.gd
+          test -f daily_games/KROLL_Microbe_Scope/project.godot
+          test -f daily_games/KROLL_Microbe_Scope/main.tscn
+          test -f daily_games/KROLL_Microbe_Scope/main_root.tscn
+          test -f daily_games/KROLL_Microbe_Scope/main.gd
+          test -f daily_games/KROLL_Microbe_Scope/rules.gd
+          test -f daily_games/KROLL_Microbe_Scope/tests/rules_test.gd
+          test -f daily_games/KROLL_Microbe_Scope/tests/game_smoke_test.gd
+          grep -q 'MICROBE_SCOPE_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Microbe Scope Lab' tests/survival_test_hub_smoke_test.gd
 
       - name: Run shared terrain transition collider manager tests
         shell: bash
@@ -2931,21 +2931,21 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld cross-chunk terrain adjacency tests passed."
 
-      - name: Import and parse KROLL Fossil Assembly
-        run: godot --headless --path daily_games/KROLL_Fossil_Assembly --editor --quit
-      - name: Run KROLL Fossil Assembly rules tests
+      - name: Import and parse KROLL Microbe Scope
+        run: godot --headless --path daily_games/KROLL_Microbe_Scope --editor --quit
+      - name: Run KROLL Microbe Scope rules tests
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Fossil_Assembly --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Microbe_Scope --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Fossil Assembly rules tests passed."
-      - name: Run KROLL Fossil Assembly runtime smoke test
+          echo "$output" | grep -q "KROLL Microbe Scope rules tests passed."
+      - name: Run KROLL Microbe Scope runtime smoke test
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Fossil_Assembly --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Microbe_Scope --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Fossil Assembly runtime smoke test passed."
+          echo "$output" | grep -q "KROLL Microbe Scope runtime smoke test passed."
