@@ -371,7 +371,9 @@ func clear_neighbor_edge_state(side: String) -> bool:
 func _clear_neighbor_edge_state_local(side: String) -> void:
 	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
+	_shared_transition_sides.erase(side)
 	_refresh_edge_ramp_state(side)
+	_refresh_collision_segmentation()
 
 func _refresh_bound_neighbors() -> void:
 	var local_state: Dictionary = get_world_object_state()
