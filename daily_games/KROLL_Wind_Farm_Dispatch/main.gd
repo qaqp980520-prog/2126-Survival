@@ -258,6 +258,7 @@ func _refresh_ui() -> void:
 		for key in ["yaw_left","yaw_right","pitch_down","pitch_up"]:
 			card[key].disabled = str(_state["status"]) != "playing" or not online
 		card["select"].disabled = str(_state["status"]) != "playing"
+	_selection_label.text = "SELECTED TURBINE %d — use Q/E to yaw and W/S to change blade pitch." % (_selected_turbine + 1)
 	var status: String = str(_state["status"])
 	match status:
 		"failed":
