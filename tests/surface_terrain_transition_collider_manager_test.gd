@@ -33,6 +33,8 @@ func _test_single_shared_transition() -> void:
     holder.add_child(higher)
     await process_frame
     await physics_frame
+    _ensure_visuals(lower)
+    _ensure_visuals(higher)
 
     var lower_state: Dictionary = lower.call("get_world_object_state")
     lower_state["revision"] = 1
@@ -67,6 +69,16 @@ func _test_single_shared_transition() -> void:
     _expect(_edge_segments_disabled(lower, 2), "all three lower-patch east edge collision segments are removed")
     _expect(_edge_segments_disabled(higher, 0), "all three higher-patch west edge collision segments are removed")
     _expect(not _segment_disabled(lower, 1, 1) and not _segment_disabled(higher, 1, 1), "interior collision segments remain active")
+    var lower_surface := lower.get_node("TerrainCollisionBody/TerrainSurfaceMesh") as MeshInstance3D
+    var higher_surface := higher.get_node("TerrainCollisionBody/TerrainSurfaceMesh") as MeshInstance3D
+    _expect(lower_surface != null and not lower_surface.visible, "lower full visual mesh is hidden while a shared edge is active")
+    _expect(higher_surface != null and not higher_surface.visible, "higher full visual mesh is hidden while a shared edge is active")
+    var lower_cut_visual := lower.get_node("TerrainCollisionBody/TerrainSurfaceSegment_X2_Z1") as MeshInstance3D
+    var lower_inner_visual := lower.get_node("TerrainCollisionBody/TerrainSurfaceSegment_X1_Z1") as MeshInstance3D
+    var higher_cut_visual := higher.get_node("TerrainCollisionBody/TerrainSurfaceSegment_X0_Z1") as MeshInstance3D
+    _expect(lower_cut_visual != null and not lower_cut_visual.visible, "lower east visual strip is removed beneath the shared ramp")
+    _expect(higher_cut_visual != null and not higher_cut_visual.visible, "higher west visual strip is removed beneath the shared ramp")
+    _expect(lower_inner_visual != null and lower_inner_visual.visible, "unshared interior terrain visual remains visible")
 
     var body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
     _expect(body != null and body.collision_layer == 1, "one owner-managed shared static body is active")
@@ -119,6 +131,8 @@ func _test_single_shared_transition() -> void:
     _expect(manager.call("get_transition_body", edge_key) == null and body_weak.get_ref() == null, "retired shared body is released")
     _expect(not lower_base.disabled and not higher_base.disabled, "full base collision returns when the transition is removed")
     _expect(not bool(lower.call("is_shared_transition_active", "east")) and not bool(higher.call("is_shared_transition_active", "west")), "both patches restore their unsegmented collision policy")
+    _expect(lower_surface.visible and higher_surface.visible, "full terrain visuals return when the shared transition retires")
+    _expect(not lower_cut_visual.visible and not lower_inner_visual.visible and not higher_cut_visual.visible, "segmented terrain visuals are hidden after transition retirement")
 
     holder.queue_free()
     await process_frame
@@ -236,6 +250,11 @@ func _test_perpendicular_conflict_falls_back_to_step() -> void:
     holder.queue_free()
     await process_frame
     await process_frame
+
+func _ensure_visuals(patch: Node3D) -> void:
+    if patch.get("_surface_mesh") == null:
+        patch.call("_build_visual")
+        patch.call("_refresh_geometry")
 
 func _edge_segments_disabled(patch: Node3D, x_index: int) -> bool:
     for z_index in range(3):
