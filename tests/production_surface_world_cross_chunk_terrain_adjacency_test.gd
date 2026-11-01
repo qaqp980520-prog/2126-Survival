@@ -78,6 +78,13 @@ func _run() -> void:
 	_expect(str(descriptor_before_unload.get("mode", "")) == "unequal_height", "production descriptor reflects the live unequal-height edge")
 	_expect(str(descriptor_before_unload.get("higher_stable_id", "")) == first_id and str(descriptor_before_unload.get("lower_stable_id", "")) == second_id, "production descriptor uses registry-backed Stable IDs for high and low patches")
 	_expect(is_equal_approx(float(descriptor_before_unload.get("height_delta", 0.0)), 0.5), "production descriptor reports the exact cross-chunk rise")
+
+	var transition_edge_key: String = str(descriptor_before_unload.get("edge_key", ""))
+	var original_transition_body: StaticBody3D = controller.call("get_terrain_transition_collider", transition_edge_key) as StaticBody3D
+	_expect(controller.call("get_terrain_transition_collider_count") == 1, "production controller owns exactly one active shared ramp for the edited seam")
+	_expect(original_transition_body != null and original_transition_body.collision_layer == 1, "production cross-chunk seam exposes an active shared collision body")
+	var original_transition_instance: int = original_transition_body.get_instance_id() if original_transition_body != null else 0
+	var original_transition_weak: WeakRef = weakref(original_transition_body) if original_transition_body != null else null
 	var first_instance: int = first.get_instance_id()
 	var second_instance: int = second.get_instance_id()
 	var first_proxy: Area3D = first.get_node_or_null("InteractionArea") as Area3D
@@ -110,6 +117,8 @@ func _run() -> void:
 	_expect(first_proxy_weak.get_ref() == null and second_proxy_weak.get_ref() == null, "both old interaction proxies are released")
 	_expect(registry.call("get_object_state", first_id).get("state", {}) == saved_first_state, "left boundary state survives chunk unload")
 	_expect(registry.call("get_object_state", second_id).get("state", {}) == saved_second_state, "right boundary state survives chunk unload")
+	_expect(controller.call("get_terrain_transition_collider_count") == 0, "shared transition collider is retired when both boundary chunks unload")
+	_expect(original_transition_weak == null or original_transition_weak.get_ref() == null, "old shared transition body is released with the unloaded seam")
 
 	_expect(bool(world.call("debug_move_player_to", Vector3(8.0, 2.0, 5.5), _test_time + 1)), "returning reloads the original 3x3 surface window")
 	await process_frame
@@ -144,6 +153,9 @@ func _run() -> void:
 				descriptor_after_reload = candidate_descriptor
 		_expect(str(descriptor_after_reload.get("edge_key", "")) == str(descriptor_before_unload.get("edge_key", "")), "derived edge key remains stable across chunk unload and reload")
 		_expect(str(descriptor_after_reload.get("higher_stable_id", "")) == first_id, "reloaded descriptor restores the same higher-patch owner identity")
+		var fresh_transition_body: StaticBody3D = controller.call("get_terrain_transition_collider", transition_edge_key) as StaticBody3D
+		_expect(fresh_transition_body != null and fresh_transition_body.get_instance_id() != original_transition_instance, "reloaded seam owns a fresh shared transition body")
+		_expect(controller.call("get_terrain_transition_collider_count") == 1, "reloaded production window rebuilds exactly one shared transition collider")
 	_expect(_count_cross_chunk_pairs(controller) == 12, "all twelve cross-chunk seams are rebuilt after reload")
 
 	_expect(bool(world.call("restore_stream_state", payload, _test_time + 2)), "schema-1 world restore accepts the cross-chunk terrain snapshot")
@@ -156,6 +168,7 @@ func _run() -> void:
 		_expect(str(restored_first.call("get_edge_policy", "east").get("mode", "")) == "local_higher", "schema-1 restore rebinds the higher left edge")
 		_expect(str(restored_second.call("get_edge_policy", "west").get("mode", "")) == "neighbor_higher", "schema-1 restore rebinds the lower right edge")
 	_expect(_count_cross_chunk_pairs(controller) == 12, "schema-1 restore reconstructs all twelve derived cross-chunk seams")
+	_expect(controller.call("get_terrain_transition_collider_count") == 1, "schema-1 restore reconstructs the derived shared ramp collider")
 	await _finish(0)
 
 func _surface_chunk_count(controller: Node) -> int:
