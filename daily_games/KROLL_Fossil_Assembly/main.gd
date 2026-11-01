@@ -3,7 +3,7 @@ extends Control
 const ROOT_RULES_PATH: String = "res://daily_games/KROLL_Fossil_Assembly/rules.gd"
 const LOCAL_RULES_PATH: String = "res://rules.gd"
 
-var _rules: Script
+var _rules: RefCounted
 var _state: Dictionary = {}
 var _selected_piece_id: String = ""
 var _selected_rotation: int = 0
@@ -16,11 +16,15 @@ var _next_button: Button
 
 func _ready() -> void:
     var rules_path: String = ROOT_RULES_PATH if ResourceLoader.exists(ROOT_RULES_PATH) else LOCAL_RULES_PATH
-    _rules = load(rules_path) as Script
-    if _rules == null:
+    var rules_script: Script = load(rules_path) as Script
+    if rules_script == null:
         push_error("KROLL Fossil Assembly could not load its rules module.")
         return
-    _state = _rules.create_state(0)
+    _rules = rules_script.new() as RefCounted
+    if _rules == null:
+        push_error("KROLL Fossil Assembly could not instantiate its rules module.")
+        return
+    _state = _rules.call("create_state", 0)
     _build_ui()
     _refresh_ui()
 
