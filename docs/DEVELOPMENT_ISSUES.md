@@ -1160,3 +1160,34 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 
 - World-save schema remains version 1; derived terrain descriptors are not serialized.
 - Inertial Docking is a simplified deterministic physics game; it does not implement orbital gravity, multiplayer, persistent campaign saves or device-level performance certification.
+
+
+## Run 81 closeout — shared transition colliders and Microbe Scope
+
+### Completed
+
+- KROLL Microbe Scope M0.1 is integrated into the standalone project and Survival Test Hub. M0.2 closes a score-farming loophole: resetting a captured specimen reverses that specimen's clarity credit and one capture count, preserves prior campaign totals, and rejects reset after campaign completion. Rules and runtime regressions cover repeated capture/reset and UI recalibration.
+- SurfaceTerrainTransitionColliderManager is integrated with the production binder/controller. One canonical owner creates one shared ramp body per accepted unequal-height cardinal seam. SurfaceTerrainPatch removes the overlapping base-edge collision strips and restores them when the transition retires.
+- Production cross-chunk regression verifies four-direction collision height, one-sided unload/reload, full-window unload/reload, fresh body/proxy instances, stable edge identity and schema-1 state restoration.
+- Headless manager regression no longer creates MeshInstance3D resources in the dummy renderer. It checks pure visibility-state helpers in headless mode while GUI mode retains actual mesh assertions.
+- Run 81 world-save schema remains version 1.
+
+### Exact validation and merge
+
+- Feature PR [#199](https://github.com/qaqp980520-prog/2126-Survival/pull/199) merged as `8e563d448c7ca663a7ab3a71c29fd0955f77b026`.
+- Exact-head Godot 4.3 [Run #925](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41287159093) passed 359/359 step entries, zero failures and zero skipped. Checkout cleanup, container shutdown and job completion all succeeded.
+- Run #925 passed manager physics at step 352, production cross-chunk transition unload/reload at step 353, Microbe Scope import at 354, rules tests at 355 and runtime smoke at 356.
+- Failed predecessor Run #921 is retained as a historical failed test-harness attempt; it is not counted as acceptance evidence. The M0.3 correction is verified by Run #925.
+
+### Remaining engineering work
+
+1. Implement and test a safe corner-junction transition, or continue the documented conservative step fallback for perpendicular seams.
+2. Add bounded asynchronous chunk streaming with stale-request invalidation, cancellation-safe ownership and rollback.
+3. Perform local GUI/renderer visual QA, GPU performance testing and iPhone hardware QA when a suitable environment is available.
+4. Configure main branch protection and required status checks through repository owner/admin settings.
+
+### Limitations and compatibility
+
+- Shared ramps currently support the fixed production profile only: 2.0 m patch size, 0.75 m run on each side of the seam and 0.04 m collision slab thickness.
+- Headless CI validates collision and logical visual visibility state; it does not certify actual rendered appearance.
+- World-save schema remains version 1; transition descriptors and colliders are derived runtime objects and are not serialized.
