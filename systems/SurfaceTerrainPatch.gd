@@ -124,10 +124,11 @@ func _build_interaction_area() -> void:
 	add_child(_interaction_area)
 
 func _build_visual() -> void:
+	var initial_box_height: float = maxf(0.05, get_top_height())
 	_surface_mesh=MeshInstance3D.new()
 	_surface_mesh.name="TerrainSurfaceMesh"
 	var initial_surface_mesh := BoxMesh.new()
-	initial_surface_mesh.size = Vector3(PATCH_SIZE, BOX_HEIGHT, PATCH_SIZE)
+	initial_surface_mesh.size = Vector3(PATCH_SIZE, initial_box_height, PATCH_SIZE)
 	_surface_mesh.mesh = initial_surface_mesh
 	_collision_body.add_child(_surface_mesh)
 	for x_index in range(3):
@@ -135,7 +136,7 @@ func _build_visual() -> void:
 			var segment := MeshInstance3D.new()
 			segment.name = "TerrainSurfaceSegment_X%d_Z%d" % [x_index, z_index]
 			var initial_segment_mesh := BoxMesh.new()
-			initial_segment_mesh.size = Vector3(0.1, BOX_HEIGHT, 0.1)
+			initial_segment_mesh.size = Vector3(0.1, initial_box_height, 0.1)
 			segment.mesh = initial_segment_mesh
 			segment.visible = false
 			_collision_body.add_child(segment)
@@ -370,9 +371,7 @@ func clear_neighbor_edge_state(side: String) -> bool:
 func _clear_neighbor_edge_state_local(side: String) -> void:
 	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
-	_shared_transition_sides.erase(side)
 	_refresh_edge_ramp_state(side)
-	_refresh_collision_segmentation()
 
 func _refresh_bound_neighbors() -> void:
 	var local_state: Dictionary = get_world_object_state()
@@ -413,4 +412,3 @@ func _refresh_edge_ramp_state(side: String) -> void:
 	var visual: MeshInstance3D = _ramp_visuals.get(side) as MeshInstance3D
 	if visual != null:
 		visual.visible = ramp_enabled
-
