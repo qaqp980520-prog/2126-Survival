@@ -2,7 +2,6 @@ extends SceneTree
 
 const PlaygroundScene = preload("res://prototypes/SurfaceChunkStreamingPlayground.tscn")
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
-const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 
 var failures: Array[String] = []
 var _delegate_factory: Callable
@@ -82,7 +81,6 @@ func _test_production_surface_world_async_movement() -> void:
         await process_frame
         return
 
-    var initial_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
     var rollback_position: Vector3 = player.global_position
     var target_position := Vector3(35.0, 2.0, 35.0)
     var started: bool = bool(world.call("_request_surface_streaming", rollback_position, target_position, Vector3.ZERO))
