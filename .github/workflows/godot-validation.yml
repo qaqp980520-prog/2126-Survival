@@ -2846,7 +2846,7 @@ jobs:
           echo "$output" | grep -q "KROLL Wind Farm Dispatch runtime smoke test passed."
 
 
-      - name: Verify Run 80 Orbital Docking and descriptor-binding inputs
+      - name: Verify Run 80 Inertial Docking and descriptor-binding inputs
         shell: bash
         run: |
           set -e
@@ -2862,7 +2862,7 @@ jobs:
           test -f daily_games/KROLL_Inertial_Docking/rules.gd
           test -f daily_games/KROLL_Inertial_Docking/tests/rules_test.gd
           test -f daily_games/KROLL_Inertial_Docking/tests/game_smoke_test.gd
-          grep -q 'ORBITAL_DOCKING_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'INERTIAL_DOCKING_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'KROLL Inertial Docking' tests/survival_test_hub_smoke_test.gd
 
       - name: Run production cross-chunk transition descriptor binding regression
