@@ -322,6 +322,7 @@ func _run() -> void:
 		root.add_child(microbe_game)
 		await process_frame
 		_expect(microbe_game.has_method("get_current_state"), "root-loaded Microbe Scope initializes its calibration model")
+		_expect(microbe_game.get_title_text() == "KROLL // MICROBE SCOPE", "root-loaded Microbe Scope displays its correct title")
 		_expect(microbe_game.get_parameter_control_count() == 4, "root-loaded Microbe Scope builds four calibration controls")
 		_expect(microbe_game.get_action_button_count() == 3, "root-loaded Microbe Scope builds capture/reset/next controls")
 		if microbe_game.has_method("get_current_state"):
