@@ -192,7 +192,9 @@ func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
     visual.material_override = material
     body.add_child(visual)
     add_child(body)
-    body.global_transform = Transform3D(geometry["basis"], geometry["body_origin"])
+    var edge_basis: Basis = geometry["basis"]
+    var body_origin: Vector3 = geometry["body_origin"]
+    body.global_transform = Transform3D(edge_basis, body_origin)
     return {
         "body": body,
         "first_patch": edge["first_patch"],
