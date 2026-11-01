@@ -14,8 +14,9 @@ func _run() -> void:
         ["acid", "acid", "cool", "cool", "cool", "stir", "stir", "stir", "stir"],
         ["base", "base", "heat", "heat", "heat", "stir", "stir", "stir", "stir"]
     ]
+    var campaign_state: Dictionary = rules.call("create_state", 0)
     for index in range(3):
-        var state: Dictionary = rules.call("create_state", index)
+        var state: Dictionary = campaign_state
         var definition: Dictionary = rules.call("get_scenario_definition", index)
         _expect(not state.is_empty() and str(state.get("scenario_id", "")) == str(definition.get("id", "")), "scenario %d creates a matching process state" % index)
         for action in solutions[index]:
@@ -24,13 +25,30 @@ func _run() -> void:
             state = result["state"]
         _expect(str(state.get("status", "")) == "complete", "scenario %d reaches a stable four-cycle completion" % index)
         _expect(int(state.get("progress", 0)) == 100, "scenario %d reaches 100 percent stabilization" % index)
-        _expect(int(state.get("score", 0)) == 100, "scenario %d earns exactly 100 points" % index)
+        _expect(int(state.get("score", 0)) == (index + 1) * 100, "scenario %d awards one batch bonus without partial-cycle farming" % index)
         var advanced: Dictionary = rules.call("advance_scenario", state)
         _expect(bool(advanced.get("ok", false)), "scenario %d can advance after stabilization" % index)
         if index < 2:
-            _expect(str(advanced["state"].get("scenario_id", "")) != str(state.get("scenario_id", "")), "scenario %d advances to a new batch" % index)
+            campaign_state = advanced["state"]
+            _expect(int(campaign_state.get("score", 0)) == (index + 1) * 100, "scenario %d carries completed batch credit forward" % index)
         else:
             _expect(bool(advanced.get("complete", false)) and str(advanced["state"].get("status", "")) == "campaign_complete", "third batch completes the campaign")
+
+    var partial: Dictionary = rules.call("create_state", 0)
+    partial["ph"] = 7.0
+    partial["temperature"] = 50.0
+    partial["pressure"] = 1.6
+    for cycle in range(3):
+        var partial_result: Dictionary = rules.call("apply_action", partial, "stir")
+        partial = partial_result["state"]
+    _expect(int(partial.get("progress", 0)) == 75 and int(partial.get("score", 0)) == 0, "partial stable cycles show progress but award no reusable score")
+    partial["status"] = "failed"
+    var partial_reset: Dictionary = rules.call("reset_scenario", partial)
+    _expect(bool(partial_reset.get("ok", false)) and int(partial_reset["state"].get("score", -1)) == 0, "failed partial batch cannot be used to farm score")
+    var carried_failure: Dictionary = rules.call("create_state", 1, 200)
+    carried_failure["status"] = "failed"
+    var carried_reset: Dictionary = rules.call("reset_scenario", carried_failure)
+    _expect(int(carried_reset["state"].get("score", -1)) == 200, "reset preserves credit earned from earlier completed batches")
 
     var state: Dictionary = rules.call("create_state", 0, 50)
     var invalid: Dictionary = rules.call("apply_action", state, "unknown")
