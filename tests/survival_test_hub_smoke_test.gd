@@ -26,7 +26,7 @@ const STRATA_MAPPER_SCENE := "res://daily_games/KROLL_Strata_Mapper/main_root.ts
 const RASTER_SURVEY_SCENE := "res://daily_games/KROLL_Raster_Survey/main_root.tscn"
 const WIND_FARM_DISPATCH_SCENE := "res://daily_games/KROLL_Wind_Farm_Dispatch/main_root.tscn"
 const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_root.tscn"
-const FOSSIL_ASSEMBLY_SCENE := "res://daily_games/KROLL_Fossil_Assembly/main_root.tscn"
+const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -235,7 +235,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Raster Survey"), "hub labels the Raster Survey game")
 	_expect(labels.has("KROLL Wind Farm Dispatch"), "hub labels the Wind Farm Dispatch game")
 	_expect(labels.has("KROLL Inertial Docking"), "hub labels the Inertial Docking game")
-	_expect(labels.has("KROLL Fossil Assembly Lab"), "hub labels the Fossil Assembly game")
+	_expect(labels.has("KROLL Microbe Scope"), "hub labels the Fossil Assembly game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -315,19 +315,19 @@ func _run() -> void:
 		inertial_docking_game.queue_free()
 		await process_frame
 
-	var fossil_scene := load(FOSSIL_ASSEMBLY_SCENE) as PackedScene
-	_expect(fossil_scene != null, "root hub can load the Fossil Assembly scene")
-	if fossil_scene != null:
-		var fossil_game := fossil_scene.instantiate()
-		root.add_child(fossil_game)
+	var microbe_scene := load(MICROBE_SCOPE_SCENE) as PackedScene
+	_expect(microbe_scene != null, "root hub can load the Microbe Scope scene")
+	if microbe_scene != null:
+		var microbe_game := microbe_scene.instantiate()
+		root.add_child(microbe_game)
 		await process_frame
-		_expect(fossil_game.has_method("get_current_state"), "root-loaded Fossil Assembly initializes its specimen model")
-		_expect(fossil_game.get_piece_button_count() == 3, "root-loaded Fossil Assembly builds three fragment controls")
-		_expect(fossil_game.get_board_cell_count() == 25, "root-loaded Fossil Assembly builds a five-by-five board")
-		if fossil_game.has_method("get_current_state"):
-			var fossil_state: Dictionary = fossil_game.call("get_current_state")
-			_expect(str(fossil_state.get("level_id", "")) == "triceratops_skull", "root-loaded Fossil Assembly starts Triceratops Skull")
-		fossil_game.queue_free()
+		_expect(microbe_game.has_method("get_current_state"), "root-loaded Microbe Scope initializes its calibration model")
+		_expect(microbe_game.get_parameter_control_count() == 4, "root-loaded Microbe Scope builds four calibration controls")
+		_expect(microbe_game.get_action_button_count() == 3, "root-loaded Microbe Scope builds capture/reset/next controls")
+		if microbe_game.has_method("get_current_state"):
+			var microbe_state: Dictionary = microbe_game.call("get_current_state")
+			_expect(str(microbe_state.get("specimen_id", "")) == "diatom", "root-loaded Microbe Scope starts Diatom Valve")
+		microbe_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
