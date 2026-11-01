@@ -52,7 +52,8 @@ func _run() -> void:
         1
     )
     _expect(rotated.size() == 4 and rotated.has(Vector2i(1, 0)) and rotated.has(Vector2i(1, 2)), "quarter-turn rotation normalizes a vertical T fragment")
-    _expect((rules.call("create_state", 99) as Dictionary).is_empty(), "unknown specimen index is rejected")
+    var unknown_state: Dictionary = rules.call("create_state", 99)
+    _expect(unknown_state.is_empty(), "unknown specimen index is rejected")
 
     if failures.is_empty():
         print("KROLL Fossil Assembly rules tests passed.")
