@@ -2709,3 +2709,50 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Surface terrain adjacency binder tests passed."
+
+      - name: Verify Run 77 Strata Mapper and cross-chunk terrain inputs
+        shell: bash
+        run: |
+          set -e
+          test -f daily_games/KROLL_Strata_Mapper/project.godot
+          test -f daily_games/KROLL_Strata_Mapper/main.tscn
+          test -f daily_games/KROLL_Strata_Mapper/main_root.tscn
+          test -f daily_games/KROLL_Strata_Mapper/main.gd
+          test -f daily_games/KROLL_Strata_Mapper/rules.gd
+          test -f daily_games/KROLL_Strata_Mapper/tests/rules_test.gd
+          test -f daily_games/KROLL_Strata_Mapper/tests/game_smoke_test.gd
+          test -f tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd
+          grep -q 'TerrainPatch_CrossEast' systems/SurfaceChunkFactory.gd
+          grep -q 'TerrainPatch_CrossWest' systems/SurfaceChunkFactory.gd
+          grep -q 'TerrainPatch_CrossNorth' systems/SurfaceChunkFactory.gd
+          grep -q 'TerrainPatch_CrossSouth' systems/SurfaceChunkFactory.gd
+          grep -q 'entries.size() == 63' tests/production_surface_world_terrain_patch_all_chunks_reload_test.gd
+          grep -q 'STRATA_MAPPER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Strata Mapper' tests/survival_test_hub_smoke_test.gd
+
+      - name: Import and parse KROLL Strata Mapper
+        run: godot --headless --path daily_games/KROLL_Strata_Mapper --editor --quit
+      - name: Run KROLL Strata Mapper rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Strata_Mapper --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Strata Mapper rules tests passed."
+      - name: Run KROLL Strata Mapper runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Strata_Mapper --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Strata Mapper runtime smoke test passed."
+      - name: Run production cross-chunk terrain adjacency regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/production_surface_world_cross_chunk_terrain_adjacency_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld cross-chunk terrain adjacency tests passed."
