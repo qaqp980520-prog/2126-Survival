@@ -1132,3 +1132,31 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Descriptor M0.2 is a pure tested foundation, not yet used to create runtime colliders.
 - Wind Farm Dispatch uses fixed authored scenarios and simplified turbine physics; no save, random weather, animations, audio or multiplayer.
 - Local GUI/GPU/iPhone tests are not claimed; only exact-head cloud Godot 4.3 validation passed.
+
+## Run 80 closeout — terrain descriptor binding and Inertial Docking
+
+### Completed
+
+- KROLL Inertial Docking M0.1 is integrated into the Survival Test Hub and remains a separate project from the original KROLL Orbital Docking. It includes three deterministic docking trials, moving target velocity, relative-velocity retro-braking, finite fuel, debris/bounds failure, keyboard/touch controls, rules tests and runtime smoke coverage.
+- Restored Run 53's original Orbital Docking import/rules/runtime CI gates. Run 80 has independent Inertial Docking gates. The six key legacy project files remain byte-for-byte identical to main.
+- SurfaceTerrainTransitionDescriptor is integrated into SurfaceTerrainAdjacencyBinder and MineralChunkController using registry-backed Stable IDs. The controller stores derived edge descriptors in memory and refreshes them after state changes and chunk load/unload; descriptors are not persisted.
+- SurfaceTerrainAdjacencyBinder validates each complete patch state before any live adjacency mutation. An invalid material is rejected during preflight, and the prior valid adjacency remains intact.
+- Inertial Docking title and Test Hub identity were corrected; smoke tests assert the visible title.
+
+### Exact validation and merge
+
+- Feature PR [#197](https://github.com/qaqp980520-prog/2126-Survival/pull/197) merged as `57799255acaef7e7b6308b7f357331058dcbf3c4` from exact HEAD `033be2ba23a80b6bb80dbf968bbaab6c4b294bd6`.
+- Godot 4.3 exact-head [Run #892](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41277023667) passed 353/353 step entries, zero failures and zero skipped. Cleanup and job completion succeeded.
+- Restored Orbital Docking gates passed (steps 213–215); binder suite passed (step 330); cross-chunk descriptor binding passed (step 347); Inertial Docking import/rules/runtime passed (steps 348–350).
+
+### Remaining issues
+
+1. Shared unequal-height transition colliders are not implemented. Segment existing patch collision strips before introducing a single-owner shared ramp; do not simply overlay a ramp on the full BoxShape3D.
+2. Chunk streaming remains synchronous. Bounded async loading, stale-request invalidation, cancellation-safe ownership and rollback remain future work.
+3. Local editor GUI, GPU performance and iPhone hardware QA remain untested.
+4. GitHub reports `main.protected=false` and an empty repository rulesets list. The connected integration cannot configure branch protection; a repository owner/admin should enable protection and required status checks.
+
+### Compatibility
+
+- World-save schema remains version 1; derived terrain descriptors are not serialized.
+- Inertial Docking is a simplified deterministic physics game; it does not implement orbital gravity, multiplayer, persistent campaign saves or device-level performance certification.
