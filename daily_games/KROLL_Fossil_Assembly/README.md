@@ -10,7 +10,7 @@ Open this folder as a standalone Godot project or launch the root-integrated sce
 - Q / E: rotate the selected fragment.
 - WASD / arrow keys: move the placement cursor.
 - Space: place at the cursor.
-- X: remove the first placed fragment (undo).
+- X: remove the most recently placed fragment (undo).
 - R: reset the specimen.
 - N: advance after a specimen is complete.
 
