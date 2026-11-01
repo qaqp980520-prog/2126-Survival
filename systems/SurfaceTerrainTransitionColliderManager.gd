@@ -66,15 +66,26 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         var second_side: String = str(edge["second_side"])
         var first_was_active: bool = bool(first_patch.call("is_shared_transition_active", first_side)) if first_patch.has_method("is_shared_transition_active") else false
         var second_was_active: bool = bool(second_patch.call("is_shared_transition_active", second_side)) if second_patch.has_method("is_shared_transition_active") else false
-        if not bool(first_patch.call("set_shared_transition_active", first_side, true)) or not bool(second_patch.call("set_shared_transition_active", second_side, true)):
+        var first_activated: bool = bool(first_patch.call("set_shared_transition_active", first_side, true))
+        if not first_activated:
             for activation in newly_activated:
                 var activated_patch: Node3D = activation["patch"]
                 if is_instance_valid(activated_patch):
                     activated_patch.call("set_shared_transition_active", str(activation["side"]), false)
             _free_staged(staged)
-            return {"ok": false, "error": "patch_activation_failed", "active_count": _managed_edges.size()}
+            return {"ok": false, "error": "first_patch_activation_failed", "active_count": _managed_edges.size()}
         if not first_was_active:
             newly_activated.append({"patch": first_patch, "side": first_side})
+        var second_activated: bool = bool(second_patch.call("set_shared_transition_active", second_side, true))
+        if not second_activated:
+            if not first_was_active:
+                first_patch.call("set_shared_transition_active", first_side, false)
+            for activation in newly_activated:
+                var activated_patch: Node3D = activation["patch"]
+                if is_instance_valid(activated_patch):
+                    activated_patch.call("set_shared_transition_active", str(activation["side"]), false)
+            _free_staged(staged)
+            return {"ok": false, "error": "second_patch_activation_failed", "active_count": _managed_edges.size()}
         if not second_was_active:
             newly_activated.append({"patch": second_patch, "side": second_side})
 
