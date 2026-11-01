@@ -2,15 +2,13 @@ extends Control
 class_name KROLLMicrobeScopeView
 
 var _specimen_id: String = "diatom"
-var _focus: int = 50
 var _magnification: int = 2
 var _illumination: int = 50
 var _stain: int = 0
 var _clarity: int = 0
 
-func set_specimen_data(specimen_id: String, focus: int, magnification: int, illumination: int, stain: int, clarity: int) -> void:
+func set_specimen_data(specimen_id: String, magnification: int, illumination: int, stain: int, clarity: int) -> void:
     _specimen_id = specimen_id
-    _focus = focus
     _magnification = magnification
     _illumination = illumination
     _stain = stain
