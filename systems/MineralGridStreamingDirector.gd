@@ -282,7 +282,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
-		_emit_async_cancelled(request_id, staged_count)
+		_emit_async_cancelled(request_id, 0)
 		return
 	_set_sync_report(success, phase, message, rollback_complete, details)
 	_last_sync_report["request_id"] = request_id
