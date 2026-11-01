@@ -61,6 +61,8 @@ func _run() -> void:
 		await _finish(1)
 		return
 	var retained_root_instance: int = retained_root.get_instance_id()
+	var underground_before: Dictionary = _underground_ids(controller)
+	_expect(underground_before.size() == 9, "initial SurfaceWorld keeps its independent nine-chunk underground window")
 	var retained_patch_instance: int = retained_neighbor.get_instance_id() if retained_neighbor != null else 0
 	var centers: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(0, 0)]
 	for step_index in range(centers.size()):
@@ -86,6 +88,7 @@ func _run() -> void:
 		await process_frame
 		await physics_frame
 		_expect_window(controller, center, "shift %d" % (step_index + 1))
+		_expect(_same_ids(underground_before, _underground_ids(controller)), "surface shift %d leaves all underground chunk IDs unchanged" % (step_index + 1))
 		for id in previous.keys():
 			var entry: Dictionary = previous[id]
 			if target_ids.has(str(id)):
@@ -127,7 +130,7 @@ func _run() -> void:
 	var final_retained_patch: Node3D = _find_patch(controller, _chunk_id(Vector2i(0, 0)), "TerrainPatch_CrossWest")
 	_expect(final_retained_root != null and final_retained_root.get_instance_id() == retained_root_instance, "center chunk root remains the same instance through all four shifts")
 	_expect(final_retained_patch != null and final_retained_patch.get_instance_id() == retained_patch_instance, "overlapping center terrain patch remains the same instance")
-	_expect(controller.call("get_loaded_chunk_ids").size() == 10, "surface window remains nine chunks while the independent underground chunk stays loaded")
+	_expect(controller.call("get_loaded_chunk_ids").size() == 18, "surface and underground windows each retain nine loaded chunks")
 	await _finish(0)
 
 func _expect_window(controller: Node, center: Vector2i, label: String) -> void:
@@ -142,6 +145,7 @@ func _expect_window(controller: Node, center: Vector2i, label: String) -> void:
 		_expect(loaded_surface.has(str(id)), "%s window contains expected chunk %s" % [label, str(id)])
 	_expect(_terrain_patch_count(controller) == 63, "%s window contains all 63 terrain patches" % label)
 	_expect(_count_cross_chunk_pairs(controller) == 12, "%s window rebuilds all 12 cross-chunk seams" % label)
+	_expect(_underground_ids(controller).size() == 9, "%s window preserves the independent nine-chunk underground window" % label)
 
 func _expected_ids(center: Vector2i) -> Dictionary:
 	var ids: Dictionary = {}
@@ -160,6 +164,22 @@ func _snapshot_roots(controller: Node) -> Dictionary:
 		if chunk_root != null:
 			snapshot[id] = {"instance":chunk_root.get_instance_id(),"weak":weakref(chunk_root)}
 	return snapshot
+
+func _underground_ids(controller: Node) -> Dictionary:
+	var ids: Dictionary = {}
+	for raw_id in controller.call("get_loaded_chunk_ids"):
+		var id: String = str(raw_id)
+		if id.begins_with("underground/"):
+			ids[id] = true
+	return ids
+
+func _same_ids(left: Dictionary, right: Dictionary) -> bool:
+	if left.size() != right.size():
+		return false
+	for id in left.keys():
+		if not right.has(id):
+			return false
+	return true
 
 func _terrain_patch_count(controller: Node) -> int:
 	var count: int = 0
