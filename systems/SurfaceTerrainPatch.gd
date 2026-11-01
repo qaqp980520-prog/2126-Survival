@@ -270,6 +270,30 @@ func _refresh_surface_segment_visuals(box_height: float, material: StandardMater
 			segment.position = Vector3(centers[x_index], box_height * 0.5, centers[z_index])
 			segment.material_override = material
 
+func is_surface_base_visual_visible() -> bool:
+	return _get_active_shared_transition_sides().is_empty()
+
+func is_surface_segment_visual_visible(x_index: int, z_index: int) -> bool:
+	return _is_surface_segment_visual_visible_for_sides(x_index, z_index, _get_active_shared_transition_sides())
+
+func _get_active_shared_transition_sides() -> Dictionary:
+	var active_sides: Dictionary = {}
+	for side in _shared_transition_sides.keys():
+		if bool(_shared_transition_sides[side]):
+			active_sides[str(side)] = true
+	return active_sides
+
+func _is_surface_segment_visual_visible_for_sides(x_index: int, z_index: int, active_sides: Dictionary) -> bool:
+	if x_index < 0 or x_index > 2 or z_index < 0 or z_index > 2 or active_sides.is_empty():
+		return false
+	var cut: bool = (
+		(active_sides.has("west") and x_index == 0)
+		or (active_sides.has("east") and x_index == 2)
+		or (active_sides.has("north") and z_index == 0)
+		or (active_sides.has("south") and z_index == 2)
+	)
+	return not cut
+
 func set_shared_transition_active(side: String, active: bool) -> bool:
 	if not RAMP_SIDES.has(side):
 		return false
@@ -287,10 +311,7 @@ func is_shared_transition_active(side: String) -> bool:
 	return RAMP_SIDES.has(side) and bool(_shared_transition_sides.get(side, false))
 
 func _refresh_collision_segmentation() -> void:
-	var active_sides: Dictionary = {}
-	for side in _shared_transition_sides.keys():
-		if bool(_shared_transition_sides[side]):
-			active_sides[str(side)] = true
+	var active_sides: Dictionary = _get_active_shared_transition_sides()
 	var has_shared_transition: bool = not active_sides.is_empty()
 	if _collision_shape != null:
 		_collision_shape.disabled = has_shared_transition
@@ -298,19 +319,14 @@ func _refresh_collision_segmentation() -> void:
 		_surface_mesh.visible = not has_shared_transition
 	for x_index in range(3):
 		for z_index in range(3):
-			var cut: bool = (
-				(active_sides.has("west") and x_index == 0)
-				or (active_sides.has("east") and x_index == 2)
-				or (active_sides.has("north") and z_index == 0)
-				or (active_sides.has("south") and z_index == 2)
-			)
+			var cut: bool = not _is_surface_segment_visual_visible_for_sides(x_index, z_index, active_sides) and has_shared_transition
 			var key: String = "%d:%d" % [x_index, z_index]
 			var collision_segment: CollisionShape3D = _collision_segments.get(key) as CollisionShape3D
 			if collision_segment != null:
 				collision_segment.disabled = not has_shared_transition or cut
 			var surface_segment: MeshInstance3D = _surface_segments.get(key) as MeshInstance3D
 			if surface_segment != null:
-				surface_segment.visible = has_shared_transition and not cut
+				surface_segment.visible = _is_surface_segment_visual_visible_for_sides(x_index, z_index, active_sides)
 
 func get_edge_ramp_profile() -> Dictionary:
 	var rise: float = get_top_height()
