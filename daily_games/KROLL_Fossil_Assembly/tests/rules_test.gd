@@ -1,14 +1,15 @@
 extends SceneTree
 
-const Rules = preload("res://rules.gd")
+const RulesScript = preload("res://rules.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
     call_deferred("_run")
 
 func _run() -> void:
-    _expect(Rules.level_count() == 3, "three authored fossil specimens are available")
-    for level_index in range(Rules.level_count()):
+    var rules: RefCounted = RulesScript.new() as RefCounted
+    _expect(rules.call("level_count") == 3, "three authored fossil specimens are available")
+    for level_index in range(int(rules.call("level_count"))):
         var state: Dictionary = Rules.create_state(level_index)
         _expect(not state.is_empty(), "specimen %d creates a valid state" % level_index)
         var definition: Dictionary = Rules.get_level_definition(level_index)
