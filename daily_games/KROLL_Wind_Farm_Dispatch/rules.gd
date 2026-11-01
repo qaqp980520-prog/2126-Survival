@@ -162,7 +162,7 @@ func resolve_round(state: Dictionary) -> Dictionary:
 		generation += output
 		var pitch: int = int(turbine["pitch"])
 		var heat_gain: int = int(ceil(float(PITCH_HEAT_GAIN[pitch]) * float(wind_speed) / 3.0))
-		var next_heat: int = maxi(0, int(turbine["heat"]) + heat_gain - COOLING_PER_ROUND)
+		var next_heat: int = mini(TRIP_HEAT, maxi(0, int(turbine["heat"]) + heat_gain - COOLING_PER_ROUND))
 		turbine["heat"] = next_heat
 		if next_heat >= TRIP_HEAT:
 			turbine["online"] = false
