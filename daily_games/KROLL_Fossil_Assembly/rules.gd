@@ -36,7 +36,7 @@ const LEVELS: Array = [
         "title": "RAPTOR CLAW",
         "target_cells": [
             Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(1, 1),
-            Vector2i(0, 1), Vector2i(1, 2), Vector2i(2, 0), Vector2i(3, 1),
+            Vector2i(0, 1), Vector2i(1, 2), Vector2i(3, 1), Vector2i(4, 1),
             Vector2i(0, 3), Vector2i(1, 3), Vector2i(0, 4), Vector2i(1, 4)
         ],
         "pieces": [
