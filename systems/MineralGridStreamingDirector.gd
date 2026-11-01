@@ -219,7 +219,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			_emit_async_cancelled(request_id, staged_count)
 			return
 		if not _async_dependencies_available():
-			_abort_async_sync_request(request_id, staged_roots, staged_count)
+			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, [])
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
@@ -288,7 +288,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	var unloaded_stale: Array[Dictionary] = []
 	for id in stale_ids:
 		if not _async_dependencies_available():
-			_abort_async_sync_request(request_id, staged_roots, staged_count)
+			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
 			return
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		if not chunk_controller.unload_chunk(id, now_unix):
@@ -309,6 +309,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		unloaded_stale.append({"id": id, "coord": stale_coord})
 		_managed_chunk_ids.erase(id)
 
+	if not _async_dependencies_available():
+		_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
+		return
 	_finish_async_sync_request(request_id, true, "complete", "", true, {
 		"center": desired[int((desired.size() - 1) / 2)] if not desired.is_empty() else Vector2i.ZERO,
 		"desired_count": desired.size(),
@@ -328,7 +331,14 @@ func _async_dependencies_available() -> bool:
 		and chunk_factory.is_valid()
 	)
 
-func _abort_async_sync_request(request_id: int, staged_roots: Dictionary, staged_count: int) -> void:
+func _abort_async_sync_request(
+	request_id: int,
+	staged_roots: Dictionary,
+	staged_count: int,
+	now_unix: int = -1,
+	newly_loaded: Array[String] = [],
+	unloaded_stale: Array[Dictionary] = []
+) -> void:
 	var released_count: int = _release_async_staged_roots(request_id, staged_roots)
 	var controller_destroyed: bool = (
 		chunk_controller == null
@@ -338,10 +348,22 @@ func _abort_async_sync_request(request_id: int, staged_roots: Dictionary, staged
 	var controller_detached: bool = controller_destroyed
 	if not controller_destroyed and is_instance_valid(chunk_controller):
 		controller_detached = not chunk_controller.is_inside_tree()
+	var new_loads_rollback_ok: bool = true
+	var stale_restore_ok: bool = true
+	var rollback_complete: bool = true
 	if controller_destroyed:
 		# The controller owns every committed root. Once it is destroyed, its active
 		# window no longer exists and the director must be allowed to bind a replacement.
 		_managed_chunk_ids.clear()
+		rollback_complete = false
+		new_loads_rollback_ok = newly_loaded.is_empty()
+		stale_restore_ok = unloaded_stale.is_empty()
+	else:
+		if not newly_loaded.is_empty():
+			new_loads_rollback_ok = _rollback_new_loads(newly_loaded, now_unix)
+		if new_loads_rollback_ok and not unloaded_stale.is_empty():
+			stale_restore_ok = _restore_unloaded_chunks(unloaded_stale, now_unix)
+		rollback_complete = new_loads_rollback_ok and stale_restore_ok
 	if request_id != _active_async_request_id:
 		_emit_async_cancelled(request_id, staged_count)
 		return
@@ -350,13 +372,17 @@ func _abort_async_sync_request(request_id: int, staged_roots: Dictionary, staged
 		false,
 		"dependency_unavailable",
 		"Async chunk staging lost its controller or factory before commit.",
-		not controller_destroyed,
+		rollback_complete,
 		{
 			"staged_count": staged_count,
 			"staged_roots_released": released_count,
 			"controller_destroyed": controller_destroyed,
 			"controller_detached": controller_detached,
-			"factory_valid": chunk_factory.is_valid()
+			"factory_valid": chunk_factory.is_valid(),
+			"newly_loaded_count": newly_loaded.size(),
+			"unloaded_stale_count": unloaded_stale.size(),
+			"new_loads_rollback_ok": new_loads_rollback_ok,
+			"stale_restore_ok": stale_restore_ok
 		}
 	)
 
