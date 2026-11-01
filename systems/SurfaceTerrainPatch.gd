@@ -24,6 +24,9 @@ var _ramp_collisions: Dictionary = {}
 var _ramp_visuals: Dictionary = {}
 var _neighbor_edge_states: Dictionary = {}
 var _neighbor_patches: Dictionary = {}
+var _collision_segments: Dictionary = {}
+var _surface_segments: Dictionary = {}
+var _shared_transition_sides: Dictionary = {}
 
 func _ready() -> void:
 	_build_collision()
@@ -84,6 +87,15 @@ func _build_collision() -> void:
 	_collision_shape=CollisionShape3D.new()
 	_collision_shape.name="TerrainCollisionShape"
 	_collision_body.add_child(_collision_shape)
+	for x_index in range(3):
+		for z_index in range(3):
+			var segment := CollisionShape3D.new()
+			segment.name = "TerrainCollisionSegment_X%d_Z%d" % [x_index, z_index]
+			var segment_box := BoxShape3D.new()
+			segment.shape = segment_box
+			segment.disabled = true
+			_collision_body.add_child(segment)
+			_collision_segments["%d:%d" % [x_index, z_index]] = segment
 	for side in RAMP_SIDES:
 		var ramp_body := StaticBody3D.new()
 		ramp_body.name="TerrainRampBody_"+side.capitalize()
@@ -115,6 +127,13 @@ func _build_visual() -> void:
 	_surface_mesh=MeshInstance3D.new()
 	_surface_mesh.name="TerrainSurfaceMesh"
 	_collision_body.add_child(_surface_mesh)
+	for x_index in range(3):
+		for z_index in range(3):
+			var segment := MeshInstance3D.new()
+			segment.name = "TerrainSurfaceSegment_X%d_Z%d" % [x_index, z_index]
+			segment.visible = false
+			_collision_body.add_child(segment)
+			_surface_segments["%d:%d" % [x_index, z_index]] = segment
 	for side in RAMP_SIDES:
 		var ramp_mesh := MeshInstance3D.new()
 		ramp_mesh.name="TerrainRampVisual_"+side.capitalize()
@@ -156,12 +175,14 @@ func _refresh_geometry() -> void:
 	box.size=Vector3(PATCH_SIZE,box_height,PATCH_SIZE)
 	_collision_shape.shape=box
 	_collision_shape.position=Vector3(0.0,box_height*0.5,0.0)
+	_refresh_segment_geometry(box_height)
 	for side in RAMP_SIDES:
 		var ramp_collision: CollisionShape3D = _ramp_collisions.get(side) as CollisionShape3D
 		if ramp_collision != null:
 			_configure_ramp_collision(ramp_collision,side,height)
 	for side in RAMP_SIDES:
 		_refresh_edge_ramp_state(side)
+	_refresh_collision_segmentation()
 	if _surface_mesh == null or not is_instance_valid(_surface_mesh):
 		return
 	var material := StandardMaterial3D.new()
@@ -174,6 +195,7 @@ func _refresh_geometry() -> void:
 	_surface_mesh.mesh=mesh
 	_surface_mesh.position=_collision_shape.position
 	_surface_mesh.material_override=material
+	_refresh_surface_segment_visuals(box_height, material)
 	var angle: float = atan(height/EDGE_RAMP_RUN)
 	var slope_length: float = sqrt(EDGE_RAMP_RUN*EDGE_RAMP_RUN+height*height)
 	var half: float = PATCH_SIZE*0.5
@@ -199,6 +221,89 @@ func _refresh_geometry() -> void:
 			"south":
 				ramp_visual.position=Vector3(0.0,height*0.5,offset)
 				ramp_visual.rotation=Vector3(angle,0.0,0.0)
+
+func _segment_widths() -> Array[float]:
+    return [EDGE_RAMP_RUN, PATCH_SIZE - EDGE_RAMP_RUN * 2.0, EDGE_RAMP_RUN]
+
+func _segment_centers() -> Array[float]:
+    var widths: Array[float] = _segment_widths()
+    return [
+        -PATCH_SIZE * 0.5 + widths[0] * 0.5,
+        0.0,
+        PATCH_SIZE * 0.5 - widths[2] * 0.5
+    ]
+
+func _refresh_segment_geometry(box_height: float) -> void:
+    var widths: Array[float] = _segment_widths()
+    var centers: Array[float] = _segment_centers()
+    for x_index in range(3):
+        for z_index in range(3):
+            var key: String = "%d:%d" % [x_index, z_index]
+            var segment: CollisionShape3D = _collision_segments.get(key) as CollisionShape3D
+            if segment != null:
+                var box := segment.shape as BoxShape3D
+                if box == null:
+                    box = BoxShape3D.new()
+                    segment.shape = box
+                box.size = Vector3(widths[x_index], box_height, widths[z_index])
+                segment.position = Vector3(centers[x_index], box_height * 0.5, centers[z_index])
+
+func _refresh_surface_segment_visuals(box_height: float, material: StandardMaterial3D) -> void:
+    var widths: Array[float] = _segment_widths()
+    var centers: Array[float] = _segment_centers()
+    for x_index in range(3):
+        for z_index in range(3):
+            var key: String = "%d:%d" % [x_index, z_index]
+            var segment: MeshInstance3D = _surface_segments.get(key) as MeshInstance3D
+            if segment == null:
+                continue
+            var mesh := BoxMesh.new()
+            mesh.size = Vector3(widths[x_index], box_height, widths[z_index])
+            segment.mesh = mesh
+            segment.position = Vector3(centers[x_index], box_height * 0.5, centers[z_index])
+            segment.material_override = material
+
+func set_shared_transition_active(side: String, active: bool) -> bool:
+    if not RAMP_SIDES.has(side):
+        return false
+    if active:
+        var policy: Dictionary = get_edge_policy(side)
+        if not bool(policy.get("valid", false)) or not ["local_higher", "neighbor_higher"].has(str(policy.get("mode", ""))):
+            return false
+        _shared_transition_sides[side] = true
+    else:
+        _shared_transition_sides.erase(side)
+    _refresh_collision_segmentation()
+    return true
+
+func is_shared_transition_active(side: String) -> bool:
+    return RAMP_SIDES.has(side) and bool(_shared_transition_sides.get(side, false))
+
+func _refresh_collision_segmentation() -> void:
+    var active_sides: Dictionary = {}
+    for side in _shared_transition_sides.keys():
+        if bool(_shared_transition_sides[side]):
+            active_sides[str(side)] = true
+    var has_shared_transition: bool = not active_sides.is_empty()
+    if _collision_shape != null:
+        _collision_shape.disabled = has_shared_transition
+    if _surface_mesh != null and is_instance_valid(_surface_mesh):
+        _surface_mesh.visible = not has_shared_transition
+    for x_index in range(3):
+        for z_index in range(3):
+            var cut: bool = (
+                (active_sides.has("west") and x_index == 0)
+                or (active_sides.has("east") and x_index == 2)
+                or (active_sides.has("north") and z_index == 0)
+                or (active_sides.has("south") and z_index == 2)
+            )
+            var key: String = "%d:%d" % [x_index, z_index]
+            var collision_segment: CollisionShape3D = _collision_segments.get(key) as CollisionShape3D
+            if collision_segment != null:
+                collision_segment.disabled = not has_shared_transition or cut
+            var surface_segment: MeshInstance3D = _surface_segments.get(key) as MeshInstance3D
+            if surface_segment != null:
+                surface_segment.visible = has_shared_transition and not cut
 
 func get_edge_ramp_profile() -> Dictionary:
 	var rise: float = get_top_height()
@@ -259,7 +364,9 @@ func clear_neighbor_edge_state(side: String) -> bool:
 func _clear_neighbor_edge_state_local(side: String) -> void:
 	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
+	_shared_transition_sides.erase(side)
 	_refresh_edge_ramp_state(side)
+	_refresh_collision_segmentation()
 
 func _refresh_bound_neighbors() -> void:
 	var local_state: Dictionary = get_world_object_state()
