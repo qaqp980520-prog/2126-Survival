@@ -338,8 +338,8 @@ func _test_async_diagnostics_and_stress() -> void:
         _expect(int(retained_history[-1].get("request_id", 0)) == last_request_id, "diagnostic history keeps the latest request at the end")
 
     var superseded_id: int = int(director.call("request_sync_to_world_position_async", Vector3(10000.0, 0.0, 0.0), _test_time + 90, 1))
-    await process_frame
-    _expect(int(director.call("get_async_staged_root_count", superseded_id)) > 0, "overlap stress observes a staged root before supersession")
+    var staged_before_supersession: bool = await _wait_for_staged_root_count(director, superseded_id, 1)
+    _expect(staged_before_supersession, "overlap stress observes a staged root before supersession")
     var replacement_id: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 91, 2))
     var superseded_report: Dictionary = await _wait_for_request(director, superseded_id)
     var replacement_report: Dictionary = await _wait_for_request(director, replacement_id)
@@ -351,7 +351,8 @@ func _test_async_diagnostics_and_stress() -> void:
     _expect(str(replacement_diagnostic.get("phase", "")) == "complete", "replacement request diagnostics end in complete")
 
     var explicit_cancel_id: int = int(director.call("request_sync_to_world_position_async", Vector3(14000.0, 0.0, 0.0), _test_time + 92, 1))
-    await process_frame
+    var staged_before_cancel: bool = await _wait_for_staged_root_count(director, explicit_cancel_id, 1)
+    _expect(staged_before_cancel, "explicit cancellation test reaches staging before cancellation")
     _expect(bool(director.call("cancel_async_sync_request", explicit_cancel_id)), "explicit cancellation is accepted during staging")
     var explicit_cancel_report: Dictionary = await _wait_for_request(director, explicit_cancel_id)
     var explicit_cancel_diagnostic: Dictionary = director.call("get_async_request_diagnostics", explicit_cancel_id)
