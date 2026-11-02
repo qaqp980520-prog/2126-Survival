@@ -18,7 +18,7 @@ func _run() -> void:
 	director.chunk_size_z = 10.0
 	director.load_radius = 1
 	_expect(bool(director.call("bind_controller", controller)), "fixture binds controller")
-	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "fixture binds factory")
+	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "fixture binds factory")
 	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, 2000)), "fixture creates initial window")
 	var request_id: int = director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 0.0), 2001, 1)
 	_expect(request_id > 0, "async window shift starts")
