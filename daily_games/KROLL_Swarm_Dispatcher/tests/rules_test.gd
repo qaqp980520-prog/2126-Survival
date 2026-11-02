@@ -47,7 +47,8 @@ func _test_invalid_inputs_and_copy_isolation() -> void:
 	_expect(not bool(invalid_drone.get("ok", true)) and str(invalid_drone.get("reason", "")) == "invalid_drone", "unknown drone indexes are rejected")
 	var appended: Dictionary = rules.append_action(state, 0, "right")
 	_expect(bool(appended.get("ok", false)), "valid route commands can be appended")
-	_expect((state["programs"][0] as Array).is_empty(), "appending a command does not mutate the caller's prior state")
+	var original_program: Array = state["programs"][0]
+	_expect(original_program.is_empty(), "appending a command does not mutate the caller's prior state")
 
 func _test_same_target_collision() -> void:
 	var rules := RulesScript.new()
