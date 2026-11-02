@@ -38,6 +38,7 @@ jobs:
           grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
           grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'labels.has("KROLL Signal Resonator")' tests/survival_test_hub_smoke_test.gd
 
       - name: Import and parse KROLL Signal Resonator
         run: godot --headless --path daily_games/KROLL_Signal_Resonator --editor --quit
