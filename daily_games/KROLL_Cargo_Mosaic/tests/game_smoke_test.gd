@@ -31,6 +31,9 @@ func _run() -> void:
 			_expect(bool(game.call("advance_level")), "advance to next bay")
 	_expect(bool(game.call("advance_level")), "complete final bay")
 	_expect(bool(game.call("get_current_state").get("campaign_complete", false)), "campaign terminal state")
+	game.call("reset_level")
+	var restarted: Dictionary = game.call("get_current_state")
+	_expect(int(restarted.get("level_index", -1)) == 0 and not bool(restarted.get("campaign_complete", true)), "reset restarts the campaign after completion")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
