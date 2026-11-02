@@ -34,6 +34,7 @@ const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
+const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
 
 var status_label: Label
 
@@ -293,6 +294,13 @@ func _build_ui() -> void:
 		"KROLL Titration Bench",
 		"逐步加入標準滴定液，讀取即時 pH 曲線，在三份未知酸樣本中精準鎖定當量點。",
 		TITRATION_BENCH_SCENE
+	)
+
+	_add_scene_button(
+		launch_list,
+		"KROLL Planetary Climate Lab",
+		"調整行星反照率與溫室熱滯留比例，讓三個世界的能量平衡溫度進入目標範圍。",
+		PLANETARY_CLIMATE_LAB_SCENE
 	)
 	_add_scene_button(
 		launch_list,
