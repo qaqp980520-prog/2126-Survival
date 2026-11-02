@@ -15,6 +15,7 @@ func _run() -> void:
 	_expect(game.call("get_drone_button_count") == 3, "game builds three drone selectors")
 	_expect(game.call("get_action_button_count") == 5, "game builds four directions and wait")
 	_expect(game.call("get_control_button_count") == 6, "game builds six execution controls")
+	_expect(game.call("get_restart_button_text") == "RESTART MISSION  ·  R", "game labels the restart control for the active mission")
 	_expect(bool(game.call("select_drone", 1)), "second drone can be selected")
 	_expect(bool(game.call("append_action", "wait")), "selected drone accepts a wait command")
 	_expect(bool(game.call("undo_action")), "unexecuted command can be undone")
