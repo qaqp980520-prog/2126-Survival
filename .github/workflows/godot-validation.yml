@@ -3343,7 +3343,7 @@ jobs:
           test -f daily_games/KROLL_Planetary_Climate_Lab/tests/rules_test.gd
           test -f daily_games/KROLL_Planetary_Climate_Lab/tests/game_smoke_test.gd
           grep -q 'PLANETARY_CLIMATE_LAB_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'KROLL Planetary Climate Lab' tests/survival_test_hub_smoke_test.gd
+          grep -q 'PLANETARY_CLIMATE_LAB_SCENE' tests/survival_test_hub_smoke_test.gd
 
       - name: Import and parse KROLL Planetary Climate Lab
         run: godot --headless --path daily_games/KROLL_Planetary_Climate_Lab --editor --quit
