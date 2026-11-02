@@ -1,0 +1,82 @@
+name: Run 93 focused Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Signal_Resonator/**'
+      - 'systems/SurfaceTerrainTransitionColliderManager.gd'
+      - 'tests/surface_terrain_transition_collider_manager_test.gd'
+      - 'prototypes/SurvivalTestHub.gd'
+      - 'tests/survival_test_hub_smoke_test.gd'
+      - '.github/workflows/run93-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print engine version and verify Run 93 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Signal_Resonator/project.godot
+          test -f daily_games/KROLL_Signal_Resonator/main.tscn
+          test -f daily_games/KROLL_Signal_Resonator/main_root.tscn
+          test -f daily_games/KROLL_Signal_Resonator/main.gd
+          test -f daily_games/KROLL_Signal_Resonator/rules.gd
+          test -f daily_games/KROLL_Signal_Resonator/tests/rules_test.gd
+          test -f daily_games/KROLL_Signal_Resonator/tests/game_smoke_test.gd
+          grep -q 'descriptor_side_mismatch' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q '_side_between(first_position, second_position, patch_size)' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
+          grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
+
+      - name: Import and parse KROLL Signal Resonator
+        run: godot --headless --path daily_games/KROLL_Signal_Resonator --editor --quit
+
+      - name: Run KROLL Signal Resonator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Signal_Resonator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Signal Resonator rules tests passed."
+
+      - name: Run KROLL Signal Resonator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Signal_Resonator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Signal Resonator runtime smoke test passed."
+
+      - name: Import and parse root 2126 Survival project
+        run: godot --headless --path . --editor --quit
+
+      - name: Run root Test Hub integration smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Run shared terrain transition manager regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 100s godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain shared transition collider manager tests passed."
