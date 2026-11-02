@@ -6,7 +6,7 @@ const COLORS: Dictionary = {
 	"HOOK": Color(0.72, 0.56, 0.93), "CORE": Color(0.30, 0.78, 0.56)
 }
 const MARKS: Dictionary = {"ION":"I","FORK":"F","HOOK":"H","CORE":"C"}
-const PREVIEWS: Dictionary = {"ION":"■■■■","FORK":"■■■/·■·","HOOK":"■·/■·/■■","CORE":"■■/■■"}
+const PREVIEWS: Dictionary = {"ION":"####","FORK":"###/.#.","HOOK":"#./#./##","CORE":"##/##"}
 
 var level_index := 0
 var placements: Dictionary = {}
