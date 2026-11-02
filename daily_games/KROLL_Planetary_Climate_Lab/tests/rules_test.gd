@@ -19,6 +19,10 @@ func _run() -> void:
 		{"albedo": 0.50, "greenhouse": 0.45, "target": 291.4}
 	]
 	var state: Dictionary = rules.create_state(0)
+	var initial_attempt: Dictionary = rules.simulate(state)
+	_expect(not bool(initial_attempt.get("ok", true)) and str(initial_attempt.get("reason", "")) == "outside_target_band", "out-of-band climate submission is rejected")
+	state = initial_attempt["state"]
+	_expect(str(state.get("status", "")) == "tuning" and int(state.get("score", -1)) == 0, "failed simulation keeps the planet open without awarding points")
 	for planet_index in range(3):
 		var definition: Dictionary = rules.get_planet_definition(planet_index)
 		_expect(not definition.is_empty(), "planet %d exposes its mission brief" % planet_index)
@@ -29,7 +33,7 @@ func _run() -> void:
 			float(reference["greenhouse"])
 		)
 		_expect(absf(calculated - float(reference["target"])) <= 0.1, "planet %d reference settings reproduce the authored target" % planet_index)
-		_expect(absf(calculated - float(definition["target_temp_k"])) <= rules.TARGET_TOLERANCE_K, "planet %d reference settings are inside the target band" % planet_index)
+		_expect(absf(calculated - float(definition["target_temp_k"])) <= 1.5, "planet %d reference settings are inside the target band" % planet_index)
 
 		var invalid_albedo: Dictionary = rules.set_albedo(state, 0.333)
 		_expect(not bool(invalid_albedo.get("ok", true)) and str(invalid_albedo.get("reason", "")) == "invalid_albedo", "unquantized albedo is rejected")
@@ -55,6 +59,9 @@ func _run() -> void:
 	_expect(not bool(rules.advance_planet(state).get("ok", true)), "completed campaign rejects a fourth planet")
 	var restarted: Dictionary = rules.restart_campaign()
 	_expect(int(restarted.get("score", -1)) == 0 and int(restarted.get("planet_index", -1)) == 0, "new campaign clears score and returns to Nysa")
+	var carried_state: Dictionary = rules.create_state(1, 100)
+	var reset_current: Dictionary = rules.restart_planet(carried_state)
+	_expect(bool(reset_current.get("ok", false)) and int(reset_current["state"].get("score", -1)) == 100, "restarting an unfinished planet preserves prior campaign points")
 
 	var boundary_state: Dictionary = rules.create_state(0)
 	var max_albedo: Dictionary = rules.set_albedo(boundary_state, 0.80)
