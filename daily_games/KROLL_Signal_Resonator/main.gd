@@ -1,12 +1,13 @@
 extends Control
 
-const RulesScript = preload("res://rules.gd")
+const MISS_WINDOW_MS: int = 160
 const LANE_COLORS: Array[Color] = [
 	Color("#54d9ff"),
 	Color("#ffbd58"),
 	Color("#b79aff")
 ]
 
+var _rules: Variant
 var _rules: Variant
 var _state: Dictionary = {}
 var _round_start_ms: int = 0
@@ -22,7 +23,18 @@ var _restart_button: Button
 var _next_button: Button
 
 func _ready() -> void:
-	_rules = RulesScript.new()
+	var attached_script: Script = get_script() as Script
+	if attached_script == null:
+		push_error("Signal Resonator main script is unavailable.")
+		set_process(false)
+		return
+	var rules_path: String = attached_script.resource_path.get_base_dir().path_join("rules.gd")
+	var rules_script: Script = load(rules_path) as Script
+	if rules_script == null:
+		push_error("Signal Resonator rules script could not be loaded: " + rules_path)
+		set_process(false)
+		return
+	_rules = rules_script.new()
 	_state = _rules.create_state(0)
 	_round_start_ms = Time.get_ticks_msec()
 	_build_ui()
@@ -140,10 +152,13 @@ func _refresh_ui() -> void:
 	_info_label.text = "STAGE %02d / %02d  ·  %s  ·  %d BPM" % [
 		level_index + 1, _rules.get_level_count(), str(level.get("title", "UNKNOWN")), int(level.get("bpm", 0))
 	]
-	_timing_label.text = "NEXT PULSE  ·  %s  ·  %+.2f s" % [
-		["CYAN", "AMBER", "VIOLET"][maxi(0, _rules.get_next_lane(_state))] if status == "playing" else "—",
-		float(delta_to_note) / 1000.0
-	]
+	if status == "playing":
+		_timing_label.text = "NEXT PULSE  ·  %s  ·  %+.2f s" % [
+			["CYAN", "AMBER", "VIOLET"][maxi(0, _rules.get_next_lane(_state))],
+			float(delta_to_note) / 1000.0
+		]
+	else:
+		_timing_label.text = "CHANNEL STATUS  ·  " + status.to_upper()
 	_progress.value = clampf(100.0 * (1.0 - absf(float(delta_to_note)) / float(_rules.MISS_WINDOW_MS)), 0.0, 100.0) if status == "playing" else 0.0
 	for lane in range(_lane_buttons.size()):
 		_lane_buttons[lane].disabled = status != "playing"
