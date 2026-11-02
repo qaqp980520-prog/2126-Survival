@@ -18,6 +18,7 @@ func _run() -> void:
 	_expect(game.call("get_title_text") == "KROLL // CARGO MOSAIC", "game title")
 	_expect(game.call("get_board_button_count") == 36, "6x6 board")
 	_expect(game.call("get_piece_button_count") == 4, "four module controls")
+	_expect(str(game.call("get_piece_preview_text", "FORK")).contains("■"), "module controls show their spatial silhouettes")
 	_expect(game.call("get_target_cell_count") == 16, "sixteen target cells")
 	_expect(game.call("try_place_piece", "ION", Vector2i(1,1), 3), "valid module placement")
 	_expect(not game.call("try_place_piece", "CORE", Vector2i(1,1), 0), "overlap rejection")
