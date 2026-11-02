@@ -2,13 +2,13 @@ extends Control
 
 const BOARD_WIDTH: int = 6
 const BOARD_HEIGHT: int = 6
-var rules_api: Variant
 const COLORS: Dictionary = {
 	"ION": Color(0.22, 0.72, 0.91), "FORK": Color(0.96, 0.66, 0.25),
 	"HOOK": Color(0.72, 0.56, 0.93), "CORE": Color(0.30, 0.78, 0.56)
 }
 const MARKS: Dictionary = {"ION":"I","FORK":"F","HOOK":"H","CORE":"C"}
 const PREVIEWS: Dictionary = {"ION":"####","FORK":"###/.#.","HOOK":"#./#./##","CORE":"##/##"}
+var rules_api: Variant
 
 var level_index := 0
 var placements: Dictionary = {}
