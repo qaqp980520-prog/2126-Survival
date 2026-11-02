@@ -214,7 +214,7 @@ func _build_ui() -> void:
 	action_row.add_theme_constant_override("separation", 10)
 	column.add_child(action_row)
 	action_row.add_child(_make_button("SHUTTER  [SPACE]", Callable(self, "capture_photo")))
-	action_row.add_child(_make_button("RESET  [R]", Callable(self, "reset_stage")))
+	action_row.add_child(_make_button("RESET / RESTART  [R]", Callable(self, "reset_stage")))
 	action_row.add_child(_make_button("NEXT  [N]", Callable(self, "advance_stage")))
 	var hint := Label.new()
 	hint.text = "Q/E focus · W/S zoom · A/D exposure · Space capture · R reset · N next habitat"
