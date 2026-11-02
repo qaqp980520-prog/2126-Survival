@@ -229,8 +229,7 @@ func _undo_last() -> void:
 	_refresh_ui()
 
 func reset_level() -> void:
-	if not campaign_complete:
-		_load_level(level_index)
+	_load_level(0 if campaign_complete else level_index)
 
 func advance_level() -> bool:
 	if not Rules.is_solved(level_index, placements):
