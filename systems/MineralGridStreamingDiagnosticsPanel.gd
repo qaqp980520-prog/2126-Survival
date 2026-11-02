@@ -114,7 +114,12 @@ func refresh_now() -> void:
 			if started_usec >= 0:
 				duration_usec = maxi(0, Time.get_ticks_usec() - started_usec)
 		var duration_text: String = "pending" if duration_usec < 0 else "%.1fms" % (float(duration_usec) / 1000.0)
-		var rollback_text: String = "rollback=ok" if bool(record.get("rollback_complete", false)) else "rollback=FAILED"
+		var rollback_text: String = "rollback=pending"
+		if bool(record.get("terminal", false)):
+			if bool(record.get("success", false)):
+				rollback_text = "rollback=n/a"
+			else:
+				rollback_text = "rollback=ok" if bool(record.get("rollback_complete", false)) else "rollback=FAILED"
 		var reason: String = str(record.get("cancellation_reason", ""))
 		if reason.length() > 22:
 			reason = reason.substr(0, 22) + "…"
