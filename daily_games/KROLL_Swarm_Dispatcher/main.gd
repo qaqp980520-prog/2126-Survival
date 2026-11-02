@@ -330,16 +330,18 @@ func get_control_button_count() -> int:
 	return _control_buttons.size()
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey):
 		return
 	var key_event: InputEventKey = event as InputEventKey
+	if key_event == null or not key_event.pressed or key_event.echo:
+		return
 	var key: int = key_event.keycode
 	match key:
 		KEY_TAB:
 			_selected_drone = (_selected_drone + 1) % 3
 			_refresh_ui()
 		KEY_ENTER, KEY_KP_ENTER:
-			run_all() if event.shift_pressed else step_tick()
+			run_all() if key_event.shift_pressed else step_tick()
 		KEY_BACKSPACE:
 			undo_action()
 		KEY_DELETE:
