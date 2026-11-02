@@ -43,11 +43,37 @@ class HabitatCanvas extends Control:
 				body_color = Color("#8b6841")
 			elif stage_index == 2:
 				body_color = Color("#72513c")
-			draw_circle(animal_center + Vector2(0.0, -12.0), 19.0, body_color)
-			draw_circle(animal_center + Vector2(16.0, -31.0), 8.0, body_color)
-			draw_line(animal_center + Vector2(-8.0, 1.0), animal_center + Vector2(-12.0, 24.0), body_color, 5.0)
-			draw_line(animal_center + Vector2(8.0, 1.0), animal_center + Vector2(12.0, 24.0), body_color, 5.0)
-			draw_line(animal_center + Vector2(20.0, -32.0), animal_center + Vector2(29.0, -34.0), body_color, 3.0)
+			var zoom_scale: float = 0.82 + float(state.get("zoom", 2)) * 0.1
+			if stage_index == 0:
+				var heron_body := animal_center + Vector2(0.0, -12.0) * zoom_scale
+				draw_circle(heron_body, 14.0 * zoom_scale, body_color)
+				draw_line(heron_body + Vector2(7.0, -5.0) * zoom_scale, heron_body + Vector2(13.0, -37.0) * zoom_scale, body_color, 5.0 * zoom_scale)
+				draw_circle(heron_body + Vector2(14.0, -40.0) * zoom_scale, 6.0 * zoom_scale, body_color)
+				draw_line(heron_body + Vector2(19.0, -41.0) * zoom_scale, heron_body + Vector2(34.0, -38.0) * zoom_scale, Color("#d8a64c"), 2.5 * zoom_scale)
+				draw_line(heron_body + Vector2(-4.0, 10.0) * zoom_scale, heron_body + Vector2(-8.0, 34.0) * zoom_scale, body_color, 3.0 * zoom_scale)
+				draw_line(heron_body + Vector2(5.0, 10.0) * zoom_scale, heron_body + Vector2(8.0, 34.0) * zoom_scale, body_color, 3.0 * zoom_scale)
+			elif stage_index == 1:
+				var glider_body := animal_center + Vector2(0.0, -14.0) * zoom_scale
+				draw_circle(glider_body, 13.0 * zoom_scale, body_color)
+				draw_colored_polygon(PackedVector2Array([
+					glider_body + Vector2(-5.0, -5.0) * zoom_scale,
+					glider_body + Vector2(-42.0, -37.0) * zoom_scale,
+					glider_body + Vector2(-25.0, 5.0) * zoom_scale
+				]), body_color.lightened(0.18))
+				draw_colored_polygon(PackedVector2Array([
+					glider_body + Vector2(5.0, -5.0) * zoom_scale,
+					glider_body + Vector2(42.0, -37.0) * zoom_scale,
+					glider_body + Vector2(25.0, 5.0) * zoom_scale
+				]), body_color.lightened(0.18))
+				draw_circle(glider_body + Vector2(15.0, -12.0) * zoom_scale, 5.0 * zoom_scale, body_color)
+				draw_line(glider_body + Vector2(-8.0, 5.0) * zoom_scale, glider_body + Vector2(-20.0, 18.0) * zoom_scale, body_color, 3.0 * zoom_scale)
+			else:
+				var runner_body := animal_center + Vector2(0.0, -13.0) * zoom_scale
+				draw_circle(runner_body, 19.0 * zoom_scale, body_color)
+				draw_line(runner_body + Vector2(-15.0, -3.0) * zoom_scale, runner_body + Vector2(-47.0, -18.0) * zoom_scale, body_color, 6.0 * zoom_scale)
+				draw_circle(runner_body + Vector2(18.0, -12.0) * zoom_scale, 7.0 * zoom_scale, body_color)
+				draw_line(runner_body + Vector2(-8.0, 10.0) * zoom_scale, runner_body + Vector2(-12.0, 28.0) * zoom_scale, body_color, 4.0 * zoom_scale)
+				draw_line(runner_body + Vector2(9.0, 10.0) * zoom_scale, runner_body + Vector2(13.0, 28.0) * zoom_scale, body_color, 4.0 * zoom_scale)
 		else:
 			for index in range(7):
 				var bush_x: float = size.x * 0.35 + float(index) * 26.0
@@ -289,6 +315,9 @@ func get_current_state() -> Dictionary:
 		"focus": _focus,
 		"zoom": _zoom,
 		"exposure": _exposure,
+		"target_focus": int(stage.get("focus", 0)),
+		"target_zoom": int(stage.get("zoom", 0)),
+		"target_exposure": int(stage.get("exposure", 0)),
 		"score": _score,
 		"stage_awarded": _stage_awarded,
 		"campaign_complete": _campaign_complete,
@@ -315,7 +344,12 @@ func _refresh_ui() -> void:
 	_stage_label.text = "%s · %d / %d" % [str(state.get("stage_name", "")), _stage_index + 1, int(state.get("stage_count", 0))]
 	_species_label.text = str(state.get("species", ""))
 	_score_label.text = "SCORE %d" % _score
-	_settings_label.text = "FOCUS %d/5    ZOOM %d/3    EXPOSURE %+d" % [_focus, _zoom, _exposure]
+	_settings_label.text = "CAMERA F%d/5 Z%d/3 E%+d  ·  FIELD BRIEF F%d Z%d E%+d" % [
+		_focus, _zoom, _exposure,
+		int(state.get("target_focus", 0)),
+		int(state.get("target_zoom", 0)),
+		int(state.get("target_exposure", 0))
+	]
 	var visibility_text: String = "OBSCURED" if bool(state.get("obscured", false)) else "CLEAR"
 	_telemetry_label.text = "SUBJECT X %.2f · %s · %.1fs" % [float(state.get("animal_x", 0.5)), visibility_text, _elapsed]
 	_status_label.text = _status
