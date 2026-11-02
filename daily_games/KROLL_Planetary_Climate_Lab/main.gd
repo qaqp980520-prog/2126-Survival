@@ -300,7 +300,6 @@ func _refresh() -> void:
 	var definition: Dictionary = _rules.call("get_planet_definition", index)
 	if definition.is_empty():
 		return
-	var target: float = float(definition["target_temp_k"])
 	var minimum: float = float(definition["target_min_k"])
 	var maximum: float = float(definition["target_max_k"])
 	var temperature: float = float(_state.get("equilibrium_temp_k", 0.0))
