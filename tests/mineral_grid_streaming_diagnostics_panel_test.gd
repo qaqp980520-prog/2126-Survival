@@ -1,7 +1,7 @@
 extends SceneTree
 
 const Director = preload("res://systems/MineralGridStreamingDirector.gd")
-const Panel = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
+const DiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const FakeController = preload("res://tests/helpers/FakeMineralChunkController.gd")
 var failures: Array[String] = []
 
@@ -29,7 +29,7 @@ func _run() -> void:
 			break
 		await process_frame
 	_expect(staged, "test observes a real staged root")
-	var panel: PanelContainer = Panel.new() as PanelContainer
+	var panel: PanelContainer = DiagnosticsPanelScript.new() as PanelContainer
 	root.add_child(panel)
 	panel.call("bind_director", director)
 	panel.call("set_open", true)
