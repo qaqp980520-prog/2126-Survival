@@ -1618,3 +1618,27 @@
 - World-save schema remains version 1; diagnostic records and async request state are transient and are not serialized.
 - Local Godot GUI, GPU performance and iPhone hardware QA remain untested because no local Godot executable/device runtime was available.
 
+
+## 2026-11-02 Run 85 — Cargo Mosaic and live streaming diagnostics overlay (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Cargo_Mosaic/`, a 6×6 exact-cover packing puzzle with four distinct rotatable tetromino modules (ION, FORK, HOOK and CORE) and three authored bays: Dockside Matrix, Fracture Bay and Orbital Hold.
+- Players rotate, position, place, lift and undo modules; all 16 illuminated target cells must be covered exactly once without overlap or out-of-bounds placement. The rules test enumerates all valid placements, deduplicates symmetric rotations and proves exactly one distinct packing for each bay.
+- Includes keyboard, mouse and touch controls, module silhouettes, restart/next campaign flow, standalone nested project entry and a separate repository-root Test Hub wrapper. Root and nested `res://` rules paths are resolved explicitly.
+- Registered in `prototypes/SurvivalTestHub.gd`; the hub now exposes 30 launch entries. No external assets, plugins, audio or network dependencies; Godot 4.3+.
+
+### Existing-system change
+- Added `systems/MineralGridStreamingDiagnosticsPanel.gd` and integrated it into `world/SurfaceWorld.gd`.
+- F3 toggles the debug overlay. It refreshes at 4 Hz only while visible and displays the active request ID, phase, staged/desired roots, new loads/stale unloads, elapsed duration, phase-aware rollback state and cancellation reason.
+- The panel displays the newest six records from the director's existing 32-entry bounded history. Diagnostics remain transient and are not written to world saves; schema remains version 1.
+- Added `tests/mineral_grid_streaming_diagnostics_panel_test.gd` for a real staged async request, active/pending rollback state, explicit cancellation, terminal cleanup, reason display, six-row bound, open/close and missing-director behavior. Production SurfaceWorld and root Test Hub smoke tests verify embedding and launch integration.
+
+### Exact validation and merge
+- Feature PR [#207](https://github.com/qaqp980520-prog/2126-Survival/pull/207) merged from exact candidate HEAD `1058a1d783ac36c03a72c1981b078e9aab8b4f22`; merge commit `8c41a664cb11a35f6c9b7f824262da4b564c41ef`.
+- Exact-head Godot 4.3 [Run #1001](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41383134233) completed successfully: 380 successful workflow records, zero failures and zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- Run #1001 passed the full repository regression suite, Run 84 streaming/Crew Ledger gates, the Run 85 diagnostics panel integration regression, and Cargo Mosaic import, exact-cover rules and runtime smoke tests.
+
+### Remaining work and limitations
+- The overlay is a developer diagnostic view, not persistent telemetry or a file export; history is bounded to 32 requests and the panel shows six. Touch-only access to the F3 toggle is not implemented.
+- Local Godot editor GUI, renderer appearance, GPU performance and iPhone hardware QA were not performed; cloud headless CI is not device QA.
+- Consider long-duration streaming soak tests, graphical layout/device QA and an optional exportable diagnostic snapshot after a suitable local runtime is available.
