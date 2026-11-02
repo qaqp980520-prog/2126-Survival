@@ -335,7 +335,17 @@ func _test_async_diagnostics_and_stress() -> void:
         _expect(last_request_id > previous_request_id, "soak request IDs increase monotonically at shift %d" % index)
         _expect(bool(report.get("success", false)), "64-shift soak %d completes successfully" % index)
         _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "soak shift %d records a terminal completion phase" % index)
-        _expect(int(diagnostic.get("desired_count", 0)) == 9 and int(diagnostic.get("staged_count", 0)) == 3, "soak shift %d records desired and staged counts" % index)
+        var expected_staged_count: int = 0
+        var expected_unloaded_count: int = 0
+        for current_id in current_ids:
+            if not previous_ids.has(current_id):
+                expected_staged_count += 1
+        for previous_id in previous_ids:
+            if not current_ids.has(previous_id):
+                expected_unloaded_count += 1
+        _expect(expected_staged_count > 0 and expected_staged_count <= 9, "soak shift %d computes a bounded number of entering chunks" % index)
+        _expect(int(diagnostic.get("desired_count", 0)) == 9 and int(diagnostic.get("staged_count", 0)) == expected_staged_count, "soak shift %d records the exact number of entering chunks" % index)
+        _expect(int(diagnostic.get("newly_loaded_count", 0)) == expected_staged_count and int(diagnostic.get("unloaded_stale_count", 0)) == expected_unloaded_count, "soak shift %d records matching load and unload totals" % index)
         _expect(int(diagnostic.get("duration_usec", -1)) >= 0 and int(diagnostic.get("started_usec", 0)) > 0, "soak shift %d records a monotonic duration" % index)
         _expect(bool(diagnostic.get("rollback_complete", false)), "soak shift %d records rollback-safe completion" % index)
         _expect(current_ids.size() == 9 and current_ids == director.call("get_managed_chunk_ids"), "soak shift %d keeps both ownership maps aligned" % index)
