@@ -212,7 +212,7 @@ func finish_test_now() -> void:
 	_finish_test()
 
 func advance_stage() -> bool:
-	if _testing or not bool(_result.get("passed", false)):
+	if _testing or _campaign_complete or not bool(_result.get("passed", false)):
 		return false
 	if _stage_index >= int(_rules.call("get_stage_count")) - 1:
 		_campaign_complete = true
@@ -299,6 +299,6 @@ func _refresh_ui() -> void:
 	_minus_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false)) or _length <= MIN_LENGTH
 	_plus_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false)) or _length >= MAX_LENGTH
 	_run_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false))
-	_next_button.disabled = _testing or not bool(_result.get("passed", false))
+	_next_button.disabled = _testing or _campaign_complete or not bool(_result.get("passed", false))
 	if is_instance_valid(_canvas):
 		_canvas.queue_redraw()
