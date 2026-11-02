@@ -322,38 +322,51 @@ func _test_async_diagnostics_and_stress() -> void:
     var rng := RandomNumberGenerator.new()
     rng.seed = 0x91A55EED
     var target_position := Vector3.ZERO
-    var x_shift_count: int = 0
-    var z_shift_count: int = 0
+    var negative_x_shift_count: int = 0
+    var positive_x_shift_count: int = 0
+    var negative_z_shift_count: int = 0
+    var positive_z_shift_count: int = 0
     for index in range(128):
         var previous_ids: PackedStringArray = controller.get_loaded_chunk_ids()
         var previous_roots: Dictionary = {}
         for previous_id in previous_ids:
             var previous_root: Node3D = controller.get_chunk_root(previous_id)
             previous_roots[previous_id] = weakref(previous_root) if previous_root != null else null
-        var dx_steps: int = rng.randi_range(0, 2)
-        var dz_steps: int = rng.randi_range(0, 2)
+        var dx_steps: int = rng.randi_range(-2, 2)
+        var dz_steps: int = rng.randi_range(-2, 2)
         if index == 0:
             dx_steps = 1
             dz_steps = 0
         elif index == 1:
             dx_steps = 0
             dz_steps = 1
+        elif index == 2:
+            dx_steps = -1
+            dz_steps = 0
+        elif index == 3:
+            dx_steps = 0
+            dz_steps = -1
         elif dx_steps == 0 and dz_steps == 0:
-            dx_steps = 1
-        if dx_steps > 0:
-            x_shift_count += 1
-        if dz_steps > 0:
-            z_shift_count += 1
+            dx_steps = 1 if index % 2 == 0 else -1
+        if dx_steps < 0:
+            negative_x_shift_count += 1
+        elif dx_steps > 0:
+            positive_x_shift_count += 1
+        if dz_steps < 0:
+            negative_z_shift_count += 1
+        elif dz_steps > 0:
+            positive_z_shift_count += 1
         target_position += Vector3(float(dx_steps) * 65.0, 0.0, float(dz_steps) * 65.0)
         var target: Vector3 = target_position
         var previous_request_id: int = last_request_id
-        last_request_id = int(director.call("request_sync_to_world_position_async", target, _test_time + 51 + index, 8))
+        var stage_budget: int = rng.randi_range(1, 8)
+        last_request_id = int(director.call("request_sync_to_world_position_async", target, _test_time + 51 + index, stage_budget))
         var report: Dictionary = await _wait_for_request(director, last_request_id)
         await process_frame
         var diagnostic: Dictionary = director.call("get_async_request_diagnostics", last_request_id)
         var current_ids: PackedStringArray = controller.get_loaded_chunk_ids()
         _expect(last_request_id > previous_request_id, "soak request IDs increase monotonically at shift %d" % index)
-        _expect(bool(report.get("success", false)), "128-shift randomized soak %d completes successfully" % index)
+        _expect(bool(report.get("success", false)), "128-shift signed randomized soak %d completes successfully" % index)
         _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "randomized soak shift %d records a terminal completion phase" % index)
         var expected_staged_count: int = 0
         var expected_unloaded_count: int = 0
@@ -376,7 +389,20 @@ func _test_async_diagnostics_and_stress() -> void:
             else:
                 _expect(reference != null and reference.get_ref() == null, "departed chunk %s releases its old root instance" % previous_id)
 
-    _expect(x_shift_count > 0 and z_shift_count > 0, "seeded randomized path exercises both world axes")
+    _expect(negative_x_shift_count > 0 and positive_x_shift_count > 0, "seeded randomized path exercises both negative and positive X movement")
+    _expect(negative_z_shift_count > 0 and positive_z_shift_count > 0, "seeded randomized path exercises both negative and positive Z movement")
+
+    var negative_probe := Vector3(-65.0, 0.0, -65.0)
+    _expect(director.call("get_grid_coordinate", Vector3(-0.1, 0.0, -0.1)) == Vector2i(-1, -1), "negative world positions use floor-based grid coordinates")
+    _expect(bool(director.call("sync_to_world_position", negative_probe, _test_time + 180)), "production director synchronizes a fully negative chunk window")
+    var negative_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+    var negative_chunk_count: int = 0
+    for chunk_id in negative_ids:
+        if chunk_id.contains("chunk_-"):
+            negative_chunk_count += 1
+    _expect(negative_chunk_count == 9, "negative-coordinate window produces nine canonical signed chunk IDs")
+    _expect(bool(director.call("recover_to_world_position", negative_probe, _test_time + 181)), "recovery accepts canonical negative chunk IDs")
+    _expect(controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "negative-coordinate recovery preserves controller/director ownership agreement")
 
     var retained_history: Array = director.call("get_recent_async_request_diagnostics")
     _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests after a 128-shift randomized soak")
@@ -384,10 +410,13 @@ func _test_async_diagnostics_and_stress() -> void:
         _expect(int(retained_history[0].get("request_id", 0)) == last_request_id - 31, "diagnostic pruning retains exactly the newest thirty-two requests")
         _expect(int(retained_history[-1].get("request_id", 0)) == last_request_id, "diagnostic history keeps the latest request at the end")
 
-    var superseded_id: int = int(director.call("request_sync_to_world_position_async", Vector3(10000.0, 0.0, 0.0), _test_time + 90, 1))
-    var staged_before_supersession: bool = await _wait_for_staged_root_count(director, superseded_id, 1)
+    var superseded_stage_budget: int = rng.randi_range(1, 4)
+    var superseded_minimum_staged: int = rng.randi_range(1, superseded_stage_budget)
+    var superseded_id: int = int(director.call("request_sync_to_world_position_async", Vector3(10000.0, 0.0, 0.0), _test_time + 90, superseded_stage_budget))
+    var staged_before_supersession: bool = await _wait_for_staged_root_count(director, superseded_id, superseded_minimum_staged)
     _expect(staged_before_supersession, "overlap stress observes a staged root before supersession")
-    var replacement_id: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 91, 2))
+    var replacement_stage_budget: int = rng.randi_range(1, 8)
+    var replacement_id: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 91, replacement_stage_budget))
     var superseded_report: Dictionary = await _wait_for_request(director, superseded_id)
     var replacement_report: Dictionary = await _wait_for_request(director, replacement_id)
     var superseded_diagnostic: Dictionary = director.call("get_async_request_diagnostics", superseded_id)
@@ -397,8 +426,10 @@ func _test_async_diagnostics_and_stress() -> void:
     var replacement_diagnostic: Dictionary = director.call("get_async_request_diagnostics", replacement_id)
     _expect(str(replacement_diagnostic.get("phase", "")) == "complete", "replacement request diagnostics end in complete")
 
-    var explicit_cancel_id: int = int(director.call("request_sync_to_world_position_async", Vector3(14000.0, 0.0, 0.0), _test_time + 92, 1))
-    var staged_before_cancel: bool = await _wait_for_staged_root_count(director, explicit_cancel_id, 1)
+    var cancel_stage_budget: int = rng.randi_range(1, 4)
+    var cancel_minimum_staged: int = rng.randi_range(1, cancel_stage_budget)
+    var explicit_cancel_id: int = int(director.call("request_sync_to_world_position_async", Vector3(14000.0, 0.0, 0.0), _test_time + 92, cancel_stage_budget))
+    var staged_before_cancel: bool = await _wait_for_staged_root_count(director, explicit_cancel_id, cancel_minimum_staged)
     _expect(staged_before_cancel, "explicit cancellation test reaches staging before cancellation")
     _expect(bool(director.call("cancel_async_sync_request", explicit_cancel_id)), "explicit cancellation is accepted during staging")
     var explicit_cancel_report: Dictionary = await _wait_for_request(director, explicit_cancel_id)
