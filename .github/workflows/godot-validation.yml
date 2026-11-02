@@ -3407,3 +3407,40 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Chrono Vault runtime smoke test passed."
+
+      - name: Verify Run 93 Signal Resonator and terrain orientation guard inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Signal_Resonator/project.godot
+          test -f daily_games/KROLL_Signal_Resonator/main.tscn
+          test -f daily_games/KROLL_Signal_Resonator/main_root.tscn
+          test -f daily_games/KROLL_Signal_Resonator/main.gd
+          test -f daily_games/KROLL_Signal_Resonator/rules.gd
+          test -f daily_games/KROLL_Signal_Resonator/tests/rules_test.gd
+          test -f daily_games/KROLL_Signal_Resonator/tests/game_smoke_test.gd
+          grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 38' tests/survival_test_hub_smoke_test.gd
+          grep -q 'descriptor_side_mismatch' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q '_side_between(first_position, second_position, patch_size)' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
+
+      - name: Import and parse KROLL Signal Resonator
+        run: godot --headless --path daily_games/KROLL_Signal_Resonator --editor --quit
+      - name: Run KROLL Signal Resonator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Signal_Resonator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Signal Resonator rules tests passed."
+      - name: Run KROLL Signal Resonator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Signal_Resonator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Signal Resonator runtime smoke test passed."
