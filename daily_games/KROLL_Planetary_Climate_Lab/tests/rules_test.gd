@@ -7,7 +7,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var rules: RefCounted = RulesScript.new()
+	var rules = RulesScript.new()
 	_expect(rules.get_planet_count() == 3, "three planetary climate missions are available")
 	_expect(rules.calculate_equilibrium_temperature(-1.0, 0.3, 0.4) < 0.0, "negative solar flux is rejected")
 	_expect(rules.calculate_equilibrium_temperature(1361.0, 0.9, 0.4) < 0.0, "out-of-range albedo is rejected")
