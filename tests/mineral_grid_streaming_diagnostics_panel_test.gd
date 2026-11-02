@@ -20,7 +20,7 @@ func _run() -> void:
 	_expect(bool(director.call("bind_controller", controller)), "fixture binds controller")
 	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "fixture binds factory")
 	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, 2000)), "fixture creates initial window")
-	var request_id: int = director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 0.0), 2001, 1)
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 0.0), 2001, 1))
 	_expect(request_id > 0, "async window shift starts")
 	var staged := false
 	for _frame in range(120):
@@ -56,7 +56,7 @@ func _run() -> void:
 	_expect(int(panel.call("get_visible_row_count")) <= 6, "visible history is bounded")
 	panel.call("set_open", false)
 	_expect(not panel.visible, "panel hides")
-	_expect(panel.call("toggle_open"), "panel toggle reopens")
+	_expect(bool(panel.call("toggle_open")), "panel toggle reopens")
 	panel.call("bind_director", null)
 	panel.call("refresh_now")
 	_expect(str(panel.call("get_rendered_text")).contains("UNAVAILABLE"), "unbound director is handled")
