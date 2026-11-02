@@ -1730,3 +1730,30 @@
 - Run #1041 includes the Run 89 diagnostics export edge-case regression, Titration Bench standalone import, rules tests and runtime smoke test, as well as the full existing repository suite and prior mini-game/system regressions.
 - The earlier original-base Run #1039 passed 399/399 but was not used as merge authorization after main advanced; Run #1041 validated the refreshed branch against current main.
 - World-save schema remains version 1. Local Godot GUI/renderer, GPU performance and iPhone hardware QA remain untested.
+
+
+## 2026-11-02 Run 90 — Planetary Climate Lab and terrain duplicate-side guard
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Planetary_Climate_Lab/`, a three-world climate-balance calibration game (Nysa, Vesper and Orin).
+- Player adjusts surface albedo and simplified greenhouse retention; equilibrium temperature uses the explicitly idealized Stefan–Boltzmann energy-balance model: `T = [S(1-A)/(4 σ (1-G))]^(1/4)`.
+- Each world targets a ±1.5 K band and awards 100 points once. Completed worlds cannot be reset to farm score; the campaign has an explicit restart.
+- Includes standalone project, repository Test Hub wrapper, keyboard/mouse/touch controls, rules tests and runtime smoke test.
+- Independent discrete-grid check enumerated 240 legal slider pairs per mission: Nysa 5 in-band solutions, Vesper 9, Orin 6. This is a model check, not a replacement for engine tests.
+
+### Existing-system hardening
+- Hardened `systems/SurfaceTerrainCornerConflictResolver.gd` against empty edge keys, non-dictionary descriptors, invalid patch IDs/sides and duplicate claims on the same patch side.
+- Duplicate-side reports include stable ID, side and deterministically sorted edge keys. Existing perpendicular-corner conflicts retain the conservative `step_fallback`; this change does not create corner-cap geometry.
+- Added regression cases to `tests/surface_terrain_transition_collider_manager_test.gd`.
+
+### Exact validation and merge
+- Feature PR [#216](https://github.com/qaqp980520-prog/2126-Survival/pull/216) merged from exact candidate HEAD `88b5ea6f7c9f7965d797be28dc01c89cd9ab700d`; squash merge commit `b351e9e1d0e0b1058ea54af1d789fc8270eeb02e`.
+- Exact-head Godot 4.3 [Run #1048](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41442111878) completed with 403/403 workflow step records, zero failures and zero skips. Root Test Hub, terrain transition manager, diagnostics panel, Run 90 static gate, Planetary Climate Lab standalone import/rules/runtime and cleanup/container shutdown/job completion all passed.
+- Historical Run #1047 failed only at the Run 90 static gate because it searched for a title literal absent from the smoke test. The workflow was corrected to search for `PLANETARY_CLIMATE_LAB_SCENE` in commit `88b5ea6f7c9f7965d797be28dc01c89cd9ab700d`; the corrected exact head passed Run #1048.
+- Earlier launch-button assertion retries are preserved as historical evidence; the numeric count was corrected to 35 in commit `740156180380671dfcd9cf8184f39babbcdca28a`.
+- Final feature main at merge: `b351e9e1d0e0b1058ea54af1d789fc8270eeb02e`. A separate post-merge main validation was not yet confirmed at documentation-branch creation.
+
+### Constraints
+- World-save schema remains version 1; no persistence migration was introduced.
+- Climate model is an educational equilibrium approximation; it omits circulation, clouds, ocean heat storage, seasonal geometry and feedbacks.
+- Local GUI/renderer, GPU performance and iPhone hardware QA remain untested.
