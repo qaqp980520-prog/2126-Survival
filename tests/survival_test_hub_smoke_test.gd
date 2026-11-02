@@ -34,6 +34,7 @@ const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
+const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -69,6 +70,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(PENDULUM_ARRAY_SCENE), "Pendulum Array game scene exists")
 	_expect(ResourceLoader.exists(HABITAT_PHOTOGRAPHER_SCENE), "Habitat Photographer game scene exists")
 	_expect(ResourceLoader.exists(SOLAR_SAIL_NAVIGATOR_SCENE), "Solar Sail Navigator game scene exists")
+	_expect(ResourceLoader.exists(TITRATION_BENCH_SCENE), "Titration Bench game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -79,7 +81,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 33, "hub exposes thirty-three world, prototype and game launch buttons")
+	_expect(buttons.size() == 34, "hub exposes thirty-four world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -104,6 +106,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Robotic Arm Operator"), "hub labels the Robotic Arm Operator game")
 	_expect(labels.has("KROLL Pendulum Array"), "hub labels the Pendulum Array game")
 	_expect(labels.has("KROLL Habitat Photographer"), "hub labels the Habitat Photographer game")
+	_expect(labels.has("KROLL Titration Bench"), "hub labels the Titration Bench game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -433,6 +436,18 @@ func _run() -> void:
 		_expect(solar_sail_game.call("get_mission_count") == 3, "root-loaded Solar Sail Navigator builds three relay missions")
 		_expect(solar_sail_game.call("get_control_button_count") == 7, "root-loaded Solar Sail Navigator builds seven flight controls")
 		solar_sail_game.queue_free()
+		await process_frame
+
+	var titration_scene := load(TITRATION_BENCH_SCENE) as PackedScene
+	_expect(titration_scene != null, "root hub can load the Titration Bench scene")
+	if titration_scene != null:
+		var titration_game := titration_scene.instantiate()
+		root.add_child(titration_game)
+		await process_frame
+		_expect(titration_game.call("get_title_text") == "KROLL // TITRATION BENCH", "root-loaded Titration Bench displays its title")
+		_expect(titration_game.call("get_sample_count") == 3, "root-loaded Titration Bench builds three acid samples")
+		_expect(titration_game.call("get_control_button_count") == 7, "root-loaded Titration Bench builds seven controls")
+		titration_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
