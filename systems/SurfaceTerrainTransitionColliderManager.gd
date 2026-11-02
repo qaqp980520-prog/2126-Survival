@@ -16,14 +16,31 @@ var _last_blocked_corner_reports: Array[Dictionary] = []
 func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary) -> Dictionary:
     var candidates: Dictionary = {}
     for edge_key_value in descriptors.keys():
-        var edge_key: String = str(edge_key_value)
-        var descriptor: Dictionary = descriptors[edge_key_value]
+        if not (edge_key_value is String) or str(edge_key_value).is_empty():
+            return {"ok": false, "error": "invalid_edge_key", "active_count": _managed_edges.size()}
+        var edge_key: String = edge_key_value
+        var descriptor_value: Variant = descriptors[edge_key_value]
+        if not (descriptor_value is Dictionary):
+            return {"ok": false, "error": "invalid_edge_descriptor", "active_count": _managed_edges.size()}
+        var descriptor: Dictionary = descriptor_value
         if not bool(descriptor.get("transition_required", false)):
             continue
-        var first_id: String = str(descriptor.get("first_stable_id", ""))
-        var second_id: String = str(descriptor.get("second_stable_id", ""))
-        var first_side: String = str(descriptor.get("first_side", ""))
-        var second_side: String = str(descriptor.get("second_side", ""))
+        var first_id_value: Variant = descriptor.get("first_stable_id", null)
+        var second_id_value: Variant = descriptor.get("second_stable_id", null)
+        if not (first_id_value is String) or not (second_id_value is String):
+            return {"ok": false, "error": "invalid_stable_ids", "active_count": _managed_edges.size()}
+        var first_id: String = first_id_value
+        var second_id: String = second_id_value
+        var first_side_value: Variant = descriptor.get("first_side", null)
+        var second_side_value: Variant = descriptor.get("second_side", null)
+        if not (first_side_value is String) or not (second_side_value is String):
+            return {"ok": false, "error": "invalid_edge_sides", "active_count": _managed_edges.size()}
+        var first_side: String = first_side_value
+        var second_side: String = second_side_value
+        var descriptor_edge_key: Variant = descriptor.get("edge_key", null)
+        var owner_stable_id: Variant = descriptor.get("owner_stable_id", null)
+        if not (descriptor_edge_key is String) or not (owner_stable_id is String):
+            return {"ok": false, "error": "invalid_edge_owner", "active_count": _managed_edges.size()}
         var first_patch: Node3D = patches_by_stable_id.get(first_id) as Node3D
         var second_patch: Node3D = patches_by_stable_id.get(second_id) as Node3D
         if first_id.is_empty() or second_id.is_empty() or first_id == second_id or first_id > second_id:
@@ -115,7 +132,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         "ok": true,
         "active_count": _managed_edges.size(),
         "blocked_count": blocked_edges.size(),
-        "blocked_edge_keys": blocked_edges.keys(),
+        "blocked_edge_keys": corner_resolution.get("blocked_edge_keys", blocked_edges.keys()),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true)
     }
 

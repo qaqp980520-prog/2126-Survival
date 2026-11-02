@@ -15,6 +15,8 @@ func _run() -> void:
     await _test_perpendicular_conflict_falls_back_to_step()
     _test_corner_resolver_all_orientations()
     _test_duplicate_patch_side_rejected()
+    _test_resolver_rejects_non_opposite_sides_and_stable_order()
+    _test_manager_rejects_non_string_public_inputs()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -270,6 +272,11 @@ func _test_perpendicular_conflict_falls_back_to_step() -> void:
     var report: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
     _expect(bool(report.get("ok", false)), "manager safely handles a perpendicular corner conflict")
     _expect(int(report.get("active_count", -1)) == 0 and int(report.get("blocked_count", -1)) == 2, "both crossing ramps are rejected instead of overlapping at a corner")
+    var blocked_keys: Array = report.get("blocked_edge_keys", [])
+    var sorted_blocked_keys: Array = blocked_keys.duplicate()
+    sorted_blocked_keys.sort()
+    _expect(blocked_keys.size() == 2, "manager exposes both blocked edge keys")
+    _expect(blocked_keys == sorted_blocked_keys, "manager forwards blocked edge keys in deterministic sorted order")
     var corner_reports: Array = report.get("blocked_corner_reports", [])
     _expect(corner_reports.size() == 1, "one perpendicular conflict produces one explicit corner report")
     if corner_reports.size() == 1:
@@ -353,6 +360,25 @@ func _test_duplicate_patch_side_rejected() -> void:
     var empty_key := {"":{"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}}
     _expect(str(CornerResolverScript.resolve(empty_key).get("error", "")) == "invalid_edge_key", "empty edge keys are rejected safely")
 
+func _test_resolver_rejects_non_opposite_sides_and_stable_order() -> void:
+    var same_side := {"same":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"east"}}
+    var non_opposite := {"crossed":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"north"}}
+    var numeric_key := {7:{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"west"}}
+    var numeric_id := {"numeric_id":{"first_id":7,"second_id":"neighbor","first_side":"east","second_side":"west"}}
+    _expect(str(CornerResolverScript.resolve(same_side).get("error", "")) == "invalid_edge_sides", "same-side edge descriptors are rejected")
+    _expect(str(CornerResolverScript.resolve(non_opposite).get("error", "")) == "invalid_edge_sides", "non-opposite edge descriptors are rejected")
+    _expect(str(CornerResolverScript.resolve(numeric_key).get("error", "")) == "invalid_edge_key", "non-string edge keys are rejected")
+    _expect(str(CornerResolverScript.resolve(numeric_id).get("error", "")) == "invalid_patch_ids", "non-string stable patch IDs are rejected")
+    var east_edge := {"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}
+    var north_edge := {"first_id":"center","second_id":"north","first_side":"north","second_side":"south"}
+    var forward := {"z_north":north_edge,"a_east":east_edge}
+    var reverse := {"a_east":east_edge,"z_north":north_edge}
+    var forward_result: Dictionary = CornerResolverScript.resolve(forward)
+    var reverse_result: Dictionary = CornerResolverScript.resolve(reverse)
+    _expect(bool(forward_result.get("ok", false)) and bool(reverse_result.get("ok", false)), "valid perpendicular descriptors resolve in either insertion order")
+    _expect(forward_result.get("blocked_edge_keys", []) == ["a_east", "z_north"], "blocked edge keys are returned in sorted order")
+    _expect(forward_result.get("reports", []) == reverse_result.get("reports", []), "corner reports are stable across candidate insertion order")
+
 func _opposite_side(side: String) -> String:
     match side:
         "east": return "west"
@@ -375,6 +401,32 @@ func _edge_segments_disabled(patch: Node3D, x_index: int) -> bool:
 func _segment_disabled(patch: Node3D, x_index: int, z_index: int) -> bool:
     var segment := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionSegment_X%d_Z%d" % [x_index, z_index]) as CollisionShape3D
     return segment == null or segment.disabled
+
+
+func _test_manager_rejects_non_string_public_inputs() -> void:
+    var manager: Node3D = ManagerScript.new()
+    var valid_descriptor := {
+        "transition_required": true,
+        "first_stable_id": "a",
+        "second_stable_id": "b",
+        "first_side": "east",
+        "second_side": "west",
+        "edge_key": "a|b",
+        "owner_stable_id": "a"
+    }
+    var numeric_key_result: Dictionary = manager.call("sync_transitions", {7: valid_descriptor}, {})
+    _expect(not bool(numeric_key_result.get("ok", true)) and str(numeric_key_result.get("error", "")) == "invalid_edge_key", "manager rejects non-string edge keys before coercion")
+    var numeric_id_descriptor: Dictionary = valid_descriptor.duplicate(true)
+    numeric_id_descriptor["first_stable_id"] = 7
+    numeric_id_descriptor["edge_key"] = "7|b"
+    numeric_id_descriptor["owner_stable_id"] = "7"
+    var numeric_id_result: Dictionary = manager.call("sync_transitions", {"7|b": numeric_id_descriptor}, {})
+    _expect(not bool(numeric_id_result.get("ok", true)) and str(numeric_id_result.get("error", "")) == "invalid_stable_ids", "manager rejects non-string stable IDs before patch lookup")
+    var numeric_side_descriptor: Dictionary = valid_descriptor.duplicate(true)
+    numeric_side_descriptor["first_side"] = 1
+    var numeric_side_result: Dictionary = manager.call("sync_transitions", {"a|b": numeric_side_descriptor}, {})
+    _expect(not bool(numeric_side_result.get("ok", true)) and str(numeric_side_result.get("error", "")) == "invalid_edge_sides", "manager rejects non-string side values before coercion")
+    manager.free()
 
 func _expect(condition: bool, description: String) -> void:
     if condition:

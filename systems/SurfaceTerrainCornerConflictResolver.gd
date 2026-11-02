@@ -8,25 +8,32 @@ const SIDE_ORDER: Dictionary = {"east":0,"south":1,"west":2,"north":3}
 
 static func resolve(candidates: Dictionary) -> Dictionary:
 	var sides_by_patch: Dictionary = {}
+	var candidate_keys: Array[String] = []
 	for edge_key_value in candidates.keys():
-		var edge_key: String = str(edge_key_value)
-		if edge_key.is_empty():
+		if not (edge_key_value is String) or str(edge_key_value).is_empty():
 			return {"ok":false,"error":"invalid_edge_key"}
-		var edge_value: Variant = candidates[edge_key_value]
+		candidate_keys.append(str(edge_key_value))
+	candidate_keys.sort()
+	for edge_key in candidate_keys:
+		var edge_value: Variant = candidates[edge_key]
 		if not (edge_value is Dictionary):
 			return {"ok":false,"error":"invalid_edge_descriptor"}
 		var edge: Dictionary = edge_value
 		for required in ["first_id", "second_id", "first_side", "second_side"]:
 			if not edge.has(required):
 				return {"ok":false,"error":"missing_" + required}
-		var first_id: String = str(edge["first_id"])
-		var second_id: String = str(edge["second_id"])
+		if not (edge["first_id"] is String) or not (edge["second_id"] is String):
+			return {"ok":false,"error":"invalid_patch_ids","edge_key":edge_key}
+		var first_id: String = edge["first_id"]
+		var second_id: String = edge["second_id"]
 		var first_side: String = str(edge["first_side"])
 		var second_side: String = str(edge["second_side"])
 		if first_id.is_empty() or second_id.is_empty() or first_id == second_id:
 			return {"ok":false,"error":"invalid_patch_ids"}
 		if not VALID_SIDES.has(first_side) or not VALID_SIDES.has(second_side):
 			return {"ok":false,"error":"invalid_patch_side"}
+		if _opposite_side(first_side) != second_side:
+			return {"ok":false,"error":"invalid_edge_sides","edge_key":edge_key}
 		_record_side(sides_by_patch, first_id, first_side, edge_key)
 		_record_side(sides_by_patch, second_id, second_side, edge_key)
 
@@ -72,7 +79,11 @@ static func resolve(candidates: Dictionary) -> Dictionary:
 					"policy":"step_fallback"
 				})
 	reports.sort_custom(_report_less)
-	return {"ok":true,"blocked_edges":blocked_edges,"reports":reports}
+	var blocked_edge_keys: Array[String] = []
+	for blocked_key in blocked_edges.keys():
+		blocked_edge_keys.append(str(blocked_key))
+	blocked_edge_keys.sort()
+	return {"ok":true,"blocked_edges":blocked_edges,"blocked_edge_keys":blocked_edge_keys,"reports":reports}
 
 static func _record_side(target: Dictionary, stable_id: String, side: String, edge_key: String) -> void:
 	if not target.has(stable_id):
