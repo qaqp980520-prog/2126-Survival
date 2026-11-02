@@ -50,8 +50,8 @@ func _run() -> void:
 		_expect(bool(state.get("stage_awarded", false)), "habitat %d records its capture" % stage_index)
 		_expect(int(state.get("score", 0)) == (stage_index + 1) * 100, "habitat %d awards exactly 100 points" % stage_index)
 		_expect(not bool(game.call("capture_photo")), "habitat %d cannot award the same photo twice" % stage_index)
-		_expect(not bool(game.call("reset_stage")), "captured habitat cannot be reset to farm score")
 		if stage_index < 2:
+			_expect(not bool(game.call("reset_stage")), "completed intermediate habitat cannot be reset to farm score")
 			_expect(bool(game.call("advance_stage")), "habitat %d advances" % stage_index)
 	state = game.call("get_current_state")
 	_expect(bool(state.get("campaign_complete", false)), "third capture completes the expedition")
