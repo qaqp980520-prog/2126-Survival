@@ -122,7 +122,7 @@ func _build_ui() -> void:
 	column.add_child(_status_label)
 	var hint := Label.new()
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.text = "按 A / S / D 或 1 / 2 / 3 對準節拍；每個脈衝有 Perfect、Good 與 Miss 時窗。Space 可等待，R 重試，N 前往下一關。"
+	hint.text = "按 A / S / D 或 1 / 2 / 3 對準節拍；每個脈衝有 Perfect、Good 與 Miss 時窗。不按鍵即可等待，R 重試，N 前往下一關。"
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_color_override("font_color", Color("#8fa9bb"))
 	column.add_child(hint)
