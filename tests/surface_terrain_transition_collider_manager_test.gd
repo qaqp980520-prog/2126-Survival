@@ -15,6 +15,7 @@ func _run() -> void:
     await _test_perpendicular_conflict_falls_back_to_step()
     _test_corner_resolver_all_orientations()
     _test_duplicate_patch_side_rejected()
+    _test_resolver_rejects_non_opposite_sides_and_stable_order()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -352,6 +353,23 @@ func _test_duplicate_patch_side_rejected() -> void:
     _expect(str(CornerResolverScript.resolve(invalid_descriptor).get("error", "")) == "invalid_edge_descriptor", "non-dictionary edge candidates are rejected safely")
     var empty_key := {"":{"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}}
     _expect(str(CornerResolverScript.resolve(empty_key).get("error", "")) == "invalid_edge_key", "empty edge keys are rejected safely")
+
+func _test_resolver_rejects_non_opposite_sides_and_stable_order() -> void:
+    var same_side := {"same":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"east"}}
+    var non_opposite := {"crossed":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"north"}}
+    var numeric_key := {7:{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"west"}}
+    _expect(str(CornerResolverScript.resolve(same_side).get("error", "")) == "invalid_edge_sides", "same-side edge descriptors are rejected")
+    _expect(str(CornerResolverScript.resolve(non_opposite).get("error", "")) == "invalid_edge_sides", "non-opposite edge descriptors are rejected")
+    _expect(str(CornerResolverScript.resolve(numeric_key).get("error", "")) == "invalid_edge_key", "non-string edge keys are rejected")
+    var east_edge := {"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}
+    var north_edge := {"first_id":"center","second_id":"north","first_side":"north","second_side":"south"}
+    var forward := {"z_north":north_edge,"a_east":east_edge}
+    var reverse := {"a_east":east_edge,"z_north":north_edge}
+    var forward_result: Dictionary = CornerResolverScript.resolve(forward)
+    var reverse_result: Dictionary = CornerResolverScript.resolve(reverse)
+    _expect(bool(forward_result.get("ok", false)) and bool(reverse_result.get("ok", false)), "valid perpendicular descriptors resolve in either insertion order")
+    _expect(forward_result.get("blocked_edge_keys", []) == ["a_east", "z_north"], "blocked edge keys are returned in sorted order")
+    _expect(forward_result.get("reports", []) == reverse_result.get("reports", []), "corner reports are stable across candidate insertion order")
 
 func _opposite_side(side: String) -> String:
     match side:
