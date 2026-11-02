@@ -165,6 +165,9 @@ func _build_geometry(first_patch: Node3D, second_patch: Node3D, descriptor: Dict
     var horizontal_delta := Vector3(second_position.x - first_position.x, 0.0, second_position.z - first_position.z)
     if absf(first_position.y - second_position.y) > POSITION_TOLERANCE or absf(horizontal_delta.length() - patch_size) > POSITION_TOLERANCE:
         return {"ok": false, "error": "patches_not_level_cardinal_neighbors"}
+    var declared_first_side: Variant = descriptor.get("first_side", null)
+    if not (declared_first_side is String) or _side_between(first_position, second_position, patch_size) != str(declared_first_side):
+        return {"ok": false, "error": "descriptor_side_mismatch"}
     if not first_patch.has_method("get_top_height") or not second_patch.has_method("get_top_height") or not first_patch.has_method("get_edge_ramp_profile") or not second_patch.has_method("get_edge_ramp_profile"):
         return {"ok": false, "error": "patch_missing_geometry_profile"}
     var first_profile: Dictionary = first_patch.call("get_edge_ramp_profile")
@@ -274,6 +277,20 @@ func _free_staged(staged: Dictionary) -> void:
         if is_instance_valid(body):
             body.collision_layer = 0
             body.queue_free()
+
+func _side_between(first_position: Vector3, second_position: Vector3, patch_size: float) -> String:
+    var delta: Vector3 = second_position - first_position
+    if absf(delta.y) > POSITION_TOLERANCE:
+        return ""
+    if absf(delta.x - patch_size) <= POSITION_TOLERANCE and absf(delta.z) <= POSITION_TOLERANCE:
+        return "east"
+    if absf(delta.x + patch_size) <= POSITION_TOLERANCE and absf(delta.z) <= POSITION_TOLERANCE:
+        return "west"
+    if absf(delta.z + patch_size) <= POSITION_TOLERANCE and absf(delta.x) <= POSITION_TOLERANCE:
+        return "north"
+    if absf(delta.z - patch_size) <= POSITION_TOLERANCE and absf(delta.x) <= POSITION_TOLERANCE:
+        return "south"
+    return ""
 
 func _opposite_side(side: String) -> String:
     match side:
