@@ -39,6 +39,7 @@ var _elapsed: float = 0.0
 var _testing: bool = false
 var _campaign_complete: bool = false
 var _score: int = 0
+var _stage_awarded: bool = false
 var _result: Dictionary = {}
 var _status: String = "Tune the pendulum length, then run four cycles."
 var _canvas: PendulumCanvas
@@ -177,14 +178,14 @@ func _make_button(text_value: String, callback: Callable) -> Button:
 	return button
 
 func adjust_length(delta_length: float) -> void:
-	if _testing or _campaign_complete or _rules == null:
+	if _testing or _campaign_complete or _rules == null or bool(_result.get("passed", false)):
 		return
 	_length = float(_rules.call("snap_length", _length + delta_length))
 	_status = "Length adjusted. Run four cycles to compare phase drift."
 	_refresh_ui()
 
 func run_test() -> bool:
-	if _testing or _campaign_complete or _rules == null:
+	if _testing or _campaign_complete or _rules == null or bool(_result.get("passed", false)):
 		return false
 	_elapsed = 0.0
 	_result.clear()
@@ -199,7 +200,9 @@ func _finish_test() -> void:
 	_testing = false
 	_result = _rules.call("evaluate", _length, _stage_index)
 	if bool(_result.get("passed", false)):
-		_score += int(_result.get("score", 0))
+		if not _stage_awarded:
+			_score += int(_result.get("score", 0))
+			_stage_awarded = true
 		_status = "RESONANCE LOCKED — period error %.3f s. Press N for the next chamber." % float(_result.get("period_error", 0.0))
 	else:
 		_status = "PHASE DRIFT — error %.3f s. Adjust the length and try again." % float(_result.get("period_error", 0.0))
@@ -216,6 +219,7 @@ func advance_stage() -> bool:
 		_status = "ARRAY CALIBRATED — all three chambers are synchronized."
 	else:
 		_stage_index += 1
+		_stage_awarded = false
 		_length = 1.5
 		_result.clear()
 		_status = "New chamber loaded. Tune the pendulum to the reference period."
@@ -240,6 +244,7 @@ func reset_campaign() -> void:
 	_testing = false
 	_campaign_complete = false
 	_score = 0
+	_stage_awarded = false
 	_result.clear()
 	_status = "Campaign restarted. Calibrate all three pendulum arrays."
 	_refresh_ui()
@@ -267,6 +272,7 @@ func get_current_state() -> Dictionary:
 		"length":_length,
 		"target_period":float(stage.get("target_period", -1.0)),
 		"score":_score,
+		"stage_awarded":_stage_awarded,
 		"testing":_testing,
 		"result":_result.duplicate(true),
 		"campaign_complete":_campaign_complete
@@ -290,9 +296,9 @@ func _refresh_ui() -> void:
 	_score_label.text = "SCORE  %03d" % _score
 	_length_label.text = "L = %.2f m" % _length
 	_status_label.text = _status
-	_minus_button.disabled = _testing or _campaign_complete or _length <= MIN_LENGTH
-	_plus_button.disabled = _testing or _campaign_complete or _length >= MAX_LENGTH
-	_run_button.disabled = _testing or _campaign_complete
+	_minus_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false)) or _length <= MIN_LENGTH
+	_plus_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false)) or _length >= MAX_LENGTH
+	_run_button.disabled = _testing or _campaign_complete or bool(_result.get("passed", false))
 	_next_button.disabled = _testing or not bool(_result.get("passed", false))
 	if is_instance_valid(_canvas):
 		_canvas.queue_redraw()
