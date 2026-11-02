@@ -1288,3 +1288,19 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Exact-head Godot 4.3 [Run #1026](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41406639640) passed 389/389 workflow steps, zero failures/skips, including root Test Hub smoke, production SurfaceWorld binding, nested game import/rules/runtime and cleanup.
 - The failed superseded Run #1025 is retained as failure evidence; its incorrect final-stage reset assertion was fixed before Run #1026.
 - World-save schema remains version 1; local GUI/GPU/iPhone QA remains untested.
+
+
+## Run 88 — Solar Sail and diagnostics export (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Static CI title gate | The workflow searched for a mixed-case title while the game smoke test asserts the authored title with a `KROLL //` prefix. | Corrected the workflow assertion; the exact corrected head passed Run #1036. The earlier Run #1035 remains a failed historical run. |
+| Portable diagnostic snapshots | Live streaming diagnostics can contain Godot vector/color types and nested arrays/dictionaries that JSON cannot represent directly. | Added recursive JSON normalization and defensive copying for request history and blocked-corner reports. |
+| Export path safety | A diagnostic export must not overwrite project resources or escape the user-data directory. | Export only accepts `user://` paths and rejects `res://` and paths containing traversal segments. |
+| Export integration coverage | Unit coverage validates nested vector conversion and file roundtrip, but actual completed-request center and public-button/default-path behavior can be strengthened. | Follow-up tests recorded: real Vector2i center from a completed request, explicit `user://../` rejection, and pressing EXPORT SNAPSHOT through the UI. |
+
+### Run 88 validation and merge
+- Feature PR [#212](https://github.com/qaqp980520-prog/2126-Survival/pull/212) merged as `8307621e60648eab036f0d758dfa649372868161`.
+- Exact-head Godot 4.3 [Run #1036](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41424779146) passed 394/394 workflow step records, zero failures/skips, including snapshot export and Solar Sail import/rules/runtime gates plus cleanup and job completion.
+- Solar Sail's three deterministic flight plans independently reach their relays within capture radius/speed limits; this is a model cross-check, not device QA.
+- World-save schema remains version 1. Local GUI/rendering, GPU performance and iPhone hardware QA remain untested.
