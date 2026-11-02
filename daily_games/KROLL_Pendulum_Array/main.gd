@@ -1,5 +1,10 @@
 extends Control
 
+const MIN_LENGTH: float = 0.5
+const MAX_LENGTH: float = 3.0
+const LENGTH_STEP: float = 0.05
+const CYCLES_PER_TEST: int = 4
+
 class PendulumCanvas extends Control:
 	var game: Control
 
@@ -61,7 +66,7 @@ func _process(delta: float) -> void:
 	if _testing and _rules != null:
 		_elapsed += delta
 		var stage: Dictionary = _rules.call("get_stage", _stage_index)
-		var duration: float = float(stage.get("target_period", 1.0)) * float(_rules.CYCLES_PER_TEST)
+		var duration: float = float(stage.get("target_period", 1.0)) * float(CYCLES_PER_TEST)
 		if _elapsed >= duration:
 			_finish_test()
 	if is_instance_valid(_canvas):
@@ -72,10 +77,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	match event.keycode:
 		KEY_LEFT:
-			adjust_length(-0.05)
+			adjust_length(-LENGTH_STEP)
 			get_viewport().set_input_as_handled()
 		KEY_RIGHT:
-			adjust_length(0.05)
+			adjust_length(LENGTH_STEP)
 			get_viewport().set_input_as_handled()
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			run_test()
@@ -134,14 +139,14 @@ func _build_ui() -> void:
 	control_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	control_row.add_theme_constant_override("separation", 12)
 	column.add_child(control_row)
-	_minus_button = _make_button("LENGTH −", Callable(self, "adjust_length").bind(-0.05))
+	_minus_button = _make_button("LENGTH −", Callable(self, "adjust_length").bind(-LENGTH_STEP))
 	control_row.add_child(_minus_button)
 	_length_label = Label.new()
 	_length_label.custom_minimum_size = Vector2(130.0, 44.0)
 	_length_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_length_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	control_row.add_child(_length_label)
-	_plus_button = _make_button("LENGTH +", Callable(self, "adjust_length").bind(0.05))
+	_plus_button = _make_button("LENGTH +", Callable(self, "adjust_length").bind(LENGTH_STEP))
 	control_row.add_child(_plus_button)
 	_run_button = _make_button("RUN FOUR CYCLES", Callable(self, "run_test"))
 	control_row.add_child(_run_button)
@@ -251,7 +256,7 @@ func get_display_state() -> Dictionary:
 		"testing":_testing,
 		"actual_angle":sin(actual_phase) * 0.17,
 		"reference_angle":sin(reference_phase) * 0.17,
-		"progress":clampf(_elapsed / maxf(target_period * float(_rules.CYCLES_PER_TEST), 0.001), 0.0, 1.0)
+		"progress":clampf(_elapsed / maxf(target_period * float(CYCLES_PER_TEST), 0.001), 0.0, 1.0)
 	}
 
 func get_current_state() -> Dictionary:
@@ -285,8 +290,8 @@ func _refresh_ui() -> void:
 	_score_label.text = "SCORE  %03d" % _score
 	_length_label.text = "L = %.2f m" % _length
 	_status_label.text = _status
-	_minus_button.disabled = _testing or _campaign_complete or _length <= _rules.MIN_LENGTH
-	_plus_button.disabled = _testing or _campaign_complete or _length >= _rules.MAX_LENGTH
+	_minus_button.disabled = _testing or _campaign_complete or _length <= MIN_LENGTH
+	_plus_button.disabled = _testing or _campaign_complete or _length >= MAX_LENGTH
 	_run_button.disabled = _testing or _campaign_complete
 	_next_button.disabled = _testing or not bool(_result.get("passed", false))
 	if is_instance_valid(_canvas):
