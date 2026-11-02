@@ -3,12 +3,12 @@ extends RefCounted
 const BOARD_SIZE: int = 8
 const MINIMUM_SCANS: int = 3
 const INVALID_CELL: Vector2i = Vector2i(-1, -1)
-const SENSOR_NAMES: Array[String] = ["NORTHWEST", "NORTHEAST", "SOUTHWEST", "SOUTHEAST"]
+const SENSOR_NAMES: Array[String] = ["NORTHWEST", "NORTHEAST", "SOUTHWEST", "SOUTH EDGE"]
 const SENSOR_POSITIONS: Array[Vector2i] = [
     Vector2i(0, 0),
     Vector2i(7, 0),
     Vector2i(0, 7),
-    Vector2i(7, 7)
+    Vector2i(4, 7)
 ]
 const MISSIONS: Array[Dictionary] = [
     {
@@ -20,7 +20,7 @@ const MISSIONS: Array[Dictionary] = [
     {
         "id": "abyssal_relay",
         "title": "ABYSSAL RELAY",
-        "briefing": "Two seabed cells produce the same first three rounded ranges. Use the fourth buoy or eliminate a false return.",
+        "briefing": "The first three corner buoys leave two plausible cells. Use the south-edge buoy D or eliminate a false return.",
         "target": Vector2i(5, 3)
     },
     {

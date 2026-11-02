@@ -5,11 +5,11 @@ A touch-friendly acoustic search puzzle for Godot 4.3.
 ## Gameplay
 
 - Survey a hidden beacon on an 8×8 seabed grid.
-- Four acoustic buoys sit at the grid corners.
+- Three buoys sit at the north-west, north-east and south-west corners; the fourth is on the southern edge at (4, 7).
 - Each ping reports the Euclidean distance rounded to the nearest grid unit.
 - Three pings unlock target selection.
 - Nereid Wreck and Trench Beacon resolve after three pings.
-- Abyssal Relay intentionally leaves two plausible cells after any three pings; use the fourth buoy or eliminate a false return.
+- Abyssal Relay leaves two plausible cells after the first three corner-buoy pings; buoy D on the southern edge breaks the tie, or you can eliminate a false return.
 - A wrong guess removes only that candidate and applies a score penalty.
 - A passed mission can only be scored once. The campaign contains three missions.
 

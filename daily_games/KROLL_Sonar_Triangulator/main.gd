@@ -151,7 +151,7 @@ func _build_ui() -> void:
     var hint := Label.new()
     hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    hint.text = "1–4 ping four corner buoys · three pings unlock guesses · the fourth ping breaks ties · tap a candidate cell and lock it. R restarts the campaign; N advances."
+    hint.text = "1–4 ping four buoys · three pings unlock guesses · buoy D can break the standard three-corner tie · tap a candidate cell and lock it. R restarts the campaign; N advances."
     hint.add_theme_color_override("font_color", Color("#8ba8bb"))
     column.add_child(hint)
 
@@ -226,7 +226,7 @@ func _refresh_ui() -> void:
     elif scans.size() < _rules.get_minimum_scan_count():
         _status_label.text = "PING AT LEAST THREE BUOYS TO BEGIN TRIANGULATION."
     elif candidates.size() > 1:
-        _status_label.text = "AMBIGUOUS RETURN  ·  USE THE FOURTH BUOY OR ELIMINATE A FALSE CELL."
+        _status_label.text = "AMBIGUOUS RETURN  ·  USE BUOY D OR ELIMINATE A FALSE CELL."
     else:
         _status_label.text = "SINGLE RETURN LOCK  ·  SELECT THE REMAINING CELL."
 

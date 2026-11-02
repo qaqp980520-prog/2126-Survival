@@ -51,6 +51,8 @@ func _test_fourth_ping_breaks_the_abyssal_tie() -> void:
     var rules := RulesScript.new()
     var state: Dictionary = rules.create_state(1)
     var expected_readings: Array[int] = [6, 4, 6, 4]
+    _expect(rules.get_sensor_position(3) == Vector2i(4, 7), "fourth buoy is placed on the south edge rather than the symmetric corner")
+    _expect(rules.get_sensor_name(3) == "SOUTH EDGE", "fourth buoy reports its correct station name")
     for sensor_index in range(3):
         var result: Dictionary = rules.scan_sensor(state, sensor_index)
         _expect(bool(result.get("ok", false)), "Abyssal sensor %d scan succeeds" % sensor_index)
