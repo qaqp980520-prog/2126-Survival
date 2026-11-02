@@ -1757,3 +1757,52 @@
 - World-save schema remains version 1; no persistence migration was introduced.
 - Climate model is an educational equilibrium approximation; it omits circulation, clouds, ocean heat storage, seasonal geometry and feedbacks.
 - Local GUI/renderer, GPU performance and iPhone hardware QA remain untested.
+
+
+## 2026-11-03 Run 92 — Swarm Dispatcher and signed-coordinate streaming soak
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Swarm_Dispatcher/`, a simultaneous three-drone route-programming game with three authored 8×8 missions.
+- Each drone receives up to 24 directional/wait commands. A tick is atomic: all target positions are checked for walls, bounds, same-cell conflicts and head-on swaps before any drone moves.
+- Includes route editing, undo/clear, single-step and continuous execution, mission retry and campaign restart.
+- Standalone Godot project and root Test Hub wrapper are included; the Test Hub has 37 launch buttons at the Run 92 merge point.
+
+### Existing-system change
+- Expanded `tests/mineral_grid_streaming_async_test.gd` from a one-direction 34/64-shift path to a deterministic 128-shift signed-coordinate soak.
+- Covers positive/negative X and Z movement, staging budgets 1–8, request replacement/cancellation at varied staging depths, exact nine-chunk ownership, overlap instance retention, WeakRef release, monotonic request IDs, and the 32-entry diagnostics history cap.
+- Added negative-coordinate recovery around zero and verified Director/Controller ownership agreement after recovery.
+- This is a test/observability expansion; it does not change world-save schema 1.
+
+### Exact validation and merge
+- Feature PR [#220](https://github.com/qaqp980520-prog/2126-Survival/pull/220) merged with merge commit `7bb31ba57f1e251a66fab1bf7db121046cb817ea` from exact candidate `30de4b388af61242ff8f2fac8e9a029736e0a176`.
+- Exact-head Godot 4.3 Run [#1077](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41476088570) attempt 2 passed 407 successful step records, zero failures/skips; checkout cleanup, container shutdown and job completion succeeded. Attempt 1 was cancelled and is retained only as historical evidence.
+- Focused Run [#10](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41544068202) passed 13/13 after Run 93 branch synchronization; it reconfirmed the 128-shift soak and diagnostics cap.
+- Post-merge main Run [#1082](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41543906948) passed 407 successful step records, zero failures/skips and successful cleanup/job completion.
+
+## 2026-11-03 Run 93 — Signal Resonator and terrain descriptor orientation guard
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Signal_Resonator/`, a visual timing game with three signal lanes and three 12-pulse stages at 100, 112 and 124 BPM.
+- Controls: A/S/D or 1/2/3; R restarts the active stage; N advances after a pass.
+- Timing windows: Perfect ±45 ms, Good ±100 ms, expiry at ±160 ms; at least 75% hits required to pass. Wrong-lane hits reset combo; early inputs outside the window do not consume the pending pulse.
+- Campaign score, combo, timeout progression, passed-stage restart lock and explicit campaign restart are covered by deterministic rules/runtime tests.
+- Standalone project, root Test Hub wrapper, keyboard/mouse/touch buttons and root-loaded rules path are included. No external assets/plugins required.
+
+### Existing-system hardening
+- Updated `systems/SurfaceTerrainTransitionColliderManager.gd` to verify the descriptor's declared first cardinal side against the actual live patch positions before ramp staging.
+- A mismatch returns `descriptor_side_mismatch` without activating patch collision strips or creating a shared collider.
+- Added a manager-level regression using an east-adjacent pair deliberately mislabeled north/south; the test verifies the stable error code, zero managed colliders and unchanged patch flags.
+- Existing valid cardinal ramp tests remain intact. Perpendicular corner conflicts still use `step_fallback`; this change does not implement four-way shared corner-cap geometry.
+
+### Exact validation and merge
+- Feature PR [#221](https://github.com/qaqp980520-prog/2126-Survival/pull/221) merged with merge commit `1032b7224f46afd5f7f9fce5c6f487218dd95f5b` from exact candidate `1fefb2842cea7becb9a71130a91bf83bf908bd5e`.
+- Exact-head full Godot 4.3 Run [#1083](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41544067872) passed 411 successful step records, zero failures/skips; checkout cleanup, container shutdown and job completion succeeded.
+- Run 93 focused [#5](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41544067922) passed 13/13, including standalone game import/rules/runtime, root Test Hub smoke and terrain manager regression.
+- Run 92 focused [#10](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41544068202) passed 13/13.
+- Post-merge main Run [#1084](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41545415316) is currently in progress on `1032b7224f46afd5f7f9fce5c6f487218dd95f5b`; do not mark post-merge verification complete until it succeeds.
+
+### Constraints and next steps
+- World-save schema remains version 1; no migration introduced.
+- Four-way shared corner geometry remains a separate feature; the current change validates descriptor orientation only.
+- Signal Resonator uses visual timing and has no bundled audio; audio latency, local GUI/renderer, GPU and iPhone touch QA remain untested.
+- After documentation PR validation, continue with a separately designed four-way corner geometry implementation and randomized long-duration streaming soak.
