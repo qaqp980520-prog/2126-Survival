@@ -3198,6 +3198,8 @@ jobs:
           test -f daily_games/KROLL_Habitat_Photographer/main.tscn
           test -f daily_games/KROLL_Habitat_Photographer/main_root.tscn
           test -f daily_games/KROLL_Habitat_Photographer/main.gd
+          grep -q 'ROOT_RULES_PATH' daily_games/KROLL_Habitat_Photographer/main.gd
+          grep -q 'STANDALONE_RULES_PATH' daily_games/KROLL_Habitat_Photographer/main.gd
           test -f daily_games/KROLL_Habitat_Photographer/rules.gd
           test -f daily_games/KROLL_Habitat_Photographer/tests/rules_test.gd
           test -f daily_games/KROLL_Habitat_Photographer/tests/game_smoke_test.gd
