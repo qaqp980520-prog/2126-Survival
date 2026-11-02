@@ -3,9 +3,9 @@
 A timing-and-observation field photography game for Godot 4.3+.
 
 ## Gameplay
-Track a moving animal in three habitats, adjust focus, zoom and exposure, then take the photo while the subject is centered and unobscured. Each successful habitat photo awards 100 points once. A completed habitat cannot be reset to farm score.
+Track a moving animal in three habitats, calibrate focus, zoom and exposure from the neutral F3 / Z2 / E0 camera profile using the visible field brief, then take the photo while the subject is centered and unobscured. Each successful habitat photo awards 100 points once. A completed habitat cannot be reset to farm score.
 
-The animal follows a deterministic triangular patrol path. The central viewfinder tolerance is 0.085 normalized screen units. Each habitat defines its own focus, zoom, exposure and foliage-obscuration interval.
+The animal follows a deterministic triangular patrol path. The central viewfinder tolerance is 0.085 normalized screen units. Each habitat defines its own required focus, zoom, exposure and foliage-obscuration interval.
 
 ## Controls
 - Q / E: focus down / up
