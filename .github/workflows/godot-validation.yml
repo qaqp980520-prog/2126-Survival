@@ -3366,38 +3366,38 @@ jobs:
 
 
 
-      - name: Verify Run 91 Pulse Conductor and terrain resolver contracts
+      - name: Verify Run 91 Chrono Vault and terrain resolver contracts
         shell: bash
         run: |
           set -euo pipefail
-          test -f daily_games/KROLL_Pulse_Conductor/project.godot
-          test -f daily_games/KROLL_Pulse_Conductor/main.tscn
-          test -f daily_games/KROLL_Pulse_Conductor/main_root.tscn
-          test -f daily_games/KROLL_Pulse_Conductor/main.gd
-          test -f daily_games/KROLL_Pulse_Conductor/rules.gd
-          test -f daily_games/KROLL_Pulse_Conductor/tests/rules_test.gd
-          test -f daily_games/KROLL_Pulse_Conductor/tests/game_smoke_test.gd
-          grep -q 'PULSE_CONDUCTOR_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'PULSE_CONDUCTOR_SCENE' tests/survival_test_hub_smoke_test.gd
+          test -f daily_games/KROLL_Chrono_Vault/project.godot
+          test -f daily_games/KROLL_Chrono_Vault/main.tscn
+          test -f daily_games/KROLL_Chrono_Vault/main_root.tscn
+          test -f daily_games/KROLL_Chrono_Vault/main.gd
+          test -f daily_games/KROLL_Chrono_Vault/rules.gd
+          test -f daily_games/KROLL_Chrono_Vault/tests/rules_test.gd
+          test -f daily_games/KROLL_Chrono_Vault/tests/game_smoke_test.gd
+          grep -q 'CHRONO_VAULT_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'CHRONO_VAULT_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'invalid_edge_sides' systems/SurfaceTerrainCornerConflictResolver.gd
           grep -q 'blocked_edge_keys' systems/SurfaceTerrainCornerConflictResolver.gd
           grep -q 'blocked_edge_keys' tests/surface_terrain_transition_collider_manager_test.gd
 
-      - name: Import and parse KROLL Pulse Conductor
-        run: godot --headless --path daily_games/KROLL_Pulse_Conductor --editor --quit
-      - name: Run KROLL Pulse Conductor rules tests
+      - name: Import and parse KROLL Chrono Vault
+        run: godot --headless --path daily_games/KROLL_Chrono_Vault --editor --quit
+      - name: Run KROLL Chrono Vault rules tests
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Pulse_Conductor --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Chrono_Vault --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Pulse Conductor rules tests passed."
-      - name: Run KROLL Pulse Conductor runtime smoke test
+          echo "$output" | grep -q "KROLL Chrono Vault rules tests passed."
+      - name: Run KROLL Chrono Vault runtime smoke test
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Pulse_Conductor --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Chrono_Vault --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Pulse Conductor runtime smoke test passed."
+          echo "$output" | grep -q "KROLL Chrono Vault runtime smoke test passed."
