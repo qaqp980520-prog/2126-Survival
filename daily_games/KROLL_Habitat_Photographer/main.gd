@@ -232,10 +232,11 @@ func _make_button(label_text: String, callback: Callable) -> Button:
 	return button
 
 func _load_stage_settings() -> void:
-	var stage: Dictionary = _rules.call("get_stage", _stage_index)
-	_focus = int(stage.get("focus", 3))
-	_zoom = int(stage.get("zoom", 2))
-	_exposure = int(stage.get("exposure", 0))
+	# Start each habitat from a neutral camera profile; the visible field brief
+	# tells the player which adjustments are required for the current species.
+	_focus = 3
+	_zoom = 2
+	_exposure = 0
 
 func adjust_setting(setting: String, amount: int) -> bool:
 	if _stage_awarded or _campaign_complete or amount == 0:
