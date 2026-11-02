@@ -184,9 +184,10 @@ func _build_hud() -> void:
 	streaming_diagnostics_panel.offset_left = -430.0
 	streaming_diagnostics_panel.offset_right = -14.0
 	streaming_diagnostics_panel.offset_top = 14.0
-	streaming_diagnostics_panel.offset_bottom = 270.0
+	streaming_diagnostics_panel.offset_bottom = 350.0
 	layer.add_child(streaming_diagnostics_panel)
 	streaming_diagnostics_panel.call("bind_director", director)
+	streaming_diagnostics_panel.call("bind_corner_provider", chunk_controller)
 	streaming_diagnostics_panel.call("set_open", false)
 	_refresh_hud()
 
