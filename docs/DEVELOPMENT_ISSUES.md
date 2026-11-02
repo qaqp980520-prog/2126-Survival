@@ -1304,3 +1304,20 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Exact-head Godot 4.3 [Run #1036](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41424779146) passed 394/394 workflow step records, zero failures/skips, including snapshot export and Solar Sail import/rules/runtime gates plus cleanup and job completion.
 - Solar Sail's three deterministic flight plans independently reach their relays within capture radius/speed limits; this is a model cross-check, not device QA.
 - World-save schema remains version 1. Local GUI/rendering, GPU performance and iPhone hardware QA remain untested.
+
+
+## Run 89 — Titration Bench and diagnostics export path hardening (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Export path traversal | A `user://` prefix check alone is insufficient if a path contains current/parent segments, empty segments or Windows-style separators. | Added segment-aware validation; rejects empty/current/parent segments, repeated/leading/trailing separators, backslashes and all non-`user://` paths. |
+| Snapshot center provenance | A synthetic Vector2i conversion test does not prove the production streamer supplies the actual completed request center. | Test now completes a real async request at Vector2i(2, 0) and verifies that center survives JSON-safe snapshot conversion. |
+| Export UI integration | Testing only the file helper can miss a disconnected or incorrectly wired export button. | Regression activates the public EXPORT SNAPSHOT button and verifies default output path, SAVED status and valid file creation. |
+| Titration scoring and progression | Completed samples must not be reset to farm score, and the campaign must not accept a fourth endpoint. | Rules and runtime smoke cover three endpoint captures, one-time 100-point awards, completed-sample lock, terminal campaign lock and explicit fresh-campaign restart. |
+
+### Run 89 validation and merge
+- KROLL Titration Bench M0.1 is registered in the root Test Hub and has a standalone Godot 4.3+ project, rules tests and runtime smoke test.
+- Feature PR [#214](https://github.com/qaqp980520-prog/2126-Survival/pull/214) merged as `8461be2308ff7e0445a5fec6043af04ff16afb61`.
+- Refreshed-base exact-head Godot 4.3 [Run #1041](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41436668952) passed 399/399 workflow steps, zero failures/skips, including all Run 89 diagnostics-export and Titration Bench gates plus cleanup/container shutdown/job completion.
+- World-save schema remains version 1; diagnostics snapshot remains transient under `user://`.
+- Local GUI/renderer, GPU and iPhone hardware QA remain untested.
