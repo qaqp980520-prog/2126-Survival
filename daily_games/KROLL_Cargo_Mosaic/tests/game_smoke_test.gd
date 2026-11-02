@@ -1,6 +1,6 @@
 extends SceneTree
 
-const GameScene = preload("res://main_root.tscn")
+const GameScene = preload("res://main.tscn")
 const FIXTURES: Array[Array] = [
 	[{"id":"ION","origin":Vector2i(1,1),"rotation":3},{"id":"FORK","origin":Vector2i(2,4),"rotation":0},{"id":"HOOK","origin":Vector2i(4,0),"rotation":0},{"id":"CORE","origin":Vector2i(2,1),"rotation":0}],
 	[{"id":"ION","origin":Vector2i(1,2),"rotation":0},{"id":"FORK","origin":Vector2i(0,3),"rotation":1},{"id":"HOOK","origin":Vector2i(4,3),"rotation":2},{"id":"CORE","origin":Vector2i(3,4),"rotation":2}],
