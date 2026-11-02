@@ -3,12 +3,6 @@ extends Control
 const BOARD_WIDTH: int = 6
 const BOARD_HEIGHT: int = 6
 var rules_api: Variant
-
-func _init() -> void:
-	var rules_path := "res://daily_games/KROLL_Cargo_Mosaic/rules.gd"
-	if not ResourceLoader.exists(rules_path):
-		rules_path = "res://rules.gd"
-	rules_api = load(rules_path)
 const COLORS: Dictionary = {
 	"ION": Color(0.22, 0.72, 0.91), "FORK": Color(0.96, 0.66, 0.25),
 	"HOOK": Color(0.72, 0.56, 0.93), "CORE": Color(0.30, 0.78, 0.56)
@@ -33,7 +27,16 @@ var next_button: Button
 var left_button: Button
 var right_button: Button
 
+func _init() -> void:
+	var rules_path := "res://daily_games/KROLL_Cargo_Mosaic/rules.gd"
+	if not ResourceLoader.exists(rules_path):
+		rules_path = "res://rules.gd"
+	rules_api = load(rules_path)
+
 func _ready() -> void:
+	if rules_api == null:
+		push_error("Cargo Mosaic could not load its rules script.")
+		return
 	_build_ui()
 	_load_level(0)
 
