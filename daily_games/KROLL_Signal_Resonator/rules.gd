@@ -40,7 +40,8 @@ func get_level_definition(index: int) -> Dictionary:
 
 func get_note_count(index: int) -> int:
 	var level: Dictionary = get_level_definition(index)
-	return (level.get("sequence", []) as Array).size()
+	var sequence: Array = level.get("sequence", [])
+	return sequence.size()
 
 func create_state(index: int, campaign_score: int = 0, completed: Array = []) -> Dictionary:
 	var level: Dictionary = get_level_definition(index)
