@@ -265,6 +265,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Crew Ledger"), "hub labels the Crew Ledger game")
 	_expect(labels.has("KROLL Cargo Mosaic"), "hub labels the Cargo Mosaic game")
 	_expect(labels.has("KROLL Chrono Vault"), "hub labels the Chrono Vault game")
+	_expect(labels.has("KROLL Swarm Dispatcher"), "hub labels the Swarm Dispatcher game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
