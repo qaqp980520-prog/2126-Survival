@@ -66,7 +66,7 @@ func _draw() -> void:
 			draw_rect(rect, Color("#29485c"), false, 1.0)
 			for drone_index in range(goals.size()):
 				if goals[drone_index] == point:
-					draw_circle(rect.get_center(), cell * 0.27, Color(DRONE_COLORS[drone_index], 0.24))
+					draw_circle(rect.get_center(), cell * 0.27, Color(DRONE_COLORS[drone_index].r, DRONE_COLORS[drone_index].g, DRONE_COLORS[drone_index].b, 0.24))
 					draw_arc(rect.get_center(), cell * 0.30, 0.0, TAU, 32, DRONE_COLORS[drone_index], 2.0)
 			for drone_index in range(starts.size()):
 				if starts[drone_index] == point:
