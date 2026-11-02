@@ -479,7 +479,7 @@ func _run() -> void:
 		await process_frame
 		_expect(chrono_game.call("get_title_text") == "KROLL // CHRONO VAULT", "root-loaded Chrono Vault displays its title")
 		_expect(chrono_game.call("get_level_count") == 3, "root-loaded Chrono Vault builds three vaults")
-		_expect(chrono_game.call("get_move_button_count") == 4, "root-loaded Chrono Vault builds five movement controls")
+		_expect(chrono_game.call("get_move_button_count") == 5, "root-loaded Chrono Vault builds five movement controls")
 		_expect(chrono_game.call("get_action_button_count") == 3, "root-loaded Chrono Vault builds three vault action controls")
 		_expect(chrono_game.call("get_control_button_count") == 8, "root-loaded Chrono Vault exposes eight controls")
 		chrono_game.queue_free()
