@@ -1,6 +1,14 @@
 extends Control
 
-const Rules = preload("res://rules.gd")
+const BOARD_WIDTH: int = 6
+const BOARD_HEIGHT: int = 6
+var rules_api: Variant
+
+func _init() -> void:
+	var rules_path := "res://daily_games/KROLL_Cargo_Mosaic/rules.gd"
+	if not ResourceLoader.exists(rules_path):
+		rules_path = "res://rules.gd"
+	rules_api = load(rules_path)
 const COLORS: Dictionary = {
 	"ION": Color(0.22, 0.72, 0.91), "FORK": Color(0.96, 0.66, 0.25),
 	"HOOK": Color(0.72, 0.56, 0.93), "CORE": Color(0.30, 0.78, 0.56)
@@ -71,12 +79,12 @@ func _build_ui() -> void:
 		board_margin.add_theme_constant_override("margin_" + side, 10)
 	board_panel.add_child(board_margin)
 	var grid := GridContainer.new()
-	grid.columns = Rules.BOARD_WIDTH
+	grid.columns = BOARD_WIDTH
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
 	board_margin.add_child(grid)
-	for y in range(Rules.BOARD_HEIGHT):
-		for x in range(Rules.BOARD_WIDTH):
+	for y in range(BOARD_HEIGHT):
+		for x in range(BOARD_WIDTH):
 			var cell := Vector2i(x, y)
 			var button := Button.new()
 			button.name = "Cell_%d_%d" % [x, y]
@@ -95,7 +103,7 @@ func _build_ui() -> void:
 	heading.add_theme_font_size_override("font_size", 18)
 	heading.add_theme_color_override("font_color", Color(0.58, 0.88, 1.0))
 	side.add_child(heading)
-	for piece_id in Rules.get_piece_ids():
+	for piece_id in rules_api.get_piece_ids():
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(0, 42)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -132,7 +140,7 @@ func _add_action(parent: VBoxContainer, text_value: String, action: Callable) ->
 	return button
 
 func _load_level(index: int) -> void:
-	level_index = clampi(index, 0, Rules.get_level_count() - 1)
+	level_index = clampi(index, 0, rules_api.get_level_count() - 1)
 	placements.clear()
 	placement_order.clear()
 	rotations = {"ION":0,"FORK":0,"HOOK":0,"CORE":0}
@@ -143,12 +151,12 @@ func _load_level(index: int) -> void:
 	_refresh_ui()
 
 func _select_piece(piece_id: String) -> void:
-	if campaign_complete or not Rules.get_piece_ids().has(piece_id):
+	if campaign_complete or not rules_api.get_piece_ids().has(piece_id):
 		return
 	if placements.has(piece_id):
-		placements = Rules.remove_piece(placements, piece_id)
+		placements = rules_api.remove_piece(placements, piece_id)
 		placement_order.erase(piece_id)
-		status_label.text = "%s lifted back to the tray." % Rules.get_piece_name(piece_id)
+		status_label.text = "%s lifted back to the tray." % rules_api.get_piece_name(piece_id)
 	selected_piece = piece_id
 	_refresh_ui()
 
@@ -167,9 +175,9 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 		try_place_piece(selected_piece, cell, int(rotations.get(selected_piece, 0)))
 
 func try_place_piece(piece_id: String, origin: Vector2i, rotation: int) -> bool:
-	if campaign_complete or Rules.is_solved(level_index, placements):
+	if campaign_complete or rules_api.is_solved(level_index, placements):
 		return false
-	var result: Dictionary = Rules.place_piece(level_index, placements, piece_id, origin, rotation)
+	var result: Dictionary = rules_api.place_piece(level_index, placements, piece_id, origin, rotation)
 	if not bool(result.get("ok", false)):
 		status_label.text = "Placement rejected: %s." % str(result.get("reason", "invalid"))
 		_refresh_ui()
@@ -179,21 +187,21 @@ func try_place_piece(piece_id: String, origin: Vector2i, rotation: int) -> bool:
 		placement_order.append(piece_id)
 	rotations[piece_id] = posmod(rotation, 4)
 	selected_piece = _find_next_unplaced()
-	if Rules.is_solved(level_index, placements):
+	if rules_api.is_solved(level_index, placements):
 		status_label.text = "BAY SEALED · ALL SIGNALLED CELLS COVERED."
 	else:
-		status_label.text = "%s secured · %d / 4 modules placed." % [Rules.get_piece_name(piece_id), placements.size()]
+		status_label.text = "%s secured · %d / 4 modules placed." % [rules_api.get_piece_name(piece_id), placements.size()]
 	_refresh_ui()
 	return true
 
 func _piece_at_cell(cell: Vector2i) -> String:
 	for piece_id in placements:
-		if Rules.get_placement_cells(str(piece_id), placements[piece_id]).has(cell):
+		if rules_api.get_placement_cells(str(piece_id), placements[piece_id]).has(cell):
 			return str(piece_id)
 	return ""
 
 func _find_next_unplaced() -> String:
-	for piece_id in Rules.get_piece_ids():
+	for piece_id in rules_api.get_piece_ids():
 		if not placements.has(piece_id):
 			return piece_id
 	return ""
@@ -211,8 +219,8 @@ func _rotate_selected(amount: int) -> void:
 	_refresh_ui()
 
 func _move_anchor(delta: Vector2i) -> void:
-	anchor_cell.x = clampi(anchor_cell.x + delta.x, 0, Rules.BOARD_WIDTH - 1)
-	anchor_cell.y = clampi(anchor_cell.y + delta.y, 0, Rules.BOARD_HEIGHT - 1)
+	anchor_cell.x = clampi(anchor_cell.x + delta.x, 0, BOARD_WIDTH - 1)
+	anchor_cell.y = clampi(anchor_cell.y + delta.y, 0, BOARD_HEIGHT - 1)
 	_refresh_ui()
 
 func _place_selected() -> void:
@@ -223,18 +231,18 @@ func _undo_last() -> void:
 	if placement_order.is_empty() or campaign_complete:
 		return
 	var piece_id: String = placement_order.pop_back()
-	placements = Rules.remove_piece(placements, piece_id)
+	placements = rules_api.remove_piece(placements, piece_id)
 	selected_piece = piece_id
-	status_label.text = "%s returned to the tray." % Rules.get_piece_name(piece_id)
+	status_label.text = "%s returned to the tray." % rules_api.get_piece_name(piece_id)
 	_refresh_ui()
 
 func reset_level() -> void:
 	_load_level(0 if campaign_complete else level_index)
 
 func advance_level() -> bool:
-	if not Rules.is_solved(level_index, placements):
+	if not rules_api.is_solved(level_index, placements):
 		return false
-	if level_index + 1 >= Rules.get_level_count():
+	if level_index + 1 >= rules_api.get_level_count():
 		campaign_complete = true
 		status_label.text = "CAMPAIGN COMPLETE · ALL THREE BAYS SEALED."
 		_refresh_ui()
@@ -245,11 +253,11 @@ func advance_level() -> bool:
 func _refresh_ui() -> void:
 	if status_label == null:
 		return
-	var level: Dictionary = Rules.get_level_data(level_index)
+	var level: Dictionary = rules_api.get_level_data(level_index)
 	var targets: Array[Vector2i] = level.get("target_cells", [])
-	level_label.text = "BAY %02d / %02d · %s" % [level_index + 1, Rules.get_level_count(), level.get("name", "")]
+	level_label.text = "BAY %02d / %02d · %s" % [level_index + 1, rules_api.get_level_count(), level.get("name", "")]
 	for index in range(board_buttons.size()):
-		var cell := Vector2i(index % Rules.BOARD_WIDTH, index / Rules.BOARD_WIDTH)
+		var cell := Vector2i(index % BOARD_WIDTH, index / BOARD_WIDTH)
 		var button: Button = board_buttons[index]
 		var occupant := _piece_at_cell(cell)
 		if not targets.has(cell):
@@ -264,18 +272,18 @@ func _refresh_ui() -> void:
 			button.text = "◎" if cell == anchor_cell and not selected_piece.is_empty() else "·"
 			button.disabled = false
 			_style_button(button, Color(0.10, 0.18, 0.25) if cell == anchor_cell else Color(0.075, 0.12, 0.17), Color(0.24, 0.46, 0.58))
-	for piece_id in Rules.get_piece_ids():
+	for piece_id in rules_api.get_piece_ids():
 		var button: Button = piece_buttons[piece_id]
 		var placed: bool = placements.has(piece_id)
-		button.text = "%s  %s  %s%s" % [MARKS[piece_id], Rules.get_piece_name(piece_id), PREVIEWS[piece_id], " ✓" if placed else (" ◀" if selected_piece == piece_id else "")]
+		button.text = "%s  %s  %s%s" % [MARKS[piece_id], rules_api.get_piece_name(piece_id), PREVIEWS[piece_id], " ✓" if placed else (" ◀" if selected_piece == piece_id else "")]
 		button.add_theme_color_override("font_color", Color(0.04, 0.07, 0.09) if placed else Color(0.84, 0.93, 1.0))
 		_style_button(button, COLORS[piece_id] if placed else Color(0.08, 0.15, 0.21), COLORS[piece_id])
 	selected_label.text = "SELECTED: %s · ROTATION %d° · ANCHOR %d,%d" % [
-		"NONE" if selected_piece.is_empty() else Rules.get_piece_name(selected_piece),
+		"NONE" if selected_piece.is_empty() else rules_api.get_piece_name(selected_piece),
 		int(rotations.get(selected_piece, 0)) * 90, anchor_cell.x, anchor_cell.y
 	]
 	undo_button.disabled = placement_order.is_empty() or campaign_complete
-	next_button.disabled = not Rules.is_solved(level_index, placements)
+	next_button.disabled = not rules_api.is_solved(level_index, placements)
 	left_button.disabled = selected_piece.is_empty() or campaign_complete or placements.has(selected_piece)
 	right_button.disabled = left_button.disabled
 
@@ -315,9 +323,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func get_current_state() -> Dictionary:
-	var level: Dictionary = Rules.get_level_data(level_index)
+	var level: Dictionary = rules_api.get_level_data(level_index)
 	return {"level_index":level_index,"level_id":level.get("id",""),"placed_count":placements.size(),
-		"solved":Rules.is_solved(level_index, placements),"campaign_complete":campaign_complete}
+		"solved":rules_api.is_solved(level_index, placements),"campaign_complete":campaign_complete}
 
 func get_title_text() -> String:
 	return "KROLL // CARGO MOSAIC"
@@ -332,4 +340,4 @@ func get_piece_button_count() -> int:
 	return piece_buttons.size()
 
 func get_target_cell_count() -> int:
-	return Rules.get_level_data(level_index).get("target_cells", []).size()
+	return rules_api.get_level_data(level_index).get("target_cells", []).size()
