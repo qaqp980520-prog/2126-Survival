@@ -36,6 +36,7 @@ const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographe
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
 const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
+const PULSE_CONDUCTOR_SCENE := "res://daily_games/KROLL_Pulse_Conductor/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -73,6 +74,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(SOLAR_SAIL_NAVIGATOR_SCENE), "Solar Sail Navigator game scene exists")
 	_expect(ResourceLoader.exists(TITRATION_BENCH_SCENE), "Titration Bench game scene exists")
 	_expect(ResourceLoader.exists(PLANETARY_CLIMATE_LAB_SCENE), "Planetary Climate Lab game scene exists")
+	_expect(ResourceLoader.exists(PULSE_CONDUCTOR_SCENE), "Pulse Conductor game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -83,7 +85,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 35, "hub exposes thirty-five world, prototype and game launch buttons")
+	_expect(buttons.size() == 36, "hub exposes thirty-six world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -260,6 +262,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Paleo Track Lab"), "hub labels the Paleo Track Lab game")
 	_expect(labels.has("KROLL Crew Ledger"), "hub labels the Crew Ledger game")
 	_expect(labels.has("KROLL Cargo Mosaic"), "hub labels the Cargo Mosaic game")
+	_expect(labels.has("KROLL Pulse Conductor"), "hub labels the Pulse Conductor game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -465,6 +468,20 @@ func _run() -> void:
 		var climate_state: Dictionary = climate_game.call("get_current_state")
 		_expect(str(climate_state.get("planet_id", "")) == "nysa", "root-loaded Planetary Climate Lab starts at Nysa")
 		climate_game.queue_free()
+		await process_frame
+
+
+	var pulse_scene := load(PULSE_CONDUCTOR_SCENE) as PackedScene
+	_expect(pulse_scene != null, "root hub can load the Pulse Conductor scene")
+	if pulse_scene != null:
+		var pulse_game := pulse_scene.instantiate()
+		root.add_child(pulse_game)
+		await process_frame
+		_expect(pulse_game.call("get_title_text") == "KROLL // PULSE CONDUCTOR", "root-loaded Pulse Conductor displays its title")
+		_expect(pulse_game.call("get_chart_count") == 3, "root-loaded Pulse Conductor builds three charts")
+		_expect(pulse_game.call("get_lane_button_count") == 4, "root-loaded Pulse Conductor builds four input lanes")
+		_expect(pulse_game.call("get_action_button_count") == 3, "root-loaded Pulse Conductor builds three campaign controls")
+		pulse_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
