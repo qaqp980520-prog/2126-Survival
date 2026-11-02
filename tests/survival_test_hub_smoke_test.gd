@@ -38,6 +38,7 @@ const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_roo
 const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
 const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn"
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
+const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -77,6 +78,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(PLANETARY_CLIMATE_LAB_SCENE), "Planetary Climate Lab game scene exists")
 	_expect(ResourceLoader.exists(CHRONO_VAULT_SCENE), "Chrono Vault game scene exists")
 	_expect(ResourceLoader.exists(SWARM_DISPATCHER_SCENE), "Swarm Dispatcher game scene exists")
+	_expect(ResourceLoader.exists(SIGNAL_RESONATOR_SCENE), "Signal Resonator game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -87,7 +89,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 37, "hub exposes thirty-six world, prototype and game launch buttons")
+	_expect(buttons.size() == 38, "hub exposes thirty-seven world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -113,6 +115,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Pendulum Array"), "hub labels the Pendulum Array game")
 	_expect(labels.has("KROLL Habitat Photographer"), "hub labels the Habitat Photographer game")
 	_expect(labels.has("KROLL Titration Bench"), "hub labels the Titration Bench game")
+	_expect(labels.has("KROLL Signal Resonator"), "hub labels the Signal Resonator game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -266,6 +269,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Cargo Mosaic"), "hub labels the Cargo Mosaic game")
 	_expect(labels.has("KROLL Chrono Vault"), "hub labels the Chrono Vault game")
 	_expect(labels.has("KROLL Swarm Dispatcher"), "hub labels the Swarm Dispatcher game")
+	_expect(labels.has("KROLL Signal Resonator"), "hub labels the Signal Resonator game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -498,6 +502,18 @@ func _run() -> void:
 		_expect(swarm_dispatcher.call("get_level_count") == 3, "root-loaded Swarm Dispatcher exposes three missions")
 		_expect(swarm_dispatcher.call("get_drone_button_count") == 3, "root-loaded Swarm Dispatcher creates three drone selectors")
 		swarm_dispatcher.queue_free()
+		await process_frame
+
+	var signal_resonator_scene := load(SIGNAL_RESONATOR_SCENE) as PackedScene
+	_expect(signal_resonator_scene != null, "root hub can load the Signal Resonator scene")
+	if signal_resonator_scene != null:
+		var signal_resonator := signal_resonator_scene.instantiate()
+		root.add_child(signal_resonator)
+		await process_frame
+		_expect(signal_resonator.call("get_title_text") == "KROLL // SIGNAL RESONATOR", "root-loaded Signal Resonator displays its title")
+		_expect(signal_resonator.call("get_level_count") == 3, "root-loaded Signal Resonator exposes three stages")
+		_expect(signal_resonator.call("get_lane_button_count") == 3, "root-loaded Signal Resonator builds three timing lanes")
+		signal_resonator.queue_free()
 		await process_frame
 
 	hub.queue_free()

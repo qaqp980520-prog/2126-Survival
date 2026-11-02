@@ -17,6 +17,7 @@ func _run() -> void:
     _test_duplicate_patch_side_rejected()
     _test_resolver_rejects_non_opposite_sides_and_stable_order()
     _test_manager_rejects_non_string_public_inputs()
+    await _test_manager_rejects_mismatched_cardinal_side()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -427,6 +428,56 @@ func _test_manager_rejects_non_string_public_inputs() -> void:
     var numeric_side_result: Dictionary = manager.call("sync_transitions", {"a|b": numeric_side_descriptor}, {})
     _expect(not bool(numeric_side_result.get("ok", true)) and str(numeric_side_result.get("error", "")) == "invalid_edge_sides", "manager rejects non-string side values before coercion")
     manager.free()
+
+
+func _test_manager_rejects_mismatched_cardinal_side() -> void:
+    var holder := Node3D.new()
+    holder.name = "TransitionSideMismatchTestRoot"
+    root.add_child(holder)
+    var lower: Node3D = PatchScript.new()
+    lower.name = "Lower"
+    var higher: Node3D = PatchScript.new()
+    higher.name = "Higher"
+    higher.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+    holder.add_child(lower)
+    holder.add_child(higher)
+    await process_frame
+    lower.call("apply_world_object_state", {"height_level": 0, "surface_type": "soil", "revision": 1})
+    higher.call("apply_world_object_state", {"height_level": 2, "surface_type": "metal", "revision": 1})
+    var stable_ids := {
+        lower.get_instance_id(): "a/side-mismatch/lower",
+        higher.get_instance_id(): "z/side-mismatch/higher"
+    }
+    var binding: Dictionary = BinderScript.bind_patches([lower, higher], stable_ids)
+    _expect(bool(binding.get("ok", false)), "side-mismatch fixture receives a valid east/west descriptor")
+    var descriptors: Dictionary = binding.get("descriptors", {}).duplicate(true)
+    var edge_key: String = ""
+    for key in descriptors.keys():
+        edge_key = str(key)
+    if edge_key.is_empty():
+        holder.queue_free()
+        await process_frame
+        return
+    var malformed: Dictionary = descriptors[edge_key].duplicate(true)
+    malformed["first_side"] = "north"
+    malformed["second_side"] = "south"
+    descriptors[edge_key] = malformed
+    var patches := {
+        "a/side-mismatch/lower": lower,
+        "z/side-mismatch/higher": higher
+    }
+    var manager: Node3D = ManagerScript.new()
+    holder.add_child(manager)
+    var report: Dictionary = manager.call("sync_transitions", descriptors, patches)
+    _expect(not bool(report.get("ok", true)), "manager rejects a cardinal side that disagrees with patch positions")
+    _expect(str(report.get("error", "")) == "descriptor_side_mismatch", "side mismatch returns a stable diagnostic code")
+    _expect(int(manager.call("get_transition_count")) == 0, "invalid orientation creates no shared collider")
+    _expect(not bool(lower.call("is_shared_transition_active", "east")) and not bool(lower.call("is_shared_transition_active", "north")), "invalid orientation leaves lower patch collision strips untouched")
+    _expect(not bool(higher.call("is_shared_transition_active", "west")) and not bool(higher.call("is_shared_transition_active", "south")), "invalid orientation leaves higher patch collision strips untouched")
+    holder.queue_free()
+    await process_frame
+    await process_frame
+
 
 func _expect(condition: bool, description: String) -> void:
     if condition:

@@ -37,6 +37,7 @@ const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_roo
 const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
 const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn"
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
+const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 
 var status_label: Label
 
@@ -315,6 +316,12 @@ func _build_ui() -> void:
 		"KROLL Swarm Dispatcher",
 		"分別編排三架無人機的路線，再逐 tick 同步執行；系統會拒絕同格衝突與迎面交換。",
 		SWARM_DISPATCHER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Signal Resonator",
+		"依照節拍按下三條訊號通道，抓住 Perfect／Good 時窗，完成三段共振校準。",
+		SIGNAL_RESONATOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,
