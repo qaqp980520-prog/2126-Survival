@@ -10,6 +10,7 @@ var _action_buttons: Array[Button] = []
 var _info_label: Label
 var _status_label: Label
 var _record_button: Button
+var _restart_button: Button
 var _next_button: Button
 func _ready() -> void:
 	_rules = RulesScript.new()
@@ -100,13 +101,13 @@ func _build_ui() -> void:
 	_record_button.pressed.connect(_on_record_pressed)
 	action_row.add_child(_record_button)
 	_action_buttons.append(_record_button)
-	var restart_button := Button.new()
-	restart_button.name = "RestartLevelButton"
-	restart_button.text = "RESTART VAULT  ·  C"
-	restart_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	restart_button.pressed.connect(_on_restart_pressed)
-	action_row.add_child(restart_button)
-	_action_buttons.append(restart_button)
+	_restart_button = Button.new()
+	_restart_button.name = "RestartLevelButton"
+	_restart_button.text = "RESTART VAULT  ·  C"
+	_restart_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_button.pressed.connect(_on_restart_pressed)
+	action_row.add_child(_restart_button)
+	_action_buttons.append(_restart_button)
 	_next_button = Button.new()
 	_next_button.name = "NextLevelButton"
 	_next_button.text = "NEXT VAULT  ·  N"
@@ -138,6 +139,8 @@ func _refresh_ui() -> void:
 	var player_pos: Vector2i = _state.get("player_pos",Vector2i.ZERO)
 	var can_record: bool = status == "playing" and player_pos == level.get("echo_plate",Vector2i(-1,-1)) and not _state.get("recording",[]).is_empty()
 	_record_button.disabled = not can_record
+	_restart_button.text = "RESTART CAMPAIGN  ·  C" if status == "campaign_complete" else "RESTART VAULT  ·  C"
+	_restart_button.disabled = status == "passed"
 	_next_button.disabled = status != "passed"
 	for button in _move_buttons:
 		button.disabled = status != "playing"
@@ -146,7 +149,10 @@ func _on_move_pressed(action: String) -> void:
 func _on_record_pressed() -> void:
 	commit_echo()
 func _on_restart_pressed() -> void:
-	restart_level()
+	if str(_state.get("status","")) == "campaign_complete":
+		restart_campaign()
+	else:
+		restart_level()
 func _on_next_pressed() -> void:
 	advance_level()
 func step_action(action: String) -> bool:
@@ -199,7 +205,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_D, KEY_RIGHT: step_action("right")
 		KEY_SPACE: step_action("wait")
 		KEY_R: commit_echo()
-		KEY_C: restart_level()
+		KEY_C:
+			if str(_state.get("status","")) == "campaign_complete":
+				restart_campaign()
+			else:
+				restart_level()
 		KEY_N: advance_level()
 	get_viewport().set_input_as_handled()
 func get_title_text() -> String:
@@ -214,3 +224,5 @@ func get_control_button_count() -> int:
 	return _move_buttons.size() + _action_buttons.size()
 func get_current_state() -> Dictionary:
 	return _state.duplicate(true)
+func get_restart_button_text() -> String:
+	return _restart_button.text
