@@ -115,6 +115,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Pendulum Array"), "hub labels the Pendulum Array game")
 	_expect(labels.has("KROLL Habitat Photographer"), "hub labels the Habitat Photographer game")
 	_expect(labels.has("KROLL Titration Bench"), "hub labels the Titration Bench game")
+	_expect(labels.has("KROLL Signal Resonator"), "hub labels the Signal Resonator game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
