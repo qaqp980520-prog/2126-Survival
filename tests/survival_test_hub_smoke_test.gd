@@ -39,6 +39,7 @@ const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_
 const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn"
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
+const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -79,6 +80,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(CHRONO_VAULT_SCENE), "Chrono Vault game scene exists")
 	_expect(ResourceLoader.exists(SWARM_DISPATCHER_SCENE), "Swarm Dispatcher game scene exists")
 	_expect(ResourceLoader.exists(SIGNAL_RESONATOR_SCENE), "Signal Resonator game scene exists")
+	_expect(ResourceLoader.exists(SONAR_TRIANGULATOR_SCENE), "Sonar Triangulator game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -89,7 +91,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 38, "hub exposes thirty-seven world, prototype and game launch buttons")
+	_expect(buttons.size() == 39, "hub exposes thirty-eight world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -116,6 +118,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Habitat Photographer"), "hub labels the Habitat Photographer game")
 	_expect(labels.has("KROLL Titration Bench"), "hub labels the Titration Bench game")
 	_expect(labels.has("KROLL Signal Resonator"), "hub labels the Signal Resonator game")
+	_expect(labels.has("KROLL Sonar Triangulator"), "hub labels the Sonar Triangulator game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -514,6 +517,19 @@ func _run() -> void:
 		_expect(signal_resonator.call("get_level_count") == 3, "root-loaded Signal Resonator exposes three stages")
 		_expect(signal_resonator.call("get_lane_button_count") == 3, "root-loaded Signal Resonator builds three timing lanes")
 		signal_resonator.queue_free()
+		await process_frame
+
+	var sonar_triangulator_scene := load(SONAR_TRIANGULATOR_SCENE) as PackedScene
+	_expect(sonar_triangulator_scene != null, "root hub can load the Sonar Triangulator scene")
+	if sonar_triangulator_scene != null:
+		var sonar_triangulator := sonar_triangulator_scene.instantiate()
+		root.add_child(sonar_triangulator)
+		await process_frame
+		_expect(sonar_triangulator.call("get_title_text") == "KROLL // SONAR TRIANGULATOR", "root-loaded Sonar Triangulator displays its title")
+		_expect(sonar_triangulator.call("get_mission_count") == 3, "root-loaded Sonar Triangulator exposes three missions")
+		_expect(sonar_triangulator.call("get_sensor_button_count") == 4, "root-loaded Sonar Triangulator builds four sensor buttons")
+		_expect(sonar_triangulator.call("get_cell_button_count") == 64, "root-loaded Sonar Triangulator builds the 8x8 survey grid")
+		sonar_triangulator.queue_free()
 		await process_frame
 
 	hub.queue_free()

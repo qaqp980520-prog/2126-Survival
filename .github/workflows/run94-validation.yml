@@ -1,0 +1,81 @@
+name: Run 94 focused Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Sonar_Triangulator/**'
+      - 'tests/surface_terrain_four_way_corner_junction_test.gd'
+      - 'prototypes/SurvivalTestHub.gd'
+      - 'tests/survival_test_hub_smoke_test.gd'
+      - '.github/workflows/run94-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Run 94 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Sonar_Triangulator/project.godot
+          test -f daily_games/KROLL_Sonar_Triangulator/main.tscn
+          test -f daily_games/KROLL_Sonar_Triangulator/main_root.tscn
+          test -f daily_games/KROLL_Sonar_Triangulator/main.gd
+          test -f daily_games/KROLL_Sonar_Triangulator/rules.gd
+          test -f daily_games/KROLL_Sonar_Triangulator/tests/rules_test.gd
+          test -f daily_games/KROLL_Sonar_Triangulator/tests/game_smoke_test.gd
+          grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 39' tests/survival_test_hub_smoke_test.gd
+          grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
+
+      - name: Import and parse KROLL Sonar Triangulator
+        run: godot --headless --path daily_games/KROLL_Sonar_Triangulator --editor --quit
+
+      - name: Run KROLL Sonar Triangulator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Sonar_Triangulator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Sonar Triangulator rules tests passed."
+
+      - name: Run KROLL Sonar Triangulator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Sonar_Triangulator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Sonar Triangulator runtime smoke test passed."
+
+      - name: Import and parse root 2126 Survival project
+        run: godot --headless --path . --editor --quit
+
+      - name: Run root Test Hub integration smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Run four-way terrain corner junction regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 100s godot --headless --path . --script res://tests/surface_terrain_four_way_corner_junction_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Four-way terrain corner junction regression passed."

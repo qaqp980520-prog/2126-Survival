@@ -38,6 +38,7 @@ const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_
 const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn"
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
+const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
 
 var status_label: Label
 
@@ -322,6 +323,12 @@ func _build_ui() -> void:
 		"KROLL Signal Resonator",
 		"依照節拍按下三條訊號通道，抓住 Perfect／Good 時窗，完成三段共振校準。",
 		SIGNAL_RESONATOR_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Sonar Triangulator",
+		"從四座聲納浮標讀取距離回波，在 8×8 海床上定位失聯探測器；第四次掃描可破解模糊回波。",
+		SONAR_TRIANGULATOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,
