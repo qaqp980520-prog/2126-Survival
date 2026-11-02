@@ -3252,7 +3252,7 @@ jobs:
           test -f daily_games/KROLL_Solar_Sail_Navigator/tests/rules_test.gd
           test -f daily_games/KROLL_Solar_Sail_Navigator/tests/game_smoke_test.gd
           grep -q 'SOLAR_SAIL_NAVIGATOR_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'KROLL Solar Sail Navigator' tests/survival_test_hub_smoke_test.gd
+          grep -q 'KROLL // SOLAR SAIL NAVIGATOR' tests/survival_test_hub_smoke_test.gd
 
       - name: Run streaming diagnostics snapshot export regression
         shell: bash
