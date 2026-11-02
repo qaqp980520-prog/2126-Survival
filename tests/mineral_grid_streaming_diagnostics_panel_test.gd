@@ -9,27 +9,27 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var controller := FakeController.new()
-	var director := Director.new()
+	var controller: Node = FakeController.new()
+	var director: Node = Director.new()
 	root.add_child(controller)
 	root.add_child(director)
 	await process_frame
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = 10.0
 	director.load_radius = 1
-	_expect(director.bind_controller(controller), "fixture binds controller")
-	_expect(director.bind_chunk_factory(Callable(self, "_make_chunk")), "fixture binds factory")
-	_expect(director.sync_to_world_position(Vector3.ZERO, 2000), "fixture creates initial window")
-	var request_id: int = director.request_sync_to_world_position_async(Vector3(65.0, 0.0, 0.0), 2001, 1)
+	_expect(director.call("bind_controller", controller), "fixture binds controller")
+	_expect(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "fixture binds factory")
+	_expect(director.call("sync_to_world_position", Vector3.ZERO, 2000), "fixture creates initial window")
+	var request_id: int = director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 0.0), 2001, 1)
 	_expect(request_id > 0, "async window shift starts")
 	var staged := false
 	for _frame in range(120):
-		if int(director.get_async_staged_root_count(request_id)) >= 1:
+		if int(director.call("get_async_staged_root_count", request_id)) >= 1:
 			staged = true
 			break
 		await process_frame
 	_expect(staged, "test observes a real staged root")
-	var panel := Panel.new()
+	var panel: PanelContainer = Panel.new() as PanelContainer
 	root.add_child(panel)
 	panel.bind_director(director)
 	panel.set_open(true)
@@ -39,10 +39,10 @@ func _run() -> void:
 	_expect(live_text.contains("ACTIVE #%d" % request_id), "panel reports active request ID")
 	_expect(live_text.contains("staging"), "panel reports staging phase")
 	_expect(live_text.contains("stage 1/3"), "panel reports staged versus desired roots")
-	_expect(director.cancel_async_sync_request(request_id), "explicit cancellation is accepted")
+	_expect(director.call("cancel_async_sync_request", request_id), "explicit cancellation is accepted")
 	var terminal: Dictionary = {}
 	for _frame in range(120):
-		terminal = director.get_async_request_diagnostics(request_id)
+		terminal = director.call("get_async_request_diagnostics", request_id)
 		if bool(terminal.get("terminal", false)):
 			break
 		await process_frame
