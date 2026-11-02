@@ -8,7 +8,6 @@ const LANE_COLORS: Array[Color] = [
 ]
 
 var _rules: Variant
-var _rules: Variant
 var _state: Dictionary = {}
 var _round_start_ms: int = 0
 var _elapsed_ms: int = 0
