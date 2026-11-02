@@ -17,6 +17,14 @@ func _run() -> void:
 	root.add_child(world)
 	await process_frame
 	_expect(bool(world.call("initialize_world_session")), "surface world initializes shared session")
+	var diagnostics_panel: Control = world.find_child("StreamingDiagnosticsPanel", true, false) as Control
+	_expect(diagnostics_panel != null, "surface world embeds the streaming diagnostics panel")
+	if diagnostics_panel != null:
+		_expect(not diagnostics_panel.visible, "streaming diagnostics panel starts hidden")
+		diagnostics_panel.call("toggle_open")
+		_expect(diagnostics_panel.visible, "streaming diagnostics panel opens through its toggle API")
+		diagnostics_panel.call("toggle_open")
+		_expect(not diagnostics_panel.visible, "streaming diagnostics panel closes through its toggle API")
 	var status: Dictionary = world.call("get_world_session_status")
 	_expect(bool(status.get("ready", false)), "surface world reports ready")
 	var ids: PackedStringArray = status.get("active_chunk_ids", PackedStringArray())

@@ -3095,3 +3095,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Crew Ledger runtime smoke test passed."
+
+
+      - name: Verify Run 85 Cargo Mosaic and streaming diagnostics panel inputs
+        shell: bash
+        run: |
+          set -e
+          test -f systems/MineralGridStreamingDiagnosticsPanel.gd
+          test -f tests/mineral_grid_streaming_diagnostics_panel_test.gd
+          grep -q 'KEY_F3' world/SurfaceWorld.gd
+          grep -q 'StreamingDiagnosticsPanelScript' world/SurfaceWorld.gd
+          test -f daily_games/KROLL_Cargo_Mosaic/project.godot
+          test -f daily_games/KROLL_Cargo_Mosaic/main.tscn
+          test -f daily_games/KROLL_Cargo_Mosaic/main_root.tscn
+          grep -q 'res://daily_games/KROLL_Cargo_Mosaic/main.gd' daily_games/KROLL_Cargo_Mosaic/main_root.tscn
+          grep -q 'ResourceLoader.exists(rules_path)' daily_games/KROLL_Cargo_Mosaic/main.gd
+          test -f daily_games/KROLL_Cargo_Mosaic/main.gd
+          test -f daily_games/KROLL_Cargo_Mosaic/rules.gd
+          test -f daily_games/KROLL_Cargo_Mosaic/tests/rules_test.gd
+          test -f daily_games/KROLL_Cargo_Mosaic/tests/game_smoke_test.gd
+          grep -q 'CARGO_MOSAIC_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Cargo Mosaic' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run streaming diagnostics panel integration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_panel_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming diagnostics panel tests passed."
+
+      - name: Import and parse KROLL Cargo Mosaic
+        run: godot --headless --path daily_games/KROLL_Cargo_Mosaic --editor --quit
+      - name: Run KROLL Cargo Mosaic rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Cargo_Mosaic --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Cargo Mosaic rules tests passed."
+      - name: Run KROLL Cargo Mosaic runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Cargo_Mosaic --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Cargo Mosaic runtime smoke test passed."

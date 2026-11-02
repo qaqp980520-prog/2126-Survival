@@ -6,6 +6,7 @@ const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFacto
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
+const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -25,6 +26,7 @@ var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
 var hud: Label
 var interaction_prompt: Label
+var streaming_diagnostics_panel: PanelContainer
 var touch_buttons: Dictionary = {}
 var _touch_directions: Dictionary = {}
 var _touch_jump: bool = false
@@ -173,6 +175,19 @@ func _build_hud() -> void:
 	_add_touch_button(grid, "quick_2", "2 HERBS")
 	_add_touch_button(grid, "quick_3", "3 MEAT")
 	_add_touch_button(grid, "quick_4", "4 FOOD")
+	streaming_diagnostics_panel = StreamingDiagnosticsPanelScript.new() as PanelContainer
+	streaming_diagnostics_panel.name = "StreamingDiagnosticsPanel"
+	streaming_diagnostics_panel.anchor_left = 1.0
+	streaming_diagnostics_panel.anchor_right = 1.0
+	streaming_diagnostics_panel.anchor_top = 0.0
+	streaming_diagnostics_panel.anchor_bottom = 0.0
+	streaming_diagnostics_panel.offset_left = -430.0
+	streaming_diagnostics_panel.offset_right = -14.0
+	streaming_diagnostics_panel.offset_top = 14.0
+	streaming_diagnostics_panel.offset_bottom = 270.0
+	layer.add_child(streaming_diagnostics_panel)
+	streaming_diagnostics_panel.call("bind_director", director)
+	streaming_diagnostics_panel.call("set_open", false)
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -452,6 +467,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F3:
+				if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel):
+					streaming_diagnostics_panel.call("toggle_open")
+				get_viewport().set_input_as_handled()
+				return
 			match key_event.keycode:
 				KEY_1: _select_quick_slot(0)
 				KEY_2: _select_quick_slot(1)
@@ -1176,7 +1196,7 @@ func _refresh_hud() -> void:
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
 	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
-	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
 		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
