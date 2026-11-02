@@ -3049,3 +3049,49 @@ jobs:
           grep -q 'FIELD GUIDE' daily_games/KROLL_Paleo_Track_Lab/main.gd
           grep -q 'get_field_guide_text' daily_games/KROLL_Paleo_Track_Lab/tests/game_smoke_test.gd
           grep -q '8.5 ratio' daily_games/KROLL_Paleo_Track_Lab/tests/rules_test.gd
+
+      - name: Verify Run 84 async diagnostics and Crew Ledger inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q 'MAX_ASYNC_DIAGNOSTIC_HISTORY' systems/MineralGridStreamingDirector.gd
+          grep -q 'get_async_request_diagnostics' systems/MineralGridStreamingDirector.gd
+          grep -q 'superseded_by_request' systems/MineralGridStreamingDirector.gd
+          grep -q 'get_recent_async_request_diagnostics' tests/mineral_grid_streaming_async_test.gd
+          test -f daily_games/KROLL_Crew_Ledger/project.godot
+          test -f daily_games/KROLL_Crew_Ledger/main.tscn
+          test -f daily_games/KROLL_Crew_Ledger/main_root.tscn
+          test -f daily_games/KROLL_Crew_Ledger/main.gd
+          test -f daily_games/KROLL_Crew_Ledger/rules.gd
+          test -f daily_games/KROLL_Crew_Ledger/tests/rules_test.gd
+          test -f daily_games/KROLL_Crew_Ledger/tests/game_smoke_test.gd
+          grep -q 'CREW_LEDGER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Crew Ledger' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run async streaming diagnostics and stress regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 150s godot --headless --path . --script res://tests/mineral_grid_streaming_async_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid bounded async streaming tests passed."
+
+      - name: Import and parse KROLL Crew Ledger
+        run: godot --headless --path daily_games/KROLL_Crew_Ledger --editor --quit
+      - name: Run KROLL Crew Ledger rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Crew_Ledger --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Crew Ledger rules tests passed."
+      - name: Run KROLL Crew Ledger runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Crew_Ledger --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Crew Ledger runtime smoke test passed."

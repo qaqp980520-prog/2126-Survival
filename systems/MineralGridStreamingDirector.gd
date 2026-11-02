@@ -10,6 +10,7 @@ signal async_sync_completed(request_id: int, report: Dictionary)
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MAX_SAFE_GRID_COORDINATE: float = 1000000000.0
+const MAX_ASYNC_DIAGNOSTIC_HISTORY: int = 32
 
 @export_range(1.0, 4096.0, 1.0) var chunk_size_x: float = 64.0
 @export_range(1.0, 4096.0, 1.0) var chunk_size_z: float = 64.0
@@ -22,6 +23,7 @@ var _last_sync_report: Dictionary = {}
 var _next_async_request_id: int = 1
 var _active_async_request_id: int = -1
 var _async_staged_roots_by_request: Dictionary = {}
+var _async_request_diagnostics: Dictionary = {}
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null or not is_instance_valid(candidate) or not candidate.is_inside_tree() or candidate.is_queued_for_deletion():
@@ -147,6 +149,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 ## controller registration and stale-chunk retirement are committed only after staging succeeds.
 ## A newer request supersedes any request that is still in its staging phase.
 func _exit_tree() -> void:
+	if _active_async_request_id >= 0:
+		_record_async_diagnostic(_active_async_request_id, "cancelled", {}, true, "director_exit")
 	_active_async_request_id = -1
 	var request_ids: Array = _async_staged_roots_by_request.keys()
 	for raw_request_id in request_ids:
@@ -161,12 +165,29 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
 		return -1
 
-	if _active_async_request_id >= 0:
-		var superseded_request_id: int = _active_async_request_id
-		_release_async_staged_roots(superseded_request_id, _async_staged_roots_by_request.get(superseded_request_id, {}))
 	var request_id: int = _next_async_request_id
 	_next_async_request_id += 1
+	if _active_async_request_id >= 0:
+		var superseded_request_id: int = _active_async_request_id
+		_record_async_diagnostic(superseded_request_id, "cancelling", {}, false, "superseded_by_request:%d" % request_id)
+		_release_async_staged_roots(superseded_request_id, _async_staged_roots_by_request.get(superseded_request_id, {}))
 	_active_async_request_id = request_id
+	_async_request_diagnostics[request_id] = {
+		"request_id": request_id,
+		"phase": "queued",
+		"cancellation_reason": "",
+		"started_usec": Time.get_ticks_usec(),
+		"finished_usec": -1,
+		"duration_usec": -1,
+		"staged_count": 0,
+		"desired_count": 0,
+		"newly_loaded_count": 0,
+		"unloaded_stale_count": 0,
+		"rollback_complete": true,
+		"terminal": false,
+		"details": {}
+	}
+	_prune_async_diagnostics()
 	var center := Vector2i(
 		floori(world_position.x / chunk_size_x),
 		floori(world_position.z / chunk_size_z)
@@ -186,6 +207,7 @@ func cancel_async_sync_request(request_id: int = -1) -> bool:
 	if request_id >= 0 and request_id != _active_async_request_id:
 		return false
 	var cancelled_request_id: int = _active_async_request_id
+	_record_async_diagnostic(cancelled_request_id, "cancelling", {}, false, "explicit_cancel")
 	_active_async_request_id = -1
 	_release_async_staged_roots(cancelled_request_id, _async_staged_roots_by_request.get(cancelled_request_id, {}))
 	return true
@@ -193,9 +215,57 @@ func cancel_async_sync_request(request_id: int = -1) -> bool:
 func get_active_async_request_id() -> int:
 	return _active_async_request_id
 
+func get_async_request_diagnostics(request_id: int) -> Dictionary:
+	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	return diagnostic.duplicate(true)
+
+func get_recent_async_request_diagnostics() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var request_ids: Array = _async_request_diagnostics.keys()
+	request_ids.sort()
+	for raw_request_id in request_ids:
+		var diagnostic: Dictionary = _async_request_diagnostics[int(raw_request_id)]
+		result.append(diagnostic.duplicate(true))
+	return result
+
+func _record_async_diagnostic(
+	request_id: int,
+	phase: String,
+	details: Dictionary = {},
+	terminal: bool = false,
+	cancellation_reason: String = ""
+) -> void:
+	if not _async_request_diagnostics.has(request_id):
+		return
+	var diagnostic: Dictionary = _async_request_diagnostics[request_id].duplicate(true)
+	diagnostic["phase"] = phase
+	if not cancellation_reason.is_empty():
+		diagnostic["cancellation_reason"] = cancellation_reason
+	var merged_details: Dictionary = diagnostic.get("details", {}).duplicate(true)
+	for key in details:
+		merged_details[key] = details[key]
+		diagnostic[key] = details[key]
+	diagnostic["details"] = merged_details
+	if terminal:
+		var finished_usec: int = Time.get_ticks_usec()
+		diagnostic["finished_usec"] = finished_usec
+		diagnostic["duration_usec"] = maxi(0, finished_usec - int(diagnostic.get("started_usec", finished_usec)))
+		diagnostic["terminal"] = true
+	_async_request_diagnostics[request_id] = diagnostic
+	_prune_async_diagnostics()
+
+func _prune_async_diagnostics() -> void:
+	var request_ids: Array = _async_request_diagnostics.keys()
+	request_ids.sort()
+	while request_ids.size() > MAX_ASYNC_DIAGNOSTIC_HISTORY:
+		var oldest_request_id: int = int(request_ids.pop_front())
+		if oldest_request_id != _active_async_request_id:
+			_async_request_diagnostics.erase(oldest_request_id)
+
 func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix: int, max_staged_per_frame: int) -> void:
 	var staged_roots: Dictionary = {}
 	_async_staged_roots_by_request[request_id] = staged_roots
+	_record_async_diagnostic(request_id, "staging", {"desired_count": desired.size()}, false)
 	if request_id != _active_async_request_id:
 		_release_async_staged_roots(request_id, staged_roots)
 		_emit_async_cancelled(request_id, 0)
@@ -235,6 +305,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			return
 		staged_roots[id] = candidate
 		staged_count += 1
+		_record_async_diagnostic(request_id, "staging", {"staged_count": staged_count}, false)
 		if staged_count % max_staged_per_frame == 0:
 			await get_tree().process_frame
 			if request_id != _active_async_request_id:
@@ -255,6 +326,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 
 	# Commit is deliberately non-yielding: no newer request can interleave with registration,
 	# adjacency rebuilding, and stale-root retirement.
+	_record_async_diagnostic(request_id, "committing", {"staged_count": staged_count}, false)
 	var newly_loaded: Array[String] = []
 	for entry in to_load:
 		if not _async_dependencies_available():
@@ -308,6 +380,11 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			return
 		unloaded_stale.append({"id": id, "coord": stale_coord})
 		_managed_chunk_ids.erase(id)
+		_record_async_diagnostic(request_id, "retiring", {
+			"staged_count": staged_count,
+			"newly_loaded_count": newly_loaded.size(),
+			"unloaded_stale_count": unloaded_stale.size()
+		}, false)
 
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
@@ -364,6 +441,18 @@ func _abort_async_sync_request(
 		if new_loads_rollback_ok and not unloaded_stale.is_empty():
 			stale_restore_ok = _restore_unloaded_chunks(unloaded_stale, now_unix)
 		rollback_complete = new_loads_rollback_ok and stale_restore_ok
+	var cancellation_reason: String = "factory_unavailable"
+	if controller_destroyed:
+		cancellation_reason = "controller_destroyed"
+	elif controller_detached:
+		cancellation_reason = "controller_detached"
+	_record_async_diagnostic(request_id, "aborting", {
+		"staged_count": staged_count,
+		"staged_roots_released": released_count,
+		"newly_loaded_count": newly_loaded.size(),
+		"unloaded_stale_count": unloaded_stale.size(),
+		"rollback_complete": rollback_complete
+	}, false, cancellation_reason)
 	if request_id != _active_async_request_id:
 		_emit_async_cancelled(request_id, staged_count)
 		return
@@ -391,18 +480,46 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 		_emit_async_cancelled(request_id, 0)
 		return
+	var failure_reason: String = ""
+	if not success:
+		match phase:
+			"load_factory":
+				failure_reason = "factory_invalid_root"
+			"load_registration":
+				failure_reason = "registration_rejected"
+			"stale_unload":
+				failure_reason = "stale_unload_failed"
+	var diagnostic_details: Dictionary = details.duplicate(true)
+	diagnostic_details["success"] = success
+	diagnostic_details["rollback_complete"] = rollback_complete
+	_record_async_diagnostic(request_id, phase, diagnostic_details, true, failure_reason)
 	_set_sync_report(success, phase, message, rollback_complete, details)
 	_last_sync_report["request_id"] = request_id
+	_last_sync_report["request_diagnostics"] = get_async_request_diagnostics(request_id)
 	_active_async_request_id = -1
 	async_sync_completed.emit(request_id, _last_sync_report.duplicate(true))
 
 func _emit_async_cancelled(request_id: int, staged_count: int = 0) -> void:
+	var existing: Dictionary = get_async_request_diagnostics(request_id)
+	var reason: String = str(existing.get("cancellation_reason", "cancelled"))
+	_record_async_diagnostic(request_id, "cancelled", {
+		"staged_count": staged_count,
+		"staged_roots_released": staged_count,
+		"success": false,
+		"rollback_complete": true
+	}, true, reason)
 	async_sync_completed.emit(request_id, {
 		"success": false,
 		"phase": "cancelled",
-		"message": "Async chunk request was superseded or cancelled before commit.",
+		"message": "Async chunk request was cancelled before commit.",
 		"rollback_complete": true,
-		"details": {"request_id": request_id, "staged_count": staged_count, "staged_roots_released": staged_count},
+		"details": {
+			"request_id": request_id,
+			"staged_count": staged_count,
+			"staged_roots_released": staged_count,
+			"cancellation_reason": reason
+		},
+		"request_diagnostics": get_async_request_diagnostics(request_id),
 		"managed_chunk_ids": get_managed_chunk_ids(),
 		"controller_chunk_ids": _get_controller_loaded_ids()
 	})

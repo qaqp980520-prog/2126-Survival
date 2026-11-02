@@ -72,6 +72,7 @@ func _run() -> void:
     await _test_async_commit_rollback()
     await _test_controller_teardown_during_staging()
     await _test_controller_detach_during_commit()
+    await _test_async_diagnostics_and_stress()
     if failures.is_empty():
         print("Mineral grid bounded async streaming tests passed.")
         quit(0)
@@ -304,6 +305,63 @@ func _test_controller_detach_during_commit() -> void:
     _expect(bool(director.call("sync_to_world_position", Vector3(65.0, 0.0, 0.0), _test_time + 32)), "reattached controller can retry the target window")
     _expect(controller.get_loaded_chunk_ids().size() == 9, "reattached controller completes a nine-root window")
 
+    director.queue_free()
+    controller.queue_free()
+    await process_frame
+
+func _test_async_diagnostics_and_stress() -> void:
+    var controller := FaultInjectingChunkController.new()
+    root.add_child(controller)
+    var director: Node = DirectorScript.new()
+    root.add_child(director)
+    _expect(bool(director.call("bind_controller", controller)), "diagnostics fixture binds its chunk controller")
+    _expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_transaction_chunk"))), "diagnostics fixture binds its deterministic factory")
+    _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 50)), "diagnostics fixture creates its initial window")
+
+    var last_request_id: int = -1
+    for index in range(34):
+        var target := Vector3(float(index + 1) * 65.0, 0.0, 0.0)
+        last_request_id = int(director.call("request_sync_to_world_position_async", target, _test_time + 51 + index, 8))
+        var report: Dictionary = await _wait_for_request(director, last_request_id)
+        var diagnostic: Dictionary = director.call("get_async_request_diagnostics", last_request_id)
+        _expect(bool(report.get("success", false)), "bounded stress shift %d completes successfully" % index)
+        _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "bounded stress shift %d records a terminal completion phase" % index)
+        _expect(int(diagnostic.get("desired_count", 0)) == 9 and int(diagnostic.get("staged_count", 0)) == 3, "bounded stress shift %d records desired and staged counts" % index)
+        _expect(int(diagnostic.get("duration_usec", -1)) >= 0 and int(diagnostic.get("started_usec", 0)) > 0, "bounded stress shift %d records a monotonic duration" % index)
+        _expect(bool(diagnostic.get("rollback_complete", false)), "bounded stress shift %d records rollback-safe completion" % index)
+        _expect(controller.get_loaded_chunk_ids().size() == 9 and controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "bounded stress shift %d keeps both ownership maps aligned" % index)
+
+    var retained_history: Array = director.call("get_recent_async_request_diagnostics")
+    _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests")
+    if retained_history.size() == 32:
+        _expect(int(retained_history[0].get("request_id", 0)) == 3, "diagnostic pruning retains the newest thirty-two requests")
+        _expect(int(retained_history[-1].get("request_id", 0)) == last_request_id, "diagnostic history keeps the latest request at the end")
+
+    var superseded_id: int = int(director.call("request_sync_to_world_position_async", Vector3(10000.0, 0.0, 0.0), _test_time + 90, 1))
+    var staged_before_supersession: bool = await _wait_for_staged_root_count(director, superseded_id, 1)
+    _expect(staged_before_supersession, "overlap stress observes a staged root before supersession")
+    var replacement_id: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 91, 2))
+    var superseded_report: Dictionary = await _wait_for_request(director, superseded_id)
+    var replacement_report: Dictionary = await _wait_for_request(director, replacement_id)
+    var superseded_diagnostic: Dictionary = director.call("get_async_request_diagnostics", superseded_id)
+    _expect(str(superseded_report.get("phase", "")) == "cancelled", "overlapped old request receives a terminal cancellation")
+    _expect(str(superseded_diagnostic.get("cancellation_reason", "")) == "superseded_by_request:%d" % replacement_id, "diagnostics identify the exact request that superseded the old request")
+    _expect(bool(replacement_report.get("success", false)), "latest overlapping request commits its destination")
+    var replacement_diagnostic: Dictionary = director.call("get_async_request_diagnostics", replacement_id)
+    _expect(str(replacement_diagnostic.get("phase", "")) == "complete", "replacement request diagnostics end in complete")
+
+    var explicit_cancel_id: int = int(director.call("request_sync_to_world_position_async", Vector3(14000.0, 0.0, 0.0), _test_time + 92, 1))
+    var staged_before_cancel: bool = await _wait_for_staged_root_count(director, explicit_cancel_id, 1)
+    _expect(staged_before_cancel, "explicit cancellation test reaches staging before cancellation")
+    _expect(bool(director.call("cancel_async_sync_request", explicit_cancel_id)), "explicit cancellation is accepted during staging")
+    var explicit_cancel_report: Dictionary = await _wait_for_request(director, explicit_cancel_id)
+    var explicit_cancel_diagnostic: Dictionary = director.call("get_async_request_diagnostics", explicit_cancel_id)
+    _expect(str(explicit_cancel_report.get("phase", "")) == "cancelled", "explicit cancellation emits a terminal report")
+    _expect(str(explicit_cancel_diagnostic.get("cancellation_reason", "")) == "explicit_cancel", "diagnostics preserve the explicit cancellation reason")
+    _expect(bool(explicit_cancel_diagnostic.get("terminal", false)), "cancelled request diagnostics are terminal")
+
+    var final_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+    _expect(final_ids.size() == 9 and final_ids == director.call("get_managed_chunk_ids"), "stress run ends with exactly nine consistent active chunks")
     director.queue_free()
     controller.queue_free()
     await process_frame

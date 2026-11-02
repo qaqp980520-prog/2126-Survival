@@ -28,6 +28,7 @@ const INERTIAL_DOCKING_SCENE := "res://daily_games/KROLL_Inertial_Docking/main_r
 const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.tscn"
 const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
 const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
+const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 
 var status_label: Label
 
@@ -251,6 +252,12 @@ func _build_ui() -> void:
 		"KROLL Paleo Track Lab",
 		"量測足印長寬、步幅、步道寬度與趾向，判讀三條恐龍足跡路線的造跡者與移動方式；支援鍵盤與觸控。",
 		PALEO_TRACK_LAB_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Crew Ledger",
+		"閱讀四條線索，將四名船員唯一指派到四個艙站；三份案件、鍵盤與觸控操作。",
+		CREW_LEDGER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
