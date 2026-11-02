@@ -153,6 +153,7 @@ func _refresh_ui() -> void:
 			lane + 1
 		]
 	_restart_button.disabled = status == "passed"
+	_restart_button.text = "RESTART CAMPAIGN  ·  R" if status == "campaign_complete" else "RESTART STAGE  ·  R"
 	_next_button.disabled = status != "passed"
 	_status_label.text = _status_text(status, note_index, note_count)
 
