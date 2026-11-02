@@ -32,6 +32,7 @@ const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_roo
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
+const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -65,6 +66,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
 	_expect(ResourceLoader.exists(FAULTLINE_CARTOGRAPHER_SCENE), "Faultline Cartographer game scene exists")
 	_expect(ResourceLoader.exists(PENDULUM_ARRAY_SCENE), "Pendulum Array game scene exists")
+	_expect(ResourceLoader.exists(HABITAT_PHOTOGRAPHER_SCENE), "Habitat Photographer game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -75,7 +77,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 31, "hub exposes thirty-one world, prototype and game launch buttons")
+	_expect(buttons.size() == 32, "hub exposes thirty-two world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -99,6 +101,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Neon Climber"), "hub labels the Neon Climber game")
 	_expect(labels.has("KROLL Robotic Arm Operator"), "hub labels the Robotic Arm Operator game")
 	_expect(labels.has("KROLL Pendulum Array"), "hub labels the Pendulum Array game")
+	_expect(labels.has("KROLL Habitat Photographer"), "hub labels the Habitat Photographer game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -401,6 +404,20 @@ func _run() -> void:
 		_expect(cargo_mosaic.call("get_board_button_count") == 36, "root-loaded Cargo Mosaic builds its 6x6 board")
 		_expect(cargo_mosaic.call("get_piece_button_count") == 4, "root-loaded Cargo Mosaic builds four module controls")
 		cargo_mosaic.queue_free()
+		await process_frame
+
+	var habitat_scene := load(HABITAT_PHOTOGRAPHER_SCENE) as PackedScene
+	_expect(habitat_scene != null, "root hub can load the Habitat Photographer scene")
+	if habitat_scene != null:
+		var habitat_game := habitat_scene.instantiate()
+		root.add_child(habitat_game)
+		await process_frame
+		_expect(habitat_game.call("get_title_text") == "KROLL // HABITAT PHOTOGRAPHER", "root-loaded Habitat Photographer displays its title")
+		_expect(habitat_game.call("get_stage_count") == 3, "root-loaded Habitat Photographer builds three habitats")
+		_expect(habitat_game.call("get_control_button_count") == 9, "root-loaded Habitat Photographer builds nine controls")
+		var habitat_state: Dictionary = habitat_game.call("get_current_state")
+		_expect(str(habitat_state.get("stage_id", "")) == "reed_marsh", "root-loaded Habitat Photographer starts Reed Marsh")
+		habitat_game.queue_free()
 		await process_frame
 
 	hub.queue_free()

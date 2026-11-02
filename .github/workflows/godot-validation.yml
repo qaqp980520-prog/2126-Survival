@@ -3184,3 +3184,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Pendulum Array runtime smoke test passed."
+
+      - name: Verify Run 87 corner diagnostics and Habitat Photographer inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q 'get_blocked_terrain_corner_reports' systems/MineralChunkController.gd
+          grep -q 'bind_corner_provider' systems/MineralGridStreamingDiagnosticsPanel.gd
+          grep -q 'bind_corner_provider' world/SurfaceWorld.gd
+          grep -q 'TERRAIN CORNERS' systems/MineralGridStreamingDiagnosticsPanel.gd
+          test -f tests/mineral_grid_streaming_diagnostics_panel_test.gd
+          test -f daily_games/KROLL_Habitat_Photographer/project.godot
+          test -f daily_games/KROLL_Habitat_Photographer/main.tscn
+          test -f daily_games/KROLL_Habitat_Photographer/main_root.tscn
+          test -f daily_games/KROLL_Habitat_Photographer/main.gd
+          grep -q 'ROOT_RULES_PATH' daily_games/KROLL_Habitat_Photographer/main.gd
+          grep -q 'STANDALONE_RULES_PATH' daily_games/KROLL_Habitat_Photographer/main.gd
+          test -f daily_games/KROLL_Habitat_Photographer/rules.gd
+          test -f daily_games/KROLL_Habitat_Photographer/tests/rules_test.gd
+          test -f daily_games/KROLL_Habitat_Photographer/tests/game_smoke_test.gd
+          grep -q 'HABITAT_PHOTOGRAPHER_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Habitat Photographer' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run terrain corner diagnostics panel integration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_panel_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming diagnostics panel tests passed."
+
+      - name: Import and parse KROLL Habitat Photographer
+        run: godot --headless --path daily_games/KROLL_Habitat_Photographer --editor --quit
+      - name: Run KROLL Habitat Photographer rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Habitat_Photographer --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Habitat Photographer rules tests passed."
+      - name: Run KROLL Habitat Photographer runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Habitat_Photographer --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Habitat Photographer runtime smoke test passed."

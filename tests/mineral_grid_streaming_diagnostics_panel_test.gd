@@ -3,6 +3,13 @@ extends SceneTree
 const Director = preload("res://systems/MineralGridStreamingDirector.gd")
 const DiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const FakeController = preload("res://tests/helpers/FakeMineralChunkController.gd")
+
+class FakeCornerProvider extends Node:
+	var reports: Array[Dictionary] = []
+
+	func get_blocked_terrain_corner_reports() -> Array[Dictionary]:
+		return reports.duplicate(true)
+
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -31,7 +38,16 @@ func _run() -> void:
 	_expect(staged, "test observes a real staged root")
 	var panel: PanelContainer = DiagnosticsPanelScript.new() as PanelContainer
 	root.add_child(panel)
+	var corner_provider := FakeCornerProvider.new()
+	corner_provider.reports = [{
+		"stable_id": "surface/patch_4_4",
+		"corner": "north_east",
+		"edge_keys": ["edge_east", "edge_north"],
+		"policy": "step_fallback"
+	}]
+	root.add_child(corner_provider)
 	panel.call("bind_director", director)
+	panel.call("bind_corner_provider", corner_provider)
 	panel.call("set_open", true)
 	panel.call("refresh_now")
 	var live_text: String = str(panel.call("get_rendered_text"))
@@ -40,6 +56,9 @@ func _run() -> void:
 	_expect(live_text.contains("staging"), "panel reports staging phase")
 	_expect(live_text.contains("stage 1/9"), "panel reports staged versus desired roots")
 	_expect(live_text.contains("rollback=pending"), "panel does not label an active request as already rolled back")
+	_expect(live_text.contains("north_east"), "panel displays the blocked terrain corner orientation")
+	_expect(live_text.contains("surface/patch_4_4"), "panel displays the affected patch Stable ID")
+	_expect(live_text.contains("step_fallback"), "panel displays the active safe corner policy")
 	_expect(bool(director.call("cancel_async_sync_request", request_id)), "explicit cancellation is accepted")
 	var terminal: Dictionary = {}
 	for _frame in range(120):
@@ -54,13 +73,19 @@ func _run() -> void:
 	_expect(cancelled_text.contains("explicit_cancel"), "panel displays cancellation reason")
 	_expect(cancelled_text.contains("rollback=ok"), "panel reports successful cancellation cleanup")
 	_expect(int(panel.call("get_visible_row_count")) <= 6, "visible history is bounded")
+	corner_provider.reports.clear()
+	panel.call("refresh_now")
+	_expect(str(panel.call("get_rendered_text")).contains("NONE BLOCKED"), "panel reports when no terrain corners are blocked")
 	panel.call("set_open", false)
 	_expect(not panel.visible, "panel hides")
 	_expect(bool(panel.call("toggle_open")), "panel toggle reopens")
 	panel.call("bind_director", null)
+	panel.call("bind_corner_provider", null)
 	panel.call("refresh_now")
 	_expect(str(panel.call("get_rendered_text")).contains("UNAVAILABLE"), "unbound director is handled")
+	_expect(str(panel.call("get_rendered_text")).contains("TERRAIN CORNERS · PROVIDER UNAVAILABLE"), "unbound corner provider is handled")
 	panel.queue_free()
+	corner_provider.queue_free()
 	director.queue_free()
 	controller.queue_free()
 	await process_frame

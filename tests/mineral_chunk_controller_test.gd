@@ -10,6 +10,12 @@ const CropRegistry = preload("res://systems/CropRegistry.gd")
 const CropController = preload("res://systems/CropPlotController.gd")
 const CropPlot = preload("res://systems/CropPlotVisual.gd")
 
+class FakeCornerManager extends Node3D:
+	var reports: Array[Dictionary] = []
+
+	func get_blocked_corner_reports() -> Array[Dictionary]:
+		return reports.duplicate(true)
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -29,6 +35,8 @@ func _run_tests() -> void:
 	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
 	await process_frame
 	await _test_invalid_crop_binding_rejected_before_chunk_registration()
+	await process_frame
+	await _test_corner_report_proxy_is_defensive()
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
@@ -325,6 +333,30 @@ func _test_invalid_crop_binding_rejected_before_chunk_registration() -> void:
 	crop_controller.queue_free()
 	crop_registry.queue_free()
 	mineral_registry.queue_free()
+	await process_frame
+
+func _test_corner_report_proxy_is_defensive() -> void:
+	var controller: Node3D = Controller.new()
+	root.add_child(controller)
+	var manager := FakeCornerManager.new()
+	manager.reports = [{
+		"stable_id": "surface/patch_4_4",
+		"corner": "north_east",
+		"edge_keys": ["edge_east", "edge_north"],
+		"policy": "step_fallback"
+	}]
+	controller.add_child(manager)
+	controller.set("_terrain_transition_collider_manager", manager)
+	var reports: Array[Dictionary] = controller.call("get_blocked_terrain_corner_reports")
+	assert(reports.size() == 1, "Controller exposes the manager's blocked corner report")
+	assert(str(reports[0].get("corner", "")) == "north_east", "Controller preserves the reported corner orientation")
+	reports[0]["corner"] = "tampered"
+	var copied_edges: Array = reports[0].get("edge_keys", [])
+	copied_edges.append("tampered")
+	assert(str(manager.reports[0].get("corner", "")) == "north_east", "Mutating the returned report cannot change manager state")
+	var manager_edges: Array = manager.reports[0].get("edge_keys", [])
+	assert(manager_edges.size() == 2, "Nested edge-key arrays are deep-copied")
+	controller.queue_free()
 	await process_frame
 
 func _new_stateful_chunk() -> Node3D:

@@ -5,14 +5,16 @@ const MAX_HISTORY: int = 32
 const REFRESH_INTERVAL: float = 0.25
 
 var _director: Node
+var _corner_provider: Node
 var _refresh_elapsed: float = 0.0
 var _summary_label: Label
+var _corner_label: Label
 var _history_label: Label
 
 func _ready() -> void:
 	name = "StreamingDiagnosticsPanel"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(410, 250)
+	custom_minimum_size = Vector2(440, 330)
 	_build_ui()
 	visible = false
 	refresh_now()
@@ -43,6 +45,12 @@ func _build_ui() -> void:
 	_summary_label.add_theme_color_override("font_color", Color(0.65, 0.92, 0.77))
 	_summary_label.add_theme_font_size_override("font_size", 12)
 	column.add_child(_summary_label)
+	_corner_label = Label.new()
+	_corner_label.name = "TerrainCorners"
+	_corner_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_corner_label.add_theme_color_override("font_color", Color(1.0, 0.73, 0.42))
+	_corner_label.add_theme_font_size_override("font_size", 11)
+	column.add_child(_corner_label)
 	_history_label = Label.new()
 	_history_label.name = "History"
 	_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -58,6 +66,10 @@ func _build_ui() -> void:
 
 func bind_director(candidate: Node) -> void:
 	_director = candidate
+	refresh_now()
+
+func bind_corner_provider(candidate: Node) -> void:
+	_corner_provider = candidate
 	refresh_now()
 
 func set_open(value: bool) -> void:
@@ -84,6 +96,7 @@ func refresh_now() -> void:
 	if _director == null or not is_instance_valid(_director) or _director.is_queued_for_deletion():
 		_summary_label.text = "STREAM DIAGNOSTICS · UNAVAILABLE"
 		_history_label.text = "Bind a live MineralGridStreamingDirector to inspect requests."
+		_refresh_corner_reports()
 		return
 	if not _director.has_method("get_active_async_request_id") or not _director.has_method("get_recent_async_request_diagnostics"):
 		_summary_label.text = "STREAM DIAGNOSTICS · INVALID DIRECTOR"
@@ -95,6 +108,7 @@ func refresh_now() -> void:
 		("ACTIVE #%d" % active_id) if active_id >= 0 else "IDLE",
 		recent.size(), MAX_HISTORY
 	]
+	_refresh_corner_reports()
 	if recent.is_empty():
 		_history_label.text = "No asynchronous streaming requests recorded."
 		return
@@ -131,10 +145,36 @@ func refresh_now() -> void:
 		lines.append(line)
 	_history_label.text = "\n".join(lines)
 
+func _refresh_corner_reports() -> void:
+	if _corner_label == null:
+		return
+	if _corner_provider == null or not is_instance_valid(_corner_provider) or _corner_provider.is_queued_for_deletion():
+		_corner_label.text = "TERRAIN CORNERS · PROVIDER UNAVAILABLE"
+		return
+	if not _corner_provider.has_method("get_blocked_terrain_corner_reports"):
+		_corner_label.text = "TERRAIN CORNERS · INVALID PROVIDER"
+		return
+	var reports: Array = _corner_provider.call("get_blocked_terrain_corner_reports")
+	if reports.is_empty():
+		_corner_label.text = "TERRAIN CORNERS · NONE BLOCKED"
+		return
+	var lines: Array[String] = []
+	for index in range(mini(reports.size(), 3)):
+		var report: Dictionary = reports[index] if reports[index] is Dictionary else {}
+		var edge_keys: Array = report.get("edge_keys", [])
+		var edge_text: String = ", ".join(PackedStringArray(edge_keys))
+		lines.append("%s · %s · %s · %s" % [
+			str(report.get("stable_id", "unknown")),
+			str(report.get("corner", "unknown")),
+			str(report.get("policy", "unknown")),
+			edge_text
+		])
+	_corner_label.text = "BLOCKED CORNERS %d\n%s" % [reports.size(), "\n".join(lines)]
+
 func get_rendered_text() -> String:
-	if _summary_label == null or _history_label == null:
+	if _summary_label == null or _corner_label == null or _history_label == null:
 		return ""
-	return _summary_label.text + "\n" + _history_label.text
+	return _summary_label.text + "\n" + _corner_label.text + "\n" + _history_label.text
 
 func get_visible_row_count() -> int:
 	if _history_label == null or _history_label.text.is_empty():

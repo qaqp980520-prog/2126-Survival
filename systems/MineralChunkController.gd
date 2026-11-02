@@ -422,6 +422,18 @@ func get_terrain_transition_collider(edge_key: String) -> StaticBody3D:
 		return null
 	return _terrain_transition_collider_manager.call("get_transition_body", edge_key) as StaticBody3D
 
+func get_blocked_terrain_corner_reports() -> Array[Dictionary]:
+	var reports: Array[Dictionary] = []
+	if not is_instance_valid(_terrain_transition_collider_manager):
+		return reports
+	if not _terrain_transition_collider_manager.has_method("get_blocked_corner_reports"):
+		return reports
+	var raw_reports: Array = _terrain_transition_collider_manager.call("get_blocked_corner_reports")
+	for report_value in raw_reports:
+		if report_value is Dictionary:
+			reports.append(report_value.duplicate(true))
+	return reports
+
 func _ensure_transition_collider_manager() -> bool:
 	if is_instance_valid(_terrain_transition_collider_manager):
 		return true

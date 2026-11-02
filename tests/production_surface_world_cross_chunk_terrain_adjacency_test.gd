@@ -24,7 +24,13 @@ func _run() -> void:
 
 	var controller: Node = world.get("chunk_controller") as Node
 	var registry: Node = world.get("object_state_registry") as Node
+	var diagnostics_panel: Node = world.get("streaming_diagnostics_panel") as Node
 	_expect(controller != null and registry != null, "world exposes the chunk controller and object-state registry")
+	_expect(diagnostics_panel != null, "production world creates the streaming diagnostics panel")
+	if diagnostics_panel != null:
+		var diagnostics_text: String = str(diagnostics_panel.call("get_rendered_text"))
+		_expect(diagnostics_text.contains("CORNERS"), "production world binds terrain corner reports into the F3 panel")
+		_expect(not diagnostics_text.contains("PROVIDER UNAVAILABLE"), "production world does not leave the corner provider unbound")
 	if controller == null or registry == null:
 		await _finish(1)
 		return

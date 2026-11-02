@@ -31,6 +31,7 @@ const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_roo
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
+const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 
 var status_label: Label
 
@@ -272,6 +273,12 @@ func _build_ui() -> void:
 		"KROLL Pendulum Array",
 		"調整擺長並比對四週期相位漂移，完成三座共振校準站；支援鍵盤與觸控。",
 		PENDULUM_ARRAY_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Habitat Photographer",
+		"追蹤三種棲地中的移動動物，調整對焦、倍率與曝光，在目標進入取景框且視線清晰時拍攝。",
+		HABITAT_PHOTOGRAPHER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
