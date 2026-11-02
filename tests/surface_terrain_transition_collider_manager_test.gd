@@ -16,6 +16,7 @@ func _run() -> void:
     _test_corner_resolver_all_orientations()
     _test_duplicate_patch_side_rejected()
     _test_resolver_rejects_non_opposite_sides_and_stable_order()
+    _test_manager_rejects_non_string_public_inputs()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -400,6 +401,32 @@ func _edge_segments_disabled(patch: Node3D, x_index: int) -> bool:
 func _segment_disabled(patch: Node3D, x_index: int, z_index: int) -> bool:
     var segment := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionSegment_X%d_Z%d" % [x_index, z_index]) as CollisionShape3D
     return segment == null or segment.disabled
+
+
+func _test_manager_rejects_non_string_public_inputs() -> void:
+    var manager: Node3D = ManagerScript.new()
+    var valid_descriptor := {
+        "transition_required": true,
+        "first_stable_id": "a",
+        "second_stable_id": "b",
+        "first_side": "east",
+        "second_side": "west",
+        "edge_key": "a|b",
+        "owner_stable_id": "a"
+    }
+    var numeric_key_result: Dictionary = manager.call("sync_transitions", {7: valid_descriptor}, {})
+    _expect(not bool(numeric_key_result.get("ok", true)) and str(numeric_key_result.get("error", "")) == "invalid_edge_key", "manager rejects non-string edge keys before coercion")
+    var numeric_id_descriptor: Dictionary = valid_descriptor.duplicate(true)
+    numeric_id_descriptor["first_stable_id"] = 7
+    numeric_id_descriptor["edge_key"] = "7|b"
+    numeric_id_descriptor["owner_stable_id"] = "7"
+    var numeric_id_result: Dictionary = manager.call("sync_transitions", {"7|b": numeric_id_descriptor}, {})
+    _expect(not bool(numeric_id_result.get("ok", true)) and str(numeric_id_result.get("error", "")) == "invalid_stable_ids", "manager rejects non-string stable IDs before patch lookup")
+    var numeric_side_descriptor: Dictionary = valid_descriptor.duplicate(true)
+    numeric_side_descriptor["first_side"] = 1
+    var numeric_side_result: Dictionary = manager.call("sync_transitions", {"a|b": numeric_side_descriptor}, {})
+    _expect(not bool(numeric_side_result.get("ok", true)) and str(numeric_side_result.get("error", "")) == "invalid_edge_sides", "manager rejects non-string side values before coercion")
+    manager.free()
 
 func _expect(condition: bool, description: String) -> void:
     if condition:
