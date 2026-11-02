@@ -37,6 +37,7 @@ func _run() -> void:
 			_expect(int(state.get("score", 0)) == 100, "resetting a completed chamber cannot farm duplicate score")
 		_expect(bool(game.call("advance_stage")), "chamber %d advances" % stage_index)
 	_expect(bool(game.call("get_current_state").get("campaign_complete", false)), "campaign completes after three locks")
+	_expect(not bool(game.call("advance_stage")), "completed campaign rejects repeated next-stage actions")
 	game.call("reset_campaign")
 	var restarted: Dictionary = game.call("get_current_state")
 	_expect(int(restarted.get("stage_index", -1)) == 0 and int(restarted.get("score", -1)) == 0, "campaign reset restores first chamber and zero score")
