@@ -3281,3 +3281,48 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Solar Sail Navigator runtime smoke test passed."
+
+      - name: Verify Run 89 Titration Bench and diagnostics export guard inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q 'is_safe_export_path' systems/MineralGridStreamingDiagnosticsPanel.gd
+          grep -q 'user://folder/../escape.json' tests/mineral_grid_streaming_diagnostics_panel_test.gd
+          grep -q 'completed request records its real Vector2i chunk center' tests/mineral_grid_streaming_diagnostics_panel_test.gd
+          test -f daily_games/KROLL_Titration_Bench/project.godot
+          test -f daily_games/KROLL_Titration_Bench/main.tscn
+          test -f daily_games/KROLL_Titration_Bench/main_root.tscn
+          test -f daily_games/KROLL_Titration_Bench/main.gd
+          test -f daily_games/KROLL_Titration_Bench/rules.gd
+          test -f daily_games/KROLL_Titration_Bench/tests/rules_test.gd
+          test -f daily_games/KROLL_Titration_Bench/tests/game_smoke_test.gd
+          grep -q 'TITRATION_BENCH_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Titration Bench' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run Run 89 diagnostics export edge-case regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_panel_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming diagnostics panel tests passed."
+
+      - name: Import and parse KROLL Titration Bench
+        run: godot --headless --path daily_games/KROLL_Titration_Bench --editor --quit
+      - name: Run KROLL Titration Bench rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Titration_Bench --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Titration Bench rules tests passed."
+      - name: Run KROLL Titration Bench runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Titration_Bench --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Titration Bench runtime smoke test passed."

@@ -72,6 +72,19 @@ func _run() -> void:
 	_expect(cancelled_text.contains("cancelled"), "panel displays terminal cancellation")
 	_expect(cancelled_text.contains("explicit_cancel"), "panel displays cancellation reason")
 	_expect(cancelled_text.contains("rollback=ok"), "panel reports successful cancellation cleanup")
+
+	var completed_request_id: int = int(director.call("request_sync_to_world_position_async", Vector3(25.0, 0.0, 0.0), 2002, 2))
+	_expect(completed_request_id > 0, "second async window shift starts after cancellation")
+	var completed_request: Dictionary = {}
+	for _frame in range(240):
+		completed_request = director.call("get_async_request_diagnostics", completed_request_id)
+		if bool(completed_request.get("terminal", false)):
+			break
+		await process_frame
+	_expect(bool(completed_request.get("terminal", false)) and bool(completed_request.get("success", false)), "second async request completes successfully")
+	var completed_center: Variant = completed_request.get("center")
+	_expect(completed_center is Vector2i and completed_center == Vector2i(2, 0), "completed request records its real Vector2i chunk center")
+	panel.call("refresh_now")
 	_expect(int(panel.call("get_visible_row_count")) <= 6, "visible history is bounded")
 	_expect(panel.call("get_export_button_count") == 1, "panel exposes an export snapshot button")
 	var safe_vector: Dictionary = panel.call("_json_safe", {"center": Vector2i(3, 4), "path": [Vector2(1.5, 2.5)]})
@@ -79,6 +92,12 @@ func _run() -> void:
 	_expect(safe_vector.get("path", [])[0].get("x", -1.0) == 1.5, "snapshot recursively converts nested Vector2 values")
 	var snapshot: Dictionary = panel.call("build_export_snapshot")
 	_expect(int(snapshot.get("schema_version", 0)) == 1, "export snapshot declares schema version 1")
+	var successful_export_record: Dictionary = {}
+	for record in snapshot.get("history", []):
+		if int(record.get("request_id", -1)) == completed_request_id:
+			successful_export_record = record
+	var exported_center: Dictionary = successful_export_record.get("center", {})
+	_expect(exported_center.get("x", -1) == 2 and exported_center.get("y", -1) == 0, "JSON-safe snapshot preserves the completed request center")
 	_expect(int(snapshot.get("active_request_id", -2)) == -1, "terminal request is no longer active")
 	_expect((snapshot.get("history", []) as Array).size() <= 32, "export history respects the 32-record cap")
 	var exported_corners: Array = snapshot.get("blocked_corners", [])
@@ -94,7 +113,18 @@ func _run() -> void:
 	var saved_text: String = FileAccess.get_file_as_string(snapshot_path)
 	_expect(not saved_text.is_empty() and JSON.parse_string(saved_text) is Dictionary, "saved snapshot is valid JSON")
 	_expect(not bool(panel.call("save_snapshot_to_file", "res://forbidden_snapshot.json")), "snapshot export refuses project-resource paths")
+	_expect(not bool(panel.call("is_safe_export_path", "user://folder/../escape.json")), "snapshot path validator rejects parent traversal")
+	_expect(not bool(panel.call("save_snapshot_to_file", "user://folder/../escape.json")), "snapshot writer refuses parent traversal")
+	_expect(not bool(panel.call("is_safe_export_path", "user://folder\\\\..\\\\escape.json")), "snapshot path validator rejects backslash traversal")
+	var export_button := panel.find_child("ExportSnapshot", true, false) as Button
+	_expect(export_button != null, "snapshot export button is discoverable through the UI tree")
+	if export_button != null:
+		export_button.emit_signal("pressed")
+		var export_status := panel.find_child("ExportStatus", true, false) as Label
+		_expect(export_status != null and export_status.text.begins_with("SAVED"), "pressing the export button writes the default snapshot and updates status")
+		_expect(FileAccess.file_exists("user://streaming_diagnostics_snapshot.json"), "default snapshot file exists after button activation")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(snapshot_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://streaming_diagnostics_snapshot.json"))
 	corner_provider.reports.clear()
 	panel.call("refresh_now")
 	_expect(str(panel.call("get_rendered_text")).contains("NONE BLOCKED"), "panel reports when no terrain corners are blocked")

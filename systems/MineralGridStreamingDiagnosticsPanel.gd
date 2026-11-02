@@ -247,8 +247,19 @@ func build_export_snapshot() -> Dictionary:
 func export_snapshot_json() -> String:
 	return JSON.stringify(build_export_snapshot(), "\t")
 
+func is_safe_export_path(path: String) -> bool:
+	if not path.begins_with("user://") or path.contains("\\"):
+		return false
+	var relative_path: String = path.substr("user://".length())
+	if relative_path.is_empty() or relative_path.begins_with("/") or relative_path.ends_with("/") or relative_path.contains("//"):
+		return false
+	for segment in relative_path.split("/"):
+		if segment == "." or segment == "..":
+			return false
+	return true
+
 func save_snapshot_to_file(path: String = DEFAULT_EXPORT_PATH) -> bool:
-	if not path.begins_with("user://") or path.contains(".."):
+	if not is_safe_export_path(path):
 		return false
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:

@@ -33,6 +33,7 @@ const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
+const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
 
 var status_label: Label
 
@@ -286,6 +287,12 @@ func _build_ui() -> void:
 		"KROLL Solar Sail Navigator",
 		"調整太陽帆角度與展開量，利用光壓轉向、控制慣性漂移並穿越碎片帶抵達三座中繼站。",
 		SOLAR_SAIL_NAVIGATOR_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Titration Bench",
+		"逐步加入標準滴定液，讀取即時 pH 曲線，在三份未知酸樣本中精準鎖定當量點。",
+		TITRATION_BENCH_SCENE
 	)
 	_add_scene_button(
 		launch_list,
