@@ -24,8 +24,8 @@ func _run() -> void:
 	]
 	for planet_index in range(3):
 		var reference: Dictionary = references[planet_index]
-		_expect(bool(game.call("set_albedo", float(reference["albedo"])), "runtime sets albedo for planet %d" % planet_index)
-		_expect(bool(game.call("set_greenhouse", float(reference["greenhouse"])), "runtime sets greenhouse for planet %d" % planet_index)
+		_expect(bool(game.call("set_albedo", float(reference["albedo"]))), "runtime sets albedo for planet %d" % planet_index)
+		_expect(bool(game.call("set_greenhouse", float(reference["greenhouse"]))), "runtime sets greenhouse for planet %d" % planet_index)
 		_expect(bool(game.call("simulate")), "runtime stabilizes planet %d" % planet_index)
 		var state: Dictionary = game.call("get_current_state")
 		_expect(int(state.get("score", 0)) == (planet_index + 1) * 100, "runtime awards planet %d exactly once" % planet_index)
