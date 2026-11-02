@@ -3167,7 +3167,8 @@ jobs:
           grep -q 'rng.seed = 0x91A55EED' tests/mineral_grid_streaming_async_test.gd
           grep -q 'negative_x_shift_count > 0 and positive_x_shift_count > 0' tests/mineral_grid_streaming_async_test.gd
           grep -q 'negative_z_shift_count > 0 and positive_z_shift_count > 0' tests/mineral_grid_streaming_async_test.gd
-          grep -q 'recover_to_world_position(negative_probe' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'negative_probe := Vector3(-65.0, 0.0, -65.0)' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'recover_to_world_position", negative_probe' tests/mineral_grid_streaming_async_test.gd
           grep -q 'rng.randi_range(1, 8)' tests/mineral_grid_streaming_async_test.gd
           grep -q 'departed chunk' tests/mineral_grid_streaming_async_test.gd
 
