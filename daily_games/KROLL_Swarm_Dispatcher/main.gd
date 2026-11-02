@@ -204,7 +204,7 @@ func _refresh_ui() -> void:
 	for button in _action_buttons:
 		button.disabled = status != "playing"
 	_control_buttons["undo"].disabled = status != "playing" or remaining[_selected_drone] <= 0
-	_control_buttons["clear"].disabled = status != "playing" or remaining[_selected_drone] <= 0 or int(cursors[_selected_drone]) > 0
+	_control_buttons["clear"].disabled = status != "playing" or remaining[_selected_drone] <= 0
 	_control_buttons["step"].disabled = status != "playing" or _rules.get_remaining_commands(_state) <= 0
 	_control_buttons["run"].disabled = status != "playing" or _rules.get_remaining_commands(_state) <= 0
 	_control_buttons["restart"].disabled = status != "playing"
@@ -281,9 +281,9 @@ func run_all() -> bool:
 		_status_label.text = "EXECUTION STOPPED  ·  " + str(result.get("reason", "unknown"))
 		return false
 	_state = result["state"]
+	_refresh_ui()
 	if str(result.get("reason", "")) == "programs_exhausted":
 		_status_label.text = "PROGRAMS EXHAUSTED  ·  路線尚未讓所有無人機抵達泊位，可繼續編排。"
-	_refresh_ui()
 	return true
 
 func restart_level() -> bool:
