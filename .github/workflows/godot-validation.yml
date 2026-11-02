@@ -3326,3 +3326,40 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Titration Bench runtime smoke test passed."
+
+
+      - name: Verify Run 90 Planetary Climate Lab and duplicate terrain side guard inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q 'duplicate_patch_side' systems/SurfaceTerrainCornerConflictResolver.gd
+          grep -q 'duplicate_patch_side' tests/surface_terrain_transition_collider_manager_test.gd
+          grep -q 'invalid_edge_descriptor' systems/SurfaceTerrainCornerConflictResolver.gd
+          test -f daily_games/KROLL_Planetary_Climate_Lab/project.godot
+          test -f daily_games/KROLL_Planetary_Climate_Lab/main.tscn
+          test -f daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn
+          test -f daily_games/KROLL_Planetary_Climate_Lab/main.gd
+          test -f daily_games/KROLL_Planetary_Climate_Lab/rules.gd
+          test -f daily_games/KROLL_Planetary_Climate_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Planetary_Climate_Lab/tests/game_smoke_test.gd
+          grep -q 'PLANETARY_CLIMATE_LAB_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'PLANETARY_CLIMATE_LAB_SCENE' tests/survival_test_hub_smoke_test.gd
+
+      - name: Import and parse KROLL Planetary Climate Lab
+        run: godot --headless --path daily_games/KROLL_Planetary_Climate_Lab --editor --quit
+      - name: Run KROLL Planetary Climate Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Planetary_Climate_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Planetary Climate Lab rules tests passed."
+      - name: Run KROLL Planetary Climate Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Planetary_Climate_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Planetary Climate Lab runtime smoke test passed."

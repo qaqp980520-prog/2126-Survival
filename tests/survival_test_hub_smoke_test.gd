@@ -35,6 +35,7 @@ const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
+const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -71,6 +72,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(HABITAT_PHOTOGRAPHER_SCENE), "Habitat Photographer game scene exists")
 	_expect(ResourceLoader.exists(SOLAR_SAIL_NAVIGATOR_SCENE), "Solar Sail Navigator game scene exists")
 	_expect(ResourceLoader.exists(TITRATION_BENCH_SCENE), "Titration Bench game scene exists")
+	_expect(ResourceLoader.exists(PLANETARY_CLIMATE_LAB_SCENE), "Planetary Climate Lab game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -81,7 +83,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 34, "hub exposes thirty-four world, prototype and game launch buttons")
+	_expect(buttons.size() == 35, "hub exposes thirty-five world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -448,6 +450,21 @@ func _run() -> void:
 		_expect(titration_game.call("get_sample_count") == 3, "root-loaded Titration Bench builds three acid samples")
 		_expect(titration_game.call("get_control_button_count") == 7, "root-loaded Titration Bench builds seven controls")
 		titration_game.queue_free()
+		await process_frame
+
+	var climate_scene := load(PLANETARY_CLIMATE_LAB_SCENE) as PackedScene
+	_expect(climate_scene != null, "root hub can load the Planetary Climate Lab scene")
+	if climate_scene != null:
+		var climate_game := climate_scene.instantiate()
+		root.add_child(climate_game)
+		await process_frame
+		_expect(climate_game.call("get_title_text") == "KROLL // PLANETARY CLIMATE LAB", "root-loaded Planetary Climate Lab displays its title")
+		_expect(climate_game.call("get_planet_count") == 3, "root-loaded Planetary Climate Lab builds three planets")
+		_expect(climate_game.call("get_slider_count") == 2, "root-loaded Planetary Climate Lab builds two climate sliders")
+		_expect(climate_game.call("get_control_button_count") == 4, "root-loaded Planetary Climate Lab builds four action buttons")
+		var climate_state: Dictionary = climate_game.call("get_current_state")
+		_expect(str(climate_state.get("planet_id", "")) == "nysa", "root-loaded Planetary Climate Lab starts at Nysa")
+		climate_game.queue_free()
 		await process_frame
 
 	hub.queue_free()

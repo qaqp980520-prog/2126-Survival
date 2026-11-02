@@ -14,6 +14,7 @@ func _run() -> void:
     await _test_all_cardinal_directions()
     await _test_perpendicular_conflict_falls_back_to_step()
     _test_corner_resolver_all_orientations()
+    _test_duplicate_patch_side_rejected()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -336,6 +337,21 @@ func _test_corner_resolver_all_orientations() -> void:
 
     var malformed := {"bad_edge":{"first_id":"center","second_id":"east","first_side":"east"}}
     _expect(not bool(CornerResolverScript.resolve(malformed).get("ok", true)), "incomplete edge candidate is rejected")
+
+func _test_duplicate_patch_side_rejected() -> void:
+    var duplicate_side := {
+        "east_a":{"first_id":"center","second_id":"east_a","first_side":"east","second_side":"west"},
+        "east_b":{"first_id":"center","second_id":"east_b","first_side":"east","second_side":"west"}
+    }
+    var duplicate_result: Dictionary = CornerResolverScript.resolve(duplicate_side)
+    _expect(not bool(duplicate_result.get("ok", true)) and str(duplicate_result.get("error", "")) == "duplicate_patch_side", "two transitions cannot claim the same patch side")
+    _expect(str(duplicate_result.get("stable_id", "")) == "center" and str(duplicate_result.get("side", "")) == "east", "duplicate-side report identifies the affected patch edge")
+    _expect(duplicate_result.get("edge_keys", []) == ["east_a", "east_b"], "duplicate-side report sorts the conflicting edge keys deterministically")
+
+    var invalid_descriptor := {"bad_edge":"not a dictionary"}
+    _expect(str(CornerResolverScript.resolve(invalid_descriptor).get("error", "")) == "invalid_edge_descriptor", "non-dictionary edge candidates are rejected safely")
+    var empty_key := {"":{"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}}
+    _expect(str(CornerResolverScript.resolve(empty_key).get("error", "")) == "invalid_edge_key", "empty edge keys are rejected safely")
 
 func _opposite_side(side: String) -> String:
     match side:
