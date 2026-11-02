@@ -319,22 +319,37 @@ func _test_async_diagnostics_and_stress() -> void:
     _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 50)), "diagnostics fixture creates its initial window")
 
     var last_request_id: int = -1
-    for index in range(34):
+    for index in range(64):
+        var previous_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+        var previous_roots: Dictionary = {}
+        for previous_id in previous_ids:
+            var previous_root: Node3D = controller.get_chunk_root(previous_id)
+            previous_roots[previous_id] = weakref(previous_root) if previous_root != null else null
         var target := Vector3(float(index + 1) * 65.0, 0.0, 0.0)
+        var previous_request_id: int = last_request_id
         last_request_id = int(director.call("request_sync_to_world_position_async", target, _test_time + 51 + index, 8))
         var report: Dictionary = await _wait_for_request(director, last_request_id)
+        await process_frame
         var diagnostic: Dictionary = director.call("get_async_request_diagnostics", last_request_id)
-        _expect(bool(report.get("success", false)), "bounded stress shift %d completes successfully" % index)
-        _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "bounded stress shift %d records a terminal completion phase" % index)
-        _expect(int(diagnostic.get("desired_count", 0)) == 9 and int(diagnostic.get("staged_count", 0)) == 3, "bounded stress shift %d records desired and staged counts" % index)
-        _expect(int(diagnostic.get("duration_usec", -1)) >= 0 and int(diagnostic.get("started_usec", 0)) > 0, "bounded stress shift %d records a monotonic duration" % index)
-        _expect(bool(diagnostic.get("rollback_complete", false)), "bounded stress shift %d records rollback-safe completion" % index)
-        _expect(controller.get_loaded_chunk_ids().size() == 9 and controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "bounded stress shift %d keeps both ownership maps aligned" % index)
+        var current_ids: PackedStringArray = controller.get_loaded_chunk_ids()
+        _expect(last_request_id > previous_request_id, "soak request IDs increase monotonically at shift %d" % index)
+        _expect(bool(report.get("success", false)), "64-shift soak %d completes successfully" % index)
+        _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "soak shift %d records a terminal completion phase" % index)
+        _expect(int(diagnostic.get("desired_count", 0)) == 9 and int(diagnostic.get("staged_count", 0)) == 3, "soak shift %d records desired and staged counts" % index)
+        _expect(int(diagnostic.get("duration_usec", -1)) >= 0 and int(diagnostic.get("started_usec", 0)) > 0, "soak shift %d records a monotonic duration" % index)
+        _expect(bool(diagnostic.get("rollback_complete", false)), "soak shift %d records rollback-safe completion" % index)
+        _expect(current_ids.size() == 9 and current_ids == director.call("get_managed_chunk_ids"), "soak shift %d keeps both ownership maps aligned" % index)
+        for previous_id in previous_ids:
+            var reference: WeakRef = previous_roots[previous_id] as WeakRef
+            if current_ids.has(previous_id):
+                _expect(reference != null and reference.get_ref() == controller.get_chunk_root(previous_id), "overlapping chunk %s retains the same root instance" % previous_id)
+            else:
+                _expect(reference != null and reference.get_ref() == null, "departed chunk %s releases its old root instance" % previous_id)
 
     var retained_history: Array = director.call("get_recent_async_request_diagnostics")
-    _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests")
+    _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests after a sixty-four-shift soak")
     if retained_history.size() == 32:
-        _expect(int(retained_history[0].get("request_id", 0)) == 3, "diagnostic pruning retains the newest thirty-two requests")
+        _expect(int(retained_history[0].get("request_id", 0)) == last_request_id - 31, "diagnostic pruning retains exactly the newest thirty-two requests")
         _expect(int(retained_history[-1].get("request_id", 0)) == last_request_id, "diagnostic history keeps the latest request at the end")
 
     var superseded_id: int = int(director.call("request_sync_to_world_position_async", Vector3(10000.0, 0.0, 0.0), _test_time + 90, 1))
