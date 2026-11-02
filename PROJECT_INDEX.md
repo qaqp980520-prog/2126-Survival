@@ -1707,3 +1707,26 @@
 - Add an integration regression that exports a completed request containing a real Vector2i chunk center.
 - Explicitly reject `user://../` traversal and exercise the EXPORT SNAPSHOT button through its public UI action/default path.
 - Continue with a new mini-game and existing-system work on a separate feature branch; validate exact HEAD before merge.
+
+
+## 2026-11-02 Run 89 — Titration Bench and diagnostics export path guards (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Titration_Bench/`, a three-sample chemistry titration game for idealized monoprotic strong acids.
+- Each sample starts with 25.0 mL acid and uses 0.100 M NaOH. Authored equivalence volumes are 20.0, 30.0 and 40.0 mL; pH is calculated from excess hydrogen/hydroxide moles and total solution volume.
+- Includes a live pH curve, indicator state, calibrated 0.5/1.0/2.5 mL additions, endpoint capture within 0.5 mL, scoring, retry and campaign progression.
+- Each sample awards 100 points once. Completed samples cannot be reset to farm score; the completed campaign can be restarted explicitly.
+- Keyboard, mouse and touch controls are included. Standalone project and repository-root Test Hub wrapper are registered; no external assets/plugins/network dependencies.
+
+### Existing-system change
+- Hardened `systems/MineralGridStreamingDiagnosticsPanel.gd` export path validation. Only `user://` destinations are accepted; empty paths, empty path segments, leading/trailing separators, current/parent directory segments, backslash separators and non-user destinations are rejected.
+- Added a real async chunk request centered at `Vector2i(2, 0)`; the test verifies that its completed center is preserved in the JSON-safe snapshot.
+- Regression also rejects explicit parent/backslash traversal, activates the public EXPORT SNAPSHOT button, verifies default path/status/file output, checks JSON parsing and deep-copy isolation.
+- Snapshot remains transient; world-save schema remains version 1.
+
+### Exact validation and merge
+- Feature PR [#214](https://github.com/qaqp980520-prog/2126-Survival/pull/214) merged from exact candidate HEAD `8c447d62a3dc9efacca991ae81ec849faa1c8663`; squash merge commit `8461be2308ff7e0445a5fec6043af04ff16afb61`.
+- Refreshed-base exact-head Godot 4.3 [Run #1041](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41436668952) completed successfully: 399/399 workflow steps, zero failures and zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- Run #1041 includes the Run 89 diagnostics export edge-case regression, Titration Bench standalone import, rules tests and runtime smoke test, as well as the full existing repository suite and prior mini-game/system regressions.
+- The earlier original-base Run #1039 passed 399/399 but was not used as merge authorization after main advanced; Run #1041 validated the refreshed branch against current main.
+- World-save schema remains version 1. Local Godot GUI/renderer, GPU performance and iPhone hardware QA remain untested.
