@@ -1,9 +1,9 @@
-# KROLL Pendulum Array M0.1
+# KROLL Pendulum Array M0.2
 
 A three-chamber physics calibration game built for Godot 4.3+.
 
 ## Gameplay
-Tune the pendulum length in 0.05 m increments, then run a four-cycle phase test against an amber reference oscillator. Each chamber has a different target period. A successful calibration awards 100 points; all three chambers complete the campaign.
+Tune the pendulum length in 0.05 m increments, then run a four-cycle phase test against an amber reference oscillator. Each chamber has a different target period. A successful calibration awards 100 points once per chamber; resetting a cleared chamber cannot farm duplicate score. All three chambers complete the campaign.
 
 The game uses the small-angle pendulum approximation:
 
