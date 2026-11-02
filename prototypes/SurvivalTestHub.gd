@@ -36,6 +36,7 @@ const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigato
 const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
 const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
 const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn"
+const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
 
 var status_label: Label
 
@@ -308,6 +309,12 @@ func _build_ui() -> void:
 		"KROLL Chrono Vault",
 		"先錄下通往紫色 A 板的路線，再倒帶讓回聲重播；你必須同步站上綠色 B 板才能開啟出口。",
 		CHRONO_VAULT_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Swarm Dispatcher",
+		"分別編排三架無人機的路線，再逐 tick 同步執行；系統會拒絕同格衝突與迎面交換。",
+		SWARM_DISPATCHER_SCENE
 	)
 	_add_scene_button(
 		launch_list,
