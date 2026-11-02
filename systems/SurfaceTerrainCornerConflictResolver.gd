@@ -10,7 +10,12 @@ static func resolve(candidates: Dictionary) -> Dictionary:
 	var sides_by_patch: Dictionary = {}
 	for edge_key_value in candidates.keys():
 		var edge_key: String = str(edge_key_value)
-		var edge: Dictionary = candidates[edge_key_value]
+		if edge_key.is_empty():
+			return {"ok":false,"error":"invalid_edge_key"}
+		var edge_value: Variant = candidates[edge_key_value]
+		if not (edge_value is Dictionary):
+			return {"ok":false,"error":"invalid_edge_descriptor"}
+		var edge: Dictionary = edge_value
 		for required in ["first_id", "second_id", "first_side", "second_side"]:
 			if not edge.has(required):
 				return {"ok":false,"error":"missing_" + required}
@@ -33,6 +38,20 @@ static func resolve(candidates: Dictionary) -> Dictionary:
 		var stable_id: String = str(stable_id_value)
 		var entries: Array = sides_by_patch[stable_id]
 		entries.sort_custom(_entry_less)
+		var seen_sides: Dictionary = {}
+		for entry_value in entries:
+			var side: String = str(entry_value["side"])
+			if seen_sides.has(side):
+				var duplicate_keys: Array[String] = [str(seen_sides[side]), str(entry_value["edge_key"])]
+				duplicate_keys.sort()
+				return {
+					"ok":false,
+					"error":"duplicate_patch_side",
+					"stable_id":stable_id,
+					"side":side,
+					"edge_keys":duplicate_keys
+				}
+			seen_sides[side] = str(entry_value["edge_key"])
 		for first_index in range(entries.size()):
 			for second_index in range(first_index + 1, entries.size()):
 				var first_entry: Dictionary = entries[first_index]
