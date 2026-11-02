@@ -17,9 +17,9 @@ func _run() -> void:
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = 10.0
 	director.load_radius = 1
-	_expect(director.call("bind_controller", controller), "fixture binds controller")
-	_expect(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "fixture binds factory")
-	_expect(director.call("sync_to_world_position", Vector3.ZERO, 2000), "fixture creates initial window")
+	_expect(bool(director.call("bind_controller", controller)), "fixture binds controller")
+	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "fixture binds factory")
+	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, 2000)), "fixture creates initial window")
 	var request_id: int = director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 0.0), 2001, 1)
 	_expect(request_id > 0, "async window shift starts")
 	var staged := false
@@ -39,7 +39,7 @@ func _run() -> void:
 	_expect(live_text.contains("ACTIVE #%d" % request_id), "panel reports active request ID")
 	_expect(live_text.contains("staging"), "panel reports staging phase")
 	_expect(live_text.contains("stage 1/9"), "panel reports staged versus desired roots")
-	_expect(director.call("cancel_async_sync_request", request_id), "explicit cancellation is accepted")
+	_expect(bool(director.call("cancel_async_sync_request", request_id)), "explicit cancellation is accepted")
 	var terminal: Dictionary = {}
 	for _frame in range(120):
 		terminal = director.call("get_async_request_diagnostics", request_id)
