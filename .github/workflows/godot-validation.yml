@@ -3156,14 +3156,16 @@ jobs:
           echo "$output" | grep -q "KROLL Cargo Mosaic runtime smoke test passed."
 
       
-      - name: Verify Run 86 corner conflict reports and streaming soak coverage
+      - name: Verify Run 86 corner conflicts and Run 92 randomized streaming soak
         shell: bash
         run: |
           set -e
           grep -q 'CornerResolverScript.resolve(candidates)' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'blocked_corner_reports' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'north_east' systems/SurfaceTerrainCornerConflictResolver.gd
-          grep -q 'range(64)' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'range(128)' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'rng.seed = 0x91A55EED' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'x_shift_count > 0 and z_shift_count > 0' tests/mineral_grid_streaming_async_test.gd
           grep -q 'departed chunk' tests/mineral_grid_streaming_async_test.gd
 
       - name: Import and parse KROLL Pendulum Array
