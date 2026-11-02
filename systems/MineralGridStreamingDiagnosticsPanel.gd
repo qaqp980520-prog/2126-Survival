@@ -3,6 +3,7 @@ extends PanelContainer
 const MAX_VISIBLE_ROWS: int = 6
 const MAX_HISTORY: int = 32
 const REFRESH_INTERVAL: float = 0.25
+const DEFAULT_EXPORT_PATH: String = "user://streaming_diagnostics_snapshot.json"
 
 var _director: Node
 var _corner_provider: Node
@@ -10,11 +11,13 @@ var _refresh_elapsed: float = 0.0
 var _summary_label: Label
 var _corner_label: Label
 var _history_label: Label
+var _export_status_label: Label
+var _export_button: Button
 
 func _ready() -> void:
 	name = "StreamingDiagnosticsPanel"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(440, 330)
+	custom_minimum_size = Vector2(440, 360)
 	_build_ui()
 	visible = false
 	refresh_now()
@@ -58,6 +61,17 @@ func _build_ui() -> void:
 	_history_label.add_theme_font_size_override("font_size", 11)
 	_history_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_history_label)
+	_export_button = Button.new()
+	_export_button.name = "ExportSnapshot"
+	_export_button.text = "EXPORT SNAPSHOT"
+	_export_button.custom_minimum_size = Vector2(150.0, 32.0)
+	_export_button.pressed.connect(export_snapshot_to_default_path)
+	column.add_child(_export_button)
+	_export_status_label = Label.new()
+	_export_status_label.name = "ExportStatus"
+	_export_status_label.add_theme_color_override("font_color", Color(0.55, 0.86, 0.74))
+	_export_status_label.add_theme_font_size_override("font_size", 10)
+	column.add_child(_export_status_label)
 	var hint := Label.new()
 	hint.text = "F3 CLOSE · NEWEST SIX REQUESTS · HISTORY CAP 32"
 	hint.add_theme_color_override("font_color", Color(0.47, 0.62, 0.72))
@@ -170,6 +184,89 @@ func _refresh_corner_reports() -> void:
 			edge_text
 		])
 	_corner_label.text = "BLOCKED CORNERS %d\n%s" % [reports.size(), "\n".join(lines)]
+
+
+func _json_safe(value: Variant) -> Variant:
+	if value is Vector2:
+		var point: Vector2 = value
+		return {"x": point.x, "y": point.y}
+	if value is Vector2i:
+		var point_i: Vector2i = value
+		return {"x": point_i.x, "y": point_i.y}
+	if value is Vector3:
+		var point_3d: Vector3 = value
+		return {"x": point_3d.x, "y": point_3d.y, "z": point_3d.z}
+	if value is Vector3i:
+		var point_3i: Vector3i = value
+		return {"x": point_3i.x, "y": point_3i.y, "z": point_3i.z}
+	if value is Color:
+		var color_value: Color = value
+		return {"r": color_value.r, "g": color_value.g, "b": color_value.b, "a": color_value.a}
+	if value is Array:
+		var safe_array: Array = []
+		for item in value:
+			safe_array.append(_json_safe(item))
+		return safe_array
+	if value is Dictionary:
+		var safe_dictionary: Dictionary = {}
+		for key in value:
+			safe_dictionary[str(key)] = _json_safe(value[key])
+		return safe_dictionary
+	if value == null or value is bool or value is int or value is float or value is String:
+		return value
+	return str(value)
+
+func build_export_snapshot() -> Dictionary:
+	var active_id: int = -1
+	var history: Array[Dictionary] = []
+	if _director != null and is_instance_valid(_director) and not _director.is_queued_for_deletion():
+		if _director.has_method("get_active_async_request_id") and _director.has_method("get_recent_async_request_diagnostics"):
+			active_id = int(_director.call("get_active_async_request_id"))
+			var raw_history: Array = _director.call("get_recent_async_request_diagnostics")
+			var first_index: int = maxi(0, raw_history.size() - MAX_HISTORY)
+			for index in range(first_index, raw_history.size()):
+				if raw_history[index] is Dictionary:
+					var safe_record: Dictionary = _json_safe(raw_history[index])
+					history.append(safe_record)
+	var corners: Array[Dictionary] = []
+	if _corner_provider != null and is_instance_valid(_corner_provider) and not _corner_provider.is_queued_for_deletion():
+		if _corner_provider.has_method("get_blocked_terrain_corner_reports"):
+			var raw_corners: Array = _corner_provider.call("get_blocked_terrain_corner_reports")
+			for report_value in raw_corners:
+				if report_value is Dictionary:
+					var safe_corner: Dictionary = _json_safe(report_value)
+					corners.append(safe_corner)
+	return {
+		"schema_version": 1,
+		"generated_unix": int(Time.get_unix_time_from_system()),
+		"active_request_id": active_id,
+		"history": history,
+		"blocked_corners": corners
+	}
+
+func export_snapshot_json() -> String:
+	return JSON.stringify(build_export_snapshot(), "\t")
+
+func save_snapshot_to_file(path: String = DEFAULT_EXPORT_PATH) -> bool:
+	if not path.begins_with("user://") or path.contains(".."):
+		return false
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(export_snapshot_json())
+	var write_error: Error = file.get_error()
+	file.close()
+	return write_error == OK
+
+func export_snapshot_to_default_path() -> void:
+	if save_snapshot_to_file():
+		if _export_status_label != null:
+			_export_status_label.text = "SAVED · " + DEFAULT_EXPORT_PATH
+	elif _export_status_label != null:
+		_export_status_label.text = "EXPORT FAILED · CHECK USER DATA STORAGE"
+
+func get_export_button_count() -> int:
+	return 1 if is_instance_valid(_export_button) else 0
 
 func get_rendered_text() -> String:
 	if _summary_label == null or _corner_label == null or _history_label == null:

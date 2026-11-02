@@ -1,0 +1,10 @@
+config_version=5
+
+[application]
+config/name="KROLL Solar Sail Navigator"
+run/main_scene="res://main.tscn"
+
+[display]
+window/size/viewport_width=1100
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"

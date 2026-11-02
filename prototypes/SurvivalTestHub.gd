@@ -32,6 +32,7 @@ const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
+const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 
 var status_label: Label
 
@@ -279,6 +280,12 @@ func _build_ui() -> void:
 		"KROLL Habitat Photographer",
 		"追蹤三種棲地中的移動動物，調整對焦、倍率與曝光，在目標進入取景框且視線清晰時拍攝。",
 		HABITAT_PHOTOGRAPHER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Solar Sail Navigator",
+		"調整太陽帆角度與展開量，利用光壓轉向、控制慣性漂移並穿越碎片帶抵達三座中繼站。",
+		SOLAR_SAIL_NAVIGATOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,
