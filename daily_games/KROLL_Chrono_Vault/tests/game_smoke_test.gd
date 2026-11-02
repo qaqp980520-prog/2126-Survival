@@ -19,14 +19,18 @@ func _run() -> void:
 		if index > 0:
 			_expect(bool(game.call("advance_level")),"runtime advances to vault %d" % (index + 1))
 		for action in ECHO_PATHS[index]:
-			_expect(bool(game.call("step_action",str(action)),"runtime records echo route"))
+			_expect(bool(game.call("step_action",str(action))),"runtime records echo route")
 		_expect(bool(game.call("commit_echo")),"runtime commits echo")
+		for action in ECHO_PATHS[index]:
+			_expect(bool(game.call("step_action",str(action))),"runtime replays route while echo is active")
+		_expect(bool(game.call("is_record_button_disabled")),"runtime disables echo recording after rewind")
+		_expect(not bool(game.call("commit_echo")),"runtime rejects replacing an active echo")
 		_expect(bool(game.call("restart_level")),"runtime restarts and preserves echo")
 		for action in PLAYER_PATHS[index]:
-			_expect(bool(game.call("step_action",str(action)),"runtime executes player route"))
-		_expect(bool(game.call("get_current_state").get("exit_unlocked",false),"runtime synchronizes both plates"))
+			_expect(bool(game.call("step_action",str(action))),"runtime executes player route")
+		_expect(bool(game.call("get_current_state").get("exit_unlocked",false)),"runtime synchronizes both plates")
 		for action in EXIT_PATHS[index]:
-			_expect(bool(game.call("step_action",str(action)),"runtime reaches exit"))
+			_expect(bool(game.call("step_action",str(action))),"runtime reaches exit")
 		_expect(str(game.call("get_current_state").get("status","")) == "passed","runtime clears vault %d" % (index + 1))
 	_expect(bool(game.call("advance_level")),"runtime finalizes third vault")
 	var final_state: Dictionary = game.call("get_current_state")

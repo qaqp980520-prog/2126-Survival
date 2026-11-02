@@ -363,9 +363,11 @@ func _test_resolver_rejects_non_opposite_sides_and_stable_order() -> void:
     var same_side := {"same":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"east"}}
     var non_opposite := {"crossed":{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"north"}}
     var numeric_key := {7:{"first_id":"center","second_id":"neighbor","first_side":"east","second_side":"west"}}
+    var numeric_id := {"numeric_id":{"first_id":7,"second_id":"neighbor","first_side":"east","second_side":"west"}}
     _expect(str(CornerResolverScript.resolve(same_side).get("error", "")) == "invalid_edge_sides", "same-side edge descriptors are rejected")
     _expect(str(CornerResolverScript.resolve(non_opposite).get("error", "")) == "invalid_edge_sides", "non-opposite edge descriptors are rejected")
     _expect(str(CornerResolverScript.resolve(numeric_key).get("error", "")) == "invalid_edge_key", "non-string edge keys are rejected")
+    _expect(str(CornerResolverScript.resolve(numeric_id).get("error", "")) == "invalid_patch_ids", "non-string stable patch IDs are rejected")
     var east_edge := {"first_id":"center","second_id":"east","first_side":"east","second_side":"west"}
     var north_edge := {"first_id":"center","second_id":"north","first_side":"north","second_side":"south"}
     var forward := {"z_north":north_edge,"a_east":east_edge}

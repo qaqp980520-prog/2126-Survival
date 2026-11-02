@@ -22,8 +22,10 @@ static func resolve(candidates: Dictionary) -> Dictionary:
 		for required in ["first_id", "second_id", "first_side", "second_side"]:
 			if not edge.has(required):
 				return {"ok":false,"error":"missing_" + required}
-		var first_id: String = str(edge["first_id"])
-		var second_id: String = str(edge["second_id"])
+		if not (edge["first_id"] is String) or not (edge["second_id"] is String):
+			return {"ok":false,"error":"invalid_patch_ids","edge_key":edge_key}
+		var first_id: String = edge["first_id"]
+		var second_id: String = edge["second_id"]
 		var first_side: String = str(edge["first_side"])
 		var second_side: String = str(edge["second_side"])
 		if first_id.is_empty() or second_id.is_empty() or first_id == second_id:

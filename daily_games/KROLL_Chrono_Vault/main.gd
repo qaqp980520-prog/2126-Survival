@@ -148,7 +148,7 @@ func _refresh_ui() -> void:
 	else:
 		_status_label.text = "CAMPAIGN COMPLETE  ·  TOTAL SCORE %03d" % int(_state.get("total_score",0))
 	var player_pos: Vector2i = _state.get("player_pos",Vector2i.ZERO)
-	var can_record: bool = status == "playing" and player_pos == level.get("echo_plate",Vector2i(-1,-1)) and not _state.get("recording",[]).is_empty()
+	var can_record: bool = status == "playing" and not bool(_state.get("echo_active",false)) and player_pos == level.get("echo_plate",Vector2i(-1,-1)) and not _state.get("recording",[]).is_empty()
 	_record_button.disabled = not can_record
 	_restart_button.text = "RESTART CAMPAIGN  ·  C" if status == "campaign_complete" else "RESTART VAULT  ·  C"
 	_restart_button.disabled = status == "passed"
@@ -237,3 +237,6 @@ func get_current_state() -> Dictionary:
 	return _state.duplicate(true)
 func get_restart_button_text() -> String:
 	return _restart_button.text
+
+func is_record_button_disabled() -> bool:
+	return _record_button.disabled

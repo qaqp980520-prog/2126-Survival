@@ -13,9 +13,10 @@ func _run() -> void:
 	_expect(bool(boundary.get("ok",false)) and not bool(boundary.get("player_moved",true)),"boundary movement is blocked")
 	_expect(not bool(rules.step_action(rules.create_state(0),"teleport").get("ok",true)),"unknown actions are rejected")
 	_expect(not bool(rules.commit_echo(rules.create_state(0)).get("ok",true)),"echo cannot be recorded before reaching plate A")
-	var campaign: Dictionary = {}
+	var campaign: Dictionary = rules.create_state(0)
 	for index in range(3):
-		var state: Dictionary = rules.create_state(index)
+		var state: Dictionary = campaign.duplicate(true)
+		_expect(int(state.get("level_index",-1)) == index,"campaign carries forward to vault %d" % (index + 1))
 		for action in ECHO_PATHS[index]:
 			var step: Dictionary = rules.step_action(state,str(action))
 			_expect(bool(step.get("ok",false)),"vault %d records echo action" % (index + 1))
@@ -29,6 +30,13 @@ func _run() -> void:
 			break
 		state = committed["state"]
 		_expect(bool(state.get("echo_active",false)) and state.get("player_pos",Vector2i.ZERO) == level["start"],"vault %d rewinds and arms echo" % (index + 1))
+		for action in ECHO_PATHS[index]:
+			var echo_replay_step: Dictionary = rules.step_action(state,str(action))
+			if bool(echo_replay_step.get("ok",false)):
+				state = echo_replay_step["state"]
+		_expect(state.get("player_pos",Vector2i.ZERO) == level["echo_plate"],"vault %d can revisit A while echo is active" % (index + 1))
+		var second_commit: Dictionary = rules.commit_echo(state)
+		_expect(not bool(second_commit.get("ok",true)) and str(second_commit.get("reason","")) == "echo_already_active","vault %d cannot overwrite an active echo" % (index + 1))
 		var retry: Dictionary = rules.restart_level(state)
 		_expect(bool(retry.get("ok",false)) and retry["state"].get("echo_script",[]).size() == ECHO_PATHS[index].size(),"vault %d retry preserves echo script" % (index + 1))
 		state = retry["state"]

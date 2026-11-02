@@ -44,9 +44,10 @@ func step_action(state: Dictionary, action: String) -> Dictionary:
 		echo_moved = bool(echo_result["moved"])
 	var player_result: Dictionary = _apply(next["player_pos"],action,walls)
 	next["player_pos"] = player_result["position"]
-	var recording: Array = next.get("recording",[])
-	recording.append(action)
-	next["recording"] = recording
+	if not bool(next.get("echo_active",false)):
+		var recording: Array = next.get("recording",[])
+		recording.append(action)
+		next["recording"] = recording
 	next["turn_index"] = turn + 1
 	next["turn_count"] = int(next.get("turn_count",0)) + 1
 	var unlocked: bool = bool(next.get("exit_unlocked",false))
@@ -60,6 +61,8 @@ func step_action(state: Dictionary, action: String) -> Dictionary:
 func commit_echo(state: Dictionary) -> Dictionary:
 	if str(state.get("status","")) != "playing":
 		return {"ok":false,"reason":"level_not_playing"}
+	if bool(state.get("echo_active",false)):
+		return {"ok":false,"reason":"echo_already_active"}
 	var level: Dictionary = get_level_definition(int(state.get("level_index",-1)))
 	var recording: Array = state.get("recording",[])
 	if level.is_empty() or recording.is_empty() or state.get("player_pos",Vector2i.ZERO) != level.get("echo_plate",Vector2i(-1,-1)):
