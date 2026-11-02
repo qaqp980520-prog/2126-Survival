@@ -34,10 +34,11 @@ const MISSIONS: Array[Dictionary] = [
 func create_state(mission_index: int = 0, campaign_score: int = 0) -> Dictionary:
     if mission_index < 0 or mission_index >= MISSIONS.size() or campaign_score < 0:
         return {}
+    var no_exclusions: Array[Vector2i] = []
     return {
         "mission_index": mission_index,
         "scans": {},
-        "candidates": _find_candidates({}, []),
+        "candidates": _find_candidates({}, no_exclusions),
         "excluded_cells": [],
         "selected": INVALID_CELL,
         "wrong_guesses": 0,
@@ -51,6 +52,9 @@ func get_mission_count() -> int:
 
 func get_sensor_count() -> int:
     return SENSOR_POSITIONS.size()
+
+func get_minimum_scan_count() -> int:
+    return MINIMUM_SCANS
 
 func get_mission_definition(mission_index: int) -> Dictionary:
     if mission_index < 0 or mission_index >= MISSIONS.size():
