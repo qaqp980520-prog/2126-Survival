@@ -186,8 +186,8 @@ func _build_hud() -> void:
 	streaming_diagnostics_panel.offset_top = 14.0
 	streaming_diagnostics_panel.offset_bottom = 270.0
 	layer.add_child(streaming_diagnostics_panel)
-	streaming_diagnostics_panel.bind_director(director)
-	streaming_diagnostics_panel.set_open(false)
+	streaming_diagnostics_panel.call("bind_director", director)
+	streaming_diagnostics_panel.call("set_open", false)
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -469,7 +469,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key_event.pressed and not key_event.echo:
 			if key_event.keycode == KEY_F3:
 				if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel):
-					streaming_diagnostics_panel.toggle_open()
+					streaming_diagnostics_panel.call("toggle_open")
 				get_viewport().set_input_as_handled()
 				return
 			match key_event.keycode:
