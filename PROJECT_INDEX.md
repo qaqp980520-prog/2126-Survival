@@ -1680,3 +1680,30 @@
 - Exact-head Godot 4.3 [Run #1026](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41406639640) completed successfully: 389/389 workflow steps, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
 - Superseded Run #1025 exposed an over-broad smoke assertion: the completed third habitat intentionally allows a full-campaign restart, while completed intermediate habitats remain locked against score farming. The smoke test was corrected and the exact-head Run #1026 passed.
 - World-save schema remains version 1. Local GUI/renderer, GPU and iPhone hardware QA remain untested.
+
+
+## 2026-11-02 Run 88 — Solar Sail Navigator and exportable streaming diagnostics (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Solar_Sail_Navigator/`, a turn-based solar-pressure trajectory game with Solar Wake, Lagrange Drift and Dust Ribbon relay missions.
+- Sail trim, deployment, inertial damping, deterministic gusts, debris collision, capture radius/speed, bounds and turn limits are covered by rules tests.
+- Each relay awards 100 points once; intermediate completed missions cannot be reset to farm points; a completed campaign can be restarted.
+- Keyboard, mouse and touch controls are included. Godot 4.3+, no external assets/plugins/network dependencies.
+- Three checked-in flight plans were independently replayed: Solar Wake succeeds on turn 22 (distance 7.975/8.5, speed 2.826/5.5); Lagrange Drift on turn 26 (7.233/8.5, 2.307/5.5); Dust Ribbon on turn 30 (8.938/10.0, 2.799/5.8). This model replay supplements, not replaces, engine tests.
+
+### Existing-system change
+- `systems/MineralGridStreamingDiagnosticsPanel.gd` now exports a schema-versioned JSON snapshot with active request ID, at most 32 recent diagnostics and blocked-corner reports.
+- Nested Vector2/Vector2i/Vector3/Vector3i/Color, arrays and dictionaries are recursively normalized for JSON; nested report data is copied before export.
+- File output is restricted to `user://`; `res://` and traversal-containing paths are rejected. Snapshot data is transient and does not change world-save schema 1.
+- Regression covers export button, schema, active request state, history bound, nested deep-copy isolation, JSON parsing, user-data write/read and resource-path rejection.
+
+### Exact validation and merge
+- Feature PR [#212](https://github.com/qaqp980520-prog/2126-Survival/pull/212) merged from exact candidate HEAD `a4e3aa0e9563abeeec7873adad823cacda126a56`; squash merge commit `8307621e60648eab036f0d758dfa649372868161`.
+- Exact-head Godot 4.3 [Run #1036](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41424779146) completed successfully. Direct job inspection confirms 394/394 step records completed, zero failures, zero skipped; root project/Test Hub, legacy regressions, snapshot export, Solar Sail standalone import/rules/runtime, checkout cleanup, container shutdown and job completion all succeeded.
+- Earlier Run #1035 failed at the static input gate due to a case/title grep mismatch; the workflow assertion was corrected in commit `a4e3aa0e9563abeeec7873adad823cacda126a56`. Run #1035 remains historical failure evidence and is not used as acceptance.
+- World-save schema remains version 1. Local GUI/renderer, GPU and iPhone hardware QA remain untested.
+
+### Next steps
+- Add an integration regression that exports a completed request containing a real Vector2i chunk center.
+- Explicitly reject `user://../` traversal and exercise the EXPORT SNAPSHOT button through its public UI action/default path.
+- Continue with a new mini-game and existing-system work on a separate feature branch; validate exact HEAD before merge.
