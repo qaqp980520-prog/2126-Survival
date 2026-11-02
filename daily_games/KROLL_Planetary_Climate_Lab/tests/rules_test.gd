@@ -57,11 +57,11 @@ func _run() -> void:
 	_expect(int(restarted.get("score", -1)) == 0 and int(restarted.get("planet_index", -1)) == 0, "new campaign clears score and returns to Nysa")
 
 	var boundary_state: Dictionary = rules.create_state(0)
-	var max_albedo: Dictionary = rules.set_albedo(boundary_state, rules.MAX_ALBEDO)
+	var max_albedo: Dictionary = rules.set_albedo(boundary_state, 0.80)
 	_expect(bool(max_albedo.get("ok", false)), "maximum albedo is accepted")
 	var over_max: Dictionary = rules.adjust_albedo(max_albedo["state"], 1)
 	_expect(not bool(over_max.get("ok", true)) and str(over_max.get("reason", "")) == "invalid_albedo", "albedo cannot exceed its upper bound")
-	var max_greenhouse: Dictionary = rules.set_greenhouse(boundary_state, rules.MAX_GREENHOUSE)
+	var max_greenhouse: Dictionary = rules.set_greenhouse(boundary_state, 0.70)
 	_expect(bool(max_greenhouse.get("ok", false)), "maximum greenhouse retention is accepted")
 	var over_greenhouse: Dictionary = rules.adjust_greenhouse(max_greenhouse["state"], 1)
 	_expect(not bool(over_greenhouse.get("ok", true)) and str(over_greenhouse.get("reason", "")) == "invalid_greenhouse", "greenhouse retention cannot exceed its upper bound")
