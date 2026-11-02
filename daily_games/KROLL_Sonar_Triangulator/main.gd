@@ -226,7 +226,16 @@ func _refresh_ui() -> void:
     elif scans.size() < _rules.get_minimum_scan_count():
         _status_label.text = "PING AT LEAST THREE BUOYS TO BEGIN TRIANGULATION."
     elif candidates.size() > 1:
-        _status_label.text = "AMBIGUOUS RETURN  ·  USE BUOY D OR ELIMINATE A FALSE CELL."
+        var unused_buoys: String = ""
+        for sensor_index in range(_rules.get_sensor_count()):
+            if not scans.has(sensor_index):
+                if not unused_buoys.is_empty():
+                    unused_buoys += ", "
+                unused_buoys += ["A", "B", "C", "D"][sensor_index]
+        if unused_buoys.is_empty():
+            _status_label.text = "AMBIGUOUS RETURN  ·  ELIMINATE A FALSE CELL."
+        else:
+            _status_label.text = "AMBIGUOUS RETURN  ·  USE UNUSED BUOY %s OR ELIMINATE A FALSE CELL." % unused_buoys
     else:
         _status_label.text = "SINGLE RETURN LOCK  ·  SELECT THE REMAINING CELL."
 

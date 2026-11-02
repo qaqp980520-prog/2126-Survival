@@ -10,6 +10,7 @@ func _run() -> void:
     _test_invalid_and_duplicate_scans()
     _test_three_ping_triangulation()
     _test_fourth_ping_breaks_the_abyssal_tie()
+    _test_all_three_sensor_combinations()
     _test_wrong_guess_elimination_and_score_penalty()
     _test_campaign_lock_and_restart()
     if failures.is_empty():
@@ -65,6 +66,34 @@ func _test_fourth_ping_breaks_the_abyssal_tie() -> void:
     state = final_ping["state"]
     var resolved: Array[Vector2i] = rules.get_candidate_positions(state)
     _expect(resolved.size() == 1 and resolved[0] == Vector2i(5, 3), "four pings isolate the Abyssal relay at (5, 3)")
+
+func _test_all_three_sensor_combinations() -> void:
+    var rules := RulesScript.new()
+    var expected_ambiguous_subsets := {
+        "1:0": true,
+        "1:3": true
+    }
+    for mission_index in range(rules.get_mission_count()):
+        var target: Vector2i = rules.get_mission_target_for_test(mission_index)
+        for omitted_sensor in range(rules.get_sensor_count()):
+            var state: Dictionary = rules.create_state(mission_index)
+            for sensor_index in range(rules.get_sensor_count()):
+                if sensor_index == omitted_sensor:
+                    continue
+                var scan: Dictionary = rules.scan_sensor(state, sensor_index)
+                _expect(bool(scan.get("ok", false)), "mission %d subset scan %d succeeds" % [mission_index + 1, sensor_index])
+                state = scan["state"]
+            var candidates: Array[Vector2i] = rules.get_candidate_positions(state)
+            var subset_key: String = "%d:%d" % [mission_index, omitted_sensor]
+            var should_be_ambiguous: bool = expected_ambiguous_subsets.has(subset_key)
+            _expect(candidates.has(target), "mission %d subset without sensor %d retains the true target" % [mission_index + 1, omitted_sensor])
+            _expect(candidates.size() == (2 if should_be_ambiguous else 1), "mission %d subset without sensor %d has the expected candidate count" % [mission_index + 1, omitted_sensor])
+            var final_scan: Dictionary = rules.scan_sensor(state, omitted_sensor)
+            _expect(bool(final_scan.get("ok", false)), "mission %d remaining sensor %d can be used" % [mission_index + 1, omitted_sensor])
+            if bool(final_scan.get("ok", false)):
+                state = final_scan["state"]
+            var resolved: Array[Vector2i] = rules.get_candidate_positions(state)
+            _expect(resolved.size() == 1 and resolved[0] == target, "mission %d all-four-buoy result resolves after omitting sensor %d is restored" % [mission_index + 1, omitted_sensor])
 
 func _test_wrong_guess_elimination_and_score_penalty() -> void:
     var rules := RulesScript.new()

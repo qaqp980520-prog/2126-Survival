@@ -20,7 +20,7 @@ const MISSIONS: Array[Dictionary] = [
     {
         "id": "abyssal_relay",
         "title": "ABYSSAL RELAY",
-        "briefing": "The first three corner buoys leave two plausible cells. Use the south-edge buoy D or eliminate a false return.",
+        "briefing": "The standard A/B/C corner-buoy plan leaves two plausible cells. South-edge buoy D breaks that tie; another station order may resolve sooner.",
         "target": Vector2i(5, 3)
     },
     {

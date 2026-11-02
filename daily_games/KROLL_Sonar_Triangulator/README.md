@@ -9,7 +9,7 @@ A touch-friendly acoustic search puzzle for Godot 4.3.
 - Each ping reports the Euclidean distance rounded to the nearest grid unit.
 - Three pings unlock target selection.
 - Nereid Wreck and Trench Beacon resolve after three pings.
-- Abyssal Relay leaves two plausible cells after the first three corner-buoy pings; buoy D on the southern edge breaks the tie, or you can eliminate a false return.
+- Abyssal Relay leaves two plausible cells under the standard A/B/C corner-buoy plan; buoy D on the southern edge breaks that tie. Other three-buoy combinations may resolve sooner. You can also eliminate a false return.
 - A wrong guess removes only that candidate and applies a score penalty.
 - A passed mission can only be scored once. The campaign contains three missions.
 
