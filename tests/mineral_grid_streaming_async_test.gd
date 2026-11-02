@@ -319,13 +319,33 @@ func _test_async_diagnostics_and_stress() -> void:
     _expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 50)), "diagnostics fixture creates its initial window")
 
     var last_request_id: int = -1
-    for index in range(64):
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 0x91A55EED
+    var target_position := Vector3.ZERO
+    var x_shift_count: int = 0
+    var z_shift_count: int = 0
+    for index in range(128):
         var previous_ids: PackedStringArray = controller.get_loaded_chunk_ids()
         var previous_roots: Dictionary = {}
         for previous_id in previous_ids:
             var previous_root: Node3D = controller.get_chunk_root(previous_id)
             previous_roots[previous_id] = weakref(previous_root) if previous_root != null else null
-        var target := Vector3(float(index + 1) * 65.0, 0.0, 0.0)
+        var dx_steps: int = rng.randi_range(0, 2)
+        var dz_steps: int = rng.randi_range(0, 2)
+        if index == 0:
+            dx_steps = 1
+            dz_steps = 0
+        elif index == 1:
+            dx_steps = 0
+            dz_steps = 1
+        elif dx_steps == 0 and dz_steps == 0:
+            dx_steps = 1
+        if dx_steps > 0:
+            x_shift_count += 1
+        if dz_steps > 0:
+            z_shift_count += 1
+        target_position += Vector3(float(dx_steps) * 65.0, 0.0, float(dz_steps) * 65.0)
+        var target: Vector3 = target_position
         var previous_request_id: int = last_request_id
         last_request_id = int(director.call("request_sync_to_world_position_async", target, _test_time + 51 + index, 8))
         var report: Dictionary = await _wait_for_request(director, last_request_id)
@@ -333,8 +353,8 @@ func _test_async_diagnostics_and_stress() -> void:
         var diagnostic: Dictionary = director.call("get_async_request_diagnostics", last_request_id)
         var current_ids: PackedStringArray = controller.get_loaded_chunk_ids()
         _expect(last_request_id > previous_request_id, "soak request IDs increase monotonically at shift %d" % index)
-        _expect(bool(report.get("success", false)), "64-shift soak %d completes successfully" % index)
-        _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "soak shift %d records a terminal completion phase" % index)
+        _expect(bool(report.get("success", false)), "128-shift randomized soak %d completes successfully" % index)
+        _expect(str(diagnostic.get("phase", "")) == "complete" and bool(diagnostic.get("terminal", false)), "randomized soak shift %d records a terminal completion phase" % index)
         var expected_staged_count: int = 0
         var expected_unloaded_count: int = 0
         for current_id in current_ids:
@@ -356,8 +376,10 @@ func _test_async_diagnostics_and_stress() -> void:
             else:
                 _expect(reference != null and reference.get_ref() == null, "departed chunk %s releases its old root instance" % previous_id)
 
+    _expect(x_shift_count > 0 and z_shift_count > 0, "seeded randomized path exercises both world axes")
+
     var retained_history: Array = director.call("get_recent_async_request_diagnostics")
-    _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests after a sixty-four-shift soak")
+    _expect(retained_history.size() == 32, "async diagnostic history is capped at thirty-two requests after a 128-shift randomized soak")
     if retained_history.size() == 32:
         _expect(int(retained_history[0].get("request_id", 0)) == last_request_id - 31, "diagnostic pruning retains exactly the newest thirty-two requests")
         _expect(int(retained_history[-1].get("request_id", 0)) == last_request_id, "diagnostic history keeps the latest request at the end")
