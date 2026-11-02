@@ -3108,6 +3108,8 @@ jobs:
           test -f daily_games/KROLL_Cargo_Mosaic/project.godot
           test -f daily_games/KROLL_Cargo_Mosaic/main.tscn
           test -f daily_games/KROLL_Cargo_Mosaic/main_root.tscn
+          grep -q 'res://daily_games/KROLL_Cargo_Mosaic/main.gd' daily_games/KROLL_Cargo_Mosaic/main_root.tscn
+          grep -q 'ResourceLoader.exists(rules_path)' daily_games/KROLL_Cargo_Mosaic/main.gd
           test -f daily_games/KROLL_Cargo_Mosaic/main.gd
           test -f daily_games/KROLL_Cargo_Mosaic/rules.gd
           test -f daily_games/KROLL_Cargo_Mosaic/tests/rules_test.gd
