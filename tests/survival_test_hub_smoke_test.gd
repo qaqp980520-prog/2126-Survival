@@ -30,6 +30,7 @@ const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.ts
 const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
 const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
+const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -72,7 +73,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 29, "hub exposes twenty-nine world, prototype and game launch buttons")
+	_expect(buttons.size() == 30, "hub exposes thirty world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -245,6 +246,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Faultline Cartographer"), "hub labels the Faultline Cartographer game")
 	_expect(labels.has("KROLL Paleo Track Lab"), "hub labels the Paleo Track Lab game")
 	_expect(labels.has("KROLL Crew Ledger"), "hub labels the Crew Ledger game")
+	_expect(labels.has("KROLL Cargo Mosaic"), "hub labels the Cargo Mosaic game")
 	var conveyor_scene := load(CONVEYOR_ARCHITECT_SCENE) as PackedScene
 	_expect(conveyor_scene != null, "root hub can load the Conveyor Architect scene")
 	if conveyor_scene != null:
@@ -384,6 +386,18 @@ func _run() -> void:
 		_expect(crew_game.call("get_assignment_button_count") == 4, "root-loaded Crew Ledger builds four crew assignment controls")
 		_expect(crew_game.call("get_clues_text").contains("Kade is assigned to Comms"), "root-loaded Crew Ledger displays the case clues")
 		crew_game.queue_free()
+		await process_frame
+
+	var cargo_mosaic_scene := load(CARGO_MOSAIC_SCENE) as PackedScene
+	_expect(cargo_mosaic_scene != null, "root hub can load the Cargo Mosaic scene")
+	if cargo_mosaic_scene != null:
+		var cargo_mosaic := cargo_mosaic_scene.instantiate()
+		root.add_child(cargo_mosaic)
+		await process_frame
+		_expect(cargo_mosaic.call("get_title_text") == "KROLL // CARGO MOSAIC", "root-loaded Cargo Mosaic displays its title")
+		_expect(cargo_mosaic.call("get_board_button_count") == 36, "root-loaded Cargo Mosaic builds its 6x6 board")
+		_expect(cargo_mosaic.call("get_piece_button_count") == 4, "root-loaded Cargo Mosaic builds four module controls")
+		cargo_mosaic.queue_free()
 		await process_frame
 
 	hub.queue_free()
