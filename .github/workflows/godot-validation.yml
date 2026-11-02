@@ -2899,6 +2899,7 @@ jobs:
           set -e
           test -f systems/SurfaceTerrainTransitionColliderManager.gd
           test -f tests/surface_terrain_transition_collider_manager_test.gd
+          test -f systems/SurfaceTerrainCornerConflictResolver.gd
           grep -q 'set_shared_transition_active' systems/SurfaceTerrainPatch.gd
           grep -q 'sync_transitions' systems/MineralChunkController.gd
           grep -q 'get_terrain_transition_collider_count' systems/MineralChunkController.gd
@@ -3106,6 +3107,15 @@ jobs:
           grep -q 'KEY_F3' world/SurfaceWorld.gd
           grep -q 'StreamingDiagnosticsPanelScript' world/SurfaceWorld.gd
           test -f daily_games/KROLL_Cargo_Mosaic/project.godot
+          test -f daily_games/KROLL_Pendulum_Array/project.godot
+          test -f daily_games/KROLL_Pendulum_Array/main.tscn
+          test -f daily_games/KROLL_Pendulum_Array/main_root.tscn
+          test -f daily_games/KROLL_Pendulum_Array/main.gd
+          test -f daily_games/KROLL_Pendulum_Array/rules.gd
+          test -f daily_games/KROLL_Pendulum_Array/tests/rules_test.gd
+          test -f daily_games/KROLL_Pendulum_Array/tests/game_smoke_test.gd
+          grep -q "PENDULUM_ARRAY_SCENE" prototypes/SurvivalTestHub.gd
+          grep -q "KROLL Pendulum Array" tests/survival_test_hub_smoke_test.gd
           test -f daily_games/KROLL_Cargo_Mosaic/main.tscn
           test -f daily_games/KROLL_Cargo_Mosaic/main_root.tscn
           grep -q 'res://daily_games/KROLL_Cargo_Mosaic/main.gd' daily_games/KROLL_Cargo_Mosaic/main_root.tscn
@@ -3144,3 +3154,33 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Cargo Mosaic runtime smoke test passed."
+
+      
+      - name: Verify Run 86 corner conflict reports and streaming soak coverage
+        shell: bash
+        run: |
+          set -e
+          grep -q 'CornerResolverScript.resolve(candidates)' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'blocked_corner_reports' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'north_east' systems/SurfaceTerrainCornerConflictResolver.gd
+          grep -q 'range(64)' tests/mineral_grid_streaming_async_test.gd
+          grep -q 'departed chunk' tests/mineral_grid_streaming_async_test.gd
+
+      - name: Import and parse KROLL Pendulum Array
+        run: godot --headless --path daily_games/KROLL_Pendulum_Array --editor --quit
+      - name: Run KROLL Pendulum Array rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 30s godot --headless --path daily_games/KROLL_Pendulum_Array --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pendulum Array rules tests passed."
+      - name: Run KROLL Pendulum Array runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Pendulum_Array --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pendulum Array runtime smoke test passed."
