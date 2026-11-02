@@ -1,6 +1,7 @@
 extends Control
 
-const RulesScript = preload("res://rules.gd")
+const STANDALONE_RULES_PATH: String = "res://rules.gd"
+const ROOT_RULES_PATH: String = "res://daily_games/KROLL_Habitat_Photographer/rules.gd"
 
 class HabitatCanvas extends Control:
 	var game: Control
@@ -106,7 +107,12 @@ var _buttons: Array[Button] = []
 var _ui_elapsed: float = 0.0
 
 func _ready() -> void:
-	_rules = RulesScript.new()
+	var rules_path: String = ROOT_RULES_PATH if ResourceLoader.exists(ROOT_RULES_PATH) else STANDALONE_RULES_PATH
+	var rules_script: Script = load(rules_path) as Script
+	if rules_script == null:
+		push_error("Habitat Photographer could not load its rules module: %s" % rules_path)
+		return
+	_rules = rules_script.new() as RefCounted
 	_build_ui()
 	_load_stage_settings()
 	_refresh_ui()
