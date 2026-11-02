@@ -183,7 +183,8 @@ func step_tick(state: Dictionary) -> Dictionary:
 	for index in range(DRONE_COUNT):
 		if next["positions"][index] != goals[index]:
 			all_at_goals = false
-		if int(next_cursors[index]) < (next["programs"][index] as Array).size():
+		var next_program: Array = next["programs"][index]
+		if int(next_cursors[index]) < next_program.size():
 			all_commands_consumed = false
 	if all_at_goals and all_commands_consumed:
 		next["status"] = "passed"
@@ -257,5 +258,6 @@ func get_remaining_commands(state: Dictionary) -> int:
 	var programs: Array = state.get("programs", [])
 	var cursors: Array = state.get("cursors", [])
 	for index in range(mini(programs.size(), cursors.size())):
-		total += maxi(0, (programs[index] as Array).size() - int(cursors[index]))
+		var program: Array = programs[index]
+		total += maxi(0, program.size() - int(cursors[index]))
 	return total
