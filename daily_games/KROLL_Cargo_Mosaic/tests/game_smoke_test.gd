@@ -29,7 +29,7 @@ func _run() -> void:
 		_expect(bool(game.call("get_current_state").get("solved", false)), "exact cover for bay %d" % (level_index + 1))
 		if level_index < 2:
 			_expect(bool(game.call("advance_level")), "advance to next bay")
-	_expect(game.call("advance_level"), "complete final bay")
+	_expect(bool(game.call("advance_level")), "complete final bay")
 	_expect(bool(game.call("get_current_state").get("campaign_complete", false)), "campaign terminal state")
 	game.queue_free()
 	await process_frame
