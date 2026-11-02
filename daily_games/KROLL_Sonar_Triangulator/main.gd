@@ -212,7 +212,7 @@ func _refresh_ui() -> void:
     var selected: Vector2i = _state.get("selected", Vector2i(-1, -1))
     _mission_label.text = "MISSION %02d / %02d  ·  %s" % [mission_index + 1, _rules.get_mission_count(), str(mission.get("title", "UNKNOWN"))]
     _briefing_label.text = str(mission.get("briefing", "No mission briefing available."))
-    _candidate_label.text = "PINGS %d / 4  ·  %d POSSIBLE CELLS  ·  3 REQUIRED TO LOCK" % [scans.size(), candidates.size()]
+    _candidate_label.text = "PINGS %d/4  ·  %d CANDIDATES" % [scans.size(), candidates.size()] if _compact_layout else "PINGS %d / 4  ·  %d POSSIBLE CELLS  ·  3 REQUIRED TO LOCK" % [scans.size(), candidates.size()]
 
     for sensor_index in range(_sensor_buttons.size()):
         var sensor_name: String = ["A", "B", "C", "D"][sensor_index]
