@@ -20,17 +20,17 @@ func _run() -> void:
 	_expect(game.call("get_piece_button_count") == 4, "four module controls")
 	_expect(str(game.call("get_piece_preview_text", "FORK")).contains("#"), "module controls show their spatial silhouettes")
 	_expect(game.call("get_target_cell_count") == 16, "sixteen target cells")
-	_expect(game.call("try_place_piece", "ION", Vector2i(1,1), 3), "valid module placement")
-	_expect(not game.call("try_place_piece", "CORE", Vector2i(1,1), 0), "overlap rejection")
+	_expect(bool(game.call("try_place_piece", "ION", Vector2i(1,1), 3)), "valid module placement")
+	_expect(not bool(game.call("try_place_piece", "CORE", Vector2i(1,1), 0)), "overlap rejection")
 	game.call("reset_level")
 	for level_index in range(3):
 		for fixture in FIXTURES[level_index]:
-			_expect(game.call("try_place_piece", fixture["id"], fixture["origin"], fixture["rotation"]), "authored placement for bay %d" % (level_index + 1))
-		_expect(game.call("get_current_state").get("solved", false), "exact cover for bay %d" % (level_index + 1))
+			_expect(bool(game.call("try_place_piece", fixture["id"], fixture["origin"], fixture["rotation"])), "authored placement for bay %d" % (level_index + 1))
+		_expect(bool(game.call("get_current_state").get("solved", false)), "exact cover for bay %d" % (level_index + 1))
 		if level_index < 2:
-			_expect(game.call("advance_level"), "advance to next bay")
+			_expect(bool(game.call("advance_level")), "advance to next bay")
 	_expect(game.call("advance_level"), "complete final bay")
-	_expect(game.call("get_current_state").get("campaign_complete", false), "campaign terminal state")
+	_expect(bool(game.call("get_current_state").get("campaign_complete", false)), "campaign terminal state")
 	game.queue_free()
 	await process_frame
 	if failures.is_empty():
