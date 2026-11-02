@@ -1642,3 +1642,41 @@
 - The overlay is a developer diagnostic view, not persistent telemetry or a file export; history is bounded to 32 requests and the panel shows six. Touch-only access to the F3 toggle is not implemented.
 - Local Godot editor GUI, renderer appearance, GPU performance and iPhone hardware QA were not performed; cloud headless CI is not device QA.
 - Consider long-duration streaming soak tests, graphical layout/device QA and an optional exportable diagnostic snapshot after a suitable local runtime is available.
+
+## 2026-11-02 Run 86 — Pendulum Array, terrain corner conflict reports and 64-shift soak (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added daily_games/KROLL_Pendulum_Array/, a three-chamber pendulum calibration game using the small-angle approximation T ≈ 2π√(L/g), g = 9.81 m/s². Players tune length in 0.05 m steps and compare a cyan oscillator with an amber reference over four cycles.
+- Includes keyboard, mouse and touch controls, campaign scoring and restart. Each chamber awards 100 points at most once; resetting a completed chamber cannot farm duplicate score.
+- Registered the standalone project and repository-root Test Hub entry.
+
+### Existing system
+- Added systems/SurfaceTerrainCornerConflictResolver.gd. The transition collider manager reports each perpendicular corner conflict with patch Stable ID, corner orientation, edge keys and explicit step_fallback policy.
+- The conservative collision fallback remains active; this release does not create unverified corner ramp geometry.
+- Extended async streaming regression from 34 to 64 sequential shifts. Tests check monotonic request IDs, terminal diagnostics, nine-chunk ownership consistency, stable identity of overlapping roots, WeakRef release of departed roots and the bounded 32-record history.
+- The soak test now derives entering/leaving counts from actual old/new chunk ID sets, covering shifts that cross one or two grid cells.
+
+### Exact validation and merge
+- Feature PR [#209](https://github.com/qaqp980520-prog/2126-Survival/pull/209) merged from exact candidate HEAD 0d89d6a0ea082b1b44422e28f53d42d7d74862e9; merge commit 5d36e40dbb1318d513838e13bf190c1d27fce1b4.
+- Exact-head Godot 4.3 [Run #1011](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41393008243) completed successfully: 384/384 workflow steps, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- The earlier Run #1010 failed because its test assumed every window shift entered exactly three chunks. The corrected test calculates the actual set difference; no production streamer change was needed to mask the fixture error.
+- World-save schema remains version 1. Local GUI/GPU/iPhone QA remains untested.
+
+## 2026-11-02 Run 87 — Habitat Photographer and terrain corner diagnostics panel (feature merged / exact-head CI passed)
+
+### New Godot 4 mini-game
+- Added daily_games/KROLL_Habitat_Photographer/, a deterministic field-photography game with Reed Marsh, Canopy Edge and Dune Shelf habitats.
+- Players track three distinct procedural animal silhouettes, read each habitat's field brief, calibrate focus/zoom/exposure from a neutral camera profile, then capture when the subject is centered and unobscured.
+- Each habitat awards 100 points once. Completed intermediate habitats cannot be reset to farm score; after the third photo the reset control restarts the full expedition.
+- Supports keyboard, mouse and touch. Standalone and root Test Hub paths resolve the rules module correctly.
+
+### Existing system
+- MineralChunkController exposes a defensive deep copy of blocked terrain-corner reports.
+- SurfaceWorld binds its live controller as the F3 diagnostics panel's corner-report provider. The panel displays affected Stable ID, corner orientation, edge keys and the safe step_fallback policy; empty and unavailable states are explicit.
+- Added controller nested-copy isolation, panel report/empty/unbound states, and production SurfaceWorld provider-binding regressions. No corner ramp collider or world-save schema change was introduced.
+
+### Exact validation and merge
+- Feature PR [#210](https://github.com/qaqp980520-prog/2126-Survival/pull/210) merged from exact candidate HEAD a4a20eb910a5e2f50efb0a5a9a44ef328c02a005; merge commit ae27c0e4e1454ad91b403d22f4b9d0181e67019b.
+- Exact-head Godot 4.3 [Run #1026](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41406639640) completed successfully: 389/389 workflow steps, zero failures, zero skipped; checkout cleanup, container shutdown and job completion succeeded.
+- Superseded Run #1025 exposed an over-broad smoke assertion: the completed third habitat intentionally allows a full-campaign restart, while completed intermediate habitats remain locked against score farming. The smoke test was corrected and the exact-head Run #1026 passed.
+- World-save schema remains version 1. Local GUI/renderer, GPU and iPhone hardware QA remain untested.
