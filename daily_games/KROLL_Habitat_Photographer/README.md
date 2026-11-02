@@ -12,7 +12,7 @@ The animal follows a deterministic triangular patrol path. The central viewfinde
 - W / S: zoom in / out
 - A / D: exposure down / up
 - Space / Enter: shutter
-- R: reset an uncleared field station
+- R: reset an uncleared field station; after the third photo, restart the whole expedition
 - N: advance after a successful photo
 - On-screen buttons: all settings and actions are available by mouse and touch
 
