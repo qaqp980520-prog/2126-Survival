@@ -115,7 +115,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         "ok": true,
         "active_count": _managed_edges.size(),
         "blocked_count": blocked_edges.size(),
-        "blocked_edge_keys": blocked_edges.keys(),
+        "blocked_edge_keys": corner_resolution.get("blocked_edge_keys", blocked_edges.keys()),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true)
     }
 
