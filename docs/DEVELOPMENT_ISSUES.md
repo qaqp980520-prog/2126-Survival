@@ -1263,3 +1263,28 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Exact-head Godot 4.3 [Run #1001](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41383134233): 380 successful workflow records, zero failures/skips, successful checkout cleanup, container shutdown and job completion.
 - World-save schema remains version 1; diagnostic history is transient and not serialized.
 - Local GUI/rendering, GPU performance and iPhone hardware QA remain untested. The debug overlay has no touch-only F3 replacement, persistent log or export.
+
+## Run 86 — 64-shift streaming soak and terrain corner reports (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Perpendicular terrain junctions | Two adjacent transition edges can meet at a patch corner; a ramp must not be emitted twice or overlap with another corner transition. | Added deterministic corner-conflict reports with Stable ID, orientation, edge keys and explicit step_fallback. Geometry remains conservative until a separately tested corner-cap design exists. |
+| Long-window streaming test | A fixed expectation of three entering chunks failed when a shift crossed two cells. | Test now derives entering/leaving counts from old/new ID sets. The production ownership invariant remains nine chunks and is checked after each of 64 shifts. |
+
+### Run 86 validation and merge
+- KROLL Pendulum Array M0.2 and the corner resolver/64-shift soak were merged in PR [#209](https://github.com/qaqp980520-prog/2126-Survival/pull/209), merge commit 5d36e40dbb1318d513838e13bf190c1d27fce1b4.
+- Exact-head Godot 4.3 [Run #1011](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41393008243) passed 384/384 workflow steps, zero failures/skips, including cleanup and container shutdown.
+- World-save schema remains version 1; local GUI/GPU/iPhone QA remains untested.
+
+## Run 87 — Habitat Photographer and corner diagnostics provider (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Camera calibration smoke | The final completed habitat intentionally uses reset to restart the expedition, but the smoke test expected reset rejection after every capture. | Test now rejects reset only for completed intermediate habitats, then verifies the final campaign restart clears score and returns to Reed Marsh. |
+| Corner report ownership | A diagnostics UI must not expose mutable manager-owned nested arrays. | Controller returns defensive deep copies; panel consumes the live SurfaceWorld provider and explicitly handles empty/unavailable states. |
+
+### Run 87 validation and merge
+- KROLL Habitat Photographer M0.1 and the live corner diagnostics panel integration were merged in PR [#210](https://github.com/qaqp980520-prog/2126-Survival/pull/210), merge commit ae27c0e4e1454ad91b403d22f4b9d0181e67019b.
+- Exact-head Godot 4.3 [Run #1026](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41406639640) passed 389/389 workflow steps, zero failures/skips, including root Test Hub smoke, production SurfaceWorld binding, nested game import/rules/runtime and cleanup.
+- The failed superseded Run #1025 is retained as failure evidence; its incorrect final-stage reset assertion was fixed before Run #1026.
+- World-save schema remains version 1; local GUI/GPU/iPhone QA remains untested.
