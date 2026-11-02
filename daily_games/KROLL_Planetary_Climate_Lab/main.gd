@@ -300,12 +300,13 @@ func _refresh() -> void:
 	var definition: Dictionary = _rules.call("get_planet_definition", index)
 	if definition.is_empty():
 		return
+	var solar_flux: float = float(definition["solar_flux"])
 	var minimum: float = float(definition["target_min_k"])
 	var maximum: float = float(definition["target_max_k"])
 	var temperature: float = float(_state.get("equilibrium_temp_k", 0.0))
 	var status: String = str(_state.get("status", ""))
 	_planet_label.text = "PLANET %d / %d · %s" % [index + 1, get_planet_count(), str(definition["title"])]
-	_target_label.text = "TARGET BAND · %.1f–%.1f K" % [minimum, maximum]
+	_target_label.text = "STAR FLUX · %.0f W/m²   TARGET BAND · %.1f–%.1f K" % [solar_flux, minimum, maximum]
 	_temperature_label.text = "EQUILIBRIUM · %.1f K" % temperature
 	_temperature_bar.value = clampf(temperature, _temperature_bar.min_value, _temperature_bar.max_value)
 	_albedo_slider.set_value_no_signal(float(_state.get("albedo", 0.05)))
