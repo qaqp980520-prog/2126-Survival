@@ -38,7 +38,7 @@ func _run() -> void:
 	_expect(panel.visible, "panel opens")
 	_expect(live_text.contains("ACTIVE #%d" % request_id), "panel reports active request ID")
 	_expect(live_text.contains("staging"), "panel reports staging phase")
-	_expect(live_text.contains("stage 1/3"), "panel reports staged versus desired roots")
+	_expect(live_text.contains("stage 1/9"), "panel reports staged versus desired roots")
 	_expect(director.call("cancel_async_sync_request", request_id), "explicit cancellation is accepted")
 	var terminal: Dictionary = {}
 	for _frame in range(120):
@@ -47,8 +47,8 @@ func _run() -> void:
 			break
 		await process_frame
 	_expect(bool(terminal.get("terminal", false)), "cancelled request reaches terminal state")
-	panel.refresh_now()
-	var cancelled_text: String = panel.get_rendered_text()
+	panel.call("refresh_now")
+	var cancelled_text: String = str(panel.call("get_rendered_text"))
 	_expect(cancelled_text.contains("cancelled"), "panel displays terminal cancellation")
 	_expect(cancelled_text.contains("explicit_cancel"), "panel displays cancellation reason")
 	_expect(int(panel.call("get_visible_row_count")) <= 6, "visible history is bounded")
@@ -56,8 +56,8 @@ func _run() -> void:
 	_expect(not panel.visible, "panel hides")
 	_expect(panel.call("toggle_open"), "panel toggle reopens")
 	panel.call("bind_director", null)
-	panel.refresh_now()
-	_expect(panel.get_rendered_text().contains("UNAVAILABLE"), "unbound director is handled")
+	panel.call("refresh_now")
+	_expect(str(panel.call("get_rendered_text")).contains("UNAVAILABLE"), "unbound director is handled")
 	panel.queue_free()
 	director.queue_free()
 	controller.queue_free()
