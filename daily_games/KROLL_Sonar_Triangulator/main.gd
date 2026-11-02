@@ -12,6 +12,7 @@ var _submit_button: Button
 var _next_button: Button
 var _restart_button: Button
 var _last_message: String = ""
+var _compact_layout: bool = false
 
 func _ready() -> void:
     var attached_script: Script = get_script() as Script
@@ -31,6 +32,8 @@ func _ready() -> void:
     _refresh_ui()
 
 func _build_ui() -> void:
+    var layout_profile: Dictionary = get_layout_profile(get_viewport_rect().size.x)
+    _compact_layout = bool(layout_profile.get("compact", false))
     var background := ColorRect.new()
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.color = Color("#061521")
@@ -57,13 +60,13 @@ func _build_ui() -> void:
     var title := Label.new()
     title.text = "KROLL // SONAR TRIANGULATOR"
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 28)
+    title.add_theme_font_size_override("font_size", int(layout_profile["title_font_size"]))
     title.add_theme_color_override("font_color", Color("#6bdfff"))
     column.add_child(title)
 
     _mission_label = Label.new()
     _mission_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _mission_label.add_theme_font_size_override("font_size", 18)
+    _mission_label.add_theme_font_size_override("font_size", int(layout_profile["mission_font_size"]))
     _mission_label.add_theme_color_override("font_color", Color("#f0c879"))
     column.add_child(_mission_label)
 
@@ -85,9 +88,9 @@ func _build_ui() -> void:
     for sensor_index in range(_rules.get_sensor_count()):
         var button := Button.new()
         button.name = "Sensor%d" % sensor_index
-        button.custom_minimum_size = Vector2(0.0, 62.0)
+        button.custom_minimum_size = Vector2(0.0, float(layout_profile["sensor_height"]))
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.add_theme_font_size_override("font_size", 13)
+        button.add_theme_font_size_override("font_size", int(layout_profile["sensor_font_size"]))
         button.pressed.connect(scan_sensor.bind(sensor_index))
         sensor_row.add_child(button)
         _sensor_buttons.append(button)
@@ -115,31 +118,57 @@ func _build_ui() -> void:
             var button := Button.new()
             button.name = "Cell_%d_%d" % [x, y]
             button.text = "·"
-            button.custom_minimum_size = Vector2(44.0, 42.0)
-            button.add_theme_font_size_override("font_size", 18)
+            button.custom_minimum_size = Vector2(float(layout_profile["cell_size"]), float(layout_profile["cell_size"]))
+            button.add_theme_font_size_override("font_size", int(layout_profile["cell_font_size"]))
             button.pressed.connect(select_cell.bind(x, y))
             board.add_child(button)
             _cell_buttons[cell] = button
 
-    var controls := HBoxContainer.new()
-    controls.add_theme_constant_override("separation", 10)
-    column.add_child(controls)
-    _submit_button = Button.new()
-    _submit_button.text = "LOCK TARGET  ·  ENTER"
-    _submit_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    _submit_button.custom_minimum_size = Vector2(0.0, 48.0)
-    _submit_button.pressed.connect(submit_target)
-    controls.add_child(_submit_button)
-    _next_button = Button.new()
-    _next_button.text = "NEXT  ·  N"
-    _next_button.custom_minimum_size = Vector2(110.0, 48.0)
-    _next_button.pressed.connect(advance_mission)
-    controls.add_child(_next_button)
-    _restart_button = Button.new()
-    _restart_button.text = "RESTART  ·  R"
-    _restart_button.custom_minimum_size = Vector2(120.0, 48.0)
-    _restart_button.pressed.connect(restart_campaign)
-    controls.add_child(_restart_button)
+    if _compact_layout:
+        var controls := VBoxContainer.new()
+        controls.add_theme_constant_override("separation", 8)
+        column.add_child(controls)
+        _submit_button = Button.new()
+        _submit_button.text = "LOCK TARGET  ·  ENTER"
+        _submit_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        _submit_button.custom_minimum_size = Vector2(0.0, 44.0)
+        _submit_button.pressed.connect(submit_target)
+        controls.add_child(_submit_button)
+        var navigation_row := HBoxContainer.new()
+        navigation_row.add_theme_constant_override("separation", 8)
+        controls.add_child(navigation_row)
+        _next_button = Button.new()
+        _next_button.text = "NEXT  ·  N"
+        _next_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        _next_button.custom_minimum_size = Vector2(0.0, 42.0)
+        _next_button.pressed.connect(advance_mission)
+        navigation_row.add_child(_next_button)
+        _restart_button = Button.new()
+        _restart_button.text = "RESTART  ·  R"
+        _restart_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        _restart_button.custom_minimum_size = Vector2(0.0, 42.0)
+        _restart_button.pressed.connect(restart_campaign)
+        navigation_row.add_child(_restart_button)
+    else:
+        var controls := HBoxContainer.new()
+        controls.add_theme_constant_override("separation", 10)
+        column.add_child(controls)
+        _submit_button = Button.new()
+        _submit_button.text = "LOCK TARGET  ·  ENTER"
+        _submit_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        _submit_button.custom_minimum_size = Vector2(0.0, 48.0)
+        _submit_button.pressed.connect(submit_target)
+        controls.add_child(_submit_button)
+        _next_button = Button.new()
+        _next_button.text = "NEXT  ·  N"
+        _next_button.custom_minimum_size = Vector2(110.0, 48.0)
+        _next_button.pressed.connect(advance_mission)
+        controls.add_child(_next_button)
+        _restart_button = Button.new()
+        _restart_button.text = "RESTART  ·  R"
+        _restart_button.custom_minimum_size = Vector2(120.0, 48.0)
+        _restart_button.pressed.connect(restart_campaign)
+        controls.add_child(_restart_button)
 
     _status_label = Label.new()
     _status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -182,9 +211,9 @@ func _refresh_ui() -> void:
         var sensor_name: String = ["A", "B", "C", "D"][sensor_index]
         var button: Button = _sensor_buttons[sensor_index]
         if scans.has(sensor_index):
-            button.text = "%s  ·  RANGE %d" % [sensor_name, int(scans[sensor_index])]
+            button.text = "%s\nRANGE %d" % [sensor_name, int(scans[sensor_index])] if _compact_layout else "%s  ·  RANGE %d" % [sensor_name, int(scans[sensor_index])]
         else:
-            button.text = "%s  ·  PING %s" % [sensor_name, ["1", "2", "3", "4"][sensor_index]]
+            button.text = "%s\nPING" % sensor_name if _compact_layout else "%s  ·  PING %s" % [sensor_name, ["1", "2", "3", "4"][sensor_index]]
         button.disabled = status != "playing" or scans.has(sensor_index)
 
     for cell_value in _cell_buttons.keys():
@@ -296,6 +325,25 @@ func restart_campaign() -> bool:
     _last_message = "NEW SURVEY CAMPAIGN INITIALIZED."
     _refresh_ui()
     return true
+
+func get_layout_profile(viewport_width: float) -> Dictionary:
+    var compact: bool = viewport_width < 520.0
+    var outer_padding: float = 36.0
+    var panel_padding: float = 16.0
+    var grid_gaps: float = 28.0
+    var cell_size: float = clampf((viewport_width - outer_padding - panel_padding - grid_gaps) / 8.0, 28.0, 52.0)
+    var board_total_width: float = cell_size * 8.0 + grid_gaps + panel_padding + outer_padding
+    return {
+        "compact": compact,
+        "cell_size": cell_size,
+        "board_total_width": board_total_width,
+        "title_font_size": 20 if compact else 28,
+        "mission_font_size": 15 if compact else 18,
+        "sensor_font_size": 11 if compact else 13,
+        "sensor_height": 54 if compact else 62,
+        "cell_font_size": 13 if compact else 18,
+        "controls_layout": "stacked" if compact else "horizontal"
+    }
 
 func get_title_text() -> String:
     return "KROLL // SONAR TRIANGULATOR"

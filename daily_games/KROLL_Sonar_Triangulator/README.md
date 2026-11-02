@@ -21,7 +21,7 @@ A touch-friendly acoustic search puzzle for Godot 4.3.
 - N: advance after a successful survey.
 - R: restart the whole campaign.
 
-Every action also has an on-screen button, so the complete campaign is playable with touch controls.
+Every action also has an on-screen button, so the complete campaign is playable with touch controls. The board and action rows use a compact profile below 520px; 320px and 375px viewport widths are covered by the runtime smoke test.
 
 ## Scoring
 

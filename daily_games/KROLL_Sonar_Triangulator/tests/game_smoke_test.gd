@@ -14,6 +14,11 @@ func _run() -> void:
     _expect(game.call("get_mission_count") == 3, "game provides three survey missions")
     _expect(game.call("get_sensor_button_count") == 4, "game builds four sensor ping buttons")
     _expect(game.call("get_cell_button_count") == 64, "game builds the 8x8 target grid")
+    var phone_profile: Dictionary = game.call("get_layout_profile", 375.0)
+    _expect(str(phone_profile.get("controls_layout", "")) == "stacked", "375px phone profile stacks the action controls")
+    _expect(float(phone_profile.get("board_total_width", 999.0)) <= 375.0, "375px phone profile keeps the full 8x8 board inside the viewport")
+    var compact_profile: Dictionary = game.call("get_layout_profile", 320.0)
+    _expect(float(compact_profile.get("board_total_width", 999.0)) <= 320.0, "320px compact profile keeps the full 8x8 board inside the viewport")
     _expect(str(game.call("get_current_state").get("status", "")) == "playing", "game starts in the playing state")
     for sensor_index in range(3):
         _expect(bool(game.call("scan_sensor", sensor_index)), "runtime accepts sensor %d" % sensor_index)
