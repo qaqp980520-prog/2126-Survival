@@ -1,5 +1,4 @@
 extends Control
-const RulesScript = preload("res://rules.gd")
 const GRID_SIZE: int = 7
 const MOVE_ACTIONS: Array[String] = ["up","left","wait","right","down"]
 const MOVE_LABELS: Array[String] = ["↑  UP","←  LEFT","WAIT","RIGHT  →","DOWN  ↓"]
@@ -13,7 +12,19 @@ var _record_button: Button
 var _restart_button: Button
 var _next_button: Button
 func _ready() -> void:
-	_rules = RulesScript.new()
+	var attached_script: Script = get_script() as Script
+	if attached_script == null:
+		push_error("Chrono Vault main script is unavailable.")
+		set_process(false)
+		return
+	var script_directory: String = attached_script.resource_path.get_base_dir()
+	var rules_path: String = script_directory.path_join("rules.gd")
+	var rules_script: Script = load(rules_path) as Script
+	if rules_script == null:
+		push_error("Chrono Vault rules script could not be loaded: " + rules_path)
+		set_process(false)
+		return
+	_rules = rules_script.new()
 	_state = _rules.create_state(0)
 	_build_ui()
 	_refresh_ui()
