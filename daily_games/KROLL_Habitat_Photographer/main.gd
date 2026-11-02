@@ -275,7 +275,10 @@ func capture_photo() -> bool:
 	return bool(_result.get("passed", false))
 
 func reset_stage() -> bool:
-	if _stage_awarded or _campaign_complete:
+	if _campaign_complete:
+		reset_campaign()
+		return true
+	if _stage_awarded:
 		return false
 	_elapsed = 0.0
 	_result = {}
