@@ -207,7 +207,8 @@ func _refresh_ui() -> void:
 	_control_buttons["clear"].disabled = status != "playing" or remaining[_selected_drone] <= 0
 	_control_buttons["step"].disabled = status != "playing" or _rules.get_remaining_commands(_state) <= 0
 	_control_buttons["run"].disabled = status != "playing" or _rules.get_remaining_commands(_state) <= 0
-	_control_buttons["restart"].disabled = status != "playing"
+	_control_buttons["restart"].text = "RESTART CAMPAIGN  ·  R" if status == "campaign_complete" else "RESTART MISSION  ·  R"
+	_control_buttons["restart"].disabled = status == "passed"
 	_control_buttons["next"].disabled = status != "passed"
 	queue_redraw()
 
@@ -230,7 +231,10 @@ func _on_run_pressed() -> void:
 	run_all()
 
 func _on_restart_pressed() -> void:
-	restart_level()
+	if str(_state.get("status", "")) == "campaign_complete":
+		restart_campaign()
+	else:
+		restart_level()
 
 func _on_next_pressed() -> void:
 	advance_level()
@@ -328,6 +332,9 @@ func get_action_button_count() -> int:
 
 func get_control_button_count() -> int:
 	return _control_buttons.size()
+
+func get_restart_button_text() -> String:
+	return str(_control_buttons["restart"].text)
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
