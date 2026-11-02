@@ -1321,3 +1321,20 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Refreshed-base exact-head Godot 4.3 [Run #1041](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41436668952) passed 399/399 workflow steps, zero failures/skips, including all Run 89 diagnostics-export and Titration Bench gates plus cleanup/container shutdown/job completion.
 - World-save schema remains version 1; diagnostics snapshot remains transient under `user://`.
 - Local GUI/renderer, GPU and iPhone hardware QA remain untested.
+
+
+## Run 90 — Planetary Climate Lab and terrain duplicate-side guard (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Test Hub launch count | Adding Planetary Climate Lab increased the launch-button total from 34 to 35; an earlier assertion still expected 34. | Corrected the numeric expectation to 35 in commit `740156180380671dfcd9cf8184f39babbcdca28a`. The root Test Hub smoke passed on the final candidate. |
+| Static gate title matching | The workflow searched for the literal `KROLL Planetary Climate Lab`, which was absent from the smoke test source even though the game scene and root assertions passed. | Changed the gate to search for the declared `PLANETARY_CLIMATE_LAB_SCENE` constant in commit `88b5ea6f7c9f7965d797be28dc01c89cd9ab700d`; exact-head Run #1048 passed. |
+| Malformed terrain edge candidates | Empty keys, non-dictionary descriptors, invalid patch IDs/sides and duplicate claims on one patch side could reach topology resolution. | Resolver now rejects malformed inputs before ramp staging and reports deterministic duplicate-side diagnostics. Existing perpendicular corner conflicts retain the safe step fallback. |
+| Corner-cap geometry | A complete shared corner-cap mesh/collider is not yet implemented. | Keep the conservative step fallback; do not introduce overlapping corner colliders until a separately tested geometry implementation exists. |
+| Climate model fidelity | The mini-game uses a global equilibrium energy-balance approximation. | Clearly label it educational/idealized; it does not model atmospheric circulation, clouds, ocean heat storage, seasonal geometry or feedbacks. |
+
+### Run 90 validation and merge
+- Feature PR [#216](https://github.com/qaqp980520-prog/2126-Survival/pull/216) merged as `b351e9e1d0e0b1058ea54af1d789fc8270eeb02e` from exact candidate HEAD `88b5ea6f7c9f7965d797be28dc01c89cd9ab700d`.
+- Exact-head Godot 4.3 [Run #1048](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41442111878) passed 403/403 workflow step records, zero failures/skips, including root Test Hub smoke, terrain manager regression, diagnostics panel integration, Run 90 static/import/rules/runtime gates, checkout cleanup, container shutdown and job completion.
+- The earlier failed Run #1047 is retained as historical evidence; it failed at the static gate only. The corrected exact head passed Run #1048.
+- World-save schema remains version 1. Local GUI/renderer, GPU and iPhone hardware QA remain untested.
