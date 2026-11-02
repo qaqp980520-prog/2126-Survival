@@ -33,6 +33,7 @@ const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographer/main_root.tscn"
+const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -67,6 +68,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(FAULTLINE_CARTOGRAPHER_SCENE), "Faultline Cartographer game scene exists")
 	_expect(ResourceLoader.exists(PENDULUM_ARRAY_SCENE), "Pendulum Array game scene exists")
 	_expect(ResourceLoader.exists(HABITAT_PHOTOGRAPHER_SCENE), "Habitat Photographer game scene exists")
+	_expect(ResourceLoader.exists(SOLAR_SAIL_NAVIGATOR_SCENE), "Solar Sail Navigator game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -77,7 +79,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 32, "hub exposes thirty-two world, prototype and game launch buttons")
+	_expect(buttons.size() == 33, "hub exposes thirty-three world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -418,6 +420,19 @@ func _run() -> void:
 		var habitat_state: Dictionary = habitat_game.call("get_current_state")
 		_expect(str(habitat_state.get("stage_id", "")) == "reed_marsh", "root-loaded Habitat Photographer starts Reed Marsh")
 		habitat_game.queue_free()
+		await process_frame
+
+
+	var solar_sail_scene := load(SOLAR_SAIL_NAVIGATOR_SCENE) as PackedScene
+	_expect(solar_sail_scene != null, "root hub can load the Solar Sail Navigator scene")
+	if solar_sail_scene != null:
+		var solar_sail_game := solar_sail_scene.instantiate()
+		root.add_child(solar_sail_game)
+		await process_frame
+		_expect(solar_sail_game.call("get_title_text") == "KROLL // SOLAR SAIL NAVIGATOR", "root-loaded Solar Sail Navigator displays its title")
+		_expect(solar_sail_game.call("get_mission_count") == 3, "root-loaded Solar Sail Navigator builds three relay missions")
+		_expect(solar_sail_game.call("get_control_button_count") == 7, "root-loaded Solar Sail Navigator builds seven flight controls")
+		solar_sail_game.queue_free()
 		await process_frame
 
 	hub.queue_free()

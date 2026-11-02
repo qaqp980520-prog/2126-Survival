@@ -3233,3 +3233,51 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Habitat Photographer runtime smoke test passed."
+
+
+      - name: Verify Run 88 Solar Sail and diagnostic snapshot export inputs
+        shell: bash
+        run: |
+          set -e
+          grep -q 'build_export_snapshot' systems/MineralGridStreamingDiagnosticsPanel.gd
+          grep -q 'save_snapshot_to_file' systems/MineralGridStreamingDiagnosticsPanel.gd
+          grep -q 'user://' systems/MineralGridStreamingDiagnosticsPanel.gd
+          test -f tests/mineral_grid_streaming_diagnostics_panel_test.gd
+          test -f daily_games/KROLL_Solar_Sail_Navigator/project.godot
+          test -f daily_games/KROLL_Solar_Sail_Navigator/main.tscn
+          test -f daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn
+          test -f daily_games/KROLL_Solar_Sail_Navigator/main.gd
+          test -f daily_games/KROLL_Solar_Sail_Navigator/rules.gd
+          test -f daily_games/KROLL_Solar_Sail_Navigator/tests/flight_plans.gd
+          test -f daily_games/KROLL_Solar_Sail_Navigator/tests/rules_test.gd
+          test -f daily_games/KROLL_Solar_Sail_Navigator/tests/game_smoke_test.gd
+          grep -q 'SOLAR_SAIL_NAVIGATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'KROLL Solar Sail Navigator' tests/survival_test_hub_smoke_test.gd
+
+      - name: Run streaming diagnostics snapshot export regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 75s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_panel_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming diagnostics panel tests passed."
+
+      - name: Import and parse KROLL Solar Sail Navigator
+        run: godot --headless --path daily_games/KROLL_Solar_Sail_Navigator --editor --quit
+      - name: Run KROLL Solar Sail Navigator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Solar_Sail_Navigator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Solar Sail Navigator rules tests passed."
+      - name: Run KROLL Solar Sail Navigator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Solar_Sail_Navigator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Solar Sail Navigator runtime smoke test passed."
