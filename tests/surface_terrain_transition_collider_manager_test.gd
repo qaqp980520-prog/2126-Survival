@@ -271,6 +271,11 @@ func _test_perpendicular_conflict_falls_back_to_step() -> void:
     var report: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
     _expect(bool(report.get("ok", false)), "manager safely handles a perpendicular corner conflict")
     _expect(int(report.get("active_count", -1)) == 0 and int(report.get("blocked_count", -1)) == 2, "both crossing ramps are rejected instead of overlapping at a corner")
+    var blocked_keys: Array = report.get("blocked_edge_keys", [])
+    var sorted_blocked_keys: Array = blocked_keys.duplicate()
+    sorted_blocked_keys.sort()
+    _expect(blocked_keys.size() == 2, "manager exposes both blocked edge keys")
+    _expect(blocked_keys == sorted_blocked_keys, "manager forwards blocked edge keys in deterministic sorted order")
     var corner_reports: Array = report.get("blocked_corner_reports", [])
     _expect(corner_reports.size() == 1, "one perpendicular conflict produces one explicit corner report")
     if corner_reports.size() == 1:
