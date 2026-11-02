@@ -1233,3 +1233,15 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 2. Improve streaming diagnostics with request IDs, phase, cancellation reason and rollback outcome.
 3. Preserve the distinction between destroyed-controller incomplete rollback and live-detached-controller complete rollback.
 4. Continue corner-junction terrain work and local GUI/GPU/iPhone QA when a suitable runtime/device is available.
+
+
+## Run 84 closeout — Crew Ledger and async streaming diagnostics (2026-11-02)
+
+- **New game:** `daily_games/KROLL_Crew_Ledger/` adds three unique four-crew/four-station logic cases, standalone scenes/project, field clues, keyboard/mouse/touch input, scoring, retry, campaign progression, rules tests, runtime smoke and Survival Test Hub registration. Exhaustive permutation tests verify exactly one valid assignment per case.
+- **Streaming diagnostics:** `MineralGridStreamingDirector` now retains at most 32 transient request records with request ID, phase, monotonic timing, desired/staged/new-load/stale-unload counts, rollback outcome and precise cancellation/failure reason. Diagnostics are not written to world saves.
+- **Stress and lifecycle regressions:** 34 sequential 3×3 window shifts, bounded-history pruning, overlapping-request attribution, explicit cancellation, controller destruction during staging, live-controller detachment during partial commit, registration rollback and stale-unload rollback.
+- **Test-fixture correction:** the duplicate-station case now uses `[0, 0, 1, 2]`, assigning every crew member while intentionally duplicating a station; this reaches the intended duplicate validation branch.
+- **Feature PR #205:** exact candidate `540d252fb664be5cdebcadd4a4ce9b5109d0680c`; merged as `8814e1e445f43262d3bf09da394cdda9ecf9ace9`.
+- **Validation:** exact-head Godot 4.3 [Run #978](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41361821633) passed all 375 validate-job steps, with zero failures/skips and successful cleanup/container shutdown/job completion.
+- **Remaining limitations:** no persistent diagnostics UI/log; stress coverage is deterministic 34-shift regression rather than long-duration device soak; local GUI/rendering, GPU and iPhone QA remain untested. World-save schema remains version 1.
+

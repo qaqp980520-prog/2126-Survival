@@ -1605,3 +1605,16 @@
 - Local Godot executable is unavailable; editor GUI, renderer appearance, GPU performance and iPhone hardware QA were not performed. Cloud headless CI is not device QA.
 - A controller destroyed after owning active chunks cannot have that former window restored; the director explicitly reports incomplete rollback for this case. Live detached controllers are covered by full rollback and reattachment tests.
 - Continue with request diagnostics/stress tests, longer multi-window traversal, and local GUI/GPU/iPhone QA when available.
+
+
+## 2026-11-02 Run 84 — Crew Ledger and bounded async streaming diagnostics
+
+- Added standalone Godot 4.3+ mini-game `daily_games/KROLL_Crew_Ledger/`: three four-crew/four-station deduction cases, keyboard/mouse/touch input, scoring, retry and campaign progression. The rules tests enumerate all 24 one-to-one assignments per case and assert exactly one solution. The root Survival Test Hub now exposes 29 launch entries and instantiates the Crew Ledger scene in its smoke test.
+- Extended `systems/MineralGridStreamingDirector.gd` with bounded in-memory async request diagnostics. Each record carries request ID, phase, monotonic start/finish/duration, desired/staged/new-load/stale-unload counts, rollback outcome and cancellation/failure reason. History is capped at 32 records and is not serialized.
+- Added 34 sequential 3×3 window shifts plus bounded-history pruning, overlapping-request attribution, explicit cancellation, controller destruction during staging, live-controller detachment during partial commit, registration rollback and stale-unload rollback regressions.
+- Corrected the duplicate-station test fixture to assign all four crew as `[0, 0, 1, 2]`; the earlier fixture correctly returned incomplete assignment before duplicate validation.
+- Feature PR [#205](https://github.com/qaqp980520-prog/2126-Survival/pull/205) merged from exact candidate HEAD `540d252fb664be5cdebcadd4a4ce9b5109d0680c`; merge commit `8814e1e445f43262d3bf09da394cdda9ecf9ace9`.
+- Exact-head Godot 4.3 [Run #978](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41361821633) completed successfully: validate job 375/375 steps, zero failures and zero skips; checkout cleanup, container shutdown and job completion succeeded.
+- World-save schema remains version 1; diagnostic records and async request state are transient and are not serialized.
+- Local Godot GUI, GPU performance and iPhone hardware QA remain untested because no local Godot executable/device runtime was available.
+
