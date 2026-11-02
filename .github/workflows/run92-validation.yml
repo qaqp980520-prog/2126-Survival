@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Print engine version and verify Run 92 inputs
+        shell: bash
         run: |
           set -euo pipefail
           godot --version
