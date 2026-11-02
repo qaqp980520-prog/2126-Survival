@@ -201,7 +201,7 @@ func _refresh_ui() -> void:
             button.add_theme_color_override("font_color", Color("#ffe18a"))
         elif candidates.has(cell):
             button.text = "◇"
-            button.disabled = status != "playing" or scans.size() < _rules.MINIMUM_SCANS
+            button.disabled = status != "playing" or scans.size() < _rules.get_minimum_scan_count()
             button.add_theme_color_override("font_color", Color("#91e8c2"))
         elif excluded.has(cell):
             button.text = "×"
@@ -212,7 +212,7 @@ func _refresh_ui() -> void:
             button.disabled = true
             button.add_theme_color_override("font_color", Color("#496272"))
 
-    _submit_button.disabled = status != "playing" or scans.size() < _rules.MINIMUM_SCANS or selected == Vector2i(-1, -1)
+    _submit_button.disabled = status != "playing" or scans.size() < _rules.get_minimum_scan_count() or selected == Vector2i(-1, -1)
     _next_button.disabled = status != "passed"
     _restart_button.disabled = false
     if status == "passed":
@@ -223,7 +223,7 @@ func _refresh_ui() -> void:
         _status_label.text = "SURVEY LOST  ·  PRESS R TO RESTART THE CAMPAIGN"
     elif not _last_message.is_empty():
         _status_label.text = _last_message
-    elif scans.size() < _rules.MINIMUM_SCANS:
+    elif scans.size() < _rules.get_minimum_scan_count():
         _status_label.text = "PING AT LEAST THREE BUOYS TO BEGIN TRIANGULATION."
     elif candidates.size() > 1:
         _status_label.text = "AMBIGUOUS RETURN  ·  USE THE FOURTH BUOY OR ELIMINATE A FALSE CELL."
