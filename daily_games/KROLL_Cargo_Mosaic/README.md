@@ -15,7 +15,7 @@ Three authored bays are included: Dockside Matrix, Fracture Bay and Orbital Hold
 - Arrow keys: move the placement anchor.
 - Enter: place the selected module at the anchor.
 - Backspace: lift the most recently placed module.
-- R: reset the current bay.
+- R: reset the current bay; after campaign completion, R restarts from Dockside Matrix.
 - N: advance after a bay is solved.
 - Tap a signalled board cell to place; tap an occupied cell to lift its module.
 - On-screen buttons support mouse and touch.
