@@ -29,6 +29,7 @@ const MICROBE_SCOPE_SCENE := "res://daily_games/KROLL_Microbe_Scope/main_root.ts
 const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartographer/main_root.tscn"
 const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
+const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
 
 var status_label: Label
 
@@ -258,6 +259,12 @@ func _build_ui() -> void:
 		"KROLL Crew Ledger",
 		"閱讀四條線索，將四名船員唯一指派到四個艙站；三份案件、鍵盤與觸控操作。",
 		CREW_LEDGER_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Cargo Mosaic",
+		"旋轉四種四格貨物模組，將三座貨艙的十六個訊號格完整填滿；支援鍵盤、滑鼠與觸控。",
+		CARGO_MOSAIC_SCENE
 	)
 	_add_scene_button(
 		launch_list,
