@@ -354,7 +354,8 @@ func _test_corner_report_proxy_is_defensive() -> void:
 	var copied_edges: Array = reports[0].get("edge_keys", [])
 	copied_edges.append("tampered")
 	assert(str(manager.reports[0].get("corner", "")) == "north_east", "Mutating the returned report cannot change manager state")
-	assert((manager.reports[0].get("edge_keys", []) as Array).size() == 2, "Nested edge-key arrays are deep-copied")
+	var manager_edges: Array = manager.reports[0].get("edge_keys", [])
+	assert(manager_edges.size() == 2, "Nested edge-key arrays are deep-copied")
 	controller.queue_free()
 	await process_frame
 
