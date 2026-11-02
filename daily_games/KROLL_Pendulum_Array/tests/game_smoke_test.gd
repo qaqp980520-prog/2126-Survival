@@ -21,7 +21,7 @@ func _run() -> void:
 	var rules: RefCounted = RulesScript.new()
 	for stage_index in range(3):
 		var stage: Dictionary = rules.get_stage(stage_index)
-		game.call("set", "_length", float(stage["target_length"]))
+		game.set("_length", float(stage["target_length"]))
 		_expect(bool(game.call("run_test")), "chamber %d starts calibration" % stage_index)
 		game.call("finish_test_now")
 		var state: Dictionary = game.call("get_current_state")
