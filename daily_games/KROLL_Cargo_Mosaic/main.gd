@@ -6,6 +6,7 @@ const COLORS: Dictionary = {
 	"HOOK": Color(0.72, 0.56, 0.93), "CORE": Color(0.30, 0.78, 0.56)
 }
 const MARKS: Dictionary = {"ION":"I","FORK":"F","HOOK":"H","CORE":"C"}
+const PREVIEWS: Dictionary = {"ION":"■■■■","FORK":"■■■/·■·","HOOK":"■·/■·/■■","CORE":"■■/■■"}
 
 var level_index := 0
 var placements: Dictionary = {}
@@ -267,7 +268,7 @@ func _refresh_ui() -> void:
 	for piece_id in Rules.get_piece_ids():
 		var button: Button = piece_buttons[piece_id]
 		var placed: bool = placements.has(piece_id)
-		button.text = "%s  %s%s" % [MARKS[piece_id], Rules.get_piece_name(piece_id), " ✓" if placed else (" ◀" if selected_piece == piece_id else "")]
+		button.text = "%s  %s  %s%s" % [MARKS[piece_id], Rules.get_piece_name(piece_id), PREVIEWS[piece_id], " ✓" if placed else (" ◀" if selected_piece == piece_id else "")]
 		button.add_theme_color_override("font_color", Color(0.04, 0.07, 0.09) if placed else Color(0.84, 0.93, 1.0))
 		_style_button(button, COLORS[piece_id] if placed else Color(0.08, 0.15, 0.21), COLORS[piece_id])
 	selected_label.text = "SELECTED: %s · ROTATION %d° · ANCHOR %d,%d" % [
@@ -321,6 +322,9 @@ func get_current_state() -> Dictionary:
 
 func get_title_text() -> String:
 	return "KROLL // CARGO MOSAIC"
+
+func get_piece_preview_text(piece_id: String) -> String:
+	return str(PREVIEWS.get(piece_id, ""))
 
 func get_board_button_count() -> int:
 	return board_buttons.size()
