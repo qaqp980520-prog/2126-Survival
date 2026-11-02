@@ -31,6 +31,7 @@ const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartogr
 const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
+const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -63,6 +64,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(WIND_FARM_DISPATCH_SCENE), "Wind Farm Dispatch game scene exists")
 	_expect(ResourceLoader.exists(INERTIAL_DOCKING_SCENE), "Inertial Docking game scene exists")
 	_expect(ResourceLoader.exists(FAULTLINE_CARTOGRAPHER_SCENE), "Faultline Cartographer game scene exists")
+	_expect(ResourceLoader.exists(PENDULUM_ARRAY_SCENE), "Pendulum Array game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -73,7 +75,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 30, "hub exposes thirty world, prototype and game launch buttons")
+	_expect(buttons.size() == 31, "hub exposes thirty-one world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -96,6 +98,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Atmosphere Lab"), "hub labels the Atmosphere Lab game")
 	_expect(labels.has("KROLL Neon Climber"), "hub labels the Neon Climber game")
 	_expect(labels.has("KROLL Robotic Arm Operator"), "hub labels the Robotic Arm Operator game")
+	_expect(labels.has("KROLL Pendulum Array"), "hub labels the Pendulum Array game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene

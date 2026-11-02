@@ -3,6 +3,7 @@ extends SceneTree
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
+const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -12,6 +13,7 @@ func _run() -> void:
     await _test_single_shared_transition()
     await _test_all_cardinal_directions()
     await _test_perpendicular_conflict_falls_back_to_step()
+    _test_corner_resolver_all_orientations()
     if failures.is_empty():
         print("Surface terrain shared transition collider manager tests passed.")
         quit(0)
@@ -267,12 +269,81 @@ func _test_perpendicular_conflict_falls_back_to_step() -> void:
     var report: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches)
     _expect(bool(report.get("ok", false)), "manager safely handles a perpendicular corner conflict")
     _expect(int(report.get("active_count", -1)) == 0 and int(report.get("blocked_count", -1)) == 2, "both crossing ramps are rejected instead of overlapping at a corner")
+    var corner_reports: Array = report.get("blocked_corner_reports", [])
+    _expect(corner_reports.size() == 1, "one perpendicular conflict produces one explicit corner report")
+    if corner_reports.size() == 1:
+        _expect(str(corner_reports[0].get("stable_id", "")) == "surface/conflict/center", "corner report identifies the shared center patch")
+        _expect(str(corner_reports[0].get("corner", "")) == "south_east", "east/south ramps resolve to the south-east corner")
+        _expect(str(corner_reports[0].get("policy", "")) == "step_fallback", "blocked corner reports the conservative step fallback")
     var center_base: CollisionShape3D = center.get_node("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
     _expect(not center_base.disabled, "conflicted center patch retains its complete step collision")
     _expect(not bool(center.call("is_shared_transition_active", "east")) and not bool(center.call("is_shared_transition_active", "south")), "conflicted edges do not cut collision strips")
     holder.queue_free()
     await process_frame
     await process_frame
+
+
+func _test_corner_resolver_all_orientations() -> void:
+    var cases: Array[Dictionary] = [
+        {"first":"east","second":"north","corner":"north_east"},
+        {"first":"east","second":"south","corner":"south_east"},
+        {"first":"west","second":"north","corner":"north_west"},
+        {"first":"west","second":"south","corner":"south_west"}
+    ]
+    for case in cases:
+        var first_side: String = str(case["first"])
+        var second_side: String = str(case["second"])
+        var candidates := {
+            "edge_a": {
+                "first_id":"surface/corner/center",
+                "second_id":"surface/corner/a",
+                "first_side":first_side,
+                "second_side":_opposite_side(first_side)
+            },
+            "edge_b": {
+                "first_id":"surface/corner/center",
+                "second_id":"surface/corner/b",
+                "first_side":second_side,
+                "second_side":_opposite_side(second_side)
+            }
+        }
+        var result: Dictionary = CornerResolverScript.resolve(candidates)
+        _expect(bool(result.get("ok", false)), "%s/%s corner topology is accepted" % [first_side, second_side])
+        _expect(result.get("blocked_edges", {}).size() == 2, "%s/%s blocks both intersecting ramps" % [first_side, second_side])
+        var reports: Array = result.get("reports", [])
+        _expect(reports.size() == 1, "%s/%s produces exactly one corner report" % [first_side, second_side])
+        if reports.size() == 1:
+            _expect(str(reports[0].get("corner", "")) == str(case["corner"]), "%s/%s maps to %s" % [first_side, second_side, str(case["corner"])])
+
+    var three_edges := {
+        "east_edge":{"first_id":"center","second_id":"east","first_side":"east","second_side":"west"},
+        "north_edge":{"first_id":"center","second_id":"north","first_side":"north","second_side":"south"},
+        "south_edge":{"first_id":"center","second_id":"south","first_side":"south","second_side":"north"}
+    }
+    var three_result: Dictionary = CornerResolverScript.resolve(three_edges)
+    var three_reports: Array = three_result.get("reports", [])
+    _expect(bool(three_result.get("ok", false)) and three_result.get("blocked_edges", {}).size() == 3, "three perpendicular edge candidates are all conservatively blocked")
+    _expect(three_reports.size() == 2, "three-way topology reports both occupied corners")
+    if three_reports.size() == 2:
+        _expect(str(three_reports[0].get("corner", "")) == "north_east" and str(three_reports[1].get("corner", "")) == "south_east", "three-way corner reports have deterministic order")
+
+    var aligned := {
+        "east_edge":{"first_id":"center","second_id":"east","first_side":"east","second_side":"west"},
+        "west_edge":{"first_id":"center","second_id":"west","first_side":"west","second_side":"east"}
+    }
+    var aligned_result: Dictionary = CornerResolverScript.resolve(aligned)
+    _expect(bool(aligned_result.get("ok", false)) and aligned_result.get("blocked_edges", {}).is_empty() and aligned_result.get("reports", []).is_empty(), "parallel opposite edges do not create a corner conflict")
+
+    var malformed := {"bad_edge":{"first_id":"center","second_id":"east","first_side":"east"}}
+    _expect(not bool(CornerResolverScript.resolve(malformed).get("ok", true)), "incomplete edge candidate is rejected")
+
+func _opposite_side(side: String) -> String:
+    match side:
+        "east": return "west"
+        "west": return "east"
+        "north": return "south"
+        "south": return "north"
+        _: return ""
 
 func _ensure_visuals(patch: Node3D) -> void:
     if patch.get("_surface_mesh") == null:

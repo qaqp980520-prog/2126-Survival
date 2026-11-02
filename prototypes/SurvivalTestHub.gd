@@ -30,6 +30,7 @@ const FAULTLINE_CARTOGRAPHER_SCENE := "res://daily_games/KROLL_Faultline_Cartogr
 const PALEO_TRACK_LAB_SCENE := "res://daily_games/KROLL_Paleo_Track_Lab/main_root.tscn"
 const CREW_LEDGER_SCENE := "res://daily_games/KROLL_Crew_Ledger/main_root.tscn"
 const CARGO_MOSAIC_SCENE := "res://daily_games/KROLL_Cargo_Mosaic/main_root.tscn"
+const PENDULUM_ARRAY_SCENE := "res://daily_games/KROLL_Pendulum_Array/main_root.tscn"
 
 var status_label: Label
 
@@ -265,6 +266,12 @@ func _build_ui() -> void:
 		"KROLL Cargo Mosaic",
 		"旋轉四種四格貨物模組，將三座貨艙的十六個訊號格完整填滿；支援鍵盤、滑鼠與觸控。",
 		CARGO_MOSAIC_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Pendulum Array",
+		"調整擺長並比對四週期相位漂移，完成三座共振校準站；支援鍵盤與觸控。",
+		PENDULUM_ARRAY_SCENE
 	)
 	_add_scene_button(
 		launch_list,

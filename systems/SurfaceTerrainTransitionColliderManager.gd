@@ -8,8 +8,10 @@ const COLLISION_THICKNESS: float = 0.04
 const EDGE_RUN_PER_PATCH: float = 0.75
 const POSITION_TOLERANCE: float = 0.01
 const VALID_SIDES: Array[String] = ["east", "west", "north", "south"]
+const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
 
 var _managed_edges: Dictionary = {}
+var _last_blocked_corner_reports: Array[Dictionary] = []
 
 func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary) -> Dictionary:
     var candidates: Dictionary = {}
@@ -47,7 +49,11 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
             "geometry": geometry
         }
 
-    var blocked_edges: Dictionary = _find_perpendicular_conflicts(candidates)
+    var corner_resolution: Dictionary = CornerResolverScript.resolve(candidates)
+    if not bool(corner_resolution.get("ok", false)):
+        return {"ok":false,"error":str(corner_resolution.get("error", "corner_resolution_failed")),"active_count":_managed_edges.size()}
+    var blocked_edges: Dictionary = corner_resolution.get("blocked_edges", {})
+    var blocked_corner_reports: Array = corner_resolution.get("reports", [])
     var staged: Dictionary = {}
     for edge_key in candidates.keys():
         if blocked_edges.has(edge_key):
@@ -101,17 +107,26 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         var body: StaticBody3D = edge["body"] as StaticBody3D
         body.collision_layer = COLLISION_LAYER
     _managed_edges = staged
+    _last_blocked_corner_reports.clear()
+    for report_value in blocked_corner_reports:
+        if report_value is Dictionary:
+            _last_blocked_corner_reports.append(report_value.duplicate(true))
     return {
         "ok": true,
         "active_count": _managed_edges.size(),
         "blocked_count": blocked_edges.size(),
-        "blocked_edge_keys": blocked_edges.keys()
+        "blocked_edge_keys": blocked_edges.keys(),
+        "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true)
     }
 
 func clear_all() -> void:
     for edge in _managed_edges.values():
         _retire_old_edge(edge, {})
     _managed_edges.clear()
+    _last_blocked_corner_reports.clear()
+
+func get_blocked_corner_reports() -> Array[Dictionary]:
+    return _last_blocked_corner_reports.duplicate(true)
 
 func get_transition_count() -> int:
     return _managed_edges.size()
@@ -219,30 +234,6 @@ func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
         "first_id": edge["first_id"],
         "second_id": edge["second_id"]
     }
-
-func _find_perpendicular_conflicts(candidates: Dictionary) -> Dictionary:
-    var sides_by_patch: Dictionary = {}
-    for edge_key in candidates.keys():
-        var edge: Dictionary = candidates[edge_key]
-        _record_side(sides_by_patch, str(edge["first_id"]), str(edge["first_side"]), str(edge_key))
-        _record_side(sides_by_patch, str(edge["second_id"]), str(edge["second_side"]), str(edge_key))
-    var blocked: Dictionary = {}
-    for stable_id in sides_by_patch.keys():
-        var entries: Array = sides_by_patch[stable_id]
-        for first_index in range(entries.size()):
-            for second_index in range(first_index + 1, entries.size()):
-                var first_side: String = str(entries[first_index]["side"])
-                var second_side: String = str(entries[second_index]["side"])
-                if first_side == second_side or _opposite_side(first_side) == second_side:
-                    continue
-                blocked[str(entries[first_index]["edge_key"])] = true
-                blocked[str(entries[second_index]["edge_key"])] = true
-    return blocked
-
-func _record_side(target: Dictionary, stable_id: String, side: String, edge_key: String) -> void:
-    if not target.has(stable_id):
-        target[stable_id] = []
-    target[stable_id].append({"side": side, "edge_key": edge_key})
 
 func _retire_old_edge(old_edge: Dictionary, replacement: Dictionary) -> void:
     var old_first: Node3D = old_edge.get("first_patch") as Node3D
