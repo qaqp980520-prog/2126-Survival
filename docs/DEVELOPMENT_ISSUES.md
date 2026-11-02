@@ -1338,3 +1338,40 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Exact-head Godot 4.3 [Run #1048](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41442111878) passed 403/403 workflow step records, zero failures/skips, including root Test Hub smoke, terrain manager regression, diagnostics panel integration, Run 90 static/import/rules/runtime gates, checkout cleanup, container shutdown and job completion.
 - The earlier failed Run #1047 is retained as historical evidence; it failed at the static gate only. The corrected exact head passed Run #1048.
 - World-save schema remains version 1. Local GUI/renderer, GPU and iPhone hardware QA remain untested.
+
+
+## Run 92 — signed-coordinate streaming soak and Swarm Dispatcher (2026-11-03)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Streaming direction coverage | Previous repeated movement primarily exercised positive coordinates and did not stress crossing zero or negative chunk IDs. | Added deterministic 128-shift signed-coordinate soak over ±X/±Z with variable staging budgets and replacement/cancellation timing. |
+| Negative-coordinate recovery | Correctly parsed negative IDs were not sufficient proof that a recovered controller restores the same live ownership set. | Added recovery from negative world coordinates and exact Director/Controller chunk-set comparison. |
+| Chunk lifetime | Counts alone can pass while an old overlapping node is recreated or an unloaded node remains referenced. | Added overlap instance-ID retention and WeakRef release checks on every shift. |
+| Swarm command conflicts | Sequential movement could partially apply a tick before a later drone discovers a collision. | Swarm Dispatcher validates all targets, walls/bounds, same-cell conflicts and head-on swaps before committing any drone movement. |
+
+### Run 92 validation and merge
+- PR [#220](https://github.com/qaqp980520-prog/2126-Survival/pull/220) merged as `7bb31ba57f1e251a66fab1bf7db121046cb817ea`.
+- Exact-head full Run #1077 attempt 2 passed 407 successful step records, zero failures/skips, cleanup and job completion.
+- Focused Run #10 passed 13/13 and reconfirmed the 128-shift signed-coordinate soak on the synchronized candidate.
+- Post-merge main Run #1082 passed 407 successful step records, zero failures/skips, cleanup and job completion.
+
+## Run 93 — terrain descriptor orientation and Signal Resonator (2026-11-03)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Terrain descriptor orientation | A descriptor could declare a pair of opposite cardinal sides that did not match the actual relative patch positions; opposite-side validation alone did not prove orientation. | Manager now compares `first_side` with the live first-to-second patch direction and rejects mismatch as `descriptor_side_mismatch` before staging/activation. |
+| Collision safety | A malformed descriptor must not leave partially enabled patch strips or a shared collider behind. | Regression verifies zero managed transitions and unchanged patch flags on rejection; existing valid cardinal ramp cases remain covered. |
+| Root Test Hub resource path | A standalone game preload using `res://rules.gd` would not resolve when the root Test Hub loaded the wrapper scene. | Game resolves `rules.gd` relative to the attached script resource path; root smoke verifies three stages and three lane controls. |
+| Timing scoring integrity | Early inputs, wrong-lane hits, expired notes and completed stages must not allow cursor drift or duplicate score. | Deterministic rules/runtime tests cover timing windows, timeout advancement, wrong-lane miss/combo reset, 75% pass threshold, campaign carry and restart lock. |
+
+### Run 93 validation and merge
+- PR [#221](https://github.com/qaqp980520-prog/2126-Survival/pull/221) merged as `1032b7224f46afd5f7f9fce5c6f487218dd95f5b` from exact head `1fefb2842cea7becb9a71130a91bf83bf908bd5e`.
+- Exact-head full Godot 4.3 Run #1083 passed 411 successful step records, zero failures/skips, cleanup and job completion.
+- Focused Run #5 passed 13/13; focused Run #10 passed 13/13.
+- Post-merge main Run #1084 is still in progress; its result is not yet known.
+
+### Remaining limitations
+- The terrain change is a descriptor-orientation guard, not four-way shared corner geometry. Keep the existing safe `step_fallback` until a separately tested corner-cap implementation exists.
+- Signal Resonator timing is visual; audio device/latency QA is not included.
+- Local GUI/renderer, GPU performance and iPhone hardware QA remain untested.
+- World-save schema remains version 1.
