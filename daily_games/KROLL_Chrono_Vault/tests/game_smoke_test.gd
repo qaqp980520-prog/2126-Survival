@@ -31,6 +31,7 @@ func _run() -> void:
 	_expect(bool(game.call("advance_level")),"runtime finalizes third vault")
 	var final_state: Dictionary = game.call("get_current_state")
 	_expect(str(final_state.get("status","")) == "campaign_complete","runtime completes campaign")
+	_expect(game.call("get_restart_button_text") == "RESTART CAMPAIGN  ·  C","campaign completion changes the restart control into a campaign restart")
 	_expect(int(final_state.get("total_score",0)) == 300,"runtime preserves campaign score")
 	_expect(not bool(game.call("step_action","left")),"completed campaign rejects movement")
 	_expect(bool(game.call("restart_campaign")),"runtime starts fresh campaign")
