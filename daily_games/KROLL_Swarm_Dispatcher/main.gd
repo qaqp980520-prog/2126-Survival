@@ -117,7 +117,7 @@ func _build_ui() -> void:
 	for index in range(3):
 		var button := Button.new()
 		button.name = "SelectDrone%d" % index
-		button.text = "DRONE %s" % char(65 + index)
+		button.text = "DRONE %s" % ["A", "B", "C"][index]
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.pressed.connect(_on_select_drone.bind(index))
 		select_row.add_child(button)
@@ -185,7 +185,7 @@ func _refresh_ui() -> void:
 	var remaining: Array[int] = []
 	for index in range(3):
 		remaining.append(maxi(0, (programs[index] as Array).size() - int(cursors[index])))
-		_select_buttons[index].text = "DRONE %s  ·  %02d" % [char(65 + index), remaining[index]]
+		_select_buttons[index].text = "DRONE %s  ·  %02d" % [["A", "B", "C"][index], remaining[index]]
 		_select_buttons[index].disabled = index == _selected_drone or str(_state.get("status", "")) != "playing"
 	_info_label.text = "MISSION %02d / %02d  ·  %s  ·  TICK %02d  ·  CAMPAIGN %03d" % [
 		level_index + 1,
@@ -332,7 +332,8 @@ func get_control_button_count() -> int:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
-	var key: int = event.keycode
+	var key_event: InputEventKey = event as InputEventKey
+	var key: int = key_event.keycode
 	match key:
 		KEY_TAB:
 			_selected_drone = (_selected_drone + 1) % 3
