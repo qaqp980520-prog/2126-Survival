@@ -23,6 +23,27 @@ func _run() -> void:
 		_expect(int(state.get("target_focus", 0)) == int(stage["focus"]), "habitat %d exposes its focus field brief" % stage_index)
 		_expect(int(state.get("target_zoom", 0)) == int(stage["zoom"]), "habitat %d exposes its zoom field brief" % stage_index)
 		_expect(int(state.get("target_exposure", 99)) == int(stage["exposure"]), "habitat %d exposes its exposure field brief" % stage_index)
+		var current_focus: int = int(state.get("focus", 3))
+		var current_zoom: int = int(state.get("zoom", 2))
+		var current_exposure: int = int(state.get("exposure", 0))
+		while current_focus < int(stage["focus"]):
+			_expect(bool(game.call("adjust_setting", "focus", 1)), "habitat %d accepts focus calibration" % stage_index)
+			current_focus += 1
+		while current_focus > int(stage["focus"]):
+			_expect(bool(game.call("adjust_setting", "focus", -1)), "habitat %d accepts focus calibration" % stage_index)
+			current_focus -= 1
+		while current_zoom < int(stage["zoom"]):
+			_expect(bool(game.call("adjust_setting", "zoom", 1)), "habitat %d accepts zoom calibration" % stage_index)
+			current_zoom += 1
+		while current_zoom > int(stage["zoom"]):
+			_expect(bool(game.call("adjust_setting", "zoom", -1)), "habitat %d accepts zoom calibration" % stage_index)
+			current_zoom -= 1
+		while current_exposure < int(stage["exposure"]):
+			_expect(bool(game.call("adjust_setting", "exposure", 1)), "habitat %d accepts exposure calibration" % stage_index)
+			current_exposure += 1
+		while current_exposure > int(stage["exposure"]):
+			_expect(bool(game.call("adjust_setting", "exposure", -1)), "habitat %d accepts exposure calibration" % stage_index)
+			current_exposure -= 1
 		game.set("_elapsed", rules.get_center_capture_time(stage_index))
 		_expect(bool(game.call("capture_photo")), "habitat %d captures a correctly prepared photo" % stage_index)
 		state = game.call("get_current_state")
