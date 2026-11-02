@@ -35,6 +35,7 @@ const HABITAT_PHOTOGRAPHER_SCENE := "res://daily_games/KROLL_Habitat_Photographe
 const SOLAR_SAIL_NAVIGATOR_SCENE := "res://daily_games/KROLL_Solar_Sail_Navigator/main_root.tscn"
 const TITRATION_BENCH_SCENE := "res://daily_games/KROLL_Titration_Bench/main_root.tscn"
 const PLANETARY_CLIMATE_LAB_SCENE := "res://daily_games/KROLL_Planetary_Climate_Lab/main_root.tscn"
+const PULSE_CONDUCTOR_SCENE := "res://daily_games/KROLL_Pulse_Conductor/main_root.tscn"
 
 var status_label: Label
 
@@ -301,6 +302,12 @@ func _build_ui() -> void:
 		"KROLL Planetary Climate Lab",
 		"調整行星反照率與溫室熱滯留比例，讓三個世界的能量平衡溫度進入目標範圍。",
 		PLANETARY_CLIMATE_LAB_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Pulse Conductor",
+		"跟隨三段原創視覺節拍，在四條訊號軌道上精準擊拍；支援 A/S/D/F、滑鼠與觸控。",
+		PULSE_CONDUCTOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,
