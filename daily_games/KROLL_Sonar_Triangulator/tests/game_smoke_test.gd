@@ -39,6 +39,7 @@ func _run() -> void:
     state = game.call("get_current_state")
     candidates = state.get("candidates", [])
     _expect(candidates.size() == 2, "second survey exposes the intentional ambiguous pair")
+    _expect(str(game.call("get_status_text")).contains("USE UNUSED BUOY D"), "ambiguous survey guidance names the remaining south-edge buoy")
     if candidates.size() == 2:
         var wrong_cell: Vector2i = candidates[1]
         _expect(bool(game.call("select_cell", wrong_cell.x, wrong_cell.y)), "runtime allows a plausible false return to be selected")

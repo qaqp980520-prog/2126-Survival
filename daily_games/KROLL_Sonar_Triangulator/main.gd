@@ -32,7 +32,10 @@ func _ready() -> void:
     _refresh_ui()
 
 func _build_ui() -> void:
-    var layout_profile: Dictionary = get_layout_profile(get_viewport_rect().size.x)
+    var window_width: float = float(DisplayServer.window_get_size().x)
+    if window_width <= 0.0:
+        window_width = get_viewport_rect().size.x
+    var layout_profile: Dictionary = get_layout_profile(window_width)
     _compact_layout = bool(layout_profile.get("compact", false))
     var background := ColorRect.new()
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -73,12 +76,14 @@ func _build_ui() -> void:
     _briefing_label = Label.new()
     _briefing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _briefing_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _briefing_label.add_theme_font_size_override("font_size", 13 if _compact_layout else 16)
     _briefing_label.add_theme_color_override("font_color", Color("#c5d8e5"))
     column.add_child(_briefing_label)
 
     var sensor_title := Label.new()
-    sensor_title.text = "ACOUSTIC BUOYS  ·  SELECT UP TO FOUR PINGS"
+    sensor_title.text = "ACOUSTIC BUOYS  ·  1–4 TO PING" if _compact_layout else "ACOUSTIC BUOYS  ·  SELECT UP TO FOUR PINGS"
     sensor_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    sensor_title.add_theme_font_size_override("font_size", 12 if _compact_layout else 16)
     sensor_title.add_theme_color_override("font_color", Color("#86b9d2"))
     column.add_child(sensor_title)
 
@@ -97,7 +102,7 @@ func _build_ui() -> void:
 
     _candidate_label = Label.new()
     _candidate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _candidate_label.add_theme_font_size_override("font_size", 16)
+    _candidate_label.add_theme_font_size_override("font_size", 12 if _compact_layout else 16)
     _candidate_label.add_theme_color_override("font_color", Color("#91e8c2"))
     column.add_child(_candidate_label)
 
@@ -173,6 +178,7 @@ func _build_ui() -> void:
     _status_label = Label.new()
     _status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _status_label.add_theme_font_size_override("font_size", 12 if _compact_layout else 15)
     _status_label.custom_minimum_size = Vector2(0.0, 44.0)
     _status_label.add_theme_color_override("font_color", Color("#d4e7ef"))
     column.add_child(_status_label)
@@ -180,7 +186,8 @@ func _build_ui() -> void:
     var hint := Label.new()
     hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    hint.text = "1–4 ping four buoys · three pings unlock guesses · buoy D can break the standard three-corner tie · tap a candidate cell and lock it. R restarts the campaign; N advances."
+    hint.text = "1–4 ping · tap a candidate · Enter lock · N next · R restart." if _compact_layout else "1–4 ping four buoys · three pings unlock guesses · buoy D can break the standard three-corner tie · tap a candidate cell and lock it. R restarts the campaign; N advances."
+    hint.add_theme_font_size_override("font_size", 11 if _compact_layout else 14)
     hint.add_theme_color_override("font_color", Color("#8ba8bb"))
     column.add_child(hint)
 
@@ -250,10 +257,8 @@ func _refresh_ui() -> void:
         _status_label.text = "ALL THREE BEACONS RECOVERED  ·  TOTAL SCORE %d  ·  PRESS R TO RESTART" % _rules.get_campaign_score(_state)
     elif status == "failed":
         _status_label.text = "SURVEY LOST  ·  PRESS R TO RESTART THE CAMPAIGN"
-    elif not _last_message.is_empty():
-        _status_label.text = _last_message
     elif scans.size() < _rules.get_minimum_scan_count():
-        _status_label.text = "PING AT LEAST THREE BUOYS TO BEGIN TRIANGULATION."
+        _status_label.text = _last_message if not _last_message.is_empty() else "PING AT LEAST THREE BUOYS TO BEGIN TRIANGULATION."
     elif candidates.size() > 1:
         var unused_buoys: String = ""
         for sensor_index in range(_rules.get_sensor_count()):
@@ -261,10 +266,12 @@ func _refresh_ui() -> void:
                 if not unused_buoys.is_empty():
                     unused_buoys += ", "
                 unused_buoys += ["A", "B", "C", "D"][sensor_index]
-        if unused_buoys.is_empty():
-            _status_label.text = "AMBIGUOUS RETURN  ·  ELIMINATE A FALSE CELL."
-        else:
-            _status_label.text = "AMBIGUOUS RETURN  ·  USE UNUSED BUOY %s OR ELIMINATE A FALSE CELL." % unused_buoys
+        var ambiguity_hint: String = "AMBIGUOUS RETURN  ·  ELIMINATE A FALSE CELL."
+        if not unused_buoys.is_empty():
+            ambiguity_hint = "AMBIGUOUS RETURN  ·  USE UNUSED BUOY %s OR ELIMINATE A FALSE CELL." % unused_buoys
+        _status_label.text = _last_message + "\n" + ambiguity_hint if not _last_message.is_empty() else ambiguity_hint
+    elif not _last_message.is_empty():
+        _status_label.text = _last_message
     else:
         _status_label.text = "SINGLE RETURN LOCK  ·  SELECT THE REMAINING CELL."
 
