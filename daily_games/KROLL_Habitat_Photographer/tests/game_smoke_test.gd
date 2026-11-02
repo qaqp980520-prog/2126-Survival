@@ -19,6 +19,10 @@ func _run() -> void:
 	var rules: RefCounted = RulesScript.new()
 	for stage_index in range(3):
 		var stage: Dictionary = rules.get_stage(stage_index)
+		state = game.call("get_current_state")
+		_expect(int(state.get("target_focus", 0)) == int(stage["focus"]), "habitat %d exposes its focus field brief" % stage_index)
+		_expect(int(state.get("target_zoom", 0)) == int(stage["zoom"]), "habitat %d exposes its zoom field brief" % stage_index)
+		_expect(int(state.get("target_exposure", 99)) == int(stage["exposure"]), "habitat %d exposes its exposure field brief" % stage_index)
 		game.set("_elapsed", rules.get_center_capture_time(stage_index))
 		_expect(bool(game.call("capture_photo")), "habitat %d captures a correctly prepared photo" % stage_index)
 		state = game.call("get_current_state")
