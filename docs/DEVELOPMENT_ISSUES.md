@@ -1245,3 +1245,21 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - **Validation:** exact-head Godot 4.3 [Run #978](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41361821633) passed all 375 validate-job steps, with zero failures/skips and successful cleanup/container shutdown/job completion.
 - **Remaining limitations:** no persistent diagnostics UI/log; stress coverage is deterministic 34-shift regression rather than long-duration device soak; local GUI/rendering, GPU and iPhone QA remain untested. World-save schema remains version 1.
 
+
+
+## Run 85 — Cargo Mosaic and streaming diagnostics overlay (2026-11-02)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Root Test Hub vs nested standalone project | The two projects resolve `res://` against different roots; a nested `res://main.tscn` path failed when loaded from the repository-root hub. | Added a root-addressable hub wrapper and kept the nested standalone entry local. `main.gd` resolves the rules script for either root or nested context. Both contexts are covered by smoke tests. |
+| Cargo Mosaic exact-cover uniqueness | Rotationally symmetric module orientations can otherwise inflate solution counts. | Rules tests enumerate all in-bounds placements and deduplicate each orientation by normalized cell-set key before asserting one distinct solution per authored bay. |
+| Streaming diagnostics visibility | Bounded request diagnostics existed, but no in-world view exposed phase/progress/rollback details. | Added a six-row F3 overlay, 4 Hz refresh while visible, 32-entry source history, and phase-aware rollback status. Diagnostics remain transient. |
+| Panel lifecycle | The panel must remain safe when no compatible director is bound and must report active cancellation as pending rather than already rolled back. | Regression covers live staging, active pending state, explicit cancellation, terminal cleanup, cancellation reason, bounded rows, close/reopen and unbound director. |
+
+### Run 85 validation and merge
+- New game: `daily_games/KROLL_Cargo_Mosaic/`; three authored 6×6 bays, four rotatable tetromino modules, exact-cover uniqueness proof, keyboard/mouse/touch controls, standalone/root hub entries and runtime smoke coverage.
+- Diagnostics: `systems/MineralGridStreamingDiagnosticsPanel.gd`, integrated into `world/SurfaceWorld.gd`; F3 toggle, newest six records from 32-entry transient history.
+- Feature PR [#207](https://github.com/qaqp980520-prog/2126-Survival/pull/207) merged from exact HEAD `1058a1d783ac36c03a72c1981b078e9aab8b4f22`; merge commit `8c41a664cb11a35f6c9b7f824262da4b564c41ef`.
+- Exact-head Godot 4.3 [Run #1001](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41383134233): 380 successful workflow records, zero failures/skips, successful checkout cleanup, container shutdown and job completion.
+- World-save schema remains version 1; diagnostic history is transient and not serialized.
+- Local GUI/rendering, GPU performance and iPhone hardware QA remain untested. The debug overlay has no touch-only F3 replacement, persistent log or export.
