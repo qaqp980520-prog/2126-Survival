@@ -97,13 +97,16 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
 			continue
 		var candidate: Variant = chunk_factory.call(coord)
-		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
+		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
+		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
+		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
 			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
 			_set_sync_report(false, "load_factory", "Chunk factory returned an invalid root.", rollback_ok, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
-				"new_loads_rollback_ok": rollback_ok
+				"new_loads_rollback_ok": rollback_ok,
+				"factory_root_queued_for_deletion": candidate_queued_for_deletion
 			})
 			if not rollback_ok:
 				push_warning("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
@@ -310,13 +313,16 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = chunk_factory.call(coord)
-		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
+		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
+		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
+		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
 			_release_async_staged_roots(request_id, staged_roots)
 			_finish_async_sync_request(request_id, false, "load_factory", "Chunk factory returned an invalid staged root.", true, {
 				"failed_chunk_id": id,
 				"staged_count": staged_count,
-				"desired_count": desired.size()
+				"desired_count": desired.size(),
+				"factory_root_queued_for_deletion": candidate_queued_for_deletion
 			})
 			return
 		var duplicate_staged_root := false
@@ -687,7 +693,9 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 		var id: String = str(entry.get("id", ""))
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = chunk_factory.call(coord)
-		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
+		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
+		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
+		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
 			success = false
 			continue
@@ -699,7 +707,7 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 	return success
 
 func _free_unowned_root(candidate: Variant) -> void:
-	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null:
+	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null and not (candidate as Node3D).is_queued_for_deletion():
 		candidate.free()
 
 func _set_sync_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:

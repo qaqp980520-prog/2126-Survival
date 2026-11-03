@@ -47,6 +47,7 @@ const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_r
 const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
 const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
+const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 
 var status_label: Label
 
@@ -385,6 +386,12 @@ func _build_ui() -> void:
 		"KROLL Reactor Deck Command",
 		"以三點能量打出戰術卡牌，管理護盾與核心耐久，擊退三波敵人；支援鍵盤、滑鼠與觸控。",
 		REACTOR_DECK_COMMAND_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Casefile: Station Zero",
+		"調查三起太空站事件：選出嫌疑人，再用兩項互相印證的證據鎖定責任者。",
+		CASEFILE_SCENE
 	)
 	_add_scene_button(
 		launch_list,
