@@ -61,7 +61,7 @@ func _test_collisions_and_rink_bounds(rules: Variant) -> void:
 	for stone_value in stones:
 		var stone: Dictionary = stone_value
 		var position: Vector2 = stone.get("position", Vector2.ZERO)
-		_expect(position.x >= rules.RINK_MIN.x + rules.STONE_RADIUS and position.x <= rules.RINK_MAX.x - rules.STONE_RADIUS, "stone stays within horizontal rink bounds")
+		_expect(position.x >= rules.get_rink_min().x + rules.get_stone_radius() and position.x <= rules.get_rink_max().x - rules.STONE_RADIUS, "stone stays within horizontal rink bounds")
 		_expect(position.y >= rules.RINK_MIN.y + rules.STONE_RADIUS and position.y <= rules.RINK_MAX.y - rules.STONE_RADIUS, "stone stays within vertical rink bounds")
 	for first in range(stones.size()):
 		for second in range(first + 1, stones.size()):
@@ -72,7 +72,7 @@ func _test_collisions_and_rink_bounds(rules: Variant) -> void:
 func _test_campaign_progression_and_restart(rules: Variant) -> void:
 	var state: Dictionary = rules.new_campaign()
 	for round_index in range(rules.get_round_count()):
-		for _shot_index in range(rules.SHOTS_PER_ROUND):
+		for _shot_index in range(rules.get_shots_per_round()):
 			var result: Dictionary = rules.throw_stone(state, Vector2.RIGHT, 250.0)
 			_expect(bool(result.get("ok", false)), "campaign throw is accepted")
 			state = result.get("state", state)
