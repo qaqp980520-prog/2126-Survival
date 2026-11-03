@@ -3422,7 +3422,7 @@ jobs:
           grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Signal Resonator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 41' tests/survival_test_hub_smoke_test.gd
           grep -q 'descriptor_side_mismatch' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q '_side_between(first_position, second_position, patch_size)' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
@@ -3461,7 +3461,7 @@ jobs:
           grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 41' tests/survival_test_hub_smoke_test.gd
           grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
 
       - name: Import and parse KROLL Sonar Triangulator
@@ -3513,7 +3513,7 @@ jobs:
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Stratosphere Balloonist")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 41' tests/survival_test_hub_smoke_test.gd
           grep -q 'shared_corner_cap' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'ConcavePolygonShape3D' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'get_corner_cap_count' tests/surface_terrain_four_way_corner_cap_test.gd
