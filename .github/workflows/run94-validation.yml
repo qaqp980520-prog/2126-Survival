@@ -15,6 +15,7 @@ on:
       - 'daily_games/KROLL_Fragment_Assembly_Lab/**'
       - 'daily_games/KROLL_Anchor_Swing_Trials/**'
       - 'tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd'
+      - 'tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd'
       - 'tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd'
       - 'tests/README_run99_corner_cap_rebind.md'
       - 'tests/README_run97_terrain_soak.md'
@@ -190,14 +191,14 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Mess Hall Rush runtime smoke test passed."
 
-      - name: Run Run 97 extended randomized 4x4 terrain soak
+      - name: Run Run 97 historical 60-layout randomized 4x4 terrain soak
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 300s godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 300s godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "Run 99 extended 4x4 terrain corner-cap soak passed"
+          echo "$output" | grep -q "Run 97 extended 4x4 terrain corner-cap soak passed"
 
       - name: Verify Run 98 Fragment Assembly Lab inputs
         shell: bash
