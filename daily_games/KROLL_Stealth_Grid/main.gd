@@ -1,6 +1,6 @@
 extends Control
 
-const Rules = preload("res://rules.gd")
+var rules: Variant
 const BOARD_SIZE := 9
 
 var state: Dictionary = {}
@@ -13,7 +13,15 @@ var next_button: Button
 var action_buttons: Array[Button] = []
 
 func _ready() -> void:
-    state = Rules.create_state()
+    var rules_path := "res://daily_games/KROLL_Stealth_Grid/rules.gd"
+    if not ResourceLoader.exists(rules_path):
+        rules_path = "res://rules.gd"
+    var rules_script := load(rules_path) as Script
+    if rules_script == null:
+        push_error("KROLL Stealth Grid could not load its rules script.")
+        return
+    rules = rules_script.new()
+    state = rules.create_state()
     _build_ui()
     _refresh()
 
@@ -143,22 +151,22 @@ func _add_action_button(parent: HBoxContainer, label_text: String) -> Button:
     return button
 
 func _attempt_move(direction: Vector2i) -> void:
-    var result: Dictionary = Rules.attempt_move(state, direction)
+    var result: Dictionary = rules.attempt_move(state, direction)
     if not bool(result.get("ok", false)):
         status_label.text = "Blocked: that tile cannot be entered."
     _refresh()
 
 func _restart_level() -> void:
-    state = Rules.restart_level(state)
+    state = rules.restart_level(state)
     _refresh()
 
 func _restart_campaign() -> void:
-    state = Rules.restart_campaign()
+    state = rules.restart_campaign()
     _refresh()
 
 func _next_level() -> void:
-    if Rules.can_advance(state):
-        state = Rules.next_level(state)
+    if rules.can_advance(state):
+        state = rules.next_level(state)
         _refresh()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -187,19 +195,19 @@ func _refresh() -> void:
     var level: Dictionary = state["level"]
     mission_label.text = "SECTOR %d / %d — %s" % [
         int(state["level_index"]) + 1,
-        Rules.get_level_count(),
-        Rules.get_level_name(state)
+        rules.get_level_count(),
+        rules.get_level_name(state)
     ]
     stats_label.text = "TURN %d    KEYS %d/%d    SCORE %d / 300" % [
         int(state["turn"]),
-        Rules.get_collected_key_count(state),
+        rules.get_collected_key_count(state),
         level["keys"].size(),
         int(state["score"])
     ]
     status_label.text = str(state["message"])
     for index in range(board_cells.size()):
         var position := Vector2i(index % BOARD_SIZE, floori(float(index) / BOARD_SIZE))
-        var tile: String = Rules.render_tile(state, position)
+        var tile: String = rules.render_tile(state, position)
         var cell: Button = board_cells[index]
         cell.text = tile
         var style := StyleBoxFlat.new()
@@ -215,7 +223,7 @@ func _refresh() -> void:
     for button in action_buttons:
         if button.text != "RESTART" and button.text != "RESET CAMPAIGN" and button.text != "NEXT":
             button.disabled = terminal
-    next_button.disabled = not Rules.can_advance(state)
+    next_button.disabled = not rules.can_advance(state)
 
 func _tile_color(tile: String) -> Color:
     match tile:
@@ -251,7 +259,7 @@ func get_title_text() -> String:
     return "KROLL // STEALTH GRID"
 
 func get_mission_count() -> int:
-    return Rules.get_level_count()
+    return rules.get_level_count()
 
 func get_board_cell_count() -> int:
     return board_cells.size()
