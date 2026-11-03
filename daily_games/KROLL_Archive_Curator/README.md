@@ -24,7 +24,7 @@ A gallery passes only when all four cases are filled, at least two items match t
 - R: reset the current unpassed gallery.
 - N: advance after a gallery passes.
 - C: restart the full campaign.
-- Mouse/touch: select item buttons, then tap an exhibit case; use the four action buttons below the board.
+- Mouse/touch: select item buttons, then tap an exhibit case; use the four action buttons below the board. The layout switches to a single-column scrollable arrangement on narrow viewports.
 
 ## Files
 
