@@ -6,6 +6,7 @@ Run 107 centralizes the controller readiness contract and applies it to synchron
 
 The regression covers:
 - a successful nine-chunk baseline window;
+- a factory callback that detaches the bound controller after the sync entry check, proving the Director revalidates after callbacks and frees the uncommitted candidate;
 - detaching the bound controller from the scene tree, then attempting sync and recovery;
 - confirming the factory is not called and the Director's managed IDs remain unchanged;
 - reattaching the same controller and successfully resuming sync;
