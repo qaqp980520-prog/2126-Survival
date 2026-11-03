@@ -1,6 +1,9 @@
 extends Node2D
 
-const Rules = preload("res://rules.gd")
+const GRAVITY: float = 1100.0
+const JUMP_SPEED: float = 560.0
+const COURSE_TIME_LIMIT: float = 90.0
+const MAX_FALLS: int = 3
 const COURSES: Array = [
 	{
 		"name": "Dockyard Swing",
@@ -41,6 +44,7 @@ const COURSES: Array = [
 	}
 ]
 
+var rules: RefCounted
 var course_index: int = 0
 var player: CharacterBody2D
 var start_position: Vector2 = Vector2.ZERO
@@ -49,7 +53,7 @@ var platforms: Array[Rect2] = []
 var goal_rect: Rect2 = Rect2()
 var falls_this_course: int = 0
 var total_score: int = 0
-var time_remaining: float = Rules.COURSE_TIME_LIMIT
+var time_remaining: float = COURSE_TIME_LIMIT
 var status: String = "playing"
 var message: String = "Hook an anchor, build momentum, and reach the green gate."
 var _platform_bodies: Array[StaticBody2D] = []
@@ -61,6 +65,19 @@ var _jump_requested: bool = false
 var _touch_control_count: int = 0
 
 func _ready() -> void:
+	var attached_script: Script = get_script() as Script
+	if attached_script == null:
+		push_error("Anchor Swing Trials main script is unavailable.")
+		return
+	var rules_path: String = attached_script.resource_path.get_base_dir().path_join("rules.gd")
+	var rules_script: Script = load(rules_path) as Script
+	if rules_script == null:
+		push_error("Anchor Swing Trials could not load rules: " + rules_path)
+		return
+	rules = rules_script.new() as RefCounted
+	if rules == null:
+		push_error("Anchor Swing Trials rules instance could not be created.")
+		return
 	_build_player()
 	_load_course()
 	_build_touch_controls()
@@ -82,31 +99,31 @@ func _physics_process(delta: float) -> void:
 		horizontal_axis -= 1.0
 	if _right_held or Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		horizontal_axis += 1.0
-	player.velocity = Rules.apply_horizontal(player.velocity, horizontal_axis, delta, player.is_on_floor())
+	player.velocity = rules.apply_horizontal(player.velocity, horizontal_axis, delta, player.is_on_floor())
 
 	if _jump_requested:
 		if player.is_on_floor():
-			player.velocity.y = -Rules.JUMP_SPEED
+			player.velocity.y = -JUMP_SPEED
 		_jump_requested = false
 
 	if _tether_anchor_index >= 0 and _tether_anchor_index < anchor_points.size():
 		var anchor: Vector2 = anchor_points[_tether_anchor_index]
-		var constrained: Dictionary = Rules.constrain_rope(player.global_position, player.velocity, anchor, _rope_length)
+		var constrained: Dictionary = rules.constrain_rope(player.global_position, player.velocity, anchor, _rope_length)
 		player.global_position = constrained["position"]
 		player.velocity = constrained["velocity"]
 
-	player.velocity.y += Rules.GRAVITY * maxf(delta, 0.0)
+	player.velocity.y += GRAVITY * maxf(delta, 0.0)
 	player.move_and_slide()
 
 	if _tether_anchor_index >= 0 and _tether_anchor_index < anchor_points.size():
 		var post_move_anchor: Vector2 = anchor_points[_tether_anchor_index]
-		var post_move: Dictionary = Rules.constrain_rope(player.global_position, player.velocity, post_move_anchor, _rope_length)
+		var post_move: Dictionary = rules.constrain_rope(player.global_position, player.velocity, post_move_anchor, _rope_length)
 		player.global_position = post_move["position"]
 		player.velocity = post_move["velocity"]
 
 	if player.global_position.y > 790.0:
 		_register_fall()
-	elif Rules.goal_contains(player.global_position, goal_rect):
+	elif rules.goal_contains(player.global_position, goal_rect):
 		_complete_course()
 	queue_redraw()
 
@@ -178,7 +195,7 @@ func _load_course() -> void:
 		_platform_bodies.append(body)
 	goal_rect = data["goal"]
 	falls_this_course = 0
-	time_remaining = Rules.COURSE_TIME_LIMIT
+	time_remaining = COURSE_TIME_LIMIT
 	status = "playing"
 	_detach_tether()
 	_jump_requested = false
@@ -192,19 +209,19 @@ func _register_fall() -> void:
 		return
 	falls_this_course += 1
 	_detach_tether()
-	if falls_this_course >= Rules.MAX_FALLS:
+	if falls_this_course >= MAX_FALLS:
 		status = "failed"
 		message = "Three falls. Press R to retry this course."
 	else:
 		player.global_position = start_position
 		player.velocity = Vector2.ZERO
-		message = "Recovery %d/%d. Try a different swing." % [falls_this_course, Rules.MAX_FALLS]
+		message = "Recovery %d/%d. Try a different swing." % [falls_this_course, MAX_FALLS]
 	queue_redraw()
 
 func _complete_course() -> void:
 	if status != "playing":
 		return
-	var awarded: int = Rules.calculate_score(time_remaining, falls_this_course)
+	var awarded: int = rules.calculate_score(time_remaining, falls_this_course)
 	total_score += awarded
 	_detach_tether()
 	if course_index >= COURSES.size() - 1:
@@ -223,13 +240,13 @@ func toggle_tether() -> bool:
 		message = "Tether released. Keep your momentum."
 		queue_redraw()
 		return true
-	var selected: int = Rules.nearest_anchor(player.global_position, anchor_points)
+	var selected: int = rules.nearest_anchor(player.global_position, anchor_points)
 	if selected < 0:
 		message = "No anchor is within tether range."
 		queue_redraw()
 		return false
 	_tether_anchor_index = selected
-	_rope_length = Rules.calculate_rope_length(player.global_position.distance_to(anchor_points[selected]))
+	_rope_length = rules.calculate_rope_length(player.global_position.distance_to(anchor_points[selected]))
 	message = "Hooked anchor %d. Use left/right to pump your swing." % [selected + 1]
 	queue_redraw()
 	return true
@@ -316,7 +333,7 @@ func _draw() -> void:
 	var font: Font = ThemeDB.fallback_font
 	draw_string(font, Vector2(24.0, 34.0), "KROLL // ANCHOR SWING TRIALS", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#91e8ff"))
 	draw_string(font, Vector2(24.0, 58.0), "Swing from anchor to anchor. Release at the right moment and land in the green gate.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#c2d7e8"))
-	draw_string(font, Vector2(24.0, 84.0), "COURSE %d/%d   FALLS %d/%d   TIME %.1f   SCORE %d" % [course_index + 1, COURSES.size(), falls_this_course, Rules.MAX_FALLS, time_remaining, total_score], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#f4d58d"))
+	draw_string(font, Vector2(24.0, 84.0), "COURSE %d/%d   FALLS %d/%d   TIME %.1f   SCORE %d" % [course_index + 1, COURSES.size(), falls_this_course, MAX_FALLS, time_remaining, total_score], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#f4d58d"))
 
 	for grid_x in range(40, 960, 40):
 		draw_line(Vector2(float(grid_x), 100.0), Vector2(float(grid_x), 650.0), Color(0.18, 0.42, 0.54, 0.18), 1.0)
@@ -381,7 +398,7 @@ func set_player_position_for_test(position: Vector2) -> void:
 		player.global_position = position
 
 func check_goal_for_test() -> void:
-	if is_instance_valid(player) and Rules.goal_contains(player.global_position, goal_rect):
+	if is_instance_valid(player) and rules.goal_contains(player.global_position, goal_rect):
 		_complete_course()
 
 func is_tether_attached() -> bool:
