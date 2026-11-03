@@ -95,8 +95,12 @@ func throw_stone(state: Dictionary, aim: Vector2, power: float) -> Dictionary:
 		next["round_score"] = round_score
 		next["total_score"] = int(next.get("total_score", 0)) + round_score
 		if int(next["round_index"]) >= TARGETS.size() - 1:
-			next["status"] = "won" if int(next["total_score"]) >= CAMPAIGN_GOAL else "complete"
-			next["message"] = "CAMPAIGN CLEARED — %d / 90 points." % int(next["total_score"])
+			var campaign_cleared := int(next["total_score"]) >= CAMPAIGN_GOAL
+			next["status"] = "won" if campaign_cleared else "complete"
+			if campaign_cleared:
+				next["message"] = "CAMPAIGN CLEARED — %d / 90 points." % int(next["total_score"])
+			else:
+				next["message"] = "CAMPAIGN COMPLETE — %d / 90 points. Goal: 45." % int(next["total_score"])
 		else:
 			next["status"] = "round_complete"
 			next["message"] = "Round scored %d points. Advance when ready." % round_score
