@@ -155,9 +155,11 @@ func _start_campaign() -> void:
 	_load_level()
 
 func _load_level() -> void:
-	var level := Rules.get_level(_level_index)
-	_start = (level.get("start", {}) as Dictionary).duplicate(true)
-	_target = (level.get("target", {}) as Dictionary).duplicate(true)
+	var level: Dictionary = Rules.get_level(_level_index)
+	var start_settings: Dictionary = level.get("start", {})
+	var target_settings: Dictionary = level.get("target", {})
+	_start = start_settings.duplicate(true)
+	_target = target_settings.duplicate(true)
 	_settings = _start.duplicate(true)
 	_moves = 0
 	_status_label.text = "Tune the four controls, then calibrate the signal."
