@@ -45,6 +45,7 @@ const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
+const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -99,7 +100,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 44, "hub exposes forty-four world, prototype and game launch buttons")
+	_expect(buttons.size() == 45, "hub exposes forty-five world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -108,6 +109,7 @@ func _run() -> void:
 	_expect(labels.has("後室傳送門實驗場"), "hub labels the Backrooms portal prototype")
 	_expect(labels.has("KROLL Mess Hall Rush"), "hub labels the Mess Hall Rush game")
 	_expect(labels.has("KROLL Fragment Assembly Lab"), "hub labels the Fragment Assembly Lab game")
+	_expect(labels.has("KROLL Archive Curator"), "hub labels the Archive Curator game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
@@ -607,6 +609,20 @@ func _run() -> void:
 		_expect(tether_bot_game.call("get_tether_node_count") >= 3, "root-loaded Tether Bot Relay builds its first course maintenance nodes")
 		_expect(tether_bot_game.call("get_touch_control_count") == 6, "root-loaded Tether Bot Relay exposes six touch controls")
 		tether_bot_game.queue_free()
+		await process_frame
+
+	var archive_curator_scene := load(ARCHIVE_CURATOR_SCENE) as PackedScene
+	_expect(archive_curator_scene != null, "root hub can load the Archive Curator scene")
+	if archive_curator_scene != null:
+		var archive_curator := archive_curator_scene.instantiate()
+		root.add_child(archive_curator)
+		await process_frame
+		_expect(archive_curator.call("get_title_text") == "KROLL // ARCHIVE CURATOR", "root-loaded Archive Curator displays its title")
+		_expect(archive_curator.call("get_gallery_count") == 3, "root-loaded Archive Curator exposes three galleries")
+		_expect(archive_curator.call("get_card_button_count") == 6, "root-loaded Archive Curator builds six item buttons")
+		_expect(archive_curator.call("get_slot_button_count") == 4, "root-loaded Archive Curator builds four case buttons")
+		_expect(archive_curator.call("get_action_button_count") == 4, "root-loaded Archive Curator exposes four campaign controls")
+		archive_curator.queue_free()
 		await process_frame
 
 	hub.queue_free()
