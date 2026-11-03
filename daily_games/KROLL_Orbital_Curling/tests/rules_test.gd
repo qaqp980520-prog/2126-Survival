@@ -103,7 +103,7 @@ func _test_accurate_campaign_can_clear(rules: Variant) -> void:
 			var next_result: Dictionary = rules.advance_round(state)
 			_expect(bool(next_result.get("ok", false)), "accurate campaign advances")
 			state = next_result.get("state", state)
-	_expect(int(state.get("total_score", 0)) >= rules.CAMPAIGN_GOAL, "accurate targeting reaches the campaign goal")
+	_expect(int(state.get("total_score", 0)) >= rules.get_campaign_goal(), "accurate targeting reaches the campaign goal")
 	_expect(str(state.get("status", "")) == "won", "accurate targeting produces a campaign win")
 	_expect(str(state.get("message", "")).contains("CAMPAIGN CLEARED"), "successful campaign uses the cleared message")
 
