@@ -37,6 +37,9 @@ func get_max_power() -> float:
 func get_shots_per_round() -> int:
 	return SHOTS_PER_ROUND
 
+func get_campaign_goal() -> int:
+	return CAMPAIGN_GOAL
+
 func new_campaign() -> Dictionary:
 	return {
 		"round_index": 0,
