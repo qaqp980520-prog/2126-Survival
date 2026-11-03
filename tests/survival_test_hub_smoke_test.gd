@@ -46,6 +46,7 @@ const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
 const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
+const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -59,6 +60,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
 	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
+	_expect(ResourceLoader.exists(ENDGAME_TACTICS_SCENE), "Endgame Tactics root scene exists")
 	_expect(ResourceLoader.exists(PINBALL_SCENE), "Orbital Pinball game scene exists")
 	_expect(ResourceLoader.exists(TETHER_SCENE), "Tether Recovery game scene exists")
 	_expect(ResourceLoader.exists(SHADOW_SCENE), "Shadow Courier game scene exists")
@@ -100,7 +102,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 45, "hub exposes forty-five world, prototype and game launch buttons")
+	_expect(buttons.size() == 46, "hub exposes forty-six world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -110,6 +112,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Mess Hall Rush"), "hub labels the Mess Hall Rush game")
 	_expect(labels.has("KROLL Fragment Assembly Lab"), "hub labels the Fragment Assembly Lab game")
 	_expect(labels.has("KROLL Archive Curator"), "hub labels the Archive Curator game")
+	_expect(labels.has("KROLL Endgame Tactics"), "hub labels the Endgame Tactics game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
@@ -623,6 +626,18 @@ func _run() -> void:
 		_expect(archive_curator.call("get_slot_button_count") == 4, "root-loaded Archive Curator builds four case buttons")
 		_expect(archive_curator.call("get_action_button_count") == 4, "root-loaded Archive Curator exposes four campaign controls")
 		archive_curator.queue_free()
+		await process_frame
+
+	var endgame_scene := load(ENDGAME_TACTICS_SCENE) as PackedScene
+	_expect(endgame_scene != null, "root hub can load the Endgame Tactics scene")
+	if endgame_scene != null:
+		var endgame_game := endgame_scene.instantiate()
+		root.add_child(endgame_game)
+		await process_frame
+		_expect(endgame_game.call("get_title_text") == "KROLL // ENDGAME TACTICS", "root-loaded Endgame Tactics displays its title")
+		_expect(endgame_game.call("get_puzzle_count") == 3, "root-loaded Endgame Tactics exposes three puzzles")
+		_expect(endgame_game.call("get_board_button_count") == 64, "root-loaded Endgame Tactics builds 64 board squares")
+		endgame_game.queue_free()
 		await process_frame
 
 	hub.queue_free()

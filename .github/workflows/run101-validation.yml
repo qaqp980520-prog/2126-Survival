@@ -1,0 +1,88 @@
+name: Run 101 focused Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Endgame_Tactics/**'
+      - 'systems/MineralGridStreamingDirector.gd'
+      - 'tests/mineral_grid_streaming_binding_guard_test.gd'
+      - 'tests/README_run101_streaming_binding_guard.md'
+      - 'prototypes/SurvivalTestHub.gd'
+      - 'tests/survival_test_hub_smoke_test.gd'
+      - '.github/workflows/run101-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Run 101 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Endgame_Tactics/project.godot
+          test -f daily_games/KROLL_Endgame_Tactics/main.tscn
+          test -f daily_games/KROLL_Endgame_Tactics/main_root.tscn
+          test -f daily_games/KROLL_Endgame_Tactics/main.gd
+          test -f daily_games/KROLL_Endgame_Tactics/rules.gd
+          test -f daily_games/KROLL_Endgame_Tactics/tests/rules_test.gd
+          test -f daily_games/KROLL_Endgame_Tactics/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_binding_guard_test.gd
+          grep -q 'ENDGAME_TACTICS_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'labels.has("KROLL Endgame Tactics")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
+          grep -q 'if _active_async_request_id >= 0' systems/MineralGridStreamingDirector.gd
+          grep -q 'bind_controller(value)' systems/MineralGridStreamingDirector.gd
+          grep -q 'bind_chunk_factory(value)' systems/MineralGridStreamingDirector.gd
+          grep -q '_chunk_controller = candidate' systems/MineralGridStreamingDirector.gd
+          grep -q '_chunk_factory = factory' systems/MineralGridStreamingDirector.gd
+          grep -q '^func _expect(condition: bool, description: String)' tests/mineral_grid_streaming_binding_guard_test.gd
+
+      - name: Import and parse KROLL Endgame Tactics
+        run: godot --headless --path daily_games/KROLL_Endgame_Tactics --editor --quit
+
+      - name: Run KROLL Endgame Tactics rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Endgame_Tactics --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Endgame Tactics rules tests passed."
+
+      - name: Run KROLL Endgame Tactics runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Endgame_Tactics --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Endgame Tactics runtime smoke test passed."
+
+      - name: Import and parse root Survival project
+        run: godot --headless --path . --editor --quit
+
+      - name: Run root Test Hub smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Run async streaming dependency binding guard regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_binding_guard_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming binding guard tests passed."

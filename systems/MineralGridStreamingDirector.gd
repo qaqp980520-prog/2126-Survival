@@ -16,8 +16,19 @@ const MAX_ASYNC_DIAGNOSTIC_HISTORY: int = 32
 @export_range(1.0, 4096.0, 1.0) var chunk_size_z: float = 64.0
 @export_range(0, 8, 1) var load_radius: int = 1
 
-var chunk_controller: Node3D
-var chunk_factory: Callable
+var _chunk_controller: Node3D
+var chunk_controller: Node3D:
+	get:
+		return _chunk_controller
+	set(value):
+		bind_controller(value)
+
+var _chunk_factory: Callable
+var chunk_factory: Callable:
+	get:
+		return _chunk_factory
+	set(value):
+		bind_chunk_factory(value)
 var _managed_chunk_ids: Dictionary = {} # chunk ID -> Vector2i coordinate
 var _last_sync_report: Dictionary = {}
 var _next_async_request_id: int = 1
@@ -28,20 +39,25 @@ var _async_request_diagnostics: Dictionary = {}
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null or not is_instance_valid(candidate) or not candidate.is_inside_tree() or candidate.is_queued_for_deletion():
 		return false
+	# An in-flight request stages roots for this exact controller. Do not let a
+	# dependency swap redirect its later non-yielding commit to another owner.
+	if _active_async_request_id >= 0:
+		return false
 	for method_name in ["load_chunk", "unload_chunk", "is_chunk_loaded"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _managed_chunk_ids.is_empty() and chunk_controller != candidate:
 		return false
-	chunk_controller = candidate
+	_chunk_controller = candidate
 	return true
 
 ## The factory receives a grid coordinate and must return a new, unparented Node3D root.
 ## Return null to signal generation failure. The director takes ownership only after load succeeds.
 func bind_chunk_factory(factory: Callable) -> bool:
-	if not factory.is_valid():
+	if not factory.is_valid() or _active_async_request_id >= 0:
 		return false
-	chunk_factory = factory
+	# Keep one factory identity for the entire multi-frame staging transaction.
+	_chunk_factory = factory
 	return true
 
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:

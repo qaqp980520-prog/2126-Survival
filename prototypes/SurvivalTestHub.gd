@@ -45,6 +45,7 @@ const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
 const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
+const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 
 var status_label: Label
 
@@ -371,6 +372,12 @@ func _build_ui() -> void:
 		"KROLL Archive Curator",
 		"策劃三座展廳：挑選四件展品，利用主題標籤與相鄰連結達成分數目標。支援鍵盤、滑鼠與觸控。",
 		ARCHIVE_CURATOR_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Endgame Tactics",
+		"在三個八乘八殘局中找出唯一的車將死一步；支援滑鼠、觸控與方向鍵。",
+		ENDGAME_TACTICS_SCENE
 	)
 	_add_scene_button(
 		launch_list,
