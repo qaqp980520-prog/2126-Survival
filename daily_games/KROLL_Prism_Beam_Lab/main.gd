@@ -185,7 +185,7 @@ func _reset_level() -> bool:
 	return true
 
 func _next_level() -> bool:
-	if not level_completed:
+	if campaign_finished or not level_completed:
 		return false
 	if level_index >= Rules.level_count() - 1:
 		campaign_finished = true
@@ -203,7 +203,7 @@ func _update_ui() -> void:
 	moves_label.text = "旋轉 %d 步" % moves
 	fire_button.disabled = level_completed or campaign_finished
 	reset_button.disabled = level_completed or campaign_finished
-	next_button.disabled = not level_completed
+	next_button.disabled = not level_completed or campaign_finished
 	next_button.text = "完成戰役" if level_index == Rules.level_count() - 1 else "下一關"
 	_render_grid()
 
