@@ -1375,3 +1375,25 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Signal Resonator timing is visual; audio device/latency QA is not included.
 - Local GUI/renderer, GPU performance and iPhone hardware QA remain untested.
 - World-save schema remains version 1.
+
+
+## Run 94 — Sonar Triangulator and four-way terrain junction (2026-11-03)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Shared Test Hub count | Run 94 added a 39th launch button, but the Run 93 full-suite static gate still asserted 38. | Corrected the Run 93 gate to 39 and corrected the smoke-test diagnostic wording. Old Run #1093 remains a failed historical run; exact-head Run #1095 passed. |
+| Sonar fourth-station geometry | The original fourth buoy at a symmetric corner produced equal rounded ranges for two candidate cells. | Moved buoy D to the south edge at (4,7); added explicit station position/name assertions and an exhaustive 12-case three-of-four subset test. |
+| Mobile layout | A four-column sensor row and long ambiguity guidance could become cramped on narrow screens. | Added compact profile below 520 px, stacked controls, compact labels and unused-buoy guidance. Width calculations are tested at 320/375 px; real-device rendering remains untested. |
+| Four-way terrain junction | Two perpendicular edge ramps can overlap around a 2×2 patch junction. | Production regression verifies all four ramps are blocked atomically, stable corner orientation reports are emitted, no partial collider is staged, and full patch collision remains active under `step_fallback`. |
+| Corner-cap geometry | A shared four-way cap mesh/collider is still absent. | Keep conservative fallback; implement cap clipping/height continuity/ownership as a separate feature with geometry and rollback tests. |
+
+### Run 94 validation and merge
+- Feature PR [#223](https://github.com/qaqp980520-prog/2126-Survival/pull/223) merged as `7d3fb9262b7576af4b9d482946c911f97687f2b6` from exact head `5a0ff1f3a17798b5748d97d5ab1577411c42a89f`.
+- Exact-head full Godot 4.3 Run [#1095](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41549893815) passed 416/416 step records, zero failures/skips, cleanup, container shutdown and job completion.
+- Focused Run 94 #9, Run 92 #19 and Run 93 #14 each passed 13/13 on the exact candidate.
+- World-save schema remains version 1. A separate post-merge main CI result was not yet available at documentation-branch creation.
+
+### Remaining limitations
+- Four-way corner cap geometry is not implemented; only deterministic safe fallback is tested.
+- 320/375 px layout calculations passed headless tests, but local GUI/renderer and physical iPhone touch QA remain untested.
+- No world-save migration or third-party asset dependency was introduced.
