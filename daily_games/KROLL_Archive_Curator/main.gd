@@ -194,6 +194,9 @@ func _on_card_pressed(card_index: int) -> void:
 func _on_slot_pressed(slot_index: int) -> void:
 	place_selected_for_test(slot_index)
 
+func _place_selected_in_slot(slot_index: int) -> void:
+	place_selected_for_test(slot_index)
+
 func select_card_for_test(card_index: int) -> bool:
 	if _status != "playing" or _placements.size() >= 4 or card_index < 0 or card_index >= 6:
 		return false
