@@ -16,6 +16,8 @@ func _run() -> void:
 	_expect(game.find_child("LaneButton_0", true, false) != null, "left lane has a visible input button")
 	_expect(game.find_child("LaneButton_1", true, false) != null, "center lane has a visible input button")
 	_expect(game.find_child("LaneButton_2", true, false) != null, "right lane has a visible input button")
+	_expect(game.find_child("TimingLabel", true, false) != null, "visual timing countdown is visible")
+	_expect(game.find_child("PulseWindowBar", true, false) != null, "visual beat window meter is visible")
 	var relay: Dictionary = Rules.get_relay(0)
 	var lanes: Array = relay["lanes"]
 	var interval: float = Rules.beat_interval(int(relay["bpm"]))
