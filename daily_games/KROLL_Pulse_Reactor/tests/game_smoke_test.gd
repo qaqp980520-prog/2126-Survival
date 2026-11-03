@@ -41,3 +41,10 @@ func _run() -> void:
 		for failure in _failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+func _expect(condition: bool, message: String) -> void:
+	if condition:
+		print("PASS: " + message)
+	else:
+		_failures.append(message)
+		push_error("FAIL: " + message)
