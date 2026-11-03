@@ -44,6 +44,7 @@ const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Bal
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
+const ANCHOR_SWING_TRIALS_SCENE := "res://daily_games/KROLL_Anchor_Swing_Trials/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -98,7 +99,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 43, "hub exposes forty-three world, prototype and game launch buttons")
+	_expect(buttons.size() == 44, "hub exposes forty-three world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -593,6 +594,19 @@ func _run() -> void:
 		_expect(fragment_lab.call("get_fragment_button_count") == 4, "root-loaded Fragment Assembly Lab builds four first-lab fragment buttons")
 		_expect(fragment_lab.call("get_control_button_count") == 2, "root-loaded Fragment Assembly Lab exposes two controls")
 		fragment_lab.queue_free()
+		await process_frame
+
+	var anchor_swing_scene := load(ANCHOR_SWING_TRIALS_SCENE) as PackedScene
+	_expect(anchor_swing_scene != null, "root hub can load the Anchor Swing Trials scene")
+	if anchor_swing_scene != null:
+		var anchor_swing_game := anchor_swing_scene.instantiate()
+		root.add_child(anchor_swing_game)
+		await process_frame
+		_expect(anchor_swing_game.call("get_title_text") == "KROLL // ANCHOR SWING TRIALS", "root-loaded Anchor Swing Trials displays its title")
+		_expect(anchor_swing_game.call("get_course_count") == 3, "root-loaded Anchor Swing Trials exposes three courses")
+		_expect(anchor_swing_game.call("get_anchor_count") >= 3, "root-loaded Anchor Swing Trials builds its first course anchors")
+		_expect(anchor_swing_game.call("get_touch_control_count") == 6, "root-loaded Anchor Swing Trials exposes six touch controls")
+		anchor_swing_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
