@@ -1468,3 +1468,34 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 3. Local GUI/renderer, GPU and physical iPhone QA remain untested; CI is headless Godot 4.3.
 4. GitHub branch endpoint reports main as unprotected with required status checks enforcement off. Configure branch protection/ruleset separately; no repository settings were changed in Run 97.
 5. World-save schema remains version 1.
+
+
+## Run 98 closeout — 2026-11-03
+
+- [x] Added KROLL Fragment Assembly Lab at `daily_games/KROLL_Fragment_Assembly_Lab/`, with three authored string-assembly labs, deterministic overlap rules, one-time scoring, keyboard/mouse/touch controls and standalone/root Test Hub scenes.
+- [x] Verified all three target strings have a unique legal next fragment at each stage; exact-head Godot 4.3 import, rules and runtime smoke are covered by full Run #1133.
+- [x] Expanded existing four-way terrain corner-cap geometry regression to both checkerboard diagonals. Four caps/four ramps, collision rays, stable ownership, failed-preflight preservation and clear-all restoration passed.
+- [x] Feature PR #231 merged as `3e7639cae1dc44ec133bbbdbc5cf38d8263829fe`; exact-head full Run #1133 passed 437/437; focused #36 passed 28/28 and #41/#46 each passed 13/13.
+- [x] No production terrain geometry or world-save schema change; schema remains 1.
+
+## Run 99 closeout — 2026-11-03
+
+- [x] Added KROLL Tether Bot Relay at `daily_games/KROLL_Tether_Bot_Relay/`, a fictional maintenance-drone tether platformer with three courses, 90-second course limits, two recoveries, thruster/tether controls and one-time scoring.
+- [x] Registered the game in Survival Test Hub; launch-button contract is 44. Standalone and root Test Hub scenes use script-relative rules loading.
+- [x] Added manager-reuse terrain rebind lifecycle coverage: release original caps/ramps/patches, recreate patch instances with the same stable IDs, reject malformed input without partial geometry, rebuild four caps/four ramps and restore base collision on clear.
+- [x] Expanded the deterministic 4×4 terrain soak to 120 layouts (five seeds; 60 compatible, 60 mixed; 2–8 distinct perturbations per mixed layout). Preserved the Run 97 60-layout baseline separately.
+- [x] Feature PR #232 merged as `e2f7a33a8bb9b5df9a4043c2428fc26f08b801d7`.
+- [x] Exact-head Godot 4.3 full Run #1163 passed 443/443 step records, zero failures/skips; cleanup, container shutdown and job completion succeeded.
+- [x] Focused Run 94–99 #62 passed 34/34; Run 93 #67 and Run 92 #72 each passed 13/13.
+- [ ] Run a separate post-merge main-push workflow on `e2f7a33a8bb9b5df9a4043c2428fc26f08b801d7`.
+- [ ] Add a controller-driven `MineralChunkController` unload/reload regression that proves the real production load/unload path rebinds the same terrain stable IDs to replacement patch instances. Run 99 currently validates manager reuse directly; the controller integration remains a distinct coverage gap.
+
+### Corrected terrain status
+
+The older Run 97 note above that lists “implement actual four-way shared corner-cap geometry” as outstanding is superseded. The production manager already contains the geometry; Run 98 verified both checkerboard diagonal orientations, and Run 99 verified manager reuse/rebind lifecycle. Do not reimplement existing geometry. The next terrain task is the controller-driven unload/reload integration test described above.
+
+### Remaining limitations
+
+- Local rendered GUI/renderer, GPU performance and physical iPhone touch QA remain untested; all recorded Run 98/99 engine evidence is cloud Godot 4.3 headless CI.
+- World-save schema remains version 1.
+- A post-merge main workflow for final Run 99 SHA has not yet been confirmed.
