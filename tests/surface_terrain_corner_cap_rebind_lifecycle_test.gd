@@ -123,13 +123,14 @@ func _run() -> void:
 	_expect(int(manager.call("get_corner_cap_count")) == 4, "manager owns exactly four new cap bodies")
 	_expect(int(manager.call("get_transition_count")) == 4, "manager owns exactly four new ramp bodies")
 
-	for stable_id in STABLE_IDS:
-		for corner in CORNERS:
-			var new_cap: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner)
-			_expect(is_instance_valid(new_cap), "reloaded stable ID resolves to a live cap: " + stable_id + " " + corner)
-			if is_instance_valid(new_cap):
-				_expect(not old_cap_ids.has(new_cap.get_instance_id()), "reloaded cap uses a new instance rather than a stale body")
-				_expect(new_cap.collision_layer == 1, "reloaded cap collision is enabled after commit")
+	for index in range(STABLE_IDS.size()):
+		var stable_id: String = STABLE_IDS[index]
+		var corner: String = CORNERS[index]
+		var new_cap: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner)
+		_expect(is_instance_valid(new_cap), "reloaded stable ID resolves to a live cap: " + stable_id + " " + corner)
+		if is_instance_valid(new_cap):
+			_expect(not old_cap_ids.has(new_cap.get_instance_id()), "reloaded cap uses a new instance rather than a stale body")
+			_expect(new_cap.collision_layer == 1, "reloaded cap collision is enabled after commit")
 	for edge_key_value in descriptors.keys():
 		var new_edge: StaticBody3D = manager.call("get_transition_body", str(edge_key_value))
 		_expect(is_instance_valid(new_edge), "reloaded edge resolves to a live shared ramp")
