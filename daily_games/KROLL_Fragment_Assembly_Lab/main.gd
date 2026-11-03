@@ -197,7 +197,7 @@ func get_title_text() -> String:
 	return title_label.text if is_instance_valid(title_label) else "KROLL // FRAGMENT ASSEMBLY LAB"
 
 func get_level_count() -> int:
-	return Rules.get_level_count()
+	return rules.get_level_count()
 
 func get_fragment_button_count() -> int:
 	return fragment_grid.get_child_count() if is_instance_valid(fragment_grid) else 0
@@ -230,7 +230,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 			var index: int = int(key_event.keycode - KEY_1)
-			var available: Array = Rules.get_available_fragments(state)
+			var available: Array = rules.get_available_fragments(state)
 			if index >= 0 and index < available.size():
 				perform_fragment(str(available[index].get("id", "")))
 				get_viewport().set_input_as_handled()
