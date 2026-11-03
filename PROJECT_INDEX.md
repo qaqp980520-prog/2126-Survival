@@ -1914,3 +1914,30 @@
 - Post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059) on `529fd85f458c022d0025e19f8758dad6735b219e` completed successfully: 433/433 step records, zero failures/skips, cleanup, container shutdown and job completion succeeded.
 - Repository branch API currently reports `main.protected=false` and required checks enforcement off. Configure branch protection/ruleset as a separate repository-administration task; this closeout does not change settings.
 - Local GUI/renderer, GPU and physical iPhone QA remain untested. Godot validation was headless 4.3 CI.
+
+
+## 2026-11-03 Run 98 — KROLL Fragment Assembly Lab + dual-diagonal corner-cap regression (feature merged)
+
+- New Godot 4.3 project: `daily_games/KROLL_Fragment_Assembly_Lab/`. Three fictional sequence-assembly labs; players select fragments whose prefix overlaps the current suffix by at least two characters and whose result remains a prefix of the hidden target. Three mismatches fail a lab; passed labs award once and cannot be replayed for duplicate points.
+- Controls: 1–5, R, N, mouse and touch. No external assets, add-ons, network dependency or world-save migration.
+- Survival Test Hub launch entries: 43.
+- Independent model replay verified exactly one valid next fragment at each stage and a 300-point perfect campaign. This was model-level verification; exact engine evidence is the Godot CI below.
+- Existing terrain regression: the production manager already contained four-way shared corner-cap geometry. Run 98 expanded coverage to both checkerboard diagonals (NW/SE high and NE/SW high), checking four caps, four trimmed ramps, collision raycasts, stable ownership, failed-preflight preservation and clear-all restoration. No production geometry or world-save schema change.
+- Feature PR [#231](https://github.com/qaqp980520-prog/2126-Survival/pull/231) merged as `3e7639cae1dc44ec133bbbdbc5cf38d8263829fe`.
+- Exact-head full Godot 4.3 Run [#1133](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41582581897) passed 437/437 step records, zero failures/skips, including cleanup and job completion.
+- Exact-head focused Run 94–98 [#36](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41582581891) passed 28/28; Run 93 [#41](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41582581884) and Run 92 [#46](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41582581894) each passed 13/13.
+- The Run 97 documentation PR [#230](https://github.com/qaqp980520-prog/2126-Survival/pull/230) subsequently merged as `0fd7de109997301b4127fc279576555fad2b4d3e`; this is the base SHA for Run 99.
+
+## 2026-11-03 Run 99 — KROLL Tether Bot Relay + terrain rebind lifecycle (feature merged)
+
+- New Godot 4.3 project: `daily_games/KROLL_Tether_Bot_Relay/`. A fictional non-human maintenance drone navigates Dockyard Relay, Broken Gantry and Spiral Service Shaft using tether nodes and short thruster boosts. Each course has a 90-second limit, two recoveries and a one-time score award; the third fall ends the course.
+- Controls: A/D or arrows, Space, E/click/tap to attach or release, R, N, C; six touch controls (LEFT, RIGHT, BOOST, TETHER, RESET, NEXT). No external assets/add-ons/network dependency.
+- Survival Test Hub launch entries: 44. Standalone and root Test Hub scenes load the same rules script relative to the attached game script.
+- Added `tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd`: manager commits four caps/four ramps, clears and releases original bodies/patches, accepts replacement patch instances with the same stable IDs, rejects a malformed descriptor without partial geometry, rebuilds four new caps/four ramps, and restores base collision on final clear.
+- Expanded deterministic 4×4 terrain soak to 120 layouts: five seeds × 24 layouts, 60 compatible and 60 mixed, with 2–8 distinct perturbations in mixed layouts. Preserved the Run 97 60-layout baseline as a separate historical test. No production terrain geometry or world-save schema change; schema remains 1.
+- Feature PR [#232](https://github.com/qaqp980520-prog/2126-Survival/pull/232) merged as `e2f7a33a8bb9b5df9a4043c2428fc26f08b801d7`.
+- Exact-head full Godot 4.3 Run [#1163](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41596180732) passed 443/443 step records, zero failures/skips. Tether Bot import/rules/runtime steps #436–438, rebind lifecycle #439 and 120-layout soak #440 all passed; post-checkout, container stop and job completion also succeeded.
+- Exact-head focused Run 94–99 [#62](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41596180801) passed 34/34; Run 93 [#67](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41596180706) and Run 92 [#72](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41596180744) each passed 13/13.
+- Candidate head was `6c13e080335e6405051e3558355cf44f27a1f620`, 63 commits / 17 files / +1,349 / -31. A superseded focused run #37 failed because one test state lookup retained the Run 97 stable-ID prefix; fixed in commit `32c344dd820ced9af97ce9a3a07d04f7f7c28616`. The corrected exact head passed.
+- Final main after Run 99: `e2f7a33a8bb9b5df9a4043c2428fc26f08b801d7`. A separate post-merge main-push run for this combined SHA has not been confirmed.
+- Local rendered GUI/renderer, GPU performance and physical iPhone touch QA remain untested; cloud CI is headless Godot 4.3.
