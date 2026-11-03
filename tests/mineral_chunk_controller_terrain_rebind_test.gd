@@ -61,7 +61,25 @@ func _run() -> void:
 	await process_frame
 	_expect(old_patch_ref.get_ref() == null, "unloaded production patch instance is released")
 	_expect(int(manager.call("get_corner_cap_count")) == 0, "three remaining chunks remove the obsolete four-way cap")
-	_expect(int(manager.call("get_transition_count")) == 2, "three remaining chunks retain only their two live shared ramps")
+	# The remaining NW/NE/SW patches form an L. Its two perpendicular seams meet
+	# at NW's south-east corner, so the resolver intentionally blocks both ramps
+	# until a complete four-patch cap junction exists.
+	_expect(int(manager.call("get_transition_count")) == 0, "incomplete three-patch junction keeps both perpendicular ramps in safe step fallback")
+	var blocked_reports: Array = manager.call("get_blocked_corner_reports")
+	_expect(blocked_reports.size() == 1, "the partial L junction reports one blocked shared corner")
+	if blocked_reports.size() == 1:
+		var blocked_report: Dictionary = blocked_reports[0]
+		_expect(str(blocked_report.get("corner", "")) == "south_east" and str(blocked_report.get("policy", "")) == "step_fallback", "partial L junction identifies the south-east safe fallback")
+	var north_west_patch: Node3D = generations[0]["patch"] as Node3D
+	var north_east_patch: Node3D = generations[1]["patch"] as Node3D
+	var south_west_patch: Node3D = generations[2]["patch"] as Node3D
+	_expect(not bool(north_west_patch.call("is_shared_transition_active", "east")) and not bool(north_west_patch.call("is_shared_transition_active", "south")), "north-west patch disables both conflicting shared sides")
+	_expect(not bool(north_east_patch.call("is_shared_transition_active", "west")), "north-east patch disables its shared west side during fallback")
+	_expect(not bool(south_west_patch.call("is_shared_transition_active", "north")), "south-west patch disables its shared north side during fallback")
+	for remaining_index in range(3):
+		var remaining_patch: Node3D = generations[remaining_index]["patch"] as Node3D
+		var remaining_collision: CollisionShape3D = remaining_patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+		_expect(remaining_collision != null and not remaining_collision.disabled, "safe fallback preserves base collision on " + remaining_patch.name)
 
 	var replacement: Dictionary = _new_patch_chunk("Replacement_SE", POSITIONS[3])
 	var new_patch: Node3D = replacement["patch"] as Node3D
