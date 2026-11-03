@@ -44,6 +44,7 @@ const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
+const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
 
 var status_label: Label
 
@@ -364,6 +365,12 @@ func _build_ui() -> void:
 		"KROLL Tether Bot Relay",
 		"操控維修無人機連接維修節點，使用推進器穿越三座太空設施；支援鍵盤、滑鼠與觸控。",
 		TETHER_BOT_RELAY_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Archive Curator",
+		"策劃三座展廳：挑選四件展品，利用主題標籤與相鄰連結達成分數目標。支援鍵盤、滑鼠與觸控。",
+		ARCHIVE_CURATOR_SCENE
 	)
 	_add_scene_button(
 		launch_list,
