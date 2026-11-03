@@ -604,7 +604,7 @@ func _run() -> void:
 		await process_frame
 		_expect(tether_bot_game.call("get_title_text") == "KROLL // TETHER BOT RELAY", "root-loaded Tether Bot Relay displays its title")
 		_expect(tether_bot_game.call("get_course_count") == 3, "root-loaded Tether Bot Relay exposes three courses")
-		_expect(tether_bot_game.call("get_anchor_count") >= 3, "root-loaded Tether Bot Relay builds its first course anchors")
+		_expect(tether_bot_game.call("get_tether_node_count") >= 3, "root-loaded Tether Bot Relay builds its first course maintenance nodes")
 		_expect(tether_bot_game.call("get_touch_control_count") == 6, "root-loaded Tether Bot Relay exposes six touch controls")
 		tether_bot_game.queue_free()
 		await process_frame
