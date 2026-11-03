@@ -67,7 +67,13 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		return false
 	if AdapterScript.make_stable_id(chunk_id, "probe").is_empty():
 		return false
-	if _chunk_roots.has(chunk_id) or chunk_root.get_parent() != null:
+	if _chunk_roots.has(chunk_id):
+		var existing_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if not is_instance_valid(existing_root) or not existing_root.is_queued_for_deletion():
+			return false
+		if not unload_chunk(chunk_id, now_unix):
+			return false
+	if chunk_root.get_parent() != null:
 		return false
 
 	var veins: Dictionary = {}
@@ -236,7 +242,8 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	_chunk_crops.erase(chunk_id)
 	_chunk_objects.erase(chunk_id)
 	remove_child(chunk_root)
-	chunk_root.queue_free()
+	if not chunk_root.is_queued_for_deletion():
+		chunk_root.queue_free()
 	var adjacency_result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 	if not bool(adjacency_result.get("ok", false)):
 		push_error("Terrain adjacency rebuild failed after chunk unload: %s" % str(adjacency_result.get("error", "unknown")))
@@ -246,50 +253,70 @@ func get_chunk_root(chunk_id: String) -> Node3D:
 	if not _chunk_roots.has(chunk_id):
 		return null
 	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
-	return chunk_root if is_instance_valid(chunk_root) else null
+	return chunk_root if is_instance_valid(chunk_root) and not chunk_root.is_queued_for_deletion() else null
 
 func is_chunk_loaded(chunk_id: String) -> bool:
-	return _chunk_roots.has(chunk_id) and is_instance_valid(_chunk_roots[chunk_id])
+	if not _chunk_roots.has(chunk_id):
+		return false
+	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+	return is_instance_valid(chunk_root) and not chunk_root.is_queued_for_deletion()
 
 func get_loaded_chunk_ids() -> PackedStringArray:
 	var ids := PackedStringArray()
 	for chunk_id in _chunk_roots.keys():
-		if is_instance_valid(_chunk_roots[chunk_id]):
+		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if is_instance_valid(chunk_root) and not chunk_root.is_queued_for_deletion():
 			ids.append(str(chunk_id))
 	ids.sort()
 	return ids
 
 func get_loaded_mineral_nodes() -> Array[Node3D]:
 	var nodes: Array[Node3D] = []
-	for local_veins in _chunk_veins.values():
+	for chunk_id in _chunk_roots.keys():
+		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
+			continue
+		var local_veins: Dictionary = _chunk_veins.get(chunk_id, {})
 		for vein_value in local_veins.values():
 			var vein := vein_value as Node3D
-			if is_instance_valid(vein):
+			if is_instance_valid(vein) and not vein.is_queued_for_deletion():
 				nodes.append(vein)
 	return nodes
 
 func refresh_crop_plots() -> void:
-	for local_plots in _chunk_crops.values():
+	for chunk_id in _chunk_roots.keys():
+		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
+			continue
+		var local_plots: Dictionary = _chunk_crops.get(chunk_id, {})
 		for plot_value in local_plots.values():
 			var plot: Node = plot_value as Node
-			if is_instance_valid(plot) and plot.has_method("refresh"):
+			if is_instance_valid(plot) and not plot.is_queued_for_deletion() and plot.has_method("refresh"):
 				plot.call("refresh")
 
 func get_loaded_crop_plots() -> Array[Node3D]:
 	var plots: Array[Node3D] = []
-	for local_plots in _chunk_crops.values():
+	for chunk_id in _chunk_roots.keys():
+		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
+			continue
+		var local_plots: Dictionary = _chunk_crops.get(chunk_id, {})
 		for plot_value in local_plots.values():
 			var plot := plot_value as Node3D
-			if is_instance_valid(plot):
+			if is_instance_valid(plot) and not plot.is_queued_for_deletion():
 				plots.append(plot)
 	return plots
 
 func get_loaded_world_state_nodes() -> Array[Node3D]:
 	var nodes: Array[Node3D] = []
-	for chunk_objects in _chunk_objects.values():
+	for chunk_id in _chunk_roots.keys():
+		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
+			continue
+		var chunk_objects: Dictionary = _chunk_objects.get(chunk_id, {})
 		for node_value in chunk_objects.values():
 			var node := node_value as Node3D
-			if is_instance_valid(node):
+			if is_instance_valid(node) and not node.is_queued_for_deletion():
 				nodes.append(node)
 	return nodes
 
