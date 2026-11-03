@@ -1514,3 +1514,12 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - [ ] Repository protection: main still reports `protected=false`; no active ruleset was returned. Follow up in [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236). Current connected GitHub tools expose read-only protection inspection, not a settings-write operation.
 - [ ] Local rendered GUI/GPU and physical iPhone touch QA remain untested.
 - World-save schema remains version 1; no migration was introduced.
+
+
+## Run 101 closeout and Run 102 follow-up — 2026-11-03
+
+- Run 101 feature PR #238 merged as `0618663eca961c54192878b3a761af8ddb28da35`; exact-head full Godot 4.3 Run #1183 passed 453/453 step records with zero failures/skips and successful cleanup/container shutdown/job completion.
+- Focused compatibility runs passed: Run 101 #2 13/13, Run 92 #86 13/13, Run 93 #81 13/13, Run 94–100 #76 39/39.
+- Post-merge main push CI remains unconfirmed; the available commit-workflow lookup only returns PR-triggered runs.
+- Run 102 follow-up: async staging currently validates each factory root as detached, but the same detached Node3D object could be returned for multiple coordinates before any staged root is parented. Add duplicate-instance detection before commit and a regression proving the request fails before controller registration, releases the staged root, and leaves both ownership maps empty.
+- Repository issue #236 remains open. Main branch protection has not been changed; the connected GitHub tools expose no settings-write action, and the last read returned 403. Local GUI/GPU/iPhone QA remains untested.
