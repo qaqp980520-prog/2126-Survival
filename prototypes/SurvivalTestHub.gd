@@ -49,6 +49,7 @@ const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_roo
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
+const ORBITAL_CURLING_SCENE := "res://daily_games/KROLL_Orbital_Curling/main_root.tscn"
 
 var status_label: Label
 
@@ -399,6 +400,12 @@ func _build_ui() -> void:
 		"KROLL Stealth Grid",
 		"收集門禁卡、觀察巡邏方向並避開前方視線；三個區域、鍵盤與觸控操作。",
 		STEALTH_GRID_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Orbital Curling",
+		"拖曳冰石、控制力道與反彈，讓三顆石頭盡量靠近目標圈；三個場次，支援滑鼠與觸控。",
+		ORBITAL_CURLING_SCENE
 	)
 	_add_scene_button(
 		launch_list,

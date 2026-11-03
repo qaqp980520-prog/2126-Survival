@@ -42,7 +42,7 @@ jobs:
           grep -q 'STEALTH_GRID_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'path="res://daily_games/KROLL_Stealth_Grid/main.gd"' daily_games/KROLL_Stealth_Grid/main_root.tscn
           grep -q 'labels.has("KROLL Stealth Grid")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 49' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 50' tests/survival_test_hub_smoke_test.gd
           grep -q 'existing_root.is_queued_for_deletion()' systems/MineralChunkController.gd
           grep -q 'not chunk_root.is_queued_for_deletion()' systems/MineralChunkController.gd
 
