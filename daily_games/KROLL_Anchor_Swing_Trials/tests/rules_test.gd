@@ -2,7 +2,7 @@ extends SceneTree
 
 const Rules = preload("res://rules.gd")
 var failures: Array[String] = []
-var rules: RefCounted = Rules.new()
+var rules: Variant = Rules.new()
 
 func _initialize() -> void:
 	_test_anchor_selection()
