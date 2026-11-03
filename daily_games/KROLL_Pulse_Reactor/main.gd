@@ -17,6 +17,8 @@ var _last_feedback: String = "SYSTEM READY"
 var _title_label: Label
 var _status_label: Label
 var _expected_label: Label
+var _timing_label: Label
+var _timing_bar: ProgressBar
 var _progress_bar: ProgressBar
 var _stats_label: Label
 var _feedback_label: Label
@@ -201,6 +203,20 @@ func _build_ui() -> void:
 	_expected_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.34))
 	column.add_child(_expected_label)
 
+	_timing_label = Label.new()
+	_timing_label.name = "TimingLabel"
+	_timing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timing_label.add_theme_font_size_override("font_size", 18)
+	_timing_label.add_theme_color_override("font_color", Color(0.45, 0.9, 1.0))
+	column.add_child(_timing_label)
+
+	_timing_bar = ProgressBar.new()
+	_timing_bar.name = "PulseWindowBar"
+	_timing_bar.min_value = 0
+	_timing_bar.max_value = 100
+	_timing_bar.show_percentage = false
+	column.add_child(_timing_bar)
+
 	_progress_bar = ProgressBar.new()
 	_progress_bar.name = "BeatProgress"
 	_progress_bar.min_value = 0
@@ -296,8 +312,21 @@ func _update_ui() -> void:
 	if _state == "playing":
 		var lane: int = get_current_expected_lane()
 		_expected_label.text = "NEXT PULSE: %s" % Rules.lane_name(lane)
+		var interval: float = Rules.beat_interval(bpm)
+		var target_time: float = Rules.LEAD_IN_SECONDS + float(_beat_index) * interval
+		var remaining: float = target_time - _elapsed_seconds
+		var phase: float = clampf(1.0 - maxf(remaining, 0.0) / interval, 0.0, 1.0)
+		_timing_bar.value = phase * 100.0
+		if absf(remaining) <= Rules.GOOD_WINDOW:
+			_timing_label.text = "HIT WINDOW OPEN"
+			_timing_label.add_theme_color_override("font_color", Color(0.45, 1.0, 0.68))
+		else:
+			_timing_label.text = "NEXT BEAT IN %.2f s" % maxf(remaining, 0.0)
+			_timing_label.add_theme_color_override("font_color", Color(0.45, 0.9, 1.0))
 	else:
 		_expected_label.text = "RELAY %s" % _state.to_upper()
+		_timing_label.text = "RELAY FINISHED"
+		_timing_bar.value = 0.0
 	_progress_bar.value = _beat_index
 	_stats_label.text = "BEAT %02d / %02d     PERFECT %d     GOOD %d     MISS %d     COMBO %d     SCORE %d / 300" % [
 		_beat_index, Rules.BEATS_PER_RELAY, _perfect_count, _good_count, _miss_count, _combo, _score
