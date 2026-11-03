@@ -15,6 +15,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await _test_factory_detaches_controller_before_restore()
 	await _test_controller_detaches_during_restore_registration()
+	await _test_rollback_allows_detached_live_controller()
 	await _test_rollback_skips_queued_controller()
 	if _failures.is_empty():
 		print("Mineral grid rollback lifecycle regression passed.")
@@ -70,6 +71,26 @@ func _test_controller_detaches_during_restore_registration() -> void:
 	director.queue_free()
 	await process_frame
 	_expect(_last_factory_root == null or _last_factory_root.get_ref() == null, "rolled-back restoration root is released after queued deletion")
+
+func _test_rollback_allows_detached_live_controller() -> void:
+	var pair: Dictionary = await _make_pair()
+	var controller: Node3D = pair["controller"]
+	var director: Node = pair["director"]
+	var chunk := Node3D.new()
+	_last_factory_root = weakref(chunk)
+	_expect(controller.load_chunk("surface/chunk_1_0", chunk, 2500), "fixture loads a chunk before Controller detachment")
+	director.set("_managed_chunk_ids", {"surface/chunk_1_0": Vector2i(1, 0)})
+	root.remove_child(controller)
+	var ids: Array[String] = ["surface/chunk_1_0"]
+	var rollback_ok: bool = bool(director.call("_rollback_new_loads", ids, 2501))
+	_expect(rollback_ok, "rollback can still clean a detached but live Controller")
+	_expect(controller.unload_calls == 1, "detached live Controller receives exactly one unload")
+	_expect(controller.get_loaded_chunk_ids().is_empty(), "detached live Controller releases the loaded root")
+	_expect(director.get_managed_chunk_ids().is_empty(), "successful detached rollback clears Director ownership")
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+	_expect(_last_factory_root == null or _last_factory_root.get_ref() == null, "detached rollback root is released after frame cleanup")
 
 func _test_rollback_skips_queued_controller() -> void:
 	var pair: Dictionary = await _make_pair()
