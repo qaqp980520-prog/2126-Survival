@@ -3503,6 +3503,9 @@ jobs:
           test -f daily_games/KROLL_Stratosphere_Balloonist/rules.gd
           test -f daily_games/KROLL_Stratosphere_Balloonist/tests/rules_test.gd
           test -f daily_games/KROLL_Stratosphere_Balloonist/tests/game_smoke_test.gd
+          grep -q 'run/main_scene="res://main.tscn"' daily_games/KROLL_Stratosphere_Balloonist/project.godot
+          grep -q 'res://daily_games/KROLL_Stratosphere_Balloonist/main.gd' daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn
+          grep -q 'path="res://main.gd"' daily_games/KROLL_Stratosphere_Balloonist/main.tscn
           test -f tests/surface_terrain_four_way_corner_cap_test.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' tests/survival_test_hub_smoke_test.gd

@@ -1,5 +1,5 @@
 extends SceneTree
-const GameScene = preload("res://main_root.tscn")
+const GameScene = preload("res://main.tscn")
 var failures: Array[String] = []
 
 func _initialize() -> void:
