@@ -1552,3 +1552,21 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - Initial candidate `d4cbb771...` had a root Test Hub scene-path failure because the root scene used the standalone-relative script path. Corrected in `main_root.tscn`, added static and smoke assertions, and reran all exact-head workflows; initial failure retained as historical evidence, not counted as a pass.
 - Run 102 documentation PR [#242](https://github.com/qaqp980520-prog/2126-Survival/pull/242) merged as main SHA `8b4c86dce4cf59305e08b7f3f9dff352bd3cc987`; exact-head documentation Run [#1191](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41640361993) passed 458/458.
 - Post-merge main push CI for `8b4c86d...` has not surfaced through the connected workflow/status lookup; record as unconfirmed, not passed/failed. Main branch protection issue #236 remains open. Local Godot executable unavailable; local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## Run 104 follow-up — queued chunk-root recovery resolved (2026-11-03)
+
+The externally queued chunk-root recovery case is now covered and merged. `MineralChunkController.load_chunk()` detects an existing root that is still valid but already queued for deletion, invokes the normal `unload_chunk()` path first, and only then registers the replacement. Public live-root, loaded-ID, mineral, crop and world-object getters omit queued roots and queued children. The unload path persists the real SalvageCrate and MineralMiningNode state under their existing stable IDs; the queued root is not queued for deletion twice.
+
+Regression: `tests/mineral_grid_streaming_queued_root_recovery_test.gd` mutates crate loot identity/open state and gold vein stock, externally queues the shared root, synchronizes the same coordinate through the production Director, and verifies replacement instances restore both stable records while old weak references clear. Exact-head Run 104 focused passed 13/13; full Godot 4.3 Run #41647196682 passed 468/468; compatibility focused suites passed 117/117. Feature PR #245 merged as `7628fc980d739bd8000a916d59bcf306f8a9b31c`.
+
+Still unresolved: repository main branch protection / required status checks under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236). The connected GitHub integration exposes no branch-protection/ruleset write action; do not claim enforcement is enabled. Local rendered GUI/GPU and physical iPhone QA remain untested. The world-save schema remains version 1.
+
+
+## Run 105 follow-up — queued-root crop recovery covered (2026-11-03)
+
+The crop subsystem now has production-path regression coverage for an externally queued chunk root. The test uses a real `CropPlotVisual`, `CropRegistry`, `CropPlotController`, `MineralChunkController` and `MineralGridStreamingDirector`. It plants a stable-ID wheat crop, advances growth, queues the owning root externally, then synchronizes the same coordinate to force replacement through the normal unload/persistence path. It verifies that the replacement retains the stable crop ID and restores/catches up stage, progress, moisture and reload timestamp; repeating the same timestamp is idempotent, and old root/plot weak references clear.
+
+Exact-head feature PR [#247](https://github.com/qaqp980520-prog/2126-Survival/pull/247) merged as `564b36cd86510af3aaa7b5c7475fc7b8f2bee909`. Godot 4.3 full Run [#41651767754](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651767754) passed all 471 numbered steps plus cleanup/container shutdown/complete-job. Run 105 focused [#41651840241](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651840241) passed 14/14; compatibility focused suites passed 117/117. Initial cleanup failure due Git dubious ownership was fixed with `safe.directory "$GITHUB_WORKSPACE"` and guarded by the full workflow static check.
+
+No runtime crop mechanic or world-save schema change was introduced; schema remains version 1. Local GUI/GPU and physical iPhone QA remain untested. Post-merge main CI is unconfirmed, and main branch protection remains unresolved under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
