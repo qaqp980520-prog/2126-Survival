@@ -12,6 +12,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _test_three_by_three_checkerboard_multi_junctions()
+	await _test_compatible_and_incompatible_adjacent_junctions_fall_back_together()
 	if failures.is_empty():
 		print("Three-by-three terrain multi-junction corner cap regression passed.")
 		quit(0)
@@ -166,6 +167,95 @@ func _test_three_by_three_checkerboard_multi_junctions() -> void:
 		for side in ["east", "west", "north", "south"]:
 			_expect(not bool(patch.call("is_shared_transition_active", side)), "clear_all resets " + patch.name + " " + side + " ownership")
 
+	holder.queue_free()
+	await process_frame
+	await process_frame
+
+func _test_compatible_and_incompatible_adjacent_junctions_fall_back_together() -> void:
+	var holder := Node3D.new()
+	holder.name = "MixedCompatibilityCornerCapTestRoot"
+	root.add_child(holder)
+
+	var levels: Array = [
+		[2, 0, 1],
+		[0, 2, 0],
+		[0, 2, 0]
+	]
+	var patches: Array[Node3D] = []
+	var stable_ids: Dictionary = {}
+	var patches_by_id: Dictionary = {}
+	for z in range(3):
+		for x in range(3):
+			var patch: Node3D = PatchScript.new()
+			patch.name = "MixedPatch_%d_%d" % [x, z]
+			patch.position = Vector3(float(x) * PATCH_SIZE, 0.0, float(z) * PATCH_SIZE)
+			holder.add_child(patch)
+			var stable_id: String = "mixed/%d_%d" % [x, z]
+			patches.append(patch)
+			stable_ids[patch.get_instance_id()] = stable_id
+			patches_by_id[stable_id] = patch
+	await process_frame
+	await physics_frame
+
+	for z in range(3):
+		for x in range(3):
+			var level: int = int(levels[z][x])
+			var state := {"height_level": level, "surface_type": "metal" if level == 2 else "soil", "revision": 1}
+			var stable_id: String = "mixed/%d_%d" % [x, z]
+			_expect(bool(patches_by_id[stable_id].call("apply_world_object_state", state)), stable_id + " accepts mixed terrain state")
+
+	var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	_expect(bool(binding.get("ok", false)), "mixed 3x3 patches bind into a complete adjacency window")
+	_expect(int(binding.get("pair_count", -1)) == 9, "mixed 3x3 fixture has nine unequal cardinal edges")
+	if not bool(binding.get("ok", false)):
+		holder.queue_free()
+		await process_frame
+		return
+
+	var manager: Node3D = ManagerScript.new()
+	holder.add_child(manager)
+	var descriptors: Dictionary = binding.get("descriptors", {})
+	var report: Dictionary = manager.call("sync_transitions", descriptors, patches_by_id)
+	await process_frame
+	await physics_frame
+
+	_expect(bool(report.get("ok", false)), "manager accepts the mixed-compatibility topology")
+	_expect(int(report.get("corner_cap_count", -1)) == 0, "a compatible junction sharing an edge with an incompatible junction is conservatively demoted")
+	_expect(int(manager.call("get_corner_cap_count")) == 0, "no partial cap set is committed across mixed junction compatibility")
+	_expect(int(report.get("blocked_count", -1)) == 7, "all seven edges incident to either conflicting junction remain blocked")
+	_expect(int(report.get("active_count", -1)) == 2, "only the two non-conflicting bottom-row ramps remain active")
+	_expect(int(manager.call("get_transition_count")) == 2, "manager owns only the two non-conflicting bottom-row ramps")
+
+	var shared_edge_key: String = ""
+	for edge_key in descriptors.keys():
+		var descriptor: Dictionary = descriptors[edge_key]
+		var first_id: String = str(descriptor.get("first_stable_id", ""))
+		var second_id: String = str(descriptor.get("second_stable_id", ""))
+		if (first_id == "mixed/1_0" and second_id == "mixed/1_1") or (first_id == "mixed/1_1" and second_id == "mixed/1_0"):
+			shared_edge_key = str(edge_key)
+	_expect(not shared_edge_key.is_empty(), "shared edge between compatible and incompatible junctions is present")
+	if not shared_edge_key.is_empty():
+		_expect(report.get("blocked_edge_keys", []).has(shared_edge_key), "shared edge remains blocked when either endpoint junction is incompatible")
+		_expect(not is_instance_valid(manager.call("get_transition_body", shared_edge_key)), "shared edge does not receive a one-sided ramp that overlaps the fallback endpoint")
+
+	var reports: Array = report.get("blocked_corner_reports", [])
+	_expect(reports.size() == 8, "both adjacent junctions retain all eight corner reports")
+	for report_value in reports:
+		_expect(str(report_value.get("policy", "")) == "step_fallback", "both connected junctions report safe step_fallback")
+	for z in range(2):
+		for x in range(3):
+			var patch: Node3D = patches_by_id["mixed/%d_%d" % [x, z]]
+			for side in ["east", "west", "north", "south"]:
+				_expect(not bool(patch.call("is_shared_transition_active", side)), patch.name + " keeps fallback collision on " + side)
+			var base_collision := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+			_expect(base_collision != null and not base_collision.disabled, patch.name + " retains full base collision")
+
+	manager.call("clear_all")
+	await process_frame
+	await physics_frame
+	for patch in patches:
+		var base_collision := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
+		_expect(base_collision != null and not base_collision.disabled, "clear_all restores base collision for " + patch.name)
 	holder.queue_free()
 	await process_frame
 	await process_frame
