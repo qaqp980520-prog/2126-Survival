@@ -46,8 +46,11 @@ func _test_checkerboard_junction_builds_four_caps(high_nw_se: bool) -> void:
 
     var high_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
     var low_state := {"height_level": 0, "surface_type": "soil", "revision": 1}
-    var high_patches: Array[Node3D] = [north_west, south_east] if high_nw_se else [north_east, south_west]
-    var low_patches: Array[Node3D] = [north_east, south_west] if high_nw_se else [north_west, south_east]
+    var high_patches: Array = [north_west, south_east]
+    var low_patches: Array = [north_east, south_west]
+    if not high_nw_se:
+        high_patches = [north_east, south_west]
+        low_patches = [north_west, south_east]
     for patch in high_patches:
         _expect(bool(patch.call("apply_world_object_state", high_state)), "high diagonal patch accepts state")
     for patch in low_patches:
