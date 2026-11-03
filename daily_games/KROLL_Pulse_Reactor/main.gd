@@ -72,11 +72,11 @@ func submit_lane_hit(lane: int, at_seconds: float = -1.0) -> Dictionary:
 		"perfect":
 			_perfect_count += 1
 			_combo += 1
-			_last_feedback = "PERFECT  +10"
+			_last_feedback = "PERFECT — ON TIME"
 		"good":
 			_good_count += 1
 			_combo += 1
-			_last_feedback = "GOOD  +6"
+			_last_feedback = "GOOD — IN WINDOW"
 		_:
 			_miss_count += 1
 			_combo = 0
