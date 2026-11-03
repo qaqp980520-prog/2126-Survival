@@ -206,7 +206,7 @@ func _test_compatible_and_incompatible_adjacent_junctions_fall_back_together() -
 
 	var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
 	_expect(bool(binding.get("ok", false)), "mixed 3x3 patches bind into a complete adjacency window")
-	_expect(int(binding.get("pair_count", -1)) == 9, "mixed 3x3 fixture has nine unequal cardinal edges")
+	_expect(int(binding.get("pair_count", -1)) == 12, "mixed 3x3 fixture binds all twelve cardinal adjacency pairs")
 	if not bool(binding.get("ok", false)):
 		holder.queue_free()
 		await process_frame
