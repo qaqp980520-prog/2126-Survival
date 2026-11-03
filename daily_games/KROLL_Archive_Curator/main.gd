@@ -59,11 +59,18 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", 20)
 	add_child(margin)
 
+	var compact_layout: bool = get_viewport_rect().size.x < 850.0
+	var scroll := ScrollContainer.new()
+	scroll.name = "ArchiveScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 12)
-	margin.add_child(column)
+	scroll.add_child(column)
 
 	_title_label = Label.new()
 	_title_label.text = "KROLL // ARCHIVE CURATOR"
@@ -76,7 +83,11 @@ func _build_ui() -> void:
 	_subtitle_label.add_theme_color_override("font_color", Color(0.86, 0.9, 0.94))
 	column.add_child(_subtitle_label)
 
-	var body := HBoxContainer.new()
+	var body: BoxContainer
+	if compact_layout:
+		body = VBoxContainer.new()
+	else:
+		body = HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 22)
 	column.add_child(body)
@@ -90,14 +101,14 @@ func _build_ui() -> void:
 	card_heading.add_theme_font_size_override("font_size", 16)
 	card_panel.add_child(card_heading)
 	var card_grid := GridContainer.new()
-	card_grid.columns = 2
+	card_grid.columns = 1 if compact_layout else 2
 	card_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card_grid.add_theme_constant_override("h_separation", 10)
 	card_grid.add_theme_constant_override("v_separation", 10)
 	card_panel.add_child(card_grid)
 	for card_index in range(6):
 		var card_button := Button.new()
-		card_button.custom_minimum_size = Vector2(235, 92)
+		card_button.custom_minimum_size = Vector2(320, 80) if compact_layout else Vector2(235, 92)
 		card_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card_button.pressed.connect(_on_card_pressed.bind(card_index))
 		_card_buttons.append(card_button)
@@ -112,14 +123,14 @@ func _build_ui() -> void:
 	slot_heading.add_theme_font_size_override("font_size", 16)
 	slot_panel.add_child(slot_heading)
 	var slot_grid := GridContainer.new()
-	slot_grid.columns = 2
+	slot_grid.columns = 1 if compact_layout else 2
 	slot_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	slot_grid.add_theme_constant_override("h_separation", 10)
 	slot_grid.add_theme_constant_override("v_separation", 10)
 	slot_panel.add_child(slot_grid)
 	for slot_index in range(4):
 		var slot_button := Button.new()
-		slot_button.custom_minimum_size = Vector2(220, 145)
+		slot_button.custom_minimum_size = Vector2(320, 100) if compact_layout else Vector2(220, 145)
 		slot_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		slot_button.pressed.connect(_on_slot_pressed.bind(slot_index))
 		_slot_buttons.append(slot_button)
@@ -135,15 +146,17 @@ func _build_ui() -> void:
 	_score_label.add_theme_color_override("font_color", Color(0.68, 0.9, 1.0))
 	column.add_child(_score_label)
 
-	var action_row := HBoxContainer.new()
-	action_row.add_theme_constant_override("separation", 10)
+	var action_row := GridContainer.new()
+	action_row.columns = 2 if compact_layout else 4
+	action_row.add_theme_constant_override("h_separation", 10)
+	action_row.add_theme_constant_override("v_separation", 8)
 	column.add_child(action_row)
 	_recall_button = _add_action_button(action_row, "RECALL", Callable(self, "undo_last"))
 	_reset_button = _add_action_button(action_row, "RESET GALLERY", Callable(self, "reset_gallery"))
 	_next_button = _add_action_button(action_row, "NEXT GALLERY", Callable(self, "advance_gallery"))
 	_restart_button = _add_action_button(action_row, "RESTART CAMPAIGN", Callable(self, "restart_campaign"))
 
-func _add_action_button(parent: HBoxContainer, label_text: String, callback: Callable) -> Button:
+func _add_action_button(parent: GridContainer, label_text: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = label_text
 	button.custom_minimum_size = Vector2(150, 42)
