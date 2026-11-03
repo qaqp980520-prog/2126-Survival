@@ -4114,3 +4114,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid staged-root lifecycle regression passed."
+      
+      - name: Verify Run 107 Waveform Calibrator and synchronous controller lifecycle inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Waveform_Calibrator/project.godot
+          test -f daily_games/KROLL_Waveform_Calibrator/main.tscn
+          test -f daily_games/KROLL_Waveform_Calibrator/main.gd
+          test -f daily_games/KROLL_Waveform_Calibrator/rules.gd
+          test -f daily_games/KROLL_Waveform_Calibrator/waveform_graph.gd
+          test -f daily_games/KROLL_Waveform_Calibrator/tests/rules_test.gd
+          test -f daily_games/KROLL_Waveform_Calibrator/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_sync_controller_lifecycle_test.gd
+          test -f tests/README_run107_sync_controller_lifecycle.md
+          test -f .github/workflows/run107-validation.yml
+          grep -Fq 'func _controller_ready_for_sync' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_controller.is_inside_tree()' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_controller.is_queued_for_deletion()' systems/MineralGridStreamingDirector.gd
+
+      - name: Import and parse KROLL Waveform Calibrator
+        run: godot --headless --path daily_games/KROLL_Waveform_Calibrator --editor --quit
+
+      - name: Run KROLL Waveform Calibrator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Waveform_Calibrator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Waveform Calibrator rules tests passed."
+
+      - name: Run KROLL Waveform Calibrator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Waveform_Calibrator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Waveform Calibrator runtime smoke test passed."
+
+      - name: Run synchronous controller lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_sync_controller_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid synchronous controller lifecycle regression passed."
+
