@@ -1952,3 +1952,17 @@
 - Exact-head full Godot 4.3 Run [#1178](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41600580811) passed 448/448 job step records, zero failures/skips, including Archive Curator import/rules/runtime, controller-driven terrain rebind, checkout cleanup, container shutdown and job completion. Focused Run 94–100 [#73](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41600580873) passed 39/39; Run 92 [#73](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41600580778) and Run 93 [#73](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41600580808) each passed 13/13.
 - Post-merge main push validation [Run #1179](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41602104676) passed 448/448, zero failures/skips; checkout cleanup, container shutdown and job completion succeeded.
 - No production terrain geometry or world-save schema change; schema remains version 1. Local rendered GUI/GPU and physical iPhone touch QA remain untested. Main is unprotected; track repository-administration follow-up in [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
+
+
+## 2026-11-03 Run 101 — KROLL Endgame Tactics and async streaming dependency guard (feature merged)
+
+- Added `daily_games/KROLL_Endgame_Tactics/`, a three-puzzle 8×8 rook mate-in-one trainer. Each puzzle has one legal mating move, a three-attempt limit for non-mating moves, and a one-time 100-point award. This is an authored trainer, not a complete chess engine.
+- Registered the game in the Survival Test Hub; launch-button contract is 46. Mouse/touch and keyboard controls are provided. No external assets, add-ons, network dependency or world-save migration.
+- Hardened `systems/MineralGridStreamingDirector.gd`: public `chunk_controller` and `chunk_factory` properties route direct assignment through the same guarded bind methods, preventing dependency swaps during async staging. Controller replacement remains blocked while managed chunks are owned; factory replacement is allowed after request completion.
+- Added `tests/mineral_grid_streaming_binding_guard_test.gd` and `tests/README_run101_streaming_binding_guard.md`. Regression verifies API and direct-property rejection during staging, unchanged request/dependencies, nine staged roots committed to the original controller, no roots received by a replacement controller, and ownership-map consistency.
+- Independent Python enumeration confirmed exactly one authored mating destination in each puzzle; this is supplemental to Godot validation.
+- Feature PR [#238](https://github.com/qaqp980520-prog/2126-Survival/pull/238) merged as `0618663eca961c54192878b3a761af8ddb28da35`.
+- Exact-head Godot 4.3 full Run [#1183](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41618343134) passed 453/453 step records, zero failures/skips. Run 101 steps #446–450 passed; post-checkout cleanup, container shutdown and job completion also succeeded.
+- Focused Run 101 #2 passed 13/13; Run 92 #86 passed 13/13; Run 93 #81 passed 13/13; Run 94–100 #76 passed 39/39. All included successful cleanup/job completion.
+- A post-merge main push workflow for merge SHA `0618663...` is not confirmed by the available PR-triggered workflow lookup; combined status was empty. Do not claim post-merge CI passed.
+- World-save schema remains version 1. Local rendered GUI/GPU and physical iPhone QA remain untested; engine evidence is cloud Godot 4.3 headless CI.
