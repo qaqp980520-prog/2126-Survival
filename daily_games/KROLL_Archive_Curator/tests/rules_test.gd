@@ -7,7 +7,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var rules: RefCounted = RulesScript.new()
+	var rules: Variant = RulesScript.new()
 	_expect(rules.get_gallery_count() == 3, "three authored galleries exist")
 	_expect(rules.get_gallery(-1).is_empty(), "negative gallery index is rejected")
 	_expect(rules.get_gallery(3).is_empty(), "out-of-range gallery index is rejected")
