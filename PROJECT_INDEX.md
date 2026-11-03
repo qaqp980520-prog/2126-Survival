@@ -1806,3 +1806,33 @@
 - Four-way shared corner geometry remains a separate feature; the current change validates descriptor orientation only.
 - Signal Resonator uses visual timing and has no bundled audio; audio latency, local GUI/renderer, GPU and iPhone touch QA remain untested.
 - After documentation PR validation, continue with a separately designed four-way corner geometry implementation and randomized long-duration streaming soak.
+
+
+## 2026-11-03 Run 94 — Sonar Triangulator and four-way terrain junction regression
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Sonar_Triangulator/`, an 8×8 acoustic-search game with four buoys (three corner stations plus one south-edge station), rounded Euclidean range readings, three missions, candidate triangulation, optional fourth-station disambiguation and false-return elimination.
+- M0.2 checks all 12 three-of-four sensor subsets across the three missions. Independent enumeration of all 64 board cells confirmed the true target remains in every subset; only Abyssal Relay omitting buoy A or D leaves two candidates, and the fourth reading resolves the target at (5,3).
+- Added a compact UI profile below 520 px, stacked action controls, shortened sensor/candidate labels and persistent unused-buoy guidance. Runtime checks cover 320 px and 375 px width calculations; physical device rendering remains untested.
+- Added standalone project, wrapper scene, README, rules tests and runtime smoke test. Registered the game in the root Survival Test Hub; the hub now exposes 39 launch buttons. No third-party assets/plugins or network dependency.
+
+### Existing-system regression
+- Added `tests/surface_terrain_four_way_corner_junction_test.gd` using four live patches in a 2×2 junction with unequal cardinal edge heights.
+- The production binder/manager path verifies all four intersecting ramps are blocked atomically under `step_fallback`, all four per-patch corner reports map to the correct compass orientation, blocked edge keys and reports are deterministic across reversed descriptor insertion order, no partial shared collider is staged, and full patch collision remains active.
+- This is a safe-fallback regression only. It does **not** implement a four-way shared corner-cap mesh/collider; clipping and geometry remain separate work.
+- World-save schema remains version 1.
+
+### CI correction history
+- Exact-head full Run [#1093](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41548297587) failed at step #405 because the Run 93 static gate still expected 38 Test Hub buttons after Run 94 registered the 39th button. The Sonar gates were skipped by the earlier gate failure.
+- Corrected `.github/workflows/godot-validation.yml` from 38 to 39 in commit `ac4f81b626ddb449c232105ed9ff5b76fa29d8e7`; corrected the smoke-test assertion description from “thirty-eight” to “thirty-nine” in commit `5a0ff1f3a17798b5748d97d5ab1577411c42a89f`.
+- Static audit of all 13 changed paths found no conflict markers. All new game/Test Hub/focused-workflow files had zero trailing whitespace; one pre-existing whitespace-only line at workflow line 3158 was left untouched.
+
+### Exact validation and merge
+- Feature PR [#223](https://github.com/qaqp980520-prog/2126-Survival/pull/223) merged from exact candidate `5a0ff1f3a17798b5748d97d5ab1577411c42a89f`; squash merge commit `7d3fb9262b7576af4b9d482946c911f97687f2b6`.
+- Exact-head full Godot 4.3 Run [#1095](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41549893815) completed successfully: 416/416 step records, zero failures, zero skips, successful checkout cleanup, container shutdown and job completion.
+- Run 94 focused [#9](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41549893871), Run 92 focused [#19](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41549893764) and Run 93 focused [#14](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41549893738) each passed 13/13 with cleanup and job completion.
+- Main after merge: `7d3fb9262b7576af4b9d482946c911f97687f2b6`. A separate post-merge main workflow result was not yet available at documentation-branch creation; do not claim it passed.
+
+### Constraints and next steps
+- Local Godot GUI/renderer, GPU performance and iPhone touch QA remain untested; this run used cloud Godot 4.3 headless validation.
+- Continue with a separately tested four-way corner-cap geometry implementation; preserve `step_fallback` until clipping, shared ownership and rollback are proven.
