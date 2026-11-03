@@ -4177,7 +4177,7 @@ jobs:
           test -f tests/mineral_grid_streaming_rollback_lifecycle_test.gd
           grep -Fq 'func _restore_unloaded_chunks' systems/MineralGridStreamingDirector.gd
           grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
-          grep -Fq 'Controller is queued for deletion' tests/README_run108_rollback_lifecycle.md
+          grep -Fq 'queued or invalid Controller' tests/README_run108_rollback_lifecycle.md
 
       - name: Import and parse KROLL Pulse Reactor
         run: godot --headless --path daily_games/KROLL_Pulse_Reactor --editor --quit
