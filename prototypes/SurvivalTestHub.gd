@@ -48,6 +48,7 @@ const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_roo
 const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
+const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
 
 var status_label: Label
 
@@ -392,6 +393,12 @@ func _build_ui() -> void:
 		"KROLL Casefile: Station Zero",
 		"調查三起太空站事件：選出嫌疑人，再用兩項互相印證的證據鎖定責任者。",
 		CASEFILE_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Stealth Grid",
+		"收集門禁卡、觀察巡邏方向並避開前方視線；三個區域、鍵盤與觸控操作。",
+		STEALTH_GRID_SCENE
 	)
 	_add_scene_button(
 		launch_list,
