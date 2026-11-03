@@ -1,0 +1,88 @@
+name: Run 103 focused Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Casefile_Station_Zero/**'
+      - 'systems/MineralGridStreamingDirector.gd'
+      - 'systems/MineralChunkController.gd'
+      - 'tests/mineral_grid_streaming_queued_root_rejection_test.gd'
+      - 'prototypes/SurvivalTestHub.gd'
+      - 'tests/survival_test_hub_smoke_test.gd'
+      - '.github/workflows/godot-validation.yml'
+      - '.github/workflows/run101-validation.yml'
+      - '.github/workflows/run102-validation.yml'
+      - '.github/workflows/run94-validation.yml'
+      - '.github/workflows/run103-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Run 103 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Casefile_Station_Zero/project.godot
+          test -f daily_games/KROLL_Casefile_Station_Zero/main.tscn
+          test -f daily_games/KROLL_Casefile_Station_Zero/main_root.tscn
+          test -f daily_games/KROLL_Casefile_Station_Zero/main.gd
+          test -f daily_games/KROLL_Casefile_Station_Zero/rules.gd
+          test -f daily_games/KROLL_Casefile_Station_Zero/tests/rules_test.gd
+          test -f daily_games/KROLL_Casefile_Station_Zero/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_queued_root_rejection_test.gd
+          grep -q 'CASEFILE_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'labels.has("KROLL Casefile: Station Zero")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 48' tests/survival_test_hub_smoke_test.gd
+          grep -q 'factory_root_queued_for_deletion' systems/MineralGridStreamingDirector.gd
+          grep -q 'chunk_root.is_queued_for_deletion()' systems/MineralChunkController.gd
+
+      - name: Import and parse KROLL Casefile Station Zero
+        run: godot --headless --path daily_games/KROLL_Casefile_Station_Zero --editor --quit
+
+      - name: Run KROLL Casefile Station Zero rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Casefile_Station_Zero --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Casefile Station Zero rules tests passed."
+
+      - name: Run KROLL Casefile Station Zero runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Casefile_Station_Zero --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Casefile Station Zero runtime smoke test passed."
+
+      - name: Import and parse root Survival project
+        run: godot --headless --path . --editor --quit
+
+      - name: Run root Test Hub smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Run queued-for-deletion chunk root rejection regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_queued_root_rejection_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid queued-root rejection regression passed."
