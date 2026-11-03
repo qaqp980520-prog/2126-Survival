@@ -4065,3 +4065,52 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid queued-root crop recovery regression passed."
+
+
+      - name: Verify Run 106 Prism Beam Lab and staged-root lifecycle inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Prism_Beam_Lab/project.godot
+          test -f daily_games/KROLL_Prism_Beam_Lab/main.tscn
+          test -f daily_games/KROLL_Prism_Beam_Lab/main.gd
+          test -f daily_games/KROLL_Prism_Beam_Lab/rules.gd
+          test -f daily_games/KROLL_Prism_Beam_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Prism_Beam_Lab/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_staged_root_lifecycle_test.gd
+          test -f tests/README_run106_staged_root_lifecycle.md
+          test -f .github/workflows/run106-validation.yml
+          grep -Fq 'func has_unique_solution' daily_games/KROLL_Prism_Beam_Lab/rules.gd
+          grep -Fq 'func _validate_async_staged_roots' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'staged_root_queued_for_deletion' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'safe.directory "$GITHUB_WORKSPACE"' .github/workflows/run106-validation.yml
+
+      - name: Import and parse KROLL Prism Beam Lab
+        run: godot --headless --path daily_games/KROLL_Prism_Beam_Lab --editor --quit
+
+      - name: Run KROLL Prism Beam Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Prism_Beam_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Prism Beam Lab rules tests passed."
+
+      - name: Run KROLL Prism Beam Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Prism_Beam_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Prism Beam Lab runtime smoke test passed."
+
+      - name: Run staged-root lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_staged_root_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid staged-root lifecycle regression passed."
