@@ -74,6 +74,8 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
     holder.add_child(manager)
     var descriptors: Dictionary = binding.get("descriptors", {})
     var report: Dictionary = manager.call("sync_transitions", descriptors, patches)
+    await process_frame
+    await physics_frame
     _expect(bool(report.get("ok", false)), "manager accepts the height-continuous checkerboard junction")
     _expect(int(report.get("active_count", -1)) == 4, "all four edge ramps are activated around the cap")
     _expect(int(report.get("blocked_count", -1)) == 0, "height-continuous edges are not left in fallback")
