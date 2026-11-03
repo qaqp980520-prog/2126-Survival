@@ -19,6 +19,24 @@ const MAX_STEPS := 900
 const SHOTS_PER_ROUND := 3
 const CAMPAIGN_GOAL := 45
 
+func get_rink_min() -> Vector2:
+	return RINK_MIN
+
+func get_rink_max() -> Vector2:
+	return RINK_MAX
+
+func get_stone_radius() -> float:
+	return STONE_RADIUS
+
+func get_min_power() -> float:
+	return MIN_POWER
+
+func get_max_power() -> float:
+	return MAX_POWER
+
+func get_shots_per_round() -> int:
+	return SHOTS_PER_ROUND
+
 func new_campaign() -> Dictionary:
 	return {
 		"round_index": 0,
@@ -56,7 +74,8 @@ func throw_stone(state: Dictionary, aim: Vector2, power: float) -> Dictionary:
 	var velocities: Array[Vector2] = []
 	for stone_value in next.get("stones", []):
 		var stone: Dictionary = stone_value
-		positions.append(stone.get("position", LAUNCH_POINT) as Vector2)
+		var stone_position: Vector2 = stone.get("position", LAUNCH_POINT)
+		positions.append(stone_position)
 		velocities.append(Vector2.ZERO)
 	positions.append(LAUNCH_POINT)
 	velocities.append(aim.normalized() * power)
