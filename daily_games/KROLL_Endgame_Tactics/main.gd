@@ -161,6 +161,7 @@ func _on_square_pressed(position: Vector2i) -> void:
 		if _board[_index(position)] == "WR":
 			_selected_from = position
 			_message = "Rook selected. Choose a legal straight-line destination."
+			_refresh_ui()
 		else:
 			_message = "Select the white rook (WR) first."
 			_refresh_ui()
@@ -174,6 +175,7 @@ func _on_square_pressed(position: Vector2i) -> void:
 	if not attempt_move(previous_from, position) and _board[_index(position)] == "WR":
 		_selected_from = position
 		_message = "Rook selection changed."
+		_refresh_ui()
 
 func attempt_move(from: Vector2i, to: Vector2i) -> bool:
 	if _status != "playing" or _rules == null:
