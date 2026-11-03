@@ -24,7 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  godot-full-validation:
+    name: Godot Full Compatibility Gate
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
