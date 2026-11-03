@@ -398,6 +398,16 @@ func get_goal_center() -> Vector2:
 func get_player_position() -> Vector2:
 	return player.global_position if is_instance_valid(player) else Vector2.ZERO
 
+func get_player_velocity_for_test() -> Vector2:
+	return player.velocity if is_instance_valid(player) else Vector2.ZERO
+
+func set_player_velocity_for_test(velocity: Vector2) -> void:
+	if is_instance_valid(player):
+		player.velocity = velocity
+
+func get_tether_length() -> float:
+	return _rope_length
+
 func set_player_position_for_test(position: Vector2) -> void:
 	if is_instance_valid(player):
 		player.global_position = position
