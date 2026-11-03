@@ -2,7 +2,7 @@
 
 Godot 4.3 root-project test command:
 
-    godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+    godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd
 
 ## Deterministic coverage
 
@@ -16,3 +16,8 @@ Godot 4.3 root-project test command:
 - The first layout injects an invalid descriptor after a valid commit and verifies the previous geometry and ramp instance survive failed preflight.
 
 This is an expanded deterministic regression harness for existing production geometry. It does not change terrain geometry, collision ownership or world-save schema 1. The fixed seed batch is repeatable; renderer/GPU seam inspection remains separate.
+
+
+## Historical baseline note — Run 99
+
+The original 60-layout Run 97 script is preserved as `tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd`. The extended file `tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd` now represents the Run 99 120-layout version with 2–8 mixed-cell perturbations.
