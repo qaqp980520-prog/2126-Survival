@@ -10,18 +10,19 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _run() -> void:
-    await _test_checkerboard_junction_builds_four_caps()
+    await _test_checkerboard_junction_builds_four_caps(true)
+    await _test_checkerboard_junction_builds_four_caps(false)
     if failures.is_empty():
-        print("Four-way terrain corner cap geometry regression passed.")
+        print("Four-way terrain corner cap geometry regression passed for both checkerboard diagonals.")
         quit(0)
     else:
         for failure in failures:
             push_error("FAIL: " + failure)
         quit(1)
 
-func _test_checkerboard_junction_builds_four_caps() -> void:
+func _test_checkerboard_junction_builds_four_caps(high_nw_se: bool) -> void:
     var holder := Node3D.new()
-    holder.name = "FourWayCornerCapTestRoot"
+    holder.name = "FourWayCornerCapTestRoot_NW_SE" if high_nw_se else "FourWayCornerCapTestRoot_NE_SW"
     root.add_child(holder)
 
     var north_west: Node3D = PatchScript.new()
@@ -45,9 +46,14 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
 
     var high_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
     var low_state := {"height_level": 0, "surface_type": "soil", "revision": 1}
-    for patch in [north_west, south_east]:
+    var high_patches: Array = [north_west, south_east]
+    var low_patches: Array = [north_east, south_west]
+    if not high_nw_se:
+        high_patches = [north_east, south_west]
+        low_patches = [north_west, south_east]
+    for patch in high_patches:
         _expect(bool(patch.call("apply_world_object_state", high_state)), "high diagonal patch accepts state")
-    for patch in [north_east, south_west]:
+    for patch in low_patches:
         _expect(bool(patch.call("apply_world_object_state", low_state)), "low diagonal patch accepts state")
 
     var stable_ids := {

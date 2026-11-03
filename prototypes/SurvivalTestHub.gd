@@ -42,6 +42,7 @@ const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/ma
 const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
+const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 
 var status_label: Label
 
@@ -350,6 +351,12 @@ func _build_ui() -> void:
 		"KROLL Mess Hall Rush",
 		"在三個太空站班次中處理十二張餐點訂單；選擇正確工序，管理所有訂單的倒數期限。支援鍵盤、滑鼠與觸控。",
 		MESS_HALL_RUSH_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Fragment Assembly Lab",
+		"拼接三組虛構字串片段，依照至少兩個字元的重疊規則重建目標序列。",
+		FRAGMENT_ASSEMBLY_LAB_SCENE
 	)
 	_add_scene_button(
 		launch_list,

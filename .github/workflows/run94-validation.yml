@@ -1,4 +1,4 @@
-name: Run 94–97 focused Godot validation
+name: Run 94–98 focused Godot validation
 
 on:
   pull_request:
@@ -12,6 +12,7 @@ on:
       - 'tests/surface_terrain_randomized_corner_cap_soak_test.gd'
       - 'tests/README_run96_terrain_soak.md'
       - 'daily_games/KROLL_Mess_Hall_Rush/**'
+      - 'daily_games/KROLL_Fragment_Assembly_Lab/**'
       - 'tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd'
       - 'tests/README_run97_terrain_soak.md'
       - 'tests/surface_terrain_four_way_corner_junction_test.gd'
@@ -47,7 +48,7 @@ jobs:
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 42' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 43' tests/survival_test_hub_smoke_test.gd
           test -f daily_games/KROLL_Emberline_Command/project.godot
           test -f daily_games/KROLL_Emberline_Command/tests/rules_test.gd
           test -f tests/surface_terrain_randomized_corner_cap_soak_test.gd
@@ -163,7 +164,7 @@ jobs:
           grep -q 'equal-height edge' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'MESS_HALL_RUSH_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Mess Hall Rush")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 42' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 43' tests/survival_test_hub_smoke_test.gd
 
       - name: Import and parse KROLL Mess Hall Rush
         run: godot --headless --path daily_games/KROLL_Mess_Hall_Rush --editor --quit
@@ -194,3 +195,34 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Run 97 extended 4x4 terrain corner-cap soak passed"
+
+      - name: Verify Run 98 Fragment Assembly Lab inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Fragment_Assembly_Lab/project.godot
+          test -f daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn
+          test -f daily_games/KROLL_Fragment_Assembly_Lab/rules.gd
+          test -f daily_games/KROLL_Fragment_Assembly_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Fragment_Assembly_Lab/tests/game_smoke_test.gd
+          grep -q 'FRAGMENT_ASSEMBLY_LAB_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'labels.has("KROLL Fragment Assembly Lab")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 43' tests/survival_test_hub_smoke_test.gd
+      - name: Import and parse KROLL Fragment Assembly Lab
+        run: godot --headless --path daily_games/KROLL_Fragment_Assembly_Lab --editor --quit
+      - name: Run KROLL Fragment Assembly Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Fragment_Assembly_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fragment Assembly Lab rules tests passed."
+      - name: Run KROLL Fragment Assembly Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Fragment_Assembly_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fragment Assembly Lab runtime smoke test passed."

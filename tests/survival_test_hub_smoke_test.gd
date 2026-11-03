@@ -43,6 +43,7 @@ const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/ma
 const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
+const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -55,6 +56,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(BACKROOMS_SCENE), "Backrooms prototype scene exists")
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
+	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
 	_expect(ResourceLoader.exists(PINBALL_SCENE), "Orbital Pinball game scene exists")
 	_expect(ResourceLoader.exists(TETHER_SCENE), "Tether Recovery game scene exists")
 	_expect(ResourceLoader.exists(SHADOW_SCENE), "Shadow Courier game scene exists")
@@ -96,7 +98,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 42, "hub exposes forty-two world, prototype and game launch buttons")
+	_expect(buttons.size() == 43, "hub exposes forty-three world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -104,6 +106,7 @@ func _run() -> void:
 	_expect(labels.has("地表探索／區塊與礦物串流"), "hub labels the surface streaming prototype")
 	_expect(labels.has("後室傳送門實驗場"), "hub labels the Backrooms portal prototype")
 	_expect(labels.has("KROLL Mess Hall Rush"), "hub labels the Mess Hall Rush game")
+	_expect(labels.has("KROLL Fragment Assembly Lab"), "hub labels the Fragment Assembly Lab game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
@@ -577,6 +580,19 @@ func _run() -> void:
 		_expect(mess_hall_game.call("get_action_button_count") == 11, "root-loaded Mess Hall Rush builds eleven workstation buttons")
 		_expect(mess_hall_game.call("get_control_button_count") == 2, "root-loaded Mess Hall Rush exposes two controls")
 		mess_hall_game.queue_free()
+		await process_frame
+
+	var fragment_lab_scene := load(FRAGMENT_ASSEMBLY_LAB_SCENE) as PackedScene
+	_expect(fragment_lab_scene != null, "root hub can load the Fragment Assembly Lab scene")
+	if fragment_lab_scene != null:
+		var fragment_lab := fragment_lab_scene.instantiate()
+		root.add_child(fragment_lab)
+		await process_frame
+		_expect(fragment_lab.call("get_title_text") == "KROLL // FRAGMENT ASSEMBLY LAB", "root-loaded Fragment Assembly Lab displays its title")
+		_expect(fragment_lab.call("get_level_count") == 3, "root-loaded Fragment Assembly Lab exposes three labs")
+		_expect(fragment_lab.call("get_fragment_button_count") == 4, "root-loaded Fragment Assembly Lab builds four first-lab fragment buttons")
+		_expect(fragment_lab.call("get_control_button_count") == 2, "root-loaded Fragment Assembly Lab exposes two controls")
+		fragment_lab.queue_free()
 		await process_frame
 
 	hub.queue_free()
