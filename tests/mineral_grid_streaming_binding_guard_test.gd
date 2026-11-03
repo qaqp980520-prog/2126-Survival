@@ -131,3 +131,10 @@ func _wait_for_request(request_id: int) -> Dictionary:
 			return completed_reports[request_id].duplicate(true)
 		await process_frame
 	return {}
+
+func _expect(condition: bool, description: String) -> void:
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures.append(description)
+		push_error("FAIL: " + description)

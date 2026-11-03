@@ -43,6 +43,7 @@ jobs:
           grep -q 'bind_chunk_factory(value)' systems/MineralGridStreamingDirector.gd
           grep -q '_chunk_controller = candidate' systems/MineralGridStreamingDirector.gd
           grep -q '_chunk_factory = factory' systems/MineralGridStreamingDirector.gd
+          grep -q '^func _expect(condition: bool, description: String)' tests/mineral_grid_streaming_binding_guard_test.gd
 
       - name: Import and parse KROLL Endgame Tactics
         run: godot --headless --path daily_games/KROLL_Endgame_Tactics --editor --quit
