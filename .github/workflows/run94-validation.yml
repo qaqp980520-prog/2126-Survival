@@ -7,6 +7,7 @@ on:
       - 'daily_games/KROLL_Stratosphere_Balloonist/**'
       - 'systems/SurfaceTerrainTransitionColliderManager.gd'
       - 'tests/surface_terrain_four_way_corner_cap_test.gd'
+      - 'tests/surface_terrain_multi_junction_corner_cap_test.gd'
       - 'tests/surface_terrain_four_way_corner_junction_test.gd'
       - 'prototypes/SurvivalTestHub.gd'
       - 'tests/survival_test_hub_smoke_test.gd'
@@ -41,6 +42,8 @@ jobs:
           grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
           grep -q 'shared_corner_cap' systems/SurfaceTerrainTransitionColliderManager.gd
           test -f tests/surface_terrain_four_way_corner_cap_test.gd
+          test -f tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'double_trim_count == 4' tests/surface_terrain_multi_junction_corner_cap_test.gd
           grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
 
       - name: Import and parse KROLL Sonar Triangulator
@@ -94,3 +97,12 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Four-way terrain corner cap geometry regression passed."
+
+      - name: Run 3x3 terrain multi-junction corner cap regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/surface_terrain_multi_junction_corner_cap_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Three-by-three terrain multi-junction corner cap regression passed."
