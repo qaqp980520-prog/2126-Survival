@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="Script" path="res://daily_games/KROLL_Casefile_Station_Zero/main.gd" id="1_main"]
 
 [node name="CasefileStationZero" type="Control"]
 layout_mode = 3
