@@ -97,6 +97,24 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
 			continue
 		var candidate: Variant = chunk_factory.call(coord)
+		var controller_alive: bool = chunk_controller != null and is_instance_valid(chunk_controller)
+		if not _controller_ready_for_sync():
+			_free_unowned_root(candidate)
+			var controller_detached: bool = controller_alive and not chunk_controller.is_inside_tree()
+			var controller_queued: bool = controller_alive and chunk_controller.is_queued_for_deletion()
+			var rollback_ok: bool = false
+			if controller_alive:
+				rollback_ok = _rollback_new_loads(newly_loaded, now_unix)
+			else:
+				_managed_chunk_ids.clear()
+			_set_sync_report(false, "controller_lifecycle", "Controller became unavailable during synchronous chunk generation.", rollback_ok, {
+					"controller_destroyed": not controller_alive,
+					"controller_detached": controller_detached,
+					"controller_queued_for_deletion": controller_queued,
+					"newly_loaded_ids": newly_loaded.duplicate(),
+					"new_loads_rollback_ok": rollback_ok
+				})
+			return false
 		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
 		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
