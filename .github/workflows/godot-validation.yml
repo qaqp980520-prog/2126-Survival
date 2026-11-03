@@ -3628,6 +3628,8 @@ jobs:
           grep -q 'range(SEEDS.size())' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'range(12)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'rng.randi_range(2, 4)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+          grep -q 'required_edge_count' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+          grep -q 'equal-height edge' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'Run 97 extended 4x4 terrain corner-cap soak passed' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
 
       - name: Import and parse KROLL Mess Hall Rush
