@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://daily_games/KROLL_Anchor_Swing_Trials/main.gd" id="1_main"]
-
-[node name="KROLLAnchorSwingTrials" type="Node2D"]
-script = ExtResource("1_main")
