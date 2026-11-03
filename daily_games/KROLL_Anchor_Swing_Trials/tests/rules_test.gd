@@ -27,16 +27,21 @@ func _test_rope_geometry() -> void:
 	_expect(is_equal_approx(Rules.calculate_rope_length(10.0), Rules.MIN_ROPE_LENGTH), "rope length respects its minimum")
 	_expect(is_equal_approx(Rules.calculate_rope_length(999.0), Rules.MAX_ROPE_LENGTH), "rope length respects its maximum")
 	var outward: Dictionary = Rules.constrain_rope(Vector2(120.0, 0.0), Vector2(30.0, 12.0), Vector2.ZERO, 80.0)
-	_expect(outward["tension"], "rope reports tension outside its length")
-	_expect((outward["position"] as Vector2).is_equal_approx(Vector2(80.0, 0.0)), "rope clamps the player to its maximum radius")
-	_expect((outward["velocity"] as Vector2).is_equal_approx(Vector2(0.0, 12.0)), "rope removes outward radial speed but preserves tangential speed")
+	var outward_position: Vector2 = outward["position"]
+	var outward_velocity: Vector2 = outward["velocity"]
+	_expect(bool(outward["tension"]), "rope reports tension outside its length")
+	_expect(outward_position.is_equal_approx(Vector2(80.0, 0.0)), "rope clamps the player to its maximum radius")
+	_expect(outward_velocity.is_equal_approx(Vector2(0.0, 12.0)), "rope removes outward radial speed but preserves tangential speed")
 	var inward: Dictionary = Rules.constrain_rope(Vector2(120.0, 0.0), Vector2(-30.0, 12.0), Vector2.ZERO, 80.0)
-	_expect((inward["velocity"] as Vector2).is_equal_approx(Vector2(-30.0, 12.0)), "rope preserves inward radial speed")
+	var inward_velocity: Vector2 = inward["velocity"]
+	_expect(inward_velocity.is_equal_approx(Vector2(-30.0, 12.0)), "rope preserves inward radial speed")
 	var slack: Dictionary = Rules.constrain_rope(Vector2(40.0, 0.0), Vector2(4.0, 8.0), Vector2.ZERO, 80.0)
+	var slack_position: Vector2 = slack["position"]
 	_expect(not bool(slack["tension"]), "rope remains slack inside its length")
-	_expect((slack["position"] as Vector2).is_equal_approx(Vector2(40.0, 0.0)), "slack rope does not move the player")
+	_expect(slack_position.is_equal_approx(Vector2(40.0, 0.0)), "slack rope does not move the player")
 	var zero_offset: Dictionary = Rules.constrain_rope(Vector2.ZERO, Vector2(1.0, 2.0), Vector2.ZERO, 80.0)
-	_expect((zero_offset["velocity"] as Vector2).is_equal_approx(Vector2(1.0, 2.0)), "zero-offset rope constraint is safe")
+	var zero_velocity: Vector2 = zero_offset["velocity"]
+	_expect(zero_velocity.is_equal_approx(Vector2(1.0, 2.0)), "zero-offset rope constraint is safe")
 
 func _test_horizontal_motion() -> void:
 	var accelerated: Vector2 = Rules.apply_horizontal(Vector2.ZERO, 1.0, 0.1, false)
