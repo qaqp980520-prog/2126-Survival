@@ -63,8 +63,8 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
-	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_factory.is_valid():
-		_set_sync_report(false, "validation", "Controller or chunk factory is unavailable.", true)
+	if not _controller_ready_for_sync() or not chunk_factory.is_valid():
+		_set_sync_report(false, "validation", "Controller must be alive, inside the scene tree and not queued for deletion; chunk factory must be available.", true)
 		return false
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
@@ -456,16 +456,19 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		"unloaded_stale_count": unloaded_stale.size()
 	})
 
-func _async_dependencies_available() -> bool:
+func _controller_ready_for_sync() -> bool:
 	return (
-		is_inside_tree()
-		and not is_queued_for_deletion()
-		and chunk_controller != null
+		chunk_controller != null
 		and is_instance_valid(chunk_controller)
 		and chunk_controller.is_inside_tree()
 		and not chunk_controller.is_queued_for_deletion()
-		and chunk_factory.is_valid()
+		and chunk_controller.has_method("load_chunk")
+		and chunk_controller.has_method("unload_chunk")
+		and chunk_controller.has_method("is_chunk_loaded")
 	)
+
+func _async_dependencies_available() -> bool:
+	return is_inside_tree() and not is_queued_for_deletion() and _controller_ready_for_sync() and chunk_factory.is_valid()
 
 func _validate_async_staged_roots(staged_roots: Dictionary) -> Dictionary:
 	for raw_id in staged_roots.keys():
@@ -666,8 +669,8 @@ func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> b
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position is outside supported grid-coordinate bounds.", false)
 		return false
-	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("get_loaded_chunk_ids"):
-		_set_sync_report(false, "recovery_validation", "Controller cannot provide its actual loaded chunk IDs.", false)
+	if not _controller_ready_for_sync() or not chunk_controller.has_method("get_loaded_chunk_ids"):
+		_set_sync_report(false, "recovery_validation", "Controller must be alive, inside the scene tree and not queued for deletion, and must provide its actual loaded chunk IDs.", false)
 		return false
 	var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
 	if not (raw_ids is Array or raw_ids is PackedStringArray):
