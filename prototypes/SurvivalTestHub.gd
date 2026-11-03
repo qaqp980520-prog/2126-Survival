@@ -41,6 +41,7 @@ const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_r
 const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
 const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
+const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 
 var status_label: Label
 
@@ -343,6 +344,12 @@ func _build_ui() -> void:
 		"KROLL Emberline Command",
 		"管理三場野火防線：配置永久防火帶、投放水彈並依照風向推進火勢；保護三座中繼站。支援鍵盤與觸控。",
 		EMBERLINE_COMMAND_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Mess Hall Rush",
+		"在三個太空站班次中處理十二張餐點訂單；選擇正確工序，管理所有訂單的倒數期限。支援鍵盤、滑鼠與觸控。",
+		MESS_HALL_RUSH_SCENE
 	)
 	_add_scene_button(
 		launch_list,
