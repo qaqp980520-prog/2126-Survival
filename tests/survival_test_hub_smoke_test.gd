@@ -120,6 +120,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Endgame Tactics"), "hub labels the Endgame Tactics game")
 	_expect(labels.has("KROLL Reactor Deck Command"), "hub labels the Reactor Deck Command game")
 	_expect(labels.has("KROLL Casefile: Station Zero"), "hub labels the Casefile Station Zero game")
+	_expect(labels.has("KROLL Stealth Grid"), "hub labels the Stealth Grid game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
