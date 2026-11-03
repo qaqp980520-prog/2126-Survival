@@ -118,7 +118,9 @@ func calculate_score(gallery_index: int, placements: Dictionary) -> Dictionary:
 			continue
 		var first_card: Dictionary = cards[int(placements[first_slot])]
 		var second_card: Dictionary = cards[int(placements[second_slot])]
-		if _shares_tag(first_card.get("tags", []), second_card.get("tags", [])):
+		var first_tags: Array = first_card.get("tags", [])
+		var second_tags: Array = second_card.get("tags", [])
+		if _shares_tag(first_tags, second_tags):
 			adjacency_count += 1
 
 	var theme_bonus: int = theme_count * THEME_BONUS
