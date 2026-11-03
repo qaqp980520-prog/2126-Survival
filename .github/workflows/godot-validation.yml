@@ -3507,6 +3507,9 @@ jobs:
           grep -q 'res://daily_games/KROLL_Stratosphere_Balloonist/main.gd' daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn
           grep -q 'path="res://main.gd"' daily_games/KROLL_Stratosphere_Balloonist/main.tscn
           test -f tests/surface_terrain_four_way_corner_cap_test.gd
+          test -f tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'double_trim_count == 4' tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'single_trim_count == 8' tests/surface_terrain_multi_junction_corner_cap_test.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Stratosphere Balloonist")' tests/survival_test_hub_smoke_test.gd
@@ -3542,3 +3545,12 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Four-way terrain corner cap geometry regression passed."
+
+      - name: Run 3x3 terrain multi-junction corner cap regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/surface_terrain_multi_junction_corner_cap_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Three-by-three terrain multi-junction corner cap regression passed."
