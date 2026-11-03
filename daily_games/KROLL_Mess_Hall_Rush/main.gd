@@ -143,9 +143,11 @@ func _refresh_ui() -> void:
 	if not is_instance_valid(order_list):
 		return
 	for child in order_list.get_children():
-		child.free()
+		order_list.remove_child(child)
+		child.queue_free()
 	var orders: Array = state.get("orders", [])
-	for order_value in orders:
+	for order_index in range(orders.size()):
+		var order_value: Variant = orders[order_index]
 		if not (order_value is Dictionary):
 			continue
 		var order: Dictionary = order_value
@@ -156,8 +158,8 @@ func _refresh_ui() -> void:
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(0.0, 54.0)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.text = "%s  |  %s  |  %s  |  %d ticks" % [
-			order_id.to_upper(),
+		button.text = "%d  |  %s  |  %s  |  %d ticks" % [
+			order_index + 1,
 			str(order.get("dish", "Unknown")),
 			str(order.get("status", "unknown")).to_upper() if str(order.get("status", "")) != "active" else next_step.to_upper(),
 			int(order.get("remaining", 0))
@@ -174,8 +176,9 @@ func _refresh_ui() -> void:
 		str(state.get("shift_name", "")),
 		str(state.get("status", "")).to_upper()
 	]
-	score_label.text = "SCORE %d  ·  SERVED %d  ·  FAILED %d" % [
+	score_label.text = "SCORE %d  ·  SHIFT %d/4  ·  CAMPAIGN %d/12  ·  FAILED %d" % [
 		int(state.get("score", 0)),
+		int(state.get("served_count", 0)),
 		int(state.get("served_total", 0)),
 		int(state.get("failed_total", 0))
 	]
