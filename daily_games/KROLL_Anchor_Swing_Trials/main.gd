@@ -44,7 +44,7 @@ const COURSES: Array = [
 	}
 ]
 
-var rules: RefCounted
+var rules: Variant
 var course_index: int = 0
 var player: CharacterBody2D
 var start_position: Vector2 = Vector2.ZERO
