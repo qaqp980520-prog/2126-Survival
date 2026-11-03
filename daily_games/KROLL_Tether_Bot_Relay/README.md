@@ -11,7 +11,7 @@ A fictional maintenance drone navigates three artificial-gravity service routes 
 - R: retry the current course before it is cleared.
 - N: advance after clearing a course.
 - C: restart the whole campaign.
-- Touch UI: LEFT, RIGHT, BOOST, HOOK, RESET and NEXT.
+- Touch UI: LEFT, RIGHT, BOOST, TETHER, RESET and NEXT.
 
 ## Courses
 
