@@ -3461,7 +3461,7 @@ jobs:
           grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 39' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
           grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
 
       - name: Import and parse KROLL Sonar Triangulator
