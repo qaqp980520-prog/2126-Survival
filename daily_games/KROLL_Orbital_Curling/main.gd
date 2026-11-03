@@ -162,7 +162,7 @@ func _refresh() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.045, 0.07), true)
-	var rink_rect := Rect2(rules.get_rink_min(), rules.get_rink_max() - rules.RINK_MIN)
+	var rink_rect := Rect2(rules.get_rink_min(), rules.get_rink_max() - rules.get_rink_min())
 	draw_rect(rink_rect, Color(0.12, 0.25, 0.34), true)
 	draw_rect(rink_rect, Color(0.58, 0.84, 0.92), false, 3.0)
 	draw_line(Vector2(rink_rect.position.x, LAUNCH_POINT.y), Vector2(rink_rect.end.x, LAUNCH_POINT.y), Color(0.55, 0.72, 0.79, 0.35), 1.0)
