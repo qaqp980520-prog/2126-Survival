@@ -59,7 +59,7 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", 20)
 	add_child(margin)
 
-	var compact_layout: bool = get_viewport_rect().size.x < 850.0
+	var compact_layout: bool = get_viewport_rect().size.x < 1000.0
 	var scroll := ScrollContainer.new()
 	scroll.name = "ArchiveScroll"
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
