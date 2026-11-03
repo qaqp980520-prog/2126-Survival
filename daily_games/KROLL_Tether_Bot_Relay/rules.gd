@@ -1,7 +1,7 @@
 extends RefCounted
 
 const GRAVITY: float = 1100.0
-const JUMP_SPEED: float = 560.0
+const BOOST_SPEED: float = 560.0
 const MAX_NODE_RANGE: float = 260.0
 const MIN_ROPE_LENGTH: float = 76.0
 const MAX_ROPE_LENGTH: float = 240.0
