@@ -1871,3 +1871,32 @@
 ### Constraints and next steps
 - Local GUI/renderer, GPU performance and physical iPhone touch QA remain untested; this run used cloud Godot 4.3 headless validation.
 - Continue with randomized long-duration multi-junction layouts and rendered seam inspection once a local Godot renderer is available.
+
+
+## Run 96 — Emberline Command and randomized 4×4 terrain corner-cap soak (2026-11-03)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Emberline_Command/`, an 8×8 turn-based wildfire-containment game with three authored missions: Ridge Watch, Canyon Shift and Basin Relay.
+- Players have two response actions per turn. Water suppresses a burning cell and wets nearby flammable cells; firebreaks interrupt spread; wind direction and fuel determine deterministic propagation; relays are protected objectives.
+- Includes keyboard, mouse and touch controls, mission replay, campaign score guards and standalone/root Test Hub scene paths. Root Test Hub now has 41 launch buttons.
+- The model is a deterministic educational fire-spread abstraction, not a real wildfire/atmospheric simulation. No external asset/plugin/network dependency and no world-save schema change.
+
+### Existing system regression: randomized 4×4 corner-cap soak
+- Added `tests/surface_terrain_randomized_corner_cap_soak_test.gd` and `tests/README_run96_terrain_soak.md`.
+- Fixed seed: `0x96C0A7`; 12 layouts total: six compatible checkerboards and six mixed layouts, each with one perturbed patch.
+- Compatible 4×4 patch layouts validate nine junctions, 36 unique per-patch corner-cap bodies and 24 shared edge ramps. Mixed layouts validate connected fallback propagation across the nine-junction graph, no partial cap set, blocked-edge/body agreement, collision-shell face counts, failed-preflight preservation and `clear_all` restoration.
+- This is expanded regression coverage for the existing Run 95 cap geometry; Run 96 does not change production cap geometry, collision ownership or world-save schema. Schema remains version 1.
+
+### CI failure history and correction
+- Full PR Run [#1117](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41565747264) failed at step #405 because the legacy Run 93 static gate still expected 40 Test Hub buttons after Emberline registered the 41st button. The job log confirms the exact failing command: `grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd`.
+- Corrected all three stale 40-button assertions in `.github/workflows/godot-validation.yml` to 41 in candidate commit `5a346519d615a09b6d1fde019b15b41ec7767b7e`. No game or terrain production code was changed to hide the workflow defect.
+
+### Exact validation and merge
+- Feature PR [#227](https://github.com/qaqp980520-prog/2126-Survival/pull/227) squash-merged from exact candidate `5a346519d615a09b6d1fde019b15b41ec7767b7e`; merge/main commit: `16249bf17b36ef1ba45e656d4a2b2e20bc287352`.
+- Exact-head full Godot 4.3 PR workflow [#1118](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029605) passed 428/428 step records, zero failures/skips, including the corrected Run 93 gate, Emberline import/rules/runtime checks, randomized 4×4 soak, checkout cleanup, container shutdown and job completion.
+- Exact-head focused Run 94/95 [#26](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029453) passed 19/19; Run 93 [#31](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029471) and Run 92 [#36](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029472) each passed 13/13, all with cleanup/job completion.
+- Post-merge main push workflow [#1119](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41571118271) passed 428/428 step records, zero failures/skips, including checkout cleanup, container shutdown and job completion.
+
+### Constraints and next steps
+- Local Godot GUI/renderer, GPU performance and physical iPhone touch QA remain untested; CI used cloud Godot 4.3 headless validation.
+- Continue with broader randomized multi-cell perturbations/longer soak windows and rendered cap-seam inspection when a local Godot renderer is available. Preserve current fallback/rollback guarantees.

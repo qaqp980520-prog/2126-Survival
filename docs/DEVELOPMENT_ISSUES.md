@@ -1426,3 +1426,26 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Headless Godot 4.3 validation does not certify rendered seam appearance, local GPU performance or physical iPhone touch behavior.
 - The Balloonist is an idealized educational altitude/wind model, not a complete atmospheric simulation.
 - World-save schema remains version 1.
+
+
+## Run 96 — Emberline Command and randomized 4×4 terrain cap soak (2026-11-03)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Emberline authored-solution fixture | A firebreak action returns a new immutable game state. The authored-plan test originally applied the action but discarded the returned state before advancing the turn. | Fixed the fixture to carry the returned state and assert the firebreak exists. Production game rules were not changed to conceal a test-fixture defect. |
+| Test Hub count | Emberline registered the 41st root Test Hub launch button, but three historical full-workflow static gates still expected 40. | Full Run #1117 failed at step #405. The exact failing grep was confirmed from the job log. All three stale assertions in `.github/workflows/godot-validation.yml` were updated to 41 in commit `5a346519d615a09b6d1fde019b15b41ec7767b7e`. |
+| Randomized 4×4 corner-cap soak | Previous 2×2/3×3 tests did not cover a larger 4×4 patch field with multiple connected junctions under deterministic mixed perturbations. | Added 12 seeded layouts: six compatible checkerboards and six one-cell mixed perturbations. Compatible layouts verify 9 junctions / 36 unique caps / 24 shared ramps; mixed layouts verify connected fallback propagation, zero partial caps, blocked-edge/body agreement, collision shell counts, rollback preservation and clear-all restoration. |
+| Production terrain geometry | Run 96 extends regression coverage rather than introducing a new geometry algorithm. | Existing Run 95 cap meshes/collision shells and connected fallback policy are unchanged. World-save schema remains version 1. |
+| Game simulation scope | Fire spread uses deterministic authored wind cycles, cell fuel and action rules. | Educational turn-based abstraction only; it is not a predictive wildfire or atmospheric model. |
+
+### Run 96 exact validation and merge
+- Feature PR [#227](https://github.com/qaqp980520-prog/2126-Survival/pull/227) squash-merged from exact candidate `5a346519d615a09b6d1fde019b15b41ec7767b7e` as `16249bf17b36ef1ba45e656d4a2b2e20bc287352`.
+- Exact-head full Godot 4.3 PR workflow [#1118](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029605) passed 428/428 step records, zero failures/skips, cleanup, container shutdown and job completion. Run 96 steps #420–425 all succeeded (contract, import, rules, runtime smoke, soak contract, soak execution).
+- Exact-head focused Run 94/95 [#26](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029453) passed 19/19; Run 93 [#31](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029471) and Run 92 [#36](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41570029472) each passed 13/13, all with cleanup/job completion.
+- Post-merge main push workflow [#1119](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41571118271) passed 428/428 step records, zero failures/skips, cleanup, container shutdown and job completion.
+
+### Remaining limitations and next steps
+- Cloud headless Godot 4.3 validation does not certify local rendered fire effects, GUI layout, GPU performance or physical iPhone touch behavior.
+- The 4×4 soak uses a fixed seed and one-cell perturbations per mixed layout; broaden to multiple perturbations/longer deterministic seed batches without weakening rollback or fallback assertions.
+- Inspect actual cap seams in a local renderer when available. Do not relax safe fallback based only on headless geometry checks.
+- No world-save migration or external asset/plugin dependency was introduced.
