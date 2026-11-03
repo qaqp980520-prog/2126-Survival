@@ -48,6 +48,7 @@ const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_r
 const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
 const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
+const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -104,7 +105,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 47, "hub exposes forty-seven world, prototype and game launch buttons")
+	_expect(buttons.size() == 48, "hub exposes forty-seven world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -653,6 +654,20 @@ func _run() -> void:
 		_expect(reactor_deck_game.call("get_encounter_count") == 3, "root-loaded Reactor Deck Command exposes three encounters")
 		_expect(reactor_deck_game.call("get_card_button_count") == 5, "root-loaded Reactor Deck Command builds five card buttons")
 		reactor_deck_game.queue_free()
+		await process_frame
+
+	var casefile_scene := load(CASEFILE_SCENE) as PackedScene
+	_expect(casefile_scene != null, "root hub can load the Casefile Station Zero scene")
+	if casefile_scene != null:
+		var casefile_game := casefile_scene.instantiate()
+		root.add_child(casefile_game)
+		await process_frame
+		_expect(casefile_game.call("get_title_text") == "KROLL // CASEFILE: STATION ZERO", "root-loaded Casefile displays its title")
+		_expect(casefile_game.call("get_case_count") == 3, "root-loaded Casefile exposes three incidents")
+		_expect(casefile_game.call("get_suspect_button_count") == 3, "root-loaded Casefile builds three suspect buttons")
+		_expect(casefile_game.call("get_evidence_button_count") == 3, "root-loaded Casefile builds three evidence buttons")
+		_expect(casefile_game.call("get_action_button_count") == 5, "root-loaded Casefile exposes five action buttons")
+		casefile_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
