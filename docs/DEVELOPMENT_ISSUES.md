@@ -2,6 +2,22 @@
 
 這份清單是目前的開發追蹤文件，與 GitHub Issues 功能不同；之後可逐項搬成正式 Issues。
 
+## Run 106 final verification — 2026-11-04
+
+- [x] Added standalone Godot 4.3+ KROLL Prism Beam Lab M0.1 at `daily_games/KROLL_Prism_Beam_Lab/`; three 7×7 mirror-routing levels each have exactly one solution among all 16 orientation states.
+- [x] Added `tests/mineral_grid_streaming_staged_root_lifecycle_test.gd`; a staged root queued for deletion while the factory produces the next candidate must abort before any Controller registration and release all staged state.
+- [x] Revalidate staged roots before/after factory callbacks, after frame yields, before commit and before each individual registration; add explicit invalid/queued/parented diagnostics.
+- [x] Feature PR #249 merged as `de56d39c2f9372bd90bc17a222f82df75180beea`; validated candidate `fec150957bb9ad4b2849384883d0c44c8fbf8966`.
+- [x] Exact-head Godot 4.3 full Run #41662249016 passed 475 numbered steps, zero failures/skips; cleanup #949, container shutdown #950 and complete-job #951 succeeded.
+- [x] Run 106 focused 12/12; combined Run 105–106 19/19; Run 101–104 compatibility 52/52.
+- [x] Corrected historical GDScript parse error from Run #41661960393 in commit `fec1509`; failed candidate is retained as history and not counted as a pass.
+- [x] No world-save schema change; schema remains version 1.
+- [ ] Post-merge main-push workflow for `de56d39...` is not surfaced by the connected commit-workflow lookup; do not claim it passed without an exact-SHA run.
+- [ ] Main protection / required checks remain unresolved under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
+- [ ] Local rendered GUI/GPU and physical iPhone QA remain untested because no local Godot executable is available.
+
+Next: finish the Run 104–106 documentation PR on the post-Run-106 main, validate its exact head, then proceed with a distinct Godot game and another evidence-driven production-system task.
+
 ## Run 65 verification — 2026-10-31
 
 - [x] Added KROLL Core Drill M0.1 at `daily_games/KROLL_Core_Drill/`: three eight-row/five-lane sites, ore quota, lane-adjacent drilling, energy/heat/hull management, coolant vent, keyboard and touch controls.
@@ -1552,3 +1568,21 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - Initial candidate `d4cbb771...` had a root Test Hub scene-path failure because the root scene used the standalone-relative script path. Corrected in `main_root.tscn`, added static and smoke assertions, and reran all exact-head workflows; initial failure retained as historical evidence, not counted as a pass.
 - Run 102 documentation PR [#242](https://github.com/qaqp980520-prog/2126-Survival/pull/242) merged as main SHA `8b4c86dce4cf59305e08b7f3f9dff352bd3cc987`; exact-head documentation Run [#1191](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41640361993) passed 458/458.
 - Post-merge main push CI for `8b4c86d...` has not surfaced through the connected workflow/status lookup; record as unconfirmed, not passed/failed. Main branch protection issue #236 remains open. Local Godot executable unavailable; local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## Run 104 follow-up — queued chunk-root recovery resolved (2026-11-03)
+
+The externally queued chunk-root recovery case is now covered and merged. `MineralChunkController.load_chunk()` detects an existing root that is still valid but already queued for deletion, invokes the normal `unload_chunk()` path first, and only then registers the replacement. Public live-root, loaded-ID, mineral, crop and world-object getters omit queued roots and queued children. The unload path persists the real SalvageCrate and MineralMiningNode state under their existing stable IDs; the queued root is not queued for deletion twice.
+
+Regression: `tests/mineral_grid_streaming_queued_root_recovery_test.gd` mutates crate loot identity/open state and gold vein stock, externally queues the shared root, synchronizes the same coordinate through the production Director, and verifies replacement instances restore both stable records while old weak references clear. Exact-head Run 104 focused passed 13/13; full Godot 4.3 Run #41647196682 passed 468/468; compatibility focused suites passed 117/117. Feature PR #245 merged as `7628fc980d739bd8000a916d59bcf306f8a9b31c`.
+
+Still unresolved: repository main branch protection / required status checks under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236). The connected GitHub integration exposes no branch-protection/ruleset write action; do not claim enforcement is enabled. Local rendered GUI/GPU and physical iPhone QA remain untested. The world-save schema remains version 1.
+
+
+## Run 105 follow-up — queued-root crop recovery covered (2026-11-03)
+
+The crop subsystem now has production-path regression coverage for an externally queued chunk root. The test uses a real `CropPlotVisual`, `CropRegistry`, `CropPlotController`, `MineralChunkController` and `MineralGridStreamingDirector`. It plants a stable-ID wheat crop, advances growth, queues the owning root externally, then synchronizes the same coordinate to force replacement through the normal unload/persistence path. It verifies that the replacement retains the stable crop ID and restores/catches up stage, progress, moisture and reload timestamp; repeating the same timestamp is idempotent, and old root/plot weak references clear.
+
+Exact-head feature PR [#247](https://github.com/qaqp980520-prog/2126-Survival/pull/247) merged as `564b36cd86510af3aaa7b5c7475fc7b8f2bee909`. Godot 4.3 full Run [#41651767754](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651767754) passed all 471 numbered steps plus cleanup/container shutdown/complete-job. Run 105 focused [#41651840241](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651840241) passed 14/14; compatibility focused suites passed 117/117. Initial cleanup failure due Git dubious ownership was fixed with `safe.directory "$GITHUB_WORKSPACE"` and guarded by the full workflow static check.
+
+No runtime crop mechanic or world-save schema change was introduced; schema remains version 1. Local GUI/GPU and physical iPhone QA remain untested. Post-merge main CI is unconfirmed, and main branch protection remains unresolved under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
