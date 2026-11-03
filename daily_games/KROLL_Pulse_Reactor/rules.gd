@@ -50,17 +50,17 @@ static func lane_name(lane: int) -> String:
 
 static func judge_hit(expected_lane: int, actual_lane: int, timing_error: float) -> Dictionary:
 	if expected_lane < 0 or expected_lane >= LANE_COUNT or actual_lane < 0 or actual_lane >= LANE_COUNT:
-		return {"grade": "miss", "points": 0, "accepted": false, "reason": "invalid_lane"}
+		return {"grade": "miss", "accepted": false, "reason": "invalid_lane"}
 	if not is_finite(timing_error):
-		return {"grade": "miss", "points": 0, "accepted": false, "reason": "invalid_timing"}
+		return {"grade": "miss", "accepted": false, "reason": "invalid_timing"}
 	if expected_lane != actual_lane:
-		return {"grade": "miss", "points": 0, "accepted": true, "reason": "wrong_lane"}
+		return {"grade": "miss", "accepted": true, "reason": "wrong_lane"}
 	var error: float = absf(timing_error)
 	if error <= PERFECT_WINDOW:
-		return {"grade": "perfect", "points": 10, "accepted": true, "reason": ""}
+		return {"grade": "perfect", "accepted": true, "reason": ""}
 	if error <= GOOD_WINDOW:
-		return {"grade": "good", "points": 6, "accepted": true, "reason": ""}
-	return {"grade": "miss", "points": 0, "accepted": true, "reason": "outside_window"}
+		return {"grade": "good", "accepted": true, "reason": ""}
+	return {"grade": "miss", "accepted": true, "reason": "outside_window"}
 
 static func can_clear(hit_count: int, miss_count: int) -> bool:
 	return hit_count >= 10 and miss_count <= 2
