@@ -243,11 +243,40 @@ func _build_corner_cap_specs(candidates: Dictionary, reports: Array) -> Dictiona
         })
         groups[junction_key] = entries
 
-    var specs: Array[Dictionary] = []
-    var edge_junctions: Dictionary = {}
-    var report_policies: Dictionary = {}
     var group_keys: Array = groups.keys()
     group_keys.sort()
+
+    # Track every junction report, including ineligible ones, per edge. If one
+    # endpoint of a shared edge must fall back, a compatible cap at the other
+    # endpoint must not re-enable that edge and create a one-sided ramp overlap.
+    var edge_groups: Dictionary = {}
+    for junction_key_value in group_keys:
+        var junction_key: String = str(junction_key_value)
+        var edge_set: Dictionary = {}
+        for entry_value in groups[junction_key]:
+            if not (entry_value is Dictionary):
+                continue
+            var entry: Dictionary = entry_value
+            var entry_edges_value: Variant = entry.get("edge_keys", [])
+            if not (entry_edges_value is Array):
+                continue
+            var entry_edges: Array = entry_edges_value
+            for edge_key_value in entry_edges:
+                if not (edge_key_value is String) or str(edge_key_value).is_empty():
+                    continue
+                edge_set[str(edge_key_value)] = true
+        var junction_edge_keys: Array[String] = []
+        for edge_key_value in edge_set.keys():
+            junction_edge_keys.append(str(edge_key_value))
+        junction_edge_keys.sort()
+        for edge_key in junction_edge_keys:
+            var junctions: Array = edge_groups.get(edge_key, [])
+            if not junctions.has(junction_key):
+                junctions.append(junction_key)
+            junctions.sort()
+            edge_groups[edge_key] = junctions
+
+    var specs: Array[Dictionary] = []
     for junction_key_value in group_keys:
         var junction_key: String = str(junction_key_value)
         var entries: Array = groups[junction_key]
@@ -328,16 +357,57 @@ func _build_corner_cap_specs(candidates: Dictionary, reports: Array) -> Dictiona
             "corners": corner_entries,
             "edge_keys": edge_keys
         })
-        for edge_key in edge_keys:
+
+    # A cap group is eligible only when every junction sharing each of its
+    # edges is also eligible. Propagate fallback across connected junctions
+    # until no compatible group can bridge into an incompatible endpoint.
+    var eligible_junctions: Dictionary = {}
+    for spec in specs:
+        eligible_junctions[str(spec["junction_key"])] = true
+    var eligibility_changed: bool = true
+    while eligibility_changed:
+        eligibility_changed = false
+        var shared_edge_keys: Array = edge_groups.keys()
+        shared_edge_keys.sort()
+        for edge_key_value in shared_edge_keys:
+            var junctions: Array = edge_groups[str(edge_key_value)]
+            if junctions.size() < 2:
+                continue
+            var has_ineligible_junction: bool = false
+            for junction_key_value in junctions:
+                if not eligible_junctions.has(str(junction_key_value)):
+                    has_ineligible_junction = true
+                    break
+            if not has_ineligible_junction:
+                continue
+            for junction_key_value in junctions:
+                var junction_key: String = str(junction_key_value)
+                if eligible_junctions.has(junction_key):
+                    eligible_junctions.erase(junction_key)
+                    eligibility_changed = true
+
+    var safe_specs: Array[Dictionary] = []
+    var edge_junctions: Dictionary = {}
+    var report_policies: Dictionary = {}
+    for spec in specs:
+        var junction_key: String = str(spec["junction_key"])
+        if not eligible_junctions.has(junction_key):
+            continue
+        safe_specs.append(spec)
+        var junction_position: Vector3 = spec["position"]
+        var spec_edges: Array = spec["edge_keys"]
+        for edge_key_value in spec_edges:
+            var edge_key: String = str(edge_key_value)
             var positions: Array = edge_junctions.get(edge_key, [])
             positions.append(junction_position)
             edge_junctions[edge_key] = positions
-        for entry in corner_entries:
-            report_policies[_report_token(str(entry["stable_id"]), str(entry["corner"]))] = {
+        var spec_corners: Array = spec["corners"]
+        for corner_entry in spec_corners:
+            report_policies[_report_token(str(corner_entry["stable_id"]), str(corner_entry["corner"]))] = {
                 "junction_key": junction_key,
-                "midpoint_height": common_midpoint
+                "midpoint_height": float(spec["midpoint_height"])
             }
-    return {"ok": true, "specs": specs, "edge_junctions": edge_junctions, "report_policies": report_policies}
+    return {"ok": true, "specs": safe_specs, "edge_junctions": edge_junctions, "report_policies": report_policies}
 
 func _stage_corner_cap(cap_key: String, spec: Dictionary, corner_entry: Dictionary) -> Dictionary:
     var patch: Node3D = corner_entry.get("patch") as Node3D
