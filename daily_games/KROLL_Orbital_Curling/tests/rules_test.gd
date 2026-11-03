@@ -83,6 +83,8 @@ func _test_campaign_progression_and_restart(rules: Variant) -> void:
 	_expect(state.get("round_scores", []).size() == 3, "campaign records three round scores")
 	_expect(int(state.get("total_score", -1)) >= 0 and int(state.get("total_score", -1)) <= 90, "campaign score stays within 0–90")
 	_expect(str(state.get("status", "")) in ["won", "complete"], "third round ends the campaign")
+	if str(state.get("status", "")) == "complete":
+		_expect(not str(state.get("message", "")).contains("CAMPAIGN CLEARED"), "below-goal campaign does not claim a win")
 	var restarted: Dictionary = rules.restart_campaign()
 	_expect(int(restarted.get("round_index", -1)) == 0 and int(restarted.get("shots_left", -1)) == 3, "restart returns to the first round with three throws")
 	_expect(restarted.get("stones", []).is_empty() and int(restarted.get("total_score", -1)) == 0, "restart clears stones and score")
