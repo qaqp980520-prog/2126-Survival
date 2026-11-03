@@ -1,7 +1,6 @@
 extends Control
 
-const Rules = preload("res://rules.gd")
-
+var rules: Variant
 var state: Dictionary = {}
 var title_label: Label
 var progress_label: Label
@@ -14,7 +13,18 @@ var next_button: Button
 var restart_button: Button
 
 func _ready() -> void:
-	state = Rules.create_state()
+	var attached_script: Script = get_script() as Script
+	if attached_script == null:
+		push_error("Fragment Assembly Lab main script is unavailable.")
+		return
+	var script_directory: String = attached_script.resource_path.get_base_dir()
+	var rules_path: String = script_directory.path_join("rules.gd")
+	var rules_script: Script = load(rules_path) as Script
+	if rules_script == null:
+		push_error("Fragment Assembly Lab could not load rules: " + rules_path)
+		return
+	rules = rules_script.new()
+	state = rules.create_state()
 	_build_ui()
 	_refresh_ui()
 
@@ -137,7 +147,7 @@ func _refresh_ui() -> void:
 	var level_index: int = int(state.get("level_index", 0))
 	var level_name: String = str(state.get("level_name", "UNKNOWN"))
 	var status: String = str(state.get("status", "playing"))
-	progress_label.text = "LAB %02d / %02d   %s" % [level_index + 1, Rules.get_level_count(), level_name]
+	progress_label.text = "LAB %02d / %02d   %s" % [level_index + 1, rules.get_level_count(), level_name]
 	score_label.text = "TOTAL  %03d" % int(state.get("total_score", 0))
 	sequence_label.text = "ASSEMBLED SEQUENCE\n" + str(state.get("sequence", ""))
 	error_label.text = "MISMATCHES  %d / %d" % [int(state.get("errors", 0)), int(state.get("max_errors", 3))]
@@ -147,7 +157,7 @@ func _refresh_ui() -> void:
 		fragment_grid.remove_child(child)
 		child.queue_free()
 
-	var available: Array = Rules.get_available_fragments(state)
+	var available: Array = rules.get_available_fragments(state)
 	for index in range(available.size()):
 		var fragment: Dictionary = available[index]
 		var fragment_id: String = str(fragment.get("id", ""))
@@ -169,15 +179,15 @@ func _refresh_ui() -> void:
 		next_button.text = "CAMPAIGN COMPLETE"
 
 func perform_fragment(fragment_id: String) -> void:
-	state = Rules.attempt_fragment(state, fragment_id)
+	state = rules.attempt_fragment(state, fragment_id)
 	_refresh_ui()
 
 func advance_level() -> void:
-	state = Rules.next_level(state)
+	state = rules.next_level(state)
 	_refresh_ui()
 
 func restart_current_level() -> void:
-	state = Rules.restart_level(state)
+	state = rules.restart_level(state)
 	_refresh_ui()
 
 func get_state() -> Dictionary:
@@ -208,9 +218,9 @@ func _on_restart_pressed() -> void:
 	restart_current_level()
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	var key_event := event as InputEventKey
+	if key_event == null or not key_event.pressed or key_event.echo:
 		return
-	var key_event: InputEventKey = event as InputEventKey
 	match key_event.keycode:
 		KEY_R:
 			restart_current_level()
