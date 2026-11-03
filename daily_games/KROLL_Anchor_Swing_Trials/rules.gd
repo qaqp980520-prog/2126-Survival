@@ -17,7 +17,7 @@ func nearest_anchor(position: Vector2, anchors: Array, max_distance: float = MAX
 	var nearest_distance: float = maxf(max_distance, 0.0)
 	for index in range(anchors.size()):
 		var candidate: Variant = anchors[index]
-		if not (candidate is Vector2):
+		if typeof(candidate) != TYPE_VECTOR2:
 			continue
 		var distance: float = position.distance_to(candidate)
 		if distance <= nearest_distance:
