@@ -1,6 +1,5 @@
 extends Control
 
-const Rules = preload("res://rules.gd")
 const LAUNCH_POINT := Vector2(140.0, 345.0)
 const STONE_RADIUS := 16.0
 
@@ -143,7 +142,7 @@ func _release_aim(position: Vector2) -> void:
 		status_label.text = "Aim farther from the launch stone before releasing."
 		queue_redraw()
 		return
-	var power := clampf(drag_length * 1.8, float(rules.MIN_POWER), float(rules.MAX_POWER))
+	var power := clampf(drag_length * 1.8, rules.get_min_power(), rules.get_max_power())
 	throw_from_aim(aim, power)
 	queue_redraw()
 
@@ -153,7 +152,7 @@ func _refresh() -> void:
 		round_number,
 		rules.get_round_count(),
 		int(state.get("shots_left", 0)),
-		rules.SHOTS_PER_ROUND,
+		rules.get_shots_per_round(),
 		int(state.get("total_score", 0))
 	]
 	status_label.text = str(state.get("message", ""))
@@ -163,7 +162,7 @@ func _refresh() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.045, 0.07), true)
-	var rink_rect := Rect2(rules.RINK_MIN, rules.RINK_MAX - rules.RINK_MIN)
+	var rink_rect := Rect2(rules.get_rink_min(), rules.get_rink_max() - rules.RINK_MIN)
 	draw_rect(rink_rect, Color(0.12, 0.25, 0.34), true)
 	draw_rect(rink_rect, Color(0.58, 0.84, 0.92), false, 3.0)
 	draw_line(Vector2(rink_rect.position.x, LAUNCH_POINT.y), Vector2(rink_rect.end.x, LAUNCH_POINT.y), Color(0.55, 0.72, 0.79, 0.35), 1.0)
