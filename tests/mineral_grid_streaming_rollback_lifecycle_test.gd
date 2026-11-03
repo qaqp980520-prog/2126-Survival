@@ -37,7 +37,7 @@ func _make_pair() -> Dictionary:
 
 func _test_factory_detaches_controller_before_restore() -> void:
 	var pair: Dictionary = await _make_pair()
-	var controller: Node3D = pair["controller"]
+	var controller: Variant = pair["controller"]
 	var director: Node = pair["director"]
 	_controller_to_detach = controller
 	_detach_on_factory = true
@@ -56,7 +56,7 @@ func _test_factory_detaches_controller_before_restore() -> void:
 
 func _test_controller_detaches_during_restore_registration() -> void:
 	var pair: Dictionary = await _make_pair()
-	var controller: Node3D = pair["controller"]
+	var controller: Variant = pair["controller"]
 	var director: Node = pair["director"]
 	controller.detach_on_next_load = true
 	_factory_calls = 0
@@ -74,7 +74,7 @@ func _test_controller_detaches_during_restore_registration() -> void:
 
 func _test_rollback_allows_detached_live_controller() -> void:
 	var pair: Dictionary = await _make_pair()
-	var controller: Node3D = pair["controller"]
+	var controller: Variant = pair["controller"]
 	var director: Node = pair["director"]
 	var chunk := Node3D.new()
 	_last_factory_root = weakref(chunk)
@@ -94,7 +94,7 @@ func _test_rollback_allows_detached_live_controller() -> void:
 
 func _test_rollback_skips_queued_controller() -> void:
 	var pair: Dictionary = await _make_pair()
-	var controller: Node3D = pair["controller"]
+	var controller: Variant = pair["controller"]
 	var director: Node = pair["director"]
 	director.set("_managed_chunk_ids", {"surface/chunk_0_0": Vector2i.ZERO})
 	controller.queue_free()
