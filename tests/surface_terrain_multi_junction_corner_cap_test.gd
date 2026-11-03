@@ -79,11 +79,15 @@ func _test_three_by_three_checkerboard_multi_junctions() -> void:
 	var midpoint_height: float = 0.30
 	for junction_z in [1, 3]:
 		for junction_x in [1, 3]:
+			var west_x: int = int(float(junction_x - 1) / 2.0)
+			var east_x: int = west_x + 1
+			var north_z: int = int(float(junction_z - 1) / 2.0)
+			var south_z: int = north_z + 1
 			var corner_cases: Array[Dictionary] = [
-				{"x": junction_x - 1, "z": junction_z - 1, "corner": "south_east", "sx": 1.0, "sz": 1.0},
-				{"x": junction_x + 1, "z": junction_z - 1, "corner": "south_west", "sx": -1.0, "sz": 1.0},
-				{"x": junction_x - 1, "z": junction_z + 1, "corner": "north_east", "sx": 1.0, "sz": -1.0},
-				{"x": junction_x + 1, "z": junction_z + 1, "corner": "north_west", "sx": -1.0, "sz": -1.0}
+				{"x": west_x, "z": north_z, "corner": "south_east", "sx": 1.0, "sz": 1.0},
+				{"x": east_x, "z": north_z, "corner": "south_west", "sx": -1.0, "sz": 1.0},
+				{"x": west_x, "z": south_z, "corner": "north_east", "sx": 1.0, "sz": -1.0},
+				{"x": east_x, "z": south_z, "corner": "north_west", "sx": -1.0, "sz": -1.0}
 			]
 			for entry in corner_cases:
 				var stable_id: String = "multi/%d_%d" % [int(entry["x"]), int(entry["z"])]
