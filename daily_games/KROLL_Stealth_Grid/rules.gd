@@ -64,15 +64,15 @@ const LEVELS = [
     }
 ]
 
-static func get_level_count() -> int:
+func get_level_count() -> int:
     return LEVELS.size()
 
-static func get_level_data(level_index: int) -> Dictionary:
+func get_level_data(level_index: int) -> Dictionary:
     if level_index < 0 or level_index >= LEVELS.size():
         return {}
     return LEVELS[level_index].duplicate(true)
 
-static func create_state(level_index: int = 0, prior_score: int = 0, rewarded_levels: Array = []) -> Dictionary:
+func create_state(level_index: int = 0, prior_score: int = 0, rewarded_levels: Array = []) -> Dictionary:
     var safe_index: int = clampi(level_index, 0, LEVELS.size() - 1)
     var level: Dictionary = get_level_data(safe_index)
     var guard_states: Array = []
@@ -100,7 +100,7 @@ static func create_state(level_index: int = 0, prior_score: int = 0, rewarded_le
         "message": "Collect every access key, then reach the exit."
     }
 
-static func attempt_move(state: Dictionary, direction: Vector2i) -> Dictionary:
+func attempt_move(state: Dictionary, direction: Vector2i) -> Dictionary:
     if state.is_empty() or bool(state.get("failed", false)) or bool(state.get("complete", false)):
         return {"ok": false, "reason": "terminal"}
     if abs(direction.x) + abs(direction.y) > 1:
@@ -156,7 +156,7 @@ static func attempt_move(state: Dictionary, direction: Vector2i) -> Dictionary:
         state["message"] = "Move quietly. Patrols advance after every action."
     return {"ok": true, "detected": false, "complete": false}
 
-static func _is_player_detected(state: Dictionary) -> bool:
+func _is_player_detected(state: Dictionary) -> bool:
     var level: Dictionary = state["level"]
     var rows: Array = level["rows"]
     var player: Vector2i = state["player"]
@@ -176,7 +176,7 @@ static func _is_player_detected(state: Dictionary) -> bool:
                 return true
     return false
 
-static func _is_wall(rows: Array, position: Vector2i) -> bool:
+func _is_wall(rows: Array, position: Vector2i) -> bool:
     if position.y < 0 or position.y >= rows.size():
         return true
     var row: String = str(rows[position.y])
@@ -184,10 +184,10 @@ static func _is_wall(rows: Array, position: Vector2i) -> bool:
         return true
     return row.substr(position.x, 1) == "#"
 
-static func _unit_direction(delta: Vector2i) -> Vector2i:
+func _unit_direction(delta: Vector2i) -> Vector2i:
     return Vector2i(signi(delta.x), signi(delta.y))
 
-static func render_tile(state: Dictionary, position: Vector2i) -> String:
+func render_tile(state: Dictionary, position: Vector2i) -> String:
     var level: Dictionary = state["level"]
     var rows: Array = level["rows"]
     if _is_wall(rows, position):
@@ -208,13 +208,13 @@ static func render_tile(state: Dictionary, position: Vector2i) -> String:
     var tile: String = str(rows[position.y]).substr(position.x, 1)
     return "." if tile == "S" or tile == "G" else tile
 
-static func get_collected_key_count(state: Dictionary) -> int:
+func get_collected_key_count(state: Dictionary) -> int:
     return state.get("keys_collected", []).size()
 
-static func can_advance(state: Dictionary) -> bool:
+func can_advance(state: Dictionary) -> bool:
     return bool(state.get("complete", false)) and int(state.get("level_index", 0)) < LEVELS.size() - 1
 
-static func next_level(state: Dictionary) -> Dictionary:
+func next_level(state: Dictionary) -> Dictionary:
     if not can_advance(state):
         return state.duplicate(true)
     return create_state(
@@ -223,7 +223,7 @@ static func next_level(state: Dictionary) -> Dictionary:
         state["rewarded_levels"]
     )
 
-static func restart_level(state: Dictionary) -> Dictionary:
+func restart_level(state: Dictionary) -> Dictionary:
     if state.is_empty():
         return create_state()
     return create_state(
@@ -232,8 +232,8 @@ static func restart_level(state: Dictionary) -> Dictionary:
         state["rewarded_levels"]
     )
 
-static func restart_campaign() -> Dictionary:
+func restart_campaign() -> Dictionary:
     return create_state(0, 0, [])
 
-static func get_level_name(state: Dictionary) -> String:
+func get_level_name(state: Dictionary) -> String:
     return str(state.get("level", {}).get("name", "Unknown Sector"))
