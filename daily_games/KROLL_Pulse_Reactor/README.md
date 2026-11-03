@@ -10,7 +10,7 @@ A standalone Godot 4.3+ rhythm/timing game. Keep the three reactor relays synchr
 - Correct lane is required. Wrong lane, late input or missed pulse increments the miss count.
 - A relay clears with at least ten hits and no more than two misses.
 - Each relay grants 100 points once; campaign maximum is 300.
-- The metronome is visual only. No audio, external assets, plugins, network services or save integration.
+- A live countdown label and pulse-window meter provide visual timing; the metronome is visual only and uses no audio. No external assets, plugins, network services or save integration.
 
 ## Controls
 
