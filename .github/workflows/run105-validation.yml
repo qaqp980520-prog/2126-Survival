@@ -79,4 +79,7 @@ jobs:
           echo "$output" | grep -q "Mineral grid queued-root recovery regression passed."
       - name: Checkout cleanup
         if: always()
-        run: git status --short
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short
