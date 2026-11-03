@@ -20,8 +20,20 @@ func _run() -> void:
 	var anchor: Vector2 = game.call("get_tether_node_position", 0)
 	game.call("set_player_position_for_test", anchor + Vector2(32.0, 0.0))
 	_expect(bool(game.call("toggle_tether")), "player can attach to the nearest maintenance node in range")
-	_expect(bool(game.call("is_tether_attached")), "successful hook stores the selected anchor")
+	_expect(bool(game.call("is_tether_attached")), "successful tether stores the selected maintenance node")
 	_expect(int(game.call("get_tether_anchor_index")) == 0, "nearest maintenance node index is deterministic")
+
+	var tether_anchor: Vector2 = game.call("get_tether_node_position", 0)
+	game.call("set_player_position_for_test", tether_anchor + Vector2(180.0, 0.0))
+	game.call("set_player_velocity_for_test", Vector2(600.0, 0.0))
+	for frame_index in range(8):
+		await physics_frame
+	var constrained_position: Vector2 = game.call("get_player_position")
+	var constrained_velocity: Vector2 = game.call("get_player_velocity_for_test")
+	var tether_length: float = game.call("get_tether_length")
+	var tether_direction: Vector2 = (constrained_position - tether_anchor).normalized()
+	_expect(constrained_position.distance_to(tether_anchor) <= tether_length + 1.5, "runtime physics keeps the maintenance drone inside its tether radius")
+	_expect(constrained_velocity.dot(tether_direction) <= 3.0, "runtime physics removes outward radial velocity while tethered")
 
 	for course_index in range(3):
 		game.call("set_player_position_for_test", game.call("get_goal_center"))
