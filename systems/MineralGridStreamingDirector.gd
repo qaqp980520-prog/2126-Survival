@@ -97,10 +97,6 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
 			continue
 		var candidate: Variant = chunk_factory.call(coord)
-		var staged_validation_after_factory: Dictionary = _validate_async_staged_roots(staged_roots)
-		if not bool(staged_validation_after_factory.get("ok", false)):
-			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_factory, candidate, [], now_unix)
-			return
 		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
 		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
@@ -321,6 +317,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = chunk_factory.call(coord)
+		var staged_validation_after_factory: Dictionary = _validate_async_staged_roots(staged_roots)
+		if not bool(staged_validation_after_factory.get("ok", false)):
+			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_factory, candidate, [], now_unix)
+			return
 		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
 		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
