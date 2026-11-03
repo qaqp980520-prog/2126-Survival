@@ -316,6 +316,7 @@ jobs:
           grep -q 'ADJACENCY_BONUS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
           grep -q 'MIN_THEME_ITEMS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
           grep -q 'scroll.name = "ArchiveScroll"' daily_games/KROLL_Archive_Curator/main.gd
+          grep -q 'get_viewport_rect().size.x < 1000.0' daily_games/KROLL_Archive_Curator/main.gd
           grep -q 'controller.call("load_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
           grep -q 'controller.call("unload_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
           grep -q 'get_corner_cap_count' tests/mineral_chunk_controller_terrain_rebind_test.gd
