@@ -44,7 +44,8 @@ func _test_wrong_fragment_is_transactional() -> void:
 	var state: Dictionary = Rules.create_state(0)
 	var rejected: Dictionary = Rules.attempt_fragment(state, "D1")
 	_expect(str(rejected.get("sequence", "")) == str(state.get("sequence", "")), "wrong fragment does not mutate the assembled sequence")
-	_expect((rejected.get("used_ids", []) as Array).is_empty(), "wrong fragment remains available after rejection")
+	var rejected_used_ids: Array = rejected.get("used_ids", [])
+	_expect(rejected_used_ids.is_empty(), "wrong fragment remains available after rejection")
 	_expect(int(rejected.get("errors", 0)) == 1, "wrong fragment consumes one mismatch allowance")
 	_expect(str(state.get("sequence", "")) == "ACGTAG", "original state remains immutable")
 
