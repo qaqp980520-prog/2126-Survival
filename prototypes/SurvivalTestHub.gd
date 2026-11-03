@@ -363,7 +363,7 @@ func _build_ui() -> void:
 		launch_list,
 		"KROLL Tether Bot Relay",
 		"操控維修無人機連接維修節點，使用推進器穿越三座太空設施；支援鍵盤、滑鼠與觸控。",
-		ANCHOR_SWING_TRIALS_SCENE
+		TETHER_BOT_RELAY_SCENE
 	)
 	_add_scene_button(
 		launch_list,
