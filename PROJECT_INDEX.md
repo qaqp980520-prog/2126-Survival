@@ -1900,3 +1900,17 @@
 ### Constraints and next steps
 - Local Godot GUI/renderer, GPU performance and physical iPhone touch QA remain untested; CI used cloud Godot 4.3 headless validation.
 - Continue with broader randomized multi-cell perturbations/longer soak windows and rendered cap-seam inspection when a local Godot renderer is available. Preserve current fallback/rollback guarantees.
+
+
+## 2026-11-03 Run 97 — KROLL Mess Hall Rush M0.2 + extended terrain soak (feature merged; exact-head CI passed)
+
+- New Godot 4.3 project: `daily_games/KROLL_Mess_Hall_Rush/`. Three shifts and twelve authored orders; each shift requires at least 3/4 orders served, and the campaign requires at least 9 total. Night Shift cannot bypass its own per-shift threshold.
+- Review reproduced and fixed the final-shift defect: after 8 prior serves, 2 Night Shift serves (10 total) must fail; 3 Night Shift serves (11 total) pass. Added both boundary regressions and clarified README.
+- Test Hub launch entries: 42. No external assets, addons, network dependencies or world-save migration.
+- Existing-system regression: `tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd`, five deterministic seeds × twelve 4×4 layouts = 60 (30 compatible, 30 mixed), with 2–4 distinct cell perturbations in each mixed layout. Production terrain geometry unchanged; world-save schema remains 1.
+- Feature PR [#229](https://github.com/qaqp980520-prog/2126-Survival/pull/229) merged as `529fd85f458c022d0025e19f8758dad6735b219e`.
+- Exact-head full Godot 4.3 Run [#1129](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765756) passed 433/433 job step records, zero failures/skips; Post Checkout repository, Stop containers and Complete job all succeeded.
+- Exact-head focused Runs [#34](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765746) passed 24/24; [#44](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765722) and [#39](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765788) each passed 13/13, including cleanup and job completion.
+- Post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059) on `529fd85f458c022d0025e19f8758dad6735b219e` completed successfully: 433/433 step records, zero failures/skips, cleanup, container shutdown and job completion succeeded.
+- Repository branch API currently reports `main.protected=false` and required checks enforcement off. Configure branch protection/ruleset as a separate repository-administration task; this closeout does not change settings.
+- Local GUI/renderer, GPU and physical iPhone QA remain untested. Godot validation was headless 4.3 CI.

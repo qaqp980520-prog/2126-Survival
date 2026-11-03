@@ -1449,3 +1449,22 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - The 4×4 soak uses a fixed seed and one-cell perturbations per mixed layout; broaden to multiple perturbations/longer deterministic seed batches without weakening rollback or fallback assertions.
 - Inspect actual cap seams in a local renderer when available. Do not relax safe fallback based only on headless geometry checks.
 - No world-save migration or external asset/plugin dependency was introduced.
+
+
+## Run 97 closeout — 2026-11-03
+
+- [x] Added KROLL Mess Hall Rush M0.1 and corrected M0.2 final-shift win condition. The final shift requires at least 3 of 4 orders in that shift as well as at least 9 served overall.
+- [x] Added regressions proving 2 final-shift orders fail and 3 pass after two perfect prior shifts; updated README.
+- [x] Added deterministic 60-layout 4×4 terrain corner-cap soak (five seeds; 30 compatible and 30 mixed layouts). Production geometry and world-save schema 1 unchanged.
+- [x] Feature PR #229 merged as `529fd85f458c022d0025e19f8758dad6735b219e`.
+- [x] Exact-head Godot 4.3 full Run #1129 passed 433/433 step records, zero failures/skips, cleanup/container shutdown/job completion successful.
+- [x] Exact-head focused Runs #34 (24/24), #44 (13/13), and #39 (13/13) passed.
+- [x] Verified post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059): 433/433 step records, zero failures/skips, cleanup, container shutdown and job completion succeeded.
+- [ ] Create and validate the separate documentation PR.
+
+### Remaining engineering and repository risks
+1. Implement actual four-way shared corner-cap geometry; current Run 97 work is regression-test-only and does not change production terrain geometry.
+2. Expand randomized terrain/streaming stress duration where runtime budget permits.
+3. Local GUI/renderer, GPU and physical iPhone QA remain untested; CI is headless Godot 4.3.
+4. GitHub branch endpoint reports main as unprotected with required status checks enforcement off. Configure branch protection/ruleset separately; no repository settings were changed in Run 97.
+5. World-save schema remains version 1.
