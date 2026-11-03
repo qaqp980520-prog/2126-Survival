@@ -44,6 +44,7 @@ const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Bal
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
+const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -98,7 +99,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 43, "hub exposes forty-three world, prototype and game launch buttons")
+	_expect(buttons.size() == 44, "hub exposes forty-four world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -593,6 +594,19 @@ func _run() -> void:
 		_expect(fragment_lab.call("get_fragment_button_count") == 4, "root-loaded Fragment Assembly Lab builds four first-lab fragment buttons")
 		_expect(fragment_lab.call("get_control_button_count") == 2, "root-loaded Fragment Assembly Lab exposes two controls")
 		fragment_lab.queue_free()
+		await process_frame
+
+	var tether_bot_scene := load(TETHER_BOT_RELAY_SCENE) as PackedScene
+	_expect(tether_bot_scene != null, "root hub can load the Tether Bot Relay scene")
+	if tether_bot_scene != null:
+		var tether_bot_game := tether_bot_scene.instantiate()
+		root.add_child(tether_bot_game)
+		await process_frame
+		_expect(tether_bot_game.call("get_title_text") == "KROLL // TETHER BOT RELAY", "root-loaded Tether Bot Relay displays its title")
+		_expect(tether_bot_game.call("get_course_count") == 3, "root-loaded Tether Bot Relay exposes three courses")
+		_expect(tether_bot_game.call("get_tether_node_count") >= 3, "root-loaded Tether Bot Relay builds its first course maintenance nodes")
+		_expect(tether_bot_game.call("get_touch_control_count") == 6, "root-loaded Tether Bot Relay exposes six touch controls")
+		tether_bot_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
