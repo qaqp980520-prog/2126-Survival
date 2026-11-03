@@ -3155,7 +3155,7 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Cargo Mosaic runtime smoke test passed."
 
-      
+
       - name: Verify Run 86 corner conflicts and Run 92 randomized streaming soak
         shell: bash
         run: |
@@ -3422,7 +3422,7 @@ jobs:
           grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Signal Resonator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 39' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
           grep -q 'descriptor_side_mismatch' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q '_side_between(first_position, second_position, patch_size)' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
@@ -3461,7 +3461,7 @@ jobs:
           grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 39' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
           grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
 
       - name: Import and parse KROLL Sonar Triangulator
@@ -3490,3 +3490,67 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Four-way terrain corner junction regression passed."
+
+
+      - name: Verify Run 95 Stratosphere Balloonist and shared corner cap geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Stratosphere_Balloonist/project.godot
+          test -f daily_games/KROLL_Stratosphere_Balloonist/main.tscn
+          test -f daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn
+          test -f daily_games/KROLL_Stratosphere_Balloonist/main.gd
+          test -f daily_games/KROLL_Stratosphere_Balloonist/rules.gd
+          test -f daily_games/KROLL_Stratosphere_Balloonist/tests/rules_test.gd
+          test -f daily_games/KROLL_Stratosphere_Balloonist/tests/game_smoke_test.gd
+          grep -q 'run/main_scene="res://main.tscn"' daily_games/KROLL_Stratosphere_Balloonist/project.godot
+          grep -q 'res://daily_games/KROLL_Stratosphere_Balloonist/main.gd' daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn
+          grep -q 'path="res://main.gd"' daily_games/KROLL_Stratosphere_Balloonist/main.tscn
+          test -f tests/surface_terrain_four_way_corner_cap_test.gd
+          test -f tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'double_trim_count == 4' tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'single_trim_count == 8' tests/surface_terrain_multi_junction_corner_cap_test.gd
+          grep -q 'STRATOSPHERE_BALLOONIST_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'STRATOSPHERE_BALLOONIST_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'labels.has("KROLL Stratosphere Balloonist")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
+          grep -q 'shared_corner_cap' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'ConcavePolygonShape3D' systems/SurfaceTerrainTransitionColliderManager.gd
+          grep -q 'get_corner_cap_count' tests/surface_terrain_four_way_corner_cap_test.gd
+          grep -q 'middle_state' tests/surface_terrain_four_way_corner_junction_test.gd
+
+      - name: Import and parse KROLL Stratosphere Balloonist
+        run: godot --headless --path daily_games/KROLL_Stratosphere_Balloonist --editor --quit
+      - name: Run KROLL Stratosphere Balloonist rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 35s godot --headless --path daily_games/KROLL_Stratosphere_Balloonist --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Stratosphere Balloonist rules tests passed."
+      - name: Run KROLL Stratosphere Balloonist runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Stratosphere_Balloonist --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Stratosphere Balloonist runtime smoke test passed."
+      - name: Run four-way terrain corner cap geometry regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 100s godot --headless --path . --script res://tests/surface_terrain_four_way_corner_cap_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Four-way terrain corner cap geometry regression passed."
+
+      - name: Run 3x3 terrain multi-junction corner cap regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/surface_terrain_multi_junction_corner_cap_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Three-by-three terrain multi-junction corner cap regression passed."

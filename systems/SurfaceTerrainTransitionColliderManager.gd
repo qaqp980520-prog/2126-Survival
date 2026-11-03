@@ -1,16 +1,19 @@
 extends Node3D
 class_name SurfaceTerrainTransitionColliderManager
 
-## Owns exactly one shared ramp collider/visual for each accepted unequal-height edge.
-## A patch pair is activated only after every candidate edge has passed preflight and staging.
+## Owns shared edge ramps and eligible four-patch corner caps.
+## Every edge/cap is staged with collision disabled; patch segmentation is committed only after preflight succeeds.
 const COLLISION_LAYER: int = 1
 const COLLISION_THICKNESS: float = 0.04
 const EDGE_RUN_PER_PATCH: float = 0.75
+const PATCH_SIZE: float = 2.0
 const POSITION_TOLERANCE: float = 0.01
 const VALID_SIDES: Array[String] = ["east", "west", "north", "south"]
+const CORNER_NAMES: Array[String] = ["north_east", "south_east", "south_west", "north_west"]
 const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
 
 var _managed_edges: Dictionary = {}
+var _managed_corner_caps: Dictionary = {}
 var _last_blocked_corner_reports: Array[Dictionary] = []
 
 func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary) -> Dictionary:
@@ -68,17 +71,58 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
 
     var corner_resolution: Dictionary = CornerResolverScript.resolve(candidates)
     if not bool(corner_resolution.get("ok", false)):
-        return {"ok":false,"error":str(corner_resolution.get("error", "corner_resolution_failed")),"active_count":_managed_edges.size()}
-    var blocked_edges: Dictionary = corner_resolution.get("blocked_edges", {})
-    var blocked_corner_reports: Array = corner_resolution.get("reports", [])
+        return {"ok": false, "error": str(corner_resolution.get("error", "corner_resolution_failed")), "active_count": _managed_edges.size()}
+    var blocked_edges: Dictionary = corner_resolution.get("blocked_edges", {}).duplicate(true)
+    var blocked_corner_reports: Array = corner_resolution.get("reports", []).duplicate(true)
+    var cap_resolution: Dictionary = _build_corner_cap_specs(candidates, blocked_corner_reports)
+    if not bool(cap_resolution.get("ok", false)):
+        return {"ok": false, "error": str(cap_resolution.get("error", "corner_cap_resolution_failed")), "active_count": _managed_edges.size()}
+    var cap_specs: Array = cap_resolution.get("specs", [])
+    var edge_junctions: Dictionary = cap_resolution.get("edge_junctions", {})
+    var report_policies: Dictionary = cap_resolution.get("report_policies", {})
+    for edge_key in edge_junctions.keys():
+        blocked_edges.erase(str(edge_key))
+    for report_value in blocked_corner_reports:
+        if not (report_value is Dictionary):
+            continue
+        var report: Dictionary = report_value
+        var token: String = _report_token(str(report.get("stable_id", "")), str(report.get("corner", "")))
+        if report_policies.has(token):
+            var policy: Dictionary = report_policies[token]
+            report["policy"] = "shared_corner_cap"
+            report["junction_key"] = str(policy.get("junction_key", ""))
+            report["midpoint_height"] = float(policy.get("midpoint_height", 0.0))
+
+    var staged_caps: Dictionary = {}
+    for cap_spec_value in cap_specs:
+        if not (cap_spec_value is Dictionary):
+            _free_staged_caps(staged_caps)
+            return {"ok": false, "error": "invalid_corner_cap_spec", "active_count": _managed_edges.size()}
+        var cap_spec: Dictionary = cap_spec_value
+        for corner_value in cap_spec.get("corners", []):
+            if not (corner_value is Dictionary):
+                _free_staged_caps(staged_caps)
+                return {"ok": false, "error": "invalid_corner_cap_entry", "active_count": _managed_edges.size()}
+            var corner_entry: Dictionary = corner_value
+            var stable_id: String = str(corner_entry.get("stable_id", ""))
+            var corner: String = str(corner_entry.get("corner", ""))
+            var cap_key: String = _report_token(stable_id, corner)
+            var staged_cap: Dictionary = _stage_corner_cap(cap_key, cap_spec, corner_entry)
+            if staged_cap.is_empty():
+                _free_staged_caps(staged_caps)
+                return {"ok": false, "error": "corner_cap_staging_failed", "active_count": _managed_edges.size()}
+            staged_caps[cap_key] = staged_cap
+
     var staged: Dictionary = {}
     for edge_key in candidates.keys():
         if blocked_edges.has(edge_key):
             continue
         var edge: Dictionary = candidates[edge_key]
-        var staged_edge: Dictionary = _stage_edge(str(edge_key), edge)
+        var junction_positions: Array = edge_junctions.get(str(edge_key), [])
+        var staged_edge: Dictionary = _stage_edge(str(edge_key), edge, junction_positions)
         if staged_edge.is_empty():
             _free_staged(staged)
+            _free_staged_caps(staged_caps)
             return {"ok": false, "error": "edge_staging_failed", "active_count": _managed_edges.size()}
         staged[str(edge_key)] = staged_edge
 
@@ -93,11 +137,9 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         var second_was_active: bool = bool(second_patch.call("is_shared_transition_active", second_side)) if second_patch.has_method("is_shared_transition_active") else false
         var first_activated: bool = bool(first_patch.call("set_shared_transition_active", first_side, true))
         if not first_activated:
-            for activation in newly_activated:
-                var activated_patch: Node3D = activation["patch"]
-                if is_instance_valid(activated_patch):
-                    activated_patch.call("set_shared_transition_active", str(activation["side"]), false)
+            _rollback_patch_activations(newly_activated)
             _free_staged(staged)
+            _free_staged_caps(staged_caps)
             return {"ok": false, "error": "first_patch_activation_failed", "active_count": _managed_edges.size()}
         if not first_was_active:
             newly_activated.append({"patch": first_patch, "side": first_side})
@@ -105,11 +147,9 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         if not second_activated:
             if not first_was_active:
                 first_patch.call("set_shared_transition_active", first_side, false)
-            for activation in newly_activated:
-                var activated_patch: Node3D = activation["patch"]
-                if is_instance_valid(activated_patch):
-                    activated_patch.call("set_shared_transition_active", str(activation["side"]), false)
+            _rollback_patch_activations(newly_activated)
             _free_staged(staged)
+            _free_staged_caps(staged_caps)
             return {"ok": false, "error": "second_patch_activation_failed", "active_count": _managed_edges.size()}
         if not second_was_active:
             newly_activated.append({"patch": second_patch, "side": second_side})
@@ -118,12 +158,18 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         var old_edge: Dictionary = _managed_edges[old_key]
         var replacement: Dictionary = staged.get(str(old_key), {})
         _retire_old_edge(old_edge, replacement)
+    for old_cap in _managed_corner_caps.values():
+        _retire_old_cap(old_cap)
 
-    for edge_key in staged.keys():
-        var edge: Dictionary = staged[edge_key]
+    for edge in staged.values():
         var body: StaticBody3D = edge["body"] as StaticBody3D
         body.collision_layer = COLLISION_LAYER
+    for cap in staged_caps.values():
+        var cap_body: StaticBody3D = cap["body"] as StaticBody3D
+        cap_body.collision_layer = COLLISION_LAYER
+
     _managed_edges = staged
+    _managed_corner_caps = staged_caps
     _last_blocked_corner_reports.clear()
     for report_value in blocked_corner_reports:
         if report_value is Dictionary:
@@ -132,14 +178,18 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
         "ok": true,
         "active_count": _managed_edges.size(),
         "blocked_count": blocked_edges.size(),
-        "blocked_edge_keys": corner_resolution.get("blocked_edge_keys", blocked_edges.keys()),
-        "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true)
+        "blocked_edge_keys": _sorted_keys(blocked_edges),
+        "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
+        "corner_cap_count": _managed_corner_caps.size()
     }
 
 func clear_all() -> void:
     for edge in _managed_edges.values():
         _retire_old_edge(edge, {})
+    for cap in _managed_corner_caps.values():
+        _retire_old_cap(cap)
     _managed_edges.clear()
+    _managed_corner_caps.clear()
     _last_blocked_corner_reports.clear()
 
 func get_blocked_corner_reports() -> Array[Dictionary]:
@@ -148,10 +198,448 @@ func get_blocked_corner_reports() -> Array[Dictionary]:
 func get_transition_count() -> int:
     return _managed_edges.size()
 
+func get_corner_cap_count() -> int:
+    return _managed_corner_caps.size()
+
+func get_corner_cap_body(stable_id: String, corner: String) -> StaticBody3D:
+    var cap: Dictionary = _managed_corner_caps.get(_report_token(stable_id, corner), {})
+    var body: StaticBody3D = cap.get("body") as StaticBody3D
+    return body if is_instance_valid(body) else null
+
 func get_transition_body(edge_key: String) -> StaticBody3D:
     var edge: Dictionary = _managed_edges.get(edge_key, {})
     var body: StaticBody3D = edge.get("body") as StaticBody3D
     return body if is_instance_valid(body) else null
+
+func _build_corner_cap_specs(candidates: Dictionary, reports: Array) -> Dictionary:
+    var patch_by_id: Dictionary = {}
+    for edge_value in candidates.values():
+        if not (edge_value is Dictionary):
+            continue
+        var edge: Dictionary = edge_value
+        patch_by_id[str(edge.get("first_id", ""))] = edge.get("first_patch")
+        patch_by_id[str(edge.get("second_id", ""))] = edge.get("second_patch")
+
+    var groups: Dictionary = {}
+    for report_value in reports:
+        if not (report_value is Dictionary):
+            continue
+        var report: Dictionary = report_value
+        var stable_id: String = str(report.get("stable_id", ""))
+        var corner: String = str(report.get("corner", ""))
+        var patch: Node3D = patch_by_id.get(stable_id) as Node3D
+        var offset: Vector3 = _corner_offset(corner)
+        if not is_instance_valid(patch) or offset == Vector3.ZERO:
+            continue
+        var junction_position: Vector3 = patch.global_position + offset
+        var junction_key: String = _corner_key(junction_position)
+        var entries: Array = groups.get(junction_key, [])
+        entries.append({
+            "stable_id": stable_id,
+            "corner": corner,
+            "patch": patch,
+            "edge_keys": report.get("edge_keys", []).duplicate(),
+            "junction_position": junction_position
+        })
+        groups[junction_key] = entries
+
+    var group_keys: Array = groups.keys()
+    group_keys.sort()
+
+    # Track every junction report, including ineligible ones, per edge. If one
+    # endpoint of a shared edge must fall back, a compatible cap at the other
+    # endpoint must not re-enable that edge and create a one-sided ramp overlap.
+    var edge_groups: Dictionary = {}
+    for junction_key_value in group_keys:
+        var junction_key: String = str(junction_key_value)
+        var edge_set: Dictionary = {}
+        for entry_value in groups[junction_key]:
+            if not (entry_value is Dictionary):
+                continue
+            var entry: Dictionary = entry_value
+            var entry_edges_value: Variant = entry.get("edge_keys", [])
+            if not (entry_edges_value is Array):
+                continue
+            var entry_edges: Array = entry_edges_value
+            for edge_key_value in entry_edges:
+                if not (edge_key_value is String) or str(edge_key_value).is_empty():
+                    continue
+                edge_set[str(edge_key_value)] = true
+        var junction_edge_keys: Array[String] = []
+        for edge_key_value in edge_set.keys():
+            junction_edge_keys.append(str(edge_key_value))
+        junction_edge_keys.sort()
+        for edge_key in junction_edge_keys:
+            var junctions: Array = edge_groups.get(edge_key, [])
+            if not junctions.has(junction_key):
+                junctions.append(junction_key)
+            junctions.sort()
+            edge_groups[edge_key] = junctions
+
+    var specs: Array[Dictionary] = []
+    for junction_key_value in group_keys:
+        var junction_key: String = str(junction_key_value)
+        var entries: Array = groups[junction_key]
+        if entries.size() != 4:
+            continue
+        var patch_ids: Dictionary = {}
+        var corners_seen: Dictionary = {}
+        var edges_seen: Dictionary = {}
+        var midpoint_heights: Array[float] = []
+        var corner_entries: Array[Dictionary] = []
+        var valid_group: bool = true
+        for entry_value in entries:
+            if not (entry_value is Dictionary):
+                valid_group = false
+                break
+            var entry: Dictionary = entry_value
+            var stable_id: String = str(entry.get("stable_id", ""))
+            var corner: String = str(entry.get("corner", ""))
+            var patch: Node3D = entry.get("patch") as Node3D
+            if stable_id.is_empty() or not CORNER_NAMES.has(corner) or not is_instance_valid(patch) or patch_ids.has(stable_id) or corners_seen.has(corner):
+                valid_group = false
+                break
+            if not patch.has_method("get_top_height"):
+                valid_group = false
+                break
+            patch_ids[stable_id] = true
+            corners_seen[corner] = true
+            var top_height: float = float(patch.call("get_top_height"))
+            if is_nan(top_height) or is_inf(top_height):
+                valid_group = false
+                break
+            var entry_edges: Array = entry.get("edge_keys", [])
+            if entry_edges.size() != 2:
+                valid_group = false
+                break
+            for edge_key_value in entry_edges:
+                if not (edge_key_value is String):
+                    valid_group = false
+                    break
+                var edge_key: String = edge_key_value
+                var candidate_value: Variant = candidates.get(edge_key, null)
+                if not (candidate_value is Dictionary):
+                    valid_group = false
+                    break
+                var candidate: Dictionary = candidate_value
+                var geometry: Dictionary = candidate.get("geometry", {})
+                if not geometry.has("low_top") or not geometry.has("high_top") or absf(float(geometry.get("patch_size", 0.0)) - PATCH_SIZE) > POSITION_TOLERANCE:
+                    valid_group = false
+                    break
+                midpoint_heights.append((float(geometry["low_top"]) + float(geometry["high_top"])) * 0.5)
+                edges_seen[edge_key] = true
+            if not valid_group:
+                break
+            corner_entries.append({
+                "stable_id": stable_id,
+                "corner": corner,
+                "patch": patch,
+                "top_height": top_height
+            })
+        if not valid_group or patch_ids.size() != 4 or corners_seen.size() != 4 or edges_seen.size() != 4 or midpoint_heights.size() != 8:
+            continue
+        var common_midpoint: float = midpoint_heights[0]
+        for midpoint_value in midpoint_heights:
+            if absf(midpoint_value - common_midpoint) > POSITION_TOLERANCE:
+                valid_group = false
+                break
+        if not valid_group:
+            continue
+        var junction_position: Vector3 = entries[0]["junction_position"]
+        var edge_keys: Array[String] = []
+        for edge_key_value in edges_seen.keys():
+            edge_keys.append(str(edge_key_value))
+        edge_keys.sort()
+        specs.append({
+            "junction_key": junction_key,
+            "position": junction_position,
+            "midpoint_height": common_midpoint,
+            "corners": corner_entries,
+            "edge_keys": edge_keys
+        })
+
+    # A cap group is eligible only when every junction sharing each of its
+    # edges is also eligible. Propagate fallback across connected junctions
+    # until no compatible group can bridge into an incompatible endpoint.
+    var eligible_junctions: Dictionary = {}
+    for spec in specs:
+        eligible_junctions[str(spec["junction_key"])] = true
+    var eligibility_changed: bool = true
+    while eligibility_changed:
+        eligibility_changed = false
+        var shared_edge_keys: Array = edge_groups.keys()
+        shared_edge_keys.sort()
+        for edge_key_value in shared_edge_keys:
+            var junctions: Array = edge_groups[str(edge_key_value)]
+            if junctions.size() < 2:
+                continue
+            var has_ineligible_junction: bool = false
+            for junction_key_value in junctions:
+                if not eligible_junctions.has(str(junction_key_value)):
+                    has_ineligible_junction = true
+                    break
+            if not has_ineligible_junction:
+                continue
+            for junction_key_value in junctions:
+                var junction_key: String = str(junction_key_value)
+                if eligible_junctions.has(junction_key):
+                    eligible_junctions.erase(junction_key)
+                    eligibility_changed = true
+
+    var safe_specs: Array[Dictionary] = []
+    var edge_junctions: Dictionary = {}
+    var report_policies: Dictionary = {}
+    for spec in specs:
+        var junction_key: String = str(spec["junction_key"])
+        if not eligible_junctions.has(junction_key):
+            continue
+        safe_specs.append(spec)
+        var junction_position: Vector3 = spec["position"]
+        var spec_edges: Array = spec["edge_keys"]
+        for edge_key_value in spec_edges:
+            var edge_key: String = str(edge_key_value)
+            var positions: Array = edge_junctions.get(edge_key, [])
+            positions.append(junction_position)
+            edge_junctions[edge_key] = positions
+        var spec_corners: Array = spec["corners"]
+        for corner_entry in spec_corners:
+            report_policies[_report_token(str(corner_entry["stable_id"]), str(corner_entry["corner"]))] = {
+                "junction_key": junction_key,
+                "midpoint_height": float(spec["midpoint_height"])
+            }
+    return {"ok": true, "specs": safe_specs, "edge_junctions": edge_junctions, "report_policies": report_policies}
+
+func _stage_corner_cap(cap_key: String, spec: Dictionary, corner_entry: Dictionary) -> Dictionary:
+    var patch: Node3D = corner_entry.get("patch") as Node3D
+    if not is_instance_valid(patch):
+        return {}
+    var corner: String = str(corner_entry.get("corner", ""))
+    var sign_x: float = 0.0
+    var sign_z: float = 0.0
+    match corner:
+        "north_east":
+            sign_x = 1.0
+            sign_z = -1.0
+        "south_east":
+            sign_x = 1.0
+            sign_z = 1.0
+        "south_west":
+            sign_x = -1.0
+            sign_z = 1.0
+        "north_west":
+            sign_x = -1.0
+            sign_z = -1.0
+        _:
+            return {}
+    var top_height: float = float(corner_entry.get("top_height", 0.0))
+    var midpoint_height: float = float(spec.get("midpoint_height", 0.0))
+    var far_corner := Vector3(-sign_x * EDGE_RUN_PER_PATCH, top_height, -sign_z * EDGE_RUN_PER_PATCH)
+    var side_x := Vector3(0.0, midpoint_height, -sign_z * EDGE_RUN_PER_PATCH)
+    var junction := Vector3(0.0, midpoint_height, 0.0)
+    var side_z := Vector3(-sign_x * EDGE_RUN_PER_PATCH, midpoint_height, 0.0)
+    var top_points: Array[Vector3] = [far_corner, side_x, junction, side_z]
+    var bottom_points: Array[Vector3] = []
+    for point in top_points:
+        bottom_points.append(point - Vector3.UP * COLLISION_THICKNESS)
+    var top_indices: Array[int] = [0, 1, 2, 0, 2, 3]
+    if sign_x * sign_z > 0.0:
+        top_indices = [0, 2, 1, 0, 3, 2]
+
+    var body := StaticBody3D.new()
+    body.name = "TerrainCornerCap_" + str(abs(hash(cap_key)))
+    body.collision_layer = 0
+    body.collision_mask = 0
+    body.set_meta("terrain_corner_key", str(spec.get("junction_key", "")))
+    body.set_meta("terrain_corner_owner", str(corner_entry.get("stable_id", "")))
+    body.set_meta("terrain_corner_name", corner)
+    add_child(body)
+    var junction_position: Vector3 = spec.get("position", patch.global_position)
+    body.global_transform = Transform3D(Basis.IDENTITY, junction_position)
+
+    var faces := PackedVector3Array()
+    var surface_tool := SurfaceTool.new()
+    surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+    for index in range(0, top_indices.size(), 3):
+        var a: int = top_indices[index]
+        var b: int = top_indices[index + 1]
+        var c: int = top_indices[index + 2]
+        _append_triangle(faces, top_points[a], top_points[b], top_points[c])
+        _append_triangle(faces, bottom_points[c], bottom_points[b], bottom_points[a])
+        surface_tool.add_vertex(top_points[a])
+        surface_tool.add_vertex(top_points[b])
+        surface_tool.add_vertex(top_points[c])
+    for index in range(4):
+        var next_index: int = (index + 1) % 4
+        _append_triangle(faces, top_points[index], bottom_points[index], bottom_points[next_index])
+        _append_triangle(faces, top_points[index], bottom_points[next_index], top_points[next_index])
+    if faces.size() < 36:
+        body.queue_free()
+        return {}
+    var concave := ConcavePolygonShape3D.new()
+    concave.backface_collision = true
+    concave.set_faces(faces)
+    var collision := CollisionShape3D.new()
+    collision.name = "CornerCapCollision"
+    collision.shape = concave
+    body.add_child(collision)
+
+    if DisplayServer.get_name() != "headless":
+        surface_tool.generate_normals()
+        var cap_mesh: ArrayMesh = surface_tool.commit()
+        if cap_mesh == null:
+            body.queue_free()
+            return {}
+        var visual := MeshInstance3D.new()
+        visual.name = "CornerCapVisual"
+        visual.mesh = cap_mesh
+        var material := StandardMaterial3D.new()
+        material.albedo_color = Color("#9bb7b5")
+        material.roughness = 0.82
+        material.metallic = 0.12
+        material.cull_mode = BaseMaterial3D.CULL_DISABLED
+        visual.material_override = material
+        body.add_child(visual)
+    return {
+        "body": body,
+        "stable_id": str(corner_entry.get("stable_id", "")),
+        "corner": corner,
+        "junction_key": str(spec.get("junction_key", ""))
+    }
+
+func _append_triangle(target: PackedVector3Array, a: Vector3, b: Vector3, c: Vector3) -> void:
+    target.append(a)
+    target.append(b)
+    target.append(c)
+
+func _stage_edge(edge_key: String, edge: Dictionary, corner_junctions: Array = []) -> Dictionary:
+    var geometry: Dictionary = edge["geometry"].duplicate(true)
+    var basis: Basis = geometry["basis"]
+    var width_axis: Vector3 = basis.z.normalized()
+    var patch_size: float = float(geometry["patch_size"])
+    var trim_negative: float = 0.0
+    var trim_positive: float = 0.0
+    for junction_value in corner_junctions:
+        if not (junction_value is Vector3):
+            return {}
+        var projection: float = (junction_value - geometry["center"]).dot(width_axis)
+        if absf(absf(projection) - patch_size * 0.5) > POSITION_TOLERANCE:
+            return {}
+        if projection < 0.0:
+            trim_negative = EDGE_RUN_PER_PATCH
+        else:
+            trim_positive = EDGE_RUN_PER_PATCH
+    var width: float = patch_size - trim_negative - trim_positive
+    if width <= POSITION_TOLERANCE:
+        return {}
+    var center: Vector3 = geometry["center"] + width_axis * ((trim_negative - trim_positive) * 0.5)
+    geometry["center"] = center
+    geometry["body_origin"] = center - basis.y * (COLLISION_THICKNESS * 0.5)
+    geometry["width"] = width
+
+    var body := StaticBody3D.new()
+    body.name = "TerrainTransition_" + str(abs(hash(edge_key)))
+    body.collision_layer = 0
+    body.collision_mask = 0
+    var collision := CollisionShape3D.new()
+    collision.name = "SharedTransitionCollision"
+    var box := BoxShape3D.new()
+    box.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, width)
+    collision.shape = box
+    body.add_child(collision)
+    if DisplayServer.get_name() != "headless":
+        var visual := MeshInstance3D.new()
+        visual.name = "SharedTransitionVisual"
+        var ramp_mesh := BoxMesh.new()
+        ramp_mesh.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, width)
+        visual.mesh = ramp_mesh
+        var material := StandardMaterial3D.new()
+        material.albedo_color = Color("#9bb7b5")
+        material.roughness = 0.82
+        material.metallic = 0.12
+        material.cull_mode = BaseMaterial3D.CULL_DISABLED
+        visual.material_override = material
+        body.add_child(visual)
+    body.set_meta("terrain_edge_key", edge_key)
+    body.set_meta("terrain_edge_owner", str(edge["first_id"]))
+    body.set_meta("terrain_corner_trim_negative", trim_negative)
+    body.set_meta("terrain_corner_trim_positive", trim_positive)
+    add_child(body)
+    var edge_basis: Basis = geometry["basis"]
+    var body_origin: Vector3 = geometry["body_origin"]
+    body.global_transform = Transform3D(edge_basis, body_origin)
+    return {
+        "body": body,
+        "first_patch": edge["first_patch"],
+        "second_patch": edge["second_patch"],
+        "first_side": edge["first_side"],
+        "second_side": edge["second_side"],
+        "first_id": edge["first_id"],
+        "second_id": edge["second_id"],
+        "width": width,
+        "trim_negative": trim_negative,
+        "trim_positive": trim_positive
+    }
+
+func _retire_old_edge(old_edge: Dictionary, replacement: Dictionary) -> void:
+    var old_first: Node3D = old_edge.get("first_patch") as Node3D
+    var old_second: Node3D = old_edge.get("second_patch") as Node3D
+    var old_body: StaticBody3D = old_edge.get("body") as StaticBody3D
+    if is_instance_valid(old_first):
+        var replacement_first: Node3D = replacement.get("first_patch") as Node3D
+        if replacement_first != old_first or str(replacement.get("first_side", "")) != str(old_edge.get("first_side", "")):
+            old_first.call("set_shared_transition_active", str(old_edge["first_side"]), false)
+    if is_instance_valid(old_second):
+        var replacement_second: Node3D = replacement.get("second_patch") as Node3D
+        if replacement_second != old_second or str(replacement.get("second_side", "")) != str(old_edge.get("second_side", "")):
+            old_second.call("set_shared_transition_active", str(old_edge["second_side"]), false)
+    if is_instance_valid(old_body):
+        old_body.collision_layer = 0
+        old_body.queue_free()
+
+func _retire_old_cap(old_cap: Dictionary) -> void:
+    var body: StaticBody3D = old_cap.get("body") as StaticBody3D
+    if is_instance_valid(body):
+        body.collision_layer = 0
+        body.queue_free()
+
+func _free_staged(staged: Dictionary) -> void:
+    for edge in staged.values():
+        var body: StaticBody3D = edge.get("body") as StaticBody3D
+        if is_instance_valid(body):
+            body.collision_layer = 0
+            body.queue_free()
+
+func _free_staged_caps(staged: Dictionary) -> void:
+    for cap in staged.values():
+        _retire_old_cap(cap)
+
+func _rollback_patch_activations(activations: Array[Dictionary]) -> void:
+    for activation in activations:
+        var patch: Node3D = activation.get("patch") as Node3D
+        if is_instance_valid(patch):
+            patch.call("set_shared_transition_active", str(activation.get("side", "")), false)
+
+func _corner_offset(corner: String) -> Vector3:
+    var half: float = PATCH_SIZE * 0.5
+    match corner:
+        "north_east": return Vector3(half, 0.0, -half)
+        "south_east": return Vector3(half, 0.0, half)
+        "south_west": return Vector3(-half, 0.0, half)
+        "north_west": return Vector3(-half, 0.0, -half)
+        _: return Vector3.ZERO
+
+func _corner_key(position: Vector3) -> String:
+    return "%.3f|%.3f|%.3f" % [position.x, position.y, position.z]
+
+func _report_token(stable_id: String, corner: String) -> String:
+    return stable_id + "|" + corner
+
+func _sorted_keys(source: Dictionary) -> Array[String]:
+    var result: Array[String] = []
+    for key in source.keys():
+        result.append(str(key))
+    result.sort()
+    return result
 
 func _build_geometry(first_patch: Node3D, second_patch: Node3D, descriptor: Dictionary) -> Dictionary:
     for key in ["first_top_height", "second_top_height", "patch_size", "height_delta"]:
@@ -213,70 +701,6 @@ func _build_geometry(first_patch: Node3D, second_patch: Node3D, descriptor: Dict
         "high_top": high_top,
         "horizontal_run": total_run
     }
-
-func _stage_edge(edge_key: String, edge: Dictionary) -> Dictionary:
-    var geometry: Dictionary = edge["geometry"]
-    var body := StaticBody3D.new()
-    body.name = "TerrainTransition_" + str(abs(hash(edge_key)))
-    body.collision_layer = 0
-    body.collision_mask = 0
-    var collision := CollisionShape3D.new()
-    collision.name = "SharedTransitionCollision"
-    var box := BoxShape3D.new()
-    box.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
-    collision.shape = box
-    body.add_child(collision)
-    if DisplayServer.get_name() != "headless":
-        var visual := MeshInstance3D.new()
-        visual.name = "SharedTransitionVisual"
-        var ramp_mesh := BoxMesh.new()
-        ramp_mesh.size = Vector3(float(geometry["slope_length"]), COLLISION_THICKNESS, float(geometry["patch_size"]))
-        visual.mesh = ramp_mesh
-        var material := StandardMaterial3D.new()
-        material.albedo_color = Color("#9bb7b5")
-        material.roughness = 0.82
-        material.metallic = 0.12
-        material.cull_mode = BaseMaterial3D.CULL_DISABLED
-        visual.material_override = material
-        body.add_child(visual)
-    body.set_meta("terrain_edge_key", edge_key)
-    body.set_meta("terrain_edge_owner", str(edge["first_id"]))
-    add_child(body)
-    var edge_basis: Basis = geometry["basis"]
-    var body_origin: Vector3 = geometry["body_origin"]
-    body.global_transform = Transform3D(edge_basis, body_origin)
-    return {
-        "body": body,
-        "first_patch": edge["first_patch"],
-        "second_patch": edge["second_patch"],
-        "first_side": edge["first_side"],
-        "second_side": edge["second_side"],
-        "first_id": edge["first_id"],
-        "second_id": edge["second_id"]
-    }
-
-func _retire_old_edge(old_edge: Dictionary, replacement: Dictionary) -> void:
-    var old_first: Node3D = old_edge.get("first_patch") as Node3D
-    var old_second: Node3D = old_edge.get("second_patch") as Node3D
-    var old_body: StaticBody3D = old_edge.get("body") as StaticBody3D
-    if is_instance_valid(old_first):
-        var replacement_first: Node3D = replacement.get("first_patch") as Node3D
-        if replacement_first != old_first or str(replacement.get("first_side", "")) != str(old_edge.get("first_side", "")):
-            old_first.call("set_shared_transition_active", str(old_edge["first_side"]), false)
-    if is_instance_valid(old_second):
-        var replacement_second: Node3D = replacement.get("second_patch") as Node3D
-        if replacement_second != old_second or str(replacement.get("second_side", "")) != str(old_edge.get("second_side", "")):
-            old_second.call("set_shared_transition_active", str(old_edge["second_side"]), false)
-    if is_instance_valid(old_body):
-        old_body.collision_layer = 0
-        old_body.queue_free()
-
-func _free_staged(staged: Dictionary) -> void:
-    for edge in staged.values():
-        var body: StaticBody3D = edge.get("body") as StaticBody3D
-        if is_instance_valid(body):
-            body.collision_layer = 0
-            body.queue_free()
 
 func _side_between(first_position: Vector3, second_position: Vector3, patch_size: float) -> String:
     var delta: Vector3 = second_position - first_position

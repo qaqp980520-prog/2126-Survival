@@ -40,6 +40,7 @@ const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
+const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -81,6 +82,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(SWARM_DISPATCHER_SCENE), "Swarm Dispatcher game scene exists")
 	_expect(ResourceLoader.exists(SIGNAL_RESONATOR_SCENE), "Signal Resonator game scene exists")
 	_expect(ResourceLoader.exists(SONAR_TRIANGULATOR_SCENE), "Sonar Triangulator game scene exists")
+	_expect(ResourceLoader.exists(STRATOSPHERE_BALLOONIST_SCENE), "Stratosphere Balloonist game scene exists")
 	_expect(ResourceLoader.exists(PALEO_TRACK_LAB_SCENE), "Paleo Track Lab game scene exists")
 	_expect(ResourceLoader.exists(CREW_LEDGER_SCENE), "Crew Ledger game scene exists")
 	_expect(str(ProjectSettings.get_setting("application/run/main_scene", "")) == WORLD_SCENE, "project launches directly into the playable surface world")
@@ -91,7 +93,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 39, "hub exposes thirty-nine world, prototype and game launch buttons")
+	_expect(buttons.size() == 40, "hub exposes forty world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -119,6 +121,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Titration Bench"), "hub labels the Titration Bench game")
 	_expect(labels.has("KROLL Signal Resonator"), "hub labels the Signal Resonator game")
 	_expect(labels.has("KROLL Sonar Triangulator"), "hub labels the Sonar Triangulator game")
+	_expect(labels.has("KROLL Stratosphere Balloonist"), "hub labels the Stratosphere Balloonist game")
 	_expect(hub.find_child("StatusLabel", true, false) != null, "hub creates visible explanatory labels")
 
 	var star_chart_scene := load(STAR_CHART_SCENE) as PackedScene
@@ -530,6 +533,18 @@ func _run() -> void:
 		_expect(sonar_triangulator.call("get_sensor_button_count") == 4, "root-loaded Sonar Triangulator builds four sensor buttons")
 		_expect(sonar_triangulator.call("get_cell_button_count") == 64, "root-loaded Sonar Triangulator builds the 8x8 survey grid")
 		sonar_triangulator.queue_free()
+		await process_frame
+	var balloonist_scene := load(STRATOSPHERE_BALLOONIST_SCENE) as PackedScene
+	_expect(balloonist_scene != null, "root hub can load the Stratosphere Balloonist scene")
+	if balloonist_scene != null:
+		var balloonist := balloonist_scene.instantiate()
+		root.add_child(balloonist)
+		await process_frame
+		_expect(balloonist.call("get_title_text") == "KROLL // STRATOSPHERE BALLOONIST", "root-loaded Stratosphere Balloonist displays its title")
+		_expect(balloonist.call("get_mission_count") == 3, "root-loaded Stratosphere Balloonist exposes three missions")
+		_expect(balloonist.call("get_action_button_count") == 3, "root-loaded Stratosphere Balloonist builds three flight actions")
+		_expect(balloonist.call("get_control_button_count") == 5, "root-loaded Stratosphere Balloonist exposes five controls")
+		balloonist.queue_free()
 		await process_frame
 
 	hub.queue_free()

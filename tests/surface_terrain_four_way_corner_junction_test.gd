@@ -45,9 +45,10 @@ func _test_four_way_junction_falls_back_atomically() -> void:
 
     var high_state := {"height_level": 2, "surface_type": "metal", "revision": 1}
     var low_state := {"height_level": 0, "surface_type": "soil", "revision": 1}
+    var middle_state := {"height_level": 1, "surface_type": "rock", "revision": 1}
     _expect(bool(north_west.call("apply_world_object_state", high_state)), "north-west patch accepts its high state")
     _expect(bool(north_east.call("apply_world_object_state", low_state)), "north-east patch accepts its low state")
-    _expect(bool(south_west.call("apply_world_object_state", low_state)), "south-west patch accepts its low state")
+    _expect(bool(south_west.call("apply_world_object_state", middle_state)), "south-west patch accepts its intermediate state")
     _expect(bool(south_east.call("apply_world_object_state", high_state)), "south-east patch accepts its high state")
 
     var stable_ids := {
@@ -76,8 +77,9 @@ func _test_four_way_junction_falls_back_atomically() -> void:
     var report: Dictionary = manager.call("sync_transitions", descriptors, patches)
     _expect(bool(report.get("ok", false)), "manager accepts the valid four-way topology")
     _expect(int(report.get("active_count", -1)) == 0, "no edge ramp is staged through the unresolved four-way junction")
-    _expect(int(report.get("blocked_count", -1)) == 4, "all four intersecting ramps are blocked atomically")
+    _expect(int(report.get("blocked_count", -1)) == 4, "all four intersecting ramps are blocked when edge midpoint heights disagree")
     _expect(int(manager.call("get_transition_count")) == 0, "manager owns no partial shared collider after fallback")
+    _expect(int(manager.call("get_corner_cap_count")) == 0, "mismatched edge midpoint heights retain fallback without partial caps")
     _expect(manager.get_child_count() == 0, "no staged collider node remains under the manager")
 
     var expected_corners := {
