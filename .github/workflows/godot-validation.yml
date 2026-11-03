@@ -3422,7 +3422,7 @@ jobs:
           grep -q 'SIGNAL_RESONATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SIGNAL_RESONATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Signal Resonator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'descriptor_side_mismatch' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q '_side_between(first_position, second_position, patch_size)' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'await _test_manager_rejects_mismatched_cardinal_side()' tests/surface_terrain_transition_collider_manager_test.gd
@@ -3461,7 +3461,7 @@ jobs:
           grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'four_way_junction' tests/surface_terrain_four_way_corner_junction_test.gd
 
       - name: Import and parse KROLL Sonar Triangulator
@@ -3513,7 +3513,7 @@ jobs:
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'STRATOSPHERE_BALLOONIST_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Stratosphere Balloonist")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'shared_corner_cap' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'ConcavePolygonShape3D' systems/SurfaceTerrainTransitionColliderManager.gd
           grep -q 'get_corner_cap_count' tests/surface_terrain_four_way_corner_cap_test.gd
@@ -3569,7 +3569,7 @@ jobs:
           test -f daily_games/KROLL_Emberline_Command/tests/game_smoke_test.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
 
       - name: Import and parse KROLL Emberline Command
         run: godot --headless --path daily_games/KROLL_Emberline_Command --editor --quit
@@ -3624,7 +3624,7 @@ jobs:
           test -f tests/README_run97_terrain_soak.md
           grep -q 'MESS_HALL_RUSH_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'MESS_HALL_RUSH_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'range(SEEDS.size())' tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd
           grep -q 'range(12)' tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd
           grep -q 'rng.randi_range(2, 4)' tests/surface_terrain_randomized_corner_cap_run97_60_layout_soak_test.gd
@@ -3676,7 +3676,7 @@ jobs:
           test -f daily_games/KROLL_Fragment_Assembly_Lab/tests/game_smoke_test.gd
           grep -q 'FRAGMENT_ASSEMBLY_LAB_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'FRAGMENT_ASSEMBLY_LAB_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'target.begins_with(candidate)' daily_games/KROLL_Fragment_Assembly_Lab/rules.gd
           grep -q 'MAX_ERRORS: int = 3' daily_games/KROLL_Fragment_Assembly_Lab/rules.gd
           grep -q 'both checkerboard diagonals' tests/surface_terrain_four_way_corner_cap_test.gd
@@ -3715,7 +3715,7 @@ jobs:
           test -f tests/README_run99_corner_cap_rebind.md
           grep -q 'TETHER_BOT_RELAY_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'TETHER_BOT_RELAY_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
           grep -q 'range(24)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'rng.randi_range(2, 8)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'Run 99 extended 4x4 terrain corner-cap soak passed' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
@@ -3762,3 +3762,59 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Run 99 extended 4x4 terrain corner-cap soak passed"
+
+      
+      - name: Verify Run 100 Archive Curator and controller-driven terrain rebind inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Archive_Curator/project.godot
+          test -f daily_games/KROLL_Archive_Curator/main.tscn
+          test -f daily_games/KROLL_Archive_Curator/main_root.tscn
+          test -f daily_games/KROLL_Archive_Curator/main.gd
+          test -f daily_games/KROLL_Archive_Curator/rules.gd
+          test -f daily_games/KROLL_Archive_Curator/tests/rules_test.gd
+          test -f daily_games/KROLL_Archive_Curator/tests/game_smoke_test.gd
+          test -f tests/mineral_chunk_controller_terrain_rebind_test.gd
+          test -f tests/README_run100_terrain_controller_rebind.md
+          grep -q 'ARCHIVE_CURATOR_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'ARCHIVE_CURATOR_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'ADJACENCY_BONUS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
+          grep -q 'MIN_THEME_ITEMS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
+          grep -q 'scroll.name = "ArchiveScroll"' daily_games/KROLL_Archive_Curator/main.gd
+          grep -q 'get_viewport_rect().size.x < 1000.0' daily_games/KROLL_Archive_Curator/main.gd
+          grep -q 'path="res://daily_games/KROLL_Archive_Curator/main.gd"' daily_games/KROLL_Archive_Curator/main_root.tscn
+          grep -q 'controller.call("load_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
+          grep -q 'controller.call("unload_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
+          grep -q 'get_corner_cap_count' tests/mineral_chunk_controller_terrain_rebind_test.gd
+
+      - name: Import and parse KROLL Archive Curator
+        run: godot --headless --path daily_games/KROLL_Archive_Curator --editor --quit
+
+      - name: Run KROLL Archive Curator rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Archive_Curator --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Archive Curator rules tests passed."
+
+      - name: Run KROLL Archive Curator runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Archive_Curator --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Archive Curator runtime smoke test passed."
+
+      - name: Run controller-driven terrain patch rebind integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 150s godot --headless --path . --script res://tests/mineral_chunk_controller_terrain_rebind_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "MineralChunkController terrain rebind integration test passed."
