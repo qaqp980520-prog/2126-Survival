@@ -4038,6 +4038,7 @@ jobs:
           grep -Fq 'KROLL Orbital Curling' prototypes/SurvivalTestHub.gd
           grep -Fq 'buttons.size() == 50' tests/survival_test_hub_smoke_test.gd
           grep -Fq 'CropRegistry remains the source of truth' tests/README_run105_crop_queued_root_recovery.md
+          grep -Fq 'safe.directory "$GITHUB_WORKSPACE"' .github/workflows/run105-validation.yml
       - name: Import and parse KROLL Orbital Curling
         run: godot --headless --path daily_games/KROLL_Orbital_Curling --editor --quit
       - name: Run KROLL Orbital Curling rules tests
