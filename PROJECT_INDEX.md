@@ -11,6 +11,57 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-11-04 Run 107 — KROLL Waveform Calibrator + synchronous Controller lifecycle guard (feature merged / exact-head CI passed)
+
+### New Godot 4 game
+- Project: `daily_games/KROLL_Waveform_Calibrator/`, standalone three-relay signal-matching campaign.
+- Four controls: frequency, amplitude, phase and DC offset; live target/current graph; 128-sample RMS matching.
+- Independent enumeration of all 288 settings found exactly one solution per relay.
+- One-time score 100 at/below par, otherwise 75; maximum campaign score 300. Pointer/touch and keyboard controls. No external dependencies or Test Hub entry; Test Hub remains at 50.
+
+### Existing-system change
+- `systems/MineralGridStreamingDirector.gd` now uses `_controller_ready_for_sync()` for synchronous sync, recovery and async dependency checks.
+- Controllers must be valid, inside the scene tree, not queued for deletion and expose required methods.
+- Synchronous sync revalidates after factory callbacks; detachment/queueing aborts before further commit, frees the candidate and rolls back new loads. A destroyed Controller clears stale managed IDs and reports incomplete rollback.
+- Regression covers detached, queued, factory-callback-detached and reattach/resume cases. No world-save schema change (schema 1).
+
+### Exact GitHub evidence
+- Feature PR [#251](https://github.com/qaqp980520-prog/2126-Survival/pull/251) merged as `e20f81de7c0a0c4d27cdfb3b987371780f6088d9`; validated feature head `6ccb9ccec4666f212638e462349e3575b97cb12c`.
+- Full Godot 4.3 [Run #41737860767](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41737860767) passed 483/483 including game rules/runtime, synchronous lifecycle regression, checkout cleanup, container shutdown and complete-job.
+- Run 107 focused #41737860768 passed 12/12; combined Run 105–107 #41737860860 passed 25/25; Run 101–104 and 106 compatibility passed 64/64 total.
+- Post-merge push workflows #41739226907/#41739226795/#41739226910/#41739226792 were in progress at closeout; not claimed as passed.
+- Historical failures #41737279677 and #41737486484 are retained and corrected by commits `1f585ca` and `6ccb9ce`, respectively.
+
+### Limits
+- No local Godot executable; GUI/GPU/iPhone QA untested.
+- Main protection remains open under issue #236.
+
+## 2026-11-04 Run 106 — KROLL Prism Beam Lab + async staged-root lifecycle guard (feature merged / exact-head CI passed)
+
+### New Godot 4 game
+- Project: `daily_games/KROLL_Prism_Beam_Lab/`, a standalone 7×7 optical-routing puzzle with Service Bend, Coolant Bypass and Vertical Relay.
+- Four rotatable mirrors per board; deterministic tracing detects receiver hits, walls, bounds and loops. Independent enumeration of all 16 mirror states found exactly one solution per level.
+- Scoring: 100 within par, otherwise 75; one-time reward per level; campaign cap 300. Controls: click/1–4 rotate, Space fire, R reset, N next, C restart.
+- No external assets/plugins/network dependencies or world-save integration. Standalone only; Test Hub remains at 50 entries.
+
+### Existing-system change
+- `systems/MineralGridStreamingDirector.gd` revalidates every staged Node3D root before the next factory call, after factory callbacks, after frame yields, before commit and before each Controller registration.
+- Invalid, queued-for-deletion or parented roots abort with `staged_root_invalid`, `staged_root_queued_for_deletion` or `staged_root_parented`.
+- `tests/mineral_grid_streaming_staged_root_lifecycle_test.gd` queues the first staged root while the factory creates the second; it verifies no partial Controller commit, staged cleanup, candidate release, rollback and request-lock release.
+- World-save schema remains version 1.
+
+### Exact GitHub evidence
+- Feature PR [#249](https://github.com/qaqp980520-prog/2126-Survival/pull/249) merged as `de56d39c2f9372bd90bc17a222f82df75180beea`; exact validated feature head `fec150957bb9ad4b2849384883d0c44c8fbf8966`.
+- Exact-head full Godot 4.3 [Run #41662249016](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41662249016): 475 numbered steps plus cleanup #949, container shutdown #950 and complete-job #951 succeeded; zero failures/skips.
+- Run 106 focused #41662249000 passed 12/12; combined Run 105–106 #41662248958 passed 19/19; Run 101–104 compatibility runs #41662248984/#41662248993/#41662248967/#41662248908 passed 52/52 total.
+- Historical parse-error run #41661960393 is not counted as a pass; commit `fec1509` corrected the misplaced async-only check.
+- No separate post-merge main-push workflow record surfaced through the connected lookup; it remains unconfirmed.
+
+### Limits
+- No local Godot executable; rendered GUI/GPU and physical iPhone QA remain untested.
+- Main branch protection remains open under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
+- Continue with documentation closeout, then a distinct new game and production-system reliability work.
+
 ## 2026-10-31 Run 65 — KROLL Core Drill + stale camera-ray target lifecycle guard (feature merged / exact-head CI passed)
 
 ### New Godot 4 game
@@ -1995,3 +2046,28 @@
 - Initial candidate `d4cbb771...` had a root Test Hub scene-path failure because the root scene used the standalone-relative script path. Corrected in `main_root.tscn`, added static and smoke assertions, and reran all exact-head workflows; initial failure retained as historical evidence, not counted as a pass.
 - Run 102 documentation PR [#242](https://github.com/qaqp980520-prog/2126-Survival/pull/242) merged as main SHA `8b4c86dce4cf59305e08b7f3f9dff352bd3cc987`; exact-head documentation Run [#1191](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41640361993) passed 458/458.
 - Post-merge main push CI for `8b4c86d...` has not surfaced through the connected workflow/status lookup; record as unconfirmed, not passed/failed. Main branch protection issue #236 remains open. Local Godot executable unavailable; local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## 2026-11-03 Run 104 — KROLL Stealth Grid and queued-root recovery (feature merged)
+
+- Added `daily_games/KROLL_Stealth_Grid/`, a standalone Godot 4.3+ turn-based stealth route puzzle with three authored 9×9 sectors (Service Spine, Split Relay, Black Archive), patrol movement, forward line-of-sight, access keys, exits, retry and one-time 100-point sector rewards (300-point campaign cap). Keyboard, mouse and touch controls are supported.
+- Added standalone and repository-root scene entry points. The rules loader resolves both `res://rules.gd` and `res://daily_games/KROLL_Stealth_Grid/rules.gd`; root Test Hub now exposes 49 launch buttons.
+- Added layout-contract tests for 9×9 rows, walkable start/key/exit/patrol cells and cardinal patrol movement, plus authored safe-route and scene smoke tests.
+- Hardened `systems/MineralChunkController.gd` for an already-loaded chunk root externally marked `queue_free()`: live getters omit queued roots and children, a same-coordinate replacement runs the normal unload/persistence path before loading, and the controller does not queue the old root twice.
+- Added `tests/mineral_grid_streaming_queued_root_recovery_test.gd`: a real SalvageCrate and gold MineralMiningNode are mutated, their shared root is queued, then same-coordinate Director sync verifies stable-ID state restoration, replacement instances, empty live-query exposure of the old root and old-instance release.
+- Feature PR [#245](https://github.com/qaqp980520-prog/2126-Survival/pull/245) squash-merged from exact head `ca1d2d146fa5f564b2cc1149be6ee7327999fe68` as main commit `7628fc980d739bd8000a916d59bcf306f8a9b31c`.
+- Exact-head Godot 4.3 full Run [#41647196682](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196682) passed **468/468** job steps, zero failures/skips; Run 104 gates, checkout cleanup, container shutdown and complete-job all succeeded.
+- Exact-head focused suites: Run 104 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196464), Run 92 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196424), Run 93 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196366), Run 94–100 [39/39](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647198263), Run 101 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196599), Run 102 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196586), Run 103 [13/13](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41647196511): **117/117** total, all with successful cleanup and job completion.
+- Historical candidate `1e8e24ba65d67404564f0bc3e8c7bb070f6b8b59` failed the new layout contract because two Split Relay patrol nodes occupied wall cells. The corridor was corrected in `ca1d2d1`; the 16-turn safe route was independently re-simulated and all exact-head suites passed. The failed run is retained as history, not counted as a pass.
+- World-save schema remains version 1. Local Godot was unavailable; rendered GUI/GPU and physical iPhone QA remain untested. A separate post-merge main push CI run for `7628fc9...` has not surfaced through the connected commit-workflow lookup and is recorded as unconfirmed, not passed/failed.
+
+
+## 2026-11-03 Run 105 — KROLL Orbital Curling and crop queued-root recovery (feature merged)
+
+- Added `daily_games/KROLL_Orbital_Curling/`, a standalone Godot 4.3+ deterministic 2D curling game with three target layouts, three stones per round, 60 Hz fixed-step friction, wall bounce, equal-mass stone collisions, target-distance scoring (30/20/10/0), a 45-point campaign goal, restart and one-time round progression. Mouse/touch drag aiming is supported; standalone and repository-root scenes are provided.
+- Registered KROLL Orbital Curling in `prototypes/SurvivalTestHub.gd`; the Test Hub now exposes 50 launch buttons. Rules and scene smoke tests cover invalid input, immutable rejection, deterministic motion, collision separation, rink bounds, campaign progression and both below-goal and successful win messages.
+- Added `tests/mineral_grid_streaming_queued_root_crop_recovery_test.gd` using the production Director→MineralChunkController path with real CropPlotVisual/CropRegistry state. The regression plants and advances a stable-ID wheat crop, externally queues its owning chunk root, then synchronizes the same coordinate and verifies replacement state restoration/catch-up (stage, progress, moisture and reload timestamp), same-time idempotency and old weak-reference release.
+- Feature PR [#247](https://github.com/qaqp980520-prog/2126-Survival/pull/247) merged as main SHA `564b36cd86510af3aaa7b5c7475fc7b8f2bee909` from exact head `ded40bb1afe91dd8b403ace96f2d0c6447f3f0ed`.
+- Exact-head full Godot 4.3 Run [#41651767754](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651767754) completed successfully: all 471 numbered workflow steps passed, including Run 105 gates #466–470; post-checkout cleanup, container shutdown and complete-job (#939–941) also succeeded. Exact-head Run 105 focused [#41651840241](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651840241) passed 14/14. Compatibility suites Run 92/93/94–100/101/102/103/104 passed 13/13, 13/13, 39/39, 13/13, 13/13, 13/13 and 13/13 respectively: 117/117 total, all with successful cleanup/job completion.
+- Historical first focused run [#41651381777](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41651381777) passed its game/system steps but failed custom container cleanup because Git reported dubious ownership. Fixed by commit `66588a0cd2ca05dea9229c3d4007be131223d48c` adding the workspace to global `safe.directory`; a static contract in `ded40bb` now guards the cleanup rule. The initial failure is retained as historical evidence and is not counted as a pass.
+- World-save schema remains version 1. Local Godot executable is unavailable; local rendered GUI/GPU and physical iPhone QA remain untested. Post-merge main push CI for `564b36c...` is unconfirmed because the connected status/workflow lookup returned no records. Main branch protection remains unresolved under issue [#236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
