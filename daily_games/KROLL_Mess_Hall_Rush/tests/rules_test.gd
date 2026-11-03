@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_wrong_action_consumes_time(rules)
 	_test_expired_order(rules)
 	_test_full_campaign_solution(rules)
+	_test_final_shift_requires_three_orders(rules)
 	_test_campaign_guards(rules)
 	_test_restart_campaign_resets(rules)
 	if failures.is_empty():
@@ -101,6 +102,65 @@ func _test_full_campaign_solution(rules: Variant) -> void:
 	_expect(int(state.get("served_total", 0)) == 12, "perfect campaign serves all twelve orders")
 	_expect(int(state.get("failed_total", 0)) == 0, "perfect campaign has no expired orders")
 	_expect(int(state.get("score", 0)) >= 1200, "perfect campaign reaches the score target")
+
+func _prepare_final_shift_state(rules: Variant) -> Dictionary:
+	var state: Dictionary = rules.create_state(0)
+	for shift_index in range(2):
+		state = _complete_shift(rules, state)
+		_expect(str(state.get("status", "")) == "shift_passed", "previous shift %d passes before final-shift boundary test" % shift_index)
+		var advance: Dictionary = rules.advance_shift(state)
+		_expect(bool(advance.get("ok", false)), "campaign advances into the next shift")
+		if not bool(advance.get("ok", false)):
+			return {}
+		state = advance["state"]
+	return state
+
+func _serve_order(rules: Variant, state: Dictionary, order_id: String) -> Dictionary:
+	while str(rules.get_order_snapshot(state, order_id).get("status", "")) == "active":
+		var action: String = rules.get_next_action(state, order_id)
+		if action.is_empty():
+			_expect(false, "order has a valid next station while active")
+			return state
+		var result: Dictionary = rules.perform_action(state, order_id, action)
+		if not bool(result.get("ok", false)) or not bool(result.get("correct", false)):
+			_expect(false, "authored final-shift recipe completes without penalty")
+			return state
+		state = result["state"]
+	return state
+
+func _fail_remaining_orders_with_wait(rules: Variant, state: Dictionary) -> Dictionary:
+	while str(state.get("status", "")) == "playing":
+		var active_order_id: String = ""
+		for order_value in state.get("orders", []):
+			if order_value is Dictionary and str(order_value.get("status", "")) == "active":
+				active_order_id = str(order_value.get("id", ""))
+				break
+		if active_order_id.is_empty():
+			break
+		var result: Dictionary = rules.perform_action(state, active_order_id, "wait")
+		if not bool(result.get("ok", false)):
+			_expect(false, "WAIT remains accepted while an order is active")
+			return state
+		state = result["state"]
+	return state
+
+func _test_final_shift_requires_three_orders(rules: Variant) -> void:
+	var two_served: Dictionary = _prepare_final_shift_state(rules)
+	two_served = _serve_order(rules, two_served, "s2_o0")
+	two_served = _serve_order(rules, two_served, "s2_o1")
+	two_served = _fail_remaining_orders_with_wait(rules, two_served)
+	_expect(int(two_served.get("served_total", 0)) == 10, "two previous perfect shifts plus two final-shift orders reach ten overall")
+	_expect(int(two_served.get("served_count", 0)) == 2, "final shift records exactly two served orders")
+	_expect(str(two_served.get("status", "")) == "campaign_failed", "campaign fails when the final shift serves fewer than three orders")
+
+	var three_served: Dictionary = _prepare_final_shift_state(rules)
+	three_served = _serve_order(rules, three_served, "s2_o0")
+	three_served = _serve_order(rules, three_served, "s2_o1")
+	three_served = _serve_order(rules, three_served, "s2_o2")
+	three_served = _fail_remaining_orders_with_wait(rules, three_served)
+	_expect(int(three_served.get("served_total", 0)) == 11, "two previous perfect shifts plus three final-shift orders reach eleven overall")
+	_expect(int(three_served.get("served_count", 0)) == 3, "final shift records exactly three served orders")
+	_expect(str(three_served.get("status", "")) == "campaign_passed", "campaign passes at the three-order final-shift threshold")
 
 func _test_campaign_guards(rules: Variant) -> void:
 	var state: Dictionary = rules.create_state(0)
