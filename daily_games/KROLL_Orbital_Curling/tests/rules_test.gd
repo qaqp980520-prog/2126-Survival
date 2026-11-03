@@ -61,13 +61,13 @@ func _test_collisions_and_rink_bounds(rules: Variant) -> void:
 	for stone_value in stones:
 		var stone: Dictionary = stone_value
 		var position: Vector2 = stone.get("position", Vector2.ZERO)
-		_expect(position.x >= rules.get_rink_min().x + rules.get_stone_radius() and position.x <= rules.get_rink_max().x - rules.STONE_RADIUS, "stone stays within horizontal rink bounds")
-		_expect(position.y >= rules.RINK_MIN.y + rules.STONE_RADIUS and position.y <= rules.RINK_MAX.y - rules.STONE_RADIUS, "stone stays within vertical rink bounds")
+		_expect(position.x >= rules.get_rink_min().x + rules.get_stone_radius() and position.x <= rules.get_rink_max().x - rules.get_stone_radius(), "stone stays within horizontal rink bounds")
+		_expect(position.y >= rules.get_rink_min().y + rules.get_stone_radius() and position.y <= rules.get_rink_max().y - rules.get_stone_radius(), "stone stays within vertical rink bounds")
 	for first in range(stones.size()):
 		for second in range(first + 1, stones.size()):
 			var a: Vector2 = stones[first]["position"]
 			var b: Vector2 = stones[second]["position"]
-			_expect(a.distance_to(b) >= rules.STONE_RADIUS * 2.0 - 0.75, "settled stones do not overlap")
+			_expect(a.distance_to(b) >= rules.get_stone_radius() * 2.0 - 0.75, "settled stones do not overlap")
  
 func _test_campaign_progression_and_restart(rules: Variant) -> void:
 	var state: Dictionary = rules.new_campaign()
