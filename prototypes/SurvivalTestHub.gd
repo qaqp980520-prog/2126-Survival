@@ -43,6 +43,7 @@ const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Bal
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
+const ANCHOR_SWING_TRIALS_SCENE := "res://daily_games/KROLL_Anchor_Swing_Trials/main_root.tscn"
 
 var status_label: Label
 
@@ -357,6 +358,12 @@ func _build_ui() -> void:
 		"KROLL Fragment Assembly Lab",
 		"拼接三組虛構字串片段，依照至少兩個字元的重疊規則重建目標序列。",
 		FRAGMENT_ASSEMBLY_LAB_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Anchor Swing Trials",
+		"利用繫索擺盪穿越三座太空設施，掌握慣性、跳躍與脫鉤時機；支援鍵盤、滑鼠與觸控。",
+		ANCHOR_SWING_TRIALS_SCENE
 	)
 	_add_scene_button(
 		launch_list,
