@@ -12,6 +12,7 @@ func _initialize() -> void:
 func _run() -> void:
     rules = RulesScript.new()
     _test_authored_routes()
+    _test_level_layout_contract()
     _test_blocked_move_and_wait()
     _test_detection_and_retry()
     _test_reward_cannot_be_farmed()
@@ -39,6 +40,29 @@ func _test_authored_routes() -> void:
             state = rules.next_level(state)
     _expect(bool(state.get("campaign_complete", false)), "third sector completes the campaign")
     _expect(int(state.get("score", 0)) == 300, "three unique sector rewards total 300 points")
+
+func _test_level_layout_contract() -> void:
+    for level_index in range(rules.get_level_count()):
+        var level: Dictionary = rules.get_level_data(level_index)
+        var rows: Array = level["rows"]
+        _expect(rows.size() == 9, "sector %d has nine rows" % (level_index + 1))
+        for row in rows:
+            _expect(str(row).length() == 9, "sector %d row has nine columns" % (level_index + 1))
+        var state: Dictionary = rules.create_state(level_index)
+        var start: Vector2i = level["start"]
+        var exit_position: Vector2i = level["exit"]
+        _expect(rules.render_tile(state, start) != "#", "sector %d start is walkable" % (level_index + 1))
+        _expect(rules.render_tile(state, exit_position) != "#", "sector %d exit is walkable" % (level_index + 1))
+        for key_position in level["keys"]:
+            _expect(rules.render_tile(state, key_position) != "#", "sector %d access key is walkable" % (level_index + 1))
+        for guard_data in level["guards"]:
+            var path: Array = guard_data["path"]
+            _expect(not path.is_empty(), "sector %d patrol path is not empty" % (level_index + 1))
+            for path_index in range(path.size()):
+                var point: Vector2i = path[path_index]
+                _expect(rules.render_tile(state, point) != "#", "sector %d patrol node is walkable" % (level_index + 1))
+                var next_point: Vector2i = path[(path_index + 1) % path.size()]
+                _expect(abs(next_point.x - point.x) + abs(next_point.y - point.y) == 1, "sector %d patrol step is cardinal" % (level_index + 1))
 
 func _test_blocked_move_and_wait() -> void:
     var state: Dictionary = rules.create_state()
