@@ -234,7 +234,7 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Fragment Assembly Lab runtime smoke test passed."
 
-      
+
       - name: Verify Run 99 Tether Bot Relay and terrain rebind inputs
         shell: bash
         run: |
@@ -296,7 +296,7 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Run 99 extended 4x4 terrain corner-cap soak passed"
 
-      
+
       - name: Verify Run 100 Archive Curator and controller-driven terrain rebind inputs
         shell: bash
         run: |
