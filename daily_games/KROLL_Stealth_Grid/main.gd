@@ -153,7 +153,7 @@ func _add_action_button(parent: HBoxContainer, label_text: String) -> Button:
 func _attempt_move(direction: Vector2i) -> void:
     var result: Dictionary = rules.attempt_move(state, direction)
     if not bool(result.get("ok", false)):
-        status_label.text = "Blocked: that tile cannot be entered."
+        state["message"] = "Blocked: that tile cannot be entered."
     _refresh()
 
 func _restart_level() -> void:
