@@ -18,6 +18,7 @@ func _run() -> void:
 	_expect(int(game.call("get_slot_button_count")) == 4, "scene builds four touch-selectable case buttons")
 	_expect(int(game.call("get_action_button_count")) == 4, "scene exposes recall, reset, next and campaign restart controls")
 	_expect(str(game.call("get_status")) == "playing", "new campaign starts in playing state")
+	_expect(game.find_child("ArchiveScroll", true, false) != null, "scene uses a scroll container for narrow touch viewports")
 
 	_play_layout(game, [0, 1, 2, 3])
 	_expect(str(game.call("get_status")) == "gallery_clear", "engineering gallery passes and unlocks the next gallery")
