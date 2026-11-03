@@ -19,7 +19,7 @@ A fictional maintenance drone navigates three artificial-gravity service routes 
 2. Broken Gantry
 3. Spiral Service Shaft
 
-Each course has a 90-second limit and up to three recoveries. Clearing a course awards a one-time score based on remaining time and falls. A cleared course cannot be restarted for duplicate points.
+Each course has a 90-second limit and two recoveries; the third fall ends the course. Clearing a course awards a one-time score based on remaining time and falls. A cleared course cannot be restarted for duplicate points.
 
 ## Files
 
