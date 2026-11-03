@@ -3660,7 +3660,7 @@ jobs:
           output="$(timeout -k 5s 300s godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "Run 97 extended 4x4 terrain corner-cap soak passed"
+          echo "$output" | grep -q "Run 99 extended 4x4 terrain corner-cap soak passed"
 
 
       - name: Verify Run 98 Fragment Assembly Lab and corner-cap orientation inputs
@@ -3719,6 +3719,8 @@ jobs:
           grep -q 'range(24)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'rng.randi_range(2, 8)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'Run 99 extended 4x4 terrain corner-cap soak passed' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+          grep -q 'resource_path.get_base_dir().path_join("rules.gd")' daily_games/KROLL_Anchor_Swing_Trials/main.gd
+          grep -q 'typeof(candidate) != TYPE_VECTOR2' daily_games/KROLL_Anchor_Swing_Trials/rules.gd
           grep -q 'weakref(old_cap)' tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
           grep -q 'reloaded_generation' tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
 
