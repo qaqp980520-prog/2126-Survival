@@ -1911,6 +1911,6 @@
 - Feature PR [#229](https://github.com/qaqp980520-prog/2126-Survival/pull/229) merged as `529fd85f458c022d0025e19f8758dad6735b219e`.
 - Exact-head full Godot 4.3 Run [#1129](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765756) passed 433/433 job step records, zero failures/skips; Post Checkout repository, Stop containers and Complete job all succeeded.
 - Exact-head focused Runs [#34](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765746) passed 24/24; [#44](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765722) and [#39](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41574765788) each passed 13/13, including cleanup and job completion.
-- Post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059) was observed in progress at documentation start; its final result must be recorded after polling.
+- Post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059) on `529fd85f458c022d0025e19f8758dad6735b219e` completed successfully: 433/433 step records, zero failures/skips, cleanup, container shutdown and job completion succeeded.
 - Repository branch API currently reports `main.protected=false` and required checks enforcement off. Configure branch protection/ruleset as a separate repository-administration task; this closeout does not change settings.
 - Local GUI/renderer, GPU and physical iPhone QA remain untested. Godot validation was headless 4.3 CI.
