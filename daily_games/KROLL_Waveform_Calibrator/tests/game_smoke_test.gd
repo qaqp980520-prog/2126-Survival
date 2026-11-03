@@ -13,7 +13,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	_expect(game.has_method("_adjust_knob") and game.has_method("_submit_signal"), "main scene exposes playable calibration actions")
-	_expect(game.get_node_or_null("WaveformGraph") != null, "main scene creates the waveform display")
+	_expect(game.find_child("WaveformGraph", true, false) != null, "main scene creates the waveform display")
 	var level: Dictionary = Rules.get_level(0)
 	var start: Dictionary = level["start"]
 	var target: Dictionary = level["target"]
