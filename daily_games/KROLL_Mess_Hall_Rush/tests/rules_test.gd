@@ -10,10 +10,12 @@ func _run() -> void:
 	var rules = RulesScript.new()
 	_test_shift_contract(rules)
 	_test_correct_action_and_immutability(rules)
+	_test_served_order_cannot_score_twice(rules)
 	_test_wrong_action_consumes_time(rules)
 	_test_expired_order(rules)
 	_test_full_campaign_solution(rules)
 	_test_campaign_guards(rules)
+	_test_restart_campaign_resets(rules)
 	if failures.is_empty():
 		print("KROLL Mess Hall Rush rules tests passed.")
 		quit(0)
@@ -106,3 +108,32 @@ func _test_campaign_guards(rules: Variant) -> void:
 	_expect(not bool(early_advance.get("ok", false)) and str(early_advance.get("reason", "")) == "shift_not_passed", "cannot skip an unfinished shift")
 	var invalid: Dictionary = rules.perform_action(state, "s0_o0", "teleport")
 	_expect(not bool(invalid.get("ok", false)) and str(invalid.get("reason", "")) == "invalid_action", "unknown workstation actions are rejected")
+
+func _test_served_order_cannot_score_twice(rules: Variant) -> void:
+	var state: Dictionary = rules.create_state(0)
+	var order_id: String = "s0_o0"
+	for index in range(3):
+		var action: String = rules.get_next_action(state, order_id)
+		var result: Dictionary = rules.perform_action(state, order_id, action)
+		_expect(bool(result.get("ok", false)) and bool(result.get("correct", false)), "authored recipe action completes without a penalty")
+		state = result["state"]
+	var score_before: int = int(state.get("score", 0))
+	var served_before: int = int(state.get("served_count", 0))
+	var duplicate: Dictionary = rules.perform_action(state, order_id, "plate")
+	_expect(not bool(duplicate.get("ok", false)) and str(duplicate.get("reason", "")) == "order_not_active", "served order rejects duplicate completion")
+	_expect(int(state.get("score", 0)) == score_before, "duplicate completion cannot award score twice")
+	_expect(int(state.get("served_count", 0)) == served_before, "duplicate completion cannot increment served count")
+
+func _test_restart_campaign_resets(rules: Variant) -> void:
+	var restarted: Dictionary = rules.restart_campaign()
+	_expect(int(restarted.get("shift_index", -1)) == 0, "restart returns to the first shift")
+	_expect(int(restarted.get("score", -1)) == 0, "restart clears the campaign score")
+	_expect(int(restarted.get("served_total", -1)) == 0, "restart clears the served total")
+	_expect(int(restarted.get("failed_total", -1)) == 0, "restart clears the failed total")
+
+func _expect(condition: bool, description: String) -> void:
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures.append(description)
+		push_error("FAIL: " + description)
