@@ -106,8 +106,10 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 	_last_factory_root = weakref(chunk)
 	if _detach_on_next_factory:
 		_detach_on_next_factory = false
-		if is_instance_valid(_factory_controller) and _factory_controller.get_parent() == root:
-			root.remove_child(_factory_controller)
+		if is_instance_valid(_factory_controller):
+			var current_parent: Node = _factory_controller.get_parent()
+			if current_parent != null:
+				current_parent.remove_child(_factory_controller)
 	return chunk
 
 func _expect(condition: bool, message: String) -> void:
