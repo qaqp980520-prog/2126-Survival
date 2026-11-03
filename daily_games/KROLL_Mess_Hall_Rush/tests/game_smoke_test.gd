@@ -13,6 +13,13 @@ func _run() -> void:
 	_expect(game.call("get_title_text") == "KROLL // MESS HALL RUSH", "game exposes its title")
 	_expect(game.call("get_shift_count") == 3, "game exposes three shifts")
 	_expect(game.call("get_order_button_count") == 4, "game builds four order tickets")
+	var first_selected: String = str(game.call("get_selected_order_id"))
+	game.call("_select_order", "s0_o1")
+	await process_frame
+	_expect(game.call("get_selected_order_id") == "s0_o1", "selecting another order updates the active ticket")
+	_expect(game.call("get_order_button_count") == 4, "rebuilding the order list does not duplicate or retain stale buttons")
+	game.call("_select_order", first_selected)
+	await process_frame
 	_expect(game.call("get_action_button_count") == 11, "game builds eleven workstation buttons")
 	_expect(game.call("get_control_button_count") == 2, "game builds next-shift and restart controls")
 	var state: Dictionary = game.call("get_current_state")
