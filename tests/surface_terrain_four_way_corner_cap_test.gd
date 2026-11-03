@@ -139,6 +139,8 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
             1
         )
         var hit: Dictionary = holder.get_world_3d().direct_space_state.intersect_ray(query)
+        if hit.is_empty() or hit.get("collider") != cap_body:
+            print("CAP_DIAGNOSTIC owner=" + stable_id + " body=" + str(cap_body.global_position) + " sample=" + str(sample_position) + " hit=" + str(hit))
         _expect(not hit.is_empty(), stable_id + " cap center is raycastable")
         if not hit.is_empty():
             _expect(hit.get("collider") == cap_body, stable_id + " ray hits its own cap rather than a clipped ramp or base segment")
