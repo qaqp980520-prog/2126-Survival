@@ -73,7 +73,7 @@ func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_
 		for x in range(4):
 			var level: int = int(levels[z][x])
 			var surface_type: String = "metal" if level == high_level else "soil"
-			var stable_id: String = "run97_s%d/%02d_%d_%d" % [seed_index, trial, x, z]
+			var stable_id: String = "run99_s%d/%02d_%d_%d" % [seed_index, trial, x, z]
 			var state := {"height_level": level, "surface_type": surface_type, "revision": 1}
 			_expect(bool(patches_by_id[stable_id].call("apply_world_object_state", state)), stable_id + " accepts seeded height state")
 
