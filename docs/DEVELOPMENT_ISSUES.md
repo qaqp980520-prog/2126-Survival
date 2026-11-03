@@ -1459,7 +1459,7 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - [x] Feature PR #229 merged as `529fd85f458c022d0025e19f8758dad6735b219e`.
 - [x] Exact-head Godot 4.3 full Run #1129 passed 433/433 step records, zero failures/skips, cleanup/container shutdown/job completion successful.
 - [x] Exact-head focused Runs #34 (24/24), #44 (13/13), and #39 (13/13) passed.
-- [ ] Verify post-merge main push Run #1130; at closeout start it was in progress.
+- [x] Verified post-merge main push Run [#1130](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41581725059): 433/433 step records, zero failures/skips, cleanup, container shutdown and job completion succeeded.
 - [ ] Create and validate the separate documentation PR.
 
 ### Remaining engineering and repository risks
