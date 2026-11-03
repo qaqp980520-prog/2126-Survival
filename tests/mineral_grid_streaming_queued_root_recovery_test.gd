@@ -87,10 +87,21 @@ func _run() -> void:
             push_error("FAIL: " + failure)
         quit(1)
 
+func _find_crate(controller: Node) -> Node3D:
+    var nodes: Array = controller.call("get_loaded_world_state_nodes")
+    for node_value in nodes:
+        var node: Node3D = node_value as Node3D
+        if is_instance_valid(node) and node.name == "SalvageCrate":
+            return node
+    return null
+
 func _make_chunk(_coordinate: Vector2i) -> Node3D:
     factory_calls += 1
     var candidate := Node3D.new()
-    candidate.name = "RecoveryChunk_%d" % factory_calls
+    candidate.name = "Chunk_0_0"
+    var crate: Node3D = StatefulProp.new()
+    crate.name = "SalvageCrate"
+    candidate.add_child(crate)
     return candidate
 
 func _expect(condition: bool, description: String) -> void:
