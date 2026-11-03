@@ -6,7 +6,7 @@ const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderMan
 const PATCH_SIZE: float = 2.0
 const CORNERS: Array[String] = ["north_east", "south_east", "south_west", "north_west"]
 const SIDES: Array[String] = ["east", "west", "north", "south"]
-const SEEDS: Array[int] = [0x970001, 0x970002, 0x970003, 0x970004, 0x970005]
+const SEEDS: Array[int] = [0x990001, 0x990002, 0x990003, 0x990004, 0x990005]
 var failures: Array[String] = []
 var compatible_layouts: int = 0
 var mixed_layouts: int = 0
@@ -19,11 +19,11 @@ func _run() -> void:
 	for seed_index in range(SEEDS.size()):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEEDS[seed_index]
-		for local_trial in range(12):
+		for local_trial in range(24):
 			await _run_layout(global_trial, rng, local_trial % 2 == 0, seed_index)
 			global_trial += 1
 	if failures.is_empty():
-		print("Run 97 extended 4x4 terrain corner-cap soak passed (%d layouts, %d compatible, %d mixed, %d seeds)." % [global_trial, compatible_layouts, mixed_layouts, SEEDS.size()])
+		print("Run 99 extended 4x4 terrain corner-cap soak passed (%d layouts, %d compatible, %d mixed, %d seeds)." % [global_trial, compatible_layouts, mixed_layouts, SEEDS.size()])
 		quit(0)
 	else:
 		for failure in failures:
@@ -32,7 +32,7 @@ func _run() -> void:
 
 func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_index: int) -> void:
 	var holder := Node3D.new()
-	holder.name = "Run97TerrainSoak_%02d" % trial
+	holder.name = "Run99TerrainSoak_%02d" % trial
 	root.add_child(holder)
 	var patches: Array[Node3D] = []
 	var stable_ids: Dictionary = {}
@@ -40,7 +40,7 @@ func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_
 	var low_level: int = rng.randi_range(0, 1)
 	var high_level: int = 2
 	var parity: int = rng.randi_range(0, 1)
-	var perturb_count: int = rng.randi_range(2, 4) if not compatible else 0
+	var perturb_count: int = rng.randi_range(2, 8) if not compatible else 0
 	var perturbed_cells: Dictionary = {}
 	while perturbed_cells.size() < perturb_count:
 		perturbed_cells[rng.randi_range(0, 15)] = true
@@ -62,7 +62,7 @@ func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_
 			patch.name = "Patch_%d_%d" % [x, z]
 			patch.position = Vector3(float(x) * PATCH_SIZE, 0.0, float(z) * PATCH_SIZE)
 			holder.add_child(patch)
-			var stable_id: String = "run97_s%d/%02d_%d_%d" % [seed_index, trial, x, z]
+			var stable_id: String = "run99_s%d/%02d_%d_%d" % [seed_index, trial, x, z]
 			patches.append(patch)
 			stable_ids[patch.get_instance_id()] = stable_id
 			patches_by_id[stable_id] = patch
