@@ -1,6 +1,8 @@
 extends SceneTree
 
-const Rules = preload("res://rules.gd")
+const RulesScript = preload("res://rules.gd")
+
+var rules: Variant
 
 var failures: Array[String] = []
 
@@ -8,6 +10,7 @@ func _initialize() -> void:
     call_deferred("_run")
 
 func _run() -> void:
+    rules = RulesScript.new()
     _test_authored_routes()
     _test_blocked_move_and_wait()
     _test_detection_and_retry()
@@ -27,50 +30,50 @@ func _test_authored_routes() -> void:
         "DURRDDRRUURRDDDD",
         "DDDDDDRRRRUURWUUUDDDRD"
     ]
-    var state: Dictionary = Rules.create_state()
-    for level_index in range(Rules.get_level_count()):
+    var state: Dictionary = rules.create_state()
+    for level_index in range(rules.get_level_count()):
         state = _play_route(state, routes[level_index])
-        _expect(bool(state.get("complete", false)), "authored safe route clears " + Rules.get_level_name(state))
+        _expect(bool(state.get("complete", false)), "authored safe route clears " + rules.get_level_name(state))
         _expect(not bool(state.get("failed", false)), "authored safe route avoids detection")
-        if level_index < Rules.get_level_count() - 1:
-            state = Rules.next_level(state)
+        if level_index < rules.get_level_count() - 1:
+            state = rules.next_level(state)
     _expect(bool(state.get("campaign_complete", false)), "third sector completes the campaign")
     _expect(int(state.get("score", 0)) == 300, "three unique sector rewards total 300 points")
 
 func _test_blocked_move_and_wait() -> void:
-    var state: Dictionary = Rules.create_state()
-    var blocked: Dictionary = Rules.attempt_move(state, Vector2i(-1, 0))
+    var state: Dictionary = rules.create_state()
+    var blocked: Dictionary = rules.attempt_move(state, Vector2i(-1, 0))
     _expect(not bool(blocked.get("ok", false)), "wall movement is rejected")
     _expect(int(state["turn"]) == 0, "blocked movement does not consume a turn")
     _expect(int(state["guard_states"][0]["index"]) == 0, "blocked movement does not advance patrols")
-    var waited: Dictionary = Rules.attempt_move(state, Vector2i.ZERO)
+    var waited: Dictionary = rules.attempt_move(state, Vector2i.ZERO)
     _expect(bool(waited.get("ok", false)), "wait is a legal turn")
     _expect(int(state["turn"]) == 1, "wait consumes one turn")
     _expect(int(state["guard_states"][0]["index"]) == 1, "wait advances the patrol")
 
 func _test_detection_and_retry() -> void:
-    var state: Dictionary = Rules.create_state()
-    _expect(bool(Rules.attempt_move(state, Vector2i(0, 1)).get("ok", false)), "first approach step is legal")
-    var detected: Dictionary = Rules.attempt_move(state, Vector2i(0, 1))
+    var state: Dictionary = rules.create_state()
+    _expect(bool(rules.attempt_move(state, Vector2i(0, 1)).get("ok", false)), "first approach step is legal")
+    var detected: Dictionary = rules.attempt_move(state, Vector2i(0, 1))
     _expect(bool(detected.get("detected", false)), "forward patrol sight detects the player")
     _expect(bool(state.get("failed", false)), "detection fails the current sector")
-    var retried: Dictionary = Rules.restart_level(state)
+    var retried: Dictionary = rules.restart_level(state)
     _expect(not bool(retried.get("failed", true)), "retry clears the failure state")
     _expect(int(retried["turn"]) == 0, "retry resets the turn counter")
     _expect(retried["player"] == Vector2i(1, 1), "retry restores the start position")
-    _expect(Rules.get_collected_key_count(retried) == 0, "retry clears current-sector keys")
+    _expect(rules.get_collected_key_count(retried) == 0, "retry clears current-sector keys")
 
 func _test_reward_cannot_be_farmed() -> void:
     var route := "RRRRRDDR"
-    var state: Dictionary = _play_route(Rules.create_state(), route)
+    var state: Dictionary = _play_route(rules.create_state(), route)
     _expect(int(state["score"]) == 100, "first completion awards 100 points")
-    var replay: Dictionary = _play_route(Rules.restart_level(state), route)
+    var replay: Dictionary = _play_route(rules.restart_level(state), route)
     _expect(int(replay["score"]) == 100, "replaying a cleared sector cannot award points twice")
 
 func _test_level_data_is_defensive() -> void:
-    var first: Dictionary = Rules.get_level_data(0)
+    var first: Dictionary = rules.get_level_data(0)
     first["rows"][0] = "........."
-    var second: Dictionary = Rules.get_level_data(0)
+    var second: Dictionary = rules.get_level_data(0)
     _expect(str(second["rows"][0]) == "#########", "mutating a level snapshot cannot change authored data")
 
 func _play_route(initial_state: Dictionary, route: String) -> Dictionary:
@@ -90,7 +93,7 @@ func _play_route(initial_state: Dictionary, route: String) -> Dictionary:
                 direction = Vector2i.ZERO
             _:
                 _expect(false, "route contains a known action")
-        var result: Dictionary = Rules.attempt_move(state, direction)
+        var result: Dictionary = rules.attempt_move(state, direction)
         _expect(bool(result.get("ok", false)), "route action " + str(index + 1) + " is legal")
         if bool(state.get("failed", false)) or bool(state.get("complete", false)):
             break
