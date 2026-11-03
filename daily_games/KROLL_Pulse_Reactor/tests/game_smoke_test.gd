@@ -25,9 +25,16 @@ func _run() -> void:
 		var target_time: float = Rules.LEAD_IN_SECONDS + float(beat) * interval
 		var result: Dictionary = game.submit_lane_hit(int(lanes[beat]), target_time)
 		_expect(str(result.get("grade", "")) == "perfect", "authored lane can be hit on its exact beat")
+		if beat == 0:
+			_expect(game.get_score() == 0, "individual beats do not award campaign score")
 	_expect(game.get_relay_state() == "complete", "twelve accurate inputs clear the relay")
 	_expect(game.get_score() == 100, "first clear awards one hundred points")
 	_expect(not bool(game.submit_lane_hit(0, 99.0).get("accepted", true)), "completed relay rejects additional scoring inputs")
+	game.restart_current_relay()
+	for beat in range(Rules.BEATS_PER_RELAY):
+		var target_time: float = Rules.LEAD_IN_SECONDS + float(beat) * interval
+		game.submit_lane_hit(int(lanes[beat]), target_time)
+	_expect(game.get_score() == 100, "replaying a cleared relay cannot duplicate its reward")
 	_expect(game.next_relay(), "cleared relay advances to the next relay")
 	_expect(game.get_relay_index() == 1, "next relay index advances exactly once")
 	game.restart_campaign()
