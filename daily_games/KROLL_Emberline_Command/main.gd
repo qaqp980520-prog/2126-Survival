@@ -88,12 +88,12 @@ func _build_ui() -> void:
     grid.add_theme_constant_override("v_separation",3)
     grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     board_margin.add_child(grid)
-    var cell_size: float = 38.0 if compact else 54.0
+    var cell_size: float = 32.0 if compact else 54.0
     for index in range(GRID_SIZE*GRID_SIZE):
         var cell_button := Button.new()
         cell_button.custom_minimum_size = Vector2(cell_size,cell_size)
         cell_button.focus_mode = Control.FOCUS_NONE
-        cell_button.add_theme_font_size_override("font_size",17 if compact else 22)
+        cell_button.add_theme_font_size_override("font_size",14 if compact else 22)
         cell_button.pressed.connect(select_cell.bind(index))
         grid.add_child(cell_button)
         _cell_buttons.append(cell_button)
@@ -101,7 +101,7 @@ func _build_ui() -> void:
     _selected_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _selected_label.add_theme_color_override("font_color",Color("#f3d49c"))
     column.add_child(_selected_label)
-    var actions := HBoxContainer.new()
+    var actions: BoxContainer = VBoxContainer.new() if compact else HBoxContainer.new()
     actions.add_theme_constant_override("separation",7)
     column.add_child(actions)
     _add_action_button(actions,"firebreak","FIREBREAK  ·  F")
@@ -113,7 +113,7 @@ func _build_ui() -> void:
     end_button.pressed.connect(end_turn)
     actions.add_child(end_button)
     _action_buttons["end_turn"] = end_button
-    var navigation := HBoxContainer.new()
+    var navigation: BoxContainer = VBoxContainer.new() if compact else HBoxContainer.new()
     navigation.add_theme_constant_override("separation",7)
     column.add_child(navigation)
     _next_button = Button.new()
@@ -141,7 +141,7 @@ func _build_ui() -> void:
     hint.add_theme_color_override("font_color",Color("#7898a2"))
     column.add_child(hint)
 
-func _add_action_button(parent: HBoxContainer, action: String, label_text: String) -> void:
+func _add_action_button(parent: BoxContainer, action: String, label_text: String) -> void:
     var button := Button.new()
     button.text = label_text
     button.custom_minimum_size = Vector2(0.0,44.0)
@@ -193,7 +193,7 @@ func restart_campaign() -> void:
     var result: Dictionary = _rules.restart_campaign()
     if bool(result.get("ok",false)):
         _state = result["state"]
-        _selected_index = 19
+        _selected_index = 25
     _refresh_ui()
 
 func get_title_text() -> String:

@@ -125,12 +125,15 @@ func _test_authored_mission_solutions(rules: Variant) -> void:
     for mission_index in range(3):
         var state: Dictionary = rules.create_state(mission_index)
         var plan: Dictionary = plans[mission_index]
-        var water_result: Dictionary = rules.apply_action(state,"water",rules.get_cell_index(plan["water"].x,plan["water"].y))
+        var water_cell: Vector2i = plan["water"]
+        var break_cell: Vector2i = plan["break"]
+        var last_cell: Vector2i = plan["last"]
+        var water_result: Dictionary = rules.apply_action(state,"water",rules.get_cell_index(water_cell.x,water_cell.y))
         _expect(bool(water_result.get("ok",false)),"mission %d authored plan drops water" % mission_index)
         if not bool(water_result.get("ok",false)):
             continue
         state = water_result["state"]
-        var break_result: Dictionary = rules.apply_action(state,"firebreak",rules.get_cell_index(plan["break"].x,plan["break"].y))
+        var break_result: Dictionary = rules.apply_action(state,"firebreak",rules.get_cell_index(break_cell.x,break_cell.y))
         _expect(bool(break_result.get("ok",false)),"mission %d authored plan builds a frontline" % mission_index)
         if not bool(break_result.get("ok",false)):
             continue
@@ -139,7 +142,7 @@ func _test_authored_mission_solutions(rules: Variant) -> void:
         if not bool(first_turn.get("ok",false)):
             continue
         state = first_turn["state"]
-        var final_water: Dictionary = rules.apply_action(state,"water",rules.get_cell_index(plan["last"].x,plan["last"].y))
+        var final_water: Dictionary = rules.apply_action(state,"water",rules.get_cell_index(last_cell.x,last_cell.y))
         _expect(bool(final_water.get("ok",false)),"mission %d plan extinguishes the remaining ignition" % mission_index)
         if not bool(final_water.get("ok",false)):
             continue
