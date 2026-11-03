@@ -25,7 +25,7 @@ func _test_authored_routes() -> void:
     var routes: Array[String] = [
         "RRRRRDDR",
         "DURRDDRRUURRDDDD",
-        "DDDDDDRRRRUURWUUUDDDR"
+        "DDDDDDRRRRUURWUUUDDDRD"
     ]
     var state: Dictionary = Rules.create_state()
     for level_index in range(Rules.get_level_count()):
