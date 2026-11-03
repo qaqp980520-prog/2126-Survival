@@ -105,7 +105,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 48, "hub exposes forty-seven world, prototype and game launch buttons")
+	_expect(buttons.size() == 48, "hub exposes forty-eight world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -117,6 +117,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Archive Curator"), "hub labels the Archive Curator game")
 	_expect(labels.has("KROLL Endgame Tactics"), "hub labels the Endgame Tactics game")
 	_expect(labels.has("KROLL Reactor Deck Command"), "hub labels the Reactor Deck Command game")
+	_expect(labels.has("KROLL Casefile: Station Zero"), "hub labels the Casefile Station Zero game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
