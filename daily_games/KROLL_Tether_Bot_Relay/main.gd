@@ -4,6 +4,7 @@ const GRAVITY: float = 1100.0
 const BOOST_SPEED: float = 560.0
 const COURSE_TIME_LIMIT: float = 90.0
 const MAX_FALLS: int = 3
+const MAX_RECOVERIES: int = 2
 const COURSES: Array = [
 	{
 		"name": "Dockyard Relay",
@@ -215,7 +216,7 @@ func _register_fall() -> void:
 	else:
 		player.global_position = start_position
 		player.velocity = Vector2.ZERO
-		message = "Recovery %d/%d. Try a different route." % [falls_this_course, MAX_FALLS]
+		message = "Recovery %d/%d. Try a different route." % [falls_this_course, MAX_RECOVERIES]
 	queue_redraw()
 
 func _complete_course() -> void:
@@ -333,7 +334,7 @@ func _draw() -> void:
 	var font: Font = ThemeDB.fallback_font
 	draw_string(font, Vector2(24.0, 34.0), "KROLL // TETHER BOT RELAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#91e8ff"))
 	draw_string(font, Vector2(24.0, 58.0), "Guide the maintenance drone between tether nodes and release at the right moment to reach the green service gate.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#c2d7e8"))
-	draw_string(font, Vector2(24.0, 84.0), "COURSE %d/%d   FALLS %d/%d   TIME %.1f   SCORE %d" % [course_index + 1, COURSES.size(), falls_this_course, MAX_FALLS, time_remaining, total_score], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#f4d58d"))
+	draw_string(font, Vector2(24.0, 84.0), "COURSE %d/%d   RECOVERIES %d/%d   TIME %.1f   SCORE %d" % [course_index + 1, COURSES.size(), mini(falls_this_course, MAX_RECOVERIES), MAX_RECOVERIES, time_remaining, total_score], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#f4d58d"))
 
 	for grid_x in range(40, 960, 40):
 		draw_line(Vector2(float(grid_x), 100.0), Vector2(float(grid_x), 650.0), Color(0.18, 0.42, 0.54, 0.18), 1.0)
