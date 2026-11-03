@@ -199,8 +199,6 @@ func end_turn() -> bool:
 		_message = "CORE OFFLINE. Restart the campaign to try again."
 	_refresh_ui()
 	return true
-	_refresh_ui()
-	return true
 
 func advance_encounter() -> bool:
 	if _rules == null or not bool(_rules.advance_encounter(_state)):
