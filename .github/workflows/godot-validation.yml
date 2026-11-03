@@ -3700,50 +3700,50 @@ jobs:
           echo "$output" | grep -q "KROLL Fragment Assembly Lab runtime smoke test passed."
 
       
-      - name: Verify Run 99 Anchor Swing Trials and corner-cap rebind lifecycle inputs
+      - name: Verify Run 99 Tether Bot Relay and corner-cap rebind lifecycle inputs
         shell: bash
         run: |
           set -euo pipefail
-          test -f daily_games/KROLL_Anchor_Swing_Trials/project.godot
-          test -f daily_games/KROLL_Anchor_Swing_Trials/main.tscn
-          test -f daily_games/KROLL_Anchor_Swing_Trials/main_root.tscn
-          test -f daily_games/KROLL_Anchor_Swing_Trials/main.gd
-          test -f daily_games/KROLL_Anchor_Swing_Trials/rules.gd
-          test -f daily_games/KROLL_Anchor_Swing_Trials/tests/rules_test.gd
-          test -f daily_games/KROLL_Anchor_Swing_Trials/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Tether_Bot_Relay/project.godot
+          test -f daily_games/KROLL_Tether_Bot_Relay/main.tscn
+          test -f daily_games/KROLL_Tether_Bot_Relay/main_root.tscn
+          test -f daily_games/KROLL_Tether_Bot_Relay/main.gd
+          test -f daily_games/KROLL_Tether_Bot_Relay/rules.gd
+          test -f daily_games/KROLL_Tether_Bot_Relay/tests/rules_test.gd
+          test -f daily_games/KROLL_Tether_Bot_Relay/tests/game_smoke_test.gd
           test -f tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
           test -f tests/README_run99_corner_cap_rebind.md
-          grep -q 'ANCHOR_SWING_TRIALS_SCENE' prototypes/SurvivalTestHub.gd
-          grep -q 'ANCHOR_SWING_TRIALS_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'TETHER_BOT_RELAY_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'TETHER_BOT_RELAY_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'buttons.size() == 44' tests/survival_test_hub_smoke_test.gd
           grep -q 'range(24)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'rng.randi_range(2, 8)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'Run 99 extended 4x4 terrain corner-cap soak passed' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
-          grep -q 'resource_path.get_base_dir().path_join("rules.gd")' daily_games/KROLL_Anchor_Swing_Trials/main.gd
-          grep -q 'typeof(candidate) != TYPE_VECTOR2' daily_games/KROLL_Anchor_Swing_Trials/rules.gd
+          grep -q 'resource_path.get_base_dir().path_join("rules.gd")' daily_games/KROLL_Tether_Bot_Relay/main.gd
+          grep -q 'typeof(candidate) != TYPE_VECTOR2' daily_games/KROLL_Tether_Bot_Relay/rules.gd
           grep -q 'weakref(old_cap)' tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
           grep -q 'reloaded_generation' tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
 
-      - name: Import and parse KROLL Anchor Swing Trials
-        run: godot --headless --path daily_games/KROLL_Anchor_Swing_Trials --editor --quit
+      - name: Import and parse KROLL Tether Bot Relay
+        run: godot --headless --path daily_games/KROLL_Tether_Bot_Relay --editor --quit
 
-      - name: Run KROLL Anchor Swing Trials rules tests
+      - name: Run KROLL Tether Bot Relay rules tests
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Anchor_Swing_Trials --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Tether_Bot_Relay --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Anchor Swing Trials rules tests passed."
+          echo "$output" | grep -q "KROLL Tether Bot Relay rules tests passed."
 
-      - name: Run KROLL Anchor Swing Trials runtime smoke test
+      - name: Run KROLL Tether Bot Relay runtime smoke test
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Anchor_Swing_Trials --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Tether_Bot_Relay --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
-          echo "$output" | grep -q "KROLL Anchor Swing Trials runtime smoke test passed."
+          echo "$output" | grep -q "KROLL Tether Bot Relay runtime smoke test passed."
 
       - name: Run Run 99 terrain corner-cap patch rebind lifecycle regression
         shell: bash
