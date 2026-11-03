@@ -44,7 +44,7 @@ const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Bal
 const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 const MESS_HALL_RUSH_SCENE := "res://daily_games/KROLL_Mess_Hall_Rush/main_root.tscn"
 const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_Lab/main_root.tscn"
-const ANCHOR_SWING_TRIALS_SCENE := "res://daily_games/KROLL_Anchor_Swing_Trials/main_root.tscn"
+const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -596,17 +596,17 @@ func _run() -> void:
 		fragment_lab.queue_free()
 		await process_frame
 
-	var anchor_swing_scene := load(ANCHOR_SWING_TRIALS_SCENE) as PackedScene
-	_expect(anchor_swing_scene != null, "root hub can load the Anchor Swing Trials scene")
-	if anchor_swing_scene != null:
-		var anchor_swing_game := anchor_swing_scene.instantiate()
-		root.add_child(anchor_swing_game)
+	var tether_bot_scene := load(TETHER_BOT_RELAY_SCENE) as PackedScene
+	_expect(tether_bot_scene != null, "root hub can load the Tether Bot Relay scene")
+	if tether_bot_scene != null:
+		var tether_bot_game := tether_bot_scene.instantiate()
+		root.add_child(tether_bot_game)
 		await process_frame
-		_expect(anchor_swing_game.call("get_title_text") == "KROLL // ANCHOR SWING TRIALS", "root-loaded Anchor Swing Trials displays its title")
-		_expect(anchor_swing_game.call("get_course_count") == 3, "root-loaded Anchor Swing Trials exposes three courses")
-		_expect(anchor_swing_game.call("get_anchor_count") >= 3, "root-loaded Anchor Swing Trials builds its first course anchors")
-		_expect(anchor_swing_game.call("get_touch_control_count") == 6, "root-loaded Anchor Swing Trials exposes six touch controls")
-		anchor_swing_game.queue_free()
+		_expect(tether_bot_game.call("get_title_text") == "KROLL // TETHER BOT RELAY", "root-loaded Tether Bot Relay displays its title")
+		_expect(tether_bot_game.call("get_course_count") == 3, "root-loaded Tether Bot Relay exposes three courses")
+		_expect(tether_bot_game.call("get_anchor_count") >= 3, "root-loaded Tether Bot Relay builds its first course anchors")
+		_expect(tether_bot_game.call("get_touch_control_count") == 6, "root-loaded Tether Bot Relay exposes six touch controls")
+		tether_bot_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
