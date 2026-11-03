@@ -40,6 +40,7 @@ jobs:
           test -f daily_games/KROLL_Casefile_Station_Zero/tests/game_smoke_test.gd
           test -f tests/mineral_grid_streaming_queued_root_rejection_test.gd
           grep -q 'CASEFILE_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'path="res://daily_games/KROLL_Casefile_Station_Zero/main.gd"' daily_games/KROLL_Casefile_Station_Zero/main_root.tscn
           grep -q 'labels.has("KROLL Casefile: Station Zero")' tests/survival_test_hub_smoke_test.gd
           grep -q 'buttons.size() == 48' tests/survival_test_hub_smoke_test.gd
           grep -q 'factory_root_queued_for_deletion' systems/MineralGridStreamingDirector.gd
