@@ -3554,3 +3554,38 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Three-by-three terrain multi-junction corner cap regression passed."
+
+
+      - name: Verify Run 96 Emberline Command inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Emberline_Command/project.godot
+          test -f daily_games/KROLL_Emberline_Command/main.tscn
+          test -f daily_games/KROLL_Emberline_Command/main_root.tscn
+          test -f daily_games/KROLL_Emberline_Command/main.gd
+          test -f daily_games/KROLL_Emberline_Command/rules.gd
+          test -f daily_games/KROLL_Emberline_Command/tests/rules_test.gd
+          test -f daily_games/KROLL_Emberline_Command/tests/game_smoke_test.gd
+          grep -q 'EMBERLINE_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'EMBERLINE_COMMAND_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 41' tests/survival_test_hub_smoke_test.gd
+
+      - name: Import and parse KROLL Emberline Command
+        run: godot --headless --path daily_games/KROLL_Emberline_Command --editor --quit
+      - name: Run KROLL Emberline Command rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Emberline_Command --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Emberline Command rules tests passed."
+      - name: Run KROLL Emberline Command runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Emberline_Command --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Emberline Command runtime smoke test passed."

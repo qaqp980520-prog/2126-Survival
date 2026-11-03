@@ -40,6 +40,7 @@ const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_r
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
 const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
+const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 
 var status_label: Label
 
@@ -336,6 +337,12 @@ func _build_ui() -> void:
 		"KROLL Stratosphere Balloonist",
 		"管理氣球浮力、消耗壓艙物與氣體完整度，穿越變化風層並在三個高度帶穩定採樣。",
 		STRATOSPHERE_BALLOONIST_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Emberline Command",
+		"管理三場野火防線：配置永久防火帶、投放水彈並依照風向推進火勢；保護三座中繼站。支援鍵盤與觸控。",
+		EMBERLINE_COMMAND_SCENE
 	)
 	_add_scene_button(
 		launch_list,
