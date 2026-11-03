@@ -41,6 +41,7 @@ const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_r
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
 const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
+const EMBERLINE_COMMAND_SCENE := "res://daily_games/KROLL_Emberline_Command/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -93,7 +94,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 40, "hub exposes forty world, prototype and game launch buttons")
+	_expect(buttons.size() == 41, "hub exposes forty-one world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -545,6 +546,20 @@ func _run() -> void:
 		_expect(balloonist.call("get_action_button_count") == 3, "root-loaded Stratosphere Balloonist builds three flight actions")
 		_expect(balloonist.call("get_control_button_count") == 5, "root-loaded Stratosphere Balloonist exposes five controls")
 		balloonist.queue_free()
+		await process_frame
+
+	var emberline_scene := load(EMBERLINE_COMMAND_SCENE) as PackedScene
+	_expect(emberline_scene != null,"root hub can load the Emberline Command scene")
+	if emberline_scene != null:
+		var emberline_game := emberline_scene.instantiate()
+		root.add_child(emberline_game)
+		await process_frame
+		_expect(emberline_game.call("get_title_text") == "KROLL // EMBERLINE COMMAND","root-loaded Emberline Command displays its title")
+		_expect(emberline_game.call("get_mission_count") == 3,"root-loaded Emberline Command exposes three missions")
+		_expect(emberline_game.call("get_cell_button_count") == 64,"root-loaded Emberline Command builds its 8x8 response grid")
+		_expect(emberline_game.call("get_action_button_count") == 2,"root-loaded Emberline Command builds two response actions")
+		_expect(emberline_game.call("get_control_button_count") == 5,"root-loaded Emberline Command exposes five controls")
+		emberline_game.queue_free()
 		await process_frame
 
 	hub.queue_free()

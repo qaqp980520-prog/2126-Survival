@@ -5,9 +5,12 @@ on:
     paths:
       - 'daily_games/KROLL_Sonar_Triangulator/**'
       - 'daily_games/KROLL_Stratosphere_Balloonist/**'
+      - 'daily_games/KROLL_Emberline_Command/**'
       - 'systems/SurfaceTerrainTransitionColliderManager.gd'
       - 'tests/surface_terrain_four_way_corner_cap_test.gd'
       - 'tests/surface_terrain_multi_junction_corner_cap_test.gd'
+      - 'tests/surface_terrain_randomized_corner_cap_soak_test.gd'
+      - 'tests/README_run96_terrain_soak.md'
       - 'tests/surface_terrain_four_way_corner_junction_test.gd'
       - 'prototypes/SurvivalTestHub.gd'
       - 'tests/survival_test_hub_smoke_test.gd'
@@ -39,7 +42,12 @@ jobs:
           grep -q 'SONAR_TRIANGULATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'SONAR_TRIANGULATOR_SCENE' tests/survival_test_hub_smoke_test.gd
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 40' tests/survival_test_hub_smoke_test.gd
+          grep -q 'EMBERLINE_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'EMBERLINE_COMMAND_SCENE' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 41' tests/survival_test_hub_smoke_test.gd
+          test -f daily_games/KROLL_Emberline_Command/project.godot
+          test -f daily_games/KROLL_Emberline_Command/tests/rules_test.gd
+          test -f tests/surface_terrain_randomized_corner_cap_soak_test.gd
           grep -q 'shared_corner_cap' systems/SurfaceTerrainTransitionColliderManager.gd
           test -f tests/surface_terrain_four_way_corner_cap_test.gd
           test -f tests/surface_terrain_multi_junction_corner_cap_test.gd
@@ -106,3 +114,34 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Three-by-three terrain multi-junction corner cap regression passed."
+
+
+      - name: Import and parse KROLL Emberline Command
+        run: godot --headless --path daily_games/KROLL_Emberline_Command --editor --quit
+
+      - name: Run KROLL Emberline Command rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 40s godot --headless --path daily_games/KROLL_Emberline_Command --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Emberline Command rules tests passed."
+
+      - name: Run KROLL Emberline Command runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Emberline_Command --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Emberline Command runtime smoke test passed."
+
+      - name: Run randomized 4x4 terrain corner-cap soak
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_soak_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Run 96 randomized 4x4 terrain corner-cap soak passed"
