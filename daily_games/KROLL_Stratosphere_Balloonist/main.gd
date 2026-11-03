@@ -204,9 +204,10 @@ func _refresh_ui() -> void:
     _restart_button.disabled = false
 
 func _unhandled_input(event: InputEvent) -> void:
-    if not (event is InputEventKey) or not event.pressed or event.echo:
+    var key_event: InputEventKey = event as InputEventKey
+    if key_event == null or not key_event.pressed or key_event.echo:
         return
-    match event.keycode:
+    match key_event.keycode:
         KEY_UP:
             perform_action("ascend")
             get_viewport().set_input_as_handled()

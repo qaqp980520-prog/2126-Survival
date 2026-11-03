@@ -294,7 +294,7 @@ func _build_corner_cap_specs(candidates: Dictionary, reports: Array) -> Dictiona
                     break
                 var candidate: Dictionary = candidate_value
                 var geometry: Dictionary = candidate.get("geometry", {})
-                if not geometry.has("low_top") or not geometry.has("high_top"):
+                if not geometry.has("low_top") or not geometry.has("high_top") or absf(float(geometry.get("patch_size", 0.0)) - PATCH_SIZE) > POSITION_TOLERANCE:
                     valid_group = false
                     break
                 midpoint_heights.append((float(geometry["low_top"]) + float(geometry["high_top"])) * 0.5)

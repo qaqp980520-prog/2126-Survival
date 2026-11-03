@@ -142,7 +142,8 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
         _expect(not hit.is_empty(), stable_id + " cap center is raycastable")
         if not hit.is_empty():
             _expect(hit.get("collider") == cap_body, stable_id + " ray hits its own cap rather than a clipped ramp or base segment")
-            _expect(absf(float(hit.get("position", Vector3.ZERO).y) - (patch.global_position.y + (top_height + midpoint_height) * 0.5)) <= POSITION_TOLERANCE, stable_id + " cap center height matches the diagonal triangulation")
+            var hit_position: Vector3 = hit.get("position", Vector3.ZERO)
+            _expect(absf(hit_position.y - (patch.global_position.y + (top_height + midpoint_height) * 0.5)) <= POSITION_TOLERANCE, stable_id + " cap center height matches the diagonal triangulation")
 
     for edge_key in descriptors.keys():
         var edge_body: StaticBody3D = manager.call("get_transition_body", str(edge_key))

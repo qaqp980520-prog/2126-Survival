@@ -3155,7 +3155,7 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Cargo Mosaic runtime smoke test passed."
 
-      
+
       - name: Verify Run 86 corner conflicts and Run 92 randomized streaming soak
         shell: bash
         run: |
