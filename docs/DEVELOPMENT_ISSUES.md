@@ -1499,3 +1499,18 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - Local rendered GUI/renderer, GPU performance and physical iPhone touch QA remain untested; all recorded Run 98/99 engine evidence is cloud Godot 4.3 headless CI.
 - World-save schema remains version 1.
 - A post-merge main workflow for final Run 99 SHA has not yet been confirmed.
+
+
+## Run 100 closeout — 2026-11-03
+
+- [x] KROLL Archive Curator M0.1 added under `daily_games/KROLL_Archive_Curator/`; Test Hub contract is 45 launch buttons.
+- [x] Controller-driven terrain unload/reload regression added at `tests/mineral_chunk_controller_terrain_rebind_test.gd`, with the execution scenario documented in `tests/README_run100_terrain_controller_rebind.md`.
+- [x] Corrected the incomplete three-patch L-junction expectation: both perpendicular seams remain on `step_fallback` until a complete four-patch junction exists. No partial ramps are committed; base collision remains intact.
+- [x] Feature PR #235 merged from exact candidate `779feb3f62a3b15dcf386a4535587b3963298ead`; merge/main SHA `fab0369c065a3fae698fa666077413d6da501f7c`.
+- [x] Exact-head full Godot 4.3 Run #1178 passed 448/448, zero failures/skips; cleanup, container shutdown and job completion succeeded.
+- [x] Focused Run 94–100 #73 passed 39/39; Run 92/93 #73 passed 13/13 each.
+- [x] Post-merge main Run #1179 on the merge SHA passed 448/448, zero failures/skips, including cleanup and job completion.
+- [x] Superseded PR #234 remains closed/unmerged as historical validation attempt; PR #235 is the merged corrected/rebased feature.
+- [ ] Repository protection: main still reports `protected=false`; no active ruleset was returned. Follow up in [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236). Current connected GitHub tools expose read-only protection inspection, not a settings-write operation.
+- [ ] Local rendered GUI/GPU and physical iPhone touch QA remain untested.
+- World-save schema remains version 1; no migration was introduced.
