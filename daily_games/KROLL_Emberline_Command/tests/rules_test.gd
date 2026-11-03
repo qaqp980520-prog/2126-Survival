@@ -142,11 +142,16 @@ func _test_authored_mission_solutions(rules: Variant) -> void:
         if not bool(first_turn.get("ok",false)):
             continue
         state = first_turn["state"]
+        print("MISSION DEBUG %d after first turn: status=%s fires=%s relay_breached=%s burned=%d" % [mission_index,str(state.get("status","")), _burning_coordinates(state), str(state.get("relay_breached",false)), int(state.get("burned_count",0))])
         var final_water: Dictionary = rules.apply_action(state,"water",rules.get_cell_index(last_cell.x,last_cell.y))
         _expect(bool(final_water.get("ok",false)),"mission %d plan extinguishes the remaining ignition" % mission_index)
         if not bool(final_water.get("ok",false)):
             continue
+        print("MISSION DEBUG %d after final water: fires=%s" % [mission_index,_burning_coordinates(final_water["state"])])
         var final_turn: Dictionary = rules.end_turn(final_water["state"])
+        if bool(final_turn.get("ok",false)):
+            var final_state: Dictionary = final_turn["state"]
+            print("MISSION DEBUG %d final: status=%s fires=%s relay_breached=%s burned=%d" % [mission_index,str(final_state.get("status","")),_burning_coordinates(final_state),str(final_state.get("relay_breached",false)),int(final_state.get("burned_count",0))])
         _expect(bool(final_turn.get("ok",false)) and str(final_turn["state"].get("status","")) == "passed","mission %d authored solution protects every relay" % mission_index)
 
 func _test_campaign_progression(rules: Variant) -> void:
@@ -165,6 +170,14 @@ func _test_campaign_progression(rules: Variant) -> void:
     final_state["status"] = "passed"
     var complete: Dictionary = rules.advance_mission(final_state)
     _expect(bool(complete.get("ok",false)) and str(complete["state"].get("status","")) == "campaign_complete","third mission ends the campaign")
+
+func _burning_coordinates(state: Dictionary) -> String:
+    var result: Array[String] = []
+    var cells: Array = state.get("cells",[])
+    for index in range(cells.size()):
+        if bool(cells[index].get("burning",false)):
+            result.append("(%d,%d)" % [index % 8,int(index/8)])
+    return ",".join(result)
 
 func _expect(condition: bool, description: String) -> void:
     if condition:
