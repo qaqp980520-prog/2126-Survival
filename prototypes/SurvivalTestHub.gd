@@ -46,6 +46,7 @@ const FRAGMENT_ASSEMBLY_LAB_SCENE := "res://daily_games/KROLL_Fragment_Assembly_
 const TETHER_BOT_RELAY_SCENE := "res://daily_games/KROLL_Tether_Bot_Relay/main_root.tscn"
 const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_root.tscn"
 const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
+const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
 
 var status_label: Label
 
@@ -378,6 +379,12 @@ func _build_ui() -> void:
 		"KROLL Endgame Tactics",
 		"在三個八乘八殘局中找出唯一的車將死一步；支援滑鼠、觸控與方向鍵。",
 		ENDGAME_TACTICS_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Reactor Deck Command",
+		"以三點能量打出戰術卡牌，管理護盾與核心耐久，擊退三波敵人；支援鍵盤、滑鼠與觸控。",
+		REACTOR_DECK_COMMAND_SCENE
 	)
 	_add_scene_button(
 		launch_list,
