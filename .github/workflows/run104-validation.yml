@@ -1,0 +1,89 @@
+name: Run 104 focused Godot validation
+
+on:
+  pull_request:
+    paths:
+      - 'daily_games/KROLL_Stealth_Grid/**'
+      - 'systems/MineralChunkController.gd'
+      - 'tests/mineral_grid_streaming_queued_root_recovery_test.gd'
+      - 'prototypes/SurvivalTestHub.gd'
+      - 'tests/survival_test_hub_smoke_test.gd'
+      - '.github/workflows/godot-validation.yml'
+      - '.github/workflows/run101-validation.yml'
+      - '.github/workflows/run102-validation.yml'
+      - '.github/workflows/run103-validation.yml'
+      - '.github/workflows/run94-validation.yml'
+      - '.github/workflows/run104-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Run 104 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Stealth_Grid/project.godot
+          test -f daily_games/KROLL_Stealth_Grid/main.tscn
+          test -f daily_games/KROLL_Stealth_Grid/main_root.tscn
+          test -f daily_games/KROLL_Stealth_Grid/main.gd
+          test -f daily_games/KROLL_Stealth_Grid/rules.gd
+          test -f daily_games/KROLL_Stealth_Grid/tests/rules_test.gd
+          test -f daily_games/KROLL_Stealth_Grid/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_queued_root_recovery_test.gd
+          grep -q 'STEALTH_GRID_SCENE' prototypes/SurvivalTestHub.gd
+          grep -q 'path="res://daily_games/KROLL_Stealth_Grid/main.gd"' daily_games/KROLL_Stealth_Grid/main_root.tscn
+          grep -q 'labels.has("KROLL Stealth Grid")' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 49' tests/survival_test_hub_smoke_test.gd
+          grep -q 'existing_root.is_queued_for_deletion()' systems/MineralChunkController.gd
+          grep -q 'not chunk_root.is_queued_for_deletion()' systems/MineralChunkController.gd
+
+      - name: Import and parse KROLL Stealth Grid
+        run: godot --headless --path daily_games/KROLL_Stealth_Grid --editor --quit
+
+      - name: Run KROLL Stealth Grid rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Stealth_Grid --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Stealth Grid rules tests passed."
+
+      - name: Run KROLL Stealth Grid runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Stealth_Grid --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Stealth Grid runtime smoke test passed."
+
+      - name: Import and parse root Survival project
+        run: godot --headless --path . --editor --quit
+
+      - name: Run root Test Hub smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+
+      - name: Run queued chunk-root recovery regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_queued_root_recovery_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid queued-root recovery regression passed."

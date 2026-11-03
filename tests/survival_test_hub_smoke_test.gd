@@ -49,6 +49,7 @@ const ARCHIVE_CURATOR_SCENE := "res://daily_games/KROLL_Archive_Curator/main_roo
 const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_root.tscn"
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
+const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -60,6 +61,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(SURFACE_SCENE), "surface streaming prototype scene exists")
 	_expect(ResourceLoader.exists(BACKROOMS_SCENE), "Backrooms prototype scene exists")
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
+	_expect(ResourceLoader.exists(STEALTH_GRID_SCENE), "Stealth Grid root scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
 	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
 	_expect(ResourceLoader.exists(ENDGAME_TACTICS_SCENE), "Endgame Tactics root scene exists")
@@ -105,7 +107,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 48, "hub exposes forty-eight world, prototype and game launch buttons")
+	_expect(buttons.size() == 49, "hub exposes forty-nine world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -118,6 +120,7 @@ func _run() -> void:
 	_expect(labels.has("KROLL Endgame Tactics"), "hub labels the Endgame Tactics game")
 	_expect(labels.has("KROLL Reactor Deck Command"), "hub labels the Reactor Deck Command game")
 	_expect(labels.has("KROLL Casefile: Station Zero"), "hub labels the Casefile Station Zero game")
+	_expect(labels.has("KROLL Stealth Grid"), "hub labels the Stealth Grid game")
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
@@ -670,6 +673,19 @@ func _run() -> void:
 		_expect(casefile_game.call("get_evidence_button_count") == 3, "root-loaded Casefile builds three evidence buttons")
 		_expect(casefile_game.call("get_action_button_count") == 5, "root-loaded Casefile exposes five action buttons")
 		casefile_game.queue_free()
+		await process_frame
+
+	var stealth_scene := load(STEALTH_GRID_SCENE) as PackedScene
+	_expect(stealth_scene != null, "root hub can load the Stealth Grid scene")
+	if stealth_scene != null:
+		var stealth_game := stealth_scene.instantiate()
+		root.add_child(stealth_game)
+		await process_frame
+		_expect(stealth_game.call("get_title_text") == "KROLL // STEALTH GRID", "root-loaded Stealth Grid displays its title")
+		_expect(stealth_game.call("get_mission_count") == 3, "root-loaded Stealth Grid exposes three sectors")
+		_expect(stealth_game.call("get_board_cell_count") == 81, "root-loaded Stealth Grid builds 81 board cells")
+		_expect(stealth_game.call("get_control_button_count") == 8, "root-loaded Stealth Grid exposes eight controls")
+		stealth_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
