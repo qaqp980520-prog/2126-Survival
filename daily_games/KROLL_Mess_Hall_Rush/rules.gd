@@ -182,6 +182,7 @@ func _refresh_shift_status(state: Dictionary) -> void:
 			return
 	var passed: bool = int(state.get("served_count", 0)) >= 3
 	if int(state.get("shift_index", 0)) >= SHIFTS.size() - 1:
-		state["status"] = "campaign_passed" if int(state.get("served_total", 0)) >= 9 else "campaign_failed"
+		var campaign_passed: bool = passed and int(state.get("served_total", 0)) >= 9
+		state["status"] = "campaign_passed" if campaign_passed else "campaign_failed"
 	else:
 		state["status"] = "shift_passed" if passed else "shift_failed"
