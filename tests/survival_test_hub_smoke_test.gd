@@ -50,6 +50,7 @@ const ENDGAME_TACTICS_SCENE := "res://daily_games/KROLL_Endgame_Tactics/main_roo
 const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Command/main_root.tscn"
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
+const ORBITAL_CURLING_SCENE := "res://daily_games/KROLL_Orbital_Curling/main_root.tscn"
 
 var failures: Array[String] = []
 
@@ -62,6 +63,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(BACKROOMS_SCENE), "Backrooms prototype scene exists")
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(ResourceLoader.exists(STEALTH_GRID_SCENE), "Stealth Grid root scene exists")
+	_expect(ResourceLoader.exists(ORBITAL_CURLING_SCENE), "Orbital Curling root scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
 	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
 	_expect(ResourceLoader.exists(ENDGAME_TACTICS_SCENE), "Endgame Tactics root scene exists")
@@ -107,7 +109,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 49, "hub exposes forty-nine world, prototype and game launch buttons")
+	_expect(buttons.size() == 50, "hub exposes fifty world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -121,6 +123,17 @@ func _run() -> void:
 	_expect(labels.has("KROLL Reactor Deck Command"), "hub labels the Reactor Deck Command game")
 	_expect(labels.has("KROLL Casefile: Station Zero"), "hub labels the Casefile Station Zero game")
 	_expect(labels.has("KROLL Stealth Grid"), "hub labels the Stealth Grid game")
+	_expect(labels.has("KROLL Orbital Curling"), "hub labels the Orbital Curling game")
+	var curling_root_scene := load(ORBITAL_CURLING_SCENE) as PackedScene
+	_expect(curling_root_scene != null, "root project resolves the nested Orbital Curling scene")
+	if curling_root_scene != null:
+		var curling_root := curling_root_scene.instantiate()
+		root.add_child(curling_root)
+		await process_frame
+		_expect(curling_root.has_method("get_current_state"), "root Orbital Curling scene exposes campaign state")
+		_expect(str(curling_root.call("get_current_state").get("status", "")) == "playing", "root Orbital Curling scene starts in a playable state")
+		curling_root.queue_free()
+		await process_frame
 	_expect(labels.has("地下礦坑／採礦與共用背包"), "hub labels the underground mining prototype")
 	_expect(labels.has("KROLL Orbital Pinball"), "hub labels the Orbital Pinball game")
 	_expect(labels.has("KROLL Tether Recovery"), "hub labels the Tether Recovery game")
