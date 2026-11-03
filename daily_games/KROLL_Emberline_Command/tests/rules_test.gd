@@ -72,7 +72,7 @@ func _test_firebreak_blocks_spread(rules: Variant) -> void:
     cells[target_index] = {"terrain":"grass","fuel":2,"burning":false,"wet":0,"firebreak":true,"burned":false,"relay":false,"relay_hp":0}
     state["cells"] = cells
     var result: Dictionary = rules.end_turn(state)
-    _expect(bool(result.get("ok",false),"isolated firebreak scenario resolves a turn")
+    _expect(bool(result.get("ok",false)),"isolated firebreak scenario resolves a turn")
     if bool(result.get("ok",false)):
         var next_state: Dictionary = result["state"]
         _expect(not bool(rules.get_cell_state(next_state,target_index).get("burning",false)),"fire cannot cross a permanent firebreak")

@@ -3589,3 +3589,22 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Emberline Command runtime smoke test passed."
+
+
+      - name: Verify Run 96 randomized 4x4 terrain corner-cap soak
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f tests/surface_terrain_randomized_corner_cap_soak_test.gd
+          grep -q 'range(12)' tests/surface_terrain_randomized_corner_cap_soak_test.gd
+          grep -q 'get_corner_cap_body' tests/surface_terrain_randomized_corner_cap_soak_test.gd
+          grep -q 'failed preflight preserves the previous cap set' tests/surface_terrain_randomized_corner_cap_soak_test.gd
+
+      - name: Run randomized 4x4 terrain corner-cap soak
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_randomized_corner_cap_soak_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Run 96 randomized 4x4 terrain corner-cap soak passed"

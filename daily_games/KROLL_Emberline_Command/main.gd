@@ -12,7 +12,7 @@ var _resource_label: Label
 var _status_label: Label
 var _selected_label: Label
 var _next_button: Button
-var _selected_index: int = 19
+var _selected_index: int = 25
 
 func _ready() -> void:
     var attached_script: Script = get_script() as Script
@@ -183,7 +183,7 @@ func advance_mission() -> Dictionary:
     var result: Dictionary = _rules.advance_mission(_state)
     if bool(result.get("ok",false)):
         _state = result["state"]
-        _selected_index = 19
+        _selected_index = 25
     _refresh_ui()
     return result
 
