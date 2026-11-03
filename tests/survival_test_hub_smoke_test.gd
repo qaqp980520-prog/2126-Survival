@@ -664,6 +664,7 @@ func _run() -> void:
 		root.add_child(casefile_game)
 		await process_frame
 		_expect(casefile_game.call("get_title_text") == "KROLL // CASEFILE: STATION ZERO", "root-loaded Casefile displays its title")
+		_expect(casefile_game.get_script().resource_path == "res://daily_games/KROLL_Casefile_Station_Zero/main.gd", "root-loaded Casefile uses the root-relative script path")
 		_expect(casefile_game.call("get_case_count") == 3, "root-loaded Casefile exposes three incidents")
 		_expect(casefile_game.call("get_suspect_button_count") == 3, "root-loaded Casefile builds three suspect buttons")
 		_expect(casefile_game.call("get_evidence_button_count") == 3, "root-loaded Casefile builds three evidence buttons")
