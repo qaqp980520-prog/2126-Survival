@@ -1,6 +1,6 @@
 extends Control
 
-var _rules: RefCounted
+var _rules: Variant
 var _current_gallery: int = 0
 var _placements: Dictionary = {}
 var _placement_order: Array[int] = []
@@ -302,17 +302,25 @@ func _refresh_ui() -> void:
 		if _placements.has(slot_index):
 			var placed_card: Dictionary = cards[int(_placements[slot_index])]
 			_slot_buttons[slot_index].text = "CASE %s\n%s\n%s" % [
-				"A" if slot_index == 0 else "B" if slot_index == 1 else "C" if slot_index == 2 else "D",
+				_slot_letter(slot_index),
 				str(placed_card.get("name", "")),
 				_join_tags(placed_card.get("tags", []))
 			]
 		else:
-			_slot_buttons[slot_index].text = "CASE %s\nOPEN\nChoose a card" % ("A" if slot_index == 0 else "B" if slot_index == 1 else "C" if slot_index == 2 else "D")
+			_slot_buttons[slot_index].text = "CASE %s\nOPEN\nChoose a card" % (_slot_letter(slot_index))
 		_slot_buttons[slot_index].disabled = _status != "playing" or _selected_card < 0 or _placements.has(slot_index)
 	_recall_button.disabled = _status != "playing" or _placement_order.is_empty()
 	_reset_button.disabled = _status != "playing" or _passed_galleries[_current_gallery]
 	_next_button.disabled = _status != "gallery_clear"
 	_restart_button.disabled = false
+
+
+func _slot_letter(slot_index: int) -> String:
+	match slot_index:
+		0: return "A"
+		1: return "B"
+		2: return "C"
+		_: return "D"
 
 func _join_tags(tags: Array) -> String:
 	var parts: PackedStringArray = PackedStringArray()
