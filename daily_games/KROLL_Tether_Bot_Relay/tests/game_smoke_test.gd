@@ -58,6 +58,13 @@ func _run() -> void:
 	_expect(int(game.call("get_course_index")) == 0, "fresh campaign returns to the first course")
 	_expect(int(game.call("get_total_score")) == 0, "fresh campaign clears the previous campaign score")
 	_expect(str(game.call("get_status")) == "playing", "fresh campaign returns to playing state")
+	game.call("_register_fall")
+	game.call("_register_fall")
+	_expect(str(game.call("get_status")) == "playing", "two recovery attempts remain playable")
+	game.call("_register_fall")
+	_expect(str(game.call("get_status")) == "failed", "third fall ends the course")
+	_expect(bool(game.call("restart_course")), "failed course can be retried")
+	_expect(str(game.call("get_status")) == "playing", "retry restores the course to playing state")
 
 	game.queue_free()
 	await process_frame
