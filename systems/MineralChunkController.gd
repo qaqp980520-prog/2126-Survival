@@ -63,7 +63,7 @@ func bind_object_state_registry(candidate: Node) -> bool:
 ## Accepts an instantiated, unparented chunk root. Mineral and crop local IDs are
 ## derived from node names/hierarchy; registry records persist after the scene unloads.
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
-	if registry == null or adapter == null or not is_instance_valid(chunk_root):
+	if registry == null or adapter == null or not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 		return false
 	if AdapterScript.make_stable_id(chunk_id, "probe").is_empty():
 		return false
