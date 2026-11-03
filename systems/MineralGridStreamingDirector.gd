@@ -97,6 +97,10 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
 			continue
 		var candidate: Variant = chunk_factory.call(coord)
+		var staged_validation_after_factory: Dictionary = _validate_async_staged_roots(staged_roots)
+		if not bool(staged_validation_after_factory.get("ok", false)):
+			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_factory, candidate, [], now_unix)
+			return
 		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
 		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
@@ -310,6 +314,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not _async_dependencies_available():
 			_abort_async_sync_request(request_id, staged_roots, staged_count)
 			return
+		var staged_validation_before_factory: Dictionary = _validate_async_staged_roots(staged_roots)
+		if not bool(staged_validation_before_factory.get("ok", false)):
+			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_before_factory, null, [], now_unix)
+			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = chunk_factory.call(coord)
@@ -354,6 +362,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			if not _async_dependencies_available():
 				_abort_async_sync_request(request_id, staged_roots, staged_count)
 				return
+			var staged_validation_after_yield: Dictionary = _validate_async_staged_roots(staged_roots)
+			if not bool(staged_validation_after_yield.get("ok", false)):
+				_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_yield, null, [], now_unix)
+				return
 
 	if request_id != _active_async_request_id:
 		_release_async_staged_roots(request_id, staged_roots)
@@ -361,6 +373,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		return
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count)
+		return
+	var staged_validation_before_commit: Dictionary = _validate_async_staged_roots(staged_roots)
+	if not bool(staged_validation_before_commit.get("ok", false)):
+		_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_before_commit, null, [], now_unix)
 		return
 
 	# Commit is deliberately non-yielding: no newer request can interleave with registration,
@@ -370,6 +386,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	for entry in to_load:
 		if not _async_dependencies_available():
 			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, [])
+			return
+		var staged_validation_during_commit: Dictionary = _validate_async_staged_roots(staged_roots)
+		if not bool(staged_validation_during_commit.get("ok", false)):
+			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_during_commit, null, newly_loaded, now_unix)
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
@@ -445,6 +465,49 @@ func _async_dependencies_available() -> bool:
 		and chunk_controller.is_inside_tree()
 		and not chunk_controller.is_queued_for_deletion()
 		and chunk_factory.is_valid()
+	)
+
+func _validate_async_staged_roots(staged_roots: Dictionary) -> Dictionary:
+	for raw_id in staged_roots.keys():
+		var chunk_id: String = str(raw_id)
+		var candidate: Variant = staged_roots[raw_id]
+		if not is_instance_valid(candidate) or not (candidate is Node3D):
+			return {"ok": false, "failed_chunk_id": chunk_id, "failure_reason": "staged_root_invalid"}
+		var staged_root: Node3D = candidate as Node3D
+		if staged_root.is_queued_for_deletion():
+			return {"ok": false, "failed_chunk_id": chunk_id, "failure_reason": "staged_root_queued_for_deletion"}
+		if staged_root.get_parent() != null:
+			return {"ok": false, "failed_chunk_id": chunk_id, "failure_reason": "staged_root_parented"}
+	return {"ok": true}
+
+func _fail_async_staged_root_validation(
+	request_id: int,
+	staged_roots: Dictionary,
+	staged_count: int,
+	desired_count: int,
+	validation: Dictionary,
+	unowned_candidate: Variant = null,
+	newly_loaded: Array[String] = [],
+	now_unix: int = -1
+) -> void:
+	_free_unowned_root(unowned_candidate)
+	var released_count: int = _release_async_staged_roots(request_id, staged_roots)
+	var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+	_finish_async_sync_request(
+		request_id,
+		false,
+		"staged_root_validation",
+		"A staged chunk root changed lifecycle before the async commit completed.",
+		rollback_ok,
+		{
+			"failed_chunk_id": str(validation.get("failed_chunk_id", "")),
+			"failure_reason": str(validation.get("failure_reason", "staged_root_invalid")),
+			"staged_count": staged_count,
+			"desired_count": desired_count,
+			"staged_roots_released": released_count,
+			"newly_loaded_ids": newly_loaded.duplicate(),
+			"new_loads_rollback_ok": rollback_ok
+		}
 	)
 
 func _abort_async_sync_request(
@@ -530,6 +593,8 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				failure_reason = "registration_rejected"
 			"stale_unload":
 				failure_reason = "stale_unload_failed"
+			"staged_root_validation":
+				failure_reason = str(details.get("failure_reason", "staged_root_invalid"))
 	var diagnostic_details: Dictionary = details.duplicate(true)
 	diagnostic_details["success"] = success
 	diagnostic_details["rollback_complete"] = rollback_complete
