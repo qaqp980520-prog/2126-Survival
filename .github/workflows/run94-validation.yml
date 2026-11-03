@@ -159,6 +159,8 @@ jobs:
           test -f daily_games/KROLL_Mess_Hall_Rush/tests/rules_test.gd
           test -f daily_games/KROLL_Mess_Hall_Rush/tests/game_smoke_test.gd
           test -f tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+          grep -q 'required_edge_count' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
+          grep -q 'equal-height edge' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'MESS_HALL_RUSH_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Mess Hall Rush")' tests/survival_test_hub_smoke_test.gd
           grep -q 'buttons.size() == 42' tests/survival_test_hub_smoke_test.gd
