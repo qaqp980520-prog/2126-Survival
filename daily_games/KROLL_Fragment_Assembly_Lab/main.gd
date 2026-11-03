@@ -210,7 +210,7 @@ func _on_restart_pressed() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
-	var key_event: InputEventKey = event
+	var key_event: InputEventKey = event as InputEventKey
 	match key_event.keycode:
 		KEY_R:
 			restart_current_level()
