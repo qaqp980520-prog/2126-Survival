@@ -3784,6 +3784,7 @@ jobs:
           grep -q 'MIN_THEME_ITEMS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
           grep -q 'scroll.name = "ArchiveScroll"' daily_games/KROLL_Archive_Curator/main.gd
           grep -q 'get_viewport_rect().size.x < 1000.0' daily_games/KROLL_Archive_Curator/main.gd
+          grep -q 'func _place_selected_in_slot(slot_index: int)' daily_games/KROLL_Archive_Curator/main.gd
           grep -q 'path="res://daily_games/KROLL_Archive_Curator/main.gd"' daily_games/KROLL_Archive_Curator/main_root.tscn
           grep -q 'controller.call("load_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
           grep -q 'controller.call("unload_chunk"' tests/mineral_chunk_controller_terrain_rebind_test.gd
