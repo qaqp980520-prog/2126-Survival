@@ -106,7 +106,11 @@ func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_
 	else:
 		mixed_layouts += 1
 		_expect(int(report.get("corner_cap_count", -1)) == 0, "multiple incompatible cells propagate fallback across all nine connected junctions")
-	_expect(int(report.get("active_count", 0)) + int(report.get("blocked_count", 0)) == 24, "active and blocked accounting covers the 4x4 adjacency graph")
+	var required_edge_count: int = 0
+	for descriptor_value in descriptors.values():
+		if descriptor_value is Dictionary and bool(descriptor_value.get("transition_required", false)):
+			required_edge_count += 1
+	_expect(int(report.get("active_count", 0)) + int(report.get("blocked_count", 0)) == required_edge_count, "active and blocked accounting covers every required height transition (%d)" % required_edge_count)
 	_expect(int(manager.call("get_corner_cap_count")) == expected_caps, "manager cap ownership matches the seeded layout")
 
 	var cap_ids: Dictionary = {}
@@ -145,13 +149,20 @@ func _run_layout(trial: int, rng: RandomNumberGenerator, compatible: bool, seed_
 	_expect(shared_cap_reports == expected_caps, "corner report policy count matches committed cap count")
 	for edge_key_value in descriptors.keys():
 		var edge_key: String = str(edge_key_value)
+		var edge_descriptor: Dictionary = descriptors[edge_key_value]
+		var transition_required: bool = bool(edge_descriptor.get("transition_required", false))
 		var body: StaticBody3D = manager.call("get_transition_body", edge_key)
+		if fallback_edges.has(edge_key):
+			_expect(transition_required, "fallback report only names edges requiring a height transition")
+			_expect(blocked_set.has(edge_key), "fallback edge %s cannot be re-enabled by a neighboring cap" % edge_key)
+		if not transition_required:
+			_expect(not blocked_set.has(edge_key), "equal-height edge %s is excluded from blocked-transition accounting" % edge_key)
+			_expect(not is_instance_valid(body), "equal-height edge %s does not create a redundant ramp" % edge_key)
+			continue
 		if blocked_set.has(edge_key):
 			_expect(not is_instance_valid(body), "blocked edge %s has no active shared ramp" % edge_key)
 		else:
 			_expect(is_instance_valid(body), "active edge %s has one shared ramp body" % edge_key)
-		if fallback_edges.has(edge_key):
-			_expect(blocked_set.has(edge_key), "fallback edge %s cannot be re-enabled by a neighboring cap" % edge_key)
 
 	if trial == 0:
 		var original_cap_count: int = manager.call("get_corner_cap_count")
