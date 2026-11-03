@@ -4163,3 +4163,48 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid synchronous controller lifecycle regression passed."
 
+
+      - name: Verify Run 108 Pulse Reactor and rollback lifecycle inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Pulse_Reactor/project.godot
+          test -f daily_games/KROLL_Pulse_Reactor/main.tscn
+          test -f daily_games/KROLL_Pulse_Reactor/main.gd
+          test -f daily_games/KROLL_Pulse_Reactor/rules.gd
+          test -f daily_games/KROLL_Pulse_Reactor/tests/rules_test.gd
+          test -f daily_games/KROLL_Pulse_Reactor/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_rollback_lifecycle_test.gd
+          grep -Fq 'func _restore_unloaded_chunks' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'Controller is queued for deletion' tests/README_run108_rollback_lifecycle.md
+
+      - name: Import and parse KROLL Pulse Reactor
+        run: godot --headless --path daily_games/KROLL_Pulse_Reactor --editor --quit
+
+      - name: Run KROLL Pulse Reactor rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Pulse_Reactor --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pulse Reactor rules tests passed."
+
+      - name: Run KROLL Pulse Reactor runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Pulse_Reactor --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Pulse Reactor runtime smoke test passed."
+
+      - name: Run rollback Controller lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_rollback_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid rollback lifecycle regression passed."
