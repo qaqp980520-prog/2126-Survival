@@ -8,7 +8,7 @@ A turn-based station-cafeteria time-management game for Godot 4.3.
 - Each shift contains four authored orders and recipe-specific workstation sequences.
 - Select an order, then choose the next required station action.
 - Every action advances the countdown of all unfinished orders; incorrect actions and WAIT consume time.
-- Serve at least three of four orders to pass a shift. Complete all three shifts with at least nine served orders to win the campaign.
+- Serve at least three of four orders to pass every shift, including Night Shift. The campaign also requires at least nine served orders overall; the total alone cannot bypass a shift threshold.
 - Score is awarded once when an order is completed. The immutable rules API prevents UI retries from mutating an earlier state.
 
 ## Controls
