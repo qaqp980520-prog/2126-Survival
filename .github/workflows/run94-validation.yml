@@ -55,7 +55,7 @@ jobs:
           grep -q 'labels.has("KROLL Sonar Triangulator")' tests/survival_test_hub_smoke_test.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'EMBERLINE_COMMAND_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
           test -f daily_games/KROLL_Emberline_Command/project.godot
           test -f daily_games/KROLL_Emberline_Command/tests/rules_test.gd
           test -f tests/surface_terrain_randomized_corner_cap_soak_test.gd
@@ -171,7 +171,7 @@ jobs:
           grep -q 'equal-height edge' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'MESS_HALL_RUSH_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Mess Hall Rush")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
 
       - name: Import and parse KROLL Mess Hall Rush
         run: godot --headless --path daily_games/KROLL_Mess_Hall_Rush --editor --quit
@@ -214,7 +214,7 @@ jobs:
           test -f daily_games/KROLL_Fragment_Assembly_Lab/tests/game_smoke_test.gd
           grep -q 'FRAGMENT_ASSEMBLY_LAB_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Fragment Assembly Lab")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
       - name: Import and parse KROLL Fragment Assembly Lab
         run: godot --headless --path daily_games/KROLL_Fragment_Assembly_Lab --editor --quit
       - name: Run KROLL Fragment Assembly Lab rules tests
@@ -249,7 +249,7 @@ jobs:
           test -f tests/surface_terrain_corner_cap_rebind_lifecycle_test.gd
           grep -q 'TETHER_BOT_RELAY_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'TETHER_BOT_RELAY_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
           grep -q 'range(24)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'rng.randi_range(2, 8)' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
           grep -q 'Run 99 extended 4x4 terrain corner-cap soak passed' tests/surface_terrain_randomized_corner_cap_extended_soak_test.gd
@@ -312,7 +312,7 @@ jobs:
           test -f tests/README_run100_terrain_controller_rebind.md
           grep -q 'ARCHIVE_CURATOR_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'ARCHIVE_CURATOR_SCENE' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 45' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 46' tests/survival_test_hub_smoke_test.gd
           grep -q 'ADJACENCY_BONUS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
           grep -q 'MIN_THEME_ITEMS: int = 2' daily_games/KROLL_Archive_Curator/rules.gd
           grep -q 'scroll.name = "ArchiveScroll"' daily_games/KROLL_Archive_Curator/main.gd
