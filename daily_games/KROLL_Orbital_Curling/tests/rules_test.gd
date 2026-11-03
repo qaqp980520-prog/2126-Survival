@@ -13,6 +13,7 @@ func _run() -> void:
 	_test_three_stones_resolve_a_round(rules)
 	_test_collisions_and_rink_bounds(rules)
 	_test_campaign_progression_and_restart(rules)
+	_test_accurate_campaign_can_clear(rules)
 	if failures.is_empty():
 		print("KROLL Orbital Curling rules tests passed.")
 		quit(0)
@@ -88,6 +89,23 @@ func _test_campaign_progression_and_restart(rules: Variant) -> void:
 	var restarted: Dictionary = rules.restart_campaign()
 	_expect(int(restarted.get("round_index", -1)) == 0 and int(restarted.get("shots_left", -1)) == 3, "restart returns to the first round with three throws")
 	_expect(restarted.get("stones", []).is_empty() and int(restarted.get("total_score", -1)) == 0, "restart clears stones and score")
+
+func _test_accurate_campaign_can_clear(rules: Variant) -> void:
+	var state: Dictionary = rules.new_campaign()
+	for round_index in range(rules.get_round_count()):
+		var target: Vector2 = rules.get_target(round_index)
+		var aim: Vector2 = target - rules.get_launch_point()
+		for _shot_index in range(rules.get_shots_per_round()):
+			var result: Dictionary = rules.throw_stone(state, aim, rules.get_max_power())
+			_expect(bool(result.get("ok", false)), "targeted shot is accepted")
+			state = result.get("state", state)
+		if round_index < rules.get_round_count() - 1:
+			var next_result: Dictionary = rules.advance_round(state)
+			_expect(bool(next_result.get("ok", false)), "accurate campaign advances")
+			state = next_result.get("state", state)
+	_expect(int(state.get("total_score", 0)) >= rules.CAMPAIGN_GOAL, "accurate targeting reaches the campaign goal")
+	_expect(str(state.get("status", "")) == "won", "accurate targeting produces a campaign win")
+	_expect(str(state.get("message", "")).contains("CAMPAIGN CLEARED"), "successful campaign uses the cleared message")
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
