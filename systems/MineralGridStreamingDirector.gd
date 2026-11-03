@@ -319,6 +319,23 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				"desired_count": desired.size()
 			})
 			return
+		var duplicate_staged_root := false
+		for staged_value in staged_roots.values():
+			var staged_candidate: Variant = staged_value
+			if staged_candidate == candidate:
+				duplicate_staged_root = true
+				break
+		if duplicate_staged_root:
+			# A factory must return one distinct detached root per coordinate. Detect reuse
+			# before commit so one Node3D can never be registered under multiple chunk IDs.
+			_release_async_staged_roots(request_id, staged_roots)
+			_finish_async_sync_request(request_id, false, "load_factory", "Chunk factory reused a staged root instance.", true, {
+				"failed_chunk_id": id,
+				"staged_count": staged_count,
+				"desired_count": desired.size(),
+				"duplicate_staged_root_rejected": true
+			})
+			return
 		staged_roots[id] = candidate
 		staged_count += 1
 		_record_async_diagnostic(request_id, "staging", {"staged_count": staged_count}, false)
@@ -501,6 +518,8 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 		match phase:
 			"load_factory":
 				failure_reason = "factory_invalid_root"
+				if bool(details.get("duplicate_staged_root_rejected", false)):
+					failure_reason = "factory_reused_staged_root"
 			"load_registration":
 				failure_reason = "registration_rejected"
 			"stale_unload":
