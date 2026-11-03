@@ -21,6 +21,7 @@ func _run() -> void:
 	_expect(is_equal_approx(Rules.beat_interval(60), 1.0), "60 BPM maps to a one-second beat")
 	_expect(is_equal_approx(Rules.beat_interval(120), 0.5), "120 BPM maps to a half-second beat")
 	_expect(Rules.judge_hit(1, 1, 0.0).get("grade") == "perfect", "on-beat hit is perfect")
+	_expect(not Rules.judge_hit(1, 1, 0.0).has("points"), "hit grades do not imply campaign score before relay completion")
 	_expect(Rules.judge_hit(1, 1, Rules.PERFECT_WINDOW).get("grade") == "perfect", "perfect-window boundary is inclusive")
 	_expect(Rules.judge_hit(1, 1, 0.15).get("grade") == "good", "inside the good window is accepted")
 	_expect(Rules.judge_hit(1, 1, Rules.GOOD_WINDOW).get("grade") == "good", "good-window boundary is inclusive")
