@@ -1836,3 +1836,38 @@
 ### Constraints and next steps
 - Local Godot GUI/renderer, GPU performance and iPhone touch QA remain untested; this run used cloud Godot 4.3 headless validation.
 - Continue with a separately tested four-way corner-cap geometry implementation; preserve `step_fallback` until clipping, shared ownership and rollback are proven.
+
+
+## Run 95 — Stratosphere Balloonist and four-way terrain corner caps (2026-11-03)
+
+### New Godot 4 mini-game
+- Added `daily_games/KROLL_Stratosphere_Balloonist/`, an altitude-control and atmospheric-sampling game with three missions: Cloud Deck, Jet Stream and Ozone Window.
+- Players manage ascent, ballast and wind drift, then hold within each mission's sampling band for three consecutive ticks. Keyboard, mouse and touch-friendly controls are included.
+- The model is an educational, deterministic altitude/wind approximation, not a full atmospheric or fluid simulation.
+- Independent deterministic replay of the authored plans: Cloud Deck passed at 8 ticks / 4.00 km; Jet Stream at 13 ticks / 8.00 km; Ozone Window at 18 ticks / 12.04 km. Each reached 3/3 sampling progress. This is a model-level check; Godot CI remains the engine validation.
+- Registered in the root Survival Test Hub; total launch buttons increased from 39 to 40. Standalone and root-wrapper scene paths are both covered. No external assets/plugins or network dependency.
+
+### Existing-system geometry: four-way terrain corner caps
+- Updated `systems/SurfaceTerrainTransitionColliderManager.gd` to stage four per-patch cap meshes and closed collision shells at a complete four-patch junction when all eight incident ramp midpoints agree within 0.01 m and the patch size is supported.
+- Each incident edge ramp is trimmed 0.75 m at the cap endpoint. One-ended trims leave 1.25 m; two-ended trims leave 0.50 m.
+- Incomplete, midpoint-incompatible and unsupported junctions retain the conservative `step_fallback`.
+- Added connected-junction eligibility propagation: if any endpoint junction sharing an edge is ineligible, adjacent cap groups are demoted together until no staged cap can bridge into an incompatible endpoint. This prevents a one-sided ramp from overlapping fallback collision at the opposite end.
+- Staging/preflight remains transactional; a failed geometry preflight preserves the prior committed cap/ramp set. `clear_all` retires cap and ramp bodies and restores base patch collision.
+- World-save schema remains version 1; no migration introduced.
+
+### Regression coverage
+- Compatible 2×2 checkerboard junction: four caps, four trimmed edge ramps, cap-center raycasts, fallback/rollback and clear-all checks.
+- Compatible 3×3 checkerboard: four adjacent junctions, 16 unique cap bodies, 12 shared edge ramps, four double-ended trims (0.50 m) and eight single-ended trims (1.25 m), all 16 cap-center physics raycasts, and collision restoration.
+- Mixed-compatible 3×3: one compatible junction adjacent to an incompatible junction sharing an edge. Both connected junctions remain on `step_fallback`; all seven incident edges stay blocked, only two unrelated bottom-row ramps remain active, and no partial cap set is committed.
+- Main regression entry: `tests/surface_terrain_multi_junction_corner_cap_test.gd`; focused Run 94/95 workflow also executes the existing 2×2 junction and cap tests.
+
+### Exact validation and merge
+- Feature PR [#225](https://github.com/qaqp980520-prog/2126-Survival/pull/225) merged as `8703cc5675fbe123db05f994e2cea2d13f871637` from exact candidate `7e7a2e25a4c4c738c78559ef3df974d8e9e69d33`.
+- Exact-head full Godot 4.3 Run [#1110](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372665) passed 422/422 step records, zero failures/skips, including checkout cleanup, container shutdown and job completion.
+- Run 94/95 focused [#21](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372683) passed 15/15; Run 92 focused [#31](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372438) and Run 93 focused [#26](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372609) each passed 13/13, all with cleanup/job completion.
+- Historical Run 94/95 focused #19 exposed the mixed-junction one-sided-ramp defect and a test pair-count expectation error. Production fallback propagation was fixed in `3550695b156edbf1da1ded6488ef380c5a2d5661`; the binder expectation was corrected to 12 total adjacency pairs in `7e7a2e25a4c4c738c78559ef3df974d8e9e69d33`. The corrected exact-head focused and full workflows passed.
+- A separate post-merge main push-workflow result has not yet been independently confirmed; do not claim post-merge verification complete until a main-branch run is available.
+
+### Constraints and next steps
+- Local GUI/renderer, GPU performance and physical iPhone touch QA remain untested; this run used cloud Godot 4.3 headless validation.
+- Continue with randomized long-duration multi-junction layouts and rendered seam inspection once a local Godot renderer is available.
