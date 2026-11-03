@@ -41,10 +41,10 @@ const LEVELS = [
 	}
 ]
 
-static func get_level_count() -> int:
+func get_level_count() -> int:
 	return LEVELS.size()
 
-static func create_state(level_index: int = 0, total_score: int = 0) -> Dictionary:
+func create_state(level_index: int = 0, total_score: int = 0) -> Dictionary:
 	var safe_index: int = clampi(level_index, 0, LEVELS.size() - 1)
 	var level: Dictionary = LEVELS[safe_index].duplicate(true)
 	return {
@@ -62,7 +62,7 @@ static func create_state(level_index: int = 0, total_score: int = 0) -> Dictiona
 		"last_message": "Select a fragment whose prefix overlaps the current sequence by at least two bases."
 	}
 
-static func get_available_fragments(state: Dictionary) -> Array:
+func get_available_fragments(state: Dictionary) -> Array:
 	var available: Array = []
 	var used_ids: Array = state.get("used_ids", [])
 	for fragment_value in state.get("fragments", []):
@@ -74,7 +74,7 @@ static func get_available_fragments(state: Dictionary) -> Array:
 			available.append(fragment.duplicate(true))
 	return available
 
-static func attempt_fragment(state: Dictionary, fragment_id: String) -> Dictionary:
+func attempt_fragment(state: Dictionary, fragment_id: String) -> Dictionary:
 	var next: Dictionary = state.duplicate(true)
 	if str(next.get("status", "")) != "playing":
 		return next
@@ -124,18 +124,18 @@ static func attempt_fragment(state: Dictionary, fragment_id: String) -> Dictiona
 
 	return next
 
-static func next_level(state: Dictionary) -> Dictionary:
+func next_level(state: Dictionary) -> Dictionary:
 	if str(state.get("status", "")) != "level_passed":
 		return state.duplicate(true)
 	return create_state(int(state.get("level_index", 0)) + 1, int(state.get("total_score", 0)))
 
-static func restart_level(state: Dictionary) -> Dictionary:
+func restart_level(state: Dictionary) -> Dictionary:
 	var status: String = str(state.get("status", ""))
 	if status == "level_passed" or status == "campaign_passed":
 		return state.duplicate(true)
 	return create_state(int(state.get("level_index", 0)), int(state.get("total_score", 0)))
 
-static func _max_overlap(first: String, second: String) -> int:
+func _max_overlap(first: String, second: String) -> int:
 	var max_size: int = mini(first.length(), second.length())
 	for overlap_size in range(max_size, MIN_OVERLAP - 1, -1):
 		if first.substr(first.length() - overlap_size, overlap_size) == second.substr(0, overlap_size):
