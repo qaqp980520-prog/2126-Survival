@@ -66,10 +66,10 @@ func _test_controller_detaches_during_restore_registration() -> void:
 	_expect(controller.unload_calls == 1, "newly restored root is rolled back after detachment")
 	_expect(controller.get_loaded_chunk_ids().is_empty(), "detached Controller retains no partial restored root")
 	_expect(director.get_managed_chunk_ids().is_empty(), "Director does not claim the rejected restoration")
-	_expect(_last_factory_root == null or _last_factory_root.get_ref() == null, "rolled-back restoration root is released")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
+	_expect(_last_factory_root == null or _last_factory_root.get_ref() == null, "rolled-back restoration root is released after queued deletion")
 
 func _test_rollback_skips_queued_controller() -> void:
 	var pair: Dictionary = await _make_pair()
