@@ -1,13 +1,13 @@
 # KROLL Tether Bot Relay M0.1
 
-A three-course 2D momentum platformer built with Godot 4.3+ and procedural drawing.
+A fictional maintenance drone navigates three artificial-gravity service routes using tether nodes and short thruster boosts. Built with Godot 4.3+ and procedural drawing.
 
 ## Play
 
 - A/D or Left/Right: use thruster bursts to build horizontal drift.
 - Space: boost from a platform.
 - E or click/tap in the play area: attach to the nearest maintenance node or release the tether.
-- While tethered, keep moving to build a pendulum drift and release near the next platform.
+- While tethered, use controlled thruster bursts to build drift momentum, then release near the next service platform.
 - R: retry the current course before it is cleared.
 - N: advance after clearing a course.
 - C: restart the whole campaign.
@@ -15,9 +15,9 @@ A three-course 2D momentum platformer built with Godot 4.3+ and procedural drawi
 
 ## Courses
 
-1. Dockyard Swing
+1. Dockyard Relay
 2. Broken Gantry
-3. Spiral Lift
+3. Spiral Service Shaft
 
 Each course has a 90-second limit and up to three recoveries. Clearing a course awards a one-time score based on remaining time and falls. A cleared course cannot be restarted for duplicate points.
 
@@ -25,14 +25,14 @@ Each course has a 90-second limit and up to three recoveries. Clearing a course 
 
 - `project.godot`: standalone Godot project.
 - `main.tscn`, `main_root.tscn`: standalone and root Test Hub scenes.
-- `main.gd`: player physics, tether controls, course layout and procedural drawing.
+- `main.gd`: service-drone physics, tether controls, course layout and procedural drawing.
 - `rules.gd`: deterministic maintenance node selection, rope constraint, horizontal motion and score helpers.
 - `tests/rules_test.gd`: physics-rule edge cases.
 - `tests/game_smoke_test.gd`: scene, tether, progression and score-once checks.
 
 ## Import
 
-Open `daily_games/KROLL_Anchor_Swing_Trials/project.godot` in Godot Project Manager, or launch it from the root Survival Test Hub.
+Open `daily_games/KROLL_Tether_Bot_Relay/project.godot` in Godot Project Manager, or launch it from the root Survival Test Hub.
 
 ## Dependencies and limits
 
