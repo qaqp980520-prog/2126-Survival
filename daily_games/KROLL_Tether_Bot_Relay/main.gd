@@ -67,16 +67,16 @@ var _touch_control_count: int = 0
 func _ready() -> void:
 	var attached_script: Script = get_script() as Script
 	if attached_script == null:
-		push_error("Anchor Swing Trials main script is unavailable.")
+		push_error("Tether Bot Relay main script is unavailable.")
 		return
 	var rules_path: String = attached_script.resource_path.get_base_dir().path_join("rules.gd")
 	var rules_script: Script = load(rules_path) as Script
 	if rules_script == null:
-		push_error("Anchor Swing Trials could not load rules: " + rules_path)
+		push_error("Tether Bot Relay could not load rules: " + rules_path)
 		return
 	rules = rules_script.new() as RefCounted
 	if rules == null:
-		push_error("Anchor Swing Trials rules instance could not be created.")
+		push_error("Tether Bot Relay rules instance could not be created.")
 		return
 	_build_player()
 	_load_course()
@@ -215,7 +215,7 @@ func _register_fall() -> void:
 	else:
 		player.global_position = start_position
 		player.velocity = Vector2.ZERO
-		message = "Recovery %d/%d. Try a different swing." % [falls_this_course, MAX_FALLS]
+		message = "Recovery %d/%d. Try a different route." % [falls_this_course, MAX_FALLS]
 	queue_redraw()
 
 func _complete_course() -> void:
@@ -240,7 +240,7 @@ func toggle_tether() -> bool:
 		message = "Tether released. Keep your drift momentum."
 		queue_redraw()
 		return true
-	var selected: int = rules.nearest_anchor(player.global_position, anchor_points)
+	var selected: int = rules.nearest_tether_node(player.global_position, anchor_points)
 	if selected < 0:
 		message = "No maintenance node is within tether range."
 		queue_redraw()
@@ -311,7 +311,7 @@ func _build_touch_controls() -> void:
 	right_button.button_up.connect(_set_right_held.bind(false))
 	var boost_button: Button = _add_touch_button(bar, "BOOST")
 	boost_button.pressed.connect(_request_boost)
-	var hook_button: Button = _add_touch_button(bar, "HOOK")
+	var hook_button: Button = _add_touch_button(bar, "TETHER")
 	hook_button.pressed.connect(toggle_tether)
 	var reset_button: Button = _add_touch_button(bar, "RESET")
 	reset_button.pressed.connect(restart_course)
@@ -332,7 +332,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(960.0, 720.0)), Color("#07111e"), true)
 	var font: Font = ThemeDB.fallback_font
 	draw_string(font, Vector2(24.0, 34.0), "KROLL // TETHER BOT RELAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color("#91e8ff"))
-	draw_string(font, Vector2(24.0, 58.0), "Swing from anchor to anchor. Release at the right moment and land in the green gate.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#c2d7e8"))
+	draw_string(font, Vector2(24.0, 58.0), "Guide the maintenance drone between tether nodes and release at the right moment to reach the green service gate.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#c2d7e8"))
 	draw_string(font, Vector2(24.0, 84.0), "COURSE %d/%d   FALLS %d/%d   TIME %.1f   SCORE %d" % [course_index + 1, COURSES.size(), falls_this_course, MAX_FALLS, time_remaining, total_score], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#f4d58d"))
 
 	for grid_x in range(40, 960, 40):
@@ -352,13 +352,18 @@ func _draw() -> void:
 		draw_circle(anchor, 17.0, Color(0.28, 0.75, 1.0, 0.15))
 		draw_circle(anchor, 8.0, Color("#6bdcff"))
 		draw_arc(anchor, 18.0, 0.0, TAU, 32, Color("#b8f1ff"), 2.0)
-		draw_string(font, anchor + Vector2(22.0, 5.0), "A%d" % [index + 1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#b8f1ff"))
+		draw_string(font, anchor + Vector2(22.0, 5.0), "N%d" % [index + 1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#b8f1ff"))
 	if _tether_anchor_index >= 0 and _tether_anchor_index < anchor_points.size() and is_instance_valid(player):
 		draw_line(anchor_points[_tether_anchor_index], player.global_position, Color("#f4d58d"), 3.0)
 		draw_circle(anchor_points[_tether_anchor_index], _rope_length, Color(0.96, 0.82, 0.48, 0.06), false, 1.0)
 	if is_instance_valid(player):
-		draw_circle(player.global_position, 14.0, Color("#f4d58d"))
-		draw_arc(player.global_position, 17.0, 0.0, TAU, 32, Color("#fff0c2"), 2.0)
+		var drone_body := Rect2(player.global_position - Vector2(14.0, 10.0), Vector2(28.0, 20.0))
+		draw_rect(drone_body.grow(3.0), Color(0.28, 0.75, 1.0, 0.12), true)
+		draw_rect(drone_body, Color("#f4d58d"), true)
+		draw_rect(drone_body, Color("#fff0c2"), false, 2.0)
+		draw_circle(player.global_position, 4.0, Color("#07111e"))
+		draw_line(player.global_position + Vector2(0.0, -10.0), player.global_position + Vector2(0.0, -17.0), Color("#b8f1ff"), 2.0)
+		draw_circle(player.global_position + Vector2(0.0, -18.0), 3.0, Color("#6bdcff"))
 	draw_string(font, Vector2(24.0, 625.0), message, HORIZONTAL_ALIGNMENT_LEFT, 900, 14, Color("#d5e4ee"))
 
 func get_title_text() -> String:
