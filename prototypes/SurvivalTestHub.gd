@@ -39,6 +39,7 @@ const CHRONO_VAULT_SCENE := "res://daily_games/KROLL_Chrono_Vault/main_root.tscn
 const SWARM_DISPATCHER_SCENE := "res://daily_games/KROLL_Swarm_Dispatcher/main_root.tscn"
 const SIGNAL_RESONATOR_SCENE := "res://daily_games/KROLL_Signal_Resonator/main_root.tscn"
 const SONAR_TRIANGULATOR_SCENE := "res://daily_games/KROLL_Sonar_Triangulator/main_root.tscn"
+const STRATOSPHERE_BALLOONIST_SCENE := "res://daily_games/KROLL_Stratosphere_Balloonist/main_root.tscn"
 
 var status_label: Label
 
@@ -329,6 +330,12 @@ func _build_ui() -> void:
 		"KROLL Sonar Triangulator",
 		"從四座聲納浮標讀取距離回波，在 8×8 海床上定位失聯探測器；第四次掃描可破解模糊回波。",
 		SONAR_TRIANGULATOR_SCENE
+	)
+	_add_scene_button(
+		launch_list,
+		"KROLL Stratosphere Balloonist",
+		"管理氣球浮力、消耗壓艙物與氣體完整度，穿越變化風層並在三個高度帶穩定採樣。",
+		STRATOSPHERE_BALLOONIST_SCENE
 	)
 	_add_scene_button(
 		launch_list,

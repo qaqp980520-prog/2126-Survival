@@ -104,8 +104,7 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
         "cap/se": Vector2i(-1, -1)
     }
     var midpoint_height: float = (float(north_west.call("get_top_height")) + float(north_east.call("get_top_height"))) * 0.5
-    var junction_position := Vector3(PatchScript.PATCH_SIZE * 0.5, 0.0, PatchScript.PATCH_SIZE * 0.5)
-    for stable_id in expected_corners.keys():
+        for stable_id in expected_corners.keys():
         var corner: String = expected_corners[stable_id]
         var cap_body: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner)
         _expect(is_instance_valid(cap_body), stable_id + " owns a corner cap body")
@@ -122,17 +121,17 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
         var patch: Node3D = patch_by_id[stable_id]
         var base_collision := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionShape") as CollisionShape3D
         _expect(base_collision != null and base_collision.disabled, stable_id + " full patch box is replaced while shared edges are active")
-        var sign: Vector2i = signs[stable_id]
-        var x_index: int = 2 if sign.x > 0 else 0
-        var z_index: int = 2 if sign.y > 0 else 0
+        var corner_sign: Vector2i = signs[stable_id]
+        var x_index: int = 2 if corner_sign.x > 0 else 0
+        var z_index: int = 2 if corner_sign.y > 0 else 0
         var corner_segment := patch.get_node_or_null("TerrainCollisionBody/TerrainCollisionSegment_X%d_Z%d" % [x_index, z_index]) as CollisionShape3D
         _expect(corner_segment != null and corner_segment.disabled, stable_id + " base corner segment is clipped under the cap")
         _expect(bool(patch.call("is_shared_transition_active", "east" if sign.x > 0 else "west")), stable_id + " horizontal shared edge is active")
         _expect(bool(patch.call("is_shared_transition_active", "south" if sign.y > 0 else "north")), stable_id + " vertical shared edge is active")
 
         var top_height: float = float(patch.call("get_top_height"))
-        var sample_x: float = float(sign.x) * (PatchScript.PATCH_SIZE * 0.5 - 0.375)
-        var sample_z: float = float(sign.y) * (PatchScript.PATCH_SIZE * 0.5 - 0.375)
+        var sample_x: float = float(corner_sign.x) * (PatchScript.PATCH_SIZE * 0.5 - 0.375)
+        var sample_z: float = float(corner_sign.y) * (PatchScript.PATCH_SIZE * 0.5 - 0.375)
         var sample_position: Vector3 = patch.global_position + Vector3(sample_x, 0.0, sample_z)
         var query := PhysicsRayQueryParameters3D.create(
             sample_position + Vector3.UP * 2.0,
@@ -151,7 +150,9 @@ func _test_checkerboard_junction_builds_four_caps() -> void:
         if not is_instance_valid(edge_body):
             continue
         var edge_collision := edge_body.get_node_or_null("SharedTransitionCollision") as CollisionShape3D
-        var box := edge_collision.shape as BoxShape3D if edge_collision != null else null
+        var box: BoxShape3D = null
+        if edge_collision != null:
+            box = edge_collision.shape as BoxShape3D
         _expect(box != null, "trimmed edge has a box collision shape")
         if box != null:
             _expect(absf(box.size.z - (PatchScript.PATCH_SIZE - PatchScript.EDGE_RAMP_RUN)) <= POSITION_TOLERANCE, "edge ramp is clipped by one corner run at the junction end")
