@@ -1397,3 +1397,32 @@ Compatibility: world-save envelope remains schema 1. Stamina is an optional, sep
 - Four-way corner cap geometry is not implemented; only deterministic safe fallback is tested.
 - 320/375 px layout calculations passed headless tests, but local GUI/renderer and physical iPhone touch QA remain untested.
 - No world-save migration or third-party asset dependency was introduced.
+
+
+## Run 95 — Stratosphere Balloonist and connected corner-cap fallback (2026-11-03)
+
+| Area | Finding | Resolution / status |
+|---|---|---|
+| Balloonist mission plans | The three deterministic altitude-control plans need to remain solvable under their wind cycles and sampling windows. | Independent model replay passed Cloud Deck (8 ticks, 4.00 km), Jet Stream (13 ticks, 8.00 km) and Ozone Window (18 ticks, 12.04 km), each with 3/3 sampling progress. Godot 4.3 import/rules/runtime checks passed in the exact-head full workflow. |
+| Four-way corner geometry | A 2×2 junction needs a shared cap instead of four overlapping ramp ends. | Manager stages four per-patch cap meshes/collision shells when four unique patches/corners and all eight midpoint heights satisfy the 0.01 m continuity tolerance. Incident ramps trim 0.75 m at each cap endpoint. Unsupported/incomplete/mismatched groups retain `step_fallback`. |
+| Multi-junction edge ownership | A compatible cap at one end could previously re-enable a shared edge whose opposite junction was incompatible, creating a one-sided ramp over fallback collision. | Added edge-to-junction eligibility mapping and iterative fallback propagation. If an edge touches an ineligible junction, connected cap groups are demoted until the whole connected conflict set safely falls back. |
+| 3×3 compatible geometry | A single 2×2 test did not prove that multiple adjacent caps can coexist or that an edge can be trimmed at both ends. | Added a 3×3 checkerboard test: four junctions, 16 unique caps, 12 ramps, four double-ended trims (0.50 m) and eight single-ended trims (1.25 m), all 16 cap-center raycasts, and clear-all restoration. |
+| Mixed compatible/incompatible geometry | A compatible junction sharing an edge with an incompatible junction must not stage only one endpoint. | Added a mixed 3×3 regression: both connected junctions use `step_fallback`, all seven incident edges remain blocked, only two unrelated bottom-row ramps remain active, and no partial cap set is committed. |
+| Save compatibility | New diagnostic/geometry state must not silently alter existing world saves. | No save migration or serialized cap state introduced; world-save schema remains version 1. |
+
+### Run 95 failure history and corrections
+- An initial 3×3 fixture used world junction coordinates as patch-grid indices; corrected the expected owner mapping.
+- The next mixed-compatibility regression exposed the production one-sided-ramp defect described above. Fixed in commit `3550695b156edbf1da1ded6488ef380c5a2d5661`.
+- The same test initially expected nine adjacency pairs, but the binder correctly reports all 12 cardinal pairs including equal-height neighbors. Corrected to 12 in commit `7e7a2e25a4c4c738c78559ef3df974d8e9e69d33`.
+- The historical failing runs remain visible; corrected exact-head validation passed.
+
+### Run 95 validation and merge
+- PR [#225](https://github.com/qaqp980520-prog/2126-Survival/pull/225) merged as `8703cc5675fbe123db05f994e2cea2d13f871637` from exact candidate `7e7a2e25a4c4c738c78559ef3df974d8e9e69d33`.
+- Full Godot 4.3 [Run #1110](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372665) passed 422/422 step records, zero failures/skips, cleanup, container shutdown and job completion.
+- Focused Run 94/95 [#21](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372683) passed 15/15; Run 92 [#31](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372438) and Run 93 [#26](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41561372609) passed 13/13 each.
+- A separate post-merge main push-workflow result has not yet been independently confirmed.
+
+### Remaining limitations
+- Headless Godot 4.3 validation does not certify rendered seam appearance, local GPU performance or physical iPhone touch behavior.
+- The Balloonist is an idealized educational altitude/wind model, not a complete atmospheric simulation.
+- World-save schema remains version 1.
