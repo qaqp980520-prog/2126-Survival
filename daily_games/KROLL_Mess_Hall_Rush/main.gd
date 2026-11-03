@@ -1,7 +1,5 @@
 extends Control
 
-const RulesScript = preload("res://rules.gd")
-
 var rules: Variant
 var state: Dictionary = {}
 var selected_order_id: String = ""
@@ -15,7 +13,15 @@ var action_buttons: Dictionary = {}
 var action_names: Array[String] = []
 
 func _ready() -> void:
-	rules = RulesScript.new()
+	var rules_path := "res://rules.gd"
+	var root_rules_path := "res://daily_games/KROLL_Mess_Hall_Rush/rules.gd"
+	if ResourceLoader.exists(root_rules_path):
+		rules_path = root_rules_path
+	var rules_script := load(rules_path) as Script
+	if rules_script == null:
+		push_error("Mess Hall Rush could not load its rules script: " + rules_path)
+		return
+	rules = rules_script.new()
 	state = rules.create_state(0)
 	action_names = rules.get_action_names()
 	_build_ui()
@@ -43,7 +49,8 @@ func _build_ui() -> void:
 	margin.add_child(scroll)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(780.0, 0.0)
+	panel.custom_minimum_size = Vector2(0.0, 0.0)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(panel)
 
 	var column := VBoxContainer.new()
@@ -98,7 +105,7 @@ func _build_ui() -> void:
 	column.add_child(action_heading)
 
 	var action_grid := GridContainer.new()
-	action_grid.columns = 4
+	action_grid.columns = 3 if get_viewport_rect().size.x < 700.0 else 4
 	action_grid.add_theme_constant_override("h_separation", 8)
 	action_grid.add_theme_constant_override("v_separation", 8)
 	column.add_child(action_grid)
@@ -115,6 +122,7 @@ func _build_ui() -> void:
 	status_label = Label.new()
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.custom_minimum_size = Vector2(0.0, 42.0)
+	status_label.text = "Choose an order and follow its next workstation."
 	status_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.42))
 	column.add_child(status_label)
 
@@ -135,7 +143,7 @@ func _refresh_ui() -> void:
 	if not is_instance_valid(order_list):
 		return
 	for child in order_list.get_children():
-		child.queue_free()
+		child.free()
 	var orders: Array = state.get("orders", [])
 	for order_value in orders:
 		if not (order_value is Dictionary):
