@@ -52,7 +52,7 @@ func _run() -> void:
 	var primary_factory := Callable(self, "_make_primary_chunk")
 	var alternate_factory := Callable(self, "_make_alternate_chunk")
 	_expect(bool(director.call("bind_chunk_factory", primary_factory)), "initial chunk factory binds before streaming")
-	director.async_sync_completed.connect(_on_async_completed)
+	director.connect("async_sync_completed", Callable(self, "_on_async_completed"))
 
 	var request_id: int = int(director.call(
 		"request_sync_to_world_position_async", Vector3.ZERO, int(Time.get_unix_time_from_system()) + 10, 1
