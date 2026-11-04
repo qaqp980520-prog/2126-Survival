@@ -109,7 +109,7 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 				_managed_chunk_ids.clear()
 			_set_sync_report(false, "controller_lifecycle", "Controller became unavailable during synchronous chunk generation.", rollback_ok, {
 					"controller_destroyed": not controller_alive,
-					"controller_detached": controller_detached_after_load,
+					"controller_detached": controller_detached,
 					"controller_queued_for_deletion": controller_queued,
 					"newly_loaded_ids": newly_loaded.duplicate(),
 					"new_loads_rollback_ok": rollback_ok
@@ -158,11 +158,11 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var rollback_complete: bool = candidate_cleanup_ok and new_loads_rollback_ok
-			var controller_detached: bool = controller_alive_after_load and not chunk_controller.is_inside_tree()
+			var controller_detached_after_load: bool = controller_alive_after_load and not chunk_controller.is_inside_tree()
 			_set_sync_report(false, "controller_lifecycle" if not controller_ready_after_load else "load_registration", "Controller became unavailable during synchronous chunk registration." if not controller_ready_after_load else "Chunk controller rejected or failed to register a new chunk.", rollback_complete, {
 				"failed_chunk_id": id,
 				"controller_destroyed": not controller_alive_after_load,
-				"controller_detached": controller_detached,
+				"controller_detached": controller_detached_after_load,
 				"controller_queued_for_deletion": controller_queued_after_load,
 				"candidate_loaded": candidate_loaded,
 				"candidate_cleanup_ok": candidate_cleanup_ok,
