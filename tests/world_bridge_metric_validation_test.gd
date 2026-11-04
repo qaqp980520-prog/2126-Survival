@@ -84,13 +84,13 @@ func _run() -> void:
 	summary = bridge.call("get_summary")
 	_expect(is_equal_approx(float(summary["weight_kg"]), 0.0), "string weight is rejected")
 	_expect(is_equal_approx(float(summary["limit_kg"]), 65.0), "non-positive carry limit is rejected")
-	_expect(is_equal_approx(float(summary["movement_multiplier"]), 1.0), "movement multipliers above one are rejected")
+	_expect(is_equal_approx(float(summary["movement_multiplier"]), 0.68), "movement multipliers above one are rejected and use the validated overweight fallback")
 	_expect(bool(summary["overweight"]), "valid custom boolean status is preserved")
 	_expect(bool(summary["can_jump"]), "non-boolean numeric jump flag is rejected and derived")
 
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), 0.0), "public weight getter uses the validated summary")
 	_expect(is_equal_approx(float(bridge.call("get_carry_limit_kg")), 65.0), "public carry-limit getter uses the validated summary")
-	_expect(is_equal_approx(float(bridge.call("get_movement_multiplier")), 1.0), "public movement getter uses the validated summary")
+	_expect(is_equal_approx(float(bridge.call("get_movement_multiplier")), 0.68), "public movement getter uses the validated summary")
 	_expect(bool(bridge.call("can_player_jump")), "public jump getter uses the validated summary")
 
 	bridge.queue_free()
