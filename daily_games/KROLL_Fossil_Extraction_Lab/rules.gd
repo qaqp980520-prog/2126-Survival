@@ -13,6 +13,7 @@ const MISSIONS: Array = [
 	},
 	{
 		"name": "Ammonite Coil",
+		"hint": "Survey clue: eastern upper shelf near F3. Grid labels run A1 to H8.",
 		"center": Vector2i(5, 2),
 		"fossils": [Vector2i(4, 1), Vector2i(5, 1), Vector2i(6, 1), Vector2i(6, 2), Vector2i(6, 3), Vector2i(5, 3)]
 	},
