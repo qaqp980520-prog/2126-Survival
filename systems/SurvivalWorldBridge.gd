@@ -263,24 +263,19 @@ func restore_world_save(world_save: Dictionary) -> bool:
 	return _restore_inventory_atomically(payload)
 
 func _restore_inventory_atomically(payload: Dictionary) -> bool:
-	if inventory == null:
+	if inventory == null or not _is_valid_restore_payload(payload):
 		return false
 	var snapshot_value: Variant = inventory.call("to_save_dict")
 	if not (snapshot_value is Dictionary):
 		return false
 	var snapshot: Dictionary = snapshot_value.duplicate(true)
-	var expected_snapshot: Dictionary = _expected_restore_snapshot(payload, snapshot)
+	var expected_snapshot: Dictionary = _expected_restore_snapshot(payload)
 	var restore_result: Variant = inventory.call("load_save_dict", payload.duplicate(true))
-	var restored_value: Variant = inventory.call("to_save_dict")
-	var restore_verified: bool = (
-		restore_result is bool
-		and bool(restore_result)
-		and restored_value is Dictionary
-		and restored_value == expected_snapshot
-	)
-	if restore_verified:
-		_emit_inventory_changed()
-		return true
+	if restore_result is bool and bool(restore_result):
+		var restored_value: Variant = inventory.call("to_save_dict")
+		if restored_value is Dictionary and restored_value == expected_snapshot:
+			_emit_inventory_changed()
+			return true
 	# A true return is only a claim. Verify the serialized result before exposing
 	# the restore as successful; lying or no-op custom loaders must be rolled back.
 	var rollback_result: Variant = inventory.call("load_save_dict", snapshot.duplicate(true))
@@ -295,27 +290,35 @@ func _restore_inventory_atomically(payload: Dictionary) -> bool:
 		_emit_inventory_changed()
 	return false
 
-func _expected_restore_snapshot(payload: Dictionary, previous_snapshot: Dictionary) -> Dictionary:
+func _is_valid_restore_payload(payload: Dictionary) -> bool:
+	var schema: Variant = payload.get("schema_version", null)
+	if not _is_valid_bridge_count(schema) or int(schema) != 1:
+		return false
+	var day: Variant = payload.get("game_day", null)
+	if not _is_valid_bridge_count(day) or int(day) < 1 or int(day) > InventoryModel.MAX_SAVED_GAME_DAY:
+		return false
+	var counts: Variant = payload.get("inventory", null)
+	if not (counts is Dictionary):
+		return false
+	for item_id in counts.keys():
+		if not (item_id is String) or not _is_valid_bridge_count(counts[item_id]):
+			return false
+	return true
+
+func _expected_restore_snapshot(payload: Dictionary) -> Dictionary:
 	var expected: Dictionary = payload.duplicate(true)
-	var expected_counts: Variant = expected.get("inventory", null)
-	if expected_counts is Dictionary:
-		var normalized_counts: Dictionary = expected_counts.duplicate(true)
-		# The built-in model always serializes every known item key, including zeros.
-		# Preserve that stable shape when callers restore a compact partial payload.
-		if inventory.get_script() == InventoryModel:
-			for item_id in InventoryModel.ITEM_WEIGHTS.keys():
-				if not normalized_counts.has(item_id):
-					normalized_counts[item_id] = 0
-		for item_id in normalized_counts.keys():
-				if _is_valid_bridge_count(normalized_counts[item_id]):
-					normalized_counts[item_id] = int(normalized_counts[item_id])
-		expected["inventory"] = normalized_counts
-	for field_name in ["schema_version", "game_day"]:
-		var field_value: Variant = expected.get(field_name, null)
-		if field_value is int or field_value is float:
-			var numeric: float = float(field_value)
-			if is_finite(numeric) and floorf(numeric) == numeric:
-				expected[field_name] = int(numeric)
+	var expected_counts: Dictionary = expected["inventory"].duplicate(true)
+	# The built-in model always serializes every known item key, including zeros.
+	# Preserve that stable shape when callers restore a compact partial payload.
+	if inventory.get_script() == InventoryModel:
+		for item_id in InventoryModel.ITEM_WEIGHTS.keys():
+			if not expected_counts.has(item_id):
+				expected_counts[item_id] = 0
+	for item_id in expected_counts.keys():
+		expected_counts[item_id] = int(expected_counts[item_id])
+	expected["inventory"] = expected_counts
+	expected["schema_version"] = int(expected["schema_version"])
+	expected["game_day"] = int(expected["game_day"])
 	return expected
 
 func _has_inventory_contract(candidate: Object) -> bool:
