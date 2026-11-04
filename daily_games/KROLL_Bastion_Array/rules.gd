@@ -152,6 +152,11 @@ static func finish_wave(state: Dictionary) -> bool:
 	var wave_index: int = int(state.get("wave_index", 0))
 	if wave_index < 0 or wave_index >= WAVE_QUOTAS.size():
 		return false
+	if int(state.get("spawned", 0)) < wave_quota(wave_index):
+		return false
+	var enemies: Array = state.get("enemies", [])
+	if not enemies.is_empty():
+		return false
 	state["wave_index"] = wave_index + 1
 	state["completed_waves"] = int(state.get("completed_waves", 0)) + 1
 	state["credits"] = int(state.get("credits", 0)) + WAVE_CLEAR_REWARD
