@@ -679,7 +679,16 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 			"controller_lifecycle":
 				failure_reason = "controller_unavailable"
 			"dependency_unavailable":
-				failure_reason = "controller_unavailable"
+				if bool(details.get("controller_destroyed", false)):
+					failure_reason = "controller_destroyed"
+				elif bool(details.get("controller_detached", false)):
+					failure_reason = "controller_detached"
+				elif bool(details.get("controller_queued_for_deletion", false)):
+					failure_reason = "controller_destroyed"
+				elif not bool(details.get("factory_valid", true)):
+					failure_reason = "factory_unavailable"
+				else:
+					failure_reason = "dependency_unavailable"
 			"load_registration":
 				failure_reason = "registration_rejected"
 			"stale_unload":
