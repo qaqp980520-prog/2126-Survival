@@ -121,16 +121,16 @@ func _run() -> void:
 	fixture.add_mode = "over_report"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "over-reported add count is rejected")
 	_expect(int(fixture.counts["meat"]) == 3, "unexpected custom mutation remains visible rather than hidden")
-	_expect(collected_events.size() == 1 and refresh_events.size() == 1, "over-report emits no collection event but refreshes changed inventory")
+	_expect(collected_events.size() == 1 and refresh_events.size() == 2, "over-report emits no collection event but refreshes changed inventory")
 
 	fixture.add_mode = "under_report"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 2)), "under-reported add count is rejected when the dictionary delta differs")
 	_expect(int(fixture.counts["meat"]) == 5, "under-report mutation remains observable")
-	_expect(refresh_events.size() == 2, "under-report mismatch refreshes the inventory view")
+	_expect(refresh_events.size() == 3, "under-report mismatch refreshes the inventory view")
 
 	fixture.add_mode = "no_mutation"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "a positive return without an actual count change is rejected")
-	_expect(refresh_events.size() == 2, "no-op mismatch does not emit a false refresh")
+	_expect(refresh_events.size() == 3, "no-op mismatch does not emit a false refresh")
 
 	fixture.add_mode = "fractional"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "fractional operation result is rejected")
@@ -138,14 +138,14 @@ func _run() -> void:
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "string operation result is rejected")
 	fixture.add_mode = "boolean"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "Boolean operation result is rejected")
-	_expect(collected_events.size() == 1 and refresh_events.size() == 5, "malformed results never emit item-collected events and changed counts trigger refresh")
+	_expect(collected_events.size() == 1 and refresh_events.size() == 6, "malformed results never emit item-collected events and changed counts trigger refresh")
 
 	fixture.remove_mode = "normal"
 	_expect(bool(bridge.call("drop_item", "meat", 2)), "matching remove result and count delta are accepted")
 	_expect(dropped_events == [2], "valid drop emits the exact removed amount")
 	fixture.remove_mode = "over_report"
 	_expect(not bool(bridge.call("drop_item", "meat", 1)), "over-reported remove count is rejected")
-	_expect(dropped_events.size() == 1 and refresh_events.size() == 7, "invalid drop emits no drop event but refreshes an actual mutation")
+	_expect(dropped_events.size() == 1 and refresh_events.size() == 8, "invalid drop emits no drop event but refreshes an actual mutation")
 	fixture.remove_mode = "no_mutation"
 	_expect(not bool(bridge.call("consume_item", "meat", 1)), "consume rejects a positive result without a count change")
 	_expect(consumed_events.is_empty(), "invalid consume does not emit an item-consumed event")
