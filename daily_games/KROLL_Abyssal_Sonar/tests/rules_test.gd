@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Rules = preload("res://rules.gd")
+const PING_PATH_INDICES: Array = [[6, 7], [6, 10], [0, 6]]
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -17,6 +18,16 @@ func _run() -> void:
         _expect(outward.size() > 1, "mission %d has a reachable hidden beacon" % (index + 1))
         _expect(inward.size() > 1, "mission %d has a return route to the submersible" % (index + 1))
         _expect(not mission["walls"].has(start) and not mission["walls"].has(target), "mission %d start and target are passable" % (index + 1))
+        var triangulation_clues: Array = []
+        for ping_index in PING_PATH_INDICES[index]:
+            var ping_origin: Vector2i = outward[int(ping_index)]
+            triangulation_clues.append({
+                "origin": ping_origin,
+                "bearing": Rules.bearing(ping_origin, target),
+                "band": Rules.distance_band(ping_origin, target)
+            })
+        var candidates: Array[Vector2i] = Rules.triangulation_candidates(mission, triangulation_clues)
+        _expect(candidates.size() == 1 and candidates[0] == target, "mission %d two authored sonar echoes uniquely identify the beacon" % (index + 1))
 
         var state: Dictionary = Rules.new_state(index)
         var ping_result: Dictionary = Rules.ping(state)
