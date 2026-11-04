@@ -84,7 +84,7 @@ func _run() -> void:
 	var world_save := {"version":2,"game_day":8,"inventory":{"meat":22}}
 	_expect(not bool(bridge.call("restore_world_save", world_save)), "partial world-save restore failure is reported")
 	_expect(fixture.to_save_dict() == original, "world-save failure restores the exact prior snapshot")
-	_expect(refresh_events.is_empty(), "verified world-save rollback leaves observers unchanged")
+	_expect(refresh_events == 0, "verified world-save rollback leaves observers unchanged")
 
 	fixture.load_calls = 0
 	fixture.mode = "rollback_fail"
@@ -107,14 +107,14 @@ func _run() -> void:
 	var before_invalid_calls: int = fixture.load_calls
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "invalid pre-restore snapshot rejects the operation before mutation")
 	_expect(fixture.load_calls == before_invalid_calls, "invalid snapshot does not call the custom loader")
-	_expect(refresh_events.size() == 3, "invalid snapshot does not emit a refresh")
+	_expect(refresh_events == 3, "invalid snapshot does not emit a refresh")
 
 	fixture.snapshot_mode = "normal"
 	fixture.load_calls = 0
 	var invalid_world_save := {"version":2,"game_day":1,"inventory":{"unknown_item":5}}
 	_expect(not bool(bridge.call("restore_world_save", invalid_world_save)), "invalid world-save payload is rejected before custom loading")
 	_expect(fixture.load_calls == 0, "invalid world-save payload does not call the custom loader")
-	_expect(refresh_events.size() == 3, "invalid world-save payload leaves observers unchanged")
+	_expect(refresh_events == 3, "invalid world-save payload leaves observers unchanged")
 
 	bridge.queue_free()
 	await process_frame
