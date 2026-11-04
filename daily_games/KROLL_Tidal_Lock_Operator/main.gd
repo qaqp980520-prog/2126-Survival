@@ -23,9 +23,12 @@ func _ready() -> void:
 	_start_level(0)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey):
 		return
-	match event.keycode:
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	match key_event.keycode:
 		KEY_UP:
 			perform_game_action("pump_up")
 		KEY_DOWN:
