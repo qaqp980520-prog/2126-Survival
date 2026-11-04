@@ -410,6 +410,12 @@ func _build_ui() -> void:
 	)
 	_add_scene_button(
 		launch_list,
+		"KROLL Fossil Extraction Lab",
+		"使用掃描器、低壓氣筆、毛刷與微型鑿刀挖掘三份恐龍及古生物標本，維持完整度並管理行動額度。",
+		FOSSIL_EXTRACTION_SCENE
+	)
+	_add_scene_button(
+		launch_list,
 		"後室傳送門實驗場",
 		"測試後室無限迷宮、傳送門、背包負重、設定與存檔。",
 		BACKROOMS_SCENE
