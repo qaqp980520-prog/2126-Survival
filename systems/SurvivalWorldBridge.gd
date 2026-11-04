@@ -177,8 +177,8 @@ func _apply_inventory_operation(method_name: StringName, item_id: String, reques
 	var actual_delta: int = after_count - before_count if is_add else before_count - after_count
 	var changed_other_state: bool = not _inventory_snapshot_matches_except_item(before_snapshot, after_snapshot, item_id)
 	if reported_count <= 0 or actual_delta != reported_count or changed_other_state:
-		# A pure no-op with an invalid report needs no rollback or refresh. If any
-		# serialized state changed, restore the pre-operation snapshot and verify it.
+		# Attempt rollback for every inconsistent result, even when the serialized
+		# snapshot appears unchanged, because custom code may have opaque side effects.
 		if not _rollback_inventory_operation(before_snapshot):
 			_emit_inventory_changed()
 		return 0
