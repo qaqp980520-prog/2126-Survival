@@ -45,6 +45,7 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_regi
 3. Async commit: Controller attaches a candidate and returns `true` without registering it; the request must fail, remove the unregistered root and preserve matching Controller/Director IDs.
 4. Stale-root restoration: after a partial stale-unload failure, a restoration callback returns `true` without registering its candidate; the helper must return failure, report incomplete rollback and avoid retaining an orphan root.
 5. Controller detachment during async commit: the request must report `dependency_unavailable`, identify the live detached Controller, roll back the newly registered candidate, and preserve the original empty window.
+6. Factory loss after an async request is accepted: the request must remain `dependency_unavailable` and preserve the `factory_unavailable` diagnostic reason rather than being mislabeled as Controller loss.
 
 ## Validation and limitations
 
