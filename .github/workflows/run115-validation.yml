@@ -1,0 +1,88 @@
+name: Run 115 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Orbital_Foundry/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_serialization_snapshot_test.gd"
+      - "tests/README_run115_serialization_snapshot.md"
+      - ".github/workflows/run115-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Orbital_Foundry/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_serialization_snapshot_test.gd"
+      - "tests/README_run115_serialization_snapshot.md"
+      - ".github/workflows/run115-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Run 115 Focused Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 115 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Orbital_Foundry/project.godot
+          test -f daily_games/KROLL_Orbital_Foundry/main.tscn
+          test -f daily_games/KROLL_Orbital_Foundry/main.gd
+          test -f daily_games/KROLL_Orbital_Foundry/rules.gd
+          test -f daily_games/KROLL_Orbital_Foundry/tests/rules_test.gd
+          test -f daily_games/KROLL_Orbital_Foundry/tests/game_smoke_test.gd
+          test -f systems/SurvivalWorldBridge.gd
+          test -f tests/world_bridge_serialization_snapshot_test.gd
+          grep -Fq 'snapshot_dictionary.duplicate(true)' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Orbital Foundry
+        run: godot --headless --path daily_games/KROLL_Orbital_Foundry --editor --quit
+      - name: Run KROLL Orbital Foundry rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Orbital_Foundry --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Foundry rules tests passed."
+      - name: Run KROLL Orbital Foundry runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Orbital_Foundry --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Orbital Foundry runtime smoke test passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run world bridge serialization snapshot regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_serialization_snapshot_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge serialization snapshot tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short
+      - name: Post Checkout repository
+        if: always()
+        run: git status --short
+      - name: Stop containers
+        if: always()
+        run: true
+      - name: Complete job
+        if: always()
+        run: echo "Run 115 focused validation job complete."
