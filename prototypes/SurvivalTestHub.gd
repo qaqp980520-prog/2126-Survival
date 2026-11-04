@@ -50,7 +50,6 @@ const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Comman
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
 const ORBITAL_CURLING_SCENE := "res://daily_games/KROLL_Orbital_Curling/main_root.tscn"
-const FOSSIL_EXTRACTION_SCENE := "res://daily_games/KROLL_Fossil_Extraction_Lab/main.tscn"
 
 var status_label: Label
 
@@ -407,12 +406,6 @@ func _build_ui() -> void:
 		"KROLL Orbital Curling",
 		"拖曳冰石、控制力道與反彈，讓三顆石頭盡量靠近目標圈；三個場次，支援滑鼠與觸控。",
 		ORBITAL_CURLING_SCENE
-	)
-	_add_scene_button(
-		launch_list,
-		"KROLL Fossil Extraction Lab",
-		"使用掃描器、低壓氣筆、毛刷與微型鑿刀挖掘三份恐龍及古生物標本，維持完整度並管理行動額度。",
-		FOSSIL_EXTRACTION_SCENE
 	)
 	_add_scene_button(
 		launch_list,
