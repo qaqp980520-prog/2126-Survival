@@ -4,7 +4,7 @@ A standalone Godot 4.3+ turn-based sonar triangulation and deep-trench extractio
 
 ## Objective
 
-Recover the hidden beacon in each of three 9×9 trench maps, then return to the green SUB tile to extract it. Sonar reveals a coarse distance band and an eight-way bearing; it never directly draws the beacon. Walls block movement but are visible.
+Recover the hidden beacon in each of three 9×9 trench maps, then return to the green SUB tile to extract it. Sonar reveals a coarse distance band and an eight-way bearing; it never directly draws the beacon. Each authored route has two planned ping positions whose combined clues uniquely identify the beacon. Walls block movement but are visible.
 
 ## Controls
 
@@ -33,7 +33,7 @@ Open this folder in Godot 4.3 or newer and run main.tscn. The project uses the C
 
 ## Validation
 
-- tests/rules_test.gd checks all mission paths, sonar clue correctness, battery/ping budgets, extraction, one-time rewards and restart behavior.
+- tests/rules_test.gd checks all mission paths, sonar clue correctness, unique two-ping triangulation, battery/ping budgets, extraction, one-time rewards and restart behavior.
 - tests/game_smoke_test.gd instantiates the scene and exercises keyboard-facing actions and touch hit-testing.
 - tests/route_simulation_test.gd drives each route through real grid moves, sonar pings, beacon collection and return-to-sub extraction without teleporting.
 - The root project regression tests/world_bridge_restore_read_isolation_test.gd proves that serialization and metric/count reads do not expose a partially restored custom inventory.
