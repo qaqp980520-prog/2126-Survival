@@ -51,7 +51,6 @@ const REACTOR_DECK_COMMAND_SCENE := "res://daily_games/KROLL_Reactor_Deck_Comman
 const CASEFILE_SCENE := "res://daily_games/KROLL_Casefile_Station_Zero/main_root.tscn"
 const STEALTH_GRID_SCENE := "res://daily_games/KROLL_Stealth_Grid/main_root.tscn"
 const ORBITAL_CURLING_SCENE := "res://daily_games/KROLL_Orbital_Curling/main_root.tscn"
-const FOSSIL_EXTRACTION_SCENE := "res://daily_games/KROLL_Fossil_Extraction_Lab/main.tscn"
 
 var failures: Array[String] = []
 
@@ -65,7 +64,6 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(ResourceLoader.exists(STEALTH_GRID_SCENE), "Stealth Grid root scene exists")
 	_expect(ResourceLoader.exists(ORBITAL_CURLING_SCENE), "Orbital Curling root scene exists")
-	_expect(ResourceLoader.exists(FOSSIL_EXTRACTION_SCENE), "Fossil Extraction Lab game scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
 	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
 	_expect(ResourceLoader.exists(ENDGAME_TACTICS_SCENE), "Endgame Tactics root scene exists")
@@ -111,7 +109,7 @@ func _run() -> void:
 	var scroll_list := hub.find_child("LaunchListScroll", true, false) as ScrollContainer
 	_expect(scroll_list != null, "hub keeps the expanded launch list accessible in a vertical scroll container")
 	var buttons := hub.find_children("*", "Button", true, false)
-	_expect(buttons.size() == 51, "hub exposes fifty world, prototype and game launch buttons")
+	_expect(buttons.size() == 50, "hub exposes fifty world, prototype and game launch buttons")
 	var labels: Array[String] = []
 	for candidate in buttons:
 		labels.append((candidate as Button).text)
@@ -701,18 +699,6 @@ func _run() -> void:
 		_expect(stealth_game.call("get_board_cell_count") == 81, "root-loaded Stealth Grid builds 81 board cells")
 		_expect(stealth_game.call("get_control_button_count") == 8, "root-loaded Stealth Grid exposes eight controls")
 		stealth_game.queue_free()
-		await process_frame
-
-	var fossil_scene := load(FOSSIL_EXTRACTION_SCENE) as PackedScene
-	_expect(fossil_scene != null, "root hub can load the Fossil Extraction Lab scene")
-	if fossil_scene != null:
-		var fossil_game := fossil_scene.instantiate()
-		root.add_child(fossil_game)
-		await process_frame
-		_expect(fossil_game.call("get_grid_button_count") == 64, "root-loaded Fossil Extraction Lab builds sixty-four excavation cells")
-		var fossil_state: Dictionary = fossil_game.call("get_game_state")
-		_expect(fossil_state.get("fossil_cells", []).size() == 5, "root-loaded Fossil Extraction Lab exposes the first five-fragment specimen")
-		fossil_game.queue_free()
 		await process_frame
 
 	hub.queue_free()
