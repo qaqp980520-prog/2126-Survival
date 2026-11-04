@@ -109,7 +109,7 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 				_managed_chunk_ids.clear()
 			_set_sync_report(false, "controller_lifecycle", "Controller became unavailable during synchronous chunk generation.", rollback_ok, {
 					"controller_destroyed": not controller_alive,
-					"controller_detached": controller_detached,
+					"controller_detached": controller_detached_after_load,
 					"controller_queued_for_deletion": controller_queued,
 					"newly_loaded_ids": newly_loaded.duplicate(),
 					"new_loads_rollback_ok": rollback_ok
