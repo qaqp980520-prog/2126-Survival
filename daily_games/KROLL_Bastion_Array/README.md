@@ -26,4 +26,4 @@ Open project.godot in Godot 4.3+ and run main.tscn. The project uses the Compati
 ## Tests
 
 - tests/rules_test.gd covers build validation, credits, lane targeting, enemy leaks, core failure and one-time wave rewards.
-- tests/game_smoke_test.gd instantiates the real scene, checks all 15 cells, builds towers, starts a wave, advances the simulation and verifies campaign reset.
+- tests/game_smoke_test.gd instantiates the real scene, checks all 15 cells, builds towers, starts a wave, advances the simulation and plays all three waves to a 300-point win with a deterministic two-tower strategy, verifies core/leak outcomes, then checks campaign reset.
