@@ -15,3 +15,10 @@ The bridge validates custom inventory mutation return values before emitting ite
 ## Regression
 
 Run tests/world_bridge_operation_result_test.gd under Godot 4.3 headless. It covers valid operations, over-reporting, under-reporting, no-op false reports, fractional/string/Boolean results, drop/consume signal behavior, refresh behavior and a method-only custom inventory without a public counts property.
+
+
+## Run 116 superseding contract — atomic operation verification
+
+Run 116 supersedes the earlier "mismatch remains visible" behavior. Before add/remove, the bridge now captures a detached to_save_dict() snapshot. It accepts an operation only when the reported count, serialized target-item delta and all non-target serialized fields agree. A mismatched mutation is rolled back from the prior snapshot and verified. Verified rollback emits no item event and no misleading refresh; failed or unverifiable rollback emits one defensive inventory_changed signal. Custom inventories without a public counts property remain supported when their serialized snapshot contains an inventory Dictionary. If no valid snapshot baseline exists, the bridge fails closed before invoking the mutation method.
+
+See tests/world_bridge_operation_atomicity_test.gd and docs/README_run116_inventory_operation_atomicity.md for the Run 116 regression contract.
