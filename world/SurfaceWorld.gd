@@ -51,6 +51,14 @@ var _surface_stream_request_id: int = -1
 var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
+var _player_visual_root: Node3D
+var _player_torso_pivot: Node3D
+var _player_left_arm_pivot: Node3D
+var _player_right_arm_pivot: Node3D
+var _player_left_leg_pivot: Node3D
+var _player_right_leg_pivot: Node3D
+var _player_visual_clock: float = 0.0
+var _player_visual_state: String = "idle"
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -97,16 +105,7 @@ func _build_player() -> void:
 	collision.position = Vector3(0.0, 0.9, 0.0)
 	player.add_child(collision)
 	if DisplayServer.get_name() != "headless":
-		var body_mesh := MeshInstance3D.new()
-		var capsule_mesh := CapsuleMesh.new()
-		capsule_mesh.radius = 0.35
-		capsule_mesh.height = 1.8
-		body_mesh.mesh = capsule_mesh
-		body_mesh.position = Vector3(0.0, 0.9, 0.0)
-		var body_material := StandardMaterial3D.new()
-		body_material.albedo_color = Color(0.16, 0.78, 0.9)
-		body_mesh.material_override = body_material
-		player.add_child(body_mesh)
+		_build_player_visual_rig()
 	camera = Camera3D.new()
 	camera.name = "PlayerCamera"
 	camera.position = Vector3(0.0, 1.48, 0.0)
@@ -114,6 +113,196 @@ func _build_player() -> void:
 	camera.current = true
 	camera.fov = 76.0
 	player.add_child(camera)
+
+func _build_player_visual_rig() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	if _player_visual_root != null and is_instance_valid(_player_visual_root):
+		return
+	_player_visual_root = Node3D.new()
+	_player_visual_root.name = "PlayerVisualRoot"
+	player.add_child(_player_visual_root)
+
+	var suit_material := _make_player_visual_material(Color(0.055, 0.23, 0.29), 0.22, 0.58)
+	var armor_material := _make_player_visual_material(Color(0.11, 0.17, 0.21), 0.52, 0.42)
+	var fabric_material := _make_player_visual_material(Color(0.025, 0.055, 0.07), 0.0, 0.86)
+	var accent_material := _make_player_visual_material(Color(0.94, 0.52, 0.12), 0.18, 0.5)
+	var visor_material := _make_player_visual_material(Color(0.035, 0.58, 0.72), 0.62, 0.24)
+
+	_player_torso_pivot = Node3D.new()
+	_player_torso_pivot.name = "TorsoPivot"
+	_player_torso_pivot.position = Vector3(0.0, 0.92, 0.0)
+	_player_visual_root.add_child(_player_torso_pivot)
+	_add_player_visual_capsule(_player_torso_pivot, "Torso", 0.25, 0.78, Vector3(0.0, 0.17, 0.0), suit_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestPlate", Vector3(0.32, 0.26, 0.065), Vector3(0.0, 0.18, -0.218), armor_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestStripe", Vector3(0.24, 0.045, 0.018), Vector3(0.0, 0.29, -0.257), accent_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestBeacon", Vector3(0.055, 0.055, 0.02), Vector3(0.0, 0.055, -0.257), visor_material)
+	_add_player_visual_sphere(_player_torso_pivot, "LeftShoulderPad", 0.13, Vector3(-0.32, 0.38, 0.0), armor_material)
+	_add_player_visual_sphere(_player_torso_pivot, "RightShoulderPad", 0.13, Vector3(0.32, 0.38, 0.0), armor_material)
+	_add_player_visual_box(_player_torso_pivot, "Backpack", Vector3(0.34, 0.42, 0.17), Vector3(0.0, -0.055, 0.235), fabric_material)
+
+	var helmet_pivot := Node3D.new()
+	helmet_pivot.name = "HelmetPivot"
+	helmet_pivot.position = Vector3(0.0, 0.66, 0.0)
+	_player_torso_pivot.add_child(helmet_pivot)
+	_add_player_visual_sphere(helmet_pivot, "Helmet", 0.18, Vector3.ZERO, armor_material)
+	_add_player_visual_box(helmet_pivot, "Visor", Vector3(0.25, 0.085, 0.032), Vector3(0.0, 0.015, -0.158), visor_material)
+	_add_player_visual_sphere(helmet_pivot, "HelmetBeacon", 0.042, Vector3(0.0, 0.15, 0.0), accent_material)
+
+	_player_left_arm_pivot = Node3D.new()
+	_player_left_arm_pivot.name = "LeftArmPivot"
+	_player_left_arm_pivot.position = Vector3(-0.32, 0.36, -0.02)
+	_player_torso_pivot.add_child(_player_left_arm_pivot)
+	_add_player_visual_capsule(_player_left_arm_pivot, "LeftArm", 0.105, 0.62, Vector3(0.0, -0.31, -0.02), suit_material)
+	_add_player_visual_sphere(_player_left_arm_pivot, "LeftGlove", 0.095, Vector3(0.0, -0.63, -0.04), fabric_material)
+
+	_player_right_arm_pivot = Node3D.new()
+	_player_right_arm_pivot.name = "RightArmPivot"
+	_player_right_arm_pivot.position = Vector3(0.32, 0.36, -0.02)
+	_player_torso_pivot.add_child(_player_right_arm_pivot)
+	_add_player_visual_capsule(_player_right_arm_pivot, "RightArm", 0.105, 0.62, Vector3(0.0, -0.31, -0.02), suit_material)
+	_add_player_visual_sphere(_player_right_arm_pivot, "RightGlove", 0.095, Vector3(0.0, -0.63, -0.04), fabric_material)
+
+	_player_left_leg_pivot = Node3D.new()
+	_player_left_leg_pivot.name = "LeftLegPivot"
+	_player_left_leg_pivot.position = Vector3(-0.15, -0.03, 0.0)
+	_player_visual_root.add_child(_player_left_leg_pivot)
+	_add_player_visual_capsule(_player_left_leg_pivot, "LeftLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftBoot", Vector3(0.24, 0.16, 0.34), Vector3(0.0, -0.73, -0.045), armor_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftBootStripe", Vector3(0.16, 0.035, 0.018), Vector3(0.0, -0.685, -0.218), accent_material)
+
+	_player_right_leg_pivot = Node3D.new()
+	_player_right_leg_pivot.name = "RightLegPivot"
+	_player_right_leg_pivot.position = Vector3(0.15, -0.03, 0.0)
+	_player_visual_root.add_child(_player_right_leg_pivot)
+	_add_player_visual_capsule(_player_right_leg_pivot, "RightLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightBoot", Vector3(0.24, 0.16, 0.34), Vector3(0.0, -0.73, -0.045), armor_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightBootStripe", Vector3(0.16, 0.035, 0.018), Vector3(0.0, -0.685, -0.218), accent_material)
+
+func _make_player_visual_material(color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.metallic = clampf(metallic, 0.0, 1.0)
+	material.roughness = clampf(roughness, 0.0, 1.0)
+	return material
+
+func _add_player_visual_capsule(parent: Node3D, node_name: String, radius: float, height: float, local_position: Vector3, material: Material) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var mesh := CapsuleMesh.new()
+	mesh.radius = radius
+	mesh.height = height
+	mesh_instance.mesh = mesh
+	mesh_instance.position = local_position
+	mesh_instance.material_override = material
+	parent.add_child(mesh_instance)
+	return mesh_instance
+
+func _add_player_visual_sphere(parent: Node3D, node_name: String, radius: float, local_position: Vector3, material: Material) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh_instance.mesh = mesh
+	mesh_instance.position = local_position
+	mesh_instance.material_override = material
+	parent.add_child(mesh_instance)
+	return mesh_instance
+
+func _add_player_visual_box(parent: Node3D, node_name: String, size: Vector3, local_position: Vector3, material: Material) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh_instance.mesh = mesh
+	mesh_instance.position = local_position
+	mesh_instance.material_override = material
+	parent.add_child(mesh_instance)
+	return mesh_instance
+
+func _resolve_player_visual_animation_state(horizontal_speed: float, vertical_speed: float, grounded: bool, sprinting: bool) -> String:
+	if not grounded:
+		return "jump" if vertical_speed > 0.2 else "fall"
+	if horizontal_speed > 0.15:
+		return "sprint" if sprinting else "walk"
+	return "idle"
+
+func _update_player_visual_animation(delta: float) -> void:
+	if player == null or _player_visual_root == null or not is_instance_valid(_player_visual_root):
+		return
+	_player_visual_clock += maxf(delta, 0.0)
+	var horizontal_speed: float = Vector2(player.velocity.x, player.velocity.z).length()
+	var state: String = _resolve_player_visual_animation_state(horizontal_speed, player.velocity.y, player.is_on_floor(), _sprint_active)
+	_apply_player_visual_pose(state, delta)
+
+func _apply_player_visual_pose(state: String, delta: float) -> void:
+	if (
+		_player_torso_pivot == null or not is_instance_valid(_player_torso_pivot)
+		or _player_left_arm_pivot == null or not is_instance_valid(_player_left_arm_pivot)
+		or _player_right_arm_pivot == null or not is_instance_valid(_player_right_arm_pivot)
+		or _player_left_leg_pivot == null or not is_instance_valid(_player_left_leg_pivot)
+		or _player_right_leg_pivot == null or not is_instance_valid(_player_right_leg_pivot)
+	):
+		return
+	var resolved_state: String = state
+	if not ["idle", "walk", "sprint", "jump", "fall"].has(resolved_state):
+		resolved_state = "idle"
+	var target_body_y: float = 0.92
+	var target_body_lean: float = 0.0
+	var target_left_arm: float = 0.0
+	var target_right_arm: float = 0.0
+	var target_left_leg: float = 0.0
+	var target_right_leg: float = 0.0
+	match resolved_state:
+		"idle":
+			var idle_sway: float = sin(_player_visual_clock * 1.7) * 0.025
+			target_body_y += sin(_player_visual_clock * 2.2) * 0.012
+			target_left_arm = idle_sway + 0.02
+			target_right_arm = -idle_sway - 0.02
+		"walk":
+			var walk_stride: float = sin(_player_visual_clock * 8.5)
+			target_body_y += absf(sin(_player_visual_clock * 17.0)) * 0.022
+			target_body_lean = -0.025
+			target_left_leg = walk_stride * 0.48
+			target_right_leg = -walk_stride * 0.48
+			target_left_arm = -walk_stride * 0.34
+			target_right_arm = walk_stride * 0.34
+		"sprint":
+			var sprint_stride: float = sin(_player_visual_clock * 11.5)
+			target_body_y += absf(sin(_player_visual_clock * 23.0)) * 0.04
+			target_body_lean = -0.13
+			target_left_leg = sprint_stride * 0.68
+			target_right_leg = -sprint_stride * 0.68
+			target_left_arm = -sprint_stride * 0.58
+			target_right_arm = sprint_stride * 0.58
+		"jump":
+			target_body_y += 0.025
+			target_body_lean = -0.08
+			target_left_arm = 0.72
+			target_right_arm = 0.72
+			target_left_leg = -0.22
+			target_right_leg = -0.22
+		"fall":
+			target_body_y -= 0.015
+			target_body_lean = 0.08
+			target_left_arm = 0.98
+			target_right_arm = 0.98
+			target_left_leg = 0.18
+			target_right_leg = 0.18
+	_player_visual_state = resolved_state
+	var blend: float = 1.0 - exp(-14.0 * maxf(delta, 0.0))
+	_player_torso_pivot.position.y = lerpf(_player_torso_pivot.position.y, target_body_y, blend)
+	_player_torso_pivot.rotation.x = lerp_angle(_player_torso_pivot.rotation.x, target_body_lean, blend)
+	_player_left_arm_pivot.rotation.x = lerp_angle(_player_left_arm_pivot.rotation.x, target_left_arm, blend)
+	_player_right_arm_pivot.rotation.x = lerp_angle(_player_right_arm_pivot.rotation.x, target_right_arm, blend)
+	_player_left_leg_pivot.rotation.x = lerp_angle(_player_left_leg_pivot.rotation.x, target_left_leg, blend)
+	_player_right_leg_pivot.rotation.x = lerp_angle(_player_right_leg_pivot.rotation.x, target_right_leg, blend)
+
+func get_player_visual_animation_state() -> String:
+	return _player_visual_state
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -340,6 +529,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if _surface_stream_pending:
 		player.velocity = Vector3.ZERO
+		_update_player_visual_animation(delta)
 		_camera_interaction_target_cache = {}
 		_refresh_hud()
 		return
@@ -396,6 +586,7 @@ func _physics_process(delta: float) -> void:
 		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
 		if current_grid != _last_grid:
 			_request_surface_streaming(previous_position, player.global_position, player.velocity)
+	_update_player_visual_animation(delta)
 	_camera_interaction_target_cache = _cast_camera_interaction_target()
 	_refresh_hud()
 
