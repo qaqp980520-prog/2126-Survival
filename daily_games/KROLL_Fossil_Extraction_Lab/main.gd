@@ -190,7 +190,7 @@ func _refresh() -> void:
 		tool_button.disabled = str(_state["status"]) != "active"
 	var grid: Array = _state["grid"]
 	for index in range(_grid_buttons.size()):
-		var cell := Vector2i(index % Rules.GRID_SIZE, index / Rules.GRID_SIZE)
+		var cell := Vector2i(index % Rules.GRID_SIZE, int(index / Rules.GRID_SIZE))
 		var data: Dictionary = grid[cell.y][cell.x]
 		var depth: int = int(data["depth"])
 		var exposed: bool = bool(data["exposed"])
