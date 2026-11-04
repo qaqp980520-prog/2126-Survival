@@ -25,8 +25,9 @@ func _run() -> void:
 	var next_state: Dictionary = scene.call("get_game_state")
 	_expect(int(next_state["mission_index"]) == 1, "next site loads the second specimen")
 	scene.call("restart_campaign")
-	_expect(int(scene.call("get_game_state")["mission_index"]) == 0, "new expedition returns to the first site")
-	_expect(int(scene.call("get_game_state")["campaign_score"]) == 0, "new expedition resets campaign score")
+	var new_campaign_state: Dictionary = scene.call("get_game_state")
+	_expect(int(new_campaign_state["mission_index"]) == 0, "new expedition returns to the first site")
+	_expect(int(new_campaign_state["campaign_score"]) == 0, "new expedition resets campaign score")
 	scene.queue_free()
 	await process_frame
 	if failures.is_empty():
