@@ -257,9 +257,9 @@ func _update_ui() -> void:
 	var campaign_status: String = str(_state.get("status", "active"))
 	_buttons["next"].disabled = mission_status != "won" or mission_index >= Rules.mission_count() - 1
 	var current_tile: String = str(grid[y]).substr(x, 1)
-	_buttons["scan"].disabled = mission_status != "active" or not ["A","B","C"].has(current_tile) or bool(scanned.get(current_tile, false))
-	for action in ["move_up","move_down","move_left","move_right","scan"]:
-		_buttons[action].disabled = _buttons[action].disabled or campaign_status != "active" or mission_status != "active"
+	_buttons["scan"].disabled = mission_status != "active" or not ["A","B","C"].has(current_tile) or bool(scanned.get(current_tile, false)) or campaign_status != "active"
+	for action in ["move_up","move_down","move_left","move_right"]:
+		_buttons[action].disabled = campaign_status != "active" or mission_status != "active"
 
 	if campaign_status == "won":
 		_result_label.text = "SURVEY COMPLETE  /  ALL THREE SECTORS SECURED"
