@@ -162,6 +162,23 @@ static func distance_band(from_cell: Vector2i, target_cell: Vector2i) -> String:
         return "MID"
     return "FAINT"
 
+static func triangulation_candidates(mission: Dictionary, clues: Array) -> Array[Vector2i]:
+    var candidates: Array[Vector2i] = []
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            var candidate := Vector2i(x, y)
+            if not is_passable(mission, candidate):
+                continue
+            var matches_all: bool = true
+            for clue in clues:
+                var origin: Vector2i = clue["origin"]
+                if bearing(origin, candidate) != str(clue["bearing"]) or distance_band(origin, candidate) != str(clue["band"]):
+                    matches_all = false
+                    break
+            if matches_all:
+                candidates.append(candidate)
+    return candidates
+
 static func move(state: Dictionary, direction: String) -> Dictionary:
     var next_state: Dictionary = state.duplicate(true)
     if str(next_state.get("status", "")) != "active":
