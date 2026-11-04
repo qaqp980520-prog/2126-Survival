@@ -2013,3 +2013,17 @@ The per-run closeout documents below are the authoritative GitHub-side summaries
 - [Run 113 — KROLL Orbital Surveyor and inventory operation-result validation](docs/RUN113_CLOSEOUT.md)
 
 Current main after Run 113 feature merge: `102446bd6145067d7de54ac54932b4129e4d476b`. The post-merge main full validation is tracked separately in Run 113 closeout; do not infer success from the pre-merge PR run.
+
+
+## 2026-11-04 Runs 114–118 — verified closeout archive
+
+- [Run 114 — KROLL Zero-G Cargo Bay and custom inventory restore atomicity](docs/RUN114_CLOSEOUT.md) — PR #259 merged as `a2b52aa43c5ad57fe218e56b131213632ffec4da`; exact-head full gate #41783539122 passed 520/520; focused #41783539212 passed 16/16.
+- [Run 115 — KROLL Orbital Foundry and inventory serialization snapshot isolation](docs/RUN115_CLOSEOUT.md) — PR #260 merged as `8e45797f721ef0349240fa00694c9e04d4559129`; full gate #41790697871 passed 525/525; focused #41790697767 passed 16/16.
+- [Run 116 — KROLL Drift Rescue and inventory operation atomicity](docs/RUN116_CLOSEOUT.md) — PR #262 merged as `133e4625fe638bc785db4848b4b66340761af61b`; full gate #41794775684 passed 529/529; focused #41794775553 passed 16/16.
+- [Run 117 — KROLL Thermal Containment Lab and restore-success verification](docs/RUN117_CLOSEOUT.md) — PR #264 merged as `35ce2b478b3df5abf4c20bc918badbad828bc067`; full gate #41798421579 passed 537/537; focused #41798421426 passed 16/16; post-merge main gate #41811878630 passed 537/537.
+- [Run 118 — KROLL Moonbase Courier and inventory restore reentrancy guard](docs/RUN118_CLOSEOUT.md) — PR #265 merged as `b79ec83472d709c5f4e3ac804e299e29f839da66`; exact-head full gate #41813454893 passed 543/543 job-step records; focused #41813454882 passed 17/17.
+- All five games are standalone Godot 4.3+ projects with dedicated rules/runtime validation; no external plugin or asset dependency was introduced by Runs 114–118.
+- World-save schema remains 1 across these five system changes. Local rendered GUI/GPU and physical iPhone QA are not claimed.
+- Run 118 post-merge main-push CI has not been surfaced by the connected workflow/status lookup; do not infer a pass from the PR gate.
+
+Current main after Run 118 feature merge: `b79ec83472d709c5f4e3ac804e299e29f839da66`.
