@@ -35,6 +35,12 @@ func _run() -> void:
 	if visual_root == null:
 		_finish(1)
 		return
+	_world.call("_build_player_visual_rig")
+	var visual_root_count: int = 0
+	for child in player.get_children():
+		if child.name == "PlayerVisualRoot":
+			visual_root_count += 1
+	_expect(visual_root_count == 1, "rebuilding the player visual rig does not duplicate its root")
 	_expect(visual_root.get_node_or_null("TorsoPivot/Torso") is MeshInstance3D, "rig includes a separate torso mesh")
 	_expect(visual_root.get_node_or_null("TorsoPivot/HelmetPivot/Helmet") is MeshInstance3D, "rig includes a helmet and head assembly")
 	_expect(visual_root.get_node_or_null("TorsoPivot/HelmetPivot/Visor") is MeshInstance3D, "rig includes a distinct visor")
@@ -77,6 +83,22 @@ func _run() -> void:
 	_expect(absf(left_leg.rotation.x) < 0.001 and absf(right_leg.rotation.x) < 0.001, "idle pose returns both legs to neutral")
 	_expect(absf(torso.rotation.x) < 0.001, "idle pose removes the running lean")
 	_expect(str(_world.call("get_player_visual_animation_state")) == "idle", "idle pose reports its active state")
+
+	player.velocity = Vector3(2.0, 0.0, -1.0)
+	_world.set("_sprint_active", true)
+	var velocity_before_animation: Vector3 = player.velocity
+	var camera_position_before_animation: Vector3 = _world.camera.position
+	var expected_state: String = str(_world.call(
+		"_resolve_player_visual_animation_state",
+		Vector2(player.velocity.x, player.velocity.z).length(),
+		player.velocity.y,
+		player.is_on_floor(),
+		true
+	))
+	_world.call("_update_player_visual_animation", 0.016)
+	_expect(str(_world.call("get_player_visual_animation_state")) == expected_state, "runtime animation update uses the current physics movement state")
+	_expect((player.velocity - velocity_before_animation).length_squared() < 0.000001, "visual animation does not modify player velocity")
+	_expect(_world.camera.position.is_equal_approx(camera_position_before_animation), "visual animation does not move the first-person camera")
 	_finish(0 if _failures.is_empty() else 1)
 
 func _expect(condition: bool, message: String) -> void:
