@@ -115,7 +115,8 @@ func _run() -> void:
 	bridge.inventory_changed.connect(func(_summary: Dictionary) -> void: refresh_events.append(1))
 
 	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "matching add result and count delta are accepted")
-	_expect(int(fixture.counts["meat"]) == 2 and collected_events == [2], "valid collection mutates once and emits the requested amount")
+	_expect(int(fixture.counts["meat"]) == 2 and int(bridge.call("get_item_count", "meat")) == 2, "public count dictionary is observable through the bridge")
+	_expect(collected_events == [2], "valid collection mutates once and emits the requested amount")
 
 	fixture.add_mode = "over_report"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "over-reported add count is rejected")
