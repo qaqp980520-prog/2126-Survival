@@ -29,8 +29,9 @@ func _run() -> void:
 
         var blocked_state: Dictionary = state.duplicate(true)
         blocked_state["battery"] = 1
+        var pings_before_blocked_attempt: int = int(blocked_state["pings_left"])
         var no_battery_ping: Dictionary = Rules.ping(blocked_state)
-        _expect(not bool(no_battery_ping["accepted"]) and int(no_battery_ping["state"]["pings_left"]) == Rules.MAX_PINGS, "mission %d refuses sonar without sufficient battery" % (index + 1))
+        _expect(not bool(no_battery_ping["accepted"]) and int(no_battery_ping["state"]["pings_left"]) == pings_before_blocked_attempt and int(no_battery_ping["state"]["battery"]) == 1, "mission %d refuses sonar without spending battery or a ping" % (index + 1))
 
         var invalid_move: Dictionary = Rules.move(state, "diagonal")
         _expect(not bool(invalid_move["accepted"]), "mission %d rejects invalid movement directions" % (index + 1))
