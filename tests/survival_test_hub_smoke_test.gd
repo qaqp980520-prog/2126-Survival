@@ -710,7 +710,8 @@ func _run() -> void:
 		root.add_child(fossil_game)
 		await process_frame
 		_expect(fossil_game.call("get_grid_button_count") == 64, "root-loaded Fossil Extraction Lab builds sixty-four excavation cells")
-		_expect(fossil_game.call("get_game_state").get("fossil_cells", []).size() == 5, "root-loaded Fossil Extraction Lab exposes the first five-fragment specimen")
+		var fossil_state: Dictionary = fossil_game.call("get_game_state")
+		_expect(fossil_state.get("fossil_cells", []).size() == 5, "root-loaded Fossil Extraction Lab exposes the first five-fragment specimen")
 		fossil_game.queue_free()
 		await process_frame
 
