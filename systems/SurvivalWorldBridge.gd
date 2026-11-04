@@ -179,7 +179,7 @@ func _apply_inventory_operation(method_name: StringName, item_id: String, reques
 	if reported_count <= 0 or actual_delta != reported_count or changed_other_state:
 		# A pure no-op with an invalid report needs no rollback or refresh. If any
 		# serialized state changed, restore the pre-operation snapshot and verify it.
-		if after_snapshot != before_snapshot and not _rollback_inventory_operation(before_snapshot):
+		if not _rollback_inventory_operation(before_snapshot):
 			_emit_inventory_changed()
 		return 0
 	return reported_count
