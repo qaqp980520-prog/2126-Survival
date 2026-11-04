@@ -4708,6 +4708,22 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge restore read isolation tests passed."
 
+      - name: Verify synchronous mineral registration lifecycle inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
+          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
+      - name: Run synchronous mineral chunk registration lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid synchronous registration lifecycle tests passed."
+
       - name: Remove generated untracked Godot import metadata
         if: always()
         shell: bash

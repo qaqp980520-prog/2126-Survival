@@ -129,19 +129,49 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 			if not rollback_ok:
 				push_warning("Mineral grid streaming rollback was incomplete after invalid chunk factory output.")
 			return false
-		if not chunk_controller.load_chunk(id, candidate, now_unix):
-			_free_unowned_root(candidate)
-			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			_set_sync_report(false, "load_registration", "Chunk controller rejected a new chunk.", rollback_ok, {
+		var load_succeeded: bool = chunk_controller.load_chunk(id, candidate, now_unix)
+		var controller_alive_after_load: bool = chunk_controller != null and is_instance_valid(chunk_controller)
+		var controller_queued_after_load: bool = controller_alive_after_load and chunk_controller.is_queued_for_deletion()
+		var controller_ready_after_load: bool = _controller_ready_for_sync()
+		var controller_can_rollback: bool = controller_alive_after_load and not controller_queued_after_load
+		var candidate_loaded: bool = (
+			controller_can_rollback
+			and chunk_controller.has_method("is_chunk_loaded")
+			and chunk_controller.is_chunk_loaded(id)
+		)
+		if candidate_loaded:
+			# Record ownership before any rollback attempt so a failed unload remains
+			# visible in the Director's mirror instead of becoming an orphaned root.
+			_managed_chunk_ids[id] = coord
+			newly_loaded.append(id)
+		if not load_succeeded or not controller_ready_after_load or not candidate_loaded:
+			var candidate_cleanup_ok: bool = true
+			if not candidate_loaded:
+				if controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
+					chunk_controller.remove_child(candidate)
+					if not (candidate as Node3D).is_queued_for_deletion():
+						(candidate as Node3D).queue_free()
+				elif is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() != null:
+					# A queued/destroyed owner will release its child; do not mutate it.
+					candidate_cleanup_ok = false
+				else:
+					_free_unowned_root(candidate)
+			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var rollback_complete: bool = candidate_cleanup_ok and new_loads_rollback_ok
+			var controller_detached_after_load: bool = controller_alive_after_load and not chunk_controller.is_inside_tree()
+			_set_sync_report(false, "controller_lifecycle" if not controller_ready_after_load else "load_registration", "Controller became unavailable during synchronous chunk registration." if not controller_ready_after_load else "Chunk controller rejected or failed to register a new chunk.", rollback_complete, {
 				"failed_chunk_id": id,
+				"controller_destroyed": not controller_alive_after_load,
+				"controller_detached": controller_detached_after_load,
+				"controller_queued_for_deletion": controller_queued_after_load,
+				"candidate_loaded": candidate_loaded,
+				"candidate_cleanup_ok": candidate_cleanup_ok,
 				"newly_loaded_ids": newly_loaded.duplicate(),
-				"new_loads_rollback_ok": rollback_ok
+				"new_loads_rollback_ok": new_loads_rollback_ok
 			})
-			if not rollback_ok:
-				push_warning("Mineral grid streaming rollback was incomplete after chunk registration failure.")
+			if not rollback_complete:
+				push_warning("Mineral grid streaming rollback was incomplete after synchronous chunk registration.")
 			return false
-		_managed_chunk_ids[id] = coord
-		newly_loaded.append(id)
 
 	# Only unload stale chunks after every desired chunk has loaded successfully.
 	var stale_ids: Array[String] = []

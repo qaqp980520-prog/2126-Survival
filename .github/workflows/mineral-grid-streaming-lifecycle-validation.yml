@@ -1,0 +1,63 @@
+name: Mineral Grid Streaming Lifecycle Validation
+
+on:
+  pull_request:
+    paths:
+      - "systems/MineralGridStreamingDirector.gd"
+      - "tests/helpers/FakeMineralChunkController.gd"
+      - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
+      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "systems/MineralGridStreamingDirector.gd"
+      - "tests/helpers/FakeMineralChunkController.gd"
+      - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
+      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Mineral Grid Streaming Lifecycle Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Godot version and lifecycle inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f tests/helpers/FakeMineralChunkController.gd
+          test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
+          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run synchronous mineral chunk registration lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid synchronous registration lifecycle tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          git status --short
+          test -z "$(git status --porcelain)"
+      - name: Complete job
+        if: always()
+        run: echo "Mineral grid lifecycle validation complete."
