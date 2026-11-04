@@ -24,13 +24,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not key_event.pressed or key_event.echo:
 		return
 	match key_event.keycode:
-		KEY_W, KEY_UP:
+		KEY_W:
 			perform_action("move_up")
-		KEY_S, KEY_DOWN:
+		KEY_UP:
+			perform_action("move_up")
+		KEY_S:
 			perform_action("move_down")
-		KEY_A, KEY_LEFT:
+		KEY_DOWN:
+			perform_action("move_down")
+		KEY_A:
 			perform_action("move_left")
-		KEY_D, KEY_RIGHT:
+		KEY_LEFT:
+			perform_action("move_left")
+		KEY_D:
+			perform_action("move_right")
+		KEY_RIGHT:
 			perform_action("move_right")
 		KEY_SPACE:
 			perform_action("scan")
