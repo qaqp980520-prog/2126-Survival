@@ -65,6 +65,7 @@ func _run() -> void:
 	_expect(ResourceLoader.exists(UNDERGROUND_SCENE), "underground mining prototype scene exists")
 	_expect(ResourceLoader.exists(STEALTH_GRID_SCENE), "Stealth Grid root scene exists")
 	_expect(ResourceLoader.exists(ORBITAL_CURLING_SCENE), "Orbital Curling root scene exists")
+	_expect(ResourceLoader.exists(FOSSIL_EXTRACTION_SCENE), "Fossil Extraction Lab game scene exists")
 	_expect(ResourceLoader.exists(MESS_HALL_RUSH_SCENE), "Mess Hall Rush root scene exists")
 	_expect(ResourceLoader.exists(FRAGMENT_ASSEMBLY_LAB_SCENE), "Fragment Assembly Lab root scene exists")
 	_expect(ResourceLoader.exists(ENDGAME_TACTICS_SCENE), "Endgame Tactics root scene exists")
