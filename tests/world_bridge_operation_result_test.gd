@@ -3,9 +3,12 @@ extends SceneTree
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 
 class OperationFixture extends RefCounted:
-	var counts: Dictionary = {"meat":0}
+	var counts: Dictionary = {"meat":0,"berries":2}
+	var game_day: int = 3
 	var add_mode: String = "normal"
 	var remove_mode: String = "normal"
+	var snapshot_mode: String = "normal"
+	var load_calls: int = 0
 
 	func add_item(item_id: String, amount: int = 1) -> Variant:
 		var current: int = int(counts.get(item_id, 0))
@@ -27,6 +30,13 @@ class OperationFixture extends RefCounted:
 			"boolean":
 				counts[item_id] = current + amount
 				return true
+			"collateral":
+				counts[item_id] = current + amount
+				counts["berries"] = int(counts.get("berries", 0)) + 1
+				return amount
+			"rollback_fail":
+				counts[item_id] = current + amount
+				return 0
 			_:
 				counts[item_id] = current + amount
 				return amount
@@ -40,6 +50,9 @@ class OperationFixture extends RefCounted:
 			"over_report":
 				counts[item_id] = current - removed
 				return removed + 1
+			"under_report":
+				counts[item_id] = current - removed
+				return maxi(0, removed - 1)
 			"string":
 				counts[item_id] = current - removed
 				return str(removed)
@@ -48,7 +61,7 @@ class OperationFixture extends RefCounted:
 				return removed
 
 	func total_weight_kg() -> float:
-		return 0.0
+		return float(counts.get("meat", 0)) * 0.75
 	func carry_limit_kg() -> float:
 		return 65.0
 	func movement_multiplier() -> float:
@@ -59,14 +72,25 @@ class OperationFixture extends RefCounted:
 		return false
 	func is_super_heavy() -> bool:
 		return false
-	func to_save_dict() -> Dictionary:
-		return {"schema_version":1,"game_day":1,"inventory":counts.duplicate(true)}
-	func load_save_dict(_data: Dictionary) -> bool:
+	func to_save_dict() -> Variant:
+		if snapshot_mode == "invalid":
+			return "not-a-dictionary"
+		return {"schema_version":1,"game_day":game_day,"inventory":counts.duplicate(true)}
+	func load_save_dict(data: Dictionary) -> bool:
+		load_calls += 1
+		if add_mode == "rollback_fail":
+			counts = {"meat":999,"berries":999}
+			game_day = 99
+			return false
+		counts = data.get("inventory", {}).duplicate(true)
+		game_day = int(data.get("game_day", 1))
 		return true
 
 class MethodOnlyFixture extends RefCounted:
 	var _stored_counts: Dictionary = {"meat":0}
 	var add_mode: String = "normal"
+	var load_calls: int = 0
+
 	func add_item(item_id: String, amount: int = 1) -> Variant:
 		_stored_counts[item_id] = int(_stored_counts.get(item_id, 0)) + amount
 		return str(amount) if add_mode == "string" else amount
@@ -91,8 +115,15 @@ class MethodOnlyFixture extends RefCounted:
 		return false
 	func to_save_dict() -> Dictionary:
 		return {"schema_version":1,"game_day":1,"inventory":_stored_counts.duplicate(true)}
-	func load_save_dict(_data: Dictionary) -> bool:
+	func load_save_dict(data: Dictionary) -> bool:
+		load_calls += 1
+		_stored_counts = data.get("inventory", {}).duplicate(true)
 		return true
+
+class RefreshListener extends Node:
+	var count: int = 0
+	func on_changed(_summary: Dictionary) -> void:
+		count += 1
 
 var failures: Array[String] = []
 
@@ -103,75 +134,92 @@ func _run() -> void:
 	var bridge: Node = BridgeScript.new()
 	root.add_child(bridge)
 	await process_frame
-
 	var fixture := OperationFixture.new()
-	_expect(bool(bridge.call("bind_inventory", fixture)), "custom inventory with a counts dictionary binds")
+	_expect(bool(bridge.call("bind_inventory", fixture)), "custom inventory with a serialized inventory Dictionary binds")
+
+	var listener := RefreshListener.new()
+	root.add_child(listener)
+	bridge.inventory_changed.connect(Callable(listener, "on_changed"))
 	var collected_events: Array[int] = []
 	var dropped_events: Array[int] = []
 	var consumed_events: Array[int] = []
-	var refresh_events: Array[int] = []
 	bridge.item_collected.connect(func(_item_id: String, amount: int) -> void: collected_events.append(amount))
 	bridge.item_dropped.connect(func(_item_id: String, amount: int) -> void: dropped_events.append(amount))
 	bridge.item_consumed.connect(func(_item_id: String, amount: int) -> void: consumed_events.append(amount))
-	bridge.inventory_changed.connect(func(_summary: Dictionary) -> void: refresh_events.append(1))
 
-	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "matching add result and count delta are accepted")
-	_expect(int(fixture.counts["meat"]) == 2 and int(bridge.call("get_item_count", "meat")) == 2, "public count dictionary is observable through the bridge")
-	_expect(collected_events == [2], "valid collection mutates once and emits the requested amount")
+	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "matching add result and serialized count delta are accepted")
+	_expect(int(fixture.counts["meat"]) == 2 and int(bridge.call("get_item_count", "meat")) == 2, "successful collection is observable")
+	_expect(collected_events == [2] and listener.count == 1, "successful collection emits one item event and one refresh")
+
+	var baseline: Dictionary = fixture.to_save_dict()
+	fixture.add_mode = "under_report"
+	_expect(not bool(bridge.call("collect_world_item", "meat", 2)), "under-reported add is rejected")
+	_expect(fixture.to_save_dict() == baseline, "under-report mutation is rolled back exactly")
+	_expect(collected_events == [2] and listener.count == 1, "verified rollback emits neither item event nor misleading refresh")
 
 	fixture.add_mode = "over_report"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "over-reported add count is rejected")
-	_expect(int(fixture.counts["meat"]) == 3, "unexpected custom mutation remains visible rather than hidden")
-	_expect(collected_events.size() == 1 and refresh_events.size() == 2, "over-report emits no collection event but refreshes changed inventory")
-
-	fixture.add_mode = "under_report"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 2)), "under-reported add count is rejected when the dictionary delta differs")
-	_expect(int(fixture.counts["meat"]) == 5, "under-report mutation remains observable")
-	_expect(refresh_events.size() == 3, "under-report mismatch refreshes the inventory view")
-
-	fixture.add_mode = "no_mutation"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "a positive return without an actual count change is rejected")
-	_expect(refresh_events.size() == 3, "no-op mismatch does not emit a false refresh")
-
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "over-reported add is rejected")
+	_expect(fixture.to_save_dict() == baseline, "over-report mutation is rolled back")
 	fixture.add_mode = "fractional"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "fractional operation result is rejected")
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "fractional result is rejected and rolled back")
+	_expect(fixture.to_save_dict() == baseline, "fractional result cannot leave partial inventory changes")
 	fixture.add_mode = "string"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "string operation result is rejected")
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "string result is rejected and rolled back")
+	_expect(fixture.to_save_dict() == baseline, "string result cannot leave partial inventory changes")
 	fixture.add_mode = "boolean"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "Boolean operation result is rejected")
-	_expect(collected_events.size() == 1 and refresh_events.size() == 6, "malformed results never emit item-collected events and changed counts trigger refresh")
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "Boolean result is rejected and rolled back")
+	_expect(fixture.to_save_dict() == baseline, "Boolean result cannot leave partial inventory changes")
+	fixture.add_mode = "collateral"
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "unrelated serialized-field mutation is rejected")
+	_expect(fixture.to_save_dict() == baseline, "collateral mutation is rolled back with the target item")
+	fixture.add_mode = "no_mutation"
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "positive result without a count delta is rejected")
+	_expect(fixture.to_save_dict() == baseline, "no-op mismatch leaves the baseline unchanged")
+	_expect(listener.count == 1, "verified failed operations do not emit false refreshes")
 
-	fixture.remove_mode = "normal"
-	_expect(bool(bridge.call("drop_item", "meat", 2)), "matching remove result and count delta are accepted")
-	_expect(dropped_events == [2], "valid drop emits the exact removed amount")
+	fixture.add_mode = "normal"
+	_expect(bool(bridge.call("drop_item", "meat", 1)), "matching remove result and serialized count delta are accepted")
+	_expect(dropped_events == [1] and int(fixture.counts["meat"]) == 1, "valid drop emits the exact removed amount")
+	var after_drop: Dictionary = fixture.to_save_dict()
 	fixture.remove_mode = "over_report"
-	_expect(not bool(bridge.call("drop_item", "meat", 1)), "over-reported remove count is rejected")
-	_expect(dropped_events.size() == 1 and refresh_events.size() == 8, "invalid drop emits no drop event but refreshes an actual mutation")
-	fixture.remove_mode = "no_mutation"
-	_expect(not bool(bridge.call("consume_item", "meat", 1)), "consume rejects a positive result without a count change")
-	_expect(consumed_events.is_empty(), "invalid consume does not emit an item-consumed event")
-	fixture.remove_mode = "normal"
-	_expect(bool(bridge.call("consume_item", "meat", 1)), "valid consume remains compatible")
-	_expect(consumed_events == [1], "valid consume emits its exact removed amount")
+	_expect(not bool(bridge.call("drop_item", "meat", 1)), "over-reported removal is rejected")
+	_expect(fixture.to_save_dict() == after_drop, "failed drop restores the pre-drop snapshot")
+	_expect(dropped_events == [1], "failed drop never emits a dropped-item event")
+	fixture.remove_mode = "under_report"
+	_expect(not bool(bridge.call("consume_item", "meat", 1)), "under-reported consumption is rejected")
+	_expect(fixture.to_save_dict() == after_drop, "failed consumption restores the pre-consumption snapshot")
+	_expect(consumed_events.is_empty(), "failed consumption never emits a consumed-item event")
+
+	fixture.add_mode = "rollback_fail"
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "operation with failed rollback is rejected")
+	_expect(int(fixture.counts.get("meat", 0)) == 999, "broken custom rollback is exposed rather than hidden")
+	_expect(listener.count == 2, "unverified rollback emits one defensive inventory refresh")
+	_expect(collected_events == [2], "unverified rollback still emits no success event")
+
+	fixture.snapshot_mode = "invalid"
+	var calls_before: int = fixture.load_calls
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "invalid pre-operation snapshot fails closed")
+	_expect(fixture.load_calls == calls_before, "invalid snapshot prevents mutation and rollback calls")
 
 	var method_only := MethodOnlyFixture.new()
 	_expect(bool(bridge.call("bind_inventory", method_only)), "method-only custom inventory remains compatible")
-	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "method-only inventory with no public counts property trusts a validated return count")
+	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "method-only inventory uses its serialized snapshot for verification")
 	_expect(int(bridge.call("get_item_count", "meat")) == 2, "method-only count accessor reports the accepted mutation")
-	var refresh_before_invalid: int = refresh_events.size()
+	var refresh_before: int = listener.count
 	method_only.add_mode = "string"
-	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "method-only inventory rejects a malformed string result")
-	_expect(int(bridge.call("get_item_count", "meat")) == 3, "method-only inventory mutation remains observable through its accessor")
-	_expect(refresh_events.size() == refresh_before_invalid + 1, "invalid method-only result emits a defensive inventory refresh")
-	_expect(collected_events.size() == 2, "invalid method-only result does not emit an additional item-collected event")
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "malformed method-only result is rejected")
+	_expect(int(bridge.call("get_item_count", "meat")) == 2, "method-only hidden state is restored from its serialized snapshot")
+	_expect(listener.count == refresh_before, "verified method-only rollback needs no defensive refresh")
+	_expect(collected_events == [2, 2], "malformed method-only result emits no additional item-collected event")
 
 	bridge.queue_free()
+	listener.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("World bridge inventory operation result validation tests passed.")
+		print("World bridge inventory operation atomicity tests passed.")
 		quit(0)
 	else:
-		push_error("World bridge operation result validation failures: " + str(failures))
+		push_error("World bridge inventory operation atomicity failures: " + str(failures))
 		quit(1)
 
 func _expect(condition: bool, message: String) -> void:
