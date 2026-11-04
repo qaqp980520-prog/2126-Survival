@@ -13,6 +13,7 @@ class ReadProbeInventory extends RefCounted:
     var blocked_world_snapshot: Dictionary = {}
     var count_during_restore: int = -1
     var summary_during_restore: Dictionary = {}
+    var inventory_reference_hidden: bool = false
 
     func add_item(_item_id: String, _amount: int = 1) -> int:
         return 0
@@ -40,6 +41,7 @@ class ReadProbeInventory extends RefCounted:
             counts = {"meat": 999}
             game_day = 99
             calls_at_reentrant_probe = to_save_calls
+            inventory_reference_hidden = bridge.get("inventory") == null
             blocked_inventory_snapshot = bridge.call("serialize_inventory")
             blocked_world_snapshot = bridge.call("serialize_world_save", {"version": 2, "player": {}})
             count_during_restore = int(bridge.call("get_item_count", "meat"))
@@ -82,10 +84,12 @@ func _run() -> void:
     _expect(str(fixture.blocked_inventory_snapshot.get("error", "")) == "inventory_restore_in_progress", "inventory snapshot failure identifies the active transaction")
     _expect(not bool(fixture.blocked_world_snapshot.get("ok", true)), "serialize_world_save refuses an intermediate snapshot")
     _expect(str(fixture.blocked_world_snapshot.get("error", "")) == "inventory_restore_in_progress", "world-save failure identifies the active transaction")
+    _expect(fixture.inventory_reference_hidden, "public inventory getter hides the partially restored object")
     _expect(fixture.count_during_restore == 0, "get_item_count fails closed during restore")
     _expect(float(fixture.summary_during_restore.get("weight_kg", -1.0)) == 0.0, "get_summary does not expose partial weight")
     _expect(fixture.calls_at_reentrant_probe == 1, "reentrant read APIs do not call the custom serializer during restore")
     _expect(fixture.counts == {"meat": 40} and fixture.game_day == 9, "outer restore applies the requested final snapshot")
+    _expect(bridge.get("inventory") == fixture, "public inventory getter is restored after the transaction")
     _expect(listener.count == 1, "successful outer restore emits one notification after releasing the lock")
     _expect(listener.snapshot.get("inventory", {}).get("meat", -1) == 40, "notification listeners can serialize the completed snapshot")
 
