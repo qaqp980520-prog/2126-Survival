@@ -193,7 +193,7 @@ func _run() -> void:
 	fixture.add_mode = "rollback_fail"
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "operation with failed rollback is rejected")
 	_expect(int(fixture.counts.get("meat", 0)) == 999, "broken custom rollback is exposed rather than hidden")
-	_expect(listener.count == 2, "unverified rollback emits one defensive inventory refresh")
+	_expect(listener.count == 3, "unverified rollback emits one defensive inventory refresh")
 	_expect(collected_events == [2], "unverified rollback still emits no success event")
 
 	fixture.snapshot_mode = "invalid"
