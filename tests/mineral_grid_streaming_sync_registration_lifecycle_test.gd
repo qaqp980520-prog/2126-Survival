@@ -29,8 +29,8 @@ func _make_pair(radius: int) -> Dictionary:
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = 10.0
 	director.load_radius = radius
-	_expect(director.bind_controller(controller), "Director binds a live synchronous lifecycle Controller")
-	_expect(director.bind_chunk_factory(Callable(self, "_make_chunk")), "Director binds the synchronous lifecycle factory")
+	_expect(director.call("bind_controller", controller), "Director binds a live synchronous lifecycle Controller")
+	_expect(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "Director binds the synchronous lifecycle factory")
 	return {"controller": controller, "director": director}
 
 func _test_detach_on_final_sync_registration_rolls_back_entire_window() -> void:
@@ -45,7 +45,7 @@ func _test_detach_on_final_sync_registration_rolls_back_entire_window() -> void:
 	_expect(controller.load_calls == 9, "the final registration callback is reached after eight prior chunks load")
 	_expect(controller.unload_calls == 9, "all nine newly registered chunks are rolled back on the detached live Controller")
 	_expect(controller.get_loaded_chunk_ids().is_empty(), "detached Controller retains no partially committed window")
-	_expect(director.get_managed_chunk_ids().is_empty(), "Director clears all rolled-back chunk ownership")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "Director clears all rolled-back chunk ownership")
 	_expect(str(report.get("phase", "")) == "controller_lifecycle", "sync report identifies the registration lifecycle failure")
 	_expect(bool(report.get("rollback_complete", false)), "sync report confirms the complete window rollback")
 	_expect(bool(report.get("details", {}).get("controller_detached", false)), "sync report records the detached Controller")
