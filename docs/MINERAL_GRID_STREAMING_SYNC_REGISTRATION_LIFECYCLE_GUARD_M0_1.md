@@ -10,7 +10,7 @@
 
 ## Finding
 
-The synchronous `sync_to_world_position` path checked Controller lifecycle after the chunk factory callback but did not revalidate it after `Controller.load_chunk` returned. A Controller could detach or queue itself during registration, including on the ninth/final chunk, while the Director continued as if the requested window had committed.
+The synchronous `sync_to_world_position` path checked Controller lifecycle after the chunk factory callback but did not revalidate it after `Controller.load_chunk` returned. A Controller could detach or queue itself during registration, including on the ninth/final chunk, while the Director continued as if the requested window had committed. The Director must also distrust a callback's boolean result unless the requested chunk is observable in the Controller's loaded-chunk registry.
 
 ## Behavior
 
@@ -20,12 +20,16 @@ The synchronous `sync_to_world_position` path checked Controller lifecycle after
 - Roll back the full newly loaded window when a live Controller detaches.
 - Never call rollback methods on a Controller queued for deletion.
 - Report incomplete cleanup when owner teardown, rather than a rollback call, is responsible for releasing child roots.
+- If a callback reports failure after registration, record and unload that candidate instead of leaving a partial chunk behind.
+- If a callback reports success without registering the candidate, reject the result and free the unowned candidate root.
 
 ## Regression coverage
 
 1. A live Controller detaches during the ninth/final registration: all nine newly registered chunks are unloaded and Director ownership is cleared.
 2. A Controller queues itself during its only registration: no rollback method is invoked on the queued owner; owner teardown releases the child root.
 3. A Controller queues itself during the ninth registration after eight prior loads: no rollback method is invoked, the Director mirror is cleared, incomplete rollback is reported, and owner teardown releases all nine roots.
+4. A Controller returns `false` after attaching and registering the candidate: the Director recognizes the registration, unloads it, clears its ownership mirror, and releases the root.
+5. A Controller returns `true` after attaching but without registering the candidate: the Director rejects the false success, removes the unowned root without calling `unload_chunk`, and reports complete cleanup.
 
 ## Import and test
 
@@ -41,6 +45,6 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_sync_regis
 - Public Director method signatures are unchanged.
 - Chunk IDs and world-save schema are unchanged.
 - Asynchronous staging and commit behavior are unchanged.
-- The fake Controller's lifecycle callbacks are test-only.
+- The fake Controller's lifecycle and inconsistent-result callbacks are test-only.
 - Headless CI does not verify rendered GUI/GPU behavior or physical iPhone behavior.
 - The candidate must pass both the focused lifecycle workflow and the full Godot 4.3 compatibility gate before merge.
