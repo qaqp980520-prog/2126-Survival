@@ -761,33 +761,91 @@ func _chunk_id(coord: Vector2i) -> String:
 	return "surface/chunk_%d_%d" % [coord.x, coord.y]
 
 func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
+	if (
+		chunk_controller == null
+		or not is_instance_valid(chunk_controller)
+		or chunk_controller.is_queued_for_deletion()
+		or not chunk_controller.has_method("is_chunk_loaded")
+		or not chunk_controller.has_method("unload_chunk")
+	):
+		# A queued/destroyed Controller owns the roots that are about to disappear.
+		# Do not call into it during rollback; discard the Director's stale mirror.
+		_managed_chunk_ids.clear()
+		return ids.is_empty()
 	var success := true
 	for i in range(ids.size() - 1, -1, -1):
+		if chunk_controller == null or not is_instance_valid(chunk_controller) or chunk_controller.is_queued_for_deletion():
+			_managed_chunk_ids.clear()
+			return false
 		var id: String = ids[i]
-		if not chunk_controller.is_chunk_loaded(id):
+		var loaded: bool = chunk_controller.is_chunk_loaded(id)
+		if chunk_controller == null or not is_instance_valid(chunk_controller) or chunk_controller.is_queued_for_deletion():
+			_managed_chunk_ids.clear()
+			return false
+		if not loaded:
 			_managed_chunk_ids.erase(id)
 			continue
 		if chunk_controller.unload_chunk(id, now_unix):
 			_managed_chunk_ids.erase(id)
 		else:
 			success = false
+		if chunk_controller == null or not is_instance_valid(chunk_controller) or chunk_controller.is_queued_for_deletion():
+			_managed_chunk_ids.clear()
+			return false
 	return success
 
 func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 	var success := true
 	for entry in chunks:
+		if not _controller_ready_for_sync() or not chunk_factory.is_valid():
+			success = false
+			break
 		var id: String = str(entry.get("id", ""))
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = chunk_factory.call(coord)
+		if not _controller_ready_for_sync() or not chunk_factory.is_valid():
+			_free_unowned_root(candidate)
+			success = false
+			break
 		var candidate_is_node3d: bool = is_instance_valid(candidate) and candidate is Node3D
 		var candidate_queued_for_deletion: bool = candidate_is_node3d and (candidate as Node3D).is_queued_for_deletion()
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate_queued_for_deletion or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
 			success = false
 			continue
-		if not chunk_controller.load_chunk(id, candidate, now_unix):
-			_free_unowned_root(candidate)
+
+		var load_succeeded: bool = chunk_controller.load_chunk(id, candidate, now_unix)
+		var controller_ready_after_load: bool = _controller_ready_for_sync()
+		var controller_can_rollback: bool = (
+			chunk_controller != null
+			and is_instance_valid(chunk_controller)
+			and not chunk_controller.is_queued_for_deletion()
+		)
+		var candidate_loaded: bool = (
+			controller_can_rollback
+			and chunk_controller.has_method("is_chunk_loaded")
+			and chunk_controller.is_chunk_loaded(id)
+		)
+		if not load_succeeded or not controller_ready_after_load:
+			var candidate_rollback_ok := false
+			if candidate_loaded:
+				candidate_rollback_ok = chunk_controller.has_method("unload_chunk") and chunk_controller.unload_chunk(id, now_unix)
+			elif controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
+				chunk_controller.remove_child(candidate)
+				if not (candidate as Node3D).is_queued_for_deletion():
+					(candidate as Node3D).queue_free()
+				candidate_rollback_ok = true
+			else:
+				_free_unowned_root(candidate)
+			if not controller_can_rollback:
+				_managed_chunk_ids.clear()
+			elif candidate_loaded and not candidate_rollback_ok:
+				# Keep the mirror accurate if the Controller still owns a root that
+				# could not be removed during the lifecycle transition.
+				_managed_chunk_ids[id] = coord
 			success = false
+			if not controller_ready_after_load:
+				break
 			continue
 		_managed_chunk_ids[id] = coord
 	return success
