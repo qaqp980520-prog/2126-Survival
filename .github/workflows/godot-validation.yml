@@ -4442,3 +4442,44 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge inventory operation result validation tests passed."
+
+
+      - name: Verify Run 114 Zero-G Cargo Bay and bridge restore inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/project.godot
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/main.tscn
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/main.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/rules.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/tests/rules_test.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/tests/game_smoke_test.gd
+          test -f tests/world_bridge_restore_atomicity_test.gd
+          test -f tests/README_run114_bridge_restore_atomicity.md
+          grep -Fq 'func _restore_inventory_atomically' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Zero-G Cargo Bay
+        run: godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --editor --quit
+      - name: Run KROLL Zero-G Cargo Bay rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Zero-G Cargo Bay rules tests passed."
+      - name: Run KROLL Zero-G Cargo Bay runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Zero-G Cargo Bay runtime smoke test passed."
+      - name: Run world bridge restore atomicity regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_restore_atomicity_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge restore atomicity tests passed."
