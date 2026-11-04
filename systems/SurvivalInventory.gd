@@ -20,7 +20,12 @@ const ITEM_WEIGHTS: Dictionary = {
 }
 
 var counts: Dictionary = {}
-var game_day: int = 1
+var _game_day: int = 1
+var game_day: int:
+	get:
+		return _game_day
+	set(value):
+		_game_day = clampi(value, 1, MAX_SAVED_GAME_DAY)
 
 func _init(initial_counts: Dictionary = {}, initial_day: int = 1) -> void:
 	counts = {}
