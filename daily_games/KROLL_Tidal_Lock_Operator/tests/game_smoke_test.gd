@@ -8,7 +8,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var game: Control = GameScript.new()
+	var game: Variant = GameScript.new()
 	root.add_child(game)
 	await process_frame
 
@@ -63,7 +63,7 @@ func _run() -> void:
 		push_error("Tidal Lock runtime smoke failures: " + str(failures))
 		quit(1)
 
-func _solve(game: Control, actions: Array[String]) -> void:
+func _solve(game: Variant, actions: Array[String]) -> void:
 	for action in actions:
 		_expect(game.perform_game_action(action), "game accepts authored action " + action)
 
