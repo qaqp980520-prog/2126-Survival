@@ -13,6 +13,8 @@ func _run() -> void:
 	await _test_detach_on_final_sync_registration_rolls_back_entire_window()
 	await _test_queued_controller_is_not_called_during_sync_rollback()
 	await _test_queued_controller_after_prior_sync_loads_does_not_receive_rollback_calls()
+	await _test_failed_result_after_registration_rolls_back_candidate()
+	await _test_success_result_without_registration_rejects_and_releases_candidate()
 	if _failures.is_empty():
 		print("Mineral grid synchronous registration lifecycle tests passed.")
 		quit(0)
@@ -100,6 +102,55 @@ func _test_queued_controller_after_prior_sync_loads_does_not_receive_rollback_ca
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "queued owner teardown releases every newly loaded chunk root")
 
+	director.queue_free()
+	await process_frame
+
+func _test_failed_result_after_registration_rolls_back_candidate() -> void:
+	_factory_roots.clear()
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	controller.fail_after_register_on_load_call = 1
+	var success: bool = director.call("sync_to_world_position", Vector3.ZERO, 7000)
+	var report: Dictionary = director.call("get_last_sync_report")
+	_expect(not success, "sync rejects a false load result even when the Controller registered the candidate")
+	_expect(controller.load_calls == 1, "false-after-registration callback is attempted exactly once")
+	_expect(controller.unload_calls == 1, "the Director unloads the candidate that was registered before false was returned")
+	_expect(controller.get_loaded_chunk_ids().is_empty(), "false-after-registration leaves no Controller chunk")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "false-after-registration leaves no Director ownership")
+	_expect(str(report.get("phase", "")) == "load_registration", "false-after-registration is reported as a registration failure")
+	_expect(bool(report.get("details", {}).get("candidate_loaded", false)), "the report records that the candidate was actually registered")
+	_expect(bool(report.get("rollback_complete", false)), "false-after-registration reports a complete rollback")
+	await process_frame
+	for reference in _factory_roots:
+		_expect(reference.get_ref() == null, "false-after-registration candidate root is released")
+
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+
+func _test_success_result_without_registration_rejects_and_releases_candidate() -> void:
+	_factory_roots.clear()
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	controller.return_success_without_register_on_load_call = 1
+	var success: bool = director.call("sync_to_world_position", Vector3.ZERO, 8000)
+	var report: Dictionary = director.call("get_last_sync_report")
+	_expect(not success, "sync rejects a successful load result when the Controller did not register the candidate")
+	_expect(controller.load_calls == 1, "unregistered-success callback is attempted exactly once")
+	_expect(controller.unload_calls == 0, "unregistered candidate is cleaned without calling unload on a missing chunk")
+	_expect(controller.get_loaded_chunk_ids().is_empty(), "unregistered-success leaves no Controller chunk")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "unregistered-success leaves no Director ownership")
+	_expect(str(report.get("phase", "")) == "load_registration", "unregistered-success is reported as a registration failure")
+	_expect(not bool(report.get("details", {}).get("candidate_loaded", true)), "the report records that the candidate was not registered")
+	_expect(bool(report.get("details", {}).get("candidate_cleanup_ok", false)), "the unregistered candidate is explicitly cleaned up")
+	_expect(bool(report.get("rollback_complete", false)), "unregistered-success reports complete cleanup")
+	await process_frame
+	for reference in _factory_roots:
+		_expect(reference.get_ref() == null, "unregistered-success candidate root is released")
+
+	controller.queue_free()
 	director.queue_free()
 	await process_frame
 
