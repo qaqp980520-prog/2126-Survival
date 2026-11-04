@@ -78,9 +78,9 @@ func _run() -> void:
 
     var payload := {"schema_version": 1, "game_day": 9, "inventory": {"meat": 40}}
     _expect(bool(bridge.call("restore_inventory", payload)), "outer restore completes after reentrant reads are blocked")
-    _expect(fixture.blocked_inventory_snapshot.get("ok", true) == false, "serialize_inventory returns an explicit failure during restore")
+    _expect(not bool(fixture.blocked_inventory_snapshot.get("ok", true)), "serialize_inventory returns an explicit failure during restore")
     _expect(str(fixture.blocked_inventory_snapshot.get("error", "")) == "inventory_restore_in_progress", "inventory snapshot failure identifies the active transaction")
-    _expect(fixture.blocked_world_snapshot.get("ok", true) == false, "serialize_world_save refuses an intermediate snapshot")
+    _expect(not bool(fixture.blocked_world_snapshot.get("ok", true)), "serialize_world_save refuses an intermediate snapshot")
     _expect(str(fixture.blocked_world_snapshot.get("error", "")) == "inventory_restore_in_progress", "world-save failure identifies the active transaction")
     _expect(fixture.count_during_restore == 0, "get_item_count fails closed during restore")
     _expect(float(fixture.summary_during_restore.get("weight_kg", -1.0)) == 0.0, "get_summary does not expose partial weight")
