@@ -13,6 +13,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_time = int(Time.get_unix_time_from_system()) + 100
 	await _test_async_false_after_registration_is_rolled_back()
+	await _test_async_failed_rollback_keeps_ownership_mirrored()
 	await _test_async_true_without_registration_is_rejected()
 	await _test_stale_restore_true_without_registration_is_rejected()
 	if _failures.is_empty():
@@ -54,6 +55,27 @@ func _test_async_false_after_registration_is_rolled_back() -> void:
 	_expect(controller.get_child_count() == 0, "false-after-registration releases the candidate root instead of orphaning it")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "false-after-registration candidate weak reference is released")
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+
+func _test_async_failed_rollback_keeps_ownership_mirrored() -> void:
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	controller.fail_after_register_on_load_call = 1
+	controller.fail_on_unload_call = 1
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 1, 1))
+	var report: Dictionary = await _wait_for_request(director, request_id)
+	_expect(not bool(report.get("success", true)), "async registration failure remains a failed request when rollback unload fails")
+	_expect(not bool(report.get("rollback_complete", true)), "failed async rollback is reported as incomplete")
+	_expect(not bool(report.get("details", {}).get("new_loads_rollback_ok", true)), "report identifies the failed candidate unload")
+	var expected_ids := PackedStringArray(["surface/chunk_0_0"])
+	_expect(controller.get_loaded_chunk_ids() == expected_ids, "Controller retains the chunk that could not be unloaded")
+	_expect(director.call("get_managed_chunk_ids") == expected_ids, "Director retains ownership for the chunk still loaded by the Controller")
+	_expect(controller.get_child_count() == 1, "failed rollback retains exactly one owned root instead of orphaning it")
+	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 2)), "a later sync can reconcile the retained, actually loaded chunk")
+	_expect(controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "retry preserves Controller and Director ownership agreement")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
