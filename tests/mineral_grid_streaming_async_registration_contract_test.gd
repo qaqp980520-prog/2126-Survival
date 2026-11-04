@@ -166,7 +166,7 @@ func _test_async_factory_unavailable_preserves_diagnostic_reason() -> void:
 	var controller: Variant = pair["controller"]
 	var director: Node = pair["director"]
 	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 5, 1))
-	director.set("chunk_factory", Callable())
+	director.set("_chunk_factory", Callable())
 	var report: Dictionary = await _wait_for_request(director, request_id)
 	var diagnostics: Dictionary = report.get("request_diagnostics", {})
 	_expect(request_id > 0, "factory-loss async request is accepted before the dependency changes")
