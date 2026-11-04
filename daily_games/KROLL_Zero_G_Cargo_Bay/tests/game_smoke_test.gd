@@ -14,7 +14,7 @@ func _run() -> void:
 	_expect(game.get_node_or_null("SafeMargin/MainColumn/CargoGrid") != null, "cargo grid is created")
 	_expect(game.get_node("SafeMargin/MainColumn/CargoGrid").get_child_count() == 25, "five-by-five cargo deck has 25 cells")
 	_expect(game.get_node_or_null("SafeMargin/MainColumn/ActionControls/PlaceButton") != null, "touch place button is available")
-	_expect(game.get_node_or_null("SafeMargin/MainColumn/ActionControls/RotateButton") != null, "touch rotate button is available")
+	_expect(game.get_node_or_null("SafeMargin/MainColumn/CursorControls/RotateButton") != null, "touch rotate button is available")
 	_expect(game.get_node_or_null("SafeMargin/MainColumn/ActionControls/UndoButton") != null, "touch undo button is available")
 	_expect(game.get_node_or_null("SafeMargin/MainColumn/ActionControls/NextButton") != null, "touch next button is available")
 	_expect(game.get_node_or_null("SafeMargin/MainColumn/ActionControls/RestartButton") != null, "touch restart button is available")
