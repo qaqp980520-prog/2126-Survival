@@ -218,6 +218,8 @@ func _run() -> void:
 	listener.queue_free()
 	await process_frame
 	if failures.is_empty():
+		# Preserve the legacy Run 113 workflow marker while exposing the stronger Run 116 contract.
+		print("World bridge inventory operation result validation tests passed.")
 		print("World bridge inventory operation atomicity tests passed.")
 		quit(0)
 	else:
