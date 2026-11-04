@@ -40,7 +40,7 @@ class RestoreFixture extends RefCounted:
 			nested_collect_accepted = bool(bridge.call("collect_world_item", "meat", 1))
 			rebind_accepted = bool(bridge.call("bind_inventory", replacement))
 			bridge.set("inventory", replacement)
-			direct_rebind_blocked = bridge.get("inventory") == self
+			direct_rebind_blocked = bridge.get("inventory") == null
 		if load_calls == 1 and mode == "lying_success":
 			counts = {"meat": 999}
 			game_day = 99
