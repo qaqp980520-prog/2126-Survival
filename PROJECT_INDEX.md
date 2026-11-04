@@ -2013,3 +2013,25 @@ The per-run closeout documents below are the authoritative GitHub-side summaries
 - [Run 113 — KROLL Orbital Surveyor and inventory operation-result validation](docs/RUN113_CLOSEOUT.md)
 
 Current main after Run 113 feature merge: `102446bd6145067d7de54ac54932b4129e4d476b`. The post-merge main full validation is tracked separately in Run 113 closeout; do not infer success from the pre-merge PR run.
+
+
+## 2026-11-04 Run 114–115 verified closeout archive
+
+The per-run closeout documents below are authoritative GitHub-side summaries. Exact candidate commits and CI evidence are recorded per run. The full feature gates passed before merge; post-merge main-push validation remains unconfirmed until a corresponding workflow/status result is available.
+
+- [Run 114 — KROLL Zero-G Cargo Bay and inventory restore atomicity](docs/RUN114_CLOSEOUT.md)
+- [Run 115 — KROLL Orbital Foundry and serialization snapshot isolation](docs/RUN115_CLOSEOUT.md)
+
+### Run 114
+- Feature PR #259 merged as a2b52aa43c5ad57fe218e56b131213632ffec4da.
+- Exact-head full Godot 4.3 gate #41783539122: 520/520 successful step records, zero failures/skips.
+- Focused #41783539212: 16/16; eleven historical focused suites: 160/160.
+
+### Run 115
+- Feature PR #260 merged as 8e45797f721ef0349240fa00694c9e04d4559129.
+- Exact-head full Godot 4.3 gate #41790697871: 525/525 successful step records, zero failures/skips, including Run 115 gates #518–522 and all cleanup.
+- Focused #41790697767: 16/16 with 70 PASS assertions; eleven historical focused suites: 160/160.
+- New game: daily_games/KROLL_Orbital_Foundry/.
+- Existing-system regression: tests/world_bridge_serialization_snapshot_test.gd.
+
+Current main after Run 115 feature merge: 8e45797f721ef0349240fa00694c9e04d4559129. The connected workflow/status lookup returned no post-merge main-push run or combined status for this SHA; do not infer post-merge validation success from the pre-merge exact-head PR run. Main branch protection's last recorded readback remains disabled; see GitHub issue #236.
