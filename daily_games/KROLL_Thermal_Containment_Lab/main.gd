@@ -273,5 +273,6 @@ func _update_ui() -> void:
 		_row_buttons[row].button_pressed = row == int(_state.get("selected_row", 0))
 		_row_buttons[row].disabled = bool(_state.get("completed", false)) or bool(_state.get("failed", false))
 	_advance_button.disabled = bool(_state.get("completed", false)) or bool(_state.get("failed", false))
-	_undo_button.disabled = (_state.get("history", []) as Array).is_empty() or bool(_state.get("completed", false))
+	var history: Array = _state.get("history", [])
+	_undo_button.disabled = history.is_empty() or bool(_state.get("completed", false))
 	_next_button.disabled = not bool(_state.get("completed", false)) or level_index >= Rules.LEVELS.size() - 1
