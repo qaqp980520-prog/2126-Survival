@@ -19,6 +19,7 @@ const MISSIONS: Array = [
 	},
 	{
 		"name": "Raptor Claw",
+		"hint": "Survey clue: lower-central strata near D4. Grid labels run A1 to H8.",
 		"center": Vector2i(3, 3),
 		"fossils": [Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2), Vector2i(4, 3), Vector2i(4, 4)]
 	}
