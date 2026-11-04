@@ -1562,3 +1562,25 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - Exact-head full validation and post-merge validation evidence are listed in each closeout. Run 112's immediate merge-triggered full workflow was cancelled; subsequent main full #41776646151 passed 510/510 on f028013. Run 113's exact-head PR full #41778290589 passed 515/515; post-merge main full #41779631645 was still in progress at the time of documentation preparation.
 - Main branch protection is still disabled (`protected=false`; required-check enforcement off; no required contexts/checks). Keep GitHub issue [#236](https://github.com/qaqp980520-prog/2126-Survival/issues/236) open until a ruleset/protection configuration is actually applied and read back. Stable full check name: `Godot Full Compatibility Gate`.
 - Local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## Run 114–115 closeout — 2026-11-04
+
+### Run 114 — verified complete
+- [x] Added KROLL Zero-G Cargo Bay M0.1 with three 5×5 cargo-bay contracts, rotatable cargo, overlap/bounds checks, centre-of-mass support region, undo and a one-time 300-point campaign ledger.
+- [x] Added custom inventory restore rollback snapshot and post-rollback verification in SurvivalWorldBridge; world-save schema remains 1.
+- [x] Added tests/world_bridge_restore_atomicity_test.gd.
+- [x] Feature PR #259 merged as a2b52aa43c5ad57fe218e56b131213632ffec4da.
+- [x] Exact-head full gate #41783539122 passed 520/520; focused #41783539212 passed 16/16; historical focused suites passed 160/160.
+
+### Run 115 — verified complete
+- [x] Added KROLL Orbital Foundry M0.1 with three production contracts, six recipes, exact ingredient/energy/action budgets, keyboard/pointer/touch controls and one-time 300-point campaign scoring.
+- [x] Added deep-copy isolation to SurvivalWorldBridge.serialize_inventory() and one-read detached snapshot handling to serialize_world_save(); invalid non-Dictionary snapshots are rejected safely.
+- [x] Added tests/world_bridge_serialization_snapshot_test.gd and dedicated/full Godot 4.3 validation gates.
+- [x] Feature PR #260 merged as 8e45797f721ef0349240fa00694c9e04d4559129.
+- [x] Exact-head full gate #41790697871 passed 525/525; Run 115 focused #41790697767 passed 16/16 with 70 PASS assertions; eleven historical focused suites passed 160/160.
+
+### Remaining verification and infrastructure
+- [ ] Read back post-merge main-push CI for main SHA 8e45797f721ef0349240fa00694c9e04d4559129. The connected workflow/status lookup returned no run/status record; do not treat the pre-merge PR full gate as post-merge evidence.
+- [ ] Enable and verify main branch protection / required status checks. Last recorded state: protected=false, required-check enforcement disabled; keep issue #236 open.
+- [ ] Local rendered GUI/GPU and physical iPhone QA remain untested because no local Godot executable/device test was available.
