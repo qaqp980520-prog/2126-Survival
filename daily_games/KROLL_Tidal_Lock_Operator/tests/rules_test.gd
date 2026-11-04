@@ -19,7 +19,7 @@ func _initialize() -> void:
 		quit(1)
 
 func _test_three_authored_solutions() -> void:
-	var solutions: Array[Array] = [
+	var solutions: Array = [
 		["toggle_lower_gate", "move_ship", "toggle_lower_gate", "pump_up", "pump_up", "toggle_upper_gate", "move_ship"],
 		["pump_up", "pump_up", "toggle_lower_gate", "move_ship", "toggle_lower_gate", "pump_down", "pump_down", "pump_down", "toggle_upper_gate", "move_ship"],
 		["pump_down", "pump_down", "pump_down", "toggle_lower_gate", "move_ship", "toggle_lower_gate", "pump_up", "pump_up", "pump_up", "pump_up", "pump_up", "toggle_upper_gate", "move_ship"]
@@ -98,10 +98,13 @@ func _play_sequence(index: int, actions: Array) -> Dictionary:
 
 func _shortest_solution(index: int) -> Dictionary:
 	var start: Dictionary = Rules.new_state(index)
-	var queue: Array[Dictionary] = [start]
+	var queue: Array[Dictionary] = []
+	queue.append(start)
 	var start_key: String = _state_key(start)
-	var distances: Dictionary = {start_key: 0}
-	var ways: Dictionary = {start_key: 1}
+	var distances: Dictionary = {}
+	distances[start_key] = 0
+	var ways: Dictionary = {}
+	ways[start_key] = 1
 	var cursor: int = 0
 	var best_distance: int = -1
 	var solution_count: int = 0
