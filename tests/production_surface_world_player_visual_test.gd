@@ -22,8 +22,14 @@ func _run() -> void:
 		_finish(1)
 		return
 
-	var collision: CollisionShape3D = player.get_node_or_null("CollisionShape3D") as CollisionShape3D
-	var capsule: CapsuleShape3D = collision.shape as CapsuleShape3D if collision != null else null
+	var collision: CollisionShape3D = null
+	for child in player.get_children():
+		if child is CollisionShape3D:
+			collision = child as CollisionShape3D
+			break
+	var capsule: CapsuleShape3D = null
+	if collision != null:
+		capsule = collision.shape as CapsuleShape3D
 	_expect(capsule != null, "existing player collision capsule remains present")
 	if capsule != null:
 		_expect(is_equal_approx(capsule.radius, 0.35) and is_equal_approx(capsule.height, 1.8), "player collision dimensions remain unchanged")
@@ -41,14 +47,14 @@ func _run() -> void:
 		if child.name == "PlayerVisualRoot":
 			visual_root_count += 1
 	_expect(visual_root_count == 1, "rebuilding the player visual rig does not duplicate its root")
-	_expect(visual_root.get_node_or_null("TorsoPivot/Torso") is MeshInstance3D, "rig includes a separate torso mesh")
-	_expect(visual_root.get_node_or_null("TorsoPivot/HelmetPivot/Helmet") is MeshInstance3D, "rig includes a helmet and head assembly")
-	_expect(visual_root.get_node_or_null("TorsoPivot/HelmetPivot/Visor") is MeshInstance3D, "rig includes a distinct visor")
-	_expect(visual_root.get_node_or_null("TorsoPivot/LeftArmPivot/LeftArm") is MeshInstance3D, "rig includes an independently pivoted left arm")
-	_expect(visual_root.get_node_or_null("TorsoPivot/RightArmPivot/RightArm") is MeshInstance3D, "rig includes an independently pivoted right arm")
-	_expect(visual_root.get_node_or_null("LeftLegPivot/LeftLeg") is MeshInstance3D, "rig includes an independently pivoted left leg")
-	_expect(visual_root.get_node_or_null("RightLegPivot/RightLeg") is MeshInstance3D, "rig includes an independently pivoted right leg")
-	_expect(visual_root.get_node_or_null("TorsoPivot/Backpack") is MeshInstance3D, "rig includes a survival backpack")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/Torso", "capsule"), "rig includes a separate torso mesh")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/HelmetPivot/Helmet", "sphere"), "rig includes a helmet and head assembly")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/HelmetPivot/Visor", "box"), "rig includes a distinct visor")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/LeftArmPivot/LeftArm", "capsule"), "rig includes an independently pivoted left arm")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/RightArmPivot/RightArm", "capsule"), "rig includes an independently pivoted right arm")
+	_expect(_has_visual_descriptor(visual_root, "LeftLegPivot/LeftLeg", "capsule"), "rig includes an independently pivoted left leg")
+	_expect(_has_visual_descriptor(visual_root, "RightLegPivot/RightLeg", "capsule"), "rig includes an independently pivoted right leg")
+	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/Backpack", "box"), "rig includes a survival backpack")
 
 	_expect(str(_world.call("_resolve_player_visual_animation_state", 0.0, 0.0, true, false)) == "idle", "grounded stationary player resolves to idle")
 	_expect(str(_world.call("_resolve_player_visual_animation_state", 2.0, 0.0, true, false)) == "walk", "grounded movement resolves to walk")
@@ -100,6 +106,10 @@ func _run() -> void:
 	_expect((player.velocity - velocity_before_animation).length_squared() < 0.000001, "visual animation does not modify player velocity")
 	_expect(_world.camera.position.is_equal_approx(camera_position_before_animation), "visual animation does not move the first-person camera")
 	_finish(0 if _failures.is_empty() else 1)
+
+func _has_visual_descriptor(parent: Node, path: String, expected_type: String) -> bool:
+	var node: Node = parent.get_node_or_null(path)
+	return node is Node3D and str(node.get_meta("visual_mesh_type", "")) == expected_type
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
