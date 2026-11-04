@@ -80,28 +80,72 @@ func get_item_count(item_id: String) -> int:
 	return _validated_bridge_count(amount)
 
 func get_weight_kg() -> float:
-	return inventory.total_weight_kg() if inventory != null else 0.0
+	return float(_get_validated_metrics()["weight_kg"])
 
 func get_carry_limit_kg() -> float:
-	return inventory.carry_limit_kg() if inventory != null else 65.0
+	return float(_get_validated_metrics()["limit_kg"])
 
 func get_movement_multiplier() -> float:
-	return inventory.movement_multiplier() if inventory != null else 1.0
+	return float(_get_validated_metrics()["movement_multiplier"])
 
 func can_player_jump() -> bool:
-	return inventory.can_jump() if inventory != null else true
+	return bool(_get_validated_metrics()["can_jump"])
 
 func get_summary() -> Dictionary:
+	return _get_validated_metrics()
+
+func _get_validated_metrics() -> Dictionary:
 	if inventory == null:
-		return {"weight_kg":0.0,"limit_kg":65.0,"overweight":false,"super_heavy":false,"movement_multiplier":1.0,"can_jump":true}
+		return _default_metrics()
+	var weight: float = _read_non_negative_metric("total_weight_kg", 0.0, false)
+	var limit: float = _read_non_negative_metric("carry_limit_kg", InventoryModel.BASE_LIMIT_KG, true)
+	var overweight: bool = _read_boolean_metric("is_overweight", weight > limit)
+	var super_heavy: bool = _read_boolean_metric("is_super_heavy", weight > InventoryModel.SUPER_HEAVY_KG)
+	var fallback_multiplier: float = 0.42 if super_heavy else (0.68 if overweight else 1.0)
+	var movement_multiplier: float = _read_movement_multiplier(fallback_multiplier)
+	var can_jump: bool = _read_boolean_metric("can_jump", not super_heavy)
 	return {
-		"weight_kg":inventory.total_weight_kg(),
-		"limit_kg":inventory.carry_limit_kg(),
-		"overweight":inventory.is_overweight(),
-		"super_heavy":inventory.is_super_heavy(),
-		"movement_multiplier":inventory.movement_multiplier(),
-		"can_jump":inventory.can_jump()
+		"weight_kg": weight,
+		"limit_kg": limit,
+		"overweight": overweight,
+		"super_heavy": super_heavy,
+		"movement_multiplier": movement_multiplier,
+		"can_jump": can_jump
 	}
+
+func _default_metrics() -> Dictionary:
+	return {
+		"weight_kg": 0.0,
+		"limit_kg": InventoryModel.BASE_LIMIT_KG,
+		"overweight": false,
+		"super_heavy": false,
+		"movement_multiplier": 1.0,
+		"can_jump": true
+	}
+
+func _read_non_negative_metric(method_name: StringName, fallback: float, require_positive: bool) -> float:
+	var value: Variant = inventory.call(method_name)
+	if not (value is int or value is float):
+		return fallback
+	var numeric: float = float(value)
+	if not is_finite(numeric) or numeric < 0.0:
+		return fallback
+	if require_positive and numeric <= 0.0:
+		return fallback
+	return numeric
+
+func _read_boolean_metric(method_name: StringName, fallback: bool) -> bool:
+	var value: Variant = inventory.call(method_name)
+	return value if value is bool else fallback
+
+func _read_movement_multiplier(fallback: float) -> float:
+	var value: Variant = inventory.call("movement_multiplier")
+	if not (value is int or value is float):
+		return fallback
+	var numeric: float = float(value)
+	if not is_finite(numeric) or numeric < 0.0 or numeric > 1.0:
+		return fallback
+	return numeric
 
 func serialize_inventory() -> Dictionary:
 	return inventory.to_save_dict() if inventory != null else {}
