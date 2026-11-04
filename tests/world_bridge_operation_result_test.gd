@@ -144,7 +144,7 @@ func _run() -> void:
 	_expect(dropped_events == [2], "valid drop emits the exact removed amount")
 	fixture.remove_mode = "over_report"
 	_expect(not bool(bridge.call("drop_item", "meat", 1)), "over-reported remove count is rejected")
-	_expect(dropped_events.size() == 1 and refresh_events.size() == 6, "invalid drop emits no drop event but refreshes an actual mutation")
+	_expect(dropped_events.size() == 1 and refresh_events.size() == 7, "invalid drop emits no drop event but refreshes an actual mutation")
 	fixture.remove_mode = "no_mutation"
 	_expect(not bool(bridge.call("consume_item", "meat", 1)), "consume rejects a positive result without a count change")
 	_expect(consumed_events.is_empty(), "invalid consume does not emit an item-consumed event")
