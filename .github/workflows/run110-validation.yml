@@ -1,0 +1,94 @@
+name: Run 110 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Bastion_Array/**"
+      - "systems/SurvivalInventory.gd"
+      - "tests/inventory_weight_boundaries.gd"
+      - "tests/inventory_game_day_property_test.gd"
+      - ".github/workflows/run110-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Bastion_Array/**"
+      - "systems/SurvivalInventory.gd"
+      - "tests/inventory_weight_boundaries.gd"
+      - "tests/inventory_game_day_property_test.gd"
+      - ".github/workflows/run110-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Run 110 Focused Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 110 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Bastion_Array/project.godot
+          test -f daily_games/KROLL_Bastion_Array/main.tscn
+          test -f daily_games/KROLL_Bastion_Array/main.gd
+          test -f daily_games/KROLL_Bastion_Array/rules.gd
+          test -f daily_games/KROLL_Bastion_Array/tests/rules_test.gd
+          test -f daily_games/KROLL_Bastion_Array/tests/game_smoke_test.gd
+          test -f tests/inventory_game_day_property_test.gd
+          grep -Fq 'var game_day: int:' systems/SurvivalInventory.gd
+      - name: Import and parse KROLL Bastion Array
+        run: godot --headless --path daily_games/KROLL_Bastion_Array --editor --quit
+      - name: Run KROLL Bastion Array rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Bastion_Array --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Bastion Array rules tests passed."
+      - name: Run KROLL Bastion Array runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Bastion_Array --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Bastion Array runtime smoke test passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run inventory game-day property regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_game_day_property_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory game-day property guard tests passed."
+      - name: Run inventory boundary regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/inventory_weight_boundaries.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory weight boundary regression tests passed."
+      - name: Run inventory save adapter compatibility
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_save_adapter.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory save adapter tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short

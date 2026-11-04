@@ -10,6 +10,7 @@ func _initialize() -> void:
 	_test_invalid_item_and_amount()
 	_test_unknown_count_fallback_weight()
 	_test_runtime_dictionary_corruption_is_not_serialized()
+	_test_game_day_property_clamps_direct_assignment()
 	print("Inventory weight boundary regression tests passed.")
 	quit(0)
 
@@ -100,3 +101,13 @@ func _test_runtime_dictionary_corruption_is_not_serialized() -> void:
 	assert(bridge.bind_inventory(inventory))
 	assert(bridge.get_item_count("meat") == 0)
 	bridge.free()
+
+
+func _test_game_day_property_clamps_direct_assignment() -> void:
+	var inventory = InventoryScript.new({}, 3)
+	inventory.game_day = -20
+	assert(inventory.game_day == 1, "negative direct assignment clamps to day one")
+	inventory.game_day = InventoryScript.MAX_SAVED_GAME_DAY + 1
+	assert(inventory.game_day == InventoryScript.MAX_SAVED_GAME_DAY, "oversized direct assignment clamps to save maximum")
+	inventory.game_day = 42
+	assert(inventory.to_save_dict()["game_day"] == 42, "serialized game day reflects the guarded property")
