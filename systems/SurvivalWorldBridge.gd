@@ -200,10 +200,9 @@ func serialize_inventory() -> Dictionary:
 	return inventory.to_save_dict() if inventory != null else {}
 
 func restore_inventory(data: Dictionary) -> bool:
-	if inventory == null or not inventory.load_save_dict(data):
+	if inventory == null:
 		return false
-	_emit_inventory_changed()
-	return true
+	return _restore_inventory_atomically(data)
 
 func serialize_world_save(existing_world_save: Dictionary) -> Dictionary:
 	if inventory == null:
@@ -217,10 +216,35 @@ func restore_world_save(world_save: Dictionary) -> bool:
 	if not bool(converted.get("ok", false)):
 		return false
 	var payload: Dictionary = converted["payload"]
-	if not inventory.load_save_dict(payload):
+	return _restore_inventory_atomically(payload)
+
+func _restore_inventory_atomically(payload: Dictionary) -> bool:
+	if inventory == null:
 		return false
-	_emit_inventory_changed()
-	return true
+	var snapshot_value: Variant = inventory.call("to_save_dict")
+	if not (snapshot_value is Dictionary):
+		return false
+	var snapshot: Dictionary = snapshot_value.duplicate(true)
+	var restore_result: Variant = inventory.call("load_save_dict", payload.duplicate(true))
+	if restore_result is bool and bool(restore_result):
+		_emit_inventory_changed()
+		return true
+
+	# A custom inventory may mutate before reporting failure. Restore the captured
+	# snapshot and verify the serialized state before leaving the bridge unchanged.
+	var rollback_result: Variant = inventory.call("load_save_dict", snapshot.duplicate(true))
+	var restored_value: Variant = inventory.call("to_save_dict")
+	var rollback_verified: bool = (
+		rollback_result is bool
+		and bool(rollback_result)
+		and restored_value is Dictionary
+		and restored_value == snapshot
+	)
+	if not rollback_verified:
+		# The bridge cannot promise rollback for an opaque or broken custom inventory.
+		# Refresh observers so the UI does not keep displaying a stale snapshot.
+		_emit_inventory_changed()
+	return false
 
 func _has_inventory_contract(candidate: Object) -> bool:
 	for method_name in REQUIRED_INVENTORY_METHODS:
