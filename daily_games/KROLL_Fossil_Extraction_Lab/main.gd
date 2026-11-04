@@ -8,6 +8,7 @@ var _message: String = "Scan a sediment square, then uncover every fossil fragme
 var _grid_buttons: Array[Button] = []
 var _tool_buttons: Dictionary = {}
 var _mission_label: Label
+var _hint_label: Label
 var _stats_label: Label
 var _message_label: Label
 var _next_button: Button
@@ -97,6 +98,12 @@ func _build_ui() -> void:
 	_mission_label.add_theme_font_size_override("font_size", 18)
 	column.add_child(_mission_label)
 
+	_hint_label = Label.new()
+	_hint_label.name = "SurveyHintLabel"
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.add_theme_color_override("font_color", Color(0.65, 0.78, 0.82))
+	column.add_child(_hint_label)
+
 	_stats_label = Label.new()
 	_stats_label.name = "StatsLabel"
 	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -172,6 +179,7 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 func _refresh() -> void:
 	var mission: Dictionary = Rules.mission_at(int(_state.get("mission_index", 0)))
 	_mission_label.text = "SITE %d / %d  —  %s" % [int(_state["mission_index"]) + 1, Rules.mission_count(), str(mission["name"])]
+	_hint_label.text = str(mission["hint"])
 	_stats_label.text = "Actions %d/%d   |   Integrity %d%%   |   Fossils %d/%d   |   Air %d   Chisel %d   Scan %d   |   Campaign %d" % [
 		int(_state["actions_left"]),
 		Rules.STARTING_ACTIONS,
@@ -204,7 +212,8 @@ func _refresh() -> void:
 		else:
 			button.text = "CLEAR"
 			button.add_theme_color_override("font_color", Color(0.45, 0.85, 0.68))
-		button.tooltip_text = "Cell %d,%d — sediment depth %d" % [cell.x, cell.y, depth]
+		var column_labels: Array[String] = ["A", "B", "C", "D", "E", "F", "G", "H"]
+		button.tooltip_text = "Cell %s%d — sediment depth %d" % [column_labels[cell.x], cell.y + 1, depth]
 		button.disabled = str(_state["status"]) != "active" or (depth <= 0 and _selected_tool != "scan")
 	_next_button.disabled = str(_state["status"]) != "complete"
 
