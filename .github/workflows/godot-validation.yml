@@ -4523,3 +4523,57 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge serialization snapshot tests passed."
+
+      - name: Verify Run 116 Drift Rescue and inventory operation atomicity inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Drift_Rescue/project.godot
+          test -f daily_games/KROLL_Drift_Rescue/main.tscn
+          test -f daily_games/KROLL_Drift_Rescue/main.gd
+          test -f daily_games/KROLL_Drift_Rescue/rules.gd
+          test -f daily_games/KROLL_Drift_Rescue/tests/rules_test.gd
+          test -f daily_games/KROLL_Drift_Rescue/tests/game_smoke_test.gd
+          test -f tests/world_bridge_operation_result_test.gd
+          test -f docs/README_run116_inventory_operation_atomicity.md
+          grep -Fq 'func _rollback_inventory_operation' systems/SurvivalWorldBridge.gd
+          grep -Fq 'func _inventory_snapshot_matches_except_item' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Drift Rescue
+        run: godot --headless --path daily_games/KROLL_Drift_Rescue --editor --quit
+      - name: Run KROLL Drift Rescue rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Drift_Rescue --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Drift Rescue rules tests passed."
+      - name: Run KROLL Drift Rescue runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Drift_Rescue --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Drift Rescue runtime smoke test passed."
+      - name: Run world bridge inventory operation atomicity regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_operation_result_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge inventory operation atomicity tests passed."
+
+      - name: Remove generated untracked Godot import metadata
+        if: always()
+        shell: bash
+        run: |
+          git clean -fd
+          git status --short
+      - name: Verify clean validation workspace
+        if: always()
+        shell: bash
+        run: test -z "$(git status --porcelain)"
+
+
