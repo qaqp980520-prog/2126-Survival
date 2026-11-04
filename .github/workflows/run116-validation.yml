@@ -78,7 +78,9 @@ jobs:
         shell: bash
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
           git status --short
+          test -z "$(git status --porcelain)"
       - name: Post Checkout repository
         if: always()
         run: git status --short
