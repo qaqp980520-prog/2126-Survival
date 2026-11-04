@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Rules = preload("res://rules.gd")
+const PING_PATH_INDICES: Array = [[6, 7], [6, 10], [0, 6]]
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -18,13 +19,13 @@ func _run() -> void:
         var outward: Array[Vector2i] = Rules.find_path(mission, start, target)
         var inward: Array[Vector2i] = Rules.find_path(mission, target, start)
 
-        _expect(bool(scene.call("apply_action", "ping")), "mission %d records its first sonar echo" % (mission_index + 1))
-        for step in range(1, outward.size()):
-            var delta: Vector2i = outward[step] - outward[step - 1]
-            var direction: String = Rules.direction_for_delta(delta)
-            _expect(bool(scene.call("apply_action", "move_" + direction)), "mission %d outward movement %d is accepted" % [mission_index + 1, step])
-            if step == outward.size() / 2:
-                _expect(bool(scene.call("apply_action", "ping")), "mission %d records a second triangulation echo" % (mission_index + 1))
+        for step in range(outward.size()):
+            if PING_PATH_INDICES[mission_index].has(step):
+                _expect(bool(scene.call("apply_action", "ping")), "mission %d records sonar echo at route cell %d" % [mission_index + 1, step])
+            if step < outward.size() - 1:
+                var delta: Vector2i = outward[step + 1] - outward[step]
+                var direction: String = Rules.direction_for_delta(delta)
+                _expect(bool(scene.call("apply_action", "move_" + direction)), "mission %d outward movement %d is accepted" % [mission_index + 1, step + 1])
 
         _expect(bool(scene.call("apply_action", "interact")), "mission %d secures the hidden beacon" % (mission_index + 1))
         for step in range(1, inward.size()):
@@ -38,6 +39,8 @@ func _run() -> void:
         _expect(int(final_state["battery"]) >= int(final_state["par_battery"]), "mission %d preserves the par battery reserve" % (mission_index + 1))
         _expect(int(final_state["campaign_score"]) == 100, "mission %d earns the full on-time score" % (mission_index + 1))
         _expect(final_state["ping_log"].size() == 2, "mission %d keeps both sonar bearings in the log" % (mission_index + 1))
+        var candidates: Array[Vector2i] = Rules.triangulation_candidates(mission, final_state["ping_log"])
+        _expect(candidates.size() == 1 and candidates[0] == target, "mission %d route sonar echoes uniquely triangulate the hidden beacon" % (mission_index + 1))
         scene.queue_free()
         await process_frame
 
