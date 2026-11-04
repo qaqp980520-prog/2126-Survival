@@ -9,7 +9,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var scene := load("res://main.tscn").instantiate() as Control
+	var scene: Variant = load("res://main.tscn").instantiate()
 	_expect(scene != null, "thermal containment scene instantiates")
 	if scene == null:
 		quit(1)
