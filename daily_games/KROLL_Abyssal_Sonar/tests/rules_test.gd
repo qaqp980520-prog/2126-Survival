@@ -65,14 +65,15 @@ func _run() -> void:
             var delta: Vector2i = replay_out[step] - replay_out[step - 1]
             var replay_move: Dictionary = Rules.move(replay, Rules.direction_for_delta(delta))
             replay = replay_move["state"]
-        var replay_extract: Dictionary = Rules.interact(replay)
-        replay = replay_extract["state"]
+        var replay_collect: Dictionary = Rules.interact(replay)
+        replay = replay_collect["state"]
         var replay_back: Array[Vector2i] = Rules.find_path(mission, target, start)
         for step in range(1, replay_back.size()):
             var delta: Vector2i = replay_back[step] - replay_back[step - 1]
             var replay_return: Dictionary = Rules.move(replay, Rules.direction_for_delta(delta))
             replay = replay_return["state"]
-        replay = Rules.interact(replay)["state"]
+        var replay_extract: Dictionary = Rules.interact(replay)
+        replay = replay_extract["state"]
         _expect(int(replay["campaign_score"]) == first_score, "mission %d cannot award the same beacon twice" % (index + 1))
 
         var advance_result: Dictionary = Rules.next_mission(state)
