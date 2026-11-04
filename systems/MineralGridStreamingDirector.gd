@@ -476,7 +476,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
-			var failure_phase: String = "controller_lifecycle" if not controller_ready_after_load else "load_registration"
+			var failure_phase: String = "dependency_unavailable" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
 			var staged_roots_released: int = _release_async_staged_roots(request_id, staged_roots)
 			_finish_async_sync_request(request_id, false, failure_phase, "Controller became unavailable during async chunk registration." if not controller_ready_after_load else "Chunk controller rejected or failed to register a staged chunk.", rollback_complete, {
@@ -677,6 +677,8 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				if bool(details.get("duplicate_staged_root_rejected", false)):
 					failure_reason = "factory_reused_staged_root"
 			"controller_lifecycle":
+				failure_reason = "controller_unavailable"
+			"dependency_unavailable":
 				failure_reason = "controller_unavailable"
 			"load_registration":
 				failure_reason = "registration_rejected"
