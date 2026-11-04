@@ -19,7 +19,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 - `CollisionShape3D` remains `CapsuleShape3D`, radius 0.35 and height 1.8.
 - First-person `Camera3D` remains at local position `(0, 1.48, 0)`, with existing FOV and look input.
 - No world-save schema, chunk ID, inventory, stamina, underground, input or interaction behavior changes.
-- Visual meshes are only built on non-headless runtime; the headless regression explicitly invokes the same builder to verify its structure and pose logic.
+- Non-headless runtime creates the actual MeshInstance3D meshes. The headless regression invokes the same builder but uses metadata-only Node3D descriptors, avoiding dummy-renderer mesh creation while verifying the hierarchy and primitive geometry types.
 
 ## Files
 
