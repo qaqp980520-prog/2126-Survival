@@ -26,9 +26,9 @@ func _make_pair(radius: int) -> Dictionary:
 	root.add_child(controller)
 	root.add_child(director)
 	await process_frame
-	director.chunk_size_x = 10.0
-	director.chunk_size_z = 10.0
-	director.load_radius = radius
+	director.set("chunk_size_x", 10.0)
+	director.set("chunk_size_z", 10.0)
+	director.set("load_radius", radius)
 	_expect(director.call("bind_controller", controller), "Director binds a live synchronous lifecycle Controller")
 	_expect(director.call("bind_chunk_factory", Callable(self, "_make_chunk")), "Director binds the synchronous lifecycle factory")
 	return {"controller": controller, "director": director}
