@@ -68,7 +68,7 @@ func _test_queued_controller_is_not_called_during_sync_rollback() -> void:
 	_expect(not success, "sync rejects a Controller queued during its only registration callback")
 	_expect(controller.load_calls == 1, "queued-controller registration is attempted exactly once")
 	_expect(controller.unload_calls == 0, "queued Controller receives no rollback method calls")
-	_expect(director.get_managed_chunk_ids().is_empty(), "queued Controller leaves no stale Director ownership")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "queued Controller leaves no stale Director ownership")
 	_expect(str(report.get("phase", "")) == "controller_lifecycle", "queued registration is reported as a lifecycle failure")
 	_expect(not bool(report.get("rollback_complete", true)), "queued Controller cleanup is honestly reported as incomplete")
 	_expect(bool(report.get("details", {}).get("controller_queued_for_deletion", false)), "sync report identifies the queued Controller")
