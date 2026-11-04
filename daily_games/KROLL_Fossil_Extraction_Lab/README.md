@@ -4,7 +4,7 @@ A standalone Godot 4.3 excavation game. The player works across three fictional 
 
 ## Gameplay
 
-- Each site uses an 8×8 sediment grid.
+- Each site uses an 8×8 sediment grid labeled A1–H8 and provides a coordinate survey clue.
 - Every cell shows its remaining sediment depth; buried fossil locations remain hidden.
 - Scanner: spends one scan charge and one action to report how many fossil fragments lie in the selected 3×3 sector.
 - Air Scribe: one charge clears one sediment layer from a 3×3 sector without damaging fossils.
