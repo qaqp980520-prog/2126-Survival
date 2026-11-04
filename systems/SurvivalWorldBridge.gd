@@ -150,35 +150,69 @@ func _read_movement_multiplier(fallback: float) -> float:
 func _apply_inventory_operation(method_name: StringName, item_id: String, requested: int, is_add: bool) -> int:
 	if inventory == null or not inventory.has_method(method_name):
 		return 0
-	var before_count: int = _read_count_snapshot(item_id)
+	# A serialized snapshot is the common observable contract for both public-count
+	# and method-only custom inventories. Refuse mutation when no safe baseline exists.
+	var before_value: Variant = inventory.call("to_save_dict")
+	if not (before_value is Dictionary):
+		return 0
+	var before_snapshot: Dictionary = before_value.duplicate(true)
+	var before_count: int = _snapshot_item_count(before_snapshot, item_id)
+	if before_count < 0:
+		return 0
+
 	var raw_result: Variant = inventory.call(method_name, item_id, requested)
 	var reported_count: int = _validated_operation_count(raw_result, requested)
-	if before_count < 0:
-		if reported_count <= 0:
+	var after_value: Variant = inventory.call("to_save_dict")
+	if not (after_value is Dictionary):
+		if not _rollback_inventory_operation(before_snapshot):
 			_emit_inventory_changed()
-			return 0
-		return reported_count
-	var after_count: int = _read_count_snapshot(item_id)
-	if after_count < 0:
-		_emit_inventory_changed()
 		return 0
+	var after_snapshot: Dictionary = after_value.duplicate(true)
+	var after_count: int = _snapshot_item_count(after_snapshot, item_id)
+	if after_count < 0:
+		if not _rollback_inventory_operation(before_snapshot):
+			_emit_inventory_changed()
+		return 0
+
 	var actual_delta: int = after_count - before_count if is_add else before_count - after_count
-	if actual_delta != reported_count:
-		if actual_delta != 0:
+	var changed_other_state: bool = not _inventory_snapshot_matches_except_item(before_snapshot, after_snapshot, item_id)
+	if reported_count <= 0 or actual_delta != reported_count or changed_other_state:
+		# A pure no-op with an invalid report needs no rollback or refresh. If any
+		# serialized state changed, restore the pre-operation snapshot and verify it.
+		if after_snapshot != before_snapshot and not _rollback_inventory_operation(before_snapshot):
 			_emit_inventory_changed()
 		return 0
 	return reported_count
 
-func _read_count_snapshot(item_id: String) -> int:
-	if inventory == null:
-		return -1
-	var raw_counts: Variant = inventory.get("counts")
+func _snapshot_item_count(snapshot: Dictionary, item_id: String) -> int:
+	var raw_counts: Variant = snapshot.get("inventory", null)
 	if not (raw_counts is Dictionary):
 		return -1
 	var raw_count: Variant = raw_counts.get(item_id, 0)
 	if not _is_valid_bridge_count(raw_count):
 		return -1
 	return int(raw_count)
+
+func _inventory_snapshot_matches_except_item(before_snapshot: Dictionary, after_snapshot: Dictionary, item_id: String) -> bool:
+	var before_copy: Dictionary = before_snapshot.duplicate(true)
+	var after_copy: Dictionary = after_snapshot.duplicate(true)
+	var before_counts: Variant = before_copy.get("inventory", null)
+	var after_counts: Variant = after_copy.get("inventory", null)
+	if not (before_counts is Dictionary) or not (after_counts is Dictionary):
+		return false
+	before_counts.erase(item_id)
+	after_counts.erase(item_id)
+	return before_copy == after_copy
+
+func _rollback_inventory_operation(snapshot: Dictionary) -> bool:
+	var rollback_result: Variant = inventory.call("load_save_dict", snapshot.duplicate(true))
+	var restored_value: Variant = inventory.call("to_save_dict")
+	return (
+		rollback_result is bool
+		and bool(rollback_result)
+		and restored_value is Dictionary
+		and restored_value == snapshot
+	)
 
 func _validated_operation_count(value: Variant, requested: int) -> int:
 	if value is bool or not (value is int or value is float):
