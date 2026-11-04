@@ -42,7 +42,7 @@ jobs:
           test -f daily_games/KROLL_Thermal_Containment_Lab/tests/game_smoke_test.gd
           test -f systems/SurvivalWorldBridge.gd
           test -f tests/world_bridge_restore_success_verification_test.gd
-          grep -Fq 'var restore_verified: bool' systems/SurvivalWorldBridge.gd
+          grep -Fq 'func _is_valid_restore_payload' systems/SurvivalWorldBridge.gd
       - name: Import and parse KROLL Thermal Containment Lab
         run: godot --headless --path daily_games/KROLL_Thermal_Containment_Lab --editor --quit
       - name: Run KROLL Thermal Containment rules tests
