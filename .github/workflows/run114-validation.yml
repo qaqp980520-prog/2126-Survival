@@ -1,0 +1,88 @@
+name: Run 114 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Zero_G_Cargo_Bay/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_restore_atomicity_test.gd"
+      - "tests/README_run114_bridge_restore_atomicity.md"
+      - ".github/workflows/run114-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Zero_G_Cargo_Bay/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_restore_atomicity_test.gd"
+      - "tests/README_run114_bridge_restore_atomicity.md"
+      - ".github/workflows/run114-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Run 114 Focused Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 114 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/project.godot
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/main.tscn
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/main.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/rules.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/tests/rules_test.gd
+          test -f daily_games/KROLL_Zero_G_Cargo_Bay/tests/game_smoke_test.gd
+          test -f systems/SurvivalWorldBridge.gd
+          test -f tests/world_bridge_restore_atomicity_test.gd
+          grep -Fq 'func _restore_inventory_atomically' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Zero-G Cargo Bay
+        run: godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --editor --quit
+      - name: Run KROLL Zero-G Cargo Bay rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Zero-G Cargo Bay rules tests passed."
+      - name: Run KROLL Zero-G Cargo Bay runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Zero_G_Cargo_Bay --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Zero-G Cargo Bay runtime smoke test passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run world bridge restore atomicity regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_restore_atomicity_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge restore atomicity tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short
+      - name: Post Checkout repository
+        if: always()
+        run: git status --short
+      - name: Stop containers
+        if: always()
+        run: true
+      - name: Complete job
+        if: always()
+        run: echo "Run 114 focused validation job complete."
