@@ -26,6 +26,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 - `world/SurfaceWorld.gd`
 - `tests/production_surface_world_player_visual_test.gd`
 - `.github/workflows/godot-validation.yml`
+- `.github/workflows/surface-world-player-visual-validation.yml`
 - `docs/SURFACE_WORLD_PLAYER_VISUAL_RIG_M0_1.md`
 
 ## Dependencies and import
