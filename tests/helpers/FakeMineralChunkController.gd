@@ -5,6 +5,8 @@ var load_calls: int = 0
 var unload_calls: int = 0
 var fail_on_unload_call: int = -1
 var detach_on_next_load: bool = false
+var detach_on_load_call: int = -1
+var queue_on_load_call: int = -1
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
 	load_calls += 1
@@ -12,11 +14,15 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bo
 		return false
 	add_child(chunk_root)
 	_loaded[chunk_id] = chunk_root
-	if detach_on_next_load:
+	if detach_on_next_load or load_calls == detach_on_load_call:
 		detach_on_next_load = false
+		detach_on_load_call = -1
 		var current_parent: Node = get_parent()
 		if current_parent != null:
 			current_parent.remove_child(self)
+	if load_calls == queue_on_load_call:
+		queue_on_load_call = -1
+		queue_free()
 	return true
 
 func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
