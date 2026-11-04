@@ -8,6 +8,12 @@ class RestoreFixture extends RefCounted:
 	var game_day: int = 4
 	var mode: String = "normal"
 	var load_calls: int = 0
+	var bridge: Node
+	var replacement: RefCounted
+	var nested_restore_accepted: bool = false
+	var nested_collect_accepted: bool = false
+	var rebind_accepted: bool = false
+	var direct_rebind_blocked: bool = false
 
 	func add_item(_item_id: String, _amount: int = 1) -> int:
 		return 0
@@ -29,6 +35,12 @@ class RestoreFixture extends RefCounted:
 		return {"schema_version": 1, "game_day": game_day, "inventory": counts.duplicate(true)}
 	func load_save_dict(data: Dictionary) -> bool:
 		load_calls += 1
+		if load_calls == 1 and mode == "reentrant":
+			nested_restore_accepted = bool(bridge.call("restore_inventory", data))
+			nested_collect_accepted = bool(bridge.call("collect_world_item", "meat", 1))
+			rebind_accepted = bool(bridge.call("bind_inventory", replacement))
+			bridge.set("inventory", replacement)
+			direct_rebind_blocked = bridge.get("inventory") == self
 		if load_calls == 1 and mode == "lying_success":
 			counts = {"meat": 999}
 			game_day = 99
@@ -92,6 +104,23 @@ func _run() -> void:
 	_expect(bool(bridge.call("restore_inventory", payload)), "a custom loader whose serialized state matches the payload succeeds")
 	_expect(fixture.counts == {"meat": 40} and fixture.game_day == 9, "verified custom restore applies the requested data")
 	_expect(listener.count == 2, "verified successful restore emits exactly one refresh")
+
+	fixture.counts = {"meat": 3}
+	fixture.game_day = 4
+	fixture.load_calls = 0
+	fixture.mode = "reentrant"
+	fixture.bridge = bridge
+	fixture.replacement = RestoreFixture.new()
+	_expect(bool(bridge.call("restore_inventory", payload)), "outer restore succeeds while custom loader attempts reentrant bridge mutations")
+	_expect(not fixture.nested_restore_accepted, "nested restore is rejected while a restore transaction is active")
+	_expect(not fixture.nested_collect_accepted, "collect operation is rejected during restore callback")
+	_expect(not fixture.rebind_accepted, "bind_inventory cannot replace the active inventory during restore")
+	_expect(fixture.direct_rebind_blocked and bridge.get("inventory") == fixture, "direct inventory property assignment is blocked during restore")
+	_expect(fixture.counts == {"meat": 40} and fixture.game_day == 9, "outer restore applies only its requested snapshot")
+	_expect(listener.count == 3, "reentrant attempts do not emit extra inventory notifications")
+
+	fixture.load_calls = 0
+	fixture.mode = "normal"
 
 	fixture.load_calls = 0
 	var invalid_day_payload := {"schema_version": 1, "game_day": 0, "inventory": {"meat": 2}}

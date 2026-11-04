@@ -15,10 +15,20 @@ signal item_dropped(item_id: String, amount: int)
 signal item_consumed(item_id: String, amount: int)
 
 @export var inventory_script: Script
-var inventory: RefCounted
+var _inventory_restore_in_progress: bool = false
+var _inventory: RefCounted
+var inventory: RefCounted:
+	get:
+		return _inventory
+	set(value):
+		if _inventory_restore_in_progress:
+			return
+		if value != null and not _has_inventory_contract(value):
+			return
+		_inventory = value
 
 func bind_inventory(candidate: RefCounted) -> bool:
-	if candidate == null or not _has_inventory_contract(candidate):
+	if _inventory_restore_in_progress or candidate == null or not _has_inventory_contract(candidate):
 		return false
 	inventory = candidate
 	if is_inside_tree() and is_node_ready():
@@ -148,7 +158,7 @@ func _read_movement_multiplier(fallback: float) -> float:
 	return numeric
 
 func _apply_inventory_operation(method_name: StringName, item_id: String, requested: int, is_add: bool) -> int:
-	if inventory == null or not inventory.has_method(method_name):
+	if _inventory_restore_in_progress or inventory == null or not inventory.has_method(method_name):
 		return 0
 	# A serialized snapshot is the common observable contract for both public-count
 	# and method-only custom inventories. Refuse mutation when no safe baseline exists.
@@ -263,32 +273,38 @@ func restore_world_save(world_save: Dictionary) -> bool:
 	return _restore_inventory_atomically(payload)
 
 func _restore_inventory_atomically(payload: Dictionary) -> bool:
-	if inventory == null or not _is_valid_restore_payload(payload):
+	if _inventory_restore_in_progress or inventory == null or not _is_valid_restore_payload(payload):
 		return false
-	var snapshot_value: Variant = inventory.call("to_save_dict")
+	_inventory_restore_in_progress = true
+	var outcome: Dictionary = _perform_inventory_restore(payload)
+	_inventory_restore_in_progress = false
+	if bool(outcome.get("notify", false)):
+		_emit_inventory_changed()
+	return bool(outcome.get("success", false))
+
+func _perform_inventory_restore(payload: Dictionary) -> Dictionary:
+	var target_inventory: RefCounted = _inventory
+	var snapshot_value: Variant = target_inventory.call("to_save_dict")
 	if not (snapshot_value is Dictionary):
-		return false
+		return {"success":false, "notify":false}
 	var snapshot: Dictionary = snapshot_value.duplicate(true)
 	var expected_snapshot: Dictionary = _expected_restore_snapshot(payload)
-	var restore_result: Variant = inventory.call("load_save_dict", payload.duplicate(true))
+	var restore_result: Variant = target_inventory.call("load_save_dict", payload.duplicate(true))
 	if restore_result is bool and bool(restore_result):
-		var restored_value: Variant = inventory.call("to_save_dict")
+		var restored_value: Variant = target_inventory.call("to_save_dict")
 		if restored_value is Dictionary and restored_value == expected_snapshot:
-			_emit_inventory_changed()
-			return true
+			return {"success":true, "notify":true}
 	# A true return is only a claim. Verify the serialized result before exposing
 	# the restore as successful; lying or no-op custom loaders must be rolled back.
-	var rollback_result: Variant = inventory.call("load_save_dict", snapshot.duplicate(true))
-	var rollback_value: Variant = inventory.call("to_save_dict")
+	var rollback_result: Variant = target_inventory.call("load_save_dict", snapshot.duplicate(true))
+	var rollback_value: Variant = target_inventory.call("to_save_dict")
 	var rollback_verified: bool = (
 		rollback_result is bool
 		and bool(rollback_result)
 		and rollback_value is Dictionary
 		and rollback_value == snapshot
 	)
-	if not rollback_verified:
-		_emit_inventory_changed()
-	return false
+	return {"success":false, "notify":not rollback_verified}
 
 func _is_valid_restore_payload(payload: Dictionary) -> bool:
 	var schema: Variant = payload.get("schema_version", null)
