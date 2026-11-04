@@ -1552,3 +1552,13 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - Initial candidate `d4cbb771...` had a root Test Hub scene-path failure because the root scene used the standalone-relative script path. Corrected in `main_root.tscn`, added static and smoke assertions, and reran all exact-head workflows; initial failure retained as historical evidence, not counted as a pass.
 - Run 102 documentation PR [#242](https://github.com/qaqp980520-prog/2126-Survival/pull/242) merged as main SHA `8b4c86dce4cf59305e08b7f3f9dff352bd3cc987`; exact-head documentation Run [#1191](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41640361993) passed 458/458.
 - Post-merge main push CI for `8b4c86d...` has not surfaced through the connected workflow/status lookup; record as unconfirmed, not passed/failed. Main branch protection issue #236 remains open. Local Godot executable unavailable; local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## Run 104–113 documentation consolidation — 2026-11-04
+
+- Added verified per-run closeouts for Runs 104–113 under `docs/RUN104_CLOSEOUT.md` through `docs/RUN113_CLOSEOUT.md`.
+- Historical source content for Runs 104–107 was selectively preserved from `docs/run104-107-closeout-rebased-2026-11-04`; stale branch commits were not merged wholesale.
+- Feature merges: #252 `8ed9323...`; #253 `0f51c27...`; #254 `00093cd...`; #255 `36613e5...`; #256 `56ee003...`; #257 `102446b...`.
+- Exact-head full validation and post-merge validation evidence are listed in each closeout. Run 112's immediate merge-triggered full workflow was cancelled; subsequent main full #41776646151 passed 510/510 on f028013. Run 113's exact-head PR full #41778290589 passed 515/515; post-merge main full #41779631645 was still in progress at the time of documentation preparation.
+- Main branch protection is still disabled (`protected=false`; required-check enforcement off; no required contexts/checks). Keep GitHub issue [#236](https://github.com/qaqp980520-prog/2126-Survival/issues/236) open until a ruleset/protection configuration is actually applied and read back. Stable full check name: `Godot Full Compatibility Gate`.
+- Local rendered GUI/GPU and physical iPhone QA remain untested.
