@@ -474,7 +474,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				else:
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var rollback_complete: bool = controller_alive_after_load and candidate_cleanup_ok and new_loads_rollback_ok
+			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
 			var failure_phase: String = "controller_lifecycle" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
@@ -676,6 +676,8 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				failure_reason = "factory_invalid_root"
 				if bool(details.get("duplicate_staged_root_rejected", false)):
 					failure_reason = "factory_reused_staged_root"
+			"controller_lifecycle":
+				failure_reason = "controller_unavailable"
 			"load_registration":
 				failure_reason = "registration_rejected"
 			"stale_unload":
@@ -909,7 +911,8 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 			if not controller_can_rollback:
 				_managed_chunk_ids.clear()
 			elif candidate_loaded and not candidate_rollback_ok:
-				_managed_chunk_ids[id] = coord			success = false
+				_managed_chunk_ids[id] = coord
+			success = false
 			if not controller_ready_after_load:
 				break
 			continue
