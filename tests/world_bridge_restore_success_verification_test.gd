@@ -93,6 +93,14 @@ func _run() -> void:
 	_expect(fixture.counts == {"meat": 40} and fixture.game_day == 9, "verified custom restore applies the requested data")
 	_expect(listener.count == 2, "verified successful restore emits exactly one refresh")
 
+	fixture.load_calls = 0
+	var invalid_day_payload := {"schema_version": 1, "game_day": 0, "inventory": {"meat": 2}}
+	_expect(not bool(bridge.call("restore_inventory", invalid_day_payload)), "invalid game-day payload is rejected")
+	_expect(fixture.load_calls == 0, "invalid payload is rejected before calling the custom loader")
+	var invalid_count_payload := {"schema_version": 1, "game_day": 2, "inventory": {"meat": 1.5}}
+	_expect(not bool(bridge.call("restore_inventory", invalid_count_payload)), "fractional inventory count payload is rejected")
+	_expect(fixture.load_calls == 0, "fractional payload is rejected before mutation")
+
 	var built_bridge: Node = BridgeScript.new()
 	root.add_child(built_bridge)
 	await process_frame
