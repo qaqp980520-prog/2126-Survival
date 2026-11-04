@@ -153,16 +153,20 @@ func _apply_inventory_operation(method_name: StringName, item_id: String, reques
 	var before_count: int = _read_count_snapshot(item_id)
 	var raw_result: Variant = inventory.call(method_name, item_id, requested)
 	var reported_count: int = _validated_operation_count(raw_result, requested)
-	if before_count >= 0:
-		var after_count: int = _read_count_snapshot(item_id)
-		if after_count < 0:
+	if before_count < 0:
+		if reported_count <= 0:
 			_emit_inventory_changed()
 			return 0
-		var actual_delta: int = after_count - before_count if is_add else before_count - after_count
-		if actual_delta != reported_count:
-			if actual_delta != 0:
-				_emit_inventory_changed()
-			return 0
+		return reported_count
+	var after_count: int = _read_count_snapshot(item_id)
+	if after_count < 0:
+		_emit_inventory_changed()
+		return 0
+	var actual_delta: int = after_count - before_count if is_add else before_count - after_count
+	if actual_delta != reported_count:
+		if actual_delta != 0 or reported_count > 0:
+			_emit_inventory_changed()
+		return 0
 	return reported_count
 
 func _read_count_snapshot(item_id: String) -> int:

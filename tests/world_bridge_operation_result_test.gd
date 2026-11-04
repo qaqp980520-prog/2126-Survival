@@ -66,9 +66,10 @@ class OperationFixture extends RefCounted:
 
 class MethodOnlyFixture extends RefCounted:
 	var _stored_counts: Dictionary = {"meat":0}
-	func add_item(item_id: String, amount: int = 1) -> int:
+	var add_mode: String = "normal"
+	func add_item(item_id: String, amount: int = 1) -> Variant:
 		_stored_counts[item_id] = int(_stored_counts.get(item_id, 0)) + amount
-		return amount
+		return str(amount) if add_mode == "string" else amount
 	func remove_item(item_id: String, amount: int = 1) -> int:
 		var current: int = int(_stored_counts.get(item_id, 0))
 		var removed: int = mini(current, amount)
@@ -157,6 +158,12 @@ func _run() -> void:
 	_expect(bool(bridge.call("bind_inventory", method_only)), "method-only custom inventory remains compatible")
 	_expect(bool(bridge.call("collect_world_item", "meat", 2)), "method-only inventory with no public counts property trusts a validated return count")
 	_expect(int(bridge.call("get_item_count", "meat")) == 2, "method-only count accessor reports the accepted mutation")
+	var refresh_before_invalid: int = refresh_events.size()
+	method_only.add_mode = "string"
+	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "method-only inventory rejects a malformed string result")
+	_expect(int(bridge.call("get_item_count", "meat")) == 3, "method-only inventory mutation remains observable through its accessor")
+	_expect(refresh_events.size() == refresh_before_invalid + 1, "invalid method-only result emits a defensive inventory refresh")
+	_expect(collected_events.size() == 1, "invalid method-only result does not emit item-collected")
 
 	bridge.queue_free()
 	await process_frame
