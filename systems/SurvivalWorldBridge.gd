@@ -153,32 +153,32 @@ func _apply_inventory_operation(method_name: StringName, item_id: String, reques
 	var before_count: int = _read_count_snapshot(item_id)
 	var raw_result: Variant = inventory.call(method_name, item_id, requested)
 	var reported_count: int = _validated_operation_count(raw_result, requested)
-	if before_count >= 0:
-		var after_count: int = _read_count_snapshot(item_id)
-		if after_count < 0:
+	if before_count < 0:
+		if reported_count <= 0:
 			_emit_inventory_changed()
 			return 0
-		var actual_delta: int = after_count - before_count if is_add else before_count - after_count
-		if actual_delta != reported_count:
-			if actual_delta != 0:
-				_emit_inventory_changed()
-			return 0
+		return reported_count
+	var after_count: int = _read_count_snapshot(item_id)
+	if after_count < 0:
+		_emit_inventory_changed()
+		return 0
+	var actual_delta: int = after_count - before_count if is_add else before_count - after_count
+	if actual_delta != reported_count:
+		if actual_delta != 0:
+			_emit_inventory_changed()
+		return 0
 	return reported_count
 
 func _read_count_snapshot(item_id: String) -> int:
 	if inventory == null:
 		return -1
-	for property_info in inventory.get_property_list():
-		if str(property_info.get("name", "")) != "counts":
-			continue
-		var raw_counts: Variant = inventory.get("counts")
-		if not (raw_counts is Dictionary):
-			return -1
-		var raw_count: Variant = raw_counts.get(item_id, 0)
-		if not _is_valid_bridge_count(raw_count):
-			return -1
-		return int(raw_count)
-	return -1
+	var raw_counts: Variant = inventory.get("counts")
+	if not (raw_counts is Dictionary):
+		return -1
+	var raw_count: Variant = raw_counts.get(item_id, 0)
+	if not _is_valid_bridge_count(raw_count):
+		return -1
+	return int(raw_count)
 
 func _validated_operation_count(value: Variant, requested: int) -> int:
 	if value is bool or not (value is int or value is float):
