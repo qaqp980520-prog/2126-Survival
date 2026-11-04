@@ -58,6 +58,7 @@ class PartialRestoreInventory extends RefCounted:
 		return false
 
 var failures: Array[String] = []
+var refresh_events: int = 0
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -69,14 +70,13 @@ func _run() -> void:
 	var fixture := PartialRestoreInventory.new()
 	_expect(bool(bridge.call("bind_inventory", fixture)), "custom inventory with snapshot and load methods binds")
 
-	var refresh_events: Array[int] = []
-	bridge.inventory_changed.connect(func(_summary: Dictionary) -> void: refresh_events.append(1))
+	bridge.inventory_changed.connect(_on_inventory_changed)
 
 	var original: Dictionary = fixture.to_save_dict()
 	var partial_payload := {"schema_version":1,"game_day":9,"inventory":{"meat":40}}
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "partial custom restore failure is reported")
 	_expect(fixture.to_save_dict() == original, "failed restore rolls back the exact prior snapshot")
-	_expect(refresh_events.is_empty(), "verified rollback does not emit a misleading inventory refresh")
+	_expect(refresh_events == 0, "verified rollback does not emit a misleading inventory refresh")
 	_expect(fixture.load_calls == 2, "failed restore performs one restore attempt and one rollback")
 
 	fixture.load_calls = 0
@@ -89,18 +89,18 @@ func _run() -> void:
 	fixture.load_calls = 0
 	fixture.mode = "rollback_fail"
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "failed rollback never reports restore success")
-	_expect(refresh_events.size() == 1, "unverified rollback emits one defensive refresh")
+	_expect(refresh_events == 1, "unverified rollback emits one defensive refresh")
 
 	fixture.load_calls = 0
 	fixture.mode = "lying_rollback"
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "a rollback that returns true but restores the wrong snapshot is rejected")
-	_expect(refresh_events.size() == 2, "snapshot mismatch after rollback emits a second defensive refresh")
+	_expect(refresh_events == 2, "snapshot mismatch after rollback emits a second defensive refresh")
 
 	fixture.load_calls = 0
 	fixture.mode = "success"
 	_expect(bool(bridge.call("restore_inventory", partial_payload)), "valid custom restore succeeds")
 	_expect(fixture.counts.get("meat", 0) == 40 and fixture.game_day == 9, "successful restore applies the requested payload")
-	_expect(refresh_events.size() == 3, "successful restore emits exactly one inventory refresh")
+	_expect(refresh_events == 3, "successful restore emits exactly one inventory refresh")
 
 	fixture.load_calls = 0
 	fixture.snapshot_mode = "invalid"
@@ -124,6 +124,9 @@ func _run() -> void:
 	else:
 		push_error("World bridge restore atomicity failures: " + str(failures))
 		quit(1)
+
+func _on_inventory_changed(_summary: Dictionary) -> void:
+	refresh_events += 1
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
