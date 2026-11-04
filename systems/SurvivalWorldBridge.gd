@@ -197,7 +197,13 @@ func _is_valid_bridge_count(value: Variant) -> bool:
 	return is_finite(numeric) and numeric >= 0.0 and numeric <= float(InventoryModel.MAX_SAVED_COUNT) and floorf(numeric) == numeric
 
 func serialize_inventory() -> Dictionary:
-	return inventory.to_save_dict() if inventory != null else {}
+	if inventory == null:
+		return {}
+	var snapshot: Variant = inventory.call("to_save_dict")
+	if not (snapshot is Dictionary):
+		return {}
+	var snapshot_dictionary: Dictionary = snapshot
+	return snapshot_dictionary.duplicate(true)
 
 func restore_inventory(data: Dictionary) -> bool:
 	if inventory == null:
@@ -207,7 +213,11 @@ func restore_inventory(data: Dictionary) -> bool:
 func serialize_world_save(existing_world_save: Dictionary) -> Dictionary:
 	if inventory == null:
 		return {"ok":false,"error":"inventory_unavailable"}
-	return SaveAdapter.apply_inventory_payload_to_world_save(existing_world_save, inventory.to_save_dict())
+	var snapshot: Variant = inventory.call("to_save_dict")
+	if not (snapshot is Dictionary):
+		return {"ok":false,"error":"invalid_inventory_snapshot"}
+	var snapshot_dictionary: Dictionary = snapshot
+	return SaveAdapter.apply_inventory_payload_to_world_save(existing_world_save, snapshot_dictionary.duplicate(true))
 
 func restore_world_save(world_save: Dictionary) -> bool:
 	if inventory == null:
@@ -229,9 +239,6 @@ func _restore_inventory_atomically(payload: Dictionary) -> bool:
 	if restore_result is bool and bool(restore_result):
 		_emit_inventory_changed()
 		return true
-
-	# A custom inventory may mutate before reporting failure. Restore the captured
-	# snapshot and verify the serialized state before leaving the bridge unchanged.
 	var rollback_result: Variant = inventory.call("load_save_dict", snapshot.duplicate(true))
 	var restored_value: Variant = inventory.call("to_save_dict")
 	var rollback_verified: bool = (
@@ -241,8 +248,6 @@ func _restore_inventory_atomically(payload: Dictionary) -> bool:
 		and restored_value == snapshot
 	)
 	if not rollback_verified:
-		# The bridge cannot promise rollback for an opaque or broken custom inventory.
-		# Refresh observers so the UI does not keep displaying a stale snapshot.
 		_emit_inventory_changed()
 	return false
 
