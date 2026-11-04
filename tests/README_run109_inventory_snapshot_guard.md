@@ -7,7 +7,7 @@ The SurvivalInventory counts dictionary remains readable for compatibility, but 
 - get_item_count() returns a registered, finite, integer-valued count in the supported range; otherwise it returns zero.
 - total_weight_kg() ignores malformed registered counts but retains the one-kilogram fallback for valid directly injected legacy/unregistered counts.
 - add_item() and remove_item() reject a malformed existing count instead of coercing it through int().
-- to_save_dict() creates a sanitized snapshot containing every registered item and no unknown or malformed values.
+- to_save_dict() sanitizes malformed registered values but preserves unknown keys as invalid evidence, so the strict loader/save adapter rejects the snapshot instead of silently discarding externally injected data.
 - SurvivalWorldBridge.get_item_count() uses the model's validated accessor when available, preserving compatibility with older custom inventory implementations.
 
 ## Regression coverage
