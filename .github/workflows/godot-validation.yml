@@ -4606,6 +4606,48 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge restore success verification tests passed."
 
+      - name: Verify Run 118 Moonbase Courier and restore reentrancy inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Moonbase_Courier/project.godot
+          test -f daily_games/KROLL_Moonbase_Courier/main.tscn
+          test -f daily_games/KROLL_Moonbase_Courier/main.gd
+          test -f daily_games/KROLL_Moonbase_Courier/rules.gd
+          test -f daily_games/KROLL_Moonbase_Courier/tests/rules_test.gd
+          test -f daily_games/KROLL_Moonbase_Courier/tests/game_smoke_test.gd
+          test -f tests/world_bridge_restore_reentrancy_test.gd
+          test -f docs/README_run118_moonbase_courier.md
+          test -f docs/README_run118_restore_reentrancy_guard.md
+          grep -Fq 'var _inventory_restore_in_progress: bool = false' systems/SurvivalWorldBridge.gd
+          grep -Fq 'func _perform_inventory_restore' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Moonbase Courier
+        run: godot --headless --path daily_games/KROLL_Moonbase_Courier --editor --quit
+      - name: Run KROLL Moonbase Courier rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Moonbase_Courier --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Moonbase Courier rules tests passed."
+      - name: Run KROLL Moonbase Courier runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Moonbase_Courier --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Moonbase Courier runtime smoke test passed."
+      - name: Run world bridge restore reentrancy regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_restore_reentrancy_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge restore reentrancy tests passed."
+
       - name: Remove generated untracked Godot import metadata
         if: always()
         shell: bash
