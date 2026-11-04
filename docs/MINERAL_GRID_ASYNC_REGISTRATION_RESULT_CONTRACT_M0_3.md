@@ -41,8 +41,9 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_regi
 ## Regression coverage
 
 1. Async commit: Controller registers a chunk and then returns `false`; the candidate must be rolled back and no stale ownership/root may remain.
-2. Async commit: Controller attaches a candidate and returns `true` without registering it; the request must fail, remove the unregistered root and preserve matching Controller/Director IDs.
-3. Stale-root restoration: after a partial stale-unload failure, a restoration callback returns `true` without registering its candidate; the helper must return failure, report incomplete rollback and avoid retaining an orphan root.
+2. Async rollback failure: when that candidate cannot be unloaded, the Director must retain the actual chunk ID in its ownership mirror and allow a later sync to reconcile it.
+3. Async commit: Controller attaches a candidate and returns `true` without registering it; the request must fail, remove the unregistered root and preserve matching Controller/Director IDs.
+4. Stale-root restoration: after a partial stale-unload failure, a restoration callback returns `true` without registering its candidate; the helper must return failure, report incomplete rollback and avoid retaining an orphan root.
 
 ## Validation and limitations
 
