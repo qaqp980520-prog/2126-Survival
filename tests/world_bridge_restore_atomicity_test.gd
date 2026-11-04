@@ -97,6 +97,8 @@ func _run() -> void:
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "failed rollback never reports restore success")
 	_expect(listener.count == 1, "unverified rollback emits one defensive refresh")
 
+	fixture.counts = {"meat":3}
+	fixture.game_day = 4
 	fixture.load_calls = 0
 	fixture.mode = "lying_rollback"
 	_expect(not bool(bridge.call("restore_inventory", partial_payload)), "a rollback that returns true but restores the wrong snapshot is rejected")
