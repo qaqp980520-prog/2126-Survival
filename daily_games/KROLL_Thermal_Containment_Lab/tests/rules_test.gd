@@ -20,7 +20,8 @@ func _run() -> void:
 						var state: Dictionary = Rules.start_level(level_index)
 						for row in sequence:
 							state = Rules.advance_cycle(state, int(row)).get("state", state)
-						if Rules.is_stable(state.get("grid", [])):
+						var final_grid: Array = state.get("grid", [])
+						if Rules.is_stable(final_grid):
 							solutions.append(sequence)
 		_expect(solutions.size() == 1, "%s has exactly one four-cycle vent sequence" % str(mission.get("name", "")))
 		if not solutions.is_empty():
@@ -41,7 +42,7 @@ func _run() -> void:
 
 	var failed_state: Dictionary = Rules.start_level(0)
 	for row in [0, 0, 0, 0]:
-		failed_state = Rules.advance_cycle(failed_state, row)["state"]
+		failed_state = Rules.advance_cycle(failed_state, int(row))["state"]
 	_expect(bool(failed_state["failed"]), "an incorrect four-cycle schedule fails containment")
 	_expect(not bool(failed_state["completed"]), "failed containment is never marked complete")
 
