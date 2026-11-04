@@ -96,7 +96,8 @@ static func find_path(mission: Dictionary, start: Vector2i, goal: Vector2i) -> A
         return path
     var queue: Array[Vector2i] = [start]
     var parents: Dictionary = {}
-    var visited: Dictionary = {start: true}
+    var visited: Dictionary = {}
+    visited[start] = true
     var head: int = 0
     while head < queue.size():
         var current: Vector2i = queue[head]
