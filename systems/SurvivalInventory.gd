@@ -12,31 +12,17 @@ const UNKNOWN_ITEM_WEIGHT_KG: float = 1.0
 const MAX_SAVED_GAME_DAY: int = 1000000000
 const SAVE_SCHEMA_VERSION: int = 1
 const ITEM_WEIGHTS: Dictionary = {
-	"credits": 0.0,
-	"meat": 0.75,
-	"hide": 1.1,
-	"bone": 0.35,
-	"berries": 0.08,
-	"seeds": 0.02,
-	"herbs": 0.12,
-	"food": 0.5,
-	"rock": 2.5,
-	"iron_ore": 3.0,
-	"copper_ore": 2.8,
-	"gold_ore": 3.2,
-	"silver_ore": 3.1,
-	"aluminium_ore": 2.4,
-	"coal_ore": 1.4,
-	"uranium_ore": 3.4,
-	"crystal": 0.6
+	"credits": 0.0, "meat": 0.75, "hide": 1.1, "bone": 0.35,
+	"berries": 0.08, "seeds": 0.02, "herbs": 0.12, "food": 0.5,
+	"rock": 2.5, "iron_ore": 3.0, "copper_ore": 2.8, "gold_ore": 3.2,
+	"silver_ore": 3.1, "aluminium_ore": 2.4, "coal_ore": 1.4,
+	"uranium_ore": 3.4, "crystal": 0.6
 }
 
 var counts: Dictionary = {}
 var game_day: int = 1
 
 func _init(initial_counts: Dictionary = {}, initial_day: int = 1) -> void:
-	# Only registered items with valid integer counts may enter the model.
-	# This prevents constructor-based imports from bypassing weight validation.
 	counts = {}
 	for item_id in ITEM_WEIGHTS.keys():
 		counts[item_id] = 0
@@ -49,12 +35,20 @@ func _init(initial_counts: Dictionary = {}, initial_day: int = 1) -> void:
 	game_day = clampi(initial_day, 1, MAX_SAVED_GAME_DAY)
 
 func carry_limit_kg() -> float:
-	return BASE_LIMIT_KG + float(maxi(0, game_day - 1)) * LIMIT_GAIN_PER_DAY_KG
+	var safe_day := clampi(game_day, 1, MAX_SAVED_GAME_DAY)
+	return BASE_LIMIT_KG + float(safe_day - 1) * LIMIT_GAIN_PER_DAY_KG
+
+func get_item_count(item_id: String) -> int:
+	if not ITEM_WEIGHTS.has(item_id) or not counts.has(item_id):
+		return 0
+	return _validated_runtime_count(counts[item_id])
 
 func total_weight_kg() -> float:
 	var total := 0.0
 	for item_id in counts.keys():
-		var amount := maxi(0, int(counts[item_id]))
+		var amount := _validated_runtime_count(counts[item_id])
+		if amount <= 0:
+			continue
 		total += float(ITEM_WEIGHTS.get(item_id, UNKNOWN_ITEM_WEIGHT_KG)) * float(amount)
 	return total
 
@@ -77,7 +71,10 @@ func add_item(item_id: String, amount: int = 1) -> int:
 		return 0
 	if not counts.has(item_id):
 		counts[item_id] = 0
-	var current_amount := maxi(0, int(counts[item_id]))
+	var raw_current: Variant = counts[item_id]
+	if not _is_integer_in_range(raw_current, 0, MAX_SAVED_COUNT):
+		return 0
+	var current_amount := int(raw_current)
 	if amount > MAX_SAVED_COUNT - current_amount:
 		return 0
 	counts[item_id] = current_amount + amount
@@ -86,35 +83,37 @@ func add_item(item_id: String, amount: int = 1) -> int:
 func remove_item(item_id: String, amount: int = 1) -> int:
 	if amount <= 0 or not counts.has(item_id) or not ITEM_WEIGHTS.has(item_id):
 		return 0
-	var removed := mini(amount, maxi(0, int(counts[item_id])))
-	counts[item_id] = int(counts[item_id]) - removed
+	var raw_current: Variant = counts[item_id]
+	if not _is_integer_in_range(raw_current, 0, MAX_SAVED_COUNT):
+		return 0
+	var current_amount := int(raw_current)
+	var removed := mini(amount, current_amount)
+	counts[item_id] = current_amount - removed
 	return removed
 
 func set_game_day(day: int) -> void:
 	game_day = clampi(day, 1, MAX_SAVED_GAME_DAY)
 
 func to_save_dict() -> Dictionary:
+	var safe_inventory: Dictionary = {}
+	for item_id in ITEM_WEIGHTS.keys():
+		safe_inventory[item_id] = get_item_count(item_id)
 	return {
 		"schema_version": SAVE_SCHEMA_VERSION,
-		"game_day": game_day,
-		"inventory": counts.duplicate(true)
+		"game_day": clampi(game_day, 1, MAX_SAVED_GAME_DAY),
+		"inventory": safe_inventory
 	}
 
 func load_save_dict(data: Dictionary) -> bool:
-	# Validate the entire payload into local variables first. Failure must not
-	# partially replace the live inventory or game day.
 	var schema_version: Variant = data.get("schema_version", null)
 	if not _is_integer_in_range(schema_version, SAVE_SCHEMA_VERSION, SAVE_SCHEMA_VERSION):
 		return false
-
 	var saved_day: Variant = data.get("game_day", null)
 	if not _is_integer_in_range(saved_day, 1, MAX_SAVED_GAME_DAY):
 		return false
-
 	var saved_inventory: Variant = data.get("inventory", null)
 	if not (saved_inventory is Dictionary):
 		return false
-
 	var restored: Dictionary = {}
 	for item_id in saved_inventory.keys():
 		if not (item_id is String) or not ITEM_WEIGHTS.has(item_id):
@@ -123,22 +122,20 @@ func load_save_dict(data: Dictionary) -> bool:
 		if not _is_integer_in_range(amount, 0, MAX_SAVED_COUNT):
 			return false
 		restored[item_id] = int(amount)
-
-	# Missing registered items are backward-compatible and default to zero.
 	for item_id in ITEM_WEIGHTS.keys():
 		if not restored.has(item_id):
 			restored[item_id] = 0
-
 	counts = restored
 	game_day = int(saved_day)
 	return true
+
+func _validated_runtime_count(value: Variant) -> int:
+	return int(value) if _is_integer_in_range(value, 0, MAX_SAVED_COUNT) else 0
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
 	if not (value is int or value is float):
 		return false
 	var number := float(value)
-	if not is_finite(number):
-		return false
-	if number < float(minimum) or number > float(maximum):
+	if not is_finite(number) or number < float(minimum) or number > float(maximum):
 		return false
 	return floorf(number) == number

@@ -13,6 +13,7 @@ godot --headless --path . --script res://tests/inventory_save_validation.gd
 - Reject unsupported schema versions and unregistered item IDs.
 - Reject invalid game-day values without changing the current inventory.
 - Reject unregistered items in runtime add/remove operations.
+- Run 109 additionally verifies malformed direct runtime dictionary writes are ignored by weight/count reads and excluded from the sanitized save snapshot.
 
 ## Status
-These tests have been authored but have **not** been run in Godot 4 in the current environment. A successful GitHub commit is not evidence that the parser or runtime tests pass.
+The test is executed by the Godot 4.3 GitHub headless validation workflow. Local GUI/GPU testing is a separate acceptance task.
