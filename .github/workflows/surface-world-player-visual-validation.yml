@@ -1,0 +1,90 @@
+name: SurfaceWorld Player Visual Validation
+
+on:
+  pull_request:
+    paths:
+      - "world/SurfaceWorld.gd"
+      - "tests/production_surface_world_player_visual_test.gd"
+      - "tests/production_surface_world_test.gd"
+      - "tests/production_surface_world_carry_movement_test.gd"
+      - "tests/production_surface_world_stamina_test.gd"
+      - ".github/workflows/surface-world-player-visual-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "world/SurfaceWorld.gd"
+      - "tests/production_surface_world_player_visual_test.gd"
+      - "tests/production_surface_world_test.gd"
+      - "tests/production_surface_world_carry_movement_test.gd"
+      - "tests/production_surface_world_stamina_test.gd"
+      - ".github/workflows/surface-world-player-visual-validation.yml"
+
+jobs:
+  validate:
+    name: SurfaceWorld Player Visual Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Godot version and SurfaceWorld inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f world/SurfaceWorld.gd
+          test -f world/SurfaceWorld.tscn
+          test -f tests/production_surface_world_player_visual_test.gd
+          test -f tests/production_surface_world_test.gd
+          test -f tests/production_surface_world_carry_movement_test.gd
+          test -f tests/production_surface_world_stamina_test.gd
+          grep -Fq 'PlayerVisualRoot' world/SurfaceWorld.gd
+          grep -Fq '_update_player_visual_animation' world/SurfaceWorld.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run player visual rig and locomotion regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/production_surface_world_player_visual_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld player visual tests passed."
+      - name: Run production SurfaceWorld integration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 75s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world integration tests passed."
+      - name: Run production SurfaceWorld carry movement regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/production_surface_world_carry_movement_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world carry movement tests passed."
+      - name: Run production SurfaceWorld stamina regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/production_surface_world_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld stamina tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          git status --short
+          test -z "$(git status --porcelain)"
+      - name: Complete job
+        if: always()
+        run: echo "SurfaceWorld player visual validation complete."
