@@ -4565,3 +4565,15 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge inventory operation atomicity tests passed."
 
+      - name: Remove generated untracked Godot import metadata
+        if: always()
+        shell: bash
+        run: |
+          git clean -fd
+          git status --short
+      - name: Verify clean validation workspace
+        if: always()
+        shell: bash
+        run: test -z "$(git status --porcelain)"
+
+
