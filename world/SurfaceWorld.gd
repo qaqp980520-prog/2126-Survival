@@ -188,40 +188,62 @@ func _make_player_visual_material(color: Color, metallic: float, roughness: floa
 	material.roughness = clampf(roughness, 0.0, 1.0)
 	return material
 
-func _add_player_visual_capsule(parent: Node3D, node_name: String, radius: float, height: float, local_position: Vector3, material: Material) -> MeshInstance3D:
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var mesh := CapsuleMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh_instance.mesh = mesh
-	mesh_instance.position = local_position
-	mesh_instance.material_override = material
-	parent.add_child(mesh_instance)
-	return mesh_instance
+func _add_player_visual_capsule(parent: Node3D, node_name: String, radius: float, height: float, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := CapsuleMesh.new()
+		mesh.radius = radius
+		mesh.height = height
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "capsule")
+	visual_node.set_meta("visual_mesh_radius", radius)
+	visual_node.set_meta("visual_mesh_height", height)
+	parent.add_child(visual_node)
+	return visual_node
 
-func _add_player_visual_sphere(parent: Node3D, node_name: String, radius: float, local_position: Vector3, material: Material) -> MeshInstance3D:
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
-	mesh_instance.mesh = mesh
-	mesh_instance.position = local_position
-	mesh_instance.material_override = material
-	parent.add_child(mesh_instance)
-	return mesh_instance
+func _add_player_visual_sphere(parent: Node3D, node_name: String, radius: float, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = radius
+		mesh.height = radius * 2.0
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "sphere")
+	visual_node.set_meta("visual_mesh_radius", radius)
+	parent.add_child(visual_node)
+	return visual_node
 
-func _add_player_visual_box(parent: Node3D, node_name: String, size: Vector3, local_position: Vector3, material: Material) -> MeshInstance3D:
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mesh_instance.mesh = mesh
-	mesh_instance.position = local_position
-	mesh_instance.material_override = material
-	parent.add_child(mesh_instance)
-	return mesh_instance
+func _add_player_visual_box(parent: Node3D, node_name: String, size: Vector3, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "box")
+	visual_node.set_meta("visual_mesh_size", size)
+	parent.add_child(visual_node)
+	return visual_node
 
 func _resolve_player_visual_animation_state(horizontal_speed: float, vertical_speed: float, grounded: bool, sprinting: bool) -> String:
 	if not grounded:
