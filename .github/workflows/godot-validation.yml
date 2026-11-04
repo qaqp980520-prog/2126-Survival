@@ -4565,6 +4565,47 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge inventory operation atomicity tests passed."
 
+      - name: Verify Run 117 Thermal Containment and restore success inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Thermal_Containment_Lab/project.godot
+          test -f daily_games/KROLL_Thermal_Containment_Lab/main.tscn
+          test -f daily_games/KROLL_Thermal_Containment_Lab/main.gd
+          test -f daily_games/KROLL_Thermal_Containment_Lab/rules.gd
+          test -f daily_games/KROLL_Thermal_Containment_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Thermal_Containment_Lab/tests/game_smoke_test.gd
+          test -f tests/world_bridge_restore_success_verification_test.gd
+          test -f docs/README_run117_thermal_containment.md
+          grep -Fq 'var restore_verified: bool' systems/SurvivalWorldBridge.gd
+          grep -Fq '_expected_restore_snapshot' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Thermal Containment Lab
+        run: godot --headless --path daily_games/KROLL_Thermal_Containment_Lab --editor --quit
+      - name: Run KROLL Thermal Containment rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Thermal_Containment_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Containment rules tests passed."
+      - name: Run KROLL Thermal Containment runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Thermal_Containment_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Thermal Containment runtime smoke test passed."
+      - name: Run world bridge restore success verification regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_restore_success_verification_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge restore success verification tests passed."
+
       - name: Remove generated untracked Godot import metadata
         if: always()
         shell: bash
