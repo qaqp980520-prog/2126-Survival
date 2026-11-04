@@ -1,0 +1,96 @@
+name: Run 109 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Debris_Skimmer/**"
+      - "systems/SurvivalInventory.gd"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/inventory_weight_boundaries.gd"
+      - "tests/README_run109_inventory_snapshot_guard.md"
+      - ".github/workflows/run109-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Debris_Skimmer/**"
+      - "systems/SurvivalInventory.gd"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/inventory_weight_boundaries.gd"
+      - "tests/README_run109_inventory_snapshot_guard.md"
+      - ".github/workflows/run109-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 109 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Debris_Skimmer/project.godot
+          test -f daily_games/KROLL_Debris_Skimmer/main.tscn
+          test -f daily_games/KROLL_Debris_Skimmer/main.gd
+          test -f daily_games/KROLL_Debris_Skimmer/rules.gd
+          test -f daily_games/KROLL_Debris_Skimmer/tests/rules_test.gd
+          test -f daily_games/KROLL_Debris_Skimmer/tests/game_smoke_test.gd
+          test -f tests/inventory_weight_boundaries.gd
+          grep -Fq 'func get_item_count' systems/SurvivalInventory.gd
+          grep -Fq 'func _validated_runtime_count' systems/SurvivalInventory.gd
+          grep -Fq 'inventory.call("get_item_count", item_id)' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Debris Skimmer
+        run: godot --headless --path daily_games/KROLL_Debris_Skimmer --editor --quit
+      - name: Run KROLL Debris Skimmer rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Debris_Skimmer --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Debris Skimmer rules tests passed."
+      - name: Run KROLL Debris Skimmer runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Debris_Skimmer --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Debris Skimmer runtime smoke test passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run inventory weight and runtime snapshot regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/inventory_weight_boundaries.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory weight boundary regression tests passed."
+      - name: Run inventory save validation
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_save_validation.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory save validation smoke tests passed."
+      - name: Run inventory save adapter compatibility
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_save_adapter.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Inventory save adapter tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short

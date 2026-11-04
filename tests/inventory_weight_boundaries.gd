@@ -9,6 +9,7 @@ func _initialize() -> void:
 	_test_super_heavy_jump_boundary_and_recovery()
 	_test_invalid_item_and_amount()
 	_test_unknown_count_fallback_weight()
+	_test_runtime_dictionary_corruption_is_not_serialized()
 	print("Inventory weight boundary regression tests passed.")
 	quit(0)
 
@@ -46,8 +47,6 @@ func _test_super_heavy_jump_boundary_and_recovery() -> void:
 	assert(inventory.remove_item("rock", 1) == 1)
 	assert(not inventory.is_super_heavy())
 	assert(inventory.can_jump())
-
-	# Exercise the real world bridge drop path, not only the inventory model.
 	var bridge = BridgeScript.new()
 	assert(bridge.bind_inventory(inventory))
 	assert(bridge.drop_item("rock", 1))
@@ -66,13 +65,38 @@ func _test_invalid_item_and_amount() -> void:
 func _test_unknown_count_fallback_weight() -> void:
 	var inventory = InventoryScript.new()
 	assert(is_equal_approx(inventory.total_weight_kg(), 0.0))
-	# Defense in depth for legacy callers that may still write the public counts dictionary directly.
 	inventory.counts["legacy_unregistered_item"] = 2
-	assert(is_equal_approx(inventory.total_weight_kg(), 2.0), "Unknown directly-injected counts must not be weightless")
-	# The public API and save loader must still reject unregistered IDs.
+	assert(is_equal_approx(inventory.total_weight_kg(), 2.0))
 	assert(inventory.add_item("legacy_unregistered_item", 1) == 0)
 	var payload := inventory.to_save_dict()
 	payload["inventory"]["legacy_unregistered_item"] = 1
 	var previous_counts: Dictionary = inventory.counts.duplicate(true)
-	assert(not inventory.load_save_dict(payload), "Save loader must reject unknown item IDs")
-	assert(inventory.counts == previous_counts, "Rejected save must preserve existing inventory")
+	assert(not inventory.load_save_dict(payload))
+	assert(inventory.counts == previous_counts)
+
+func _test_runtime_dictionary_corruption_is_not_serialized() -> void:
+	var inventory = InventoryScript.new({"meat":4,"rock":2}, 3)
+	inventory.counts["meat"] = 1.5
+	inventory.counts["rock"] = -7
+	inventory.counts["berries"] = "not-a-count"
+	inventory.counts["legacy_unknown"] = 2
+	assert(inventory.get_item_count("meat") == 0)
+	assert(inventory.get_item_count("rock") == 0)
+	assert(inventory.get_item_count("berries") == 0)
+	assert(inventory.get_item_count("unknown") == 0)
+	assert(inventory.add_item("meat", 1) == 0)
+	assert(inventory.remove_item("rock", 1) == 0)
+	assert(is_equal_approx(inventory.total_weight_kg(), 2.0))
+	var save: Dictionary = inventory.to_save_dict()
+	assert(save["inventory"]["meat"] == 1.5, "save snapshot preserves malformed registered values for strict rejection")
+	assert(save["inventory"]["rock"] == -7)
+	assert(save["inventory"]["berries"] == "not-a-count")
+	assert(save["inventory"]["legacy_unknown"] == 2, "unknown keys remain visible for strict save rejection")
+	assert(save["game_day"] == 3)
+	var before_counts: Dictionary = inventory.counts.duplicate(true)
+	assert(not inventory.load_save_dict(save), "strict loader must reject the raw malformed snapshot")
+	assert(inventory.counts == before_counts, "rejected snapshot must preserve live counts")
+	var bridge = BridgeScript.new()
+	assert(bridge.bind_inventory(inventory))
+	assert(bridge.get_item_count("meat") == 0)
+	bridge.free()

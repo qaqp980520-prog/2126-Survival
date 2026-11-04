@@ -1,22 +1,12 @@
 extends Node
 class_name SurvivalWorldBridge
 
-## Thin adapter between world pickups/mining outputs and SurvivalInventory.
-## It does not replace existing M1.x scenes; integrate it deliberately with the active world controller.
-
 const InventoryModel = preload("res://systems/SurvivalInventory.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
 const REQUIRED_INVENTORY_METHODS: Array[String] = [
-	"add_item",
-	"remove_item",
-	"total_weight_kg",
-	"carry_limit_kg",
-	"movement_multiplier",
-	"can_jump",
-	"is_overweight",
-	"is_super_heavy",
-	"to_save_dict",
-	"load_save_dict"
+	"add_item", "remove_item", "total_weight_kg", "carry_limit_kg",
+	"movement_multiplier", "can_jump", "is_overweight", "is_super_heavy",
+	"to_save_dict", "load_save_dict"
 ]
 
 signal inventory_changed(summary: Dictionary)
@@ -27,8 +17,6 @@ signal item_consumed(item_id: String, amount: int)
 @export var inventory_script: Script
 var inventory: RefCounted
 
-## Bind an existing inventory instance before or after this node enters the tree.
-## This preserves one source of truth across world bridge, HUD and player controls.
 func bind_inventory(candidate: RefCounted) -> bool:
 	if candidate == null or not _has_inventory_contract(candidate):
 		return false
@@ -38,7 +26,6 @@ func bind_inventory(candidate: RefCounted) -> bool:
 	return true
 
 func _ready() -> void:
-	# A pre-bound instance is authoritative. Never replace it during _ready().
 	if inventory == null:
 		if inventory_script != null:
 			var candidate: Variant = inventory_script.new()
@@ -71,7 +58,6 @@ func drop_item(item_id: String, amount: int = 1) -> bool:
 	_emit_inventory_changed()
 	return true
 
-## Consume an inventory item and publish the same change notifications as other world actions.
 func consume_item(item_id: String, amount: int = 1) -> bool:
 	if not _is_valid_amount(item_id, amount):
 		return false
@@ -85,6 +71,8 @@ func consume_item(item_id: String, amount: int = 1) -> bool:
 func get_item_count(item_id: String) -> int:
 	if inventory == null:
 		return 0
+	if inventory.has_method("get_item_count"):
+		return int(inventory.call("get_item_count", item_id))
 	var counts: Variant = inventory.get("counts")
 	if not (counts is Dictionary):
 		return 0
@@ -105,14 +93,14 @@ func can_player_jump() -> bool:
 
 func get_summary() -> Dictionary:
 	if inventory == null:
-		return {"weight_kg": 0.0, "limit_kg": 65.0, "overweight": false, "super_heavy": false, "movement_multiplier": 1.0, "can_jump": true}
+		return {"weight_kg":0.0,"limit_kg":65.0,"overweight":false,"super_heavy":false,"movement_multiplier":1.0,"can_jump":true}
 	return {
-		"weight_kg": inventory.total_weight_kg(),
-		"limit_kg": inventory.carry_limit_kg(),
-		"overweight": inventory.is_overweight(),
-		"super_heavy": inventory.is_super_heavy(),
-		"movement_multiplier": inventory.movement_multiplier(),
-		"can_jump": inventory.can_jump()
+		"weight_kg":inventory.total_weight_kg(),
+		"limit_kg":inventory.carry_limit_kg(),
+		"overweight":inventory.is_overweight(),
+		"super_heavy":inventory.is_super_heavy(),
+		"movement_multiplier":inventory.movement_multiplier(),
+		"can_jump":inventory.can_jump()
 	}
 
 func serialize_inventory() -> Dictionary:
@@ -124,14 +112,11 @@ func restore_inventory(data: Dictionary) -> bool:
 	_emit_inventory_changed()
 	return true
 
-## Convert the current inventory into an existing M1.3 world-save envelope.
-## Unrelated fields (player position, stamina, hotbar, crops, world state) are preserved.
 func serialize_world_save(existing_world_save: Dictionary) -> Dictionary:
 	if inventory == null:
-		return {"ok": false, "error": "inventory_unavailable"}
+		return {"ok":false,"error":"inventory_unavailable"}
 	return SaveAdapter.apply_inventory_payload_to_world_save(existing_world_save, inventory.to_save_dict())
 
-## Restore only inventory/day from a legacy world-save envelope. Validation occurs before mutation.
 func restore_world_save(world_save: Dictionary) -> bool:
 	if inventory == null:
 		return false
