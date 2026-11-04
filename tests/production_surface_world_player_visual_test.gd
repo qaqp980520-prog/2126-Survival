@@ -54,6 +54,7 @@ func _run() -> void:
 	_world.call("_apply_player_visual_pose", "walk", 1.0)
 	var left_leg: Node3D = _world.get("_player_left_leg_pivot") as Node3D
 	var right_leg: Node3D = _world.get("_player_right_leg_pivot") as Node3D
+	_expect(left_leg != null and right_leg != null and is_equal_approx(left_leg.position.y, 0.86) and is_equal_approx(right_leg.position.y, 0.86), "leg pivots anchor at hip height above the ground plane")
 	var torso: Node3D = _world.get("_player_torso_pivot") as Node3D
 	var left_arm: Node3D = _world.get("_player_left_arm_pivot") as Node3D
 	var right_arm: Node3D = _world.get("_player_right_arm_pivot") as Node3D
