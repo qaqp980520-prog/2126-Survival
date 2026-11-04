@@ -44,11 +44,12 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_regi
 2. Async rollback failure: when that candidate cannot be unloaded, the Director must retain the actual chunk ID in its ownership mirror and allow a later sync to reconcile it.
 3. Async commit: Controller attaches a candidate and returns `true` without registering it; the request must fail, remove the unregistered root and preserve matching Controller/Director IDs.
 4. Stale-root restoration: after a partial stale-unload failure, a restoration callback returns `true` without registering its candidate; the helper must return failure, report incomplete rollback and avoid retaining an orphan root.
+5. Controller detachment during async commit: the request must report `dependency_unavailable`, identify the live detached Controller, roll back the newly registered candidate, and preserve the original empty window.
 
 ## Validation and limitations
 
 - Static diff review is required before merge.
-- Exact-head focused and full Godot 4.3 CI must pass, including cleanup and container shutdown.
+- Exact-head focused and full Godot 4.3 CI must pass, including cleanup and container shutdown. The full compatibility gate also runs the existing production async streaming regression suite, which covers Controller detachment during commit.
 - The local runtime has no Godot executable; no local engine pass is claimed.
 - Headless CI does not validate rendered GUI/GPU behavior or physical iPhone behavior.
 - Do not merge until exact-head focused/full gates and all cleanup steps succeed.
