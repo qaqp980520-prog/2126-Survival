@@ -82,3 +82,10 @@ func _test_full_campaign() -> void:
 	var after_finish: Dictionary = Rules.perform_action(state, "pass")
 	_expect(not bool(after_finish["accepted"]), "completed campaign cannot resolve another lot")
 	_expect(int(after_finish["state"]["credits"]) == 204, "post-completion action cannot alter credits")
+
+func _expect(condition: bool, message: String) -> void:
+	if condition:
+		print("PASS: " + message)
+	else:
+		failures.append(message)
+		push_error("FAIL: " + message)
