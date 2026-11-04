@@ -38,7 +38,7 @@ class ReentrantInventory extends RefCounted:
             nested_collect_accepted = bool(bridge.call("collect_world_item", "meat", 1))
             bind_replacement_accepted = bool(bridge.call("bind_inventory", replacement))
             bridge.set("inventory", replacement)
-            direct_rebind_blocked = bridge.get("inventory") == self
+            direct_rebind_blocked = bridge.get("inventory") == null
         counts = data.get("inventory", {}).duplicate(true)
         game_day = int(data.get("game_day", 1))
         return true

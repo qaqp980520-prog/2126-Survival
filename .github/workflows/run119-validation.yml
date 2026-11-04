@@ -1,0 +1,104 @@
+name: Run 119 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Abyssal_Sonar/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_restore_read_isolation_test.gd"
+      - "docs/README_run119_abyssal_sonar.md"
+      - "docs/README_run119_restore_read_isolation.md"
+      - ".github/workflows/run119-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Abyssal_Sonar/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_restore_read_isolation_test.gd"
+      - "docs/README_run119_abyssal_sonar.md"
+      - "docs/README_run119_restore_read_isolation.md"
+      - ".github/workflows/run119-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Run 119 Focused Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 119 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Abyssal_Sonar/project.godot
+          test -f daily_games/KROLL_Abyssal_Sonar/main.tscn
+          test -f daily_games/KROLL_Abyssal_Sonar/main.gd
+          test -f daily_games/KROLL_Abyssal_Sonar/rules.gd
+          test -f daily_games/KROLL_Abyssal_Sonar/tests/rules_test.gd
+          test -f daily_games/KROLL_Abyssal_Sonar/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Abyssal_Sonar/tests/route_simulation_test.gd
+          test -f systems/SurvivalWorldBridge.gd
+          test -f tests/world_bridge_restore_read_isolation_test.gd
+          test -f docs/README_run119_abyssal_sonar.md
+          test -f docs/README_run119_restore_read_isolation.md
+          grep -Fq 'inventory_restore_in_progress' systems/SurvivalWorldBridge.gd
+          grep -Fq 'func serialize_inventory' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Abyssal Sonar
+        run: godot --headless --path daily_games/KROLL_Abyssal_Sonar --editor --quit
+      - name: Run KROLL Abyssal Sonar rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Abyssal_Sonar --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Abyssal Sonar rules tests passed."
+      - name: Run KROLL Abyssal Sonar runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Abyssal_Sonar --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Abyssal Sonar runtime smoke test passed."
+      - name: Run KROLL Abyssal Sonar route simulation
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path daily_games/KROLL_Abyssal_Sonar --script res://tests/route_simulation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Abyssal Sonar route simulation passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run world bridge restore read isolation regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_bridge_restore_read_isolation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge restore read isolation tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          git status --short
+          test -z "$(git status --porcelain)"
+      - name: Post Checkout repository
+        if: always()
+        run: git status --short
+      - name: Stop containers
+        if: always()
+        run: true
+      - name: Complete job
+        if: always()
+        run: echo "Run 119 focused validation job complete."
