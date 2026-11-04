@@ -26,6 +26,7 @@ func _test_perfect_excavation(mission_index: int) -> void:
 	var mission: Dictionary = Rules.mission_at(mission_index)
 	var state: Dictionary = Rules.new_state(mission_index)
 	var center: Vector2i = mission["center"]
+	_expect(not str(mission.get("hint", "")).is_empty(), "each specimen includes a readable survey clue")
 	var scan := Rules.apply_tool(state, "scan", center)
 	_expect(bool(scan["accepted"]), "scanner works at the authored survey center")
 	state = scan["state"]
