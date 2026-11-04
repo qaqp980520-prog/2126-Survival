@@ -4708,6 +4708,56 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge restore read isolation tests passed."
 
+      - name: Verify Run 120 Fossil Extraction Lab and synchronous streaming registration inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/project.godot
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/main.tscn
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/main.gd
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/rules.gd
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/tests/rules_test.gd
+          test -f daily_games/KROLL_Fossil_Extraction_Lab/tests/game_smoke_test.gd
+          test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
+          test -f docs/README_run120_fossil_extraction.md
+          test -f docs/README_run120_streaming_controller_commit_guard.md
+          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
+      - name: Import and parse KROLL Fossil Extraction Lab
+        run: godot --headless --path daily_games/KROLL_Fossil_Extraction_Lab --editor --quit
+      - name: Run KROLL Fossil Extraction Lab rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Fossil_Extraction_Lab --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fossil Extraction Lab rules tests passed."
+      - name: Run KROLL Fossil Extraction Lab runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path daily_games/KROLL_Fossil_Extraction_Lab --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Fossil Extraction Lab runtime smoke test passed."
+      - name: Run Survival Test Hub integration smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/survival_test_hub_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Survival test hub smoke test passed."
+      - name: Run synchronous mineral chunk registration lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid synchronous registration lifecycle tests passed."
+
       - name: Remove generated untracked Godot import metadata
         if: always()
         shell: bash
