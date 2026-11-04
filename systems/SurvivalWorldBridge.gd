@@ -72,12 +72,12 @@ func get_item_count(item_id: String) -> int:
 	if inventory == null:
 		return 0
 	if inventory.has_method("get_item_count"):
-		return int(inventory.call("get_item_count", item_id))
+		return _validated_bridge_count(inventory.call("get_item_count", item_id))
 	var counts: Variant = inventory.get("counts")
 	if not (counts is Dictionary):
 		return 0
 	var amount: Variant = counts.get(item_id, 0)
-	return int(amount) if amount is int and int(amount) > 0 else 0
+	return _validated_bridge_count(amount)
 
 func get_weight_kg() -> float:
 	return inventory.total_weight_kg() if inventory != null else 0.0
@@ -134,6 +134,16 @@ func _has_inventory_contract(candidate: Object) -> bool:
 		if not candidate.has_method(method_name):
 			return false
 	return true
+
+func _validated_bridge_count(value: Variant) -> int:
+	if not (value is int or value is float):
+		return 0
+	var numeric: float = float(value)
+	if not is_finite(numeric) or numeric < 0.0 or numeric > float(InventoryModel.MAX_SAVED_COUNT):
+		return 0
+	if floorf(numeric) != numeric:
+		return 0
+	return int(numeric)
 
 func _is_valid_amount(item_id: String, amount: int) -> bool:
 	return inventory != null and not item_id.strip_edges().is_empty() and amount > 0
