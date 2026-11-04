@@ -1995,3 +1995,21 @@
 - Initial candidate `d4cbb771...` had a root Test Hub scene-path failure because the root scene used the standalone-relative script path. Corrected in `main_root.tscn`, added static and smoke assertions, and reran all exact-head workflows; initial failure retained as historical evidence, not counted as a pass.
 - Run 102 documentation PR [#242](https://github.com/qaqp980520-prog/2126-Survival/pull/242) merged as main SHA `8b4c86dce4cf59305e08b7f3f9dff352bd3cc987`; exact-head documentation Run [#1191](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41640361993) passed 458/458.
 - Post-merge main push CI for `8b4c86d...` has not surfaced through the connected workflow/status lookup; record as unconfirmed, not passed/failed. Main branch protection issue #236 remains open. Local Godot executable unavailable; local rendered GUI/GPU and physical iPhone QA remain untested.
+
+
+## 2026-11-04 Run 104–113 verified closeout archive
+
+The per-run closeout documents below are the authoritative GitHub-side summaries. Exact commits and workflow evidence are recorded per run; local GUI/GPU/iPhone QA remains untested unless a later record explicitly says otherwise.
+
+- [Run 104 — KROLL Stealth Grid and queued-root recovery](docs/RUN104_CLOSEOUT.md)
+- [Run 105 — KROLL Orbital Curling and crop queued-root recovery](docs/RUN105_CLOSEOUT.md)
+- [Run 106 — KROLL Prism Beam Lab and async staged-root lifecycle guard](docs/RUN106_CLOSEOUT.md)
+- [Run 107 — KROLL Waveform Calibrator and synchronous Controller lifecycle guard](docs/RUN107_CLOSEOUT.md)
+- [Run 108 — KROLL Pulse Reactor and rollback Controller lifecycle guard](docs/RUN108_CLOSEOUT.md)
+- [Run 109 — KROLL Debris Skimmer and raw inventory snapshot preservation](docs/RUN109_CLOSEOUT.md)
+- [Run 110 — KROLL Bastion Array and inventory game-day guard](docs/RUN110_CLOSEOUT.md)
+- [Run 111 — KROLL Tidal Lock Operator and custom inventory count validation](docs/RUN111_CLOSEOUT.md)
+- [Run 112 — KROLL Salvage Auction and bridge metric sanitization](docs/RUN112_CLOSEOUT.md)
+- [Run 113 — KROLL Orbital Surveyor and inventory operation-result validation](docs/RUN113_CLOSEOUT.md)
+
+Current main after Run 113 feature merge: `102446bd6145067d7de54ac54932b4129e4d476b`. The post-merge main full validation is tracked separately in Run 113 closeout; do not infer success from the pre-merge PR run.
