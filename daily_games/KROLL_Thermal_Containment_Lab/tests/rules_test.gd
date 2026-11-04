@@ -48,7 +48,7 @@ func _run() -> void:
 
 	var campaign: Dictionary = Rules.new_state()
 	for row in EXPECTED_PAR[0]:
-		campaign = Rules.advance_cycle(campaign, row)["state"]
+		campaign = Rules.advance_cycle(campaign, int(row))["state"]
 	_expect(bool(campaign["completed"]) and int(campaign["campaign_score"]) == 100, "first chamber awards 100 points once")
 	campaign = Rules.restart_level(campaign)
 	for row in EXPECTED_PAR[0]:
