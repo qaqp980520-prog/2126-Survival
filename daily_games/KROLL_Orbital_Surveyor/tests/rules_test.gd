@@ -25,10 +25,8 @@ func _test_boundaries_and_obstacles() -> void:
 	var outside: Dictionary = Rules.perform_action(state, "move_left")
 	_expect(not bool(outside["accepted"]), "rover cannot leave the west map boundary")
 	_expect(int(outside["state"]["mission_state"]["battery"]) == initial_battery, "rejected boundary move costs no battery")
-	state = Rules.perform_action(state, "move_down")["state"]
 	state = Rules.perform_action(state, "move_right")["state"]
-	state = Rules.perform_action(state, "move_up")["state"]
-	var blocked: Dictionary = Rules.perform_action(state, "move_up")
+	var blocked: Dictionary = Rules.perform_action(state, "move_down")
 	_expect(not bool(blocked["accepted"]), "rock tile blocks movement")
 	_expect(int(blocked["state"]["mission_state"]["battery"]) == int(state["mission_state"]["battery"]), "blocked move costs no battery")
 
