@@ -173,8 +173,10 @@ func _run() -> void:
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "unrelated serialized-field mutation is rejected")
 	_expect(fixture.to_save_dict() == baseline, "collateral mutation is rolled back with the target item")
 	fixture.add_mode = "no_mutation"
+	var no_op_rollback_calls: int = fixture.load_calls
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "positive result without a count delta is rejected")
 	_expect(fixture.to_save_dict() == baseline, "no-op mismatch leaves the baseline unchanged")
+	_expect(fixture.load_calls == no_op_rollback_calls + 1, "even a serialized no-op mismatch attempts snapshot rollback")
 	_expect(listener.count == 1, "verified failed operations do not emit false refreshes")
 
 	fixture.add_mode = "normal"
