@@ -21,6 +21,12 @@ The existing _restore_unloaded_chunks path already revalidated after registratio
 - Never call unload_chunk on a Controller queued for deletion.
 - Report incomplete cleanup honestly when the owner is queued/destroyed and its child roots will be released by owner teardown.
 
+## Regression coverage
+
+- Live Controller detaches during the ninth/final registration: all nine newly registered chunks are unloaded and Director ownership is cleared.
+- Controller queues itself during its only registration: no rollback method is called; the owner releases the child root on frame cleanup.
+- Controller queues itself during the ninth registration after eight prior chunks loaded: no rollback method is called on the queued owner, the Director mirror is cleared, incomplete rollback is reported, and owner teardown releases all nine child roots.
+
 ## Compatibility
 
 - Public Director method signatures are unchanged.
