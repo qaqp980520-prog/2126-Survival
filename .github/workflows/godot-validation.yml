@@ -4356,3 +4356,48 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World bridge custom inventory count validation tests passed."
+
+      - name: Verify Run 112 Salvage Auction and bridge metric inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f daily_games/KROLL_Salvage_Auction/project.godot
+          test -f daily_games/KROLL_Salvage_Auction/main.tscn
+          test -f daily_games/KROLL_Salvage_Auction/main.gd
+          test -f daily_games/KROLL_Salvage_Auction/rules.gd
+          test -f daily_games/KROLL_Salvage_Auction/tests/rules_test.gd
+          test -f daily_games/KROLL_Salvage_Auction/tests/game_smoke_test.gd
+          test -f tests/world_bridge_metric_validation_test.gd
+          test -f tests/README_run112_bridge_metric_validation.md
+          grep -Fq 'func _get_validated_metrics' systems/SurvivalWorldBridge.gd
+          grep -Fq 'func _read_movement_multiplier' systems/SurvivalWorldBridge.gd
+
+      - name: Import and parse KROLL Salvage Auction
+        run: godot --headless --path daily_games/KROLL_Salvage_Auction --editor --quit
+
+      - name: Run KROLL Salvage Auction rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Salvage_Auction --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Salvage Auction rules tests passed."
+
+      - name: Run KROLL Salvage Auction runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Salvage_Auction --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Salvage Auction runtime smoke test passed."
+
+      - name: Run world bridge metric validation
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/world_bridge_metric_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge metric validation tests passed."

@@ -1,0 +1,79 @@
+name: Run 112 focused validation
+
+on:
+  pull_request:
+    paths:
+      - "daily_games/KROLL_Salvage_Auction/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_metric_validation_test.gd"
+      - "tests/README_run112_bridge_metric_validation.md"
+      - ".github/workflows/run112-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "daily_games/KROLL_Salvage_Auction/**"
+      - "systems/SurvivalWorldBridge.gd"
+      - "tests/world_bridge_metric_validation_test.gd"
+      - "tests/README_run112_bridge_metric_validation.md"
+      - ".github/workflows/run112-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Run 112 Focused Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify Run 112 inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f daily_games/KROLL_Salvage_Auction/project.godot
+          test -f daily_games/KROLL_Salvage_Auction/main.tscn
+          test -f daily_games/KROLL_Salvage_Auction/main.gd
+          test -f daily_games/KROLL_Salvage_Auction/rules.gd
+          test -f daily_games/KROLL_Salvage_Auction/tests/rules_test.gd
+          test -f daily_games/KROLL_Salvage_Auction/tests/game_smoke_test.gd
+          test -f systems/SurvivalWorldBridge.gd
+          test -f tests/world_bridge_metric_validation_test.gd
+          grep -Fq 'func _get_validated_metrics' systems/SurvivalWorldBridge.gd
+      - name: Import and parse KROLL Salvage Auction
+        run: godot --headless --path daily_games/KROLL_Salvage_Auction --editor --quit
+      - name: Run KROLL Salvage Auction rules tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path daily_games/KROLL_Salvage_Auction --script res://tests/rules_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Salvage Auction rules tests passed."
+      - name: Run KROLL Salvage Auction runtime smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 50s godot --headless --path daily_games/KROLL_Salvage_Auction --script res://tests/game_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Salvage Auction runtime smoke test passed."
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run world bridge metric validation
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/world_bridge_metric_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World bridge metric validation tests passed."
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git status --short
