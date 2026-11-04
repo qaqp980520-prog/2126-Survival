@@ -65,12 +65,19 @@ func _test_enemy_leak_and_core_failure() -> void:
 
 func _test_wave_rewards_are_one_time() -> void:
 	var state: Dictionary = Rules.create_state()
+	assert(not Rules.finish_wave(state), "wave cannot clear before its quota is spawned")
+	state["spawned"] = Rules.wave_quota(0)
+	state["enemies"] = [{"lane": 0, "x": 1.0, "hp": 1}]
+	assert(not Rules.finish_wave(state), "wave cannot clear while enemies remain")
+	state["enemies"] = []
 	assert(Rules.finish_wave(state))
 	assert(int(state["wave_index"]) == 1)
 	assert(int(state["completed_waves"]) == 1)
 	assert(int(state["score"]) == 100)
 	assert(int(state["credits"]) == 125)
+	state["spawned"] = Rules.wave_quota(1)
 	assert(Rules.finish_wave(state))
+	state["spawned"] = Rules.wave_quota(2)
 	assert(Rules.finish_wave(state))
 	assert(bool(state["won"]))
 	assert(int(state["completed_waves"]) == 3)
