@@ -17,6 +17,7 @@ func _run() -> void:
 	await _test_async_true_without_registration_is_rejected()
 	await _test_stale_restore_true_without_registration_is_rejected()
 	await _test_async_controller_detach_during_commit_reports_dependency_unavailable()
+	await _test_async_factory_unavailable_preserves_diagnostic_reason()
 	if _failures.is_empty():
 		print("Mineral grid async registration result contract tests passed.")
 		quit(0)
@@ -155,6 +156,25 @@ func _test_async_controller_detach_during_commit_reports_dependency_unavailable(
 	_expect(controller.get_child_count() == 0, "detached-controller rollback releases its candidate root")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "detached-controller candidate weak reference is released")
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+
+
+func _test_async_factory_unavailable_preserves_diagnostic_reason() -> void:
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 5, 1))
+	director.set("chunk_factory", Callable())
+	var report: Dictionary = await _wait_for_request(director, request_id)
+	var diagnostics: Dictionary = report.get("request_diagnostics", {})
+	_expect(request_id > 0, "factory-loss async request is accepted before the dependency changes")
+	_expect(str(report.get("phase", "")) == "dependency_unavailable", "factory loss during async staging reports dependency unavailability")
+	_expect(not bool(report.get("success", true)), "factory loss cannot commit an async chunk window")
+	_expect(str(diagnostics.get("cancellation_reason", "")) == "factory_unavailable", "factory-loss diagnostic reason is preserved instead of being mislabeled as Controller loss")
+	_expect(controller.get_loaded_chunk_ids().is_empty(), "factory loss leaves the Controller window unchanged")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "factory loss leaves the Director ownership map unchanged")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
