@@ -5,7 +5,7 @@
 - Path: daily_games/KROLL_Moonbase_Courier/
 - Main scene: main.tscn
 - Scripts: main.gd, rules.gd
-- Tests: tests/rules_test.gd, tests/game_smoke_test.gd
+- Tests: tests/rules_test.gd, tests/game_smoke_test.gd, tests/game_route_simulation_test.gd
 - Engine: Godot 4.3+, Compatibility renderer.
 - Dependencies: none; no external assets, plugins, audio or network.
 
@@ -26,6 +26,7 @@ Open daily_games/KROLL_Moonbase_Courier/project.godot in Godot 4.3 or newer and 
 
 - Rules tests cover all route geometry, hazard separation, one-way landing and campaign initialization.
 - Runtime smoke completes all three deliveries, checks one-time rewards, touch hit-testing and movement/jump.
+- Route simulation pilots all three routes through actual movement and vent hazards, rather than teleporting to the parcel and exit.
 - Exact-head CI is required before merge.
 
 ## Limitations

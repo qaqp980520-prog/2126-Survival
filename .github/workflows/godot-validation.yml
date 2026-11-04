@@ -4616,6 +4616,7 @@ jobs:
           test -f daily_games/KROLL_Moonbase_Courier/rules.gd
           test -f daily_games/KROLL_Moonbase_Courier/tests/rules_test.gd
           test -f daily_games/KROLL_Moonbase_Courier/tests/game_smoke_test.gd
+          test -f daily_games/KROLL_Moonbase_Courier/tests/game_route_simulation_test.gd
           test -f tests/world_bridge_restore_reentrancy_test.gd
           test -f docs/README_run118_moonbase_courier.md
           test -f docs/README_run118_restore_reentrancy_guard.md
@@ -4639,6 +4640,14 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "KROLL Moonbase Courier runtime smoke test passed."
+      - name: Run KROLL Moonbase Courier route simulation
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path daily_games/KROLL_Moonbase_Courier --script res://tests/game_route_simulation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "KROLL Moonbase Courier route simulation passed."
       - name: Run world bridge restore reentrancy regression
         shell: bash
         run: |
