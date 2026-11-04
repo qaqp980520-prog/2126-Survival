@@ -165,7 +165,7 @@ func _build_player_visual_rig() -> void:
 
 	_player_left_leg_pivot = Node3D.new()
 	_player_left_leg_pivot.name = "LeftLegPivot"
-	_player_left_leg_pivot.position = Vector3(-0.15, -0.03, 0.0)
+	_player_left_leg_pivot.position = Vector3(-0.15, 0.86, 0.0)
 	_player_visual_root.add_child(_player_left_leg_pivot)
 	_add_player_visual_capsule(_player_left_leg_pivot, "LeftLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
 	_add_player_visual_box(_player_left_leg_pivot, "LeftKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
@@ -174,7 +174,7 @@ func _build_player_visual_rig() -> void:
 
 	_player_right_leg_pivot = Node3D.new()
 	_player_right_leg_pivot.name = "RightLegPivot"
-	_player_right_leg_pivot.position = Vector3(0.15, -0.03, 0.0)
+	_player_right_leg_pivot.position = Vector3(0.15, 0.86, 0.0)
 	_player_visual_root.add_child(_player_right_leg_pivot)
 	_add_player_visual_capsule(_player_right_leg_pivot, "RightLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
 	_add_player_visual_box(_player_right_leg_pivot, "RightKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
