@@ -81,10 +81,10 @@ func _build_ui() -> void:
 	var margin := MarginContainer.new()
 	margin.name = "SafeMargin"
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	add_child(margin)
 
 	var scroll := ScrollContainer.new()
@@ -99,16 +99,16 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 8)
 	scroll.add_child(column)
 
-	var title := _make_label("GameTitle", 29, Color(0.48, 0.88, 1.0))
+	var title := _make_label("GameTitle", 23, Color(0.48, 0.88, 1.0))
 	title.text = "KROLL  /  DRIFT RESCUE"
 	column.add_child(title)
-	var subtitle := _make_label("Subtitle", 14, Color(0.64, 0.77, 0.9))
+	var subtitle := _make_label("Subtitle", 11, Color(0.64, 0.77, 0.9))
 	subtitle.text = "ORBITAL RECOVERY  •  MOMENTUM / BRAKING / DOCKING"
 	column.add_child(subtitle)
 
-	_mission_label = _make_label("MissionStatus", 20, Color(1.0, 0.82, 0.48))
+	_mission_label = _make_label("MissionStatus", 16, Color(1.0, 0.82, 0.48))
 	column.add_child(_mission_label)
-	_stats_label = _make_label("FlightMetrics", 16, Color(0.72, 0.9, 0.85))
+	_stats_label = _make_label("FlightMetrics", 12, Color(0.72, 0.9, 0.85))
 	column.add_child(_stats_label)
 
 	var grid := GridContainer.new()
@@ -117,20 +117,22 @@ func _build_ui() -> void:
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(grid)
 
 	for index in range(Rules.BOARD_SIZE * Rules.BOARD_SIZE):
 		var panel := PanelContainer.new()
 		panel.name = "Cell_%02d" % index
-		panel.custom_minimum_size = Vector2(48, 40)
+		panel.custom_minimum_size = Vector2(34, 34)
 		var label := _make_label("CellLabel", 18, Color(0.8, 0.9, 1.0))
 		panel.add_child(label)
 		grid.add_child(panel)
 		_cell_panels.append(panel)
 		_cell_labels.append(label)
 
-	var thrust_controls := HBoxContainer.new()
+	var thrust_controls := GridContainer.new()
 	thrust_controls.name = "ThrustControls"
+	thrust_controls.columns = 3
 	thrust_controls.add_theme_constant_override("separation", 6)
 	column.add_child(thrust_controls)
 	_add_action_button(thrust_controls, "ThrustUpButton", "UP  [W]", "thrust_up")
@@ -139,12 +141,13 @@ func _build_ui() -> void:
 	_add_action_button(thrust_controls, "ThrustRightButton", "RIGHT  [D]", "thrust_right")
 	_add_action_button(thrust_controls, "CoastButton", "COAST  [SPACE]", "coast")
 
-	_message_label = _make_label("FlightMessage", 15, Color(1.0, 0.86, 0.58))
+	_message_label = _make_label("FlightMessage", 13, Color(1.0, 0.86, 0.58))
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_message_label)
 
-	var flight_controls := HBoxContainer.new()
+	var flight_controls := GridContainer.new()
 	flight_controls.name = "FlightControls"
+	flight_controls.columns = 2
 	flight_controls.add_theme_constant_override("separation", 6)
 	column.add_child(flight_controls)
 	_add_control_button(flight_controls, "UndoButton", "UNDO  [U]", Callable(self, "perform_action").bind("undo"))
@@ -152,9 +155,9 @@ func _build_ui() -> void:
 	_add_control_button(flight_controls, "NextButton", "NEXT  [N]", Callable(self, "next_mission"))
 	_add_control_button(flight_controls, "CampaignButton", "NEW CAMPAIGN  [C]", Callable(self, "restart_campaign"))
 
-	_score_label = _make_label("CampaignScore", 19, Color(0.48, 0.95, 0.75))
+	_score_label = _make_label("CampaignScore", 16, Color(0.48, 0.95, 0.75))
 	column.add_child(_score_label)
-	var help := _make_label("ControlsHelp", 13, Color(0.58, 0.69, 0.8))
+	var help := _make_label("ControlsHelp", 11, Color(0.58, 0.69, 0.8))
 	help.text = "THRUST changes velocity; COAST preserves it. Counter-thrust to stop exactly on the green target. Each thrust costs one fuel."
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(help)
@@ -171,7 +174,7 @@ func _add_action_button(parent: Node, button_name: String, caption: String, acti
 	var button := Button.new()
 	button.name = button_name
 	button.text = caption
-	button.custom_minimum_size = Vector2(112, 44)
+	button.custom_minimum_size = Vector2(90, 42)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 14)
 	button.pressed.connect(perform_action.bind(action))
@@ -182,7 +185,7 @@ func _add_control_button(parent: Node, button_name: String, caption: String, act
 	var button := Button.new()
 	button.name = button_name
 	button.text = caption
-	button.custom_minimum_size = Vector2(120, 42)
+	button.custom_minimum_size = Vector2(140, 42)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 14)
 	button.pressed.connect(action)
