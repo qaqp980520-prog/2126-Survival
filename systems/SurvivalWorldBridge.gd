@@ -38,7 +38,7 @@ func _ready() -> void:
 func collect_world_item(item_id: String, amount: int = 1) -> bool:
 	if not _is_valid_amount(item_id, amount):
 		return false
-	var changed: int = inventory.add_item(item_id, amount)
+	var changed: int = _apply_inventory_operation(StringName("add_item"), item_id, amount, true)
 	if changed <= 0:
 		return false
 	item_collected.emit(item_id, changed)
@@ -51,7 +51,7 @@ func collect_mined_ore(ore_id: String, amount: int) -> bool:
 func drop_item(item_id: String, amount: int = 1) -> bool:
 	if not _is_valid_amount(item_id, amount):
 		return false
-	var removed: int = inventory.remove_item(item_id, amount)
+	var removed: int = _apply_inventory_operation(StringName("remove_item"), item_id, amount, false)
 	if removed <= 0:
 		return false
 	item_dropped.emit(item_id, removed)
@@ -61,7 +61,7 @@ func drop_item(item_id: String, amount: int = 1) -> bool:
 func consume_item(item_id: String, amount: int = 1) -> bool:
 	if not _is_valid_amount(item_id, amount):
 		return false
-	var removed: int = inventory.remove_item(item_id, amount)
+	var removed: int = _apply_inventory_operation(StringName("remove_item"), item_id, amount, false)
 	if removed <= 0:
 		return false
 	item_consumed.emit(item_id, removed)
@@ -147,6 +147,55 @@ func _read_movement_multiplier(fallback: float) -> float:
 		return fallback
 	return numeric
 
+func _apply_inventory_operation(method_name: StringName, item_id: String, requested: int, is_add: bool) -> int:
+	if inventory == null or not inventory.has_method(method_name):
+		return 0
+	var before_count: int = _read_count_snapshot(item_id)
+	var raw_result: Variant = inventory.call(method_name, item_id, requested)
+	var reported_count: int = _validated_operation_count(raw_result, requested)
+	if before_count >= 0:
+		var after_count: int = _read_count_snapshot(item_id)
+		if after_count < 0:
+			_emit_inventory_changed()
+			return 0
+		var actual_delta: int = after_count - before_count if is_add else before_count - after_count
+		if actual_delta != reported_count:
+			if actual_delta != 0:
+				_emit_inventory_changed()
+			return 0
+	return reported_count
+
+func _read_count_snapshot(item_id: String) -> int:
+	if inventory == null:
+		return -1
+	for property_info in inventory.get_property_list():
+		if str(property_info.get("name", "")) != "counts":
+			continue
+		var raw_counts: Variant = inventory.get("counts")
+		if not (raw_counts is Dictionary):
+			return -1
+		var raw_count: Variant = raw_counts.get(item_id, 0)
+		if not _is_valid_bridge_count(raw_count):
+			return -1
+		return int(raw_count)
+	return -1
+
+func _validated_operation_count(value: Variant, requested: int) -> int:
+	if value is bool or not (value is int or value is float):
+		return 0
+	var numeric: float = float(value)
+	if not is_finite(numeric) or numeric < 1.0 or numeric > float(requested):
+		return 0
+	if floorf(numeric) != numeric:
+		return 0
+	return int(numeric)
+
+func _is_valid_bridge_count(value: Variant) -> bool:
+	if value is bool or not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and numeric >= 0.0 and numeric <= float(InventoryModel.MAX_SAVED_COUNT) and floorf(numeric) == numeric
+
 func serialize_inventory() -> Dictionary:
 	return inventory.to_save_dict() if inventory != null else {}
 
@@ -180,14 +229,7 @@ func _has_inventory_contract(candidate: Object) -> bool:
 	return true
 
 func _validated_bridge_count(value: Variant) -> int:
-	if not (value is int or value is float):
-		return 0
-	var numeric: float = float(value)
-	if not is_finite(numeric) or numeric < 0.0 or numeric > float(InventoryModel.MAX_SAVED_COUNT):
-		return 0
-	if floorf(numeric) != numeric:
-		return 0
-	return int(numeric)
+	return int(value) if _is_valid_bridge_count(value) else 0
 
 func _is_valid_amount(item_id: String, amount: int) -> bool:
 	return inventory != null and not item_id.strip_edges().is_empty() and amount > 0
