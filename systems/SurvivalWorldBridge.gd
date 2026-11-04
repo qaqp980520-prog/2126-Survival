@@ -19,6 +19,8 @@ var _inventory_restore_in_progress: bool = false
 var _inventory: RefCounted
 var inventory: RefCounted:
 	get:
+		if _inventory_restore_in_progress:
+			return null
 		return _inventory
 	set(value):
 		if _inventory_restore_in_progress:
@@ -79,7 +81,7 @@ func consume_item(item_id: String, amount: int = 1) -> bool:
 	return true
 
 func get_item_count(item_id: String) -> int:
-	if inventory == null:
+	if _inventory_restore_in_progress or inventory == null:
 		return 0
 	if inventory.has_method("get_item_count"):
 		return _validated_bridge_count(inventory.call("get_item_count", item_id))
@@ -105,7 +107,7 @@ func get_summary() -> Dictionary:
 	return _get_validated_metrics()
 
 func _get_validated_metrics() -> Dictionary:
-	if inventory == null:
+	if _inventory_restore_in_progress or inventory == null:
 		return _default_metrics()
 	var weight: float = _read_non_negative_metric("total_weight_kg", 0.0, false)
 	var limit: float = _read_non_negative_metric("carry_limit_kg", InventoryModel.BASE_LIMIT_KG, true)
@@ -241,6 +243,8 @@ func _is_valid_bridge_count(value: Variant) -> bool:
 	return is_finite(numeric) and numeric >= 0.0 and numeric <= float(InventoryModel.MAX_SAVED_COUNT) and floorf(numeric) == numeric
 
 func serialize_inventory() -> Dictionary:
+	if _inventory_restore_in_progress:
+		return {"ok":false,"error":"inventory_restore_in_progress"}
 	if inventory == null:
 		return {}
 	var snapshot: Variant = inventory.call("to_save_dict")
@@ -255,6 +259,8 @@ func restore_inventory(data: Dictionary) -> bool:
 	return _restore_inventory_atomically(data)
 
 func serialize_world_save(existing_world_save: Dictionary) -> Dictionary:
+	if _inventory_restore_in_progress:
+		return {"ok":false,"error":"inventory_restore_in_progress"}
 	if inventory == null:
 		return {"ok":false,"error":"inventory_unavailable"}
 	var snapshot: Variant = inventory.call("to_save_dict")
@@ -326,7 +332,7 @@ func _expected_restore_snapshot(payload: Dictionary) -> Dictionary:
 	var expected_counts: Dictionary = expected["inventory"].duplicate(true)
 	# The built-in model always serializes every known item key, including zeros.
 	# Preserve that stable shape when callers restore a compact partial payload.
-	if inventory.get_script() == InventoryModel:
+	if _inventory.get_script() == InventoryModel:
 		for item_id in InventoryModel.ITEM_WEIGHTS.keys():
 			if not expected_counts.has(item_id):
 				expected_counts[item_id] = 0
