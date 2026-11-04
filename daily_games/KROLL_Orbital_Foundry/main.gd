@@ -177,7 +177,7 @@ func _add_control_button(parent: Node, button_name: String, caption: String, act
 	parent.add_child(button)
 
 func _recipe_tooltip(recipe: Dictionary) -> String:
-	var parts: Array[String] = []
+	var parts := PackedStringArray()
 	var inputs: Dictionary = recipe.get("inputs", {})
 	for item_id in inputs.keys():
 		parts.append("%s × %d" % [str(item_id), int(inputs[item_id])])
@@ -217,7 +217,7 @@ func _update_ui() -> void:
 	var level_index: int = int(_state.get("level_index", 0))
 	var level: Dictionary = Rules.level_at(level_index)
 	var inventory: Dictionary = _state.get("inventory", {})
-	var stock_parts: Array[String] = []
+	var stock_parts := PackedStringArray()
 	var keys: Array = inventory.keys()
 	keys.sort()
 	for item_id in keys:
@@ -227,7 +227,7 @@ func _update_ui() -> void:
 	if stock_parts.is_empty():
 		stock_parts.append("EMPTY")
 	var goal: Dictionary = level.get("goal", {})
-	var goal_parts: Array[String] = []
+	var goal_parts := PackedStringArray()
 	for item_id in goal.keys():
 		goal_parts.append("%s × %d" % [str(item_id).to_upper(), int(goal[item_id])])
 	var status: String = str(_state.get("status", "active"))
