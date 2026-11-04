@@ -95,18 +95,12 @@ func set_game_day(day: int) -> void:
 	game_day = clampi(day, 1, MAX_SAVED_GAME_DAY)
 
 func to_save_dict() -> Dictionary:
-	var safe_inventory: Dictionary = {}
-	for item_id in ITEM_WEIGHTS.keys():
-		safe_inventory[item_id] = get_item_count(item_id)
-	# Preserve unknown keys as invalid evidence. The save loader/adapter must reject
-	# them rather than silently erase legacy or externally injected data.
-	for item_id in counts.keys():
-		if not (item_id is String) or not ITEM_WEIGHTS.has(item_id):
-			safe_inventory[item_id] = counts[item_id]
+	# Preserve the raw snapshot. Strict load/save validation must reject malformed
+	# values and unknown IDs atomically instead of silently dropping or rewriting data.
 	return {
 		"schema_version": SAVE_SCHEMA_VERSION,
-		"game_day": clampi(game_day, 1, MAX_SAVED_GAME_DAY),
-		"inventory": safe_inventory
+		"game_day": game_day,
+		"inventory": counts.duplicate(true)
 	}
 
 func load_save_dict(data: Dictionary) -> bool:
