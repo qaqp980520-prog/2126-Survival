@@ -37,7 +37,7 @@ jobs:
           test -f tests/mineral_grid_streaming_duplicate_staged_root_test.gd
           grep -q 'REACTOR_DECK_COMMAND_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Reactor Deck Command")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 50' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 51' tests/survival_test_hub_smoke_test.gd
           grep -q 'staged_candidate == candidate' systems/MineralGridStreamingDirector.gd
           grep -q 'duplicate_staged_root_rejected' systems/MineralGridStreamingDirector.gd
           grep -q '^func _expect(condition: bool, description: String)' tests/mineral_grid_streaming_duplicate_staged_root_test.gd
