@@ -19,6 +19,8 @@ var _inventory_restore_in_progress: bool = false
 var _inventory: RefCounted
 var inventory: RefCounted:
 	get:
+		if _inventory_restore_in_progress:
+			return null
 		return _inventory
 	set(value):
 		if _inventory_restore_in_progress:
@@ -330,7 +332,7 @@ func _expected_restore_snapshot(payload: Dictionary) -> Dictionary:
 	var expected_counts: Dictionary = expected["inventory"].duplicate(true)
 	# The built-in model always serializes every known item key, including zeros.
 	# Preserve that stable shape when callers restore a compact partial payload.
-	if inventory.get_script() == InventoryModel:
+	if _inventory.get_script() == InventoryModel:
 		for item_id in InventoryModel.ITEM_WEIGHTS.keys():
 			if not expected_counts.has(item_id):
 				expected_counts[item_id] = 0
