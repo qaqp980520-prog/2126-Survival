@@ -133,7 +133,8 @@ func _build_ui() -> void:
 	var thrust_controls := GridContainer.new()
 	thrust_controls.name = "ThrustControls"
 	thrust_controls.columns = 3
-	thrust_controls.add_theme_constant_override("separation", 6)
+	thrust_controls.add_theme_constant_override("h_separation", 6)
+	thrust_controls.add_theme_constant_override("v_separation", 6)
 	column.add_child(thrust_controls)
 	_add_action_button(thrust_controls, "ThrustUpButton", "UP  [W]", "thrust_up")
 	_add_action_button(thrust_controls, "ThrustLeftButton", "LEFT  [A]", "thrust_left")
@@ -148,7 +149,8 @@ func _build_ui() -> void:
 	var flight_controls := GridContainer.new()
 	flight_controls.name = "FlightControls"
 	flight_controls.columns = 2
-	flight_controls.add_theme_constant_override("separation", 6)
+	flight_controls.add_theme_constant_override("h_separation", 6)
+	flight_controls.add_theme_constant_override("v_separation", 6)
 	column.add_child(flight_controls)
 	_add_control_button(flight_controls, "UndoButton", "UNDO  [U]", Callable(self, "perform_action").bind("undo"))
 	_add_control_button(flight_controls, "RestartButton", "RESTART  [R]", Callable(self, "restart_mission"))
