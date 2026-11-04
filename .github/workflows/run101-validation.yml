@@ -37,7 +37,7 @@ jobs:
           test -f tests/mineral_grid_streaming_binding_guard_test.gd
           grep -q 'ENDGAME_TACTICS_SCENE' prototypes/SurvivalTestHub.gd
           grep -q 'labels.has("KROLL Endgame Tactics")' tests/survival_test_hub_smoke_test.gd
-          grep -q 'buttons.size() == 50' tests/survival_test_hub_smoke_test.gd
+          grep -q 'buttons.size() == 51' tests/survival_test_hub_smoke_test.gd
           grep -q 'if _active_async_request_id >= 0' systems/MineralGridStreamingDirector.gd
           grep -q 'bind_controller(value)' systems/MineralGridStreamingDirector.gd
           grep -q 'bind_chunk_factory(value)' systems/MineralGridStreamingDirector.gd
