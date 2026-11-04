@@ -1,6 +1,5 @@
 extends SceneTree
 
-const MainScript = preload("res://main.gd")
 const EXPECTED_PAR: Array = [[1, 1, 2, 2], [0, 1, 0, 1], [1, 0, 0, 1]]
 
 var failures: Array[String] = []
