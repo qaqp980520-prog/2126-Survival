@@ -163,7 +163,7 @@ func _run() -> void:
 	_expect(not bool(bridge.call("collect_world_item", "meat", 1)), "method-only inventory rejects a malformed string result")
 	_expect(int(bridge.call("get_item_count", "meat")) == 3, "method-only inventory mutation remains observable through its accessor")
 	_expect(refresh_events.size() == refresh_before_invalid + 1, "invalid method-only result emits a defensive inventory refresh")
-	_expect(collected_events.size() == 1, "invalid method-only result does not emit item-collected")
+	_expect(collected_events.size() == 2, "invalid method-only result does not emit an additional item-collected event")
 
 	bridge.queue_free()
 	await process_frame

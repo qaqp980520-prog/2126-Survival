@@ -164,7 +164,7 @@ func _apply_inventory_operation(method_name: StringName, item_id: String, reques
 		return 0
 	var actual_delta: int = after_count - before_count if is_add else before_count - after_count
 	if actual_delta != reported_count:
-		if actual_delta != 0 or reported_count > 0:
+		if actual_delta != 0:
 			_emit_inventory_changed()
 		return 0
 	return reported_count
