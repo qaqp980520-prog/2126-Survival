@@ -72,6 +72,13 @@ func _run() -> void:
         replay = Rules.interact(replay)["state"]
         _expect(int(replay["campaign_score"]) == first_score, "mission %d cannot award the same beacon twice" % (index + 1))
 
+        var advance_result: Dictionary = Rules.next_mission(state)
+        _expect(bool(advance_result["accepted"]), "mission %d can advance after extraction" % (index + 1))
+        if index < Rules.mission_count() - 1:
+            _expect(int(advance_result["state"]["mission_index"]) == index + 1, "mission %d loads the next trench" % (index + 1))
+        else:
+            _expect(str(advance_result["state"]["status"]) == "victory", "final mission completes the campaign")
+
     if failures.is_empty():
         print("KROLL Abyssal Sonar rules tests passed.")
         quit(0)
