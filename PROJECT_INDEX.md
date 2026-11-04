@@ -2027,3 +2027,14 @@ Current main after Run 113 feature merge: `102446bd6145067d7de54ac54932b4129e4d4
 - Run 118 post-merge main-push CI has not been surfaced by the connected workflow/status lookup; do not infer a pass from the PR gate.
 
 Current main after Run 118 feature merge: `b79ec83472d709c5f4e3ac804e299e29f839da66`.
+
+
+## 2026-11-04 Run 119 — KROLL Abyssal Sonar and restore read isolation
+
+- [Run 119 closeout](docs/RUN119_CLOSEOUT.md): feature PR #269 merged as `deebd5effe5cc53e28287cced2b939edcbea160f`; validated feature head `62b2b211510153f0003462f841741a2c7819048a`.
+- New standalone Godot 4.3 game: `daily_games/KROLL_Abyssal_Sonar/`, three 9×9 sonar-triangulation missions, two-ping unique beacon identification, finite battery, pickup/extraction and pointer/touch controls.
+- Existing-system change: `SurvivalWorldBridge` blocks Bridge-mediated serialization/count/metric reads during an active custom inventory restore and hides the public inventory getter until the transaction lock is released. World-save schema 1 and public signatures remain unchanged.
+- Exact-head focused Run 119 #41817145460 passed 17/17 with 248 PASS assertions. Historical focused Runs 103–118 passed 16/16 workflows; aggregate focused evidence 258/258.
+- Exact-head full Godot 4.3 gate #41817145400 passed 549/549 step records, zero failures/skips, including Run 119 gates and all cleanup/shutdown/complete-job steps.
+- Main-push validation for merge SHA `deebd5e...` was triggered: full #41818569223 and fifteen focused push workflows were still in progress at the time of this index update. Do not claim post-merge success until they complete.
+- Issue #266 remains open pending post-merge verification; issue #236 remains open because main is not protected. Local GUI/GPU/iPhone QA remains untested.
