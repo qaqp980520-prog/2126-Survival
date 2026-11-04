@@ -11,7 +11,7 @@
 
 ## Gameplay
 
-Three 8×8 excavation sites: Triceratops Horn, Ammonite Coil and Raptor Claw. The scanner reports fossil count in a selected 3×3 sector; Air Scribe clears one sediment layer over a 3×3 sector; Brush safely clears one cell; Micro Chisel clears two layers but damages a fossil on contact. Each site has a 16-action budget and specimen-integrity meter. Rewards are one-time per site.
+Three 8×8 excavation sites labeled A1–H8: Triceratops Horn, Ammonite Coil and Raptor Claw. Each site provides a coordinate survey clue so scanner placement is a deliberate decision rather than blind guessing. The scanner reports fossil count in a selected 3×3 sector; Air Scribe clears one sediment layer over a 3×3 sector; Brush safely clears one cell; Micro Chisel clears two layers but damages a fossil on contact. Each site has a 16-action budget and specimen-integrity meter. Rewards are one-time per site.
 
 ## Verification
 
