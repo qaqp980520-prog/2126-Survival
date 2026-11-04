@@ -1,6 +1,7 @@
 extends Control
 
 const Rules = preload("res://rules.gd")
+const COLUMN_LABELS: Array[String] = ["A", "B", "C", "D", "E", "F", "G", "H"]
 
 var _state: Dictionary = {}
 var _selected_tool: String = "brush"
@@ -116,12 +117,29 @@ func _build_ui() -> void:
 
 	var grid := GridContainer.new()
 	grid.name = "ExcavationGrid"
-	grid.columns = Rules.GRID_SIZE
+	grid.columns = Rules.GRID_SIZE + 1
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
 	grid_panel.add_child(grid)
 
+	var corner_label := Label.new()
+	corner_label.custom_minimum_size = Vector2(20.0, 20.0)
+	grid.add_child(corner_label)
+	for column_index in range(Rules.GRID_SIZE):
+		var column_label := Label.new()
+		column_label.text = COLUMN_LABELS[column_index]
+		column_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		column_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		column_label.custom_minimum_size = Vector2(54.0, 20.0)
+		grid.add_child(column_label)
+
 	for y in range(Rules.GRID_SIZE):
+		var row_label := Label.new()
+		row_label.text = str(y + 1)
+		row_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row_label.custom_minimum_size = Vector2(20.0, 44.0)
+		grid.add_child(row_label)
 		for x in range(Rules.GRID_SIZE):
 			var cell := Vector2i(x, y)
 			var button := Button.new()
@@ -212,8 +230,7 @@ func _refresh() -> void:
 		else:
 			button.text = "CLEAR"
 			button.add_theme_color_override("font_color", Color(0.45, 0.85, 0.68))
-		var column_labels: Array[String] = ["A", "B", "C", "D", "E", "F", "G", "H"]
-		button.tooltip_text = "Cell %s%d — sediment depth %d" % [column_labels[cell.x], cell.y + 1, depth]
+		button.tooltip_text = "Cell %s%d — sediment depth %d" % [COLUMN_LABELS[cell.x], cell.y + 1, depth]
 		button.disabled = str(_state["status"]) != "active" or (depth <= 0 and _selected_tool != "scan")
 	_next_button.disabled = str(_state["status"]) != "complete"
 
