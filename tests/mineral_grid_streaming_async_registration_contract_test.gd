@@ -16,6 +16,7 @@ func _run() -> void:
 	await _test_async_failed_rollback_keeps_ownership_mirrored()
 	await _test_async_true_without_registration_is_rejected()
 	await _test_stale_restore_true_without_registration_is_rejected()
+	await _test_async_controller_detach_during_commit_reports_dependency_unavailable()
 	if _failures.is_empty():
 		print("Mineral grid async registration result contract tests passed.")
 		quit(0)
@@ -129,6 +130,31 @@ func _test_stale_restore_true_without_registration_is_rejected() -> void:
 	_expect(controller.get_child_count() == 8, "unregistered restoration candidate is removed rather than retained as an orphan child")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "new and unregistered restoration candidates are released")
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+
+
+func _test_async_controller_detach_during_commit_reports_dependency_unavailable() -> void:
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	controller.detach_on_load_call = 1
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 4, 1))
+	var report: Dictionary = await _wait_for_request(director, request_id)
+	_expect(request_id > 0, "controller-detach async request is accepted")
+	_expect(str(report.get("phase", "")) == "dependency_unavailable", "controller detachment during commit uses the dependency-unavailable phase")
+	_expect(not bool(report.get("success", true)), "detached controller cannot commit a new chunk window")
+	_expect(bool(report.get("rollback_complete", false)), "detached live controller rolls back the newly registered chunk")
+	_expect(bool(report.get("details", {}).get("controller_detached", false)), "report identifies a detached but live controller")
+	_expect(not bool(report.get("details", {}).get("controller_destroyed", true)), "detached controller is distinguished from destroyed controller")
+	_expect(controller.get_parent() == null, "fault-injected Controller remains detached after rollback")
+	_expect(controller.get_loaded_chunk_ids().is_empty(), "detached Controller has no newly committed chunk after rollback")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "Director ownership is cleared after detached-controller rollback")
+	await process_frame
+	_expect(controller.get_child_count() == 0, "detached-controller rollback releases its candidate root")
+	for reference in _factory_roots:
+		_expect(reference.get_ref() == null, "detached-controller candidate weak reference is released")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
