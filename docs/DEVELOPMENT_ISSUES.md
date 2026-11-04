@@ -1574,7 +1574,20 @@ The older Run 97 note above that lists “implement actual four-way shared corne
 - [x] Recreated the Run 114–118 closeout archive from the post-Run118 main; stale documentation branch history was not merged wholesale.
 - [ ] Verify post-merge main-push full validation for Run 118 exact merge SHA `b79ec83472d709c5f4e3ac804e299e29f839da66`; current combined-status and connected commit-workflow lookup surfaced no result, so status is unconfirmed.
 - [ ] Apply and read back main branch protection / required `Godot Full Compatibility Gate` enforcement under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236).
-- [ ] Address [issue #266](https://github.com/qaqp980520-prog/2126-Survival/issues/266): block or explicitly define serialization/read behavior during active inventory restore transactions.
+- [ ] Confirm post-merge main-push validation for Run 119, then close [issue #266](https://github.com/qaqp980520-prog/2126-Survival/issues/266); the read-isolation implementation is merged as `deebd5effe5cc53e28287cced2b939edcbea160f` and exact-head full/focused validation passed.
 - [ ] Perform local rendered GUI/GPU and physical iPhone QA when a suitable runtime/device is available.
 
 See [Run 114–118 closeout index](RUN114_CLOSEOUT.md) through [Run 118 closeout](RUN118_CLOSEOUT.md). Historical feature and test records remain preserved; do not count superseded candidate failures as final passes.
+
+
+## 2026-11-04 Run 119 — Abyssal Sonar and restore read isolation
+
+- [x] Feature PR [#269](https://github.com/qaqp980520-prog/2126-Survival/pull/269) merged as `deebd5effe5cc53e28287cced2b939edcbea160f`; exact feature head `62b2b211510153f0003462f841741a2c7819048a`.
+- [x] Exact-head full Godot 4.3 gate [#41817145400](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41817145400) passed 549/549 step records, zero failures/skips; Run 119 gates #539–544 and all cleanup/shutdown/complete-job steps succeeded.
+- [x] Focused Run 119 #41817145460 passed 17/17 with 248 PASS assertions; sixteen historical focused workflows for Runs 103–118 passed on the same head (258/258 aggregate step records).
+- [ ] Verify post-merge main-push full gate [#41818569223](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/41818569223) and fifteen focused push workflows for merge SHA `deebd5e...`; all were in progress at the documentation checkpoint.
+- [ ] Close issue [#266](https://github.com/qaqp980520-prog/2126-Survival/issues/266) after post-merge main validation is confirmed.
+- [ ] Apply/read back main branch protection under [issue #236](https://github.com/qaqp980520-prog/2126-Survival/issues/236); current branch readback remains `protected=false`, and the connected integration's protection endpoint returned HTTP 403.
+- [ ] Perform local rendered GUI/GPU and physical iPhone QA when a suitable runtime/device is available.
+
+See [Run 119 closeout](RUN119_CLOSEOUT.md). The feature PR gate is complete; post-merge main-push validation is tracked separately and must not be inferred from pre-merge evidence.
