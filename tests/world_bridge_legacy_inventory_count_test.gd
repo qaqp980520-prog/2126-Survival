@@ -34,6 +34,8 @@ func _verify_count_values(fixture: RefCounted, label: String) -> void:
 		"food": "7",
 		"herbs": true,
 		"seeds": 0.0,
+		"uranium_ore": INF,
+		"crystal": NAN,
 		"legacy_unknown": 2
 	})
 	var bridge = BridgeScript.new()
@@ -46,6 +48,8 @@ func _verify_count_values(fixture: RefCounted, label: String) -> void:
 	_expect(bridge.get_item_count("food") == 0, label + " rejects string counts")
 	_expect(bridge.get_item_count("herbs") == 0, label + " rejects boolean counts")
 	_expect(bridge.get_item_count("seeds") == 0, label + " keeps zero counts at zero")
+	_expect(bridge.get_item_count("uranium_ore") == 0, label + " rejects positive infinity")
+	_expect(bridge.get_item_count("crystal") == 0, label + " rejects NaN")
 	_expect(bridge.get_item_count("legacy_unknown") == 2, label + " preserves legacy unknown-key reads")
 	bridge.free()
 
