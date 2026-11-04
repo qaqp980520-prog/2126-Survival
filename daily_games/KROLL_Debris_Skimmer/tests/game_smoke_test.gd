@@ -16,6 +16,12 @@ func _run() -> void:
 	_expect(game.find_child("Control_TurnLeft", true, false) != null, "touch steering control exists")
 	_expect(game.find_child("Control_Tractor", true, false) != null, "touch tractor control exists")
 	_expect(game.find_child("Control_Dock", true, false) != null, "touch docking control exists")
+	_expect(game.find_child("Control_Retry", true, false) != null, "touch retry control exists")
+	_expect(game.find_child("Control_Next", true, false) != null, "touch next-sector control exists")
+	_expect(game.find_child("Control_Campaign", true, false) != null, "touch campaign-reset control exists")
+	var next_button: Button = game.find_child("Control_Next", true, false)
+	var retry_button: Button = game.find_child("Control_Retry", true, false)
+	var campaign_button: Button = game.find_child("Control_Campaign", true, false)
 	_expect(game.get_hull() == 3, "ship starts with three hull points")
 	for sector in range(Rules.sector_count()):
 		var target: int = game.get_sector_target()
@@ -29,13 +35,23 @@ func _run() -> void:
 		_expect(game.dock_cargo(), "dock accepts carried cargo inside its radius")
 		_expect(game.get_delivered_count() == target, "delivery count reaches the sector quota")
 		_expect(game.get_score() == (sector + 1) * 100, "sector clear awards one hundred points once")
+		if sector == 0:
+			retry_button.pressed.emit()
+			_expect(game.get_score() == 100 and game.get_delivered_count() == 0, "touch retry resets the sector without erasing earned score")
+			var retry_positions: Array[Vector2] = game.get_remaining_cargo_positions()
+			for index in range(target):
+				game.ship_position = retry_positions[index]
+				game.activate_tractor()
+			game.ship_position = Rules.DOCK_POSITION
+			game.dock_cargo()
+			_expect(game.get_score() == 100, "replaying a cleared sector cannot duplicate its reward")
 		if sector < Rules.sector_count() - 1:
-			_expect(game.next_sector(), "completed sector advances to the next route")
-			_expect(game.get_sector_index() == sector + 1, "sector index advances exactly once")
+			next_button.pressed.emit()
+			_expect(game.get_sector_index() == sector + 1, "touch next button advances exactly one sector")
 	_expect(game.is_campaign_complete(), "final sector completes the campaign")
 	_expect(game.get_score() == 300, "campaign score is capped at 300")
-	game.restart_campaign()
-	_expect(game.get_score() == 0 and game.get_sector_index() == 0, "campaign restart clears progress")
+	campaign_button.pressed.emit()
+	_expect(game.get_score() == 0 and game.get_sector_index() == 0, "touch campaign reset clears progress")
 	game.queue_free()
 	await process_frame
 	if _failures.is_empty():

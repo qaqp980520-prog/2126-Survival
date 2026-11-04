@@ -22,7 +22,7 @@ A standalone Godot 4.3+ top-down inertia arcade game. Pilot a small salvage craf
 - R: retry the current sector.
 - N: advance after meeting the delivery quota.
 - C: restart the campaign.
-- Touch users can hold the six on-screen steering/thrust controls and tap TRACTOR or DOCK.
+- Touch users can hold the steering/thrust controls, tap TRACTOR/DOCK, and use the on-screen R/N/C buttons to retry, advance and restart without a keyboard.
 
 ## Import
 

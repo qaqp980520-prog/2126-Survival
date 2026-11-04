@@ -29,19 +29,22 @@ func _ready() -> void:
 
 func _build_controls() -> void:
 	var specs: Array[Dictionary] = [
-		{"name":"TurnLeft","text":"A / TURN L","action":"left","mode":"hold","x":24.0,"width":145.0},
-		{"name":"Thrust","text":"W / THRUST","action":"thrust","mode":"hold","x":180.0,"width":145.0},
-		{"name":"TurnRight","text":"D / TURN R","action":"right","mode":"hold","x":336.0,"width":145.0},
-		{"name":"Reverse","text":"S / BRAKE","action":"reverse","mode":"hold","x":492.0,"width":135.0},
-		{"name":"Tractor","text":"TRACTOR","mode":"tractor","x":640.0,"width":135.0},
-		{"name":"Dock","text":"E / DOCK","mode":"dock","x":788.0,"width":135.0}
+		{"name":"Retry","text":"R","mode":"retry","x":910.0,"y":40.0,"width":52.0,"height":40.0},
+		{"name":"Next","text":"N","mode":"next","x":968.0,"y":40.0,"width":52.0,"height":40.0},
+		{"name":"Campaign","text":"C","mode":"campaign","x":1026.0,"y":40.0,"width":52.0,"height":40.0},
+		{"name":"TurnLeft","text":"A / TURN L","action":"left","mode":"hold","x":24.0,"y":636.0,"width":145.0},
+		{"name":"Thrust","text":"W / THRUST","action":"thrust","mode":"hold","x":180.0,"y":636.0,"width":145.0},
+		{"name":"TurnRight","text":"D / TURN R","action":"right","mode":"hold","x":336.0,"y":636.0,"width":145.0},
+		{"name":"Reverse","text":"S / BRAKE","action":"reverse","mode":"hold","x":492.0,"y":636.0,"width":135.0},
+		{"name":"Tractor","text":"TRACTOR","mode":"tractor","x":640.0,"y":636.0,"width":135.0},
+		{"name":"Dock","text":"E / DOCK","mode":"dock","x":788.0,"y":636.0,"width":135.0}
 	]
 	for spec in specs:
 		var button := Button.new()
 		button.name = "Control_" + str(spec["name"])
 		button.text = str(spec["text"])
-		button.position = Vector2(float(spec["x"]), 636.0)
-		button.size = Vector2(float(spec["width"]), 52.0)
+		button.position = Vector2(float(spec["x"]), float(spec.get("y", 636.0)))
+		button.size = Vector2(float(spec["width"]), float(spec.get("height", 52.0)))
 		button.focus_mode = Control.FOCUS_NONE
 		add_child(button)
 		match str(spec["mode"]):
@@ -53,6 +56,12 @@ func _build_controls() -> void:
 				button.pressed.connect(activate_tractor)
 			"dock":
 				button.pressed.connect(dock_cargo)
+			"retry":
+				button.pressed.connect(restart_current_sector)
+			"next":
+				button.pressed.connect(next_sector)
+			"campaign":
+				button.pressed.connect(restart_campaign)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
@@ -244,8 +253,8 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.018, 0.035, 0.060), true)
 	draw_string(font, Vector2(28,38), "KROLL / DEBRIS SKIMMER", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.45,0.88,1.0))
 	var sector_data: Dictionary = Rules.sector_data(sector_index)
-	draw_string(font, Vector2(430,36), "SECTOR " + str(sector_index + 1) + " / 3   " + str(sector_data.get("name","")), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.78,0.88,0.94))
-	draw_string(font, Vector2(875,36), "SCORE " + str(score) + " / 300", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.78,0.36))
+	draw_string(font, Vector2(360,36), "SECTOR " + str(sector_index + 1) + " / 3   " + str(sector_data.get("name","")), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.78,0.88,0.94))
+	draw_string(font, Vector2(750,36), "SCORE " + str(score) + " / 300", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.78,0.36))
 	draw_rect(Rules.FIELD_RECT, Color(0.035,0.085,0.12), true)
 	draw_rect(Rules.FIELD_RECT, Color(0.16,0.34,0.42), false, 2.0)
 	for x in range(64, 1076, 64):
