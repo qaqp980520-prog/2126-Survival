@@ -703,6 +703,17 @@ func _run() -> void:
 		stealth_game.queue_free()
 		await process_frame
 
+	var fossil_scene := load(FOSSIL_EXTRACTION_SCENE) as PackedScene
+	_expect(fossil_scene != null, "root hub can load the Fossil Extraction Lab scene")
+	if fossil_scene != null:
+		var fossil_game := fossil_scene.instantiate()
+		root.add_child(fossil_game)
+		await process_frame
+		_expect(fossil_game.call("get_grid_button_count") == 64, "root-loaded Fossil Extraction Lab builds sixty-four excavation cells")
+		_expect(fossil_game.call("get_game_state").get("fossil_cells", []).size() == 5, "root-loaded Fossil Extraction Lab exposes the first five-fragment specimen")
+		fossil_game.queue_free()
+		await process_frame
+
 	hub.queue_free()
 	await process_frame
 	if failures.is_empty():
