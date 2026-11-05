@@ -35,6 +35,7 @@ func _run() -> void:
 	if jump_button != null:
 		var jump_rect: Rect2 = jump_button.get_global_rect()
 		_expect(jump_rect.size.x > 0.0 and jump_rect.size.y > 0.0, "jump touch button has a laid-out GUI rectangle")
+		_expect(bool(_world.call("_is_touch_over_hud_control", jump_rect.get_center())), "HUD hit test recognizes the jump button center in viewport coordinates")
 		var ui_touch := InputEventScreenTouch.new()
 		ui_touch.index = 0
 		ui_touch.position = jump_rect.get_center()
