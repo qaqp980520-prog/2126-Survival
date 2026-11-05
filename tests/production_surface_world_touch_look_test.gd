@@ -24,6 +24,12 @@ func _run() -> void:
 		_finish(1)
 		return
 
+	var world_status := _world.get_node_or_null("HUD/WorldStatus") as Label
+	var interaction_prompt := _world.get_node_or_null("HUD/InteractionPrompt") as Label
+	_expect(world_status != null and interaction_prompt != null, "production HUD exposes both display-only labels")
+	_assert_display_label_allows_camera_look(world_status, 8, "WorldStatus label")
+	_assert_display_label_allows_camera_look(interaction_prompt, 9, "InteractionPrompt label")
+
 	# This regression exercises raw screen-touch ownership through the production
 	# unhandled-input handler. It does not claim physical or mouse-emulated Control
 	# activation; that remains a non-headless device-level check.
@@ -136,6 +142,30 @@ func _run() -> void:
 	_expect(is_equal_approx(float(_world.get("_pitch")), -1.05), "existing mouse look retains the shared pitch clamp")
 
 	_finish(0 if _failures.is_empty() else 1)
+
+func _assert_display_label_allows_camera_look(label: Label, touch_index: int, label_name: String) -> void:
+	if label == null:
+		return
+	var viewport_position: Vector2 = label.get_global_transform_with_canvas() * (label.size * 0.5)
+	_expect(label.mouse_filter == Control.MOUSE_FILTER_IGNORE, "%s is configured as display-only input passthrough" % label_name)
+	_expect(not bool(_world.call("_is_touch_over_hud_control", viewport_position)), "%s does not claim HUD touch ownership" % label_name)
+	var touch := InputEventScreenTouch.new()
+	touch.index = touch_index
+	touch.position = viewport_position
+	touch.pressed = true
+	_world.call("_unhandled_input", touch)
+	var active_indices: Array = _world.get("_touch_look_indices")
+	_expect(active_indices.has(touch_index), "%s permits world-look touch registration" % label_name)
+	var yaw_before: float = float(_world.get("_yaw"))
+	var drag := InputEventScreenDrag.new()
+	drag.index = touch_index
+	drag.relative = Vector2(10.0, 0.0)
+	_world.call("_unhandled_input", drag)
+	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before - 0.03), "%s permits camera-look drag" % label_name)
+	var release := InputEventScreenTouch.new()
+	release.index = touch_index
+	release.pressed = false
+	_world.call("_unhandled_input", release)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
