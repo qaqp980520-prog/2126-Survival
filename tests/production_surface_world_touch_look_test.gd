@@ -24,6 +24,45 @@ func _run() -> void:
 		_finish(1)
 		return
 
+	# Exercise the actual Viewport -> GUI Control -> unhandled-input pipeline.
+	# The production jump button must own its touch so the same finger cannot
+	# become a first-person camera-look gesture.
+	var viewport: Viewport = _world.get_viewport()
+	var touch_buttons: Dictionary = _world.get("touch_buttons")
+	var jump_button: Button = touch_buttons.get("jump") as Button
+	_expect(jump_button != null, "production HUD exposes its jump touch button")
+	if jump_button != null:
+		var jump_rect: Rect2 = jump_button.get_global_rect()
+		_expect(jump_rect.size.x > 0.0 and jump_rect.size.y > 0.0, "jump touch button has a laid-out GUI rectangle")
+		var ui_touch := InputEventScreenTouch.new()
+		ui_touch.index = 11
+		ui_touch.position = jump_rect.get_center()
+		ui_touch.pressed = true
+		viewport.push_input(ui_touch)
+		await process_frame
+		_expect(bool(_world.get("_touch_jump")), "a real viewport touch activates the production HUD jump button")
+		var ui_look_indices: Array = _world.get("_touch_look_indices")
+		_expect(not ui_look_indices.has(ui_touch.index), "a GUI-owned button press never enters camera-look ownership")
+
+		var yaw_before_ui_drag: float = float(_world.get("_yaw"))
+		var pitch_before_ui_drag: float = float(_world.get("_pitch"))
+		var ui_drag := InputEventScreenDrag.new()
+		ui_drag.index = ui_touch.index
+		ui_drag.position = jump_rect.get_center() + Vector2(8.0, 0.0)
+		ui_drag.relative = Vector2(40.0, -20.0)
+		viewport.push_input(ui_drag)
+		await process_frame
+		_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_ui_drag), "dragging a GUI-owned HUD touch cannot rotate the player")
+		_expect(is_equal_approx(float(_world.get("_pitch")), pitch_before_ui_drag), "dragging a GUI-owned HUD touch cannot rotate the camera")
+
+		var ui_release := InputEventScreenTouch.new()
+		ui_release.index = ui_touch.index
+		ui_release.position = jump_rect.get_center()
+		ui_release.pressed = false
+		viewport.push_input(ui_release)
+		await process_frame
+		_expect(not bool(_world.get("_touch_jump")), "releasing the HUD touch resets the production jump state")
+
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
 	var untracked_ui_drag := InputEventScreenDrag.new()
