@@ -705,12 +705,10 @@ func _is_touch_over_hud_control(screen_position: Vector2) -> bool:
 func _control_tree_contains_point(node: Node, screen_position: Vector2) -> bool:
 	if node is Control:
 		var control := node as Control
-		if (
-			control.is_visible_in_tree()
-			and control.mouse_filter != Control.MOUSE_FILTER_IGNORE
-			and control.get_global_rect().has_point(screen_position)
-		):
-			return true
+		if control.is_visible_in_tree() and control.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			var local_position: Vector2 = control.get_global_transform_with_canvas().affine_inverse() * screen_position
+			if Rect2(Vector2.ZERO, control.size).has_point(local_position):
+				return true
 	for child in node.get_children():
 		if _control_tree_contains_point(child, screen_position):
 			return true
