@@ -72,3 +72,10 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - Runtime correction: `_is_touch_over_hud_control(screen_position)` recursively checks visible, non-ignored Controls beneath the `HUD` CanvasLayer. A screen touch beginning inside a HUD Control is excluded from `_touch_look_indices`, independent of whether the raw touch event itself is consumed by GUI.
 - Regression now enables `Input.emulate_mouse_from_touch`, sends screen-touch/drag events with `Input.parse_input_event`, verifies the emulated mouse event activates/releases the production jump Button, verifies the touch is not captured for look, and verifies a touch beginning in open world space is registered.
 - Previous candidate `83a42a1b180ab0e51854276f1f0db5fd3fbd3696` failed the focused GUI-routing test; its 18/20 matrix at failure time is not a passing candidate. The corrected exact-head CI must run before this change is accepted.
+
+
+## Run 133 — HUD canvas coordinate correction
+
+- The first recursive hit-test used `Control.get_global_rect()` directly against the screen-touch position. CI showed that the button rectangle was laid out but the event coordinate did not match the untransformed rect.
+- The hit test now converts the viewport touch position into each Control's local space using `get_global_transform_with_canvas().affine_inverse()` and checks `Rect2(Vector2.ZERO, control.size)`. This accounts for CanvasLayer/viewport transforms instead of assuming the control's global rect and input position share an untransformed coordinate space.
+- The regression now explicitly asserts that the jump button center maps inside the HUD hit test before exercising the emulated touch/mouse path. Corrected exact-head CI must confirm this before acceptance.
