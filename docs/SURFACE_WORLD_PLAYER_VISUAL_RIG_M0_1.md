@@ -1,4 +1,4 @@
-# Production SurfaceWorld Player Visual Rig M0.1.2 — Touch Look Integration
+# Production SurfaceWorld Player Visual Rig M0.1.3 — Touch Gesture Ownership Guard
 
 ## Purpose
 
@@ -45,9 +45,9 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 ## Validation and limitations
 
 - The focused player-visual regression checks player root/collision/camera invariants, confirms the first-person camera excludes helmet layer 20, verifies head-geometry layer assignments, rig node structure, all five state-resolution cases and representative pose transitions.
-- The touch-look regression dispatches synthetic screen-touch begin/release and screen-drag events through the production unhandled-input path. It verifies that untracked UI-owned drags are ignored, the active world touch drives yaw/pitch, pitch clamps remain enforced, a queued world touch takes over after release, stale drags are ignored, and desktop mouse look remains unchanged.
+- The touch-look regression now uses `Viewport.push_input` to send screen-touch and drag events through the actual headless Viewport-to-GUI-Control-to-unhandled-input pipeline. It verifies that the production HUD jump button receives a touch, toggles the jump state, does not register that finger for camera look, and does not allow a drag from that GUI-owned finger to change yaw or pitch. It then uses deterministic synthetic events through the production unhandled-input method to verify world-touch ownership, pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility.
 - Full Godot 4.3 compatibility CI also runs the existing SurfaceWorld integration, carry movement, stamina, streaming, save/restore and interaction suites.
-- Headless CI verifies structure and deterministic pose logic, not rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A visual check in a non-headless renderer remains required before treating the character art as final.
+- Headless CI verifies GUI event routing and deterministic pose logic, not physical touchscreen latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A visual check in a non-headless renderer remains required before treating the character art and mobile controls as final.
 - This is an in-engine procedural placeholder rig, not a final authored/rigged character asset. It can later be replaced by an imported model while preserving the pivot/state interface.
 
 ## Run 132 — touch gesture ownership hardening
@@ -56,4 +56,12 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - The first eligible world touch controls look; other eligible world touches wait and take over when the active touch is released. Drag events from released or untracked fingers are ignored.
 - Updated runtime source: `world/SurfaceWorld.gd`; regression: `tests/production_surface_world_touch_look_test.gd`; this document records the compatibility contract and test coverage.
 - No external assets or plugins. Godot 4.3 root project is required. Import and run the touch regression with `godot --headless --path . --editor --quit` then `godot --headless --path . --script res://tests/production_surface_world_touch_look_test.gd`.
-- Validation is pending on the new exact-head CI candidate. Local Godot is unavailable; do not claim a runtime pass until cloud Godot 4.3 completes.
+- The initial synthetic ownership-state test passed in focused CI. A real GUI Control pipeline regression was added in Run 133; its exact-head CI is pending.
+
+## Run 133 — real HUD touch-routing regression
+
+- Extended `tests/production_surface_world_touch_look_test.gd` to use `Viewport.push_input` against the production HUD jump button.
+- The test checks that the jump button receives the touch and sets `_touch_jump`, the touch index is not added to `_touch_look_indices`, dragging the same finger does not alter player yaw or camera pitch, and releasing the touch clears the jump state.
+- Existing synthetic cases remain for world-touch yaw/pitch, upper/lower clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility.
+- Runtime code is unchanged in this test-only follow-up. The updated exact-head focused and full Godot 4.3 CI results must pass before this expanded GUI-routing coverage is considered validated.
+- Physical iPhone latency, touch ergonomics and non-headless rendering remain outside headless CI.
