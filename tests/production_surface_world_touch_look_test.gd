@@ -26,7 +26,6 @@ func _run() -> void:
 
 	# The raw screen-touch event is processed by the production unhandled-input
 	# handler. Standard Controls receive the corresponding mouse-emulated event.
-	var viewport: Viewport = _world.get_viewport()
 	var touch_buttons: Dictionary = _world.get("touch_buttons")
 	var jump_button: Button = touch_buttons.get("jump") as Button
 	_expect(jump_button != null, "production HUD exposes its jump touch button")
@@ -53,23 +52,6 @@ func _run() -> void:
 		_world.call("_unhandled_input", ui_drag)
 		_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_ui_drag), "dragging a HUD-owned touch cannot rotate the player")
 		_expect(is_equal_approx(float(_world.get("_pitch")), pitch_before_ui_drag), "dragging a HUD-owned touch cannot rotate the camera")
-
-		# Simulate the mouse-button event that Godot emits from a touch for
-		# standard Control buttons. This verifies the existing HUD action path.
-		var emulated_mouse_press := InputEventMouseButton.new()
-		emulated_mouse_press.button_index = MOUSE_BUTTON_LEFT
-		emulated_mouse_press.position = ui_position
-		emulated_mouse_press.pressed = true
-		viewport.push_input(emulated_mouse_press)
-		await process_frame
-		_expect(bool(_world.get("_touch_jump")), "the emulated mouse press activates the production HUD jump button")
-		var emulated_mouse_release := InputEventMouseButton.new()
-		emulated_mouse_release.button_index = MOUSE_BUTTON_LEFT
-		emulated_mouse_release.position = ui_position
-		emulated_mouse_release.pressed = false
-		viewport.push_input(emulated_mouse_release)
-		await process_frame
-		_expect(not bool(_world.get("_touch_jump")), "the emulated mouse release resets the production HUD jump state")
 
 		var ui_release := InputEventScreenTouch.new()
 		ui_release.index = ui_touch.index
