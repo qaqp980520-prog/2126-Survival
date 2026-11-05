@@ -47,6 +47,7 @@ func _run() -> void:
 	_expect(is_equal_approx(camera.rotation.x, float(_world.get("_pitch"))), "touch look applies pitch to the first-person camera")
 
 	var upper_clamp_drag := InputEventScreenDrag.new()
+	upper_clamp_drag.index = 2
 	upper_clamp_drag.relative = Vector2(0.0, -1000.0)
 	_world.set("_pitch", 0.9)
 	camera.rotation.x = 0.9
@@ -55,6 +56,7 @@ func _run() -> void:
 	_expect(is_equal_approx(camera.rotation.x, 1.05), "camera pitch follows the upper clamp")
 
 	var lower_clamp_drag := InputEventScreenDrag.new()
+	lower_clamp_drag.index = 2
 	lower_clamp_drag.relative = Vector2(0.0, 1000.0)
 	_world.call("_unhandled_input", lower_clamp_drag)
 	_expect(is_equal_approx(float(_world.get("_pitch")), -1.05), "touch look clamps the downward pitch limit")
