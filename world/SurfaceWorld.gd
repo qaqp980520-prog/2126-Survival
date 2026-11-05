@@ -112,6 +112,9 @@ func _build_player() -> void:
 	camera.rotation.x = _pitch
 	camera.current = true
 	camera.fov = 76.0
+	# The first-person camera sits inside the helmet. Keep head geometry on a
+	# dedicated visual layer so this camera does not render the helmet over the view.
+	camera.set_cull_mask_value(20, false)
 	player.add_child(camera)
 
 func _build_player_visual_rig() -> void:
@@ -145,9 +148,12 @@ func _build_player_visual_rig() -> void:
 	helmet_pivot.name = "HelmetPivot"
 	helmet_pivot.position = Vector3(0.0, 0.66, 0.0)
 	_player_torso_pivot.add_child(helmet_pivot)
-	_add_player_visual_sphere(helmet_pivot, "Helmet", 0.18, Vector3.ZERO, armor_material)
-	_add_player_visual_box(helmet_pivot, "Visor", Vector3(0.25, 0.085, 0.032), Vector3(0.0, 0.015, -0.158), visor_material)
-	_add_player_visual_sphere(helmet_pivot, "HelmetBeacon", 0.042, Vector3(0.0, 0.15, 0.0), accent_material)
+	var helmet_mesh := _add_player_visual_sphere(helmet_pivot, "Helmet", 0.18, Vector3.ZERO, armor_material)
+	var visor_mesh := _add_player_visual_box(helmet_pivot, "Visor", Vector3(0.25, 0.085, 0.032), Vector3(0.0, 0.015, -0.158), visor_material)
+	var helmet_beacon := _add_player_visual_sphere(helmet_pivot, "HelmetBeacon", 0.042, Vector3(0.0, 0.15, 0.0), accent_material)
+	_set_player_visual_first_person_hidden(helmet_mesh)
+	_set_player_visual_first_person_hidden(visor_mesh)
+	_set_player_visual_first_person_hidden(helmet_beacon)
 
 	_player_left_arm_pivot = Node3D.new()
 	_player_left_arm_pivot.name = "LeftArmPivot"
@@ -180,6 +186,15 @@ func _build_player_visual_rig() -> void:
 	_add_player_visual_box(_player_right_leg_pivot, "RightKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
 	_add_player_visual_box(_player_right_leg_pivot, "RightBoot", Vector3(0.24, 0.16, 0.34), Vector3(0.0, -0.73, -0.045), armor_material)
 	_add_player_visual_box(_player_right_leg_pivot, "RightBootStripe", Vector3(0.16, 0.035, 0.018), Vector3(0.0, -0.685, -0.218), accent_material)
+
+func _set_player_visual_first_person_hidden(visual_node: Node3D) -> void:
+	if visual_node == null or not is_instance_valid(visual_node):
+		return
+	# Layer 20 is reserved for head geometry that must be visible to external
+	# cameras but excluded from the production first-person camera.
+	visual_node.set_meta("first_person_visibility_layer", 20)
+	if visual_node is VisualInstance3D:
+		(visual_node as VisualInstance3D).layers = 1 << 19
 
 func _make_player_visual_material(color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
