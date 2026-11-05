@@ -350,11 +350,13 @@ func _build_hud() -> void:
 	hud.name = "WorldStatus"
 	hud.position = Vector2(16.0, 14.0)
 	hud.size = Vector2(900.0, 160.0)
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_theme_color_override("font_color", Color(0.62, 0.94, 1.0))
 	hud.add_theme_font_size_override("font_size", 15)
 	layer.add_child(hud)
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	interaction_prompt.anchor_left = 0.5
 	interaction_prompt.anchor_right = 0.5
 	interaction_prompt.anchor_top = 1.0
