@@ -17,7 +17,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 
 - Player root remains `CharacterBody3D`.
 - `CollisionShape3D` remains `CapsuleShape3D`, radius 0.35 and height 1.8.
-- First-person `Camera3D` remains at local position `(0, 1.48, 0)`, with existing FOV and look input.
+- First-person `Camera3D` remains at local position `(0, 1.48, 0)`, with existing FOV and look input. Helmet, visor and beacon geometry use dedicated visual layer 20, excluded from the first-person camera to prevent head/visor occlusion; external cameras can include that layer.
 - No world-save schema, chunk ID, inventory, stamina, underground, input or interaction behavior changes.
 - Non-headless runtime creates the actual MeshInstance3D meshes. The headless regression invokes the same builder but uses metadata-only Node3D descriptors, avoiding dummy-renderer mesh creation while verifying the hierarchy and primitive geometry types.
 
@@ -42,7 +42,7 @@ godot --headless --path . --script res://tests/production_surface_world_player_v
 
 ## Validation and limitations
 
-- The focused regression checks player root/collision/camera invariants, rig node structure, all five state-resolution cases and representative pose transitions.
+- The focused regression checks player root/collision/camera invariants, confirms the first-person camera excludes helmet layer 20, verifies head-geometry layer assignments, rig node structure, all five state-resolution cases and representative pose transitions.
 - Full Godot 4.3 compatibility CI also runs the existing SurfaceWorld integration, carry movement, stamina, streaming, save/restore and interaction suites.
 - Headless CI verifies structure and deterministic pose logic, not rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A visual check in a non-headless renderer remains required before treating the character art as final.
 - This is an in-engine procedural placeholder rig, not a final authored/rigged character asset. It can later be replaced by an imported model while preserving the pivot/state interface.
