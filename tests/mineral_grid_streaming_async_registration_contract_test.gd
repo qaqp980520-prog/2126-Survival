@@ -13,6 +13,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_time = int(Time.get_unix_time_from_system()) + 100
 	await _test_async_false_after_registration_is_rolled_back()
+	await _test_async_queued_controller_after_prior_loads_does_not_receive_rollback_calls()
 	await _test_async_failed_rollback_keeps_ownership_mirrored()
 	await _test_async_true_without_registration_is_rejected()
 	await _test_stale_restore_true_without_registration_is_rejected()
@@ -60,6 +61,35 @@ func _test_async_false_after_registration_is_rolled_back() -> void:
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
+
+
+func _test_async_queued_controller_after_prior_loads_does_not_receive_rollback_calls() -> void:
+	var pair: Dictionary = await _make_pair(1)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	var controller_ref: WeakRef = weakref(controller)
+	controller.queue_on_load_call = 9
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 6, 8))
+	var report: Dictionary = await _wait_for_request(director, request_id)
+	var newly_loaded: Array = report.get("details", {}).get("newly_loaded_ids", [])
+	_expect(request_id > 0, "queued-controller async request is accepted")
+	_expect(controller.load_calls == 9, "the queued async registration follows eight successful chunk registrations")
+	_expect(controller.is_queued_for_deletion(), "the final async registration queues the Controller for deletion")
+	_expect(controller.unload_calls == 0, "no rollback method is invoked on the queued Controller after prior async loads")
+	_expect(director.call("get_managed_chunk_ids").is_empty(), "queued async Controller teardown clears the Director ownership mirror")
+	_expect(str(report.get("phase", "")) == "dependency_unavailable", "queued async registration is reported as a dependency lifecycle failure")
+	_expect(not bool(report.get("rollback_complete", true)), "queued async Controller teardown is honestly reported as incomplete")
+	_expect(bool(report.get("details", {}).get("controller_queued_for_deletion", false)), "async report identifies the queued Controller")
+	_expect(not bool(report.get("details", {}).get("new_loads_rollback_ok", true)), "async report records that prior loads were released by Controller teardown rather than explicit rollback")
+	_expect(newly_loaded.size() == 8, "async report records the eight chunks registered before the Controller was queued")
+	_expect(_factory_roots.size() == 9, "queued async fixture created all nine staged chunk roots")
+	await process_frame
+	_expect(controller_ref.get_ref() == null, "queued async Controller is released by frame cleanup")
+	for reference in _factory_roots:
+		_expect(reference.get_ref() == null, "queued async Controller teardown releases every committed chunk root")
+	director.queue_free()
+	await process_frame
+
 
 func _test_async_failed_rollback_keeps_ownership_mirrored() -> void:
 	var pair: Dictionary = await _make_pair(0)
