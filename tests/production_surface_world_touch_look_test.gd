@@ -24,9 +24,10 @@ func _run() -> void:
 		_finish(1)
 		return
 
-	# Exercise the actual Viewport -> GUI Control -> unhandled-input pipeline.
-	# The production jump button must own its touch so the same finger cannot
-	# become a first-person camera-look gesture.
+	# A screen touch reaches _unhandled_input, while the corresponding
+	# emulated mouse event is what activates a standard Control Button.
+	var old_emulate_mouse_from_touch: bool = Input.emulate_mouse_from_touch
+	Input.emulate_mouse_from_touch = true
 	var viewport: Viewport = _world.get_viewport()
 	var touch_buttons: Dictionary = _world.get("touch_buttons")
 	var jump_button: Button = touch_buttons.get("jump") as Button
@@ -35,14 +36,15 @@ func _run() -> void:
 		var jump_rect: Rect2 = jump_button.get_global_rect()
 		_expect(jump_rect.size.x > 0.0 and jump_rect.size.y > 0.0, "jump touch button has a laid-out GUI rectangle")
 		var ui_touch := InputEventScreenTouch.new()
-		ui_touch.index = 11
+		ui_touch.index = 0
 		ui_touch.position = jump_rect.get_center()
 		ui_touch.pressed = true
-		viewport.push_input(ui_touch)
+		Input.parse_input_event(ui_touch)
+		Input.flush_buffered_events()
 		await process_frame
-		_expect(bool(_world.get("_touch_jump")), "a real viewport touch activates the production HUD jump button")
 		var ui_look_indices: Array = _world.get("_touch_look_indices")
-		_expect(not ui_look_indices.has(ui_touch.index), "a GUI-owned button press never enters camera-look ownership")
+		_expect(not ui_look_indices.has(ui_touch.index), "a screen touch starting over a HUD Control is excluded from camera-look ownership")
+		_expect(bool(_world.get("_touch_jump")), "the mouse event emulated from a HUD touch activates the production jump button")
 
 		var yaw_before_ui_drag: float = float(_world.get("_yaw"))
 		var pitch_before_ui_drag: float = float(_world.get("_pitch"))
@@ -50,18 +52,21 @@ func _run() -> void:
 		ui_drag.index = ui_touch.index
 		ui_drag.position = jump_rect.get_center() + Vector2(8.0, 0.0)
 		ui_drag.relative = Vector2(40.0, -20.0)
-		viewport.push_input(ui_drag)
+		Input.parse_input_event(ui_drag)
+		Input.flush_buffered_events()
 		await process_frame
-		_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_ui_drag), "dragging a GUI-owned HUD touch cannot rotate the player")
-		_expect(is_equal_approx(float(_world.get("_pitch")), pitch_before_ui_drag), "dragging a GUI-owned HUD touch cannot rotate the camera")
+		_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_ui_drag), "dragging a HUD-owned touch cannot rotate the player")
+		_expect(is_equal_approx(float(_world.get("_pitch")), pitch_before_ui_drag), "dragging a HUD-owned touch cannot rotate the camera")
 
 		var ui_release := InputEventScreenTouch.new()
 		ui_release.index = ui_touch.index
 		ui_release.position = jump_rect.get_center()
 		ui_release.pressed = false
-		viewport.push_input(ui_release)
+		Input.parse_input_event(ui_release)
+		Input.flush_buffered_events()
 		await process_frame
 		_expect(not bool(_world.get("_touch_jump")), "releasing the HUD touch resets the production jump state")
+	Input.emulate_mouse_from_touch = old_emulate_mouse_from_touch
 
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
@@ -75,7 +80,10 @@ func _run() -> void:
 	var world_touch := InputEventScreenTouch.new()
 	world_touch.index = 2
 	world_touch.pressed = true
+	world_touch.position = Vector2(1100.0, 300.0)
 	_world.call("_unhandled_input", world_touch)
+	var active_touch_indices: Array = _world.get("_touch_look_indices")
+	_expect(active_touch_indices.has(world_touch.index), "a touch beginning in the unobstructed world viewport is registered for camera look")
 	var touch_drag := InputEventScreenDrag.new()
 	touch_drag.index = 2
 	touch_drag.relative = Vector2(40.0, -20.0)
