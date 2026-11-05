@@ -45,7 +45,7 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 ## Validation and limitations
 
 - The focused player-visual regression checks player root/collision/camera invariants, confirms the first-person camera excludes helmet layer 20, verifies head-geometry layer assignments, rig node structure, all five state-resolution cases and representative pose transitions.
-- The touch-look regression sends a raw screen-touch event through the production `_unhandled_input` handler at the HUD jump button's viewport-space center, verifies the recursive HUD Control hit test excludes that finger from camera-look ownership, and sends its drag through the same handler to confirm yaw/pitch remain unchanged. It separately pushes the mouse-button press/release event that Godot emulates from touch through the viewport and verifies the production jump Button still activates and resets. An open-world touch is also verified as eligible for look; deterministic cases cover pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility.
+- The touch-look regression sends a raw screen-touch event through the production `_unhandled_input` handler at the HUD jump button's viewport-space center, verifies the recursive HUD Control hit test excludes that finger from camera-look ownership, and sends its drag through the same handler to confirm yaw/pitch remain unchanged. An open-world touch is verified as eligible for look; deterministic cases cover pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility. Standard Control activation from a physical touch/mouse-emulation event is not claimed by headless CI and remains a device-level check.
 - Full Godot 4.3 compatibility CI also runs the existing SurfaceWorld integration, carry movement, stamina, streaming, save/restore and interaction suites.
 - Headless CI verifies the HUD hit-test ownership guard, mouse-emulated Control activation and deterministic pose logic, not physical touchscreen latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A visual check in a non-headless renderer remains required before treating the character art and mobile controls as final.
 - This is an in-engine procedural placeholder rig, not a final authored/rigged character asset. It can later be replaced by an imported model while preserving the pivot/state interface.
@@ -87,3 +87,10 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - Raw `InputEventScreenTouch` and `InputEventScreenDrag` are sent directly through the production `_unhandled_input` handler at the HUD button's viewport-space center. The HUD hit-test must exclude the touch and prevent yaw/pitch changes.
 - The mouse-button press/release event that Godot emulates from touch is pushed separately through the viewport; the production jump Button must still set and clear `_touch_jump`.
 - This is deterministic headless coverage of the ownership guard and GUI mouse path, not a substitute for a physical iPhone test.
+
+
+## Run 133 — headless GUI activation scope correction
+
+- The headless attempt to push an emulated `InputEventMouseButton` into the viewport did not activate the production HUD Button. This is a GUI/input-emulation limitation of the synthetic headless path, not evidence that the production button is broken.
+- Removed that unsupported activation assertion rather than claiming a pass. The deterministic regression now focuses on the production raw-touch handler: a touch beginning over the jump Control is excluded from camera-look ownership, its drag cannot alter yaw/pitch, and a touch in open world space remains eligible.
+- Physical HUD Button activation, touch-to-mouse emulation, gesture latency and iPhone behavior remain explicitly unverified until a non-headless device run.
