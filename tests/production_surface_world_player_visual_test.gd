@@ -34,6 +34,7 @@ func _run() -> void:
 	if capsule != null:
 		_expect(is_equal_approx(capsule.radius, 0.35) and is_equal_approx(capsule.height, 1.8), "player collision dimensions remain unchanged")
 	_expect(_world.camera != null and _world.camera.position.is_equal_approx(Vector3(0.0, 1.48, 0.0)), "first-person camera keeps its original local position")
+	_expect(_world.camera != null and (_world.camera.cull_mask & (1 << 19)) == 0, "first-person camera excludes the dedicated helmet visibility layer")
 
 	_world.call("_build_player_visual_rig")
 	var visual_root: Node3D = player.get_node_or_null("PlayerVisualRoot") as Node3D
@@ -50,6 +51,9 @@ func _run() -> void:
 	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/Torso", "capsule"), "rig includes a separate torso mesh")
 	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/HelmetPivot/Helmet", "sphere"), "rig includes a helmet and head assembly")
 	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/HelmetPivot/Visor", "box"), "rig includes a distinct visor")
+	_expect(_has_first_person_hidden_layer(visual_root, "TorsoPivot/HelmetPivot/Helmet"), "helmet geometry is assigned to the external-camera-only layer")
+	_expect(_has_first_person_hidden_layer(visual_root, "TorsoPivot/HelmetPivot/Visor"), "visor geometry is assigned to the external-camera-only layer")
+	_expect(_has_first_person_hidden_layer(visual_root, "TorsoPivot/HelmetPivot/HelmetBeacon"), "helmet beacon is assigned to the external-camera-only layer")
 	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/LeftArmPivot/LeftArm", "capsule"), "rig includes an independently pivoted left arm")
 	_expect(_has_visual_descriptor(visual_root, "TorsoPivot/RightArmPivot/RightArm", "capsule"), "rig includes an independently pivoted right arm")
 	_expect(_has_visual_descriptor(visual_root, "LeftLegPivot/LeftLeg", "capsule"), "rig includes an independently pivoted left leg")
@@ -110,6 +114,14 @@ func _run() -> void:
 func _has_visual_descriptor(parent: Node, path: String, expected_type: String) -> bool:
 	var node: Node = parent.get_node_or_null(path)
 	return node is Node3D and str(node.get_meta("visual_mesh_type", "")) == expected_type
+
+func _has_first_person_hidden_layer(parent: Node, path: String) -> bool:
+	var node: Node = parent.get_node_or_null(path)
+	if not (node is Node3D) or int(node.get_meta("first_person_visibility_layer", 0)) != 20:
+		return false
+	if node is VisualInstance3D:
+		return (node as VisualInstance3D).layers == (1 << 19)
+	return true
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
