@@ -47,7 +47,7 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - The focused player-visual regression checks player root/collision/camera invariants, confirms the first-person camera excludes helmet layer 20, verifies head-geometry layer assignments, rig node structure, all five state-resolution cases and representative pose transitions.
 - The touch-look regression sends a raw screen-touch event through the production `_unhandled_input` handler at the HUD jump button's viewport-space center, verifies the recursive HUD Control hit test excludes that finger from camera-look ownership, and sends its drag through the same handler to confirm yaw/pitch remain unchanged. An open-world touch is verified as eligible for look; deterministic cases cover pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility. Standard Control activation from a physical touch/mouse-emulation event is not claimed by headless CI and remains a device-level check.
 - Full Godot 4.3 compatibility CI also runs the existing SurfaceWorld integration, carry movement, stamina, streaming, save/restore and interaction suites.
-- Headless CI verifies the HUD hit-test ownership guard, mouse-emulated Control activation and deterministic pose logic, not physical touchscreen latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A visual check in a non-headless renderer remains required before treating the character art and mobile controls as final.
+- Headless CI verifies the HUD hit-test ownership guard and deterministic pose logic. It does not verify standard Control activation through the operating-system touch-to-mouse emulation path, physical touchscreen latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A non-headless touch-device run remains required before treating the character art and mobile controls as final.
 - This is an in-engine procedural placeholder rig, not a final authored/rigged character asset. It can later be replaced by an imported model while preserving the pivot/state interface.
 
 ## Run 132 — touch gesture ownership hardening
@@ -58,8 +58,9 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - No external assets or plugins. Godot 4.3 root project is required. Import and run the touch regression with `godot --headless --path . --editor --quit` then `godot --headless --path . --script res://tests/production_surface_world_touch_look_test.gd`.
 - The initial synthetic ownership-state test passed in focused CI. A real GUI Control pipeline regression was added in Run 133; its exact-head CI is pending.
 
-## Run 133 — real HUD touch-routing regression
+## Run 133 — superseded real HUD touch-routing experiment
 
+- This was an intermediate attempt, not the final accepted test scope. The later headless GUI activation scope correction below supersedes its Button-activation assertions.
 - Extended `tests/production_surface_world_touch_look_test.gd` to use `Viewport.push_input` against the production HUD jump button.
 - The test checks that the jump button receives the touch and sets `_touch_jump`, the touch index is not added to `_touch_look_indices`, dragging the same finger does not alter player yaw or camera pitch, and releasing the touch clears the jump state.
 - Existing synthetic cases remain for world-touch yaw/pitch, upper/lower clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility.
@@ -70,23 +71,23 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 
 - The first real-viewport attempt failed because a raw `InputEventScreenTouch` sent through `Viewport.push_input` did not activate the standard HUD Button in the headless test; the same touch was then treated as unhandled and rotated the camera. This is an important distinction between raw screen-touch delivery and the mouse-emulation path used by standard Controls.
 - Runtime correction: `_is_touch_over_hud_control(screen_position)` recursively checks visible, non-ignored Controls beneath the `HUD` CanvasLayer. A screen touch beginning inside a HUD Control is excluded from `_touch_look_indices`, independent of whether the raw touch event itself is consumed by GUI.
-- Regression now enables `Input.emulate_mouse_from_touch`, sends screen-touch/drag events with `Input.parse_input_event`, verifies the emulated mouse event activates/releases the production jump Button, verifies the touch is not captured for look, and verifies a touch beginning in open world space is registered.
+- An intermediate follow-up attempted `Input.emulate_mouse_from_touch` and `Input.parse_input_event` to exercise standard Control activation. The headless SceneTree did not reliably reproduce that GUI path; this attempt was superseded and no Button-activation pass is claimed.
 - Previous candidate `83a42a1b180ab0e51854276f1f0db5fd3fbd3696` failed the focused GUI-routing test; its 18/20 matrix at failure time is not a passing candidate. The corrected exact-head CI must run before this change is accepted.
 
 
-## Run 133 — HUD canvas coordinate correction
+## Run 133 — HUD canvas coordinate correction (intermediate test iteration)
 
 - The first recursive hit-test used `Control.get_global_rect()` directly against the screen-touch position. CI showed that the button rectangle was laid out but the event coordinate did not match the untransformed rect.
 - The hit test now converts the viewport touch position into each Control's local space using `get_global_transform_with_canvas().affine_inverse()` and checks `Rect2(Vector2.ZERO, control.size)`. This accounts for CanvasLayer/viewport transforms instead of assuming the control's global rect and input position share an untransformed coordinate space.
-- The regression now explicitly asserts that the jump button center maps inside the HUD hit test before exercising the emulated touch/mouse path. Corrected exact-head CI must confirm this before acceptance.
+- The final regression explicitly asserts that the jump button center maps inside the HUD hit test. The later headless GUI activation scope correction below removes the unsupported emulated Button-activation assertion.
 
 
-## Run 133 — separate raw touch ownership from Control mouse emulation
+## Run 133 — intermediate raw-touch and Control-emulation split
 
 - The `Input.parse_input_event` attempt did not reproduce the expected Control event routing in the headless SceneTree. The test was revised to keep the two engine paths explicit instead of claiming a complete OS touch simulation.
 - Raw `InputEventScreenTouch` and `InputEventScreenDrag` are sent directly through the production `_unhandled_input` handler at the HUD button's viewport-space center. The HUD hit-test must exclude the touch and prevent yaw/pitch changes.
-- The mouse-button press/release event that Godot emulates from touch is pushed separately through the viewport; the production jump Button must still set and clear `_touch_jump`.
-- This is deterministic headless coverage of the ownership guard and GUI mouse path, not a substitute for a physical iPhone test.
+- An intermediate experiment also pushed the emulated mouse press/release through the viewport, but this did not reliably activate the production Button in the headless SceneTree. That assertion was removed by the final scope correction below; no Control-activation pass is claimed.
+- This intermediate attempt is historical. Current headless evidence is limited to raw-touch ownership and deterministic camera-look state, not the complete GUI/OS touch-emulation path.
 
 
 ## Run 133 — headless GUI activation scope correction

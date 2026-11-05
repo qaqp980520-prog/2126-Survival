@@ -24,8 +24,9 @@ func _run() -> void:
 		_finish(1)
 		return
 
-	# The raw screen-touch event is processed by the production unhandled-input
-	# handler. Standard Controls receive the corresponding mouse-emulated event.
+	# This regression exercises raw screen-touch ownership through the production
+	# unhandled-input handler. It does not claim physical or mouse-emulated Control
+	# activation; that remains a non-headless device-level check.
 	var touch_buttons: Dictionary = _world.get("touch_buttons")
 	var jump_button: Button = touch_buttons.get("jump") as Button
 	_expect(jump_button != null, "production HUD exposes its jump touch button")
