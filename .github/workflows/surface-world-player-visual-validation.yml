@@ -5,6 +5,7 @@ on:
     paths:
       - "world/SurfaceWorld.gd"
       - "tests/production_surface_world_player_visual_test.gd"
+      - "tests/production_surface_world_touch_look_test.gd"
       - "tests/production_surface_world_test.gd"
       - "tests/production_surface_world_carry_movement_test.gd"
       - "tests/production_surface_world_stamina_test.gd"
@@ -38,6 +39,7 @@ jobs:
           test -f world/SurfaceWorld.gd
           test -f world/SurfaceWorld.tscn
           test -f tests/production_surface_world_player_visual_test.gd
+          test -f tests/production_surface_world_touch_look_test.gd
           test -f tests/production_surface_world_test.gd
           test -f tests/production_surface_world_carry_movement_test.gd
           test -f tests/production_surface_world_stamina_test.gd
@@ -53,6 +55,14 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld player visual tests passed."
+      - name: Run production SurfaceWorld touch-look regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/production_surface_world_touch_look_test.gd 2>&1)" || { echo "$output"; exit 1; fi
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production SurfaceWorld touch-look tests passed."
       - name: Run production SurfaceWorld integration regression
         shell: bash
         run: |
