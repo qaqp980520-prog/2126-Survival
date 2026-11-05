@@ -24,50 +24,58 @@ func _run() -> void:
 		_finish(1)
 		return
 
-	# A screen touch reaches _unhandled_input, while the corresponding
-	# emulated mouse event is what activates a standard Control Button.
-	var old_emulate_mouse_from_touch: bool = Input.emulate_mouse_from_touch
-	Input.emulate_mouse_from_touch = true
+	# The raw screen-touch event is processed by the production unhandled-input
+	# handler. Standard Controls receive the corresponding mouse-emulated event.
 	var viewport: Viewport = _world.get_viewport()
 	var touch_buttons: Dictionary = _world.get("touch_buttons")
 	var jump_button: Button = touch_buttons.get("jump") as Button
 	_expect(jump_button != null, "production HUD exposes its jump touch button")
 	if jump_button != null:
 		var jump_rect: Rect2 = jump_button.get_global_rect()
+		var ui_position: Vector2 = jump_rect.get_center()
 		_expect(jump_rect.size.x > 0.0 and jump_rect.size.y > 0.0, "jump touch button has a laid-out GUI rectangle")
-		_expect(bool(_world.call("_is_touch_over_hud_control", jump_rect.get_center())), "HUD hit test recognizes the jump button center in viewport coordinates")
+		_expect(bool(_world.call("_is_touch_over_hud_control", ui_position)), "HUD hit test recognizes the jump button center in viewport coordinates")
+
 		var ui_touch := InputEventScreenTouch.new()
 		ui_touch.index = 0
-		ui_touch.position = jump_rect.get_center()
+		ui_touch.position = ui_position
 		ui_touch.pressed = true
-		Input.parse_input_event(ui_touch)
-		Input.flush_buffered_events()
-		await process_frame
+		_world.call("_unhandled_input", ui_touch)
 		var ui_look_indices: Array = _world.get("_touch_look_indices")
 		_expect(not ui_look_indices.has(ui_touch.index), "a screen touch starting over a HUD Control is excluded from camera-look ownership")
-		_expect(bool(_world.get("_touch_jump")), "the mouse event emulated from a HUD touch activates the production jump button")
 
 		var yaw_before_ui_drag: float = float(_world.get("_yaw"))
 		var pitch_before_ui_drag: float = float(_world.get("_pitch"))
 		var ui_drag := InputEventScreenDrag.new()
 		ui_drag.index = ui_touch.index
-		ui_drag.position = jump_rect.get_center() + Vector2(8.0, 0.0)
+		ui_drag.position = ui_position + Vector2(8.0, 0.0)
 		ui_drag.relative = Vector2(40.0, -20.0)
-		Input.parse_input_event(ui_drag)
-		Input.flush_buffered_events()
-		await process_frame
+		_world.call("_unhandled_input", ui_drag)
 		_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_ui_drag), "dragging a HUD-owned touch cannot rotate the player")
 		_expect(is_equal_approx(float(_world.get("_pitch")), pitch_before_ui_drag), "dragging a HUD-owned touch cannot rotate the camera")
 
+		# Simulate the mouse-button event that Godot emits from a touch for
+		# standard Control buttons. This verifies the existing HUD action path.
+		var emulated_mouse_press := InputEventMouseButton.new()
+		emulated_mouse_press.button_index = MOUSE_BUTTON_LEFT
+		emulated_mouse_press.position = ui_position
+		emulated_mouse_press.pressed = true
+		viewport.push_input(emulated_mouse_press)
+		await process_frame
+		_expect(bool(_world.get("_touch_jump")), "the emulated mouse press activates the production HUD jump button")
+		var emulated_mouse_release := InputEventMouseButton.new()
+		emulated_mouse_release.button_index = MOUSE_BUTTON_LEFT
+		emulated_mouse_release.position = ui_position
+		emulated_mouse_release.pressed = false
+		viewport.push_input(emulated_mouse_release)
+		await process_frame
+		_expect(not bool(_world.get("_touch_jump")), "the emulated mouse release resets the production HUD jump state")
+
 		var ui_release := InputEventScreenTouch.new()
 		ui_release.index = ui_touch.index
-		ui_release.position = jump_rect.get_center()
+		ui_release.position = ui_position
 		ui_release.pressed = false
-		Input.parse_input_event(ui_release)
-		Input.flush_buffered_events()
-		await process_frame
-		_expect(not bool(_world.get("_touch_jump")), "releasing the HUD touch resets the production jump state")
-	Input.emulate_mouse_from_touch = old_emulate_mouse_from_touch
+		_world.call("_unhandled_input", ui_release)
 
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
