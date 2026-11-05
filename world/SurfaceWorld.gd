@@ -693,6 +693,29 @@ func _on_surface_stream_completed(request_id: int, report: Dictionary) -> void:
 	_camera_interaction_target_cache = {}
 	_refresh_hud()
 
+func _is_touch_over_hud_control(screen_position: Vector2) -> bool:
+	var hud_layer := get_node_or_null("HUD") as CanvasLayer
+	if hud_layer == null:
+		return false
+	for child in hud_layer.get_children():
+		if _control_tree_contains_point(child, screen_position):
+			return true
+	return false
+
+func _control_tree_contains_point(node: Node, screen_position: Vector2) -> bool:
+	if node is Control:
+		var control := node as Control
+		if (
+			control.is_visible_in_tree()
+			and control.mouse_filter != Control.MOUSE_FILTER_IGNORE
+			and control.get_global_rect().has_point(screen_position)
+		):
+			return true
+	for child in node.get_children():
+		if _control_tree_contains_point(child, screen_position):
+			return true
+	return false
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -736,7 +759,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
-			if not _touch_look_indices.has(touch.index):
+			if not _is_touch_over_hud_control(touch.position) and not _touch_look_indices.has(touch.index):
 				_touch_look_indices.append(touch.index)
 		else:
 			_touch_look_indices.erase(touch.index)
