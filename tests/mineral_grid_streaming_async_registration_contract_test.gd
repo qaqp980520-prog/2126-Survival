@@ -6,6 +6,13 @@ const FakeController = preload("res://tests/helpers/FakeMineralChunkController.g
 var _failures: Array[String] = []
 var _factory_roots: Array[WeakRef] = []
 var _test_time: int = 0
+var _completed_async_reports: Dictionary = {}
+var _supersede_on_next_factory_call: bool = false
+var _superseding_director: Node = null
+var _superseding_position: Vector3 = Vector3.ZERO
+var _superseding_now_unix: int = -1
+var _superseding_request_id: int = -1
+var _superseded_root_ref: WeakRef = null
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -13,6 +20,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_time = int(Time.get_unix_time_from_system()) + 100
 	await _test_async_false_after_registration_is_rolled_back()
+	await _test_async_superseded_during_staging_releases_roots()
 	await _test_async_queued_controller_after_prior_loads_does_not_receive_rollback_calls()
 	await _test_async_failed_rollback_keeps_ownership_mirrored()
 	await _test_async_true_without_registration_is_rejected()
@@ -40,6 +48,62 @@ func _make_pair(radius: int) -> Dictionary:
 	_expect(bool(director.call("bind_controller", controller)), "async registration fixture binds a live Controller")
 	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "async registration fixture binds its deterministic factory")
 	return {"controller": controller, "director": director}
+
+func _test_async_superseded_during_staging_releases_roots() -> void:
+	var pair: Dictionary = await _make_pair(0)
+	var controller: Variant = pair["controller"]
+	var director: Node = pair["director"]
+	_completed_async_reports.clear()
+	director.async_sync_completed.connect(Callable(self, "_capture_async_report"))
+	_superseding_director = director
+	_superseding_position = Vector3(10.0, 0.0, 0.0)
+	_superseding_now_unix = _test_time + 21
+	_superseding_request_id = -1
+	_superseded_root_ref = null
+	_supersede_on_next_factory_call = true
+
+	var superseded_request_id: int = int(director.call("request_sync_to_world_position_async", Vector3.ZERO, _test_time + 20, 1))
+	var waited_frames: int = 0
+	while waited_frames < 120 and (
+		not _completed_async_reports.has(superseded_request_id)
+		or _superseding_request_id < 0
+		or not _completed_async_reports.has(_superseding_request_id)
+	):
+		await process_frame
+		waited_frames += 1
+
+	var replacement_request_id: int = _superseding_request_id
+	var superseded_report: Dictionary = _completed_async_reports.get(superseded_request_id, {})
+	var replacement_report: Dictionary = _completed_async_reports.get(replacement_request_id, {})
+	var superseded_details: Dictionary = superseded_report.get("details", {})
+	var superseded_diagnostics: Dictionary = superseded_report.get("request_diagnostics", {})
+	_expect(superseded_request_id > 0, "superseded staging request is accepted")
+	_expect(replacement_request_id > superseded_request_id, "factory-triggered replacement request receives a newer ID")
+	_expect(waited_frames < 120, "superseded and replacement requests both reach terminal reports")
+	_expect(str(superseded_report.get("phase", "")) == "cancelled", "older staging request terminates as cancelled")
+	_expect(not bool(superseded_report.get("success", true)), "superseded staging request cannot report success")
+	_expect(str(superseded_diagnostics.get("cancellation_reason", "")) == "superseded_by_request:%d" % replacement_request_id, "superseded request preserves the replacement request ID in its cancellation reason")
+	_expect(bool(superseded_report.get("rollback_complete", false)), "superseded staging cleanup is reported complete")
+	_expect(int(superseded_details.get("staged_count", 0)) == 1, "superseded request staged exactly one root before yielding")
+	_expect(int(superseded_details.get("staged_roots_released", 0)) == 1, "superseded request reports releasing its staged root")
+	_expect(int(director.call("get_async_staged_root_count", superseded_request_id)) == 0, "superseded request retains no staged-root dictionary entries")
+	await process_frame
+	_expect(_superseded_root_ref != null and _superseded_root_ref.get_ref() == null, "superseded staged root is freed after cancellation")
+	_expect(bool(replacement_report.get("success", false)), "replacement request completes successfully")
+	_expect(str(replacement_report.get("phase", "")) == "complete", "replacement request reaches the complete phase")
+	var expected_ids := PackedStringArray(["surface/chunk_1_0"])
+	_expect(controller.get_loaded_chunk_ids() == expected_ids, "only the replacement request's target chunk is registered")
+	_expect(director.call("get_managed_chunk_ids") == expected_ids, "Director ownership mirrors the replacement request's actual chunk")
+	_expect(controller.get_child_count() == 1, "superseded root is not left beside the replacement root")
+	_expect(int(director.call("get_active_async_request_id")) == -1, "replacement completion clears the active async request")
+	controller.queue_free()
+	director.queue_free()
+	await process_frame
+	_superseding_director = null
+	_supersede_on_next_factory_call = false
+	_superseding_request_id = -1
+	_superseded_root_ref = null
+
 
 func _test_async_false_after_registration_is_rolled_back() -> void:
 	var pair: Dictionary = await _make_pair(0)
@@ -221,8 +285,22 @@ func _wait_for_request(director: Node, request_id: int) -> Dictionary:
 func _make_chunk(coord: Vector2i) -> Node3D:
 	var chunk := Node3D.new()
 	chunk.name = "AsyncRegistration_%d_%d" % [coord.x, coord.y]
-	_factory_roots.append(weakref(chunk))
+	var reference: WeakRef = weakref(chunk)
+	_factory_roots.append(reference)
+	if _supersede_on_next_factory_call:
+		_supersede_on_next_factory_call = false
+		_superseded_root_ref = reference
+		if is_instance_valid(_superseding_director):
+			_superseding_request_id = int(_superseding_director.call(
+				"request_sync_to_world_position_async",
+				_superseding_position,
+				_superseding_now_unix,
+				1
+			))
 	return chunk
+
+func _capture_async_report(request_id: int, report: Dictionary) -> void:
+	_completed_async_reports[request_id] = report.duplicate(true)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
