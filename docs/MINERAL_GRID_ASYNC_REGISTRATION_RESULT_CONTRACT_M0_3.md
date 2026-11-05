@@ -47,6 +47,7 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_regi
 5. Controller detachment during async commit: the request must report `dependency_unavailable`, identify the live detached Controller, roll back the newly registered candidate, and preserve the original empty window.
 6. Factory loss after an async request is accepted: the request must remain `dependency_unavailable` and preserve the `factory_unavailable` diagnostic reason rather than being mislabeled as Controller loss.
 7. The Controller queues itself during async commit after eight successful registrations: the Director must not call rollback methods on the queued Controller, must clear its stale ownership mirror, report `dependency_unavailable` with incomplete rollback, and allow owner teardown to release all nine roots.
+8. A newer async request supersedes an older request during staging: the old request must terminate as cancelled with the replacement ID in its diagnostic reason, release its staged root, and leave only the replacement request's registered chunk in both Controller and Director ownership.
 
 ## Validation and limitations
 
@@ -55,3 +56,12 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_regi
 - The local runtime has no Godot executable; no local engine pass is claimed.
 - Headless CI does not validate rendered GUI/GPU behavior or physical iPhone behavior.
 - Do not merge until exact-head focused/full gates and all cleanup steps succeed.
+
+
+## Run 133 — superseded async staging cleanup
+
+- Added `_test_async_superseded_during_staging_releases_roots()` to `tests/mineral_grid_streaming_async_registration_contract_test.gd`.
+- The deterministic factory callback issues a replacement request while the first request is staging its first detached root. The older request must report `cancelled`, preserve `superseded_by_request:<id>`, release its staged root and finish with no staged-root entry.
+- The replacement request targets `surface/chunk_1_0`; after both terminal reports, only that chunk may exist in the Controller and Director ownership mirror, with one Controller child and no active async request.
+- No runtime implementation change was needed; this commit adds regression coverage for the existing supersession contract.
+- Exact-head focused/full Godot 4.3 CI is pending for the updated test commit. No new-head pass is claimed until both gates and cleanup steps succeed.
