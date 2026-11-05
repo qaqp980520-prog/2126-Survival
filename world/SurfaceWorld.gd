@@ -731,10 +731,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		var motion := event as InputEventMouseMotion
-		_yaw -= motion.relative.x * 0.003
-		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
-		player.rotation.y = _yaw
-		camera.rotation.x = _pitch
+		_apply_look_delta(motion.relative)
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		_apply_look_delta(drag.relative)
+
+func _apply_look_delta(relative: Vector2) -> void:
+	if player == null or camera == null:
+		return
+	_yaw -= relative.x * 0.003
+	_pitch = clampf(_pitch - relative.y * 0.003, -1.05, 1.05)
+	player.rotation.y = _yaw
+	camera.rotation.x = _pitch
 
 func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
