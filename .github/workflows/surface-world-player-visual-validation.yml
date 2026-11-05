@@ -15,6 +15,7 @@ on:
     paths:
       - "world/SurfaceWorld.gd"
       - "tests/production_surface_world_player_visual_test.gd"
+      - "tests/production_surface_world_touch_look_test.gd"
       - "tests/production_surface_world_test.gd"
       - "tests/production_surface_world_carry_movement_test.gd"
       - "tests/production_surface_world_stamina_test.gd"
