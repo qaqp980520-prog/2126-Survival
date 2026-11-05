@@ -17,7 +17,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 
 - Player root remains `CharacterBody3D`.
 - `CollisionShape3D` remains `CapsuleShape3D`, radius 0.35 and height 1.8.
-- First-person `Camera3D` remains at local position `(0, 1.48, 0)` with its existing FOV. Desktop look remains right-mouse capture plus mouse motion. Touchscreen look tracks only screen-touch indices whose initial press reaches `_unhandled_input`; Control-owned HUD presses therefore do not become camera-look gestures. Only the first eligible world touch drives look, additional eligible world touches queue for handoff, and releasing the active touch stops its drag deltas. Both desktop and touch paths share the same yaw/pitch sensitivity and pitch clamp. Helmet, visor and beacon geometry use dedicated visual layer 20, excluded from the first-person camera to prevent head/visor occlusion; external cameras can include that layer.
+- First-person `Camera3D` remains at local position `(0, 1.48, 0)` with its existing FOV. Desktop look remains right-mouse capture plus mouse motion. Touchscreen look tracks only screen-touch indices whose initial press reaches `_unhandled_input`; Interactive HUD Controls own their hit regions, while display-only `WorldStatus` and `InteractionPrompt` labels use `MOUSE_FILTER_IGNORE` and remain transparent to camera-look gestures. Only the first eligible world touch drives look, additional eligible world touches queue for handoff, and releasing the active touch stops its drag deltas. Both desktop and touch paths share the same yaw/pitch sensitivity and pitch clamp. Helmet, visor and beacon geometry use dedicated visual layer 20, excluded from the first-person camera to prevent head/visor occlusion; external cameras can include that layer.
 - No world-save schema, chunk ID, inventory, stamina, underground, input or interaction behavior changes.
 - Non-headless runtime creates the actual MeshInstance3D meshes. The headless regression invokes the same builder but uses metadata-only Node3D descriptors, avoiding dummy-renderer mesh creation while verifying the hierarchy and primitive geometry types.
 
@@ -95,3 +95,14 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - The headless attempt to push an emulated `InputEventMouseButton` into the viewport did not activate the production HUD Button. This is a GUI/input-emulation limitation of the synthetic headless path, not evidence that the production button is broken.
 - Removed that unsupported activation assertion rather than claiming a pass. The deterministic regression now focuses on the production raw-touch handler: a touch beginning over the jump Control is excluded from camera-look ownership, its drag cannot alter yaw/pitch, and a touch in open world space remains eligible.
 - Physical HUD Button activation, touch-to-mouse emulation, gesture latency and iPhone behavior remain explicitly unverified until a non-headless device run.
+
+
+## Run 136 — display-only HUD input pass-through
+
+- Review found that the recursive HUD hit test correctly treats non-ignored Controls as input-owned, but the two display-only `Label` nodes (`WorldStatus` and `InteractionPrompt`) retained the default STOP mouse filter. Their full control rectangles could therefore suppress camera look even though they have no action.
+- Set both labels to `Control.MOUSE_FILTER_IGNORE`; interactive touch buttons and the diagnostics panel retain their existing input ownership.
+- Extended `tests/production_surface_world_touch_look_test.gd` to verify each label is ignored by GUI hit testing, its viewport-transformed center is not claimed by the HUD guard, and a touch/drag over that label can register and rotate the camera. Existing jump-button exclusion, open-world touch, pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look checks remain.
+- Files: `world/SurfaceWorld.gd`, `tests/production_surface_world_touch_look_test.gd`, this document.
+- Dependencies/import: root Godot 4.3 project and `world/SurfaceWorld.tscn`; no external assets or import step. Run editor import then the touch-look script from repository root.
+- Validation: pending exact-head focused and full Godot 4.3 CI. No new-head pass is claimed until both complete.
+- Limitations: headless tests validate deterministic input ownership and yaw changes, not physical iPhone touch latency, OS touch-to-mouse Control activation or rendered GPU behavior.
