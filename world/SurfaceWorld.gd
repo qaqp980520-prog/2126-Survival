@@ -35,6 +35,7 @@ var _sprint_active: bool = false
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
+var _touch_look_indices: Array[int] = []
 var _camera_interaction_target_cache: Dictionary = {}
 var _jump_was_down: bool = false
 var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
@@ -732,9 +733,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		var motion := event as InputEventMouseMotion
 		_apply_look_delta(motion.relative)
+	elif event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			if not _touch_look_indices.has(touch.index):
+				_touch_look_indices.append(touch.index)
+		else:
+			_touch_look_indices.erase(touch.index)
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		_apply_look_delta(drag.relative)
+		if not _touch_look_indices.is_empty() and drag.index == _touch_look_indices[0]:
+			_apply_look_delta(drag.relative)
 
 func _apply_look_delta(relative: Vector2) -> void:
 	if player == null or camera == null:
