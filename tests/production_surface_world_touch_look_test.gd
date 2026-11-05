@@ -26,7 +26,19 @@ func _run() -> void:
 
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
+	var untracked_ui_drag := InputEventScreenDrag.new()
+	untracked_ui_drag.index = 1
+	untracked_ui_drag.relative = Vector2(40.0, -20.0)
+	_world.call("_unhandled_input", untracked_ui_drag)
+	_expect(is_equal_approx(float(_world.get("_yaw")), initial_yaw), "a drag whose initial UI-owned touch was handled cannot rotate the player")
+	_expect(is_equal_approx(float(_world.get("_pitch")), initial_pitch), "an untracked UI touch cannot rotate the camera")
+
+	var world_touch := InputEventScreenTouch.new()
+	world_touch.index = 2
+	world_touch.pressed = true
+	_world.call("_unhandled_input", world_touch)
 	var touch_drag := InputEventScreenDrag.new()
+	touch_drag.index = 2
 	touch_drag.relative = Vector2(40.0, -20.0)
 	_world.call("_unhandled_input", touch_drag)
 	_expect(is_equal_approx(float(_world.get("_yaw")), initial_yaw - 0.12), "screen drag changes player yaw using the shared look sensitivity")
@@ -47,6 +59,31 @@ func _run() -> void:
 	_world.call("_unhandled_input", lower_clamp_drag)
 	_expect(is_equal_approx(float(_world.get("_pitch")), -1.05), "touch look clamps the downward pitch limit")
 	_expect(is_equal_approx(camera.rotation.x, -1.05), "camera pitch follows the lower clamp")
+
+	var queued_world_touch := InputEventScreenTouch.new()
+	queued_world_touch.index = 3
+	queued_world_touch.pressed = true
+	_world.call("_unhandled_input", queued_world_touch)
+	var world_touch_release := InputEventScreenTouch.new()
+	world_touch_release.index = 2
+	world_touch_release.pressed = false
+	_world.call("_unhandled_input", world_touch_release)
+	var queued_touch_drag := InputEventScreenDrag.new()
+	queued_touch_drag.index = 3
+	queued_touch_drag.relative = Vector2(-10.0, 0.0)
+	var yaw_before_queued_touch := float(_world.get("_yaw"))
+	_world.call("_unhandled_input", queued_touch_drag)
+	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_queued_touch + 0.03), "the next eligible world touch takes over look after the active finger releases")
+	var queued_touch_release := InputEventScreenTouch.new()
+	queued_touch_release.index = 3
+	queued_touch_release.pressed = false
+	_world.call("_unhandled_input", queued_touch_release)
+	var stale_touch_drag := InputEventScreenDrag.new()
+	stale_touch_drag.index = 3
+	stale_touch_drag.relative = Vector2(40.0, 0.0)
+	var yaw_after_release := float(_world.get("_yaw"))
+	_world.call("_unhandled_input", stale_touch_drag)
+	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_after_release), "releasing a world touch disables further camera-look deltas for that finger")
 
 	_world.set("_yaw", 0.0)
 	_world.set("_mouse_look_active", true)
