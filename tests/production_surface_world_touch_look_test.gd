@@ -66,6 +66,8 @@ func _run() -> void:
 		ui_release.pressed = false
 		_world.call("_unhandled_input", ui_release)
 
+	_assert_touch_button_contract(touch_buttons)
+
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
 	var untracked_ui_drag := InputEventScreenDrag.new()
@@ -142,6 +144,77 @@ func _run() -> void:
 	_expect(is_equal_approx(float(_world.get("_pitch")), -1.05), "existing mouse look retains the shared pitch clamp")
 
 	_finish(0 if _failures.is_empty() else 1)
+
+func _assert_touch_button_contract(buttons: Dictionary) -> void:
+	var direction_keys: Array[String] = ["left", "right", "forward", "back"]
+	for key in direction_keys:
+		var button: Button = buttons.get(key) as Button
+		_expect(button != null, "movement touch button exists: %s" % key)
+		if button == null:
+			continue
+		var button_rect: Rect2 = button.get_global_rect()
+		_expect(button_rect.size.x > 0.0 and button_rect.size.y > 0.0, "movement touch button has a valid GUI rectangle: %s" % key)
+		_expect(button.mouse_filter != Control.MOUSE_FILTER_IGNORE, "movement touch button participates in HUD input ownership: %s" % key)
+		_expect(bool(_world.call("_is_touch_over_hud_control", button_rect.get_center())), "HUD hit test recognizes movement button: %s" % key)
+		_expect(_has_signal_binding(button, &"button_down", &"_set_touch_direction", [key]), "movement button down signal is bound correctly: %s" % key)
+		_expect(_has_signal_binding(button, &"button_up", &"_clear_touch_direction", [key]), "movement button up signal is bound correctly: %s" % key)
+		button.emit_signal("button_down")
+		var active_directions: Dictionary = _world.get("_touch_directions")
+		_expect(bool(active_directions.get(key, false)), "holding movement button activates direction: %s" % key)
+		button.emit_signal("button_up")
+		active_directions = _world.get("_touch_directions")
+		_expect(not active_directions.has(key), "releasing movement button clears direction: %s" % key)
+
+	var jump_button: Button = buttons.get("jump") as Button
+	_expect(jump_button != null, "jump touch button exists for hold-state coverage")
+	if jump_button != null:
+		_expect(_has_signal_binding(jump_button, &"button_down", &"_set_touch_jump", [true]), "jump button down signal enables jump hold")
+		_expect(_has_signal_binding(jump_button, &"button_up", &"_set_touch_jump", [false]), "jump button up signal clears jump hold")
+		jump_button.emit_signal("button_down")
+		_expect(bool(_world.get("_touch_jump")), "holding jump button activates jump input")
+		jump_button.emit_signal("button_up")
+		_expect(not bool(_world.get("_touch_jump")), "releasing jump button clears jump input")
+
+	var sprint_button: Button = buttons.get("sprint") as Button
+	_expect(sprint_button != null, "sprint touch button exists for hold-state coverage")
+	if sprint_button != null:
+		_expect(_has_signal_binding(sprint_button, &"button_down", &"_set_touch_sprint", [true]), "sprint button down signal enables sprint hold")
+		_expect(_has_signal_binding(sprint_button, &"button_up", &"_set_touch_sprint", [false]), "sprint button up signal clears sprint hold")
+		sprint_button.emit_signal("button_down")
+		_expect(bool(_world.get("_touch_sprint")), "holding sprint button activates sprint input")
+		sprint_button.emit_signal("button_up")
+		_expect(not bool(_world.get("_touch_sprint")), "releasing sprint button clears sprint input")
+
+	var action_handlers: Dictionary = {
+		"crop": &"_on_touch_crop_pressed",
+		"crate": &"_on_touch_crate_pressed",
+		"terrain": &"_on_touch_terrain_pressed",
+		"shaft": &"_on_touch_shaft_pressed",
+		"deeper": &"_on_touch_deeper_pressed"
+	}
+	for key in action_handlers:
+		var button: Button = buttons.get(key) as Button
+		_expect(button != null, "world-action touch button exists: %s" % key)
+		if button != null:
+			_expect(_has_signal_binding(button, &"pressed", action_handlers[key], []), "world-action button is wired to its production handler: %s" % key)
+
+	for slot_index in range(4):
+		var key: String = "quick_%d" % (slot_index + 1)
+		var button: Button = buttons.get(key) as Button
+		_expect(button != null, "quick-use touch button exists: %s" % key)
+		if button != null:
+			_expect(_has_signal_binding(button, &"pressed", &"_consume_quick_slot", [slot_index]), "quick-use button is bound to the correct slot: %s" % key)
+
+func _has_signal_binding(button: Button, signal_name: StringName, expected_method: StringName, expected_bound_arguments: Array) -> bool:
+	for connection in button.get_signal_connection_list(signal_name):
+		var callback: Callable = connection.get("callable", Callable())
+		if (
+			callback.is_valid()
+			and callback.get_method() == expected_method
+			and callback.get_bound_arguments() == expected_bound_arguments
+		):
+			return true
+	return false
 
 func _assert_display_label_allows_camera_look(label: Label, touch_index: int, label_name: String) -> void:
 	if label == null:
