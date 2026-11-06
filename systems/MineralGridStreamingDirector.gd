@@ -63,8 +63,6 @@ func bind_chunk_factory(factory: Callable) -> bool:
 	return true
 
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
-	if _active_async_request_id >= 0:
-		cancel_async_sync_request(_active_async_request_id)
 	if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller must be alive, inside the scene tree and not queued for deletion; chunk factory must be available.", true)
 		return false
@@ -77,6 +75,9 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "validation", "World position is outside supported grid-coordinate bounds.", true)
 		return false
+	# Only a fully validated synchronous request may supersede an in-flight async request.
+	if _active_async_request_id >= 0:
+		cancel_async_sync_request(_active_async_request_id)
 
 	var center := Vector2i(
 		floori(world_position.x / chunk_size_x),

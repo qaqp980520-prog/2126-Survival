@@ -106,6 +106,22 @@ func _test_playground_async_requests() -> void:
     _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected excessive-radius request does not consume a request ID")
     _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected excessive-radius request leaves the active chunk window unchanged")
     director.set("load_radius", original_radius)
+
+    var validation_guard_request: int = int(director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 5.0), _test_time + 1, 1))
+    var validation_guard_staged: bool = await _wait_for_staged_root_count(director, validation_guard_request, 1)
+    _expect(validation_guard_request > 0 and validation_guard_staged, "validation-guard request has an active staged root before the invalid sync attempt")
+    director.set("load_radius", 9)
+    var invalid_sync_during_async: bool = bool(director.call("sync_to_world_position", Vector3(25.0, 0.0, 25.0), _test_time + 2))
+    _expect(not invalid_sync_during_async, "sync rejects excessive runtime radius while another async request is active")
+    _expect(int(director.call("get_active_async_request_id")) == validation_guard_request, "invalid sync validation does not cancel the valid in-flight async request")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "invalid sync validation leaves the pre-commit active chunk window unchanged")
+    director.set("load_radius", original_radius)
+    var validation_guard_report: Dictionary = await _wait_for_request(director, validation_guard_request)
+    _expect(bool(validation_guard_report.get("success", false)) and str(validation_guard_report.get("phase", "")) == "complete", "valid async request completes after invalid sync validation is rejected")
+    original_ids = controller.call("get_loaded_chunk_ids")
+    original_root = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
+    _expect(original_root != null, "post-validation baseline retains the overlapping original chunk root")
+
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
     director.set("chunk_factory", Callable(self, "_make_fault_injected_chunk"))
