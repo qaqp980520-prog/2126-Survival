@@ -430,6 +430,12 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	# Commit is deliberately non-yielding: no newer request can interleave with registration,
 	# adjacency rebuilding, and stale-root retirement.
 	_record_async_diagnostic(request_id, "committing", {"staged_count": staged_count}, false)
+	var adjacency_batch_started: bool = false
+	if chunk_controller.has_method("begin_terrain_adjacency_batch"):
+		adjacency_batch_started = bool(chunk_controller.call("begin_terrain_adjacency_batch"))
+		if not adjacency_batch_started:
+			_finish_async_sync_request(request_id, false, "terrain_adjacency_commit", "Controller rejected the terrain adjacency batch.", false, {"adjacency_batch_started": false})
+			return
 	var newly_loaded: Array[String] = []
 	for entry in to_load:
 		if not _async_dependencies_available():
@@ -474,7 +480,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				else:
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok
+			var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok and bool(adjacency_finalize.get("ok", false))
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
 			var failure_phase: String = "dependency_unavailable" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
@@ -509,7 +516,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not chunk_controller.unload_chunk(id, now_unix):
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
-			var rollback_complete: bool = new_loads_restored and old_chunks_restored
+			var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored and bool(adjacency_finalize.get("ok", false))
 			var unloaded_ids: Array[String] = []
 			for item in unloaded_stale:
 				unloaded_ids.append(str(item.get("id", "")))
@@ -531,6 +539,20 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
+		return
+	var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+	if not bool(adjacency_finalize.get("ok", false)):
+		var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+		var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix) if new_loads_restored else false
+		var refresh_ok: bool = bool(chunk_controller.call("refresh_terrain_adjacency")) if _controller_ready_for_sync() and chunk_controller.has_method("refresh_terrain_adjacency") else false
+		_finish_async_sync_request(request_id, false, "terrain_adjacency_commit", "Terrain adjacency batch could not be committed; the prior window was restored where possible.", new_loads_restored and old_chunks_restored and refresh_ok, {
+			"adjacency_finalize": adjacency_finalize,
+			"new_loads_rollback_ok": new_loads_restored,
+			"stale_restore_ok": old_chunks_restored,
+			"refresh_ok": refresh_ok,
+			"newly_loaded_ids": newly_loaded.duplicate(),
+			"unloaded_stale_count": unloaded_stale.size()
+		})
 		return
 	_finish_async_sync_request(request_id, true, "complete", "", true, {
 		"center": desired[int((desired.size() - 1) / 2)] if not desired.is_empty() else Vector2i.ZERO,
@@ -580,6 +602,8 @@ func _fail_async_staged_root_validation(
 	_free_unowned_root(unowned_candidate)
 	var released_count: int = _release_async_staged_roots(request_id, staged_roots)
 	var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+	var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+	rollback_ok = rollback_ok and bool(adjacency_finalize.get("ok", false))
 	_finish_async_sync_request(
 		request_id,
 		false,
@@ -630,6 +654,8 @@ func _abort_async_sync_request(
 		if new_loads_rollback_ok and not unloaded_stale.is_empty():
 			stale_restore_ok = _restore_unloaded_chunks(unloaded_stale, now_unix)
 		rollback_complete = new_loads_rollback_ok and stale_restore_ok
+	var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+	rollback_complete = rollback_complete and bool(adjacency_finalize.get("ok", false))
 	var cancellation_reason: String = "factory_unavailable"
 	if controller_destroyed:
 		cancellation_reason = "controller_destroyed"
@@ -664,6 +690,14 @@ func _abort_async_sync_request(
 		}
 	)
 
+func _end_controller_terrain_adjacency_batch() -> Dictionary:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or chunk_controller.is_queued_for_deletion():
+		return {"ok": false, "error": "controller_unavailable"}
+	if not chunk_controller.has_method("end_terrain_adjacency_batch"):
+		return {"ok": true, "skipped": true}
+	var result: Variant = chunk_controller.call("end_terrain_adjacency_batch")
+	return result if result is Dictionary else {"ok": false, "error": "invalid_batch_result"}
+
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
@@ -693,6 +727,8 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				failure_reason = "registration_rejected"
 			"stale_unload":
 				failure_reason = "stale_unload_failed"
+			"terrain_adjacency_commit":
+				failure_reason = "terrain_adjacency_commit_failed"
 			"staged_root_validation":
 				failure_reason = str(details.get("failure_reason", "staged_root_invalid"))
 	var diagnostic_details: Dictionary = details.duplicate(true)
