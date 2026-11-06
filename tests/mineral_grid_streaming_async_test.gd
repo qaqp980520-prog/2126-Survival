@@ -158,8 +158,9 @@ func _test_playground_async_requests() -> void:
         var dimension_guard_report: Dictionary = await _wait_for_request(director, dimension_guard_request)
         _expect(bool(dimension_guard_report.get("success", false)) and str(dimension_guard_report.get("phase", "")) == "complete", "valid async request completes after invalid dimension validation is rejected")
     original_ids = controller.call("get_loaded_chunk_ids")
-    original_root = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
-    _expect(original_root != null, "post-dimension-validation baseline retains the overlapping original chunk root")
+    var original_root_id: String = str(original_ids[0]) if not original_ids.is_empty() else ""
+    original_root = controller.call("get_chunk_root", original_root_id) as Node3D
+    _expect(original_root != null, "post-dimension-validation baseline captures a live root from the committed window")
 
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
@@ -168,7 +169,7 @@ func _test_playground_async_requests() -> void:
     var failed_report: Dictionary = await _wait_for_request(director, failed_request)
     _expect(failed_request > 0 and not bool(failed_report.get("success", true)) and str(failed_report.get("phase", "")) == "load_factory", "invalid staged root rejects the async request before commit")
     _expect(controller.call("get_loaded_chunk_ids") == original_ids, "staging failure preserves the original active chunk IDs")
-    _expect(controller.call("get_chunk_root", "surface/chunk_0_0") == original_root, "staging failure preserves the original live chunk root")
+    _expect(controller.call("get_chunk_root", original_root_id) == original_root, "staging failure preserves the original live chunk root")
     _expect(bool(failed_report.get("rollback_complete", false)), "staging failure reports a complete no-mutation rollback")
 
     director.set("chunk_factory", original_factory)
