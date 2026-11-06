@@ -58,9 +58,21 @@ func _run_tests() -> void:
 	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a zero chunk width.")
 	var zero_width_report: Dictionary = director.get_last_sync_report()
 	_check(str(zero_width_report.get("phase", "")) == "validation", "Zero chunk width should report validation.")
-	_check(str(zero_width_report.get("message", "")).contains("finite and positive"), "Zero chunk width report should explain the dimension contract.")
+	_check(str(zero_width_report.get("message", "")).contains("1 and 4096"), "Zero chunk width report should explain the Inspector dimension range.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Zero chunk width must not mutate the managed map.")
 	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Zero chunk width must not mutate controller chunks.")
+	director.chunk_size_x = 0.5
+	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a chunk width below the Inspector minimum.")
+	director.chunk_size_x = 4096.0
+	_check(bool(director.call("_is_safe_grid_position", Vector3(1.0, 0.0, 1.0))), "Chunk width at the Inspector maximum must remain valid.")
+	director.chunk_size_x = 4096.5
+	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a chunk width above the Inspector maximum.")
+	var excessive_width_report: Dictionary = director.get_last_sync_report()
+	_check(str(excessive_width_report.get("phase", "")) == "validation", "Excessive chunk width should report validation.")
+	_check(str(excessive_width_report.get("message", "")).contains("1 and 4096"), "Excessive chunk width report should explain the Inspector dimension range.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected excessive chunk width must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected excessive chunk width must not mutate controller chunks.")
+	_check(director.get_grid_coordinate(Vector3(1.0, 0.0, 1.0)) == Vector2i.ZERO, "Coordinate helper must reject a chunk width above the Inspector maximum.")
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = INF
 	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a non-finite chunk depth.")
@@ -77,6 +89,17 @@ func _run_tests() -> void:
 	_check(str(negative_depth_report.get("phase", "")) == "recovery_validation", "Negative chunk depth should report recovery_validation.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected negative chunk depth must not mutate the managed map.")
 	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected negative chunk depth must not mutate controller chunks.")
+	director.chunk_size_z = 1.0
+	_check(bool(director.call("_is_safe_grid_position", Vector3(1.0, 0.0, 1.0))), "Chunk depth at the Inspector minimum must remain valid.")
+	director.chunk_size_z = 4096.0
+	_check(bool(director.call("_is_safe_grid_position", Vector3(1.0, 0.0, 1.0))), "Chunk depth at the Inspector maximum must remain valid.")
+	director.chunk_size_z = 4096.5
+	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a chunk depth above the Inspector maximum.")
+	var excessive_depth_report: Dictionary = director.get_last_sync_report()
+	_check(str(excessive_depth_report.get("phase", "")) == "recovery_validation", "Excessive chunk depth should report recovery_validation.")
+	_check(str(excessive_depth_report.get("message", "")).contains("1 and 4096"), "Excessive chunk depth report should explain the Inspector dimension range.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected excessive chunk depth must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected excessive chunk depth must not mutate controller chunks.")
 	director.chunk_size_z = 10.0
 
 	var original_radius: int = int(director.get("load_radius"))
