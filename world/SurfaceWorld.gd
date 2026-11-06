@@ -35,6 +35,7 @@ var _sprint_active: bool = false
 var _yaw: float = 0.0
 var _pitch: float = -0.12
 var _mouse_look_active: bool = false
+var _touch_look_indices: Array[int] = []
 var _camera_interaction_target_cache: Dictionary = {}
 var _jump_was_down: bool = false
 var _crop_action_message: String = "E / CROP: plant, water, grow or harvest."
@@ -51,6 +52,14 @@ var _surface_stream_request_id: int = -1
 var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
+var _player_visual_root: Node3D
+var _player_torso_pivot: Node3D
+var _player_left_arm_pivot: Node3D
+var _player_right_arm_pivot: Node3D
+var _player_left_leg_pivot: Node3D
+var _player_right_leg_pivot: Node3D
+var _player_visual_clock: float = 0.0
+var _player_visual_state: String = "idle"
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -69,6 +78,26 @@ func _ready() -> void:
 	if not _build_underground_mine():
 		push_error("Surface world could not register its underground mine chunk.")
 	_build_mine_entrance_visual()
+
+# OS focus loss or mobile app suspension can occur before a held Control emits button_up.
+# Clear transient input so movement, jump, sprint and look cannot remain stuck on resume.
+func _notification(what: int) -> void:
+	if (
+		what == NOTIFICATION_APPLICATION_FOCUS_OUT
+		or what == NOTIFICATION_APPLICATION_PAUSED
+		or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT
+	):
+		_clear_touch_input_state()
+
+func _clear_touch_input_state() -> void:
+	_touch_directions.clear()
+	_touch_jump = false
+	_touch_sprint = false
+	_touch_look_indices.clear()
+	_mouse_look_active = false
+	_jump_was_down = false
+	_sprint_active = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -97,23 +126,241 @@ func _build_player() -> void:
 	collision.position = Vector3(0.0, 0.9, 0.0)
 	player.add_child(collision)
 	if DisplayServer.get_name() != "headless":
-		var body_mesh := MeshInstance3D.new()
-		var capsule_mesh := CapsuleMesh.new()
-		capsule_mesh.radius = 0.35
-		capsule_mesh.height = 1.8
-		body_mesh.mesh = capsule_mesh
-		body_mesh.position = Vector3(0.0, 0.9, 0.0)
-		var body_material := StandardMaterial3D.new()
-		body_material.albedo_color = Color(0.16, 0.78, 0.9)
-		body_mesh.material_override = body_material
-		player.add_child(body_mesh)
+		_build_player_visual_rig()
 	camera = Camera3D.new()
 	camera.name = "PlayerCamera"
 	camera.position = Vector3(0.0, 1.48, 0.0)
 	camera.rotation.x = _pitch
 	camera.current = true
 	camera.fov = 76.0
+	# The first-person camera sits inside the helmet. Keep head geometry on a
+	# dedicated visual layer so this camera does not render the helmet over the view.
+	camera.set_cull_mask_value(20, false)
 	player.add_child(camera)
+
+func _build_player_visual_rig() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	if _player_visual_root != null and is_instance_valid(_player_visual_root):
+		return
+	_player_visual_root = Node3D.new()
+	_player_visual_root.name = "PlayerVisualRoot"
+	player.add_child(_player_visual_root)
+
+	var suit_material := _make_player_visual_material(Color(0.055, 0.23, 0.29), 0.22, 0.58)
+	var armor_material := _make_player_visual_material(Color(0.11, 0.17, 0.21), 0.52, 0.42)
+	var fabric_material := _make_player_visual_material(Color(0.025, 0.055, 0.07), 0.0, 0.86)
+	var accent_material := _make_player_visual_material(Color(0.94, 0.52, 0.12), 0.18, 0.5)
+	var visor_material := _make_player_visual_material(Color(0.035, 0.58, 0.72), 0.62, 0.24)
+
+	_player_torso_pivot = Node3D.new()
+	_player_torso_pivot.name = "TorsoPivot"
+	_player_torso_pivot.position = Vector3(0.0, 0.92, 0.0)
+	_player_visual_root.add_child(_player_torso_pivot)
+	_add_player_visual_capsule(_player_torso_pivot, "Torso", 0.25, 0.78, Vector3(0.0, 0.17, 0.0), suit_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestPlate", Vector3(0.32, 0.26, 0.065), Vector3(0.0, 0.18, -0.218), armor_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestStripe", Vector3(0.24, 0.045, 0.018), Vector3(0.0, 0.29, -0.257), accent_material)
+	_add_player_visual_box(_player_torso_pivot, "ChestBeacon", Vector3(0.055, 0.055, 0.02), Vector3(0.0, 0.055, -0.257), visor_material)
+	_add_player_visual_sphere(_player_torso_pivot, "LeftShoulderPad", 0.13, Vector3(-0.32, 0.38, 0.0), armor_material)
+	_add_player_visual_sphere(_player_torso_pivot, "RightShoulderPad", 0.13, Vector3(0.32, 0.38, 0.0), armor_material)
+	_add_player_visual_box(_player_torso_pivot, "Backpack", Vector3(0.34, 0.42, 0.17), Vector3(0.0, -0.055, 0.235), fabric_material)
+
+	var helmet_pivot := Node3D.new()
+	helmet_pivot.name = "HelmetPivot"
+	helmet_pivot.position = Vector3(0.0, 0.66, 0.0)
+	_player_torso_pivot.add_child(helmet_pivot)
+	var helmet_mesh := _add_player_visual_sphere(helmet_pivot, "Helmet", 0.18, Vector3.ZERO, armor_material)
+	var visor_mesh := _add_player_visual_box(helmet_pivot, "Visor", Vector3(0.25, 0.085, 0.032), Vector3(0.0, 0.015, -0.158), visor_material)
+	var helmet_beacon := _add_player_visual_sphere(helmet_pivot, "HelmetBeacon", 0.042, Vector3(0.0, 0.15, 0.0), accent_material)
+	_set_player_visual_first_person_hidden(helmet_mesh)
+	_set_player_visual_first_person_hidden(visor_mesh)
+	_set_player_visual_first_person_hidden(helmet_beacon)
+
+	_player_left_arm_pivot = Node3D.new()
+	_player_left_arm_pivot.name = "LeftArmPivot"
+	_player_left_arm_pivot.position = Vector3(-0.32, 0.36, -0.02)
+	_player_torso_pivot.add_child(_player_left_arm_pivot)
+	_add_player_visual_capsule(_player_left_arm_pivot, "LeftArm", 0.105, 0.62, Vector3(0.0, -0.31, -0.02), suit_material)
+	_add_player_visual_sphere(_player_left_arm_pivot, "LeftGlove", 0.095, Vector3(0.0, -0.63, -0.04), fabric_material)
+
+	_player_right_arm_pivot = Node3D.new()
+	_player_right_arm_pivot.name = "RightArmPivot"
+	_player_right_arm_pivot.position = Vector3(0.32, 0.36, -0.02)
+	_player_torso_pivot.add_child(_player_right_arm_pivot)
+	_add_player_visual_capsule(_player_right_arm_pivot, "RightArm", 0.105, 0.62, Vector3(0.0, -0.31, -0.02), suit_material)
+	_add_player_visual_sphere(_player_right_arm_pivot, "RightGlove", 0.095, Vector3(0.0, -0.63, -0.04), fabric_material)
+
+	_player_left_leg_pivot = Node3D.new()
+	_player_left_leg_pivot.name = "LeftLegPivot"
+	_player_left_leg_pivot.position = Vector3(-0.15, 0.86, 0.0)
+	_player_visual_root.add_child(_player_left_leg_pivot)
+	_add_player_visual_capsule(_player_left_leg_pivot, "LeftLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftBoot", Vector3(0.24, 0.16, 0.34), Vector3(0.0, -0.73, -0.045), armor_material)
+	_add_player_visual_box(_player_left_leg_pivot, "LeftBootStripe", Vector3(0.16, 0.035, 0.018), Vector3(0.0, -0.685, -0.218), accent_material)
+
+	_player_right_leg_pivot = Node3D.new()
+	_player_right_leg_pivot.name = "RightLegPivot"
+	_player_right_leg_pivot.position = Vector3(0.15, 0.86, 0.0)
+	_player_visual_root.add_child(_player_right_leg_pivot)
+	_add_player_visual_capsule(_player_right_leg_pivot, "RightLeg", 0.125, 0.82, Vector3(0.0, -0.36, 0.0), fabric_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightKneeGuard", Vector3(0.2, 0.15, 0.055), Vector3(0.0, -0.25, -0.115), armor_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightBoot", Vector3(0.24, 0.16, 0.34), Vector3(0.0, -0.73, -0.045), armor_material)
+	_add_player_visual_box(_player_right_leg_pivot, "RightBootStripe", Vector3(0.16, 0.035, 0.018), Vector3(0.0, -0.685, -0.218), accent_material)
+
+func _set_player_visual_first_person_hidden(visual_node: Node3D) -> void:
+	if visual_node == null or not is_instance_valid(visual_node):
+		return
+	# Layer 20 is reserved for head geometry that must be visible to external
+	# cameras but excluded from the production first-person camera.
+	visual_node.set_meta("first_person_visibility_layer", 20)
+	if visual_node is VisualInstance3D:
+		(visual_node as VisualInstance3D).layers = 1 << 19
+
+func _make_player_visual_material(color: Color, metallic: float, roughness: float) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.metallic = clampf(metallic, 0.0, 1.0)
+	material.roughness = clampf(roughness, 0.0, 1.0)
+	return material
+
+func _add_player_visual_capsule(parent: Node3D, node_name: String, radius: float, height: float, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := CapsuleMesh.new()
+		mesh.radius = radius
+		mesh.height = height
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "capsule")
+	visual_node.set_meta("visual_mesh_radius", radius)
+	visual_node.set_meta("visual_mesh_height", height)
+	parent.add_child(visual_node)
+	return visual_node
+
+func _add_player_visual_sphere(parent: Node3D, node_name: String, radius: float, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = radius
+		mesh.height = radius * 2.0
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "sphere")
+	visual_node.set_meta("visual_mesh_radius", radius)
+	parent.add_child(visual_node)
+	return visual_node
+
+func _add_player_visual_box(parent: Node3D, node_name: String, size: Vector3, local_position: Vector3, material: Material) -> Node3D:
+	var visual_node: Node3D
+	if DisplayServer.get_name() == "headless":
+		visual_node = Node3D.new()
+	else:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		mesh_instance.mesh = mesh
+		mesh_instance.material_override = material
+		visual_node = mesh_instance
+	visual_node.name = node_name
+	visual_node.position = local_position
+	visual_node.set_meta("visual_mesh_type", "box")
+	visual_node.set_meta("visual_mesh_size", size)
+	parent.add_child(visual_node)
+	return visual_node
+
+func _resolve_player_visual_animation_state(horizontal_speed: float, vertical_speed: float, grounded: bool, sprinting: bool) -> String:
+	if not grounded:
+		return "jump" if vertical_speed > 0.2 else "fall"
+	if horizontal_speed > 0.15:
+		return "sprint" if sprinting else "walk"
+	return "idle"
+
+func _update_player_visual_animation(delta: float) -> void:
+	if player == null or _player_visual_root == null or not is_instance_valid(_player_visual_root):
+		return
+	_player_visual_clock += maxf(delta, 0.0)
+	var horizontal_speed: float = Vector2(player.velocity.x, player.velocity.z).length()
+	var state: String = _resolve_player_visual_animation_state(horizontal_speed, player.velocity.y, player.is_on_floor(), _sprint_active)
+	_apply_player_visual_pose(state, delta)
+
+func _apply_player_visual_pose(state: String, delta: float) -> void:
+	if (
+		_player_torso_pivot == null or not is_instance_valid(_player_torso_pivot)
+		or _player_left_arm_pivot == null or not is_instance_valid(_player_left_arm_pivot)
+		or _player_right_arm_pivot == null or not is_instance_valid(_player_right_arm_pivot)
+		or _player_left_leg_pivot == null or not is_instance_valid(_player_left_leg_pivot)
+		or _player_right_leg_pivot == null or not is_instance_valid(_player_right_leg_pivot)
+	):
+		return
+	var resolved_state: String = state
+	if not ["idle", "walk", "sprint", "jump", "fall"].has(resolved_state):
+		resolved_state = "idle"
+	var target_body_y: float = 0.92
+	var target_body_lean: float = 0.0
+	var target_left_arm: float = 0.0
+	var target_right_arm: float = 0.0
+	var target_left_leg: float = 0.0
+	var target_right_leg: float = 0.0
+	match resolved_state:
+		"idle":
+			var idle_sway: float = sin(_player_visual_clock * 1.7) * 0.025
+			target_body_y += sin(_player_visual_clock * 2.2) * 0.012
+			target_left_arm = idle_sway + 0.02
+			target_right_arm = -idle_sway - 0.02
+		"walk":
+			var walk_stride: float = sin(_player_visual_clock * 8.5)
+			target_body_y += absf(sin(_player_visual_clock * 17.0)) * 0.022
+			target_body_lean = -0.025
+			target_left_leg = walk_stride * 0.48
+			target_right_leg = -walk_stride * 0.48
+			target_left_arm = -walk_stride * 0.34
+			target_right_arm = walk_stride * 0.34
+		"sprint":
+			var sprint_stride: float = sin(_player_visual_clock * 11.5)
+			target_body_y += absf(sin(_player_visual_clock * 23.0)) * 0.04
+			target_body_lean = -0.13
+			target_left_leg = sprint_stride * 0.68
+			target_right_leg = -sprint_stride * 0.68
+			target_left_arm = -sprint_stride * 0.58
+			target_right_arm = sprint_stride * 0.58
+		"jump":
+			target_body_y += 0.025
+			target_body_lean = -0.08
+			target_left_arm = 0.72
+			target_right_arm = 0.72
+			target_left_leg = -0.22
+			target_right_leg = -0.22
+		"fall":
+			target_body_y -= 0.015
+			target_body_lean = 0.08
+			target_left_arm = 0.98
+			target_right_arm = 0.98
+			target_left_leg = 0.18
+			target_right_leg = 0.18
+	_player_visual_state = resolved_state
+	var blend: float = 1.0 - exp(-14.0 * maxf(delta, 0.0))
+	_player_torso_pivot.position.y = lerpf(_player_torso_pivot.position.y, target_body_y, blend)
+	_player_torso_pivot.rotation.x = lerp_angle(_player_torso_pivot.rotation.x, target_body_lean, blend)
+	_player_left_arm_pivot.rotation.x = lerp_angle(_player_left_arm_pivot.rotation.x, target_left_arm, blend)
+	_player_right_arm_pivot.rotation.x = lerp_angle(_player_right_arm_pivot.rotation.x, target_right_arm, blend)
+	_player_left_leg_pivot.rotation.x = lerp_angle(_player_left_leg_pivot.rotation.x, target_left_leg, blend)
+	_player_right_leg_pivot.rotation.x = lerp_angle(_player_right_leg_pivot.rotation.x, target_right_leg, blend)
+
+func get_player_visual_animation_state() -> String:
+	return _player_visual_state
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -123,11 +370,13 @@ func _build_hud() -> void:
 	hud.name = "WorldStatus"
 	hud.position = Vector2(16.0, 14.0)
 	hud.size = Vector2(900.0, 160.0)
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_theme_color_override("font_color", Color(0.62, 0.94, 1.0))
 	hud.add_theme_font_size_override("font_size", 15)
 	layer.add_child(hud)
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	interaction_prompt.anchor_left = 0.5
 	interaction_prompt.anchor_right = 0.5
 	interaction_prompt.anchor_top = 1.0
@@ -340,6 +589,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if _surface_stream_pending:
 		player.velocity = Vector3.ZERO
+		_update_player_visual_animation(delta)
 		_camera_interaction_target_cache = {}
 		_refresh_hud()
 		return
@@ -396,6 +646,7 @@ func _physics_process(delta: float) -> void:
 		var current_grid: Vector2i = director.get_grid_coordinate(player.global_position)
 		if current_grid != _last_grid:
 			_request_surface_streaming(previous_position, player.global_position, player.velocity)
+	_update_player_visual_animation(delta)
 	_camera_interaction_target_cache = _cast_camera_interaction_target()
 	_refresh_hud()
 
@@ -464,6 +715,27 @@ func _on_surface_stream_completed(request_id: int, report: Dictionary) -> void:
 	_camera_interaction_target_cache = {}
 	_refresh_hud()
 
+func _is_touch_over_hud_control(screen_position: Vector2) -> bool:
+	var hud_layer := get_node_or_null("HUD") as CanvasLayer
+	if hud_layer == null:
+		return false
+	for child in hud_layer.get_children():
+		if _control_tree_contains_point(child, screen_position):
+			return true
+	return false
+
+func _control_tree_contains_point(node: Node, screen_position: Vector2) -> bool:
+	if node is Control:
+		var control := node as Control
+		if control.is_visible_in_tree() and control.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			var local_position: Vector2 = control.get_global_transform_with_canvas().affine_inverse() * screen_position
+			if Rect2(Vector2.ZERO, control.size).has_point(local_position):
+				return true
+	for child in node.get_children():
+		if _control_tree_contains_point(child, screen_position):
+			return true
+	return false
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -503,10 +775,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		var motion := event as InputEventMouseMotion
-		_yaw -= motion.relative.x * 0.003
-		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
-		player.rotation.y = _yaw
-		camera.rotation.x = _pitch
+		_apply_look_delta(motion.relative)
+	elif event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			if not _is_touch_over_hud_control(touch.position) and not _touch_look_indices.has(touch.index):
+				_touch_look_indices.append(touch.index)
+		else:
+			_touch_look_indices.erase(touch.index)
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if not _touch_look_indices.is_empty() and drag.index == _touch_look_indices[0]:
+			_apply_look_delta(drag.relative)
+
+func _apply_look_delta(relative: Vector2) -> void:
+	if player == null or camera == null:
+		return
+	_yaw -= relative.x * 0.003
+	_pitch = clampf(_pitch - relative.y * 0.003, -1.05, 1.05)
+	player.rotation.y = _yaw
+	camera.rotation.x = _pitch
 
 func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
