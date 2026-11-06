@@ -133,6 +133,35 @@ func _test_playground_async_requests() -> void:
     original_root = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
     _expect(original_root != null, "post-validation baseline retains the overlapping original chunk root")
 
+    var original_chunk_size_z: float = float(director.get("chunk_size_z"))
+    var dimension_guard_request: int = int(director.call("request_sync_to_world_position_async", Vector3(95.0, 0.0, 65.0), _test_time + 4, 1))
+    _expect(dimension_guard_request > 0, "valid async request is accepted before invalid dimension checks")
+    if dimension_guard_request > 0:
+        var dimension_guard_staged: bool = await _wait_for_staged_root_count(director, dimension_guard_request, 1)
+        _expect(dimension_guard_staged, "dimension-guard request stages a root before invalid configuration is submitted")
+        if dimension_guard_staged:
+            var dimension_ids_before: PackedStringArray = controller.call("get_loaded_chunk_ids")
+            director.set("chunk_size_z", 0.0)
+            var invalid_dimension_sync: bool = bool(director.call("sync_to_world_position", Vector3(105.0, 0.0, 75.0), _test_time + 5))
+            _expect(not invalid_dimension_sync, "sync rejects zero chunk depth while another async request is active")
+            _expect(int(director.call("get_active_async_request_id")) == dimension_guard_request, "invalid dimension sync does not cancel the valid in-flight async request")
+            _expect(controller.call("get_loaded_chunk_ids") == dimension_ids_before, "invalid dimension sync leaves committed chunk IDs unchanged")
+            var next_request_before_invalid_dimension_async: int = int(director.get("_next_async_request_id"))
+            var invalid_dimension_async: int = int(director.call("request_sync_to_world_position_async", Vector3(115.0, 0.0, 85.0), _test_time + 6, 1))
+            _expect(invalid_dimension_async == -1, "async request rejects zero chunk depth")
+            _expect(int(director.call("get_active_async_request_id")) == dimension_guard_request, "invalid dimension async validation preserves the active request")
+            _expect(int(director.get("_next_async_request_id")) == next_request_before_invalid_dimension_async, "invalid dimension async validation does not consume a request ID")
+            _expect(controller.call("get_loaded_chunk_ids") == dimension_ids_before, "invalid dimension async validation leaves committed chunk IDs unchanged")
+            director.set("chunk_size_z", original_chunk_size_z)
+        else:
+            director.call("cancel_async_sync_request", dimension_guard_request)
+        var dimension_guard_report: Dictionary = await _wait_for_request(director, dimension_guard_request)
+        _expect(bool(dimension_guard_report.get("success", false)) and str(dimension_guard_report.get("phase", "")) == "complete", "valid async request completes after invalid dimension validation is rejected")
+    original_ids = controller.call("get_loaded_chunk_ids")
+    var original_root_id: String = str(original_ids[0]) if not original_ids.is_empty() else ""
+    original_root = controller.call("get_chunk_root", original_root_id) as Node3D
+    _expect(original_root != null, "post-dimension-validation baseline captures a live root from the committed window")
+
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
     director.set("chunk_factory", Callable(self, "_make_fault_injected_chunk"))
@@ -140,7 +169,7 @@ func _test_playground_async_requests() -> void:
     var failed_report: Dictionary = await _wait_for_request(director, failed_request)
     _expect(failed_request > 0 and not bool(failed_report.get("success", true)) and str(failed_report.get("phase", "")) == "load_factory", "invalid staged root rejects the async request before commit")
     _expect(controller.call("get_loaded_chunk_ids") == original_ids, "staging failure preserves the original active chunk IDs")
-    _expect(controller.call("get_chunk_root", "surface/chunk_0_0") == original_root, "staging failure preserves the original live chunk root")
+    _expect(controller.call("get_chunk_root", original_root_id) == original_root, "staging failure preserves the original live chunk root")
     _expect(bool(failed_report.get("rollback_complete", false)), "staging failure reports a complete no-mutation rollback")
 
     director.set("chunk_factory", original_factory)
@@ -474,6 +503,30 @@ func _test_async_diagnostics_and_stress() -> void:
     _expect(str(explicit_cancel_diagnostic.get("cancellation_reason", "")) == "explicit_cancel", "diagnostics preserve the explicit cancellation reason")
     _expect(bool(explicit_cancel_diagnostic.get("terminal", false)), "cancelled request diagnostics are terminal")
 
+    var original_radius: int = int(director.get("load_radius"))
+    director.set("load_radius", 8)
+    var max_radius_request: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 93, 8))
+    _expect(max_radius_request > 0, "maximum supported radius accepts an asynchronous 17x17 chunk window")
+    var max_radius_report: Dictionary = await _wait_for_request(director, max_radius_request)
+    var max_radius_diagnostic: Dictionary = director.call("get_async_request_diagnostics", max_radius_request)
+    _expect(bool(max_radius_report.get("success", false)), "maximum supported radius commits successfully")
+    _expect(int(max_radius_diagnostic.get("desired_count", 0)) == 289, "maximum radius reports exactly 289 desired chunks")
+    _expect(int(max_radius_diagnostic.get("staged_count", 0)) == 280, "maximum radius stages only the 280 chunks outside the existing 3x3 window")
+    _expect(int(max_radius_diagnostic.get("unloaded_stale_count", -1)) == 0, "expanding to maximum radius does not unload retained chunks")
+    _expect(controller.get_loaded_chunk_ids().size() == 289 and controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "maximum-radius commit keeps all 289 controller and director IDs aligned")
+
+    director.set("load_radius", 0)
+    var center_only_request: int = int(director.call("request_sync_to_world_position_async", Vector3(12000.0, 0.0, 0.0), _test_time + 94, 8))
+    _expect(center_only_request > 0, "zero radius accepts a center-only asynchronous window")
+    var center_only_report: Dictionary = await _wait_for_request(director, center_only_request)
+    var center_only_diagnostic: Dictionary = director.call("get_async_request_diagnostics", center_only_request)
+    _expect(bool(center_only_report.get("success", false)), "zero-radius request commits successfully after maximum-radius expansion")
+    _expect(int(center_only_diagnostic.get("desired_count", 0)) == 1, "zero radius reports exactly one desired chunk")
+    _expect(int(center_only_diagnostic.get("unloaded_stale_count", 0)) == 288, "shrinking from maximum radius releases exactly 288 stale chunks")
+    _expect(controller.get_loaded_chunk_ids().size() == 1 and controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "zero-radius commit leaves one consistent active chunk")
+
+    director.set("load_radius", original_radius)
+    _expect(bool(director.call("sync_to_world_position", Vector3(12000.0, 0.0, 0.0), _test_time + 95)), "normal radius restores after maximum-radius expansion and shrink")
     var final_ids: PackedStringArray = controller.get_loaded_chunk_ids()
     _expect(final_ids.size() == 9 and final_ids == director.call("get_managed_chunk_ids"), "stress run ends with exactly nine consistent active chunks")
     director.queue_free()
