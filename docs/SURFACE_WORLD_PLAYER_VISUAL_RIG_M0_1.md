@@ -1,4 +1,4 @@
-# Production SurfaceWorld Player Visual Rig M0.1.9 — Native Multitouch Gameplay Controls
+# Production SurfaceWorld Player Visual Rig M0.1.10 — Native Multitouch Input Pipeline Regression
 
 ## Purpose
 
@@ -138,7 +138,7 @@ godot --headless --path . --script res://tests/production_surface_world_touch_la
 - Raw `InputEventScreenTouch` and `InputEventScreenDrag` are routed in `_input` before GUI Controls. Each touch index is owned by one gameplay button, a non-interactive HUD region, or world-look. Hold controls use per-button owner counts, so releasing one of two fingers does not clear a control still held by the other.
 - Existing standard Buttons remain the desktop visual/mouse controls. Native touch routing invokes the same production movement, jump, sprint, world-action and quick-use callbacks. The diagnostics export button is also mapped so disabling touch-to-mouse emulation does not remove its mobile action.
 - Focus-loss and app-pause cleanup now clears touch owners, owner counts and blocked HUD touch indices in addition to movement, jump, sprint and look state.
-- Regression coverage sends raw events through `Input.parse_input_event` to verify simultaneous forward+jump, two-finger ownership of one movement control, world-look plus sprint, release isolation, diagnostics export hit mapping, focus-loss cleanup and restoration of the prior input-emulation setting.
+- Regression coverage sends raw events through the root `Viewport.push_input(event, true)` path to verify simultaneous forward+jump, two-finger ownership of one movement control, world-look plus sprint, release isolation, diagnostics export hit mapping, focus-loss cleanup and restoration of the prior input-emulation setting.
 - Dependencies: root Godot 4.3 project, `world/SurfaceWorld.tscn`, and existing `MineralGridStreamingDiagnosticsPanel.gd`; no external assets, plugins or save-schema migration.
 - Import and run from repository root:
 ```bash
@@ -147,3 +147,11 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 godot --headless --path . --script res://tests/production_surface_world_touch_layout_test.gd
 ```
 - Exact-head focused and full Godot 4.3 CI are pending for this revision. Headless input injection is engine-level evidence, not a substitute for physical iPhone multitouch, safe-area, latency, rendering or ergonomics QA.
+
+
+## Run 142 — viewport-driven multitouch test harness correction
+
+- Run 141's first exact-head focused workflow exposed a test-harness mismatch: two display-label assertions still invoked `_unhandled_input` directly, while production raw touch routing had moved to `_input`; the new multi-touch helper used `Input.parse_input_event`, which did not reproduce the expected viewport dispatch in this SceneTree test.
+- The test now injects synthetic screen-touch and drag events through the root `Viewport.push_input(event, true)` path, including display-only label checks. This exercises the production `_input` path through the viewport.
+- The production router is unchanged from Run 141. This commit corrects the regression harness only.
+- Exact-head focused and full Godot 4.3 CI must be rerun; the failed Run 141 focused workflow is historical evidence and must not be counted as a pass.

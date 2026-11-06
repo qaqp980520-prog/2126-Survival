@@ -33,9 +33,8 @@ func _run() -> void:
 	_assert_display_label_allows_camera_look(world_status, 8, "WorldStatus label")
 	_assert_display_label_allows_camera_look(interaction_prompt, 9, "InteractionPrompt label")
 
-	# This regression exercises raw screen-touch ownership through the production
-	# unhandled-input handler. It does not claim physical or mouse-emulated Control
-	# activation; that remains a non-headless device-level check.
+	# Raw touch events are routed in the production _input handler before GUI Controls.
+	# Viewport injection verifies engine event routing, not physical device ergonomics.
 	var touch_buttons: Dictionary = _world.get("touch_buttons")
 	var jump_button: Button = touch_buttons.get("jump") as Button
 	_expect(jump_button != null, "production HUD exposes its jump touch button")
@@ -260,7 +259,7 @@ func _assert_native_multitouch_delivery(buttons: Dictionary) -> void:
 	look_drag.index = 0
 	look_drag.position = world_look_position + Vector2(10.0, 0.0)
 	look_drag.relative = Vector2(10.0, 0.0)
-	Input.parse_input_event(look_drag)
+	root.push_input(look_drag, true)
 	await process_frame
 	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before_drag - 0.03), "world-look finger continues rotating while another finger holds sprint")
 	_expect(bool(_world.get("_touch_sprint")), "world-look drag does not release the independent sprint finger")
@@ -285,7 +284,7 @@ func _send_screen_touch(index: int, position: Vector2, pressed: bool) -> void:
 	touch.index = index
 	touch.position = position
 	touch.pressed = pressed
-	Input.parse_input_event(touch)
+	root.push_input(touch, true)
 	await process_frame
 
 func _assert_focus_loss_clears_held_inputs(buttons: Dictionary) -> void:
@@ -404,19 +403,19 @@ func _assert_display_label_allows_camera_look(label: Label, touch_index: int, la
 	touch.index = touch_index
 	touch.position = viewport_position
 	touch.pressed = true
-	_world.call("_unhandled_input", touch)
+	root.push_input(touch, true)
 	var active_indices: Array = _world.get("_touch_look_indices")
 	_expect(active_indices.has(touch_index), "%s permits world-look touch registration" % label_name)
 	var yaw_before: float = float(_world.get("_yaw"))
 	var drag := InputEventScreenDrag.new()
 	drag.index = touch_index
 	drag.relative = Vector2(10.0, 0.0)
-	_world.call("_unhandled_input", drag)
+	root.push_input(drag, true)
 	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_before - 0.03), "%s permits camera-look drag" % label_name)
 	var release := InputEventScreenTouch.new()
 	release.index = touch_index
 	release.pressed = false
-	_world.call("_unhandled_input", release)
+	root.push_input(release, true)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
