@@ -1,0 +1,70 @@
+name: Production Surface Chunk Benchmark
+
+on:
+  pull_request:
+    paths:
+      - "systems/SurfaceChunkFactory.gd"
+      - "systems/SurfaceTerrainPatch.gd"
+      - "systems/MineralChunkController.gd"
+      - "systems/MineralGridStreamingDirector.gd"
+      - "world/SurfaceWorld.gd"
+      - "world/SurfaceWorld.tscn"
+      - "tests/surface_chunk_production_benchmark.gd"
+      - ".github/workflows/surface-chunk-production-benchmark.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: surface-chunk-production-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-benchmark:
+    name: Godot 4.3 real-factory benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify benchmark inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f world/SurfaceWorld.tscn
+          test -f world/SurfaceWorld.gd
+          test -f systems/SurfaceChunkFactory.gd
+          test -f systems/MineralChunkController.gd
+          test -f tests/surface_chunk_production_benchmark.gd
+          grep -Fq 'SurfaceChunkFactoryScript.make_chunk' world/SurfaceWorld.gd
+          grep -Fq 'get_managed_chunk_ids' systems/MineralGridStreamingDirector.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run real production factory/controller benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          timeout -k 10s 1700s godot --headless --path . --script res://tests/surface_chunk_production_benchmark.gd 2>&1 | tee surface_chunk_production_benchmark.log
+          grep -q "Surface chunk production benchmark completed." surface_chunk_production_benchmark.log
+          test "$(grep -c '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log)" -eq 10
+          sed 's/^SURFACE_CHUNK_BENCHMARK_JSON://' surface_chunk_production_benchmark.log > surface_chunk_production_benchmark.jsonl
+      - name: Upload reproducible benchmark output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surface-chunk-production-benchmark
+          path: |
+            surface_chunk_production_benchmark.log
+            surface_chunk_production_benchmark.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Verify clean workspace
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          test -z "$(git status --porcelain)"
