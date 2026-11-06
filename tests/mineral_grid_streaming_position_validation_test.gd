@@ -60,6 +60,7 @@ func _run_tests() -> void:
 	_check(str(zero_width_report.get("phase", "")) == "validation", "Zero chunk width should report validation.")
 	_check(str(zero_width_report.get("message", "")).contains("finite and positive"), "Zero chunk width report should explain the dimension contract.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Zero chunk width must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Zero chunk width must not mutate controller chunks.")
 	director.chunk_size_x = 10.0
 	director.chunk_size_z = INF
 	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a non-finite chunk depth.")
