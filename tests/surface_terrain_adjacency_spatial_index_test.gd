@@ -85,7 +85,8 @@ func _test_large_negative_coordinate_grid() -> void:
 	_expect(int(report.get("duplicate_position_candidate_checks", -1)) == 0, "well-spaced grid requires no duplicate-position candidate comparisons")
 	_expect(int(report.get("position_bucket_lookups", -1)) == patch_count * 27, "duplicate validation checks a fixed 27-bucket neighborhood per patch")
 	_expect(int(report.get("adjacency_bucket_lookups", -1)) == patch_count * 4 * 27, "adjacency discovery checks a fixed 27-bucket neighborhood per cardinal side")
-	var center: FixturePatch = patches[(GRID_WIDTH / 2) * GRID_HEIGHT + (GRID_HEIGHT / 2)] as FixturePatch
+	var center_index: int = int(GRID_WIDTH / 2) * GRID_HEIGHT + int(GRID_HEIGHT / 2)
+	var center: FixturePatch = patches[center_index] as FixturePatch
 	_expect(center.neighbors.size() == 4, "interior grid patch binds all four cardinal neighbors")
 	holder.queue_free()
 	await process_frame
