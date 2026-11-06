@@ -14,8 +14,9 @@ The Director exposes `load_radius` with an Inspector range of 0–8, but Inspect
 
 ## Regression coverage
 
-- `tests/mineral_grid_streaming_position_validation_test.gd`: verifies radius 8 remains valid, radius 9 is rejected by synchronous sync and coordinate validation, and rejection leaves controller IDs and Director ownership unchanged.
-- `tests/mineral_grid_streaming_async_test.gd`: verifies radius 9 is rejected before an async request ID is consumed, no request becomes active, and the existing chunk window is unchanged.
+- `tests/mineral_grid_streaming_position_validation_test.gd`: verifies radius 8 remains valid; radii -1 and 9 are rejected by synchronous sync, recovery, and coordinate validation; recovery rejection occurs before Director ownership reconciliation; controller IDs and Director ownership remain unchanged.
+- `tests/mineral_grid_streaming_async_test.gd`: verifies radii -1 and 9 are rejected before an async request ID is consumed, no request becomes active, and the existing chunk window is unchanged.
+- Recovery, synchronous sync, asynchronous request creation, and the shared safe-position guard use one runtime grid-configuration validator so the 0–8 contract cannot drift between entry points.
 
 ## Files and dependencies
 
@@ -63,3 +64,12 @@ The cap bounds one Director window to at most 289 coordinates. It does not impos
 - Correct the synchronous invalid-configuration report to include the supported runtime radius range instead of an accidentally malformed placeholder.
 - Extend the position-validation test to assert the report message explains the inclusive 0–8 range, in addition to checking the validation phase and state preservation.
 - Exact-head CI must be rerun for the new commit.
+
+
+## Run 146 — shared runtime configuration and recovery validation
+
+- Centralize finite/positive chunk dimensions and the inclusive 0–8 radius contract in `_is_valid_grid_configuration()`.
+- Use the same configuration guard for synchronous sync, asynchronous request validation, recovery, and safe-grid-position checks.
+- Recovery now reports a specific `recovery_validation` message for an invalid radius before reconciling the controller's actual IDs into the Director map.
+- Add lower- and upper-bound regression coverage for radii -1 and 9 across sync, recovery, coordinate validation and async request creation.
+- Exact-head Godot 4.3 CI must pass for the resulting commit; the prior head's 10/10 matrix is historical evidence only.

@@ -105,6 +105,12 @@ func _test_playground_async_requests() -> void:
     _expect(int(director.call("get_active_async_request_id")) == -1, "Rejected excessive-radius request does not create an active request")
     _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected excessive-radius request does not consume a request ID")
     _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected excessive-radius request leaves the active chunk window unchanged")
+    director.set("load_radius", -1)
+    var negative_radius_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time, 1))
+    _expect(negative_radius_request == -1, "Async request rejects a runtime load radius below the Inspector minimum")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "Rejected negative-radius request does not create an active request")
+    _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected negative-radius request does not consume a request ID")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected negative-radius request leaves the active chunk window unchanged")
     director.set("load_radius", original_radius)
 
     var validation_guard_request: int = int(director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 5.0), _test_time + 1, 1))

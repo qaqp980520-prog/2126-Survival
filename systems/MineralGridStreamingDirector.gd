@@ -69,8 +69,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
 		return false
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
-		_set_sync_report(false, "validation", "Chunk dimensions must be finite and positive; load radius must be between 0 and %d." % MAX_LOAD_RADIUS, true)
+	if not _is_valid_grid_configuration():
+		_set_sync_report(false, "validation", _grid_configuration_error_message(), true)
 		return false
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "validation", "World position is outside supported grid-coordinate bounds.", true)
@@ -232,8 +232,7 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
 		return -1
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
-		return -1
+	
 
 	var request_id: int = _next_async_request_id
 	_next_async_request_id += 1
@@ -766,6 +765,9 @@ func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> b
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
 		return false
+	if not _is_valid_grid_configuration():
+		_set_sync_report(false, "recovery_validation", _grid_configuration_error_message(), false)
+		return false
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position is outside supported grid-coordinate bounds.", false)
 		return false
@@ -827,10 +829,23 @@ func get_grid_coordinate(world_position: Vector3) -> Vector2i:
 		return Vector2i.ZERO
 	return Vector2i(floori(world_position.x / chunk_size_x), floori(world_position.z / chunk_size_z))
 
+func _is_valid_grid_configuration() -> bool:
+	return (
+		is_finite(chunk_size_x)
+		and is_finite(chunk_size_z)
+		and chunk_size_x > 0.0
+		and chunk_size_z > 0.0
+		and load_radius >= 0
+		and load_radius <= MAX_LOAD_RADIUS
+	)
+
+func _grid_configuration_error_message() -> String:
+	return "Chunk dimensions must be finite and positive; load radius must be between 0 and %d." % MAX_LOAD_RADIUS
+
 func _is_safe_grid_position(world_position: Vector3) -> bool:
 	if not _is_finite_world_position(world_position):
 		return false
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
+	if not _is_valid_grid_configuration():
 		return false
 	var grid_x: float = world_position.x / chunk_size_x
 	var grid_z: float = world_position.z / chunk_size_z
