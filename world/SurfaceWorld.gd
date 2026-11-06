@@ -28,11 +28,6 @@ var hud: Label
 var interaction_prompt: Label
 var streaming_diagnostics_panel: PanelContainer
 var touch_buttons: Dictionary = {}
-var _touch_button_owners: Dictionary = {}
-var _touch_button_owner_counts: Dictionary = {}
-var _touch_blocked_indices: Dictionary = {}
-var _previous_emulate_mouse_from_touch: bool = true
-var _owns_mouse_emulation_override: bool = false
 var _touch_directions: Dictionary = {}
 var _touch_jump: bool = false
 var _touch_sprint: bool = false
@@ -67,11 +62,7 @@ var _player_visual_clock: float = 0.0
 var _player_visual_state: String = "idle"
 
 func _ready() -> void:
-	_previous_emulate_mouse_from_touch = Input.emulate_mouse_from_touch
-	_owns_mouse_emulation_override = true
-	Input.emulate_mouse_from_touch = false
 	if not initialize_world_session():
-		_restore_touch_mouse_emulation()
 		return
 	if director != null and director.has_signal("async_sync_completed"):
 		var stream_callback := Callable(self, "_on_surface_stream_completed")
@@ -88,15 +79,6 @@ func _ready() -> void:
 		push_error("Surface world could not register its underground mine chunk.")
 	_build_mine_entrance_visual()
 
-func _exit_tree() -> void:
-	_restore_touch_mouse_emulation()
-
-func _restore_touch_mouse_emulation() -> void:
-	if not _owns_mouse_emulation_override:
-		return
-	Input.emulate_mouse_from_touch = _previous_emulate_mouse_from_touch
-	_owns_mouse_emulation_override = false
-
 # OS focus loss or mobile app suspension can occur before a held Control emits button_up.
 # Clear transient input so movement, jump, sprint and look cannot remain stuck on resume.
 func _notification(what: int) -> void:
@@ -108,9 +90,6 @@ func _notification(what: int) -> void:
 		_clear_touch_input_state()
 
 func _clear_touch_input_state() -> void:
-	_touch_button_owners.clear()
-	_touch_button_owner_counts.clear()
-	_touch_blocked_indices.clear()
 	_touch_directions.clear()
 	_touch_jump = false
 	_touch_sprint = false
@@ -740,9 +719,6 @@ func _is_touch_over_hud_control(screen_position: Vector2) -> bool:
 	var hud_layer := get_node_or_null("HUD") as CanvasLayer
 	if hud_layer == null:
 		return false
-	if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel) and streaming_diagnostics_panel.is_visible_in_tree():
-		if _control_contains_screen_position(streaming_diagnostics_panel, screen_position):
-			return true
 	for child in hud_layer.get_children():
 		if _control_tree_contains_point(child, screen_position):
 			return true
@@ -759,102 +735,6 @@ func _control_tree_contains_point(node: Node, screen_position: Vector2) -> bool:
 		if _control_tree_contains_point(child, screen_position):
 			return true
 	return false
-
-
-func _control_contains_screen_position(control: Control, screen_position: Vector2) -> bool:
-	if control == null or not control.is_visible_in_tree():
-		return false
-	var local_position: Vector2 = control.get_global_transform_with_canvas().affine_inverse() * screen_position
-	return Rect2(Vector2.ZERO, control.size).has_point(local_position)
-
-func _touch_button_key_at_position(screen_position: Vector2) -> String:
-	for key in touch_buttons:
-		var button: Button = touch_buttons[key] as Button
-		if button != null and not button.disabled and _control_contains_screen_position(button, screen_position):
-			return str(key)
-	if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel) and streaming_diagnostics_panel.is_visible_in_tree():
-		if streaming_diagnostics_panel.has_method("get_export_button"):
-			var export_button: Button = streaming_diagnostics_panel.call("get_export_button") as Button
-			if export_button != null and not export_button.disabled and _control_contains_screen_position(export_button, screen_position):
-				return "diagnostics_export"
-	return ""
-
-func _press_touch_button(key: String) -> void:
-	match key:
-		"left", "right", "forward", "back":
-			_touch_button_owner_counts[key] = int(_touch_button_owner_counts.get(key, 0)) + 1
-			_touch_directions[key] = true
-		"jump":
-			_touch_button_owner_counts[key] = int(_touch_button_owner_counts.get(key, 0)) + 1
-			_touch_jump = true
-		"sprint":
-			_touch_button_owner_counts[key] = int(_touch_button_owner_counts.get(key, 0)) + 1
-			_touch_sprint = true
-		"crop":
-			_on_touch_crop_pressed()
-		"crate":
-			_on_touch_crate_pressed()
-		"terrain":
-			_on_touch_terrain_pressed()
-		"shaft":
-			_on_touch_shaft_pressed()
-		"deeper":
-			_on_touch_deeper_pressed()
-		"quick_1", "quick_2", "quick_3", "quick_4":
-			_consume_quick_slot(int(key.substr(6, 1)) - 1)
-		"diagnostics_export":
-			if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel):
-				streaming_diagnostics_panel.call("export_snapshot_to_default_path")
-
-func _release_touch_button(key: String) -> void:
-	var remaining: int = maxi(0, int(_touch_button_owner_counts.get(key, 0)) - 1)
-	if remaining > 0:
-		_touch_button_owner_counts[key] = remaining
-		return
-	_touch_button_owner_counts.erase(key)
-	match key:
-		"left", "right", "forward", "back":
-			_touch_directions.erase(key)
-		"jump":
-			_touch_jump = false
-		"sprint":
-			_touch_sprint = false
-
-func _handle_screen_touch(touch: InputEventScreenTouch) -> void:
-	if touch.pressed and not touch.canceled:
-		if _touch_button_owners.has(touch.index) or _touch_blocked_indices.has(touch.index) or _touch_look_indices.has(touch.index):
-			return
-		var button_key: String = _touch_button_key_at_position(touch.position)
-		if not button_key.is_empty():
-			_touch_button_owners[touch.index] = button_key
-			_press_touch_button(button_key)
-		elif _is_touch_over_hud_control(touch.position):
-			_touch_blocked_indices[touch.index] = true
-		else:
-			_touch_look_indices.append(touch.index)
-		return
-	if _touch_button_owners.has(touch.index):
-		var owned_button_key: String = str(_touch_button_owners[touch.index])
-		_touch_button_owners.erase(touch.index)
-		_release_touch_button(owned_button_key)
-	elif _touch_blocked_indices.has(touch.index):
-		_touch_blocked_indices.erase(touch.index)
-	else:
-		_touch_look_indices.erase(touch.index)
-
-func _handle_screen_drag(drag: InputEventScreenDrag) -> void:
-	if _touch_button_owners.has(drag.index) or _touch_blocked_indices.has(drag.index):
-		return
-	if not _touch_look_indices.is_empty() and drag.index == _touch_look_indices[0]:
-		_apply_look_delta(drag.relative)
-
-func _input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		_handle_screen_touch(event as InputEventScreenTouch)
-		get_viewport().set_input_as_handled()
-	elif event is InputEventScreenDrag:
-		_handle_screen_drag(event as InputEventScreenDrag)
-		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
@@ -896,6 +776,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		var motion := event as InputEventMouseMotion
 		_apply_look_delta(motion.relative)
+	elif event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			if not _is_touch_over_hud_control(touch.position) and not _touch_look_indices.has(touch.index):
+				_touch_look_indices.append(touch.index)
+		else:
+			_touch_look_indices.erase(touch.index)
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if not _touch_look_indices.is_empty() and drag.index == _touch_look_indices[0]:
+			_apply_look_delta(drag.relative)
 
 func _apply_look_delta(relative: Vector2) -> void:
 	if player == null or camera == null:
