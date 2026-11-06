@@ -50,9 +50,33 @@ func _run_tests() -> void:
 	_check(director.get_grid_coordinate(Vector3(NAN, 0.0, 0.0)) == Vector2i.ZERO, "Coordinate helper should safely return zero for non-finite input.")
 	_check(director.get_grid_coordinate(Vector3(1.0e30, 0.0, 0.0)) == Vector2i.ZERO, "Coordinate helper should safely return zero for out-of-range input.")
 	director.chunk_size_x = NAN
-	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a non-finite chunk size.")
-	_check(director.get_managed_chunk_ids() == managed_before, "Invalid chunk size must not mutate the managed map.")
+	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a non-finite chunk width.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Non-finite chunk width must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Non-finite chunk width must not mutate controller chunks.")
+	_check(director.get_grid_coordinate(Vector3(1.0, 0.0, 1.0)) == Vector2i.ZERO, "Coordinate helper must reject a non-finite chunk width.")
+	director.chunk_size_x = 0.0
+	_check(not bool(director.sync_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Sync must reject a zero chunk width.")
+	var zero_width_report: Dictionary = director.get_last_sync_report()
+	_check(str(zero_width_report.get("phase", "")) == "validation", "Zero chunk width should report validation.")
+	_check(str(zero_width_report.get("message", "")).contains("finite and positive"), "Zero chunk width report should explain the dimension contract.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Zero chunk width must not mutate the managed map.")
 	director.chunk_size_x = 10.0
+	director.chunk_size_z = INF
+	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a non-finite chunk depth.")
+	var infinite_depth_report: Dictionary = director.get_last_sync_report()
+	_check(str(infinite_depth_report.get("phase", "")) == "recovery_validation", "Non-finite chunk depth should report recovery_validation.")
+	_check(str(infinite_depth_report.get("message", "")).contains("finite and positive"), "Non-finite chunk depth report should explain the dimension contract.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected non-finite chunk depth must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected non-finite chunk depth must not mutate controller chunks.")
+	director.chunk_size_z = -10.0
+	_check(not bool(director.call("_is_safe_grid_position", Vector3(1.0, 0.0, 1.0))), "Shared grid guard must reject a negative chunk depth.")
+	_check(director.get_grid_coordinate(Vector3(1.0, 0.0, 1.0)) == Vector2i.ZERO, "Coordinate helper must reject a negative chunk depth.")
+	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a negative chunk depth.")
+	var negative_depth_report: Dictionary = director.get_last_sync_report()
+	_check(str(negative_depth_report.get("phase", "")) == "recovery_validation", "Negative chunk depth should report recovery_validation.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected negative chunk depth must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected negative chunk depth must not mutate controller chunks.")
+	director.chunk_size_z = 10.0
 
 	var original_radius: int = int(director.get("load_radius"))
 	director.load_radius = 8
