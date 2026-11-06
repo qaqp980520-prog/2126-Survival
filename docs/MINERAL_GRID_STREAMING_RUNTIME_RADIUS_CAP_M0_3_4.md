@@ -46,5 +46,13 @@ The cap bounds one Director window to at most 289 coordinates. It does not impos
 
 - The synchronous entry point previously cancelled an active async request before validating the new position, dimensions and runtime load radius. An invalid sync call could therefore discard a valid in-flight request even though the new request was rejected.
 - Move async supersession until after all synchronous validation succeeds. A valid sync request still cancels the active async request before it mutates the chunk window.
-- Extend `tests/mineral_grid_streaming_async_test.gd`: stage a valid async request, set the runtime radius above the cap, issue an invalid sync request, verify the active request ID and committed chunk IDs remain unchanged, restore the valid radius, and verify the original async request completes.
+- Extend `tests/mineral_grid_streaming_async_test.gd`: stage a valid async request, set the runtime radius above the cap, issue an invalid sync request, verify the active request ID and committed chunk IDs remain unchanged, submit a second invalid async request and verify it neither cancels the active request nor consumes an ID, restore the valid radius, and verify the original async request completes.
 - Exact-head CI for the updated branch must be rerun; no pass is claimed until the new head finishes.
+
+
+## Run 144 — invalid async request preserves an active valid request
+
+- Extend the active-request regression so both invalid synchronous and invalid asynchronous requests are submitted while a valid async chunk window is already staging.
+- Verify the invalid async request returns `-1`, leaves the active request ID unchanged, does not consume `_next_async_request_id`, and does not alter committed chunk IDs.
+- This validates the existing async validation-before-supersession order alongside Run 143's synchronous guard.
+- Exact-head CI must be rerun for the new commit; no pass is claimed until completion.
