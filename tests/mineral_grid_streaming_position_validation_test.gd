@@ -78,7 +78,7 @@ func _run_tests() -> void:
 	_check(not bool(director.recover_to_world_position(Vector3(1.0, 0.0, 1.0), 1005)), "Recovery must reject a non-finite chunk depth.")
 	var infinite_depth_report: Dictionary = director.get_last_sync_report()
 	_check(str(infinite_depth_report.get("phase", "")) == "recovery_validation", "Non-finite chunk depth should report recovery_validation.")
-	_check(str(infinite_depth_report.get("message", "")).contains("finite and positive"), "Non-finite chunk depth report should explain the dimension contract.")
+	_check(str(infinite_depth_report.get("message", "")).contains("1 and 4096"), "Non-finite chunk depth report should explain the Inspector dimension range.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected non-finite chunk depth must not mutate the managed map.")
 	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected non-finite chunk depth must not mutate controller chunks.")
 	director.chunk_size_z = -10.0
