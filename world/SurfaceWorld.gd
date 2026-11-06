@@ -79,6 +79,26 @@ func _ready() -> void:
 		push_error("Surface world could not register its underground mine chunk.")
 	_build_mine_entrance_visual()
 
+# OS focus loss or mobile app suspension can occur before a held Control emits button_up.
+# Clear transient input so movement, jump, sprint and look cannot remain stuck on resume.
+func _notification(what: int) -> void:
+	if (
+		what == NOTIFICATION_APPLICATION_FOCUS_OUT
+		or what == NOTIFICATION_APPLICATION_PAUSED
+		or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT
+	):
+		_clear_touch_input_state()
+
+func _clear_touch_input_state() -> void:
+	_touch_directions.clear()
+	_touch_jump = false
+	_touch_sprint = false
+	_touch_look_indices.clear()
+	_mouse_look_active = false
+	_jump_was_down = false
+	_sprint_active = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
