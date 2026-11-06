@@ -57,12 +57,15 @@ func _run() -> void:
 		director.set("load_radius", radius)
 		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
 		_reset_factory_metrics()
+		var expansion_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 		var expansion: Dictionary = await _run_async_request(director, target)
 		var expansion_diagnostic: Dictionary = expansion.get("diagnostic", {})
 		if not bool(expansion.get("ok", false)):
 			_expect(false, "radius %d production expansion completes: %s" % [radius, str(expansion.get("error", expansion_diagnostic.get("phase", "unknown")))])
 			break
 
+		var expansion_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - expansion_rebuilds_before
+		_expect(expansion_rebuild_delta == 1, "radius %d expansion commits one terrain adjacency rebuild instead of one per chunk" % radius)
 		var expected_count: int = (radius * 2 + 1) * (radius * 2 + 1)
 		var active_ids: PackedStringArray = _surface_ids(controller)
 		_expect(active_ids.size() == expected_count, "radius %d commits exactly %d production surface chunks" % [radius, expected_count])
@@ -101,11 +104,14 @@ func _run() -> void:
 		var departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, departing_ids)
 		var retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, retained_ids)
 		_reset_factory_metrics()
+		var boundary_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 		var boundary_result: Dictionary = await _run_async_request(director, boundary_target)
 		var boundary_diagnostic: Dictionary = boundary_result.get("diagnostic", {})
 		if not bool(boundary_result.get("ok", false)):
 			_expect(false, "radius %d one-chunk boundary crossing completes: %s" % [radius, str(boundary_result.get("error", boundary_diagnostic.get("phase", "unknown")))])
 			break
+		var boundary_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - boundary_rebuilds_before
+		_expect(boundary_rebuild_delta == 1, "radius %d boundary crossing commits one terrain adjacency rebuild instead of one per incoming chunk" % radius)
 		var boundary_ids: PackedStringArray = _surface_ids(controller)
 		_expect(boundary_ids == expected_boundary_ids, "radius %d boundary crossing commits the exact shifted window" % radius)
 		_expect(boundary_ids.size() == expected_count, "radius %d boundary crossing preserves the expected active count" % radius)
@@ -128,12 +134,15 @@ func _run() -> void:
 		_expect(departed_refs.size() == expected_count - 1, "radius %d contraction fixture captures every non-center root" % radius)
 		director.set("load_radius", 0)
 		_reset_factory_metrics()
+		var contraction_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 		var contraction: Dictionary = await _run_async_request(director, target)
 		var contraction_diagnostic: Dictionary = contraction.get("diagnostic", {})
 		if not bool(contraction.get("ok", false)):
 			_expect(false, "radius %d production contraction completes: %s" % [radius, str(contraction.get("error", contraction_diagnostic.get("phase", "unknown")))])
 			break
 
+		var contraction_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - contraction_rebuilds_before
+		_expect(contraction_rebuild_delta == 1, "radius %d contraction commits one terrain adjacency rebuild instead of one per unloaded chunk" % radius)
 		var contracted_ids: PackedStringArray = _surface_ids(controller)
 		_expect(contracted_ids.size() == 1 and contracted_ids.has(center_id), "radius %d contracts to the retained center chunk" % radius)
 		var contraction_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
