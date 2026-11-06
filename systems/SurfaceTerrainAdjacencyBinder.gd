@@ -1,6 +1,7 @@
 extends RefCounted
 
 ## Rebuilds derived terrain adjacency and stable transition descriptors after chunk load/unload.
+## Spatial buckets keep duplicate validation and cardinal-neighbor discovery bounded per patch.
 const SIDES: Array[String] = ["east", "west", "north", "south"]
 const POSITION_TOLERANCE: float = 0.01
 const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransitionDescriptor.gd")
@@ -11,12 +12,18 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 	var seen_instances: Dictionary = {}
 	var seen_stable_ids: Dictionary = {}
 	var positions: Array[Vector3] = []
+	var positions_by_bucket: Dictionary = {}
 	var snapshots_by_stable_id: Dictionary = {}
 	var stable_id_by_instance: Dictionary = {}
 	var patch_size: float = -1.0
+	var duplicate_position_candidate_checks: int = 0
+	var position_bucket_lookups: int = 0
+	var adjacency_candidate_checks: int = 0
+	var adjacency_bucket_lookups: int = 0
 
 	# Complete validation and descriptor construction before changing any live edge state.
-	for patch in patches:
+	for patch_index in range(patches.size()):
+		var patch: Node3D = patches[patch_index]
 		if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
 			return {"ok": false, "error": "invalid_patch"}
 		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("get_edge_ramp_profile") or not patch.has_method("get_world_object_state") or not patch.has_method("validate_world_object_state"):
@@ -44,10 +51,27 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 			patch_size = candidate_size
 		elif absf(candidate_size - patch_size) > POSITION_TOLERANCE:
 			return {"ok": false, "error": "mixed_patch_sizes"}
-		for prior_position in positions:
-			if prior_position.distance_to(patch.global_position) <= POSITION_TOLERANCE:
-				return {"ok": false, "error": "duplicate_position"}
-		positions.append(patch.global_position)
+
+		# A tolerance-sized spatial hash checks only the 27 neighboring buckets.
+		# This preserves the previous Euclidean duplicate-position contract at negative
+		# coordinates and across bucket boundaries without scanning every prior patch.
+		var position: Vector3 = patch.global_position
+		var position_bucket: Vector3i = _position_bucket(position)
+		for x_offset in range(-1, 2):
+			for y_offset in range(-1, 2):
+				for z_offset in range(-1, 2):
+					position_bucket_lookups += 1
+					var neighbor_bucket: Vector3i = position_bucket + Vector3i(x_offset, y_offset, z_offset)
+					var prior_indices: Array = positions_by_bucket.get(neighbor_bucket, [])
+					for prior_index_value in prior_indices:
+						duplicate_position_candidate_checks += 1
+						var prior_index: int = int(prior_index_value)
+						if positions[prior_index].distance_to(position) <= POSITION_TOLERANCE:
+							return {"ok": false, "error": "duplicate_position"}
+		positions.append(position)
+		var bucket_indices: Array = positions_by_bucket.get(position_bucket, [])
+		bucket_indices.append(patch_index)
+		positions_by_bucket[position_bucket] = bucket_indices
 
 		var state: Variant = patch.call("get_world_object_state")
 		if not (state is Dictionary) or not bool(patch.call("validate_world_object_state", state)):
@@ -56,20 +80,39 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 			return {"ok": false, "error": "invalid_patch_state"}
 		var snapshot: Dictionary = {
 			"stable_id": stable_id,
-			"position": patch.global_position,
+			"position": position,
 			"patch_size": candidate_size,
 			"height_level": state.get("height_level"),
 			"revision": state.get("revision")
 		}
 		snapshots_by_stable_id[stable_id] = snapshot
 
+	# Discover only the four cardinal neighbor positions for each patch. Candidate
+	# indices are sorted to retain deterministic pair order from the former all-pairs scan.
 	var pair_descriptors: Array[Dictionary] = []
 	for first_index in range(patches.size()):
-		for second_index in range(first_index + 1, patches.size()):
-			var first: Node3D = patches[first_index]
+		var first: Node3D = patches[first_index]
+		var neighbor_indices: Array[int] = []
+		for side in SIDES:
+			var target_position: Vector3 = first.global_position + _side_offset(side, patch_size)
+			var target_bucket: Vector3i = _position_bucket(target_position)
+			for x_offset in range(-1, 2):
+				for y_offset in range(-1, 2):
+					for z_offset in range(-1, 2):
+						adjacency_bucket_lookups += 1
+						var neighbor_bucket: Vector3i = target_bucket + Vector3i(x_offset, y_offset, z_offset)
+						var candidate_indices: Array = positions_by_bucket.get(neighbor_bucket, [])
+						for candidate_index_value in candidate_indices:
+							var second_index: int = int(candidate_index_value)
+							if second_index <= first_index:
+								continue
+							adjacency_candidate_checks += 1
+							var second_candidate: Node3D = patches[second_index]
+							if _side_between(first.global_position, second_candidate.global_position, patch_size) == side:
+								neighbor_indices.append(second_index)
+		neighbor_indices.sort()
+		for second_index in neighbor_indices:
 			var second: Node3D = patches[second_index]
-			if _side_between(first.global_position, second.global_position, patch_size).is_empty():
-				continue
 			var first_id: String = str(stable_id_by_instance[first.get_instance_id()])
 			var second_id: String = str(stable_id_by_instance[second.get_instance_id()])
 			var built: Dictionary = TransitionDescriptorScript.build(snapshots_by_stable_id[first_id], snapshots_by_stable_id[second_id])
@@ -111,8 +154,27 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		"patch_count": patches.size(),
 		"pair_count": pair_descriptors.size(),
 		"descriptor_count": descriptors.size(),
+		"duplicate_position_candidate_checks": duplicate_position_candidate_checks,
+		"position_bucket_lookups": position_bucket_lookups,
+		"adjacency_candidate_checks": adjacency_candidate_checks,
+		"adjacency_bucket_lookups": adjacency_bucket_lookups,
 		"descriptors": descriptors
 	}
+
+static func _position_bucket(position: Vector3) -> Vector3i:
+	return Vector3i(
+		floori(position.x / POSITION_TOLERANCE),
+		floori(position.y / POSITION_TOLERANCE),
+		floori(position.z / POSITION_TOLERANCE)
+	)
+
+static func _side_offset(side: String, patch_size: float) -> Vector3:
+	match side:
+		"east": return Vector3(patch_size, 0.0, 0.0)
+		"west": return Vector3(-patch_size, 0.0, 0.0)
+		"north": return Vector3(0.0, 0.0, -patch_size)
+		"south": return Vector3(0.0, 0.0, patch_size)
+		_: return Vector3.ZERO
 
 static func _side_between(first: Vector3, second: Vector3, patch_size: float) -> String:
 	var delta: Vector3 = second - first
