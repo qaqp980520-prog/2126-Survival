@@ -45,9 +45,17 @@ godot --headless --path . --script res://tests/surface_chunk_production_benchmar
 
 The PR's GitHub Actions workflow also runs the full Godot 4.3 compatibility gate.
 
-## Validation state
+## Validation state — exact-head closeout (2026-11-06)
 
-Pending exact-head CI for the implementation branch. No performance improvement is claimed until the benchmark artifact confirms one rebuild per transaction and reports comparable before/after measurements on the same runner class.
+Validated exact PR head: `0f9d3f67e734b9381cb2843fdae3a0ff3d54d62c`.
+
+- Full Godot 4.3 compatibility gate [#42223164700](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42223164700): 552/552 job steps successful; zero failed and zero skipped.
+- Production Surface Chunk Benchmark [#42223164738](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42223164738): successful. Artifact `13504905678` was downloaded and inspected: 15 valid JSONL records, 165 PASS markers, zero FAIL/ERROR markers, and the completion marker is present.
+- All 15 exact rebuild-count assertions passed: expansion, one-chunk eastward boundary crossing, and contraction at radii 1, 2, 3, 4, and 8 each perform exactly one full adjacency rebuild per asynchronous transaction.
+- Mineral Grid lifecycle [#42223164862](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42223164862) and all other focused validation runs associated with this exact head completed successfully.
+- Radius-8 one-chunk boundary sample on the headless AMD EPYC 9V45 runner: 965.914 ms transaction total, 953.736 ms maximum observed process-frame interval and p95 across 18 samples. This is a single headless observation, not a target-device performance budget or controlled cross-runner comparison.
+
+Local Godot and target-device GPU/iPhone validation are not available in this environment.
 
 ## Limitations and next steps
 
