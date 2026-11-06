@@ -442,21 +442,57 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
 		var candidate: Variant = staged_roots.get(id)
-		if not is_instance_valid(candidate) or not chunk_controller.load_chunk(id, candidate, now_unix):
-			_free_unowned_root(candidate)
+		var load_succeeded: bool = (
+			is_instance_valid(candidate)
+			and candidate is Node3D
+			and not (candidate as Node3D).is_queued_for_deletion()
+			and candidate.get_parent() == null
+		)
+		if load_succeeded:
+			load_succeeded = chunk_controller.load_chunk(id, candidate, now_unix)
+		var controller_alive_after_load: bool = chunk_controller != null and is_instance_valid(chunk_controller)
+		var controller_queued_after_load: bool = controller_alive_after_load and chunk_controller.is_queued_for_deletion()
+		var controller_ready_after_load: bool = _controller_ready_for_sync()
+		var controller_can_rollback: bool = controller_alive_after_load and not controller_queued_after_load
+		var candidate_loaded: bool = (
+			controller_can_rollback
+			and chunk_controller.has_method("is_chunk_loaded")
+			and chunk_controller.is_chunk_loaded(id)
+		)
+		if candidate_loaded:
+			_managed_chunk_ids[id] = coord
+			newly_loaded.append(id)
+		if not load_succeeded or not controller_ready_after_load or not candidate_loaded:
+			var candidate_cleanup_ok: bool = true
+			if not candidate_loaded:
+				if controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
+					chunk_controller.remove_child(candidate)
+					if not (candidate as Node3D).is_queued_for_deletion():
+						(candidate as Node3D).queue_free()
+				elif is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() != null:
+					candidate_cleanup_ok = false
+				else:
+					_free_unowned_root(candidate)
+			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok
+			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
+			var failure_phase: String = "dependency_unavailable" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
-			_release_async_staged_roots(request_id, staged_roots)
-			var rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			_finish_async_sync_request(request_id, false, "load_registration", "Chunk controller rejected a staged chunk.", rollback_ok, {
+			var staged_roots_released: int = _release_async_staged_roots(request_id, staged_roots)
+			_finish_async_sync_request(request_id, false, failure_phase, "Controller became unavailable during async chunk registration." if not controller_ready_after_load else "Chunk controller rejected or failed to register a staged chunk.", rollback_complete, {
 				"failed_chunk_id": id,
+				"controller_destroyed": not controller_alive_after_load,
+				"controller_detached": controller_detached_after_load,
+				"controller_queued_for_deletion": controller_queued_after_load,
+				"candidate_loaded": candidate_loaded,
+				"candidate_cleanup_ok": candidate_cleanup_ok,
 				"newly_loaded_ids": newly_loaded.duplicate(),
 				"staged_count": staged_count,
-				"new_loads_rollback_ok": rollback_ok
+				"staged_roots_released": staged_roots_released,
+				"new_loads_rollback_ok": new_loads_rollback_ok
 			})
 			return
 		staged_roots.erase(id)
-		_managed_chunk_ids[id] = coord
-		newly_loaded.append(id)
 
 	_release_async_staged_roots(request_id, staged_roots)
 	var stale_ids: Array[String] = []
@@ -640,6 +676,19 @@ func _finish_async_sync_request(request_id: int, success: bool, phase: String, m
 				failure_reason = "factory_invalid_root"
 				if bool(details.get("duplicate_staged_root_rejected", false)):
 					failure_reason = "factory_reused_staged_root"
+			"controller_lifecycle":
+				failure_reason = "controller_unavailable"
+			"dependency_unavailable":
+				if bool(details.get("controller_destroyed", false)):
+					failure_reason = "controller_destroyed"
+				elif bool(details.get("controller_detached", false)):
+					failure_reason = "controller_detached"
+				elif bool(details.get("controller_queued_for_deletion", false)):
+					failure_reason = "controller_destroyed"
+				elif not bool(details.get("factory_valid", true)):
+					failure_reason = "factory_unavailable"
+				else:
+					failure_reason = "dependency_unavailable"
 			"load_registration":
 				failure_reason = "registration_rejected"
 			"stale_unload":
@@ -856,8 +905,8 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 			and chunk_controller.has_method("is_chunk_loaded")
 			and chunk_controller.is_chunk_loaded(id)
 		)
-		if not load_succeeded or not controller_ready_after_load:
-			var candidate_rollback_ok := false
+		if not load_succeeded or not controller_ready_after_load or not candidate_loaded:
+			var candidate_rollback_ok: bool = false
 			if candidate_loaded:
 				candidate_rollback_ok = chunk_controller.has_method("unload_chunk") and chunk_controller.unload_chunk(id, now_unix)
 			elif controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
@@ -865,13 +914,14 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 				if not (candidate as Node3D).is_queued_for_deletion():
 					(candidate as Node3D).queue_free()
 				candidate_rollback_ok = true
+			elif is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() != null:
+				candidate_rollback_ok = false
 			else:
 				_free_unowned_root(candidate)
+				candidate_rollback_ok = true
 			if not controller_can_rollback:
 				_managed_chunk_ids.clear()
 			elif candidate_loaded and not candidate_rollback_ok:
-				# Keep the mirror accurate if the Controller still owns a root that
-				# could not be removed during the lifecycle transition.
 				_managed_chunk_ids[id] = coord
 			success = false
 			if not controller_ready_after_load:

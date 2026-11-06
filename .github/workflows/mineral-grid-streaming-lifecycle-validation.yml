@@ -6,6 +6,8 @@ on:
       - "systems/MineralGridStreamingDirector.gd"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
+      - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
+      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
       - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
@@ -15,6 +17,8 @@ on:
       - "systems/MineralGridStreamingDirector.gd"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
+      - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
+      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
       - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
@@ -38,8 +42,10 @@ jobs:
           test -f systems/MineralGridStreamingDirector.gd
           test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
+          test -f tests/mineral_grid_streaming_async_registration_contract_test.gd
           grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
           grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run synchronous mineral chunk registration lifecycle regression
@@ -50,6 +56,14 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid synchronous registration lifecycle tests passed."
+      - name: Run async mineral chunk registration result contract regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_async_registration_contract_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid async registration result contract tests passed."
       - name: Checkout cleanup
         if: always()
         shell: bash
