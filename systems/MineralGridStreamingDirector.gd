@@ -10,6 +10,8 @@ signal async_sync_completed(request_id: int, report: Dictionary)
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MAX_SAFE_GRID_COORDINATE: float = 1000000000.0
+# Keep runtime assignments within the same bound exposed by the Inspector.
+const MAX_LOAD_RADIUS: int = 8
 const MAX_ASYNC_DIAGNOSTIC_HISTORY: int = 32
 
 @export_range(1.0, 4096.0, 1.0) var chunk_size_x: float = 64.0
@@ -69,8 +71,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
 		return false
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
-		_set_sync_report(false, "validation", "Chunk dimensions and load radius must be valid.", true)
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
+		_set_sync_report(false, "validation", "NaN", true)
 		return false
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "validation", "World position is outside supported grid-coordinate bounds.", true)
@@ -229,7 +231,7 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
 		return -1
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
 		return -1
 
 	var request_id: int = _next_async_request_id
@@ -827,7 +829,7 @@ func get_grid_coordinate(world_position: Vector3) -> Vector2i:
 func _is_safe_grid_position(world_position: Vector3) -> bool:
 	if not _is_finite_world_position(world_position):
 		return false
-	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0:
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
 		return false
 	var grid_x: float = world_position.x / chunk_size_x
 	var grid_z: float = world_position.z / chunk_size_z

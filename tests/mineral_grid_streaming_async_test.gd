@@ -97,6 +97,15 @@ func _test_playground_async_requests() -> void:
     var original_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
     var original_root: Node3D = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
     _expect(original_ids.size() == 9 and original_root != null, "playground starts with a valid 3x3 active window")
+    var original_radius: int = int(director.get("load_radius"))
+    var next_request_before_validation: int = int(director.get("_next_async_request_id"))
+    director.set("load_radius", 9)
+    var excessive_radius_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time, 1))
+    _expect(excessive_radius_request == -1, "Async request rejects a runtime load radius above the Inspector maximum")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "Rejected excessive-radius request does not create an active request")
+    _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected excessive-radius request does not consume a request ID")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected excessive-radius request leaves the active chunk window unchanged")
+    director.set("load_radius", original_radius)
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
     director.set("chunk_factory", Callable(self, "_make_fault_injected_chunk"))
