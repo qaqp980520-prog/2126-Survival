@@ -480,8 +480,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				else:
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
-			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok and bool(adjacency_finalize.get("ok", false))
+			var load_failure_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok and bool(load_failure_adjacency_finalize.get("ok", false))
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
 			var failure_phase: String = "dependency_unavailable" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
@@ -516,8 +516,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not chunk_controller.unload_chunk(id, now_unix):
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
-			var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
-			var rollback_complete: bool = new_loads_restored and old_chunks_restored and bool(adjacency_finalize.get("ok", false))
+			var stale_failure_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored and bool(stale_failure_adjacency_finalize.get("ok", false))
 			var unloaded_ids: Array[String] = []
 			for item in unloaded_stale:
 				unloaded_ids.append(str(item.get("id", "")))
@@ -540,16 +540,16 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
 		return
-	var adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
-	if not bool(adjacency_finalize.get("ok", false)):
-		var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
-		var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix) if new_loads_restored else false
-		var refresh_ok: bool = bool(chunk_controller.call("refresh_terrain_adjacency")) if _controller_ready_for_sync() and chunk_controller.has_method("refresh_terrain_adjacency") else false
-		_finish_async_sync_request(request_id, false, "terrain_adjacency_commit", "Terrain adjacency batch could not be committed; the prior window was restored where possible.", new_loads_restored and old_chunks_restored and refresh_ok, {
-			"adjacency_finalize": adjacency_finalize,
-			"new_loads_rollback_ok": new_loads_restored,
-			"stale_restore_ok": old_chunks_restored,
-			"refresh_ok": refresh_ok,
+	var success_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+	if not bool(success_adjacency_finalize.get("ok", false)):
+		var adjacency_failure_new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+		var adjacency_failure_stale_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix) if adjacency_failure_new_loads_restored else false
+		var adjacency_failure_refresh_ok: bool = bool(chunk_controller.call("refresh_terrain_adjacency")) if _controller_ready_for_sync() and chunk_controller.has_method("refresh_terrain_adjacency") else false
+		_finish_async_sync_request(request_id, false, "terrain_adjacency_commit", "Terrain adjacency batch could not be committed; the prior window was restored where possible.", adjacency_failure_new_loads_restored and adjacency_failure_stale_restored and adjacency_failure_refresh_ok, {
+			"adjacency_finalize": success_adjacency_finalize,
+			"new_loads_rollback_ok": adjacency_failure_new_loads_restored,
+			"stale_restore_ok": adjacency_failure_stale_restored,
+			"refresh_ok": adjacency_failure_refresh_ok,
 			"newly_loaded_ids": newly_loaded.duplicate(),
 			"unloaded_stale_count": unloaded_stale.size()
 		})
