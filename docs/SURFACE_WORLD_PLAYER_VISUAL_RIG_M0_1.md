@@ -1,4 +1,4 @@
-# Production SurfaceWorld Player Visual Rig M0.1.5 — Touch HUD Layout Regression
+# Production SurfaceWorld Player Visual Rig M0.1.9 — Native Multitouch Gameplay Controls
 
 ## Purpose
 
@@ -17,13 +17,14 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 
 - Player root remains `CharacterBody3D`.
 - `CollisionShape3D` remains `CapsuleShape3D`, radius 0.35 and height 1.8.
-- First-person `Camera3D` remains at local position `(0, 1.48, 0)` with its existing FOV. Desktop look remains right-mouse capture plus mouse motion. Touchscreen look tracks only screen-touch indices whose initial press reaches `_unhandled_input`; Interactive HUD Controls own their hit regions, while display-only `WorldStatus` and `InteractionPrompt` labels use `MOUSE_FILTER_IGNORE` and remain transparent to camera-look gestures. Only the first eligible world touch drives look, additional eligible world touches queue for handoff, and releasing the active touch stops its drag deltas. Both desktop and touch paths share the same yaw/pitch sensitivity and pitch clamp. Helmet, visor and beacon geometry use dedicated visual layer 20, excluded from the first-person camera to prevent head/visor occlusion; external cameras can include that layer.
-- No world-save schema, chunk ID, inventory, stamina, underground, input or interaction behavior changes.
+- First-person `Camera3D` remains at local position `(0, 1.48, 0)` with its existing FOV. Desktop look remains right-mouse capture plus mouse motion. Native touch routing handles raw screen-touch and drag events in `_input` before GUI Controls. Each touch index belongs to a gameplay button, a blocked HUD region, or world-look; display-only `WorldStatus` and `InteractionPrompt` labels use `MOUSE_FILTER_IGNORE` and remain transparent to camera-look gestures. Only the first eligible world touch drives look, additional eligible world touches queue for handoff, and releasing the active touch stops its drag deltas. Both desktop and touch paths share the same yaw/pitch sensitivity and pitch clamp. Helmet, visor and beacon geometry use dedicated visual layer 20, excluded from the first-person camera to prevent head/visor occlusion; external cameras can include that layer.
+- No world-save schema, chunk ID, inventory, stamina or underground data changes. SurfaceWorld input routing is intentionally updated for native multitouch while desktop mouse and existing gameplay callbacks remain compatible.
 - Non-headless runtime creates the actual MeshInstance3D meshes. The headless regression invokes the same builder but uses metadata-only Node3D descriptors, avoiding dummy-renderer mesh creation while verifying the hierarchy and primitive geometry types.
 
 ## Files
 
 - `world/SurfaceWorld.gd`
+- `systems/MineralGridStreamingDiagnosticsPanel.gd`
 - `tests/production_surface_world_player_visual_test.gd`
 - `tests/production_surface_world_touch_look_test.gd`
 - `tests/production_surface_world_touch_layout_test.gd`
@@ -47,9 +48,9 @@ godot --headless --path . --script res://tests/production_surface_world_touch_la
 ## Validation and limitations
 
 - The focused player-visual regression checks player root/collision/camera invariants, confirms the first-person camera excludes helmet layer 20, verifies head-geometry layer assignments, rig node structure, all five state-resolution cases and representative pose transitions.
-- The touch-look regression sends a raw screen-touch event through the production `_unhandled_input` handler at the HUD jump button's viewport-space center, verifies the recursive HUD Control hit test excludes that finger from camera-look ownership, and sends its drag through the same handler to confirm yaw/pitch remain unchanged. An open-world touch is verified as eligible for look; deterministic cases cover pitch clamps, queued-finger handoff, release cleanup and desktop mouse-look compatibility. Standard Control activation from a physical touch/mouse-emulation event is not claimed by headless CI and remains a device-level check.
+- The touch-look regression routes raw screen-touch and drag events through the production `_input` handler. It verifies HUD ownership, native multitouch movement/jump, same-button finger counts, world-look plus sprint, release cleanup, focus-loss reset, input-emulation restoration, pitch clamps, finger handoff and desktop mouse-look compatibility. Physical device delivery and ergonomics remain device-level checks.
 - Full Godot 4.3 compatibility CI also runs the existing SurfaceWorld integration, carry movement, stamina, streaming, save/restore and interaction suites.
-- Headless CI verifies the HUD hit-test ownership guard and deterministic pose logic. It does not verify standard Control activation through the operating-system touch-to-mouse emulation path, physical touchscreen latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A non-headless touch-device run remains required before treating the character art and mobile controls as final.
+- Headless CI verifies raw touch routing and deterministic input-state transitions. It does not verify physical iPhone event delivery, safe areas, touch latency, gesture ergonomics, rendered materials, silhouette, shadows, camera clipping or mobile GPU appearance. A non-headless touch-device run remains required before treating the character art and mobile controls as final.
 - This is an in-engine procedural placeholder rig, not a final authored/rigged character asset. It can later be replaced by an imported model while preserving the pivot/state interface.
 
 ## Run 132 — touch gesture ownership hardening
@@ -128,3 +129,21 @@ godot --headless --path . --script res://tests/production_surface_world_touch_la
 - Runtime implementation is unchanged; this is a regression-coverage expansion for the existing `_clear_touch_input_state()` contract.
 - Exact-head focused and full Godot 4.3 CI for the resulting commit are pending; do not treat this version as validated until those checks complete.
 - Physical iPhone suspension/resume behavior and non-headless GUI/GPU rendering remain device-QA items.
+
+
+## Run 141 — native multitouch gameplay controls
+
+- The previous HUD used standard `Button` Controls for gameplay touch. Godot 4.3 documents that standard Buttons rely on touch-to-mouse emulation and do not provide simultaneous gameplay multitouch; this made movement plus jump/sprint an unverified mobile contract. See the [Godot 4.3 Button reference](https://docs.godotengine.org/en/4.3/classes/class_button.html) and [Input reference](https://docs.godotengine.org/en/4.3/classes/class_input.html).
+- SurfaceWorld now temporarily sets `Input.emulate_mouse_from_touch = false` while active and restores the prior value on initialization failure or tree exit. Desktop mouse events remain unchanged.
+- Raw `InputEventScreenTouch` and `InputEventScreenDrag` are routed in `_input` before GUI Controls. Each touch index is owned by one gameplay button, a non-interactive HUD region, or world-look. Hold controls use per-button owner counts, so releasing one of two fingers does not clear a control still held by the other.
+- Existing standard Buttons remain the desktop visual/mouse controls. Native touch routing invokes the same production movement, jump, sprint, world-action and quick-use callbacks. The diagnostics export button is also mapped so disabling touch-to-mouse emulation does not remove its mobile action.
+- Focus-loss and app-pause cleanup now clears touch owners, owner counts and blocked HUD touch indices in addition to movement, jump, sprint and look state.
+- Regression coverage sends raw events through `Input.parse_input_event` to verify simultaneous forward+jump, two-finger ownership of one movement control, world-look plus sprint, release isolation, diagnostics export hit mapping, focus-loss cleanup and restoration of the prior input-emulation setting.
+- Dependencies: root Godot 4.3 project, `world/SurfaceWorld.tscn`, and existing `MineralGridStreamingDiagnosticsPanel.gd`; no external assets, plugins or save-schema migration.
+- Import and run from repository root:
+```bash
+godot --headless --path . --editor --quit
+godot --headless --path . --script res://tests/production_surface_world_touch_look_test.gd
+godot --headless --path . --script res://tests/production_surface_world_touch_layout_test.gd
+```
+- Exact-head focused and full Godot 4.3 CI are pending for this revision. Headless input injection is engine-level evidence, not a substitute for physical iPhone multitouch, safe-area, latency, rendering or ergonomics QA.

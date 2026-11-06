@@ -276,6 +276,9 @@ func export_snapshot_to_default_path() -> void:
 	elif _export_status_label != null:
 		_export_status_label.text = "EXPORT FAILED · CHECK USER DATA STORAGE"
 
+func get_export_button() -> Button:
+	return _export_button
+
 func get_export_button_count() -> int:
 	return 1 if is_instance_valid(_export_button) else 0
 
