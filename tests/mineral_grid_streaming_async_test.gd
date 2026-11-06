@@ -157,8 +157,9 @@ func _test_playground_async_requests() -> void:
             director.call("cancel_async_sync_request", dimension_guard_request)
         var dimension_guard_report: Dictionary = await _wait_for_request(director, dimension_guard_request)
         _expect(bool(dimension_guard_report.get("success", false)) and str(dimension_guard_report.get("phase", "")) == "complete", "valid async request completes after invalid dimension validation is rejected")
+    original_ids = controller.call("get_loaded_chunk_ids")
     original_root = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
-    _expect(original_root != null, "post-validation baseline retains the overlapping original chunk root")
+    _expect(original_root != null, "post-dimension-validation baseline retains the overlapping original chunk root")
 
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
