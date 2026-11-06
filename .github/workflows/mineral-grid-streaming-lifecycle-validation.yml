@@ -52,7 +52,9 @@ jobs:
           test -f tests/mineral_grid_streaming_position_validation_test.gd
           test -f tests/mineral_grid_streaming_async_test.gd
           grep -Fq 'MAX_LOAD_RADIUS' systems/MineralGridStreamingDirector.gd
-          grep -Fq 'load_radius > MAX_LOAD_RADIUS' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'func _is_valid_grid_configuration' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'load_radius >= 0' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'load_radius <= MAX_LOAD_RADIUS' systems/MineralGridStreamingDirector.gd
           grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
           grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
