@@ -118,3 +118,13 @@ godot --headless --path . --script res://tests/production_surface_world_touch_la
 - Runtime gameplay code is unchanged in this run; the work adds deterministic layout assertions and CI coverage only.
 - Run from the repository root with `godot --headless --path . --editor --quit` followed by `godot --headless --path . --script res://tests/production_surface_world_touch_layout_test.gd`.
 - Validation status at authoring: pending exact-head Godot 4.3 focused and full CI. Headless layout geometry does not validate OS touch-to-mouse activation, physical device safe-area behavior, rendered GUI appearance or iPhone latency.
+
+
+## Run 140 — window-focus interruption regression
+
+- Extended `tests/production_surface_world_touch_look_test.gd` to cover all three production interruption notifications: `NOTIFICATION_APPLICATION_FOCUS_OUT`, `NOTIFICATION_APPLICATION_PAUSED`, and `NOTIFICATION_WM_WINDOW_FOCUS_OUT`.
+- Each path now asserts that held movement directions, jump, sprint, active world-look fingers, the jump-edge latch, active sprint state and mouse-look capture are cleared, and that the mouse cursor is released.
+- The window-focus case additionally sends a stale drag for the previously active finger and verifies that neither player yaw nor camera pitch changes.
+- Runtime implementation is unchanged; this is a regression-coverage expansion for the existing `_clear_touch_input_state()` contract.
+- Exact-head focused and full Godot 4.3 CI for the resulting commit are pending; do not treat this version as validated until those checks complete.
+- Physical iPhone suspension/resume behavior and non-headless GUI/GPU rendering remain device-QA items.
