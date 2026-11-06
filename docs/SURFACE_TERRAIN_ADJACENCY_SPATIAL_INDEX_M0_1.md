@@ -26,7 +26,7 @@ Expected lookup work is bounded by a fixed neighborhood per patch for normal non
 
 ## Regression coverage
 
-The focused Godot 4.3 workflow runs the existing real-patch binder test, a new 20x20 fixture grid test, and the transition collider manager compatibility test.
+The existing `tests/surface_terrain_adjacency_binder_test.gd` now runs both the original real-patch scenarios and a lightweight 20x20 fixture grid; the full Godot compatibility gate already executes this test. The focused Godot 4.3 workflow also runs the transition collider manager compatibility test.
 
 The new fixture asserts:
 - 400 patches produce exactly 760 cardinal adjacency pairs;
@@ -39,7 +39,7 @@ The new fixture asserts:
 ## Files
 
 - `systems/SurfaceTerrainAdjacencyBinder.gd`
-- `tests/surface_terrain_adjacency_spatial_index_test.gd`
+- `tests/surface_terrain_adjacency_binder_test.gd` — original real-patch scenarios plus the 20x20 spatial-index and tolerance-boundary regressions.
 - `.github/workflows/surface-terrain-adjacency-spatial-index-validation.yml`
 - `.github/workflows/surface-chunk-production-benchmark.yml` — expanded dependency path coverage so binder/transition changes rerun the real-factory benchmark.
 - `docs/SURFACE_TERRAIN_ADJACENCY_SPATIAL_INDEX_M0_1.md`
@@ -58,7 +58,6 @@ Focused validation:
 
 ```sh
 godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd
-godot --headless --path . --script res://tests/surface_terrain_adjacency_spatial_index_test.gd
 godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd
 ```
 

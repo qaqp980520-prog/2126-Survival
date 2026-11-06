@@ -9,7 +9,6 @@ on:
       - "systems/SurfaceTerrainTransitionColliderManager.gd"
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
-      - "tests/surface_terrain_adjacency_spatial_index_test.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
   push:
@@ -22,7 +21,6 @@ on:
       - "systems/SurfaceTerrainTransitionColliderManager.gd"
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
-      - "tests/surface_terrain_adjacency_spatial_index_test.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
 
@@ -49,16 +47,13 @@ jobs:
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
           test -f systems/SurfaceTerrainTransitionDescriptor.gd
           test -f tests/surface_terrain_adjacency_binder_test.gd
-          test -f tests/surface_terrain_adjacency_spatial_index_test.gd
           grep -Fq '_position_bucket' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'adjacency_candidate_checks' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
-      - name: Run existing real-patch adjacency regression
+      - name: Run real-patch and spatial-index adjacency regressions
         run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd
-      - name: Run spatial-index scaling and tolerance regression
-        run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_spatial_index_test.gd
       - name: Run transition collider compatibility regression
         run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd
       - name: Verify clean workspace
