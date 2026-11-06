@@ -192,7 +192,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
-		_rebind_terrain_patches(existing_terrain_patches)
+		_request_terrain_adjacency_rebind(existing_terrain_patches)
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
