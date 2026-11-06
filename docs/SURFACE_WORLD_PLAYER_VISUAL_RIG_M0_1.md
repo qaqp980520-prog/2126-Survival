@@ -1,4 +1,4 @@
-# Production SurfaceWorld Player Visual Rig M0.1.3 — Touch Gesture Ownership Guard
+# Production SurfaceWorld Player Visual Rig M0.1.5 — Touch HUD Layout Regression
 
 ## Purpose
 
@@ -26,6 +26,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 - `world/SurfaceWorld.gd`
 - `tests/production_surface_world_player_visual_test.gd`
 - `tests/production_surface_world_touch_look_test.gd`
+- `tests/production_surface_world_touch_layout_test.gd`
 - `.github/workflows/godot-validation.yml`
 - `.github/workflows/surface-world-player-visual-validation.yml`
 - `docs/SURFACE_WORLD_PLAYER_VISUAL_RIG_M0_1.md`
@@ -40,6 +41,7 @@ Replace the single capsule visual placeholder with a lightweight procedural low-
 godot --headless --path . --editor --quit
 godot --headless --path . --script res://tests/production_surface_world_player_visual_test.gd
 godot --headless --path . --script res://tests/production_surface_world_touch_look_test.gd
+godot --headless --path . --script res://tests/production_surface_world_touch_layout_test.gd
 ```
 
 ## Validation and limitations
@@ -106,3 +108,13 @@ godot --headless --path . --script res://tests/production_surface_world_touch_lo
 - Dependencies/import: root Godot 4.3 project and `world/SurfaceWorld.tscn`; no external assets or import step. Run editor import then the touch-look script from repository root.
 - Validation: pending exact-head focused and full Godot 4.3 CI. No new-head pass is claimed until both complete.
 - Limitations: headless tests validate deterministic input ownership and yaw changes, not physical iPhone touch latency, OS touch-to-mouse Control activation or rendered GPU behavior.
+
+
+## Run 137 — production touch-control layout regression
+
+- Added `tests/production_surface_world_touch_layout_test.gd` to verify the fifteen production HUD touch buttons are present, visible, non-zero, non-overlapping, fully inside the TouchControls PanelContainer and inside the active viewport.
+- The regression also verifies the InteractionPrompt remains inside the viewport and does not overlap the touch-control panel or any touch button. This protects the compact bottom-center control cluster from accidental clipping or prompt overlap as the HUD changes.
+- Added the test to both `.github/workflows/surface-world-player-visual-validation.yml` and the full `.github/workflows/godot-validation.yml` gate. The focused workflow path filters include the new test file.
+- Runtime gameplay code is unchanged in this run; the work adds deterministic layout assertions and CI coverage only.
+- Run from the repository root with `godot --headless --path . --editor --quit` followed by `godot --headless --path . --script res://tests/production_surface_world_touch_layout_test.gd`.
+- Validation status at authoring: pending exact-head Godot 4.3 focused and full CI. Headless layout geometry does not validate OS touch-to-mouse activation, physical device safe-area behavior, rendered GUI appearance or iPhone latency.
