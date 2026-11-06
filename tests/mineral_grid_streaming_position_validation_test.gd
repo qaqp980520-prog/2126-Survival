@@ -61,6 +61,7 @@ func _run_tests() -> void:
 	_check(not bool(director.sync_to_world_position(Vector3(15.0, 0.0, 15.0), 1006)), "Sync must reject a runtime load radius above the Inspector maximum.")
 	var excessive_radius_report: Dictionary = director.get_last_sync_report()
 	_check(str(excessive_radius_report.get("phase", "")) == "validation", "Excessive runtime radius should report validation.")
+	_check(str(excessive_radius_report.get("message", "")).contains("0 and 8"), "Excessive runtime radius report should explain the supported 0–8 range.")
 	_check(director.get_managed_chunk_ids() == managed_before, "Rejected excessive radius must not mutate the managed map.")
 	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected excessive radius must not mutate controller chunks.")
 	_check(director.get_grid_coordinate(Vector3(15.0, 0.0, 15.0)) == Vector2i.ZERO, "Coordinate helper must reject a runtime radius above the supported maximum.")

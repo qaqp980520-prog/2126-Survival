@@ -70,7 +70,7 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
 		return false
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0 or load_radius < 0 or load_radius > MAX_LOAD_RADIUS:
-		_set_sync_report(false, "validation", "NaN", true)
+		_set_sync_report(false, "validation", "Chunk dimensions must be finite and positive; load radius must be between 0 and %d." % MAX_LOAD_RADIUS, true)
 		return false
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "validation", "World position is outside supported grid-coordinate bounds.", true)

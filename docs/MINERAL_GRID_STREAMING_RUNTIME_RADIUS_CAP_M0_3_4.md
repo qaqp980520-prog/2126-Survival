@@ -56,3 +56,10 @@ The cap bounds one Director window to at most 289 coordinates. It does not impos
 - Verify the invalid async request returns `-1`, leaves the active request ID unchanged, does not consume `_next_async_request_id`, and does not alter committed chunk IDs.
 - This validates the existing async validation-before-supersession order alongside Run 143's synchronous guard.
 - Exact-head CI must be rerun for the new commit; no pass is claimed until completion.
+
+
+## Run 145 — validation report message regression
+
+- Correct the synchronous invalid-configuration report to include the supported runtime radius range instead of an accidentally malformed placeholder.
+- Extend the position-validation test to assert the report message explains the inclusive 0–8 range, in addition to checking the validation phase and state preservation.
+- Exact-head CI must be rerun for the new commit.
