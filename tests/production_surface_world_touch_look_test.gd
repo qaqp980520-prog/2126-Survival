@@ -222,16 +222,11 @@ func _assert_focus_loss_clears_held_inputs(buttons: Dictionary) -> void:
 	look_touch.position = Vector2(400.0, 300.0)
 	look_touch.pressed = true
 	_world.call("_unhandled_input", look_touch)
+	_world.set("_jump_was_down", true)
+	_world.set("_sprint_active", true)
 	_world.set("_mouse_look_active", true)
 	_world.call("_notification", Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
-
-	var directions: Dictionary = _world.get("_touch_directions")
-	var look_indices: Array = _world.get("_touch_look_indices")
-	_expect(directions.is_empty(), "application focus loss clears held movement directions")
-	_expect(not bool(_world.get("_touch_jump")), "application focus loss clears held jump input")
-	_expect(not bool(_world.get("_touch_sprint")), "application focus loss clears held sprint input")
-	_expect(look_indices.is_empty(), "application focus loss clears active world-look fingers")
-	_expect(not bool(_world.get("_mouse_look_active")), "application focus loss disables captured mouse-look state")
+	_assert_focus_reset_state("application focus loss")
 
 	_world.call("_set_touch_direction", "right")
 	_world.call("_set_touch_jump", true)
@@ -241,15 +236,46 @@ func _assert_focus_loss_clears_held_inputs(buttons: Dictionary) -> void:
 	paused_touch.position = Vector2(400.0, 300.0)
 	paused_touch.pressed = true
 	_world.call("_unhandled_input", paused_touch)
+	_world.set("_jump_was_down", true)
+	_world.set("_sprint_active", true)
 	_world.set("_mouse_look_active", true)
 	_world.call("_notification", Node.NOTIFICATION_APPLICATION_PAUSED)
-	directions = _world.get("_touch_directions")
-	look_indices = _world.get("_touch_look_indices")
-	_expect(directions.is_empty(), "mobile application pause clears held movement directions")
-	_expect(not bool(_world.get("_touch_jump")), "mobile application pause clears held jump input")
-	_expect(not bool(_world.get("_touch_sprint")), "mobile application pause clears held sprint input")
-	_expect(look_indices.is_empty(), "mobile application pause clears active world-look fingers")
-	_expect(not bool(_world.get("_mouse_look_active")), "mobile application pause disables mouse-look state")
+	_assert_focus_reset_state("mobile application pause")
+
+	_world.call("_set_touch_direction", "forward")
+	_world.call("_set_touch_jump", true)
+	_world.call("_set_touch_sprint", true)
+	var window_touch := InputEventScreenTouch.new()
+	window_touch.index = 79
+	window_touch.position = Vector2(400.0, 300.0)
+	window_touch.pressed = true
+	_world.call("_unhandled_input", window_touch)
+	_world.set("_jump_was_down", true)
+	_world.set("_sprint_active", true)
+	_world.set("_mouse_look_active", true)
+	_world.call("_notification", Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+	_assert_focus_reset_state("window focus loss")
+
+	var yaw_after_focus_loss: float = float(_world.get("_yaw"))
+	var pitch_after_focus_loss: float = float(_world.get("_pitch"))
+	var stale_drag := InputEventScreenDrag.new()
+	stale_drag.index = window_touch.index
+	stale_drag.relative = Vector2(60.0, -30.0)
+	_world.call("_unhandled_input", stale_drag)
+	_expect(is_equal_approx(float(_world.get("_yaw")), yaw_after_focus_loss), "a stale drag after window focus loss cannot rotate the player")
+	_expect(is_equal_approx(float(_world.get("_pitch")), pitch_after_focus_loss), "a stale drag after window focus loss cannot rotate the camera")
+
+func _assert_focus_reset_state(context: String) -> void:
+	var directions: Dictionary = _world.get("_touch_directions")
+	var look_indices: Array = _world.get("_touch_look_indices")
+	_expect(directions.is_empty(), "%s clears held movement directions" % context)
+	_expect(not bool(_world.get("_touch_jump")), "%s clears held jump input" % context)
+	_expect(not bool(_world.get("_touch_sprint")), "%s clears held sprint input" % context)
+	_expect(look_indices.is_empty(), "%s clears active world-look fingers" % context)
+	_expect(not bool(_world.get("_jump_was_down")), "%s clears the jump edge latch" % context)
+	_expect(not bool(_world.get("_sprint_active")), "%s clears the active sprint state" % context)
+	_expect(not bool(_world.get("_mouse_look_active")), "%s disables captured mouse-look state" % context)
+	_expect(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "%s releases mouse capture" % context)
 
 func _has_signal_binding(button: Button, signal_name: StringName, expected_method: StringName, expected_bound_arguments: Array) -> bool:
 	for connection in button.get_signal_connection_list(signal_name):
