@@ -67,6 +67,7 @@ func _run() -> void:
 		_world.call("_unhandled_input", ui_release)
 
 	_assert_touch_button_contract(touch_buttons)
+	_assert_focus_loss_clears_held_inputs(touch_buttons)
 
 	var initial_yaw: float = float(_world.get("_yaw"))
 	var initial_pitch: float = float(_world.get("_pitch"))
@@ -204,6 +205,51 @@ func _assert_touch_button_contract(buttons: Dictionary) -> void:
 		_expect(button != null, "quick-use touch button exists: %s" % key)
 		if button != null:
 			_expect(_has_signal_binding(button, &"pressed", &"_consume_quick_slot", [slot_index]), "quick-use button is bound to the correct slot: %s" % key)
+
+func _assert_focus_loss_clears_held_inputs(buttons: Dictionary) -> void:
+	var left_button: Button = buttons.get("left") as Button
+	var jump_button: Button = buttons.get("jump") as Button
+	var sprint_button: Button = buttons.get("sprint") as Button
+	_expect(left_button != null and jump_button != null and sprint_button != null, "focus-loss coverage has movement, jump and sprint controls")
+	if left_button == null or jump_button == null or sprint_button == null:
+		return
+
+	left_button.emit_signal("button_down")
+	jump_button.emit_signal("button_down")
+	sprint_button.emit_signal("button_down")
+	var look_touch := InputEventScreenTouch.new()
+	look_touch.index = 77
+	look_touch.position = Vector2(400.0, 300.0)
+	look_touch.pressed = true
+	_world.call("_unhandled_input", look_touch)
+	_world.set("_mouse_look_active", true)
+	_world.call("_notification", Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+
+	var directions: Dictionary = _world.get("_touch_directions")
+	var look_indices: Array = _world.get("_touch_look_indices")
+	_expect(directions.is_empty(), "application focus loss clears held movement directions")
+	_expect(not bool(_world.get("_touch_jump")), "application focus loss clears held jump input")
+	_expect(not bool(_world.get("_touch_sprint")), "application focus loss clears held sprint input")
+	_expect(look_indices.is_empty(), "application focus loss clears active world-look fingers")
+	_expect(not bool(_world.get("_mouse_look_active")), "application focus loss disables captured mouse-look state")
+
+	_world.call("_set_touch_direction", "right")
+	_world.call("_set_touch_jump", true)
+	_world.call("_set_touch_sprint", true)
+	var paused_touch := InputEventScreenTouch.new()
+	paused_touch.index = 78
+	paused_touch.position = Vector2(400.0, 300.0)
+	paused_touch.pressed = true
+	_world.call("_unhandled_input", paused_touch)
+	_world.set("_mouse_look_active", true)
+	_world.call("_notification", Node.NOTIFICATION_APPLICATION_PAUSED)
+	directions = _world.get("_touch_directions")
+	look_indices = _world.get("_touch_look_indices")
+	_expect(directions.is_empty(), "mobile application pause clears held movement directions")
+	_expect(not bool(_world.get("_touch_jump")), "mobile application pause clears held jump input")
+	_expect(not bool(_world.get("_touch_sprint")), "mobile application pause clears held sprint input")
+	_expect(look_indices.is_empty(), "mobile application pause clears active world-look fingers")
+	_expect(not bool(_world.get("_mouse_look_active")), "mobile application pause disables mouse-look state")
 
 func _has_signal_binding(button: Button, signal_name: StringName, expected_method: StringName, expected_bound_arguments: Array) -> bool:
 	for connection in button.get_signal_connection_list(signal_name):
