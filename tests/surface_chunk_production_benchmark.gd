@@ -33,7 +33,8 @@ func _run() -> void:
 
 	var initial_ids: PackedStringArray = _surface_ids(controller)
 	_expect(initial_ids.size() == 9, "production SurfaceWorld starts with its real 3x3 surface window")
-	_expect((director.call("get_managed_chunk_ids") as PackedStringArray).size() == 9, "production director owns the same initial nine surface chunks")
+	var initial_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+	_expect(initial_managed_ids.size() == 9, "production director owns the same initial nine surface chunks")
 
 	_delegate_factory = director.get("chunk_factory")
 	_expect(_delegate_factory.is_valid(), "production SurfaceWorld exposes its real SurfaceChunkFactory callable")
@@ -65,7 +66,8 @@ func _run() -> void:
 		var expected_count: int = (radius * 2 + 1) * (radius * 2 + 1)
 		var active_ids: PackedStringArray = _surface_ids(controller)
 		_expect(active_ids.size() == expected_count, "radius %d commits exactly %d production surface chunks" % [radius, expected_count])
-		_expect((director.call("get_managed_chunk_ids") as PackedStringArray) == active_ids, "radius %d keeps Director and production Controller IDs aligned" % radius)
+		var expansion_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(expansion_managed_ids == active_ids, "radius %d keeps Director and production Controller IDs aligned" % radius)
 		_expect(int(expansion_diagnostic.get("desired_count", -1)) == expected_count, "radius %d reports the expected desired window size" % radius)
 		_expect(int(expansion_diagnostic.get("staged_count", -1)) == expected_count, "radius %d stages every newly required production root" % radius)
 		_expect(int(expansion_diagnostic.get("newly_loaded_count", -1)) == expected_count, "radius %d commits every staged production root" % radius)
@@ -90,7 +92,8 @@ func _run() -> void:
 
 		var contracted_ids: PackedStringArray = _surface_ids(controller)
 		_expect(contracted_ids.size() == 1 and contracted_ids.has(center_id), "radius %d contracts to the retained center chunk" % radius)
-		_expect((director.call("get_managed_chunk_ids") as PackedStringArray) == contracted_ids, "radius %d keeps ownership maps aligned after contraction" % radius)
+		var contraction_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(contraction_managed_ids == contracted_ids, "radius %d keeps ownership maps aligned after contraction" % radius)
 		_expect(int(contraction_diagnostic.get("staged_count", -1)) == 0, "radius %d contraction creates no unnecessary roots" % radius)
 		_expect(int(contraction_diagnostic.get("newly_loaded_count", -1)) == 0, "radius %d contraction commits no new roots" % radius)
 		_expect(_factory_calls == 0, "radius %d contraction does not invoke the production factory" % radius)
