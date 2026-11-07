@@ -353,6 +353,10 @@ func get_bound_neighbor_patch(side: String) -> Node3D:
 		return null
 	return reference.get_ref() as Node3D
 
+## Explicitly opts production patches into one-call reciprocal edge-clear deduplication.
+func supports_reciprocal_neighbor_clear_deduplication() -> bool:
+	return true
+
 func _request_collision_segmentation_refresh() -> void:
 	if _collision_segmentation_batch_depth > 0:
 		_collision_segmentation_refresh_pending = true
