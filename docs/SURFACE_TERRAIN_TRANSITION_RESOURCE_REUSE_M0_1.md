@@ -9,26 +9,47 @@ This is a resource-lifecycle optimization layered on the existing full adjacency
 ## Version and GitHub
 
 - Version: Terrain Transition Resource Reuse M0.1.
-- Branch: `perf/preserve-unchanged-terrain-transition-resources-2026-11-07`.
+- Implementation branch: `perf/preserve-unchanged-terrain-transition-resources-2026-11-07`.
 - Parent: PR #286 exact head `052147d77e50667dedf6a5a98f4eda6e70c1e179`.
-- PR: [#287 — Preserve unchanged terrain transition and corner-cap resources](https://github.com/qaqp980520-prog/2126-Survival/pull/287), stacked on PR #286.
-- Current implementation commits include:
-  - `d73491ae43600c03cca850667411afddfaee6d50` — preserve unchanged edge/corner bodies during sync.
-  - `d9c6fb4d04ff0e2c8f10f94585a2db3ffde4e7b8` — add edge and four-way corner-cap reuse regressions.
-  - `ea19c2a599805d624da80687c8141823704c4ae9` — expose reuse counters through the production controller.
-  - `cd92c5675a3c0b8f9fd6f59535d301addccbeb0f` — add benchmark accounting assertions and output fields.
-  - `4374fe8cd187e1aea5fd41d3d3e49b11598010ce` — guard test assertions against missing resources.
-  - `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` — validate corner-cap signature fields explicitly without relying on sentinel constants.
-  - `4c59c77beca664dd673f9e93fa24dc0b534a42ce` — reuse unchanged bodies while reactivating patch segmentation after binder clearing.
-  - `cb3906e2fbc5a5af118734b4a611b6e4647c7335` — expose reactivation counts through the controller.
-  - `a136e709486624db74e2c941e6c4a35b73b9f333` — validate and emit reactivation accounting in production benchmark records.
-  - `793f092abf009aa25a577a44ccc72aa736c49432` — assert that reused bodies are reactivated when binder rebuild clears patch state.
-  - `17706424278aa67a64442434e039d75919a86e37` — add a real-factory transition reuse fixture.
-  - `4d1488ced73616bb9d89a1adbb6622dd7802586b` — remove an unused benchmark helper.
-  - `b5f68fd5ebf480782bbcb2fd1c0c0d7633f2d482` — update benchmark artifact validation to 20 records.
-  - `260b00d1c6e66b284d4b89ed14928dafbf750e08` — run production fixture through the adjacency batch API for complete profiling.
-  - `049aad2fa224763a5a86051e278620aaa8ce5e35` — select only descriptors marked transition_required when capturing the production transition body.
-- Latest exact branch head: `049aad2fa224763a5a86051e278620aaa8ce5e35` (20 commits ahead / 0 behind PR #286).
+- Implementation PR: [#287 — Preserve unchanged terrain transition and corner-cap resources](https://github.com/qaqp980520-prog/2126-Survival/pull/287), stacked on PR #286.
+- Latest runtime/test implementation commit: `049aad2fa224763a5a86051e278620aaa8ce5e35` — select only descriptors marked `transition_required` when capturing the production transition body.
+- PR #287 exact validated snapshot HEAD: `1211b5489189fdd6020f6a67ed6350f410097d58`. This commit is documentation-only; it records the implementation commit above. It is not the latest runtime/test implementation commit.
+- At that validated snapshot, PR #287 was 21 commits ahead / 0 behind PR #286.
+- Documentation reconciliation follow-up: [PR #289](https://github.com/qaqp980520-prog/2126-Survival/pull/289), based on PR #287's branch. This follow-up changes this document only; it does not change runtime or test code.
+
+## Implementation commits
+
+- `d73491ae43600c03cca850667411afddfaee6d50` — preserve unchanged edge/corner bodies during sync.
+- `d9c6fb4d04ff0e2c8f10f94585a2db3ffde4e7b8` — add edge and four-way corner-cap reuse regressions.
+- `ea19c2a599805d624da80687c8141823704c4ae9` — expose reuse counters through the production controller.
+- `cd92c5675a3c0b8f9fd6f59535d301addccbeb0f` — add benchmark accounting assertions and output fields.
+- `4374fe8cd187e1aea5fd41d3d3e49b11598010ce` — guard test assertions against missing resources.
+- `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` — validate corner-cap signature fields explicitly without relying on sentinel constants.
+- `4c59c77beca664dd673f9e93fa24dc0b534a42ce` — reuse unchanged bodies while reactivating patch segmentation after binder clearing.
+- `cb3906e2fbc5a5af118734b4a611b6e4647c7335` — expose reactivation counts through the controller.
+- `a136e709486624db74e2c941e6c4a35b73b9f333` — validate and emit reactivation accounting in production benchmark records.
+- `793f092abf009aa25a577a44ccc72aa736c49432` — assert that reused bodies are reactivated when binder rebuild clears patch state.
+- `17706424278aa67a64442434e039d75919a86e37` — add a real-factory transition reuse fixture.
+- `4d1488ced73616bb9d89a1adbb6622dd7802586b` — remove an unused benchmark helper.
+- `b5f68fd5ebf480782bbcb2fd1c0c0d7633f2d482` — update benchmark artifact validation to 20 records.
+- `260b00d1c6e66b284d4b89ed14928dafbf750e08` — run production fixture through the adjacency batch API for complete profiling.
+- `049aad2fa224763a5a86051e278620aaa8ce5e35` — select only descriptors marked `transition_required` when capturing the production transition body.
+- `1211b5489189fdd6020f6a67ed6350f410097d58` — documentation-only commit that records the corrected implementation head.
+
+## Exact-head validation — 2026-11-07
+
+For PR #287 validated snapshot HEAD `1211b5489189fdd6020f6a67ed6350f410097d58`:
+
+- Full Godot 4.3 compatibility gate [#42354715198](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42354715198): 552/552 steps, zero failed or skipped.
+- All eight exact-head pull-request workflows completed successfully.
+- Production benchmark [#42354715264](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42354715264): 20 valid JSONL records, 243 PASS, zero FAIL or ERROR.
+- Production benchmark artifact ID: `13566154852`; ZIP SHA-256: `8618d12d275743fe9d1bd9926ac5c8d4e3c5ec3ef2adcdef88f565c6f98441b9`.
+- Real-factory same-world edge sync: active 1 / reused 1 / reactivated 1 / staged 0 / retired 0.
+- Radius-1 boundary shift: active 1 / reused 1 / reactivated 1 / staged 0 / retired 0.
+- Radius-1 contraction: one obsolete edge body retired.
+- Spatial/adjacency, manager regression, and five additional focused workflows succeeded.
+
+PR #287 at this snapshot is Open / Ready for Review / mergeable / unmerged. It has no human review submissions or inline review threads. The documentation-only follow-up PR #289 requires its own exact-head validation before it can be merged into the PR #287 branch.
 
 ## Files
 
@@ -71,7 +92,8 @@ godot --headless --path . --script res://tests/surface_chunk_production_benchmar
 
 ## Limitations and next steps
 
-- No local-neighborhood incremental adjacency algorithm is implemented yet; binder validation, spatial discovery, descriptor generation and corner resolution still process the full loaded patch set.
-- This preserves unchanged collider resources but still evaluates candidate geometry for all descriptors.
+- Full adjacency validation, spatial discovery, descriptor generation and corner resolution still process the complete loaded patch set. This is resource preservation, not yet local-neighborhood incremental adjacency.
+- The current real-factory benchmark exercises an unequal-height edge transition, same-world edge reuse, reuse across a radius-1 boundary shift and retirement on contraction.
+- Four-way corner-cap reuse is covered by the deterministic manager-level 2×2 checkerboard regression, not yet by a real-factory four-way cap fixture. [Issue #288](https://github.com/qaqp980520-prog/2126-Survival/issues/288) tracks the production fixture and exact-head acceptance requirements.
 - No iPhone, GPU, rendered-frame or target-device performance claim is made.
-- Next: validate exact-head CI, inspect the resource-reuse counts in focused tests, then extend the real production benchmark to report reused/staged/retired edge and cap counts during boundary shifts. Preserve the full rebuild as the correctness oracle and rollback path.
+- Next: complete human review and ordered parent-stack integration; then add the real-factory four-way corner-cap fixture in Issue #288. Preserve the full rebuild as the correctness oracle and rollback path.
