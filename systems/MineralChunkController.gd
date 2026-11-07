@@ -607,7 +607,8 @@ func _finish_terrain_adjacency_profile(profile: Dictionary, total_started_usec: 
 		return
 	profile["controller_rebind_total_usec"] = Time.get_ticks_usec() - total_started_usec
 	profile["patch_count"] = patch_count
-	profile["descriptor_count"] = (result.get("descriptors", {}) as Dictionary).size()
+	var descriptors: Dictionary = result.get("descriptors", {})
+	profile["descriptor_count"] = descriptors.size()
 	profile["transition_collider_count"] = int(result.get("transition_collider_count", result.get("active_count", 0)))
 	_last_terrain_adjacency_profile = profile.duplicate(true)
 
