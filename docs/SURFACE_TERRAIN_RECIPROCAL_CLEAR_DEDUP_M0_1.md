@@ -53,6 +53,7 @@ godot --headless --path . --script res://tests/surface_chunk_production_benchmar
 - The outgoing external reciprocal state is removed.
 - Both retained seams are rebuilt reciprocally.
 - Existing 20×20 spatial-index, negative-coordinate/tolerance, descriptor, failure cleanup, segmentation batching and full Godot 4.3 compatibility suites must remain green.
+- Rebinding the 20×20 grid preserves all 760 reciprocal seams while making 840 public clear calls instead of 1,600 side-slot calls.
 
 ## Limitations and next steps
 
