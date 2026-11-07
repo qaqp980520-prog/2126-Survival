@@ -344,6 +344,19 @@ func get_bound_neighbor_patches() -> Array[Node3D]:
 			result.append(neighbor)
 	return result
 
+## Returns the current weakly-bound neighbor for one side without mutating either endpoint.
+func get_bound_neighbor_patch(side: String) -> Node3D:
+	if not RAMP_SIDES.has(side):
+		return null
+	var reference: WeakRef = _neighbor_patches.get(side) as WeakRef
+	if reference == null:
+		return null
+	return reference.get_ref() as Node3D
+
+## Explicitly opts production patches into one-call reciprocal edge-clear deduplication.
+func supports_reciprocal_neighbor_clear_deduplication() -> bool:
+	return true
+
 func _request_collision_segmentation_refresh() -> void:
 	if _collision_segmentation_batch_depth > 0:
 		_collision_segmentation_refresh_pending = true
@@ -430,6 +443,11 @@ func clear_neighbor_edge_state(side: String) -> bool:
 	return true
 
 func _clear_neighbor_edge_state_local(side: String) -> void:
+	# Empty-side clears are intentionally idempotent: avoid rebuilding ramp and
+	# collision segmentation state when no neighbor or shared transition existed.
+	var had_edge_state: bool = _neighbor_patches.has(side) or _neighbor_edge_states.has(side) or _shared_transition_sides.has(side)
+	if not had_edge_state:
+		return
 	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
 	_shared_transition_sides.erase(side)
