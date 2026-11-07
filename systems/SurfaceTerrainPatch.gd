@@ -439,6 +439,11 @@ func clear_neighbor_edge_state(side: String) -> bool:
 	return true
 
 func _clear_neighbor_edge_state_local(side: String) -> void:
+	# Empty-side clears are intentionally idempotent: avoid rebuilding ramp and
+	# collision segmentation state when no neighbor or shared transition existed.
+	var had_edge_state: bool = _neighbor_patches.has(side) or _neighbor_edge_states.has(side) or _shared_transition_sides.has(side)
+	if not had_edge_state:
+		return
 	_neighbor_patches.erase(side)
 	_neighbor_edge_states.erase(side)
 	_shared_transition_sides.erase(side)
