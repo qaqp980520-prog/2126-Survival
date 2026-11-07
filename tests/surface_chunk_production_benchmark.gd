@@ -134,6 +134,57 @@ func _run() -> void:
 		_emit_metrics("boundary_cross_east", radius, expected_count, boundary_diagnostic, boundary_result.get("frame_samples_ms", []), controller)
 		target = boundary_target
 
+		# Collect four additional same-runner radius-8 boundary samples. Alternating
+		# west/east keeps each transaction to one chunk while exercising both edges
+		# of the same warmed production window before contraction.
+		if radius == 8:
+			var repeat_sequence_ok: bool = true
+			for repeat_index in range(4):
+				var repeat_direction: float = -1.0 if repeat_index % 2 == 0 else 1.0
+				var repeat_direction_name: String = "west" if repeat_direction < 0.0 else "east"
+				var repeat_target: Vector3 = target + Vector3(boundary_chunk_size_x * repeat_direction, 0.0, 0.0)
+				var repeat_center: Vector2i = director.call("get_grid_coordinate", repeat_target)
+				var expected_repeat_ids: PackedStringArray = _expected_surface_ids(repeat_center, radius)
+				var previous_repeat_ids: PackedStringArray = _surface_ids(controller)
+				var repeat_departing_ids: Array[String] = []
+				var repeat_retained_ids: Array[String] = []
+				for current_repeat_id in previous_repeat_ids:
+					if expected_repeat_ids.has(str(current_repeat_id)):
+						repeat_retained_ids.append(str(current_repeat_id))
+					else:
+						repeat_departing_ids.append(str(current_repeat_id))
+				var expected_repeat_delta: int = radius * 2 + 1
+				_expect(repeat_departing_ids.size() == expected_repeat_delta, "radius %d repeat %d %s identifies exactly %d departing roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(repeat_retained_ids.size() == expected_count - expected_repeat_delta, "radius %d repeat %d %s retains every overlapping root" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_departing_ids)
+				var repeat_retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_retained_ids)
+				_reset_factory_metrics()
+				var repeat_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+				var repeat_result: Dictionary = await _run_async_request(director, repeat_target)
+				var repeat_diagnostic: Dictionary = repeat_result.get("diagnostic", {})
+				if not bool(repeat_result.get("ok", false)):
+					_expect(false, "radius %d repeat %d %s boundary crossing completes: %s" % [radius, repeat_index + 1, repeat_direction_name, str(repeat_result.get("error", repeat_diagnostic.get("phase", "unknown")))])
+					repeat_sequence_ok = false
+					break
+				var repeat_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - repeat_rebuilds_before
+				_expect(repeat_rebuild_delta == 1, "radius %d repeat %d %s commits one terrain adjacency rebuild" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_ids: PackedStringArray = _surface_ids(controller)
+				_expect(repeat_ids == expected_repeat_ids, "radius %d repeat %d %s commits the exact shifted window" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(repeat_ids.size() == expected_count, "radius %d repeat %d %s preserves the active chunk count" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+				_expect(repeat_managed_ids == repeat_ids, "radius %d repeat %d %s keeps Director and Controller IDs aligned" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(int(repeat_diagnostic.get("staged_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s stages exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(int(repeat_diagnostic.get("newly_loaded_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s commits exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(int(repeat_diagnostic.get("unloaded_stale_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s retires exactly %d stale roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(_factory_calls == expected_repeat_delta, "radius %d repeat %d %s calls the production factory exactly %d times" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				await _wait_frames(RELEASE_WAIT_FRAMES)
+				_expect(_all_refs_released(repeat_departing_refs), "radius %d repeat %d %s releases all departing roots" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(_all_refs_alive(repeat_retained_refs), "radius %d repeat %d %s preserves all overlapping roots" % [radius, repeat_index + 1, repeat_direction_name])
+				_emit_metrics("boundary_cross_repeat_%d_%s" % [repeat_index + 1, repeat_direction_name], radius, expected_count, repeat_diagnostic, repeat_result.get("frame_samples_ms", []), controller)
+				target = repeat_target
+			if not repeat_sequence_ok:
+				break
+
 		var center: Vector2i = boundary_center
 		var center_id: String = "surface/chunk_%d_%d" % [center.x, center.y]
 		var departed_refs: Array[WeakRef] = _capture_surface_root_refs(controller, center_id)
