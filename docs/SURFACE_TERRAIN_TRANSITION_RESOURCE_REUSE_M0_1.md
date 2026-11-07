@@ -23,7 +23,11 @@ This is a resource-lifecycle optimization layered on the existing full adjacency
   - `cb3906e2fbc5a5af118734b4a611b6e4647c7335` — expose reactivation counts through the controller.
   - `a136e709486624db74e2c941e6c4a35b73b9f333` — validate and emit reactivation accounting in production benchmark records.
   - `793f092abf009aa25a577a44ccc72aa736c49432` — assert that reused bodies are reactivated when binder rebuild clears patch state.
-- Latest exact branch head before this documentation refresh: `793f092abf009aa25a577a44ccc72aa736c49432` (12 commits ahead / 0 behind PR #286).
+  - `17706424278aa67a64442434e039d75919a86e37` — add a real-factory transition reuse fixture.
+  - `4d1488ced73616bb9d89a1adbb6622dd7802586b` — remove an unused benchmark helper.
+  - `b5f68fd5ebf480782bbcb2fd1c0c0d7633f2d482` — update benchmark artifact validation to 20 records.
+  - `260b00d1c6e66b284d4b89ed14928dafbf750e08` — run production fixture through the adjacency batch API for complete profiling.
+- Latest exact branch head: `260b00d1c6e66b284d4b89ed14928dafbf750e08` (18 commits ahead / 0 behind PR #286).
 
 ## Files
 
