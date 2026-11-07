@@ -590,12 +590,27 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 		profile["collider_corner_resolution_usec"] = int(collider_profile.get("corner_resolution_usec", 0))
 		profile["collider_resource_staging_usec"] = int(collider_profile.get("resource_staging_usec", 0))
 		profile["collider_activation_commit_usec"] = int(collider_profile.get("activation_commit_usec", 0))
+		profile["collider_reused_edge_count"] = int(transition_result.get("reused_edge_count", 0))
+		profile["collider_reactivated_edge_count"] = int(transition_result.get("reactivated_edge_count", 0))
+		profile["collider_staged_edge_count"] = int(transition_result.get("staged_edge_count", 0))
+		profile["collider_retired_edge_count"] = int(transition_result.get("retired_edge_count", 0))
+		profile["collider_reused_corner_cap_count"] = int(transition_result.get("reused_corner_cap_count", 0))
+		profile["collider_staged_corner_cap_count"] = int(transition_result.get("staged_corner_cap_count", 0))
+		profile["collider_retired_corner_cap_count"] = int(transition_result.get("retired_corner_cap_count", 0))
 	if not bool(transition_result.get("ok", false)):
 		var collider_failure: Dictionary = {"ok": false, "error": "transition_collider_sync_failed:" + str(transition_result.get("error", "unknown"))}
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), collider_failure)
 		return collider_failure
 	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
 	result["transition_collider_count"] = int(transition_result.get("active_count", 0))
+	result["corner_cap_count"] = int(transition_result.get("corner_cap_count", 0))
+	result["reused_transition_edge_count"] = int(transition_result.get("reused_edge_count", 0))
+	result["reactivated_transition_edge_count"] = int(transition_result.get("reactivated_edge_count", 0))
+	result["staged_transition_edge_count"] = int(transition_result.get("staged_edge_count", 0))
+	result["retired_transition_edge_count"] = int(transition_result.get("retired_edge_count", 0))
+	result["reused_corner_cap_count"] = int(transition_result.get("reused_corner_cap_count", 0))
+	result["staged_corner_cap_count"] = int(transition_result.get("staged_corner_cap_count", 0))
+	result["retired_corner_cap_count"] = int(transition_result.get("retired_corner_cap_count", 0))
 	result["blocked_transition_count"] = int(transition_result.get("blocked_count", 0))
 	_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), result)
 	if _terrain_adjacency_profiling_enabled:
@@ -610,6 +625,7 @@ func _finish_terrain_adjacency_profile(profile: Dictionary, total_started_usec: 
 	var descriptors: Dictionary = result.get("descriptors", {})
 	profile["descriptor_count"] = descriptors.size()
 	profile["transition_collider_count"] = int(result.get("transition_collider_count", result.get("active_count", 0)))
+	profile["corner_cap_count"] = int(result.get("corner_cap_count", 0))
 	_last_terrain_adjacency_profile = profile.duplicate(true)
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:
