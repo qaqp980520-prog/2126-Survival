@@ -19,7 +19,11 @@ This is a resource-lifecycle optimization layered on the existing full adjacency
   - `cd92c5675a3c0b8f9fd6f59535d301addccbeb0f` — add benchmark accounting assertions and output fields.
   - `4374fe8cd187e1aea5fd41d3d3e49b11598010ce` — guard test assertions against missing resources.
   - `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` — validate corner-cap signature fields explicitly without relying on sentinel constants.
-- Latest exact branch head: `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` (8 commits ahead / 0 behind PR #286).
+  - `4c59c77beca664dd673f9e93fa24dc0b534a42ce` — reuse unchanged bodies while reactivating patch segmentation after binder clearing.
+  - `cb3906e2fbc5a5af118734b4a611b6e4647c7335` — expose reactivation counts through the controller.
+  - `a136e709486624db74e2c941e6c4a35b73b9f333` — validate and emit reactivation accounting in production benchmark records.
+  - `793f092abf009aa25a577a44ccc72aa736c49432` — assert that reused bodies are reactivated when binder rebuild clears patch state.
+- Latest exact branch head before this documentation refresh: `793f092abf009aa25a577a44ccc72aa736c49432` (12 commits ahead / 0 behind PR #286).
 
 ## Files
 
