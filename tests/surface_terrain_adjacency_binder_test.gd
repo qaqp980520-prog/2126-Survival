@@ -66,6 +66,7 @@ func _run() -> void:
 	await process_frame
 	await physics_frame
 	for patch in [west, east, south, far]:
+		_expect(_segmentation_refresh_count(patch) == 0, "%s refresh counter is disabled by default" % patch.name)
 		patch.call("set_collision_segmentation_refresh_counter_enabled", true)
 	var stable_ids: Dictionary = {
 		west.get_instance_id(): "test/chunk/object/West",
