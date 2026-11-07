@@ -71,10 +71,16 @@ func _run() -> void:
 		south.get_instance_id(): "test/chunk/object/South",
 		far.get_instance_id(): "test/chunk/object/Far"
 	}
+	var initial_refresh_counts: Dictionary = {}
+	for patch in [west, east, south, far]:
+		initial_refresh_counts[patch.get_instance_id()] = _segmentation_refresh_count(patch)
 	var report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
 	_expect(bool(report.get("ok", false)), "binder accepts a valid live patch set with persistent Stable IDs")
 	_expect(int(report.get("pair_count", -1)) == 2, "binder discovers exactly the east and south adjacent pairs")
 	_expect(int(report.get("descriptor_count", -1)) == 2, "binder returns one deterministic descriptor for each adjacent pair")
+	for patch in [west, east, south, far]:
+		var refresh_delta: int = _segmentation_refresh_count(patch) - int(initial_refresh_counts[patch.get_instance_id()])
+		_expect(refresh_delta == 1, "%s refreshes collision segmentation exactly once during the full clear/rebind pass" % patch.name)
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "west/east pair resolves to a flush join")
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "flush_join", "west/south pair resolves to a flush join")
 	_expect(not _ramp_enabled(west, "East") and not _ramp_enabled(east, "West"), "both sides of east/west shared edge disable their ground ramps")
@@ -122,10 +128,31 @@ func _run() -> void:
 	_expect(bool(reduced_report.get("ok", false)), "binder rebuilds after the second side changes")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "local_higher", "west patch updates its policy after east neighbor changes")
 
+	var unload_refresh_counts_before: Dictionary = {}
+	for patch in [west, east, south, far]:
+		unload_refresh_counts_before[patch.get_instance_id()] = _segmentation_refresh_count(patch)
 	var after_unload: Dictionary = BinderScript.bind_patches([west, south, far], stable_ids)
 	_expect(bool(after_unload.get("ok", false)) and int(after_unload.get("pair_count", -1)) == 1, "rebinding after one patch unload removes only its stale adjacency")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "ground_ramp", "unloaded neighbor restores the west outer ramp")
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "local_higher", "remaining south neighbor stays bound with the correct local-higher policy")
+	for patch in [west, east, south, far]:
+		var refresh_delta: int = _segmentation_refresh_count(patch) - int(unload_refresh_counts_before[patch.get_instance_id()])
+		_expect(refresh_delta == 1, "%s receives one segmentation refresh when reciprocal neighbors are cleared during unload" % patch.name)
+
+	var nested_refresh_before: int = _segmentation_refresh_count(west)
+	west.call("begin_collision_segmentation_batch")
+	west.call("begin_collision_segmentation_batch")
+	west.call("clear_neighbor_edge_state", "north")
+	west.call("clear_neighbor_edge_state", "west")
+	_expect(_segmentation_refresh_count(west) == nested_refresh_before, "nested segmentation batch defers refresh while scopes remain open")
+	_expect(bool(west.call("end_collision_segmentation_batch")), "inner segmentation batch closes successfully")
+	_expect(_segmentation_refresh_count(west) == nested_refresh_before, "inner batch close does not refresh before the outer scope ends")
+	_expect(bool(west.call("end_collision_segmentation_batch")), "outer segmentation batch closes successfully")
+	_expect(_segmentation_refresh_count(west) == nested_refresh_before + 1, "outer batch close performs exactly one deferred segmentation refresh")
+	_expect(not bool(west.call("end_collision_segmentation_batch")), "unmatched segmentation batch close is rejected")
+	var immediate_refresh_before: int = _segmentation_refresh_count(west)
+	west.call("clear_neighbor_edge_state", "north")
+	_expect(_segmentation_refresh_count(west) == immediate_refresh_before + 1, "public single-side clear preserves immediate refresh behavior outside a batch")
 
 	var duplicate := PatchScript.new()
 	duplicate.name = "Duplicate"
@@ -237,6 +264,11 @@ func _ramp_enabled(patch: Node3D, side: String) -> bool:
 		return false
 	var collision := body.get_node_or_null("TerrainRampCollision_" + side) as CollisionShape3D
 	return body.collision_layer == 1 and collision != null and not collision.disabled
+
+func _segmentation_refresh_count(patch: Node3D) -> int:
+	if not is_instance_valid(patch) or not patch.has_method("get_collision_segmentation_refresh_count"):
+		return -1
+	return int(patch.call("get_collision_segmentation_refresh_count"))
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
