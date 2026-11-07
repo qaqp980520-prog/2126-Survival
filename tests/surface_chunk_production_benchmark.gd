@@ -264,12 +264,18 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 	var descriptors: Dictionary = controller.call("get_terrain_transition_descriptors")
 	if descriptors.is_empty():
 		return {"ok": false, "error": "production_transition_seed_created_no_descriptors"}
-	var edge_keys: Array = descriptors.keys()
+	var edge_keys: Array = []
+	for edge_key_value in descriptors.keys():
+		var descriptor: Dictionary = descriptors[edge_key_value]
+		if bool(descriptor.get("transition_required", false)):
+			edge_keys.append(str(edge_key_value))
+	if edge_keys.is_empty():
+		return {"ok": false, "error": "production_transition_seed_created_no_unequal_height_descriptor"}
 	edge_keys.sort()
 	var edge_key: String = str(edge_keys[0])
 	var body_before: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
 	if not is_instance_valid(body_before):
-		return {"ok": false, "error": "production_transition_seed_body_missing"}
+		return {"ok": false, "error": "production_transition_seed_body_missing:active=%d:transition_descriptors=%d" % [int(controller.call("get_terrain_transition_collider_count")), edge_keys.size()]}
 	if not bool(controller.call("begin_terrain_adjacency_batch")):
 		return {"ok": false, "error": "production_transition_reuse_batch_begin_failed"}
 	var unchanged_state: Dictionary = lower_patch.call("get_world_object_state")
