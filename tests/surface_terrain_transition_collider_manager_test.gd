@@ -223,7 +223,7 @@ func _test_reuses_unchanged_transition_resources() -> void:
 
     var unchanged_sync: Dictionary = manager.call("sync_transitions", descriptors, patches_by_id)
     _expect(bool(unchanged_sync.get("ok", false)), "unchanged sync succeeds")
-    _expect(int(unchanged_sync.get("reused_edge_count", -1)) == 2 and int(unchanged_sync.get("staged_edge_count", -1)) == 0, "unchanged sync reuses both edge bodies without staging replacements")
+    _expect(int(unchanged_sync.get("reused_edge_count", -1)) == 2 and int(unchanged_sync.get("reactivated_edge_count", -1)) == 0 and int(unchanged_sync.get("staged_edge_count", -1)) == 0, "unchanged sync reuses both active edge bodies without staging or reactivation")
     _expect(manager.call("get_transition_body", edge_a_key) == first_body_a and manager.call("get_transition_body", edge_b_key) == first_body_b, "unchanged sync preserves both transition body instances")
 
     var changed_state: Dictionary = higher_a.call("get_world_object_state")
@@ -235,7 +235,7 @@ func _test_reuses_unchanged_transition_resources() -> void:
     var updated_descriptors: Dictionary = updated_binding.get("descriptors", {})
     var selective_sync: Dictionary = manager.call("sync_transitions", updated_descriptors, patches_by_id)
     _expect(bool(selective_sync.get("ok", false)) and int(selective_sync.get("active_count", -1)) == 2, "selective sync keeps both transitions active")
-    _expect(int(selective_sync.get("reused_edge_count", -1)) == 1 and int(selective_sync.get("staged_edge_count", -1)) == 1 and int(selective_sync.get("retired_edge_count", -1)) == 1, "selective sync stages only the changed seam and retires only its old body")
+    _expect(int(selective_sync.get("reused_edge_count", -1)) == 1 and int(selective_sync.get("reactivated_edge_count", -1)) == 1 and int(selective_sync.get("staged_edge_count", -1)) == 1 and int(selective_sync.get("retired_edge_count", -1)) == 1, "selective sync reuses and reactivates the unchanged seam while staging only the changed seam")
     var replacement_body_a: StaticBody3D = manager.call("get_transition_body", edge_a_key) as StaticBody3D
     var retained_body_b: StaticBody3D = manager.call("get_transition_body", edge_b_key) as StaticBody3D
     _expect(is_instance_valid(replacement_body_a) and replacement_body_a != first_body_a, "changed seam receives a replacement collider body")
