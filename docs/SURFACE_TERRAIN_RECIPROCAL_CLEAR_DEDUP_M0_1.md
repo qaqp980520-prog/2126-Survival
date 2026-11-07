@@ -29,7 +29,8 @@ Avoid invoking the public reciprocal edge-clear operation twice for the same alr
 - Unpaired or stale sides are cleared individually.
 - `SurfaceTerrainPatch` treats clearing a side with no neighbor, edge-state snapshot, or shared-transition flag as a no-op; it does not rebuild unchanged ramp/collision segmentation state.
 - A changed local side still refreshes immediately outside a batch, and both changed endpoints refresh when a reciprocal seam is cleared.
-- If a custom patch does not implement `get_bound_neighbor_patch(side)`, or if an endpoint is mapped ambiguously, the binder falls back to the previous clear-every-side behavior.
+- Reciprocal deduplication is explicit opt-in: every patch must implement `supports_reciprocal_neighbor_clear_deduplication()` and return true in addition to exposing `get_bound_neighbor_patch(side)`.
+- If a custom patch lacks either optional API, declines the reciprocal-clear capability, or produces an ambiguous endpoint map, the binder falls back to the previous clear-every-side behavior.
 - Collision-segmentation batching from PR #285 remains active and unchanged.
 - Full validation, spatial discovery, descriptor generation and transition-collider synchronization remain the authoritative full-rebuild path.
 
