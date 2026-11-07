@@ -221,6 +221,8 @@ static func _collect_reciprocal_clear_pairs(patches: Array[Node3D]) -> Dictionar
 	for patch in patches:
 		if not is_instance_valid(patch) or not patch.has_method("get_bound_neighbor_patch"):
 			return {"supported": false, "endpoint_to_pair": {}}
+		if not patch.has_method("supports_reciprocal_neighbor_clear_deduplication") or not bool(patch.call("supports_reciprocal_neighbor_clear_deduplication")):
+			return {"supported": false, "endpoint_to_pair": {}}
 		for side in SIDES:
 			var neighbor_value: Variant = patch.call("get_bound_neighbor_patch", side)
 			var neighbor: Node3D = neighbor_value as Node3D
