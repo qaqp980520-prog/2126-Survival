@@ -266,6 +266,14 @@ func _test_large_spatial_index_grid() -> void:
 	_expect(int(report.get("duplicate_position_candidate_checks", -1)) == 0, "well-spaced grid requires no duplicate-position candidate comparisons")
 	_expect(int(report.get("position_bucket_lookups", -1)) == patch_count * 27, "duplicate validation checks a fixed 27-bucket neighborhood per patch")
 	_expect(int(report.get("adjacency_bucket_lookups", -1)) == patch_count * 4 * 27, "adjacency discovery checks a fixed 27-bucket neighborhood per cardinal side")
+	for patch in patches:
+		(patch as FixturePatch).clear_call_count = 0
+	var rebuilt_report: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	var total_rebuild_clear_calls: int = 0
+	for patch in patches:
+		total_rebuild_clear_calls += (patch as FixturePatch).clear_call_count
+	_expect(bool(rebuilt_report.get("ok", false)) and int(rebuilt_report.get("pair_count", -1)) == expected_pairs, "20x20 rebind preserves all 760 reciprocal adjacency pairs")
+	_expect(total_rebuild_clear_calls == patch_count * 4 - expected_pairs, "20x20 rebind clears 840 endpoints instead of invoking 1600 side-slot clears")
 	var center_index: int = 10 * 20 + 10
 	var center: FixturePatch = patches[center_index] as FixturePatch
 	_expect(center.neighbors.size() == 4, "interior grid patch binds all four cardinal neighbors")
