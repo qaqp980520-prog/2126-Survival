@@ -11,6 +11,8 @@ func _initialize() -> void:
 
 func _run() -> void:
     await _test_single_shared_transition()
+    await _test_reuses_unchanged_transition_resources()
+    await _test_reuses_unchanged_corner_caps()
     await _test_all_cardinal_directions()
     await _test_perpendicular_conflict_falls_back_to_step()
     _test_corner_resolver_all_orientations()
@@ -166,6 +168,171 @@ func _test_single_shared_transition() -> void:
     holder.queue_free()
     await process_frame
     await process_frame
+
+func _test_reuses_unchanged_transition_resources() -> void:
+    var holder := Node3D.new()
+    holder.name = "TransitionResourceReuseTestRoot"
+    root.add_child(holder)
+    var lower_a: Node3D = PatchScript.new()
+    lower_a.name = "LowerA"
+    var higher_a: Node3D = PatchScript.new()
+    higher_a.name = "HigherA"
+    higher_a.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+    var lower_b: Node3D = PatchScript.new()
+    lower_b.name = "LowerB"
+    lower_b.position = Vector3(10.0, 0.0, 0.0)
+    var higher_b: Node3D = PatchScript.new()
+    higher_b.name = "HigherB"
+    higher_b.position = Vector3(10.0 + PatchScript.PATCH_SIZE, 0.0, 0.0)
+    for patch in [lower_a, higher_a, lower_b, higher_b]:
+        holder.add_child(patch)
+    await process_frame
+    for patch in [lower_a, lower_b]:
+        _expect(bool(patch.call("apply_world_object_state", {"height_level": 0, "surface_type": "soil", "revision": 1})), "%s accepts its low baseline" % patch.name)
+    for patch in [higher_a, higher_b]:
+        _expect(bool(patch.call("apply_world_object_state", {"height_level": 2, "surface_type": "metal", "revision": 1})), "%s accepts its raised baseline" % patch.name)
+
+    var stable_ids: Dictionary = {
+        lower_a.get_instance_id(): "reuse/a/lower",
+        higher_a.get_instance_id(): "reuse/a/higher",
+        lower_b.get_instance_id(): "reuse/b/lower",
+        higher_b.get_instance_id(): "reuse/b/higher"
+    }
+    var patches_by_id: Dictionary = {
+        "reuse/a/lower": lower_a,
+        "reuse/a/higher": higher_a,
+        "reuse/b/lower": lower_b,
+        "reuse/b/higher": higher_b
+    }
+    var patches: Array[Node3D] = [lower_a, higher_a, lower_b, higher_b]
+    var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+    _expect(bool(binding.get("ok", false)) and int(binding.get("pair_count", -1)) == 2, "reuse fixture creates two independent unequal-height seams")
+    var descriptors: Dictionary = binding.get("descriptors", {})
+    var edge_a_key: String = _edge_key_for_pair(descriptors, "reuse/a/lower", "reuse/a/higher")
+    var edge_b_key: String = _edge_key_for_pair(descriptors, "reuse/b/lower", "reuse/b/higher")
+    _expect(not edge_a_key.is_empty() and not edge_b_key.is_empty(), "reuse fixture resolves both stable edge keys")
+
+    var manager: Node3D = ManagerScript.new()
+    holder.add_child(manager)
+    var first_sync: Dictionary = manager.call("sync_transitions", descriptors, patches_by_id)
+    _expect(bool(first_sync.get("ok", false)) and int(first_sync.get("active_count", -1)) == 2, "initial sync stages both transition bodies")
+    var first_body_a: StaticBody3D = manager.call("get_transition_body", edge_a_key) as StaticBody3D
+    var first_body_b: StaticBody3D = manager.call("get_transition_body", edge_b_key) as StaticBody3D
+    _expect(is_instance_valid(first_body_a) and is_instance_valid(first_body_b), "initial sync exposes both managed transition bodies")
+    var first_body_a_weak: WeakRef = weakref(first_body_a)
+
+    var unchanged_sync: Dictionary = manager.call("sync_transitions", descriptors, patches_by_id)
+    _expect(bool(unchanged_sync.get("ok", false)), "unchanged sync succeeds")
+    _expect(int(unchanged_sync.get("reused_edge_count", -1)) == 2 and int(unchanged_sync.get("staged_edge_count", -1)) == 0, "unchanged sync reuses both edge bodies without staging replacements")
+    _expect(manager.call("get_transition_body", edge_a_key) == first_body_a and manager.call("get_transition_body", edge_b_key) == first_body_b, "unchanged sync preserves both transition body instances")
+
+    var changed_state: Dictionary = higher_a.call("get_world_object_state")
+    changed_state["height_level"] = 1
+    changed_state["revision"] = 2
+    _expect(bool(higher_a.call("apply_world_object_state", changed_state)), "one endpoint accepts a new height for the selective replacement test")
+    var updated_binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+    _expect(bool(updated_binding.get("ok", false)), "binder rebuilds descriptors after one seam changes height")
+    var updated_descriptors: Dictionary = updated_binding.get("descriptors", {})
+    var selective_sync: Dictionary = manager.call("sync_transitions", updated_descriptors, patches_by_id)
+    _expect(bool(selective_sync.get("ok", false)) and int(selective_sync.get("active_count", -1)) == 2, "selective sync keeps both transitions active")
+    _expect(int(selective_sync.get("reused_edge_count", -1)) == 1 and int(selective_sync.get("staged_edge_count", -1)) == 1 and int(selective_sync.get("retired_edge_count", -1)) == 1, "selective sync stages only the changed seam and retires only its old body")
+    var replacement_body_a: StaticBody3D = manager.call("get_transition_body", edge_a_key) as StaticBody3D
+    var retained_body_b: StaticBody3D = manager.call("get_transition_body", edge_b_key) as StaticBody3D
+    _expect(is_instance_valid(replacement_body_a) and replacement_body_a != first_body_a, "changed seam receives a replacement collider body")
+    _expect(retained_body_b == first_body_b and retained_body_b.collision_layer == 1, "unaffected seam preserves its active collider body")
+    await process_frame
+    await process_frame
+    _expect(first_body_a_weak.get_ref() == null, "replaced collider body is released after commit")
+    holder.queue_free()
+    await process_frame
+    await process_frame
+
+
+func _test_reuses_unchanged_corner_caps() -> void:
+    var holder := Node3D.new()
+    holder.name = "CornerCapResourceReuseTestRoot"
+    root.add_child(holder)
+    var north_west: Node3D = PatchScript.new()
+    north_west.name = "NorthWest"
+    var north_east: Node3D = PatchScript.new()
+    north_east.name = "NorthEast"
+    north_east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+    var south_west: Node3D = PatchScript.new()
+    south_west.name = "SouthWest"
+    south_west.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE)
+    var south_east: Node3D = PatchScript.new()
+    south_east.name = "SouthEast"
+    south_east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, PatchScript.PATCH_SIZE)
+    for patch in [north_west, north_east, south_west, south_east]:
+        holder.add_child(patch)
+    await process_frame
+    _expect(bool(north_west.call("apply_world_object_state", {"height_level": 0, "surface_type": "soil", "revision": 1})), "north-west patch accepts checkerboard low state")
+    _expect(bool(north_east.call("apply_world_object_state", {"height_level": 2, "surface_type": "metal", "revision": 1})), "north-east patch accepts checkerboard high state")
+    _expect(bool(south_west.call("apply_world_object_state", {"height_level": 2, "surface_type": "metal", "revision": 1})), "south-west patch accepts checkerboard high state")
+    _expect(bool(south_east.call("apply_world_object_state", {"height_level": 0, "surface_type": "soil", "revision": 1})), "south-east patch accepts checkerboard low state")
+
+    var stable_ids: Dictionary = {
+        north_west.get_instance_id(): "cap/north_west",
+        north_east.get_instance_id(): "cap/north_east",
+        south_west.get_instance_id(): "cap/south_west",
+        south_east.get_instance_id(): "cap/south_east"
+    }
+    var patches_by_id: Dictionary = {
+        "cap/north_west": north_west,
+        "cap/north_east": north_east,
+        "cap/south_west": south_west,
+        "cap/south_east": south_east
+    }
+    var binding: Dictionary = BinderScript.bind_patches([north_west, north_east, south_west, south_east], stable_ids)
+    _expect(bool(binding.get("ok", false)) and int(binding.get("pair_count", -1)) == 4, "checkerboard fixture creates four unequal-height seams")
+    var manager: Node3D = ManagerScript.new()
+    holder.add_child(manager)
+    var first_sync: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches_by_id)
+    _expect(bool(first_sync.get("ok", false)), "checkerboard transition and corner-cap sync succeeds")
+    _expect(int(first_sync.get("corner_cap_count", -1)) == 4, "four-way checkerboard junction creates four owned corner-cap bodies")
+    var corner_refs: Array[Dictionary] = [
+        {"stable_id": "cap/north_west", "corner": "south_east"},
+        {"stable_id": "cap/north_east", "corner": "south_west"},
+        {"stable_id": "cap/south_west", "corner": "north_east"},
+        {"stable_id": "cap/south_east", "corner": "north_west"}
+    ]
+    var first_bodies: Dictionary = {}
+    for entry in corner_refs:
+        var stable_id: String = str(entry["stable_id"])
+        var corner: String = str(entry["corner"])
+        var body: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
+        _expect(is_instance_valid(body) and body.collision_layer == 1, "%s %s cap body is active" % [stable_id, corner])
+        first_bodies[stable_id + "|" + corner] = body
+
+    var unchanged_sync: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches_by_id)
+    _expect(bool(unchanged_sync.get("ok", false)), "unchanged corner-cap sync succeeds")
+    _expect(int(unchanged_sync.get("reused_corner_cap_count", -1)) == 4 and int(unchanged_sync.get("staged_corner_cap_count", -1)) == 0, "unchanged sync reuses all four cap bodies without staging replacements")
+    for entry in corner_refs:
+        var stable_id: String = str(entry["stable_id"])
+        var corner: String = str(entry["corner"])
+        var key: String = stable_id + "|" + corner
+        var retained_body: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
+        _expect(retained_body == first_bodies[key] and retained_body.collision_layer == 1, "%s %s cap instance remains active" % [stable_id, corner])
+
+    holder.queue_free()
+    await process_frame
+    await process_frame
+
+
+func _edge_key_for_pair(descriptors: Dictionary, first_id: String, second_id: String) -> String:
+    for edge_key_value in descriptors.keys():
+        var descriptor: Dictionary = descriptors[edge_key_value]
+        var matches: bool = (
+            str(descriptor.get("first_stable_id", "")) == first_id
+            and str(descriptor.get("second_stable_id", "")) == second_id
+        ) or (
+            str(descriptor.get("first_stable_id", "")) == second_id
+            and str(descriptor.get("second_stable_id", "")) == first_id
+        )
+        if matches:
+            return str(edge_key_value)
+    return ""
+
 
 func _test_all_cardinal_directions() -> void:
     var cases: Array[Dictionary] = [
