@@ -30,6 +30,10 @@ func _run() -> void:
 	if controller == null or director == null:
 		await _finish(world)
 		return
+	var profiling_api_available: bool = controller.has_method("set_terrain_adjacency_profiling_enabled") and controller.has_method("get_last_terrain_adjacency_profile")
+	_expect(profiling_api_available, "production controller exposes opt-in terrain adjacency phase profiling")
+	if profiling_api_available:
+		controller.call("set_terrain_adjacency_profiling_enabled", true)
 
 	var initial_ids: PackedStringArray = _surface_ids(controller)
 	_expect(initial_ids.size() == 9, "production SurfaceWorld starts with its real 3x3 surface window")
@@ -297,6 +301,30 @@ func _emit_metrics(
 		render_draw_calls = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var async_total_ms: float = float(diagnostic.get("duration_usec", 0)) / 1000.0
 	var factory_build_ms: float = float(_factory_build_usec) / 1000.0
+	var adjacency_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile") if controller.has_method("get_last_terrain_adjacency_profile") else {}
+	var profile_keys: Array[String] = [
+		"collect_loaded_patches_usec",
+		"stable_id_map_usec",
+		"binder_total_usec",
+		"binder_validation_usec",
+		"binder_adjacency_discovery_usec",
+		"binder_edge_apply_usec",
+		"collider_sync_total_usec",
+		"collider_candidate_geometry_usec",
+		"collider_corner_resolution_usec",
+		"collider_resource_staging_usec",
+		"collider_activation_commit_usec",
+		"controller_rebind_total_usec",
+		"batch_total_usec"
+	]
+	var profile_valid: bool = not adjacency_profile.is_empty()
+	for profile_key in profile_keys:
+		if not adjacency_profile.has(profile_key) or int(adjacency_profile.get(profile_key, -1)) < 0:
+			profile_valid = false
+	var measured_rebind_usec: int = int(adjacency_profile.get("stable_id_map_usec", 0)) + int(adjacency_profile.get("binder_total_usec", 0)) + int(adjacency_profile.get("collider_sync_total_usec", 0))
+	profile_valid = profile_valid and int(adjacency_profile.get("controller_rebind_total_usec", 0)) >= measured_rebind_usec
+	profile_valid = profile_valid and int(adjacency_profile.get("batch_total_usec", 0)) >= int(adjacency_profile.get("collect_loaded_patches_usec", 0)) + int(adjacency_profile.get("controller_rebind_total_usec", 0))
+	_expect(profile_valid, "radius %d %s records valid non-negative phase timings with consistent totals" % [radius, phase])
 	var record := {
 		"phase": phase,
 		"radius": radius,
@@ -308,6 +336,7 @@ func _emit_metrics(
 		"factory_build_ms": factory_build_ms,
 		"async_total_ms": async_total_ms,
 		"async_non_factory_ms": maxf(0.0, async_total_ms - factory_build_ms),
+		"terrain_adjacency_profile_usec": adjacency_profile,
 		"staged_count": int(diagnostic.get("staged_count", 0)),
 		"newly_loaded_count": int(diagnostic.get("newly_loaded_count", 0)),
 		"unloaded_stale_count": int(diagnostic.get("unloaded_stale_count", 0)),
