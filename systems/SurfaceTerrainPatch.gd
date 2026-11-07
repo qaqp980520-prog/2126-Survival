@@ -30,6 +30,7 @@ var _shared_transition_sides: Dictionary = {}
 var _collision_segmentation_batch_depth: int = 0
 var _collision_segmentation_refresh_pending: bool = false
 var _collision_segmentation_refresh_count: int = 0
+var _collision_segmentation_refresh_counter_enabled: bool = false
 
 func _ready() -> void:
 	_build_collision()
@@ -323,6 +324,11 @@ func end_collision_segmentation_batch() -> bool:
 		_refresh_collision_segmentation()
 	return true
 
+func set_collision_segmentation_refresh_counter_enabled(enabled: bool) -> void:
+	_collision_segmentation_refresh_counter_enabled = enabled
+	if not enabled:
+		_collision_segmentation_refresh_count = 0
+
 func get_collision_segmentation_refresh_count() -> int:
 	return _collision_segmentation_refresh_count
 
@@ -348,7 +354,8 @@ func is_shared_transition_active(side: String) -> bool:
 	return RAMP_SIDES.has(side) and bool(_shared_transition_sides.get(side, false))
 
 func _refresh_collision_segmentation() -> void:
-	_collision_segmentation_refresh_count += 1
+	if _collision_segmentation_refresh_counter_enabled:
+		_collision_segmentation_refresh_count += 1
 	var active_sides: Dictionary = _get_active_shared_transition_sides()
 	var has_shared_transition: bool = not active_sides.is_empty()
 	if _collision_shape != null:
