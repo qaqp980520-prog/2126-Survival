@@ -18,6 +18,8 @@ This is a resource-lifecycle optimization layered on the existing full adjacency
   - `ea19c2a599805d624da80687c8141823704c4ae9` — expose reuse counters through the production controller.
   - `cd92c5675a3c0b8f9fd6f59535d301addccbeb0f` — add benchmark accounting assertions and output fields.
   - `4374fe8cd187e1aea5fd41d3d3e49b11598010ce` — guard test assertions against missing resources.
+  - `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` — validate corner-cap signature fields explicitly without relying on sentinel constants.
+- Latest exact branch head: `cf57a17e15102fd7208b42dd8a2c27eb9ae19a1f` (8 commits ahead / 0 behind PR #286).
 
 ## Files
 
