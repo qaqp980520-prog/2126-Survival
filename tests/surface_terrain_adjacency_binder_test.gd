@@ -15,6 +15,7 @@ class FixturePatch:
 	var batch_begin_count: int = 0
 	var batch_end_count: int = 0
 	var clear_call_count: int = 0
+	var reciprocal_clear_dedup_supported: bool = true
 
 	func bind_neighbor_patch(side: String, neighbor: Node3D) -> bool:
 		if fail_bind or not ["east", "west", "north", "south"].has(side) or neighbor == null:
@@ -37,6 +38,9 @@ class FixturePatch:
 
 	func get_bound_neighbor_patch(side: String) -> Node3D:
 		return neighbors.get(side) as Node3D
+
+	func supports_reciprocal_neighbor_clear_deduplication() -> bool:
+		return reciprocal_clear_dedup_supported
 
 	func _opposite_side(side: String) -> String:
 		match side:
@@ -387,6 +391,15 @@ func _test_reciprocal_clear_deduplication() -> void:
 	_expect(external.neighbors.is_empty(), "one-sided unload clear removes the outgoing external reciprocal neighbor")
 	_expect(west.neighbors.get("east") == east and east.neighbors.get("west") == west, "deduplicated clear preserves the rebuilt east/west reciprocal seam")
 	_expect(west.neighbors.get("south") == south and south.neighbors.get("north") == west, "deduplicated clear preserves the rebuilt north/south reciprocal seam")
+	west.reciprocal_clear_dedup_supported = false
+	for patch in [west, east, south]:
+		patch.clear_call_count = 0
+	var fallback: Dictionary = BinderScript.bind_patches([west, east, south], stable_ids)
+	_expect(bool(fallback.get("ok", false)) and int(fallback.get("pair_count", -1)) == 2, "custom patch without reciprocal-clear opt-in uses the compatible legacy path")
+	var fallback_clear_calls: int = west.clear_call_count + east.clear_call_count + south.clear_call_count
+	_expect(fallback_clear_calls == 12, "legacy fallback clears all twelve loaded side slots")
+	_expect(west.neighbors.get("east") == east and east.neighbors.get("west") == west, "legacy fallback preserves reciprocal east/west adjacency")
+	_expect(west.neighbors.get("south") == south and south.neighbors.get("north") == west, "legacy fallback preserves reciprocal north/south adjacency")
 	holder.queue_free()
 	await process_frame
 	await process_frame
