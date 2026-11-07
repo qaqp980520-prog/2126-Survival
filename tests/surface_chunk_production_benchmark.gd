@@ -33,6 +33,8 @@ func _run() -> void:
 	var profiling_api_available: bool = controller.has_method("set_terrain_adjacency_profiling_enabled") and controller.has_method("get_last_terrain_adjacency_profile")
 	_expect(profiling_api_available, "production controller exposes opt-in terrain adjacency phase profiling")
 	if profiling_api_available:
+		var initial_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+		_expect(initial_profile.is_empty(), "terrain adjacency profiling is disabled by default")
 		controller.call("set_terrain_adjacency_profiling_enabled", true)
 
 	var initial_ids: PackedStringArray = _surface_ids(controller)
@@ -302,6 +304,8 @@ func _emit_metrics(
 	var async_total_ms: float = float(diagnostic.get("duration_usec", 0)) / 1000.0
 	var factory_build_ms: float = float(_factory_build_usec) / 1000.0
 	var adjacency_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile") if controller.has_method("get_last_terrain_adjacency_profile") else {}
+	var adjacency_batch_ms: float = float(adjacency_profile.get("batch_total_usec", 0)) / 1000.0
+	var async_other_ms: float = maxf(0.0, async_total_ms - factory_build_ms - adjacency_batch_ms)
 	var profile_keys: Array[String] = [
 		"collect_loaded_patches_usec",
 		"stable_id_map_usec",
@@ -336,6 +340,8 @@ func _emit_metrics(
 		"factory_build_ms": factory_build_ms,
 		"async_total_ms": async_total_ms,
 		"async_non_factory_ms": maxf(0.0, async_total_ms - factory_build_ms),
+		"terrain_adjacency_batch_ms": adjacency_batch_ms,
+		"async_other_ms": async_other_ms,
 		"terrain_adjacency_profile_usec": adjacency_profile,
 		"staged_count": int(diagnostic.get("staged_count", 0)),
 		"newly_loaded_count": int(diagnostic.get("newly_loaded_count", 0)),
