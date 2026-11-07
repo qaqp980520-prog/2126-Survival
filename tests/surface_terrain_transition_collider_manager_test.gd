@@ -219,7 +219,7 @@ func _test_reuses_unchanged_transition_resources() -> void:
     var first_body_a: StaticBody3D = manager.call("get_transition_body", edge_a_key) as StaticBody3D
     var first_body_b: StaticBody3D = manager.call("get_transition_body", edge_b_key) as StaticBody3D
     _expect(is_instance_valid(first_body_a) and is_instance_valid(first_body_b), "initial sync exposes both managed transition bodies")
-    var first_body_a_weak: WeakRef = weakref(first_body_a)
+    var first_body_a_weak: WeakRef = weakref(first_body_a) if is_instance_valid(first_body_a) else null
 
     var unchanged_sync: Dictionary = manager.call("sync_transitions", descriptors, patches_by_id)
     _expect(bool(unchanged_sync.get("ok", false)), "unchanged sync succeeds")
@@ -239,10 +239,10 @@ func _test_reuses_unchanged_transition_resources() -> void:
     var replacement_body_a: StaticBody3D = manager.call("get_transition_body", edge_a_key) as StaticBody3D
     var retained_body_b: StaticBody3D = manager.call("get_transition_body", edge_b_key) as StaticBody3D
     _expect(is_instance_valid(replacement_body_a) and replacement_body_a != first_body_a, "changed seam receives a replacement collider body")
-    _expect(retained_body_b == first_body_b and retained_body_b.collision_layer == 1, "unaffected seam preserves its active collider body")
+    _expect(is_instance_valid(retained_body_b) and retained_body_b == first_body_b and retained_body_b.collision_layer == 1, "unaffected seam preserves its active collider body")
     await process_frame
     await process_frame
-    _expect(first_body_a_weak.get_ref() == null, "replaced collider body is released after commit")
+    _expect(first_body_a_weak != null and first_body_a_weak.get_ref() == null, "replaced collider body is released after commit")
     holder.queue_free()
     await process_frame
     await process_frame
@@ -312,7 +312,7 @@ func _test_reuses_unchanged_corner_caps() -> void:
         var corner: String = str(entry["corner"])
         var key: String = stable_id + "|" + corner
         var retained_body: StaticBody3D = manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
-        _expect(retained_body == first_bodies[key] and retained_body.collision_layer == 1, "%s %s cap instance remains active" % [stable_id, corner])
+        _expect(is_instance_valid(retained_body) and retained_body == first_bodies[key] and retained_body.collision_layer == 1, "%s %s cap instance remains active" % [stable_id, corner])
 
     holder.queue_free()
     await process_frame
