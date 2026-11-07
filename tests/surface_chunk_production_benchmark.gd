@@ -287,15 +287,6 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 	}
 
 
-func _node_belongs_to_root(node: Node, candidate_root: Node) -> bool:
-	var cursor: Node = node
-	while cursor != null:
-		if cursor == candidate_root:
-			return true
-		cursor = cursor.get_parent()
-	return false
-
-
 func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
 	var started_usec: int = Time.get_ticks_usec()
 	var candidate: Variant = _delegate_factory.call(coord)
