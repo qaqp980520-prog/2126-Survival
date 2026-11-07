@@ -128,7 +128,7 @@ func _run() -> void:
 	_expect(int(report.get("descriptor_count", -1)) == 2, "binder returns one deterministic descriptor for each adjacent pair")
 	for patch in [west, east, south, far]:
 		var refresh_delta: int = _segmentation_refresh_count(patch) - int(initial_refresh_counts[patch.get_instance_id()])
-		_expect(refresh_delta == 1, "%s refreshes collision segmentation exactly once during the full clear/rebind pass" % patch.name)
+		_expect(refresh_delta == 0, "%s empty-side clear does not refresh unchanged segmentation during initial bind" % patch.name)
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "west/east pair resolves to a flush join")
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "flush_join", "west/south pair resolves to a flush join")
 	_expect(not _ramp_enabled(west, "East") and not _ramp_enabled(east, "West"), "both sides of east/west shared edge disable their ground ramps")
@@ -185,7 +185,8 @@ func _run() -> void:
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "local_higher", "remaining south neighbor stays bound with the correct local-higher policy")
 	for patch in [west, east, south, far]:
 		var refresh_delta: int = _segmentation_refresh_count(patch) - int(unload_refresh_counts_before[patch.get_instance_id()])
-		_expect(refresh_delta == 1, "%s receives one segmentation refresh when reciprocal neighbors are cleared during unload" % patch.name)
+		var expected_refresh_delta: int = 0 if patch == far else 1
+		_expect(refresh_delta == expected_refresh_delta, "%s refreshes only when an existing reciprocal edge changes during unload" % patch.name)
 
 	var nested_refresh_before: int = _segmentation_refresh_count(west)
 	west.call("begin_collision_segmentation_batch")
@@ -207,6 +208,7 @@ func _run() -> void:
 	var no_op_refresh_before: int = _segmentation_refresh_count(west)
 	west.call("clear_neighbor_edge_state", "north")
 	_expect(_segmentation_refresh_count(west) == no_op_refresh_before, "clearing an already-empty side does not refresh unchanged collision segmentation")
+	_expect(bool(west.call("bind_neighbor_patch", "south", south)) and bool(south.call("bind_neighbor_patch", "north", west)), "restore the existing south seam before duplicate-position preflight")
 
 	var duplicate := PatchScript.new()
 	duplicate.name = "Duplicate"
