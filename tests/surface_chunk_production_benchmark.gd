@@ -253,9 +253,13 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 	if lower_level == neighbor_level:
 		lower_state["height_level"] = 2 if neighbor_level == 0 else 0
 		lower_state["revision"] = int(lower_state.get("revision", 0)) + 1
-		if not bool(lower_patch.call("apply_world_object_state", lower_state)):
-			return {"ok": false, "error": "production_patch_height_seed_rejected"}
-	if not bool(controller.call("refresh_terrain_adjacency")):
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "production_transition_seed_batch_begin_failed"}
+	if not bool(lower_patch.call("apply_world_object_state", lower_state)):
+		controller.call("end_terrain_adjacency_batch")
+		return {"ok": false, "error": "production_patch_height_seed_rejected"}
+	var seed_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not bool(seed_result.get("ok", false)):
 		return {"ok": false, "error": "production_transition_seed_rebind_failed"}
 	var descriptors: Dictionary = controller.call("get_terrain_transition_descriptors")
 	if descriptors.is_empty():
@@ -266,7 +270,14 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 	var body_before: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
 	if not is_instance_valid(body_before):
 		return {"ok": false, "error": "production_transition_seed_body_missing"}
-	if not bool(controller.call("refresh_terrain_adjacency")):
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "production_transition_reuse_batch_begin_failed"}
+	var unchanged_state: Dictionary = lower_patch.call("get_world_object_state")
+	if not bool(lower_patch.call("apply_world_object_state", unchanged_state)):
+		controller.call("end_terrain_adjacency_batch")
+		return {"ok": false, "error": "production_transition_reuse_signal_failed"}
+	var reuse_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not bool(reuse_result.get("ok", false)):
 		return {"ok": false, "error": "production_transition_reuse_rebind_failed"}
 	var profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 	var body_after: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
@@ -283,9 +294,9 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 		"staged_edge_count": staged_edge_count,
 		"retired_edge_count": retired_edge_count,
 		"body_identity_preserved": body_after == body_before,
-		"edge_key": edge_key
+		"edge_key": edge_key,
+		"profile_usec": profile
 	}
-
 
 func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
 	var started_usec: int = Time.get_ticks_usec()
