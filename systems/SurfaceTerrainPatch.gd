@@ -27,6 +27,9 @@ var _neighbor_patches: Dictionary = {}
 var _collision_segments: Dictionary = {}
 var _surface_segments: Dictionary = {}
 var _shared_transition_sides: Dictionary = {}
+var _collision_segmentation_batch_depth: int = 0
+var _collision_segmentation_refresh_pending: bool = false
+var _collision_segmentation_refresh_count: int = 0
 
 func _ready() -> void:
 	_build_collision()
@@ -304,13 +307,48 @@ func set_shared_transition_active(side: String, active: bool) -> bool:
 		_shared_transition_sides[side] = true
 	else:
 		_shared_transition_sides.erase(side)
-	_refresh_collision_segmentation()
+	_request_collision_segmentation_refresh()
 	return true
+
+## Nested batching defers collision/surface segmentation until the outermost scope closes.
+func begin_collision_segmentation_batch() -> void:
+	_collision_segmentation_batch_depth += 1
+
+func end_collision_segmentation_batch() -> bool:
+	if _collision_segmentation_batch_depth <= 0:
+		return false
+	_collision_segmentation_batch_depth -= 1
+	if _collision_segmentation_batch_depth == 0 and _collision_segmentation_refresh_pending:
+		_collision_segmentation_refresh_pending = false
+		_refresh_collision_segmentation()
+	return true
+
+func get_collision_segmentation_refresh_count() -> int:
+	return _collision_segmentation_refresh_count
+
+## Returns live reciprocal neighbors so callers can include patches outside the new loaded set.
+func get_bound_neighbor_patches() -> Array[Node3D]:
+	var result: Array[Node3D] = []
+	for side in RAMP_SIDES:
+		var reference: WeakRef = _neighbor_patches.get(side) as WeakRef
+		if reference == null:
+			continue
+		var neighbor: Node3D = reference.get_ref() as Node3D
+		if is_instance_valid(neighbor) and not result.has(neighbor):
+			result.append(neighbor)
+	return result
+
+func _request_collision_segmentation_refresh() -> void:
+	if _collision_segmentation_batch_depth > 0:
+		_collision_segmentation_refresh_pending = true
+		return
+	_refresh_collision_segmentation()
 
 func is_shared_transition_active(side: String) -> bool:
 	return RAMP_SIDES.has(side) and bool(_shared_transition_sides.get(side, false))
 
 func _refresh_collision_segmentation() -> void:
+	_collision_segmentation_refresh_count += 1
 	var active_sides: Dictionary = _get_active_shared_transition_sides()
 	var has_shared_transition: bool = not active_sides.is_empty()
 	if _collision_shape != null:
@@ -389,7 +427,7 @@ func _clear_neighbor_edge_state_local(side: String) -> void:
 	_neighbor_edge_states.erase(side)
 	_shared_transition_sides.erase(side)
 	_refresh_edge_ramp_state(side)
-	_refresh_collision_segmentation()
+	_request_collision_segmentation_refresh()
 
 func _refresh_bound_neighbors() -> void:
 	var local_state: Dictionary = get_world_object_state()
