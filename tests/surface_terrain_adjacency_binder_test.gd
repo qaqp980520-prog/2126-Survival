@@ -9,15 +9,41 @@ class FixturePatch:
 
 	var neighbors: Dictionary = {}
 	var state: Dictionary = {"height_level": 0, "surface_type": "soil", "revision": 0}
+	var fail_bind: bool = false
+	var fail_clear: bool = false
+	var batch_depth: int = 0
+	var batch_begin_count: int = 0
+	var batch_end_count: int = 0
 
 	func bind_neighbor_patch(side: String, neighbor: Node3D) -> bool:
-		if not ["east", "west", "north", "south"].has(side) or neighbor == null:
+		if fail_bind or not ["east", "west", "north", "south"].has(side) or neighbor == null:
 			return false
 		neighbors[side] = neighbor
 		return true
 
 	func clear_neighbor_edge_state(side: String) -> bool:
+		if fail_clear:
+			return false
 		neighbors.erase(side)
+		return true
+
+	func get_bound_neighbor_patches() -> Array[Node3D]:
+		var result: Array[Node3D] = []
+		for neighbor_value in neighbors.values():
+			var neighbor: Node3D = neighbor_value as Node3D
+			if is_instance_valid(neighbor) and not result.has(neighbor):
+				result.append(neighbor)
+		return result
+
+	func begin_collision_segmentation_batch() -> void:
+		batch_depth += 1
+		batch_begin_count += 1
+
+	func end_collision_segmentation_batch() -> bool:
+		if batch_depth <= 0:
+			return false
+		batch_depth -= 1
+		batch_end_count += 1
 		return true
 
 	func get_edge_ramp_profile() -> Dictionary:
@@ -170,6 +196,7 @@ func _run() -> void:
 	await process_frame
 	await _test_large_spatial_index_grid()
 	await _test_spatial_index_tolerance_boundaries()
+	await _test_batch_scope_cleanup_on_failures()
 	if failures.is_empty():
 		print("Surface terrain adjacency binder tests passed.")
 		quit(0)
@@ -246,6 +273,54 @@ func _test_spatial_index_tolerance_boundaries() -> void:
 	_expect(not bool(duplicate_report.get("ok", true)) and str(duplicate_report.get("error", "")) == "duplicate_position", "near-duplicate positions across a bucket boundary are rejected")
 	_expect(left.neighbors.get("east") == right and right.neighbors.get("west") == left, "duplicate-position preflight preserves existing live adjacency")
 	holder.queue_free()
+	await process_frame
+	await process_frame
+
+func _test_batch_scope_cleanup_on_failures() -> void:
+	var clear_holder := Node3D.new()
+	clear_holder.name = "TerrainAdjacencyClearFailureBatchFixture"
+	root.add_child(clear_holder)
+	var clear_first := FixturePatch.new()
+	clear_first.position = Vector3.ZERO
+	var clear_second := FixturePatch.new()
+	clear_second.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	clear_first.fail_clear = true
+	clear_holder.add_child(clear_first)
+	clear_holder.add_child(clear_second)
+	await process_frame
+	var clear_ids: Dictionary = {
+		clear_first.get_instance_id(): "batch/clear/first",
+		clear_second.get_instance_id(): "batch/clear/second"
+	}
+	var clear_report: Dictionary = BinderScript.bind_patches([clear_first, clear_second], clear_ids)
+	_expect(not bool(clear_report.get("ok", true)) and str(clear_report.get("error", "")) == "clear_neighbor_failed", "binder reports a clear failure while a segmentation batch is open")
+	_expect(clear_first.batch_depth == 0 and clear_second.batch_depth == 0, "clear failure closes every started segmentation batch scope")
+	_expect(clear_first.batch_begin_count == 1 and clear_first.batch_end_count == 1 and clear_second.batch_begin_count == 1 and clear_second.batch_end_count == 1, "clear failure begins and closes each patch batch exactly once")
+	clear_holder.queue_free()
+	await process_frame
+	await process_frame
+
+	var bind_holder := Node3D.new()
+	bind_holder.name = "TerrainAdjacencyBindFailureBatchFixture"
+	root.add_child(bind_holder)
+	var bind_first := FixturePatch.new()
+	bind_first.position = Vector3.ZERO
+	var bind_second := FixturePatch.new()
+	bind_second.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	bind_second.fail_bind = true
+	bind_holder.add_child(bind_first)
+	bind_holder.add_child(bind_second)
+	await process_frame
+	var bind_ids: Dictionary = {
+		bind_first.get_instance_id(): "batch/bind/first",
+		bind_second.get_instance_id(): "batch/bind/second"
+	}
+	var bind_report: Dictionary = BinderScript.bind_patches([bind_first, bind_second], bind_ids)
+	_expect(not bool(bind_report.get("ok", true)) and str(bind_report.get("error", "")) == "neighbor_bind_failed", "binder reports a neighbor-bind failure while a segmentation batch is open")
+	_expect(bind_first.batch_depth == 0 and bind_second.batch_depth == 0, "neighbor-bind failure closes every started segmentation batch scope")
+	_expect(bind_first.batch_begin_count == 1 and bind_first.batch_end_count == 1 and bind_second.batch_begin_count == 1 and bind_second.batch_end_count == 1, "neighbor-bind failure begins and closes each patch batch exactly once")
+	_expect(bind_first.neighbors.is_empty() and bind_second.neighbors.is_empty(), "neighbor-bind failure cleanup removes partially applied fixture edges")
+	bind_holder.queue_free()
 	await process_frame
 	await process_frame
 
