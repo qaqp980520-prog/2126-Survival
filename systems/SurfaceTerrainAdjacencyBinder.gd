@@ -138,13 +138,15 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 
 	var adjacency_discovery_usec: int = Time.get_ticks_usec() - adjacency_started_usec if profile_enabled else 0
 	var edge_apply_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	# Snapshot reciprocal endpoints before clearing mutates either side. If a custom
+	# patch does not expose the optional query API, retain the legacy clear-every-side path.
+	var reciprocal_clear_result: Dictionary = _collect_reciprocal_clear_pairs(patches)
+	var reciprocal_clear_map: Dictionary = reciprocal_clear_result.get("endpoint_to_pair", {}) if bool(reciprocal_clear_result.get("supported", false)) else {}
 	var segmentation_batch_patches: Array[Node3D] = _begin_collision_segmentation_batches(patches)
-	for patch in patches:
-		for side in SIDES:
-			if not bool(patch.call("clear_neighbor_edge_state", side)):
-				_clear_all(patches)
-				_end_collision_segmentation_batches(segmentation_batch_patches)
-				return {"ok": false, "error": "clear_neighbor_failed"}
+	if not _clear_patch_edges_once(patches, reciprocal_clear_map, true):
+		_clear_all(patches)
+		_end_collision_segmentation_batches(segmentation_batch_patches)
+		return {"ok": false, "error": "clear_neighbor_failed"}
 
 	var descriptors: Dictionary = {}
 	for pair in pair_descriptors:
@@ -211,6 +213,71 @@ static func _side_between(first: Vector3, second: Vector3, patch_size: float) ->
 		return "north"
 	return ""
 
+## Captures reciprocal side pairs before the first clear mutates weak references.
+## Returns unsupported when any patch lacks the optional per-side query API, allowing the
+## binder to preserve the legacy behavior for external/custom patch implementations.
+static func _collect_reciprocal_clear_pairs(patches: Array[Node3D]) -> Dictionary:
+	var endpoint_to_pair: Dictionary = {}
+	for patch in patches:
+		if not is_instance_valid(patch) or not patch.has_method("get_bound_neighbor_patch"):
+			return {"supported": false, "endpoint_to_pair": {}}
+		for side in SIDES:
+			var neighbor_value: Variant = patch.call("get_bound_neighbor_patch", side)
+			var neighbor: Node3D = neighbor_value as Node3D
+			if not is_instance_valid(neighbor):
+				continue
+			var local_endpoint: String = _edge_endpoint_key(patch, side)
+			var reciprocal_endpoint: String = _edge_endpoint_key(neighbor, _opposite_side(side))
+			var pair_key: String = local_endpoint + "|" + reciprocal_endpoint
+			if reciprocal_endpoint < local_endpoint:
+				pair_key = reciprocal_endpoint + "|" + local_endpoint
+			if endpoint_to_pair.has(local_endpoint) and str(endpoint_to_pair[local_endpoint]) != pair_key:
+				return {"supported": false, "endpoint_to_pair": {}}
+			if endpoint_to_pair.has(reciprocal_endpoint) and str(endpoint_to_pair[reciprocal_endpoint]) != pair_key:
+				return {"supported": false, "endpoint_to_pair": {}}
+			endpoint_to_pair[local_endpoint] = pair_key
+			endpoint_to_pair[reciprocal_endpoint] = pair_key
+	return {"supported": true, "endpoint_to_pair": endpoint_to_pair}
+
+
+static func _edge_endpoint_key(patch: Node3D, side: String) -> String:
+	return "%d:%s" % [patch.get_instance_id(), side]
+
+
+static func _opposite_side(side: String) -> String:
+	match side:
+		"east": return "west"
+		"west": return "east"
+		"north": return "south"
+		"south": return "north"
+		_: return ""
+
+
+## Clears each existing reciprocal edge through one public endpoint call. The patch API
+## performs the paired local clear; unpaired/stale sides are still cleared individually.
+## On failure, stop_on_failure=true returns immediately so the caller can run full cleanup.
+static func _clear_patch_edges_once(patches: Array[Node3D], endpoint_to_pair: Dictionary, stop_on_failure: bool) -> bool:
+	var cleared_pairs: Dictionary = {}
+	var all_ok: bool = true
+	for patch in patches:
+		if not is_instance_valid(patch):
+			continue
+		for side in SIDES:
+			var endpoint_key: String = _edge_endpoint_key(patch, side)
+			var pair_key: String = str(endpoint_to_pair.get(endpoint_key, ""))
+			if not pair_key.is_empty() and cleared_pairs.has(pair_key):
+				continue
+			var clear_ok: bool = bool(patch.call("clear_neighbor_edge_state", side))
+			if not clear_ok:
+				all_ok = false
+				if stop_on_failure:
+					return false
+				continue
+			if not pair_key.is_empty():
+				cleared_pairs[pair_key] = true
+	return all_ok
+
+
 static func _begin_collision_segmentation_batches(patches: Array[Node3D]) -> Array[Node3D]:
 	var affected_patches: Array[Node3D] = []
 	var seen_instance_ids: Dictionary = {}
@@ -247,8 +314,6 @@ static func _end_collision_segmentation_batches(patches: Array[Node3D]) -> void:
 			patch.call("end_collision_segmentation_batch")
 
 static func _clear_all(patches: Array[Node3D]) -> void:
-	for patch in patches:
-		if not is_instance_valid(patch):
-			continue
-		for side in SIDES:
-			patch.call("clear_neighbor_edge_state", side)
+	var reciprocal_clear_result: Dictionary = _collect_reciprocal_clear_pairs(patches)
+	var reciprocal_clear_map: Dictionary = reciprocal_clear_result.get("endpoint_to_pair", {}) if bool(reciprocal_clear_result.get("supported", false)) else {}
+	_clear_patch_edges_once(patches, reciprocal_clear_map, false)
