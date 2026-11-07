@@ -65,6 +65,8 @@ func _run() -> void:
 	holder.add_child(far)
 	await process_frame
 	await physics_frame
+	for patch in [west, east, south, far]:
+		patch.call("set_collision_segmentation_refresh_counter_enabled", true)
 	var stable_ids: Dictionary = {
 		west.get_instance_id(): "test/chunk/object/West",
 		east.get_instance_id(): "test/chunk/object/East",
