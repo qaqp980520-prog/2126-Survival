@@ -14,6 +14,7 @@ class FixturePatch:
 	var batch_depth: int = 0
 	var batch_begin_count: int = 0
 	var batch_end_count: int = 0
+	var clear_call_count: int = 0
 
 	func bind_neighbor_patch(side: String, neighbor: Node3D) -> bool:
 		if fail_bind or not ["east", "west", "north", "south"].has(side) or neighbor == null:
@@ -24,8 +25,26 @@ class FixturePatch:
 	func clear_neighbor_edge_state(side: String) -> bool:
 		if fail_clear:
 			return false
+		clear_call_count += 1
+		var neighbor: Node3D = neighbors.get(side) as Node3D
 		neighbors.erase(side)
+		if is_instance_valid(neighbor) and neighbor.has_method("clear_neighbor_edge_state_local"):
+			neighbor.call("clear_neighbor_edge_state_local", _opposite_side(side))
 		return true
+
+	func clear_neighbor_edge_state_local(side: String) -> void:
+		neighbors.erase(side)
+
+	func get_bound_neighbor_patch(side: String) -> Node3D:
+		return neighbors.get(side) as Node3D
+
+	func _opposite_side(side: String) -> String:
+		match side:
+			"east": return "west"
+			"west": return "east"
+			"north": return "south"
+			"south": return "north"
+			_: return ""
 
 	func get_bound_neighbor_patches() -> Array[Node3D]:
 		var result: Array[Node3D] = []
@@ -197,6 +216,7 @@ func _run() -> void:
 	await _test_large_spatial_index_grid()
 	await _test_spatial_index_tolerance_boundaries()
 	await _test_batch_scope_cleanup_on_failures()
+	await _test_reciprocal_clear_deduplication()
 	if failures.is_empty():
 		print("Surface terrain adjacency binder tests passed.")
 		quit(0)
@@ -323,6 +343,46 @@ func _test_batch_scope_cleanup_on_failures() -> void:
 	bind_holder.queue_free()
 	await process_frame
 	await process_frame
+
+func _test_reciprocal_clear_deduplication() -> void:
+	var holder := Node3D.new()
+	holder.name = "TerrainAdjacencyReciprocalClearDedupFixture"
+	root.add_child(holder)
+	var west := FixturePatch.new()
+	west.name = "DedupWest"
+	var east := FixturePatch.new()
+	east.name = "DedupEast"
+	east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	var south := FixturePatch.new()
+	south.name = "DedupSouth"
+	south.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE)
+	var external := FixturePatch.new()
+	external.name = "DedupExternalSouth"
+	external.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE * 2.0)
+	for patch in [west, east, south, external]:
+		holder.add_child(patch)
+	await process_frame
+	var stable_ids: Dictionary = {
+		west.get_instance_id(): "dedup/chunk/west",
+		east.get_instance_id(): "dedup/chunk/east",
+		south.get_instance_id(): "dedup/chunk/south",
+		external.get_instance_id(): "dedup/chunk/external"
+	}
+	var initial: Dictionary = BinderScript.bind_patches([west, east, south, external], stable_ids)
+	_expect(bool(initial.get("ok", false)) and int(initial.get("pair_count", -1)) == 3, "dedup fixture creates two loaded seams and one outgoing external seam")
+	for patch in [west, east, south, external]:
+		patch.clear_call_count = 0
+	var partial: Dictionary = BinderScript.bind_patches([west, east, south], stable_ids)
+	_expect(bool(partial.get("ok", false)) and int(partial.get("pair_count", -1)) == 2, "deduplicated clear rebuilds the two retained loaded seams")
+	var clear_calls: int = west.clear_call_count + east.clear_call_count + south.clear_call_count
+	_expect(clear_calls == 10, "two loaded reciprocal seams require one public clear call each instead of two")
+	_expect(external.neighbors.is_empty(), "one-sided unload clear removes the outgoing external reciprocal neighbor")
+	_expect(west.neighbors.get("east") == east and east.neighbors.get("west") == west, "deduplicated clear preserves the rebuilt east/west reciprocal seam")
+	_expect(west.neighbors.get("south") == south and south.neighbors.get("north") == west, "deduplicated clear preserves the rebuilt north/south reciprocal seam")
+	holder.queue_free()
+	await process_frame
+	await process_frame
+
 
 func _descriptor_for(report: Dictionary, first_id: String, second_id: String) -> Dictionary:
 	for descriptor_value in report.get("descriptors", {}).values():
