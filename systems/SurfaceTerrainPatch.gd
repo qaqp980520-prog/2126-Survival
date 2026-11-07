@@ -344,6 +344,15 @@ func get_bound_neighbor_patches() -> Array[Node3D]:
 			result.append(neighbor)
 	return result
 
+## Returns the current weakly-bound neighbor for one side without mutating either endpoint.
+func get_bound_neighbor_patch(side: String) -> Node3D:
+	if not RAMP_SIDES.has(side):
+		return null
+	var reference: WeakRef = _neighbor_patches.get(side) as WeakRef
+	if reference == null:
+		return null
+	return reference.get_ref() as Node3D
+
 func _request_collision_segmentation_refresh() -> void:
 	if _collision_segmentation_batch_depth > 0:
 		_collision_segmentation_refresh_pending = true
