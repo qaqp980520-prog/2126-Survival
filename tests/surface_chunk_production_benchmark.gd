@@ -369,6 +369,12 @@ func _emit_metrics(
 		"collider_corner_resolution_usec",
 		"collider_resource_staging_usec",
 		"collider_activation_commit_usec",
+		"collider_reused_edge_count",
+		"collider_staged_edge_count",
+		"collider_retired_edge_count",
+		"collider_reused_corner_cap_count",
+		"collider_staged_corner_cap_count",
+		"collider_retired_corner_cap_count",
 		"controller_rebind_total_usec",
 		"batch_total_usec"
 	]
@@ -378,6 +384,8 @@ func _emit_metrics(
 			profile_valid = false
 	var measured_rebind_usec: int = int(adjacency_profile.get("stable_id_map_usec", 0)) + int(adjacency_profile.get("binder_total_usec", 0)) + int(adjacency_profile.get("collider_sync_total_usec", 0))
 	profile_valid = profile_valid and int(adjacency_profile.get("controller_rebind_total_usec", 0)) >= measured_rebind_usec
+	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_edge_count", -1)) + int(adjacency_profile.get("collider_staged_edge_count", -1)) == int(adjacency_profile.get("transition_collider_count", -2))
+	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_corner_cap_count", -1)) + int(adjacency_profile.get("collider_staged_corner_cap_count", -1)) == int(adjacency_profile.get("corner_cap_count", -2))
 	profile_valid = profile_valid and int(adjacency_profile.get("batch_total_usec", 0)) >= int(adjacency_profile.get("collect_loaded_patches_usec", 0)) + int(adjacency_profile.get("controller_rebind_total_usec", 0))
 	_expect(profile_valid, "radius %d %s records valid non-negative phase timings with consistent totals" % [radius, phase])
 	var record := {
@@ -394,6 +402,12 @@ func _emit_metrics(
 		"terrain_adjacency_batch_ms": adjacency_batch_ms,
 		"async_other_ms": async_other_ms,
 		"terrain_adjacency_profile_usec": adjacency_profile,
+		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
+		"staged_transition_edge_count": int(adjacency_profile.get("collider_staged_edge_count", 0)),
+		"retired_transition_edge_count": int(adjacency_profile.get("collider_retired_edge_count", 0)),
+		"reused_corner_cap_count": int(adjacency_profile.get("collider_reused_corner_cap_count", 0)),
+		"staged_corner_cap_count": int(adjacency_profile.get("collider_staged_corner_cap_count", 0)),
+		"retired_corner_cap_count": int(adjacency_profile.get("collider_retired_corner_cap_count", 0)),
 		"staged_count": int(diagnostic.get("staged_count", 0)),
 		"newly_loaded_count": int(diagnostic.get("newly_loaded_count", 0)),
 		"unloaded_stale_count": int(diagnostic.get("unloaded_stale_count", 0)),
