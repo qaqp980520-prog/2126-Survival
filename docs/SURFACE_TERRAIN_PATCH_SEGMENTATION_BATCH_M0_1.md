@@ -25,7 +25,7 @@ Defer repeated collision/surface segmentation refreshes while the production adj
 - Batch scopes are nestable. Only the outermost close performs a pending segmentation refresh.
 - The binder collects reciprocal neighbors before clearing any edge, including valid neighbors outside the new loaded patch array. This is required because a departing patch may still hold a weak reference to a patch that is not part of the new set.
 - Every patch that supports the batch API is opened once and closed once by the binder.
-- Clear failure and neighbor-bind failure both execute the existing full cleanup path before closing all started scopes.
+- Clear failure and neighbor-bind failure both execute the existing full cleanup path before closing all started scopes; deterministic fixture regressions assert that every started scope is closed exactly once.
 - The authoritative full adjacency rebuild, descriptor generation, stable-ID validation, and collider-manager synchronization are not replaced.
 - The refresh counter is disabled by default and enabled only by the regression test; normal gameplay does not pay counter-increment overhead.
 
@@ -52,6 +52,7 @@ Acceptance requires:
 - A reciprocal neighbor outside the incoming patch array is also refreshed exactly once.
 - Nested batch scopes defer refresh until the outermost scope closes.
 - An unmatched close is rejected.
+- Clear-failure and partial neighbor-bind-failure paths close every started scope exactly once and remove partially applied fixture edges.
 - Public single-side clear remains immediate outside a batch.
 - The opt-in refresh counter remains disabled by default.
 - Existing adjacency policies, ramp state, descriptors, and spatial-index assertions remain unchanged.
