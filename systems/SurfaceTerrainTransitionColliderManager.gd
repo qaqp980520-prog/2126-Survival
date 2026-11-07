@@ -131,6 +131,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
 
     var staged: Dictionary = {}
     var reused_edge_keys: Dictionary = {}
+    var reactivated_edge_keys: Dictionary = {}
     var staged_edge_count: int = 0
     for edge_key in candidates.keys():
         if blocked_edges.has(edge_key):
@@ -140,9 +141,11 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         var edge_signature: Array = _edge_reuse_signature(str(edge_key), edge, junction_positions)
         var old_edge: Dictionary = _managed_edges.get(str(edge_key), {})
         var old_edge_body: StaticBody3D = old_edge.get("body") as StaticBody3D
-        if not edge_signature.is_empty() and _signatures_match(old_edge.get("reuse_signature", []), edge_signature) and _is_reusable_managed_body(old_edge_body) and _edge_patch_states_are_active(old_edge):
+        if not edge_signature.is_empty() and _signatures_match(old_edge.get("reuse_signature", []), edge_signature) and _is_reusable_managed_body(old_edge_body):
             staged[str(edge_key)] = old_edge
             reused_edge_keys[str(edge_key)] = true
+            if not _edge_patch_states_are_active(old_edge):
+                reactivated_edge_keys[str(edge_key)] = true
             continue
         var staged_edge: Dictionary = _stage_edge(str(edge_key), edge, junction_positions, edge_signature)
         if staged_edge.is_empty():
@@ -156,7 +159,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
     var commit_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var newly_activated: Array[Dictionary] = []
     for edge_key in staged.keys():
-        if reused_edge_keys.has(str(edge_key)):
+        if reused_edge_keys.has(str(edge_key)) and not reactivated_edge_keys.has(str(edge_key)):
             continue
         var edge: Dictionary = staged[edge_key]
         var first_patch: Node3D = edge["first_patch"]
@@ -222,6 +225,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
             "resource_staging_usec": resource_staging_usec,
             "activation_commit_usec": Time.get_ticks_usec() - commit_started_usec,
             "reused_edge_count": reused_edge_keys.size(),
+            "reactivated_edge_count": reactivated_edge_keys.size(),
             "staged_edge_count": staged_edge_count,
             "retired_edge_count": retired_edge_count,
             "reused_corner_cap_count": reused_cap_keys.size(),
@@ -237,6 +241,7 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
         "corner_cap_count": _managed_corner_caps.size(),
         "reused_edge_count": reused_edge_keys.size(),
+        "reactivated_edge_count": reactivated_edge_keys.size(),
         "staged_edge_count": staged_edge_count,
         "retired_edge_count": retired_edge_count,
         "reused_corner_cap_count": reused_cap_keys.size(),
