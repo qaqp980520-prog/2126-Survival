@@ -100,42 +100,64 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
     var corner_resolution_usec: int = Time.get_ticks_usec() - corner_started_usec if profile_enabled else 0
     var staging_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var staged_caps: Dictionary = {}
+    var reused_cap_keys: Dictionary = {}
+    var staged_cap_count: int = 0
     for cap_spec_value in cap_specs:
         if not (cap_spec_value is Dictionary):
-            _free_staged_caps(staged_caps)
+            _free_staged_caps(staged_caps, reused_cap_keys)
             return {"ok": false, "error": "invalid_corner_cap_spec", "active_count": _managed_edges.size()}
         var cap_spec: Dictionary = cap_spec_value
         for corner_value in cap_spec.get("corners", []):
             if not (corner_value is Dictionary):
-                _free_staged_caps(staged_caps)
+                _free_staged_caps(staged_caps, reused_cap_keys)
                 return {"ok": false, "error": "invalid_corner_cap_entry", "active_count": _managed_edges.size()}
             var corner_entry: Dictionary = corner_value
             var stable_id: String = str(corner_entry.get("stable_id", ""))
             var corner: String = str(corner_entry.get("corner", ""))
             var cap_key: String = _report_token(stable_id, corner)
-            var staged_cap: Dictionary = _stage_corner_cap(cap_key, cap_spec, corner_entry)
+            var cap_signature: Array = _corner_cap_reuse_signature(cap_spec, corner_entry)
+            var old_cap: Dictionary = _managed_corner_caps.get(cap_key, {})
+            var old_cap_body: StaticBody3D = old_cap.get("body") as StaticBody3D
+            if not cap_signature.is_empty() and _signatures_match(old_cap.get("reuse_signature", []), cap_signature) and _is_reusable_managed_body(old_cap_body):
+                staged_caps[cap_key] = old_cap
+                reused_cap_keys[cap_key] = true
+                continue
+            var staged_cap: Dictionary = _stage_corner_cap(cap_key, cap_spec, corner_entry, cap_signature)
             if staged_cap.is_empty():
-                _free_staged_caps(staged_caps)
+                _free_staged_caps(staged_caps, reused_cap_keys)
                 return {"ok": false, "error": "corner_cap_staging_failed", "active_count": _managed_edges.size()}
             staged_caps[cap_key] = staged_cap
+            staged_cap_count += 1
 
     var staged: Dictionary = {}
+    var reused_edge_keys: Dictionary = {}
+    var staged_edge_count: int = 0
     for edge_key in candidates.keys():
         if blocked_edges.has(edge_key):
             continue
         var edge: Dictionary = candidates[edge_key]
         var junction_positions: Array = edge_junctions.get(str(edge_key), [])
-        var staged_edge: Dictionary = _stage_edge(str(edge_key), edge, junction_positions)
+        var edge_signature: Array = _edge_reuse_signature(str(edge_key), edge, junction_positions)
+        var old_edge: Dictionary = _managed_edges.get(str(edge_key), {})
+        var old_edge_body: StaticBody3D = old_edge.get("body") as StaticBody3D
+        if not edge_signature.is_empty() and _signatures_match(old_edge.get("reuse_signature", []), edge_signature) and _is_reusable_managed_body(old_edge_body) and _edge_patch_states_are_active(old_edge):
+            staged[str(edge_key)] = old_edge
+            reused_edge_keys[str(edge_key)] = true
+            continue
+        var staged_edge: Dictionary = _stage_edge(str(edge_key), edge, junction_positions, edge_signature)
         if staged_edge.is_empty():
-            _free_staged(staged)
-            _free_staged_caps(staged_caps)
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
             return {"ok": false, "error": "edge_staging_failed", "active_count": _managed_edges.size()}
         staged[str(edge_key)] = staged_edge
+        staged_edge_count += 1
 
     var resource_staging_usec: int = Time.get_ticks_usec() - staging_started_usec if profile_enabled else 0
     var commit_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var newly_activated: Array[Dictionary] = []
     for edge_key in staged.keys():
+        if reused_edge_keys.has(str(edge_key)):
+            continue
         var edge: Dictionary = staged[edge_key]
         var first_patch: Node3D = edge["first_patch"]
         var second_patch: Node3D = edge["second_patch"]
@@ -146,8 +168,8 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         var first_activated: bool = bool(first_patch.call("set_shared_transition_active", first_side, true))
         if not first_activated:
             _rollback_patch_activations(newly_activated)
-            _free_staged(staged)
-            _free_staged_caps(staged_caps)
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
             return {"ok": false, "error": "first_patch_activation_failed", "active_count": _managed_edges.size()}
         if not first_was_active:
             newly_activated.append({"patch": first_patch, "side": first_side})
@@ -156,17 +178,27 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
             if not first_was_active:
                 first_patch.call("set_shared_transition_active", first_side, false)
             _rollback_patch_activations(newly_activated)
-            _free_staged(staged)
-            _free_staged_caps(staged_caps)
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
             return {"ok": false, "error": "second_patch_activation_failed", "active_count": _managed_edges.size()}
         if not second_was_active:
             newly_activated.append({"patch": second_patch, "side": second_side})
 
+    var retired_edge_count: int = 0
     for old_key in _managed_edges.keys():
         var old_edge: Dictionary = _managed_edges[old_key]
         var replacement: Dictionary = staged.get(str(old_key), {})
+        if replacement.get("body") == old_edge.get("body"):
+            continue
+        retired_edge_count += 1
         _retire_old_edge(old_edge, replacement)
-    for old_cap in _managed_corner_caps.values():
+    var retired_corner_cap_count: int = 0
+    for old_cap_key in _managed_corner_caps.keys():
+        var old_cap: Dictionary = _managed_corner_caps[old_cap_key]
+        var replacement_cap: Dictionary = staged_caps.get(str(old_cap_key), {})
+        if replacement_cap.get("body") == old_cap.get("body"):
+            continue
+        retired_corner_cap_count += 1
         _retire_old_cap(old_cap)
 
     for edge in staged.values():
@@ -189,6 +221,12 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
             "corner_resolution_usec": corner_resolution_usec,
             "resource_staging_usec": resource_staging_usec,
             "activation_commit_usec": Time.get_ticks_usec() - commit_started_usec,
+            "reused_edge_count": reused_edge_keys.size(),
+            "staged_edge_count": staged_edge_count,
+            "retired_edge_count": retired_edge_count,
+            "reused_corner_cap_count": reused_cap_keys.size(),
+            "staged_corner_cap_count": staged_cap_count,
+            "retired_corner_cap_count": retired_corner_cap_count,
             "total_usec": Time.get_ticks_usec() - total_started_usec
         }
     return {
@@ -198,6 +236,12 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         "blocked_edge_keys": _sorted_keys(blocked_edges),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
         "corner_cap_count": _managed_corner_caps.size(),
+        "reused_edge_count": reused_edge_keys.size(),
+        "staged_edge_count": staged_edge_count,
+        "retired_edge_count": retired_edge_count,
+        "reused_corner_cap_count": reused_cap_keys.size(),
+        "staged_corner_cap_count": staged_cap_count,
+        "retired_corner_cap_count": retired_corner_cap_count,
         "profile_usec": profile_usec
     }
 
@@ -427,7 +471,28 @@ func _build_corner_cap_specs(candidates: Dictionary, reports: Array) -> Dictiona
             }
     return {"ok": true, "specs": safe_specs, "edge_junctions": edge_junctions, "report_policies": report_policies}
 
-func _stage_corner_cap(cap_key: String, spec: Dictionary, corner_entry: Dictionary) -> Dictionary:
+func _corner_cap_reuse_signature(spec: Dictionary, corner_entry: Dictionary) -> Array:
+    var patch: Node3D = corner_entry.get("patch") as Node3D
+    if not is_instance_valid(patch):
+        return []
+    var position_value: Variant = spec.get("position", null)
+    if not (position_value is Vector3):
+        return []
+    var midpoint_height: float = float(spec.get("midpoint_height", NAN))
+    var top_height: float = float(corner_entry.get("top_height", NAN))
+    if is_nan(midpoint_height) or is_inf(midpoint_height) or is_nan(top_height) or is_inf(top_height):
+        return []
+    return [
+        str(corner_entry.get("stable_id", "")),
+        str(corner_entry.get("corner", "")),
+        patch.get_instance_id(),
+        str(spec.get("junction_key", "")),
+        position_value,
+        midpoint_height,
+        top_height
+    ]
+
+func _stage_corner_cap(cap_key: String, spec: Dictionary, corner_entry: Dictionary, reuse_signature: Array = []) -> Dictionary:
     var patch: Node3D = corner_entry.get("patch") as Node3D
     if not is_instance_valid(patch):
         return {}
@@ -521,7 +586,8 @@ func _stage_corner_cap(cap_key: String, spec: Dictionary, corner_entry: Dictiona
         "body": body,
         "stable_id": str(corner_entry.get("stable_id", "")),
         "corner": corner,
-        "junction_key": str(spec.get("junction_key", ""))
+        "junction_key": str(spec.get("junction_key", "")),
+        "reuse_signature": reuse_signature
     }
 
 func _append_triangle(target: PackedVector3Array, a: Vector3, b: Vector3, c: Vector3) -> void:
@@ -529,7 +595,53 @@ func _append_triangle(target: PackedVector3Array, a: Vector3, b: Vector3, c: Vec
     target.append(b)
     target.append(c)
 
-func _stage_edge(edge_key: String, edge: Dictionary, corner_junctions: Array = []) -> Dictionary:
+func _edge_reuse_signature(edge_key: String, edge: Dictionary, corner_junctions: Array) -> Array:
+    var geometry: Dictionary = edge.get("geometry", {})
+    if not geometry.has("basis") or not geometry.has("center") or not geometry.has("slope_length") or not geometry.has("patch_size"):
+        return []
+    var first_patch: Node3D = edge.get("first_patch") as Node3D
+    var second_patch: Node3D = edge.get("second_patch") as Node3D
+    if not is_instance_valid(first_patch) or not is_instance_valid(second_patch):
+        return []
+    var basis: Basis = geometry["basis"]
+    var width_axis: Vector3 = basis.z.normalized()
+    var patch_size: float = float(geometry["patch_size"])
+    var trim_negative: float = 0.0
+    var trim_positive: float = 0.0
+    for junction_value in corner_junctions:
+        if not (junction_value is Vector3):
+            return []
+        var projection: float = (junction_value - geometry["center"]).dot(width_axis)
+        if absf(absf(projection) - patch_size * 0.5) > POSITION_TOLERANCE:
+            return []
+        if projection < 0.0:
+            trim_negative = EDGE_RUN_PER_PATCH
+        else:
+            trim_positive = EDGE_RUN_PER_PATCH
+    var width: float = patch_size - trim_negative - trim_positive
+    if width <= POSITION_TOLERANCE:
+        return []
+    var center: Vector3 = geometry["center"] + width_axis * ((trim_negative - trim_positive) * 0.5)
+    var body_origin: Vector3 = center - basis.y * (COLLISION_THICKNESS * 0.5)
+    return [
+        edge_key,
+        str(edge.get("first_id", "")),
+        str(edge.get("second_id", "")),
+        first_patch.get_instance_id(),
+        second_patch.get_instance_id(),
+        str(edge.get("first_side", "")),
+        str(edge.get("second_side", "")),
+        basis,
+        center,
+        body_origin,
+        float(geometry["slope_length"]),
+        patch_size,
+        width,
+        trim_negative,
+        trim_positive
+    ]
+
+func _stage_edge(edge_key: String, edge: Dictionary, corner_junctions: Array = [], reuse_signature: Array = []) -> Dictionary:
     var geometry: Dictionary = edge["geometry"].duplicate(true)
     var basis: Basis = geometry["basis"]
     var width_axis: Vector3 = basis.z.normalized()
@@ -595,7 +707,8 @@ func _stage_edge(edge_key: String, edge: Dictionary, corner_junctions: Array = [
         "second_id": edge["second_id"],
         "width": width,
         "trim_negative": trim_negative,
-        "trim_positive": trim_positive
+        "trim_positive": trim_positive,
+        "reuse_signature": reuse_signature
     }
 
 func _retire_old_edge(old_edge: Dictionary, replacement: Dictionary) -> void:
@@ -620,16 +733,53 @@ func _retire_old_cap(old_cap: Dictionary) -> void:
         body.collision_layer = 0
         body.queue_free()
 
-func _free_staged(staged: Dictionary) -> void:
-    for edge in staged.values():
+func _free_staged(staged: Dictionary, preserved_keys: Dictionary = {}) -> void:
+    for edge_key in staged.keys():
+        if preserved_keys.has(str(edge_key)):
+            continue
+        var edge: Dictionary = staged[edge_key]
         var body: StaticBody3D = edge.get("body") as StaticBody3D
         if is_instance_valid(body):
             body.collision_layer = 0
             body.queue_free()
 
-func _free_staged_caps(staged: Dictionary) -> void:
-    for cap in staged.values():
+func _free_staged_caps(staged: Dictionary, preserved_keys: Dictionary = {}) -> void:
+    for cap_key in staged.keys():
+        if preserved_keys.has(str(cap_key)):
+            continue
+        var cap: Dictionary = staged[cap_key]
         _retire_old_cap(cap)
+
+func _is_reusable_managed_body(candidate: StaticBody3D) -> bool:
+    return (
+        is_instance_valid(candidate)
+        and not candidate.is_queued_for_deletion()
+        and candidate.get_parent() == self
+        and candidate.collision_layer == COLLISION_LAYER
+    )
+
+func _edge_patch_states_are_active(edge: Dictionary) -> bool:
+    var first_patch: Node3D = edge.get("first_patch") as Node3D
+    var second_patch: Node3D = edge.get("second_patch") as Node3D
+    if not is_instance_valid(first_patch) or not is_instance_valid(second_patch):
+        return false
+    if not first_patch.has_method("is_shared_transition_active") or not second_patch.has_method("is_shared_transition_active"):
+        return false
+    return (
+        bool(first_patch.call("is_shared_transition_active", str(edge.get("first_side", ""))))
+        and bool(second_patch.call("is_shared_transition_active", str(edge.get("second_side", ""))))
+    )
+
+func _signatures_match(previous: Variant, candidate: Array) -> bool:
+    if not (previous is Array):
+        return false
+    var previous_values: Array = previous
+    if previous_values.size() != candidate.size():
+        return false
+    for index in range(candidate.size()):
+        if previous_values[index] != candidate[index]:
+            return false
+    return true
 
 func _rollback_patch_activations(activations: Array[Dictionary]) -> void:
     for activation in activations:
