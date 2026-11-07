@@ -478,8 +478,10 @@ func _corner_cap_reuse_signature(spec: Dictionary, corner_entry: Dictionary) -> 
     var position_value: Variant = spec.get("position", null)
     if not (position_value is Vector3):
         return []
-    var midpoint_height: float = float(spec.get("midpoint_height", NAN))
-    var top_height: float = float(corner_entry.get("top_height", NAN))
+    if not spec.has("midpoint_height") or not corner_entry.has("top_height"):
+        return []
+    var midpoint_height: float = float(spec["midpoint_height"])
+    var top_height: float = float(corner_entry["top_height"])
     if is_nan(midpoint_height) or is_inf(midpoint_height) or is_nan(top_height) or is_inf(top_height):
         return []
     return [
