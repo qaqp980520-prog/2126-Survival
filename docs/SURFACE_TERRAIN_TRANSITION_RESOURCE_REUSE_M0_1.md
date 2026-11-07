@@ -27,7 +27,8 @@ This is a resource-lifecycle optimization layered on the existing full adjacency
   - `4d1488ced73616bb9d89a1adbb6622dd7802586b` — remove an unused benchmark helper.
   - `b5f68fd5ebf480782bbcb2fd1c0c0d7633f2d482` — update benchmark artifact validation to 20 records.
   - `260b00d1c6e66b284d4b89ed14928dafbf750e08` — run production fixture through the adjacency batch API for complete profiling.
-- Latest exact branch head: `260b00d1c6e66b284d4b89ed14928dafbf750e08` (18 commits ahead / 0 behind PR #286).
+  - `049aad2fa224763a5a86051e278620aaa8ce5e35` — select only descriptors marked transition_required when capturing the production transition body.
+- Latest exact branch head: `049aad2fa224763a5a86051e278620aaa8ce5e35` (20 commits ahead / 0 behind PR #286).
 
 ## Files
 
