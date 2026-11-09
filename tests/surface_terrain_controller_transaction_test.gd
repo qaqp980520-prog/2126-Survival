@@ -4,6 +4,8 @@ const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 const LifecycleAdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
+const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 
 
 class FakeTransitionManager:
@@ -94,6 +96,27 @@ class FailingMineralAdapter:
 	func unload_chunk(_chunk_id: String, _now_unix: int = -1) -> bool:
 		unload_calls += 1
 		return true
+
+
+class FakeReconcileController:
+	extends Node
+
+	var loaded_ids: PackedStringArray = PackedStringArray(["surface/chunk_2_3"])
+
+	func load_chunk(_id: String, _root: Node3D, _now_unix: int = -1) -> bool:
+		return true
+
+	func unload_chunk(_id: String, _now_unix: int = -1) -> bool:
+		return true
+
+	func is_chunk_loaded(_id: String) -> bool:
+		return true
+
+	func get_loaded_chunk_ids() -> PackedStringArray:
+		return loaded_ids.duplicate()
+
+	func end_terrain_adjacency_batch() -> Dictionary:
+		return {"ok": false, "error": "injected_end_failure"}
 
 
 var failures: Array[String] = []
@@ -195,23 +218,36 @@ func _run() -> void:
 	_expect(bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "failed unload re-registers the chunk through the real lifecycle adapter")
 	_expect(fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "failed unload restores the registered vein identity")
 
+	var chunk_f_root := Node3D.new()
+	chunk_f_root.name = "ChunkF"
+	var patch_f: Node3D = _new_patch(chunk_f_root, "TerrainF", Vector3(6.0, 0.0, 0.0))
+	var prop_f: Node3D = StatefulPropScript.new()
+	prop_f.name = "SalvageCrate"
+	chunk_f_root.add_child(prop_f)
+	_expect(bool(controller.call("load_chunk", "chunk_f", chunk_f_root, 100)), "second stateful chunk loads before the multi-retirement batch")
+	_expect(transition_manager.sync_calls == 2, "second stateful chunk performs one pre-batch adjacency synchronization")
+	var registry_before_batch: Dictionary = object_registry.call("to_save_dict")
+
 	# A failed batch commit must restore every pending retirement and its adapter/registry state.
 	transition_manager.fail_next_sync = true
 	_expect(bool(controller.call("begin_terrain_adjacency_batch")), "rollback terrain adjacency batch begins")
 	var staged_failed_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 101))
-	_expect(staged_failed_unload, "batch unload stages the departing chunk without freeing its root")
-	_expect(transition_manager.sync_calls == 1, "batch unload defers collider synchronization until batch commit")
-	_expect(controller.get("_pending_chunk_unloads").has("chunk_c"), "batch unload records one pending retirement")
-	_expect(chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion(), "pending retirement keeps the old root attached and alive")
-	_expect(not bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "pending retirement unregisters minerals before adjacency commit")
+	var staged_failed_unload_f: bool = bool(controller.call("unload_chunk", "chunk_f", 101))
+	_expect(staged_failed_unload and staged_failed_unload_f, "two chunk unloads stage without freeing either root")
+	_expect(transition_manager.sync_calls == 2, "multiple batch unloads defer collider synchronization until one batch commit")
+	_expect(controller.get("_pending_chunk_unloads").size() == 2, "batch records both pending retirements")
+	_expect(chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion() and chunk_f_root.get_parent() == controller and not chunk_f_root.is_queued_for_deletion(), "both pending roots remain attached and alive")
+	_expect(not bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "pending retirement unregisters chunk C minerals before adjacency commit")
 	var failed_batch_end: Dictionary = controller.call("end_terrain_adjacency_batch")
-	_expect(not bool(failed_batch_end.get("ok", false)), "injected batch collider failure rejects the pending retirement")
-	_expect(transition_manager.sync_calls == 2, "failed batch performs exactly one collider synchronization attempt")
-	_expect(not controller.get("_pending_chunk_unloads").has("chunk_c"), "failed batch clears the cancelled retirement record")
-	_expect(controller.get("_chunk_roots").has("chunk_c") and chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion(), "failed batch retains the original Controller root")
-	_expect(bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "failed batch re-registers minerals through the real adapter")
-	_expect(object_registry.call("to_save_dict") == registry_before, "failed batch restores the world-object registry snapshot")
-	_expect(patch_b.call("get_bound_neighbor_patch", "east") == patch_c and patch_c.call("get_bound_neighbor_patch", "west") == patch_b, "failed batch restores reciprocal terrain adjacency")
+	_expect(not bool(failed_batch_end.get("ok", false)), "injected batch collider failure rejects the pending retirements")
+	_expect(transition_manager.sync_calls == 3, "failed multi-retirement batch performs one collider synchronization attempt")
+	_expect(controller.get("_pending_chunk_unloads").is_empty(), "failed batch clears every cancelled retirement record")
+	_expect(controller.get("_chunk_roots").has("chunk_c") and chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion(), "failed batch retains the original C root")
+	_expect(controller.get("_chunk_roots").has("chunk_f") and chunk_f_root.get_parent() == controller and not chunk_f_root.is_queued_for_deletion(), "failed batch retains the original F root")
+	_expect(bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "failed batch re-registers C minerals through the real adapter")
+	_expect(object_registry.call("to_save_dict") == registry_before_batch, "multi-retirement rollback restores each chunk's object-state records without overwriting its neighbor")
+	_expect(patch_b.call("get_bound_neighbor_patch", "east") == patch_c and patch_c.call("get_bound_neighbor_patch", "west") == patch_b, "failed batch restores the B/C reciprocal terrain edge")
+	_expect(patch_c.call("get_bound_neighbor_patch", "east") == patch_f and patch_f.call("get_bound_neighbor_patch", "west") == patch_c, "failed batch preserves the C/F reciprocal terrain edge")
 
 	# All stale roots stay alive until one shared adjacency commit excludes the complete pending-retirement set.
 	var batch_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
@@ -221,21 +257,22 @@ func _run() -> void:
 	var batch_patch: Node3D = _new_patch(batch_root, "TerrainD", Vector3(4.0, 0.0, 0.0))
 	var batch_load: bool = bool(controller.call("load_chunk", "chunk_d", batch_root, 102))
 	_expect(batch_load, "candidate chunk load is accepted into the active adjacency batch")
-	_expect(transition_manager.sync_calls == 2, "batched candidate load defers transition synchronization")
+	_expect(transition_manager.sync_calls == 3, "batched candidate load defers transition synchronization")
 	_expect(controller.get("_terrain_adjacency_batch_dirty"), "batched candidate load marks adjacency dirty")
 
 	var successful_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 103))
-	_expect(successful_unload, "chunk unload is staged while the old root remains alive")
-	_expect(transition_manager.sync_calls == 2, "staged unload does not trigger an extra per-chunk synchronization")
-	_expect(controller.get("_pending_chunk_unloads").has("chunk_c"), "successful batch records the departing chunk for retirement")
-	_expect(chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion(), "departing root remains attached until the shared commit")
+	var successful_unload_f: bool = bool(controller.call("unload_chunk", "chunk_f", 103))
+	_expect(successful_unload and successful_unload_f, "two stale chunks are staged while their old roots remain alive")
+	_expect(transition_manager.sync_calls == 3, "staged unloads do not trigger extra per-chunk synchronization")
+	_expect(controller.get("_pending_chunk_unloads").size() == 2, "successful batch records both departing chunks")
+	_expect(chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion() and chunk_f_root.get_parent() == controller and not chunk_f_root.is_queued_for_deletion(), "both departing roots remain attached until the shared commit")
 	var batch_end: Dictionary = controller.call("end_terrain_adjacency_batch")
 	_expect(bool(batch_end.get("ok", false)), "shared terrain adjacency batch commits successfully")
-	_expect(transition_manager.sync_calls == 3, "one shared commit synchronizes the loaded window exactly once")
-	_expect(int(controller.call("get_terrain_adjacency_rebuild_count")) - batch_rebuilds_before == 1, "load plus unload batch performs exactly one full adjacency rebuild")
-	_expect(not controller.get("_pending_chunk_unloads").has("chunk_c"), "successful commit clears the pending retirement")
-	_expect(not controller.get("_chunk_roots").has("chunk_c"), "successful commit removes the Controller chunk-root entry")
-	_expect(chunk_c.get_parent() == null and chunk_c.is_queued_for_deletion(), "successful commit detaches and queues the old root only after adjacency commit")
+	_expect(transition_manager.sync_calls == 4, "one shared commit synchronizes the loaded window exactly once")
+	_expect(int(controller.call("get_terrain_adjacency_rebuild_count")) - batch_rebuilds_before == 1, "load plus two unloads perform exactly one full adjacency rebuild")
+	_expect(controller.get("_pending_chunk_unloads").is_empty(), "successful commit clears all pending retirements")
+	_expect(not controller.get("_chunk_roots").has("chunk_c") and not controller.get("_chunk_roots").has("chunk_f"), "successful commit removes both Controller chunk-root entries")
+	_expect(chunk_c.get_parent() == null and chunk_c.is_queued_for_deletion() and chunk_f_root.get_parent() == null and chunk_f_root.is_queued_for_deletion(), "successful commit detaches and queues both old roots only after adjacency commit")
 	_expect(patch_a.call("get_bound_neighbor_patch", "east") == patch_b, "successful unload retains the unaffected A-east/B-west edge")
 	_expect(patch_b.call("get_bound_neighbor_patch", "east") == batch_patch, "successful unload binds the replacement D patch at the departing boundary")
 	_expect(batch_patch.call("get_bound_neighbor_patch", "west") == patch_b, "successful unload binds the replacement patch reciprocally")
@@ -243,22 +280,29 @@ func _run() -> void:
 	_expect(controller.call("get_terrain_transition_descriptors").size() == 2, "successful unload publishes descriptors for both remaining transition edges")
 	_expect(not bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "successful unload unregisters the chunk through the real lifecycle adapter")
 	_expect(not fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "successful unload removes the registered vein identity")
-	_expect(int(batch_end.get("retired_chunk_count", -1)) == 1, "batch commit reports one retired chunk")
+	_expect(int(batch_end.get("retired_chunk_count", -1)) == 2, "batch commit reports both retired chunks")
 
 	# A Director rollback can cancel a staged retirement and keep the exact old root.
 	var cancel_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 	var registry_before_cancel: Dictionary = object_registry.call("to_save_dict")
+	var rollback_director := DirectorScript.new()
+	rollback_director.name = "RollbackDirector"
+	rollback_director.set("chunk_controller", controller)
+	rollback_director.set("chunk_factory", Callable())
+	holder.add_child(rollback_director)
 	_expect(bool(controller.call("begin_terrain_adjacency_batch")), "pending-retirement cancellation batch begins")
 	_expect(bool(controller.call("unload_chunk", "chunk_d", 104)), "replacement chunk can be staged for retirement")
 	_expect(controller.get("_pending_chunk_unloads").has("chunk_d"), "replacement chunk retirement is pending")
-	_expect(bool(controller.call("cancel_pending_chunk_unload", "chunk_d", 104)), "rollback cancels the pending retirement without generating a replacement root")
-	_expect(not controller.get("_pending_chunk_unloads").has("chunk_d"), "cancelled replacement retirement is removed from the pending set")
-	_expect(controller.is_chunk_loaded("chunk_d") and batch_root.get_parent() == controller, "cancellation preserves the exact replacement root")
+	var director_restore_ok: bool = bool(rollback_director.call("_restore_unloaded_chunks", [{"id": "chunk_d", "coord": Vector2i(2, 0)}], 104))
+	_expect(director_restore_ok, "Director rollback restores a held pending root without requiring a factory")
+	_expect(not controller.get("_pending_chunk_unloads").has("chunk_d"), "Director cancellation removes the pending retirement")
+	_expect(controller.is_chunk_loaded("chunk_d") and batch_root.get_parent() == controller, "Director cancellation preserves the exact replacement root")
+	_expect(rollback_director.call("get_managed_chunk_ids").has("chunk_d"), "Director restores its managed-ID map for the held root")
 	_expect(object_registry.call("to_save_dict") == registry_before_cancel, "cancellation restores the pre-unload world-object registry snapshot")
 	var cancel_batch_end: Dictionary = controller.call("end_terrain_adjacency_batch")
 	_expect(bool(cancel_batch_end.get("ok", false)), "cancellation batch commits successfully")
 	_expect(int(controller.call("get_terrain_adjacency_rebuild_count")) - cancel_rebuilds_before == 1, "cancellation batch performs one reconciliation rebuild")
-	_expect(transition_manager.sync_calls == 4, "cancellation batch synchronizes once after restoring the pending root")
+	_expect(transition_manager.sync_calls == 5, "cancellation batch synchronizes once after restoring the pending root")
 
 	await process_frame
 	_expect(not is_instance_valid(patch_c), "successful unload releases the departing patch after the commit")
@@ -286,6 +330,23 @@ func _run() -> void:
 	_expect(candidate_patch.call("get_bound_neighbor_patch", "west") == null, "failed candidate load leaves the candidate patch unbound")
 	_expect(object_registry.call("to_save_dict") == registry_before_load, "failed candidate load restores the world-object registry snapshot")
 	candidate_root.free()
+
+	var fake_reconcile_controller := FakeReconcileController.new()
+	fake_reconcile_controller.name = "FakeReconcileController"
+	holder.add_child(fake_reconcile_controller)
+	var reconcile_director := DirectorScript.new()
+	reconcile_director.name = "ReconcileDirector"
+	reconcile_director.set("chunk_controller", fake_reconcile_controller)
+	reconcile_director.set("_managed_chunk_ids", {"surface/chunk_0_0": Vector2i.ZERO})
+	holder.add_child(reconcile_director)
+	var failed_finalize: Dictionary = reconcile_director.call("_end_controller_terrain_adjacency_batch")
+	_expect(not bool(failed_finalize.get("ok", true)), "Director receives the injected failed batch result")
+	_expect(bool(failed_finalize.get("managed_map_reconciled", false)), "Director reconciles managed IDs after failed batch rollback")
+	_expect(reconcile_director.call("get_managed_chunk_ids").has("surface/chunk_2_3"), "reconciliation restores the Controller's actual loaded surface ID")
+	var map_before_invalid_reconcile: PackedStringArray = reconcile_director.call("get_managed_chunk_ids")
+	fake_reconcile_controller.loaded_ids = PackedStringArray(["unknown/chunk"])
+	_expect(not bool(reconcile_director.call("_reconcile_managed_chunk_ids_from_controller")), "reconciliation rejects an unknown Controller chunk ID")
+	_expect(reconcile_director.call("get_managed_chunk_ids") == map_before_invalid_reconcile, "failed reconciliation leaves the previous managed map untouched")
 
 	holder.queue_free()
 	await process_frame

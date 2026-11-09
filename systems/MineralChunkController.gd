@@ -535,6 +535,8 @@ func begin_terrain_adjacency_batch() -> bool:
 	if not is_inside_tree() or is_queued_for_deletion():
 		return false
 	if _terrain_adjacency_batch_depth == 0:
+		if not _pending_chunk_unloads.is_empty():
+			return false
 		_terrain_adjacency_batch_dirty = false
 	_terrain_adjacency_batch_depth += 1
 	return true

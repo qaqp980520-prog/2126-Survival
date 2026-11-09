@@ -695,8 +695,29 @@ func _end_controller_terrain_adjacency_batch() -> Dictionary:
 		return {"ok": false, "error": "controller_unavailable"}
 	if not chunk_controller.has_method("end_terrain_adjacency_batch"):
 		return {"ok": true, "skipped": true}
-	var result: Variant = chunk_controller.call("end_terrain_adjacency_batch")
-	return result if result is Dictionary else {"ok": false, "error": "invalid_batch_result"}
+	var result_value: Variant = chunk_controller.call("end_terrain_adjacency_batch")
+	var result: Dictionary = result_value if result_value is Dictionary else {"ok": false, "error": "invalid_batch_result"}
+	if not bool(result.get("ok", false)):
+		result["managed_map_reconciled"] = _reconcile_managed_chunk_ids_from_controller()
+	return result
+
+func _reconcile_managed_chunk_ids_from_controller() -> bool:
+	if not _controller_ready_for_sync() or not chunk_controller.has_method("get_loaded_chunk_ids"):
+		return false
+	var raw_ids: Variant = chunk_controller.call("get_loaded_chunk_ids")
+	if not (raw_ids is Array or raw_ids is PackedStringArray):
+		return false
+	var reconciled: Dictionary = {}
+	for raw_id in raw_ids:
+		var chunk_id: String = str(raw_id)
+		if chunk_id.begins_with("underground/"):
+			continue
+		var parsed: Dictionary = _parse_grid_chunk_id(chunk_id)
+		if not bool(parsed.get("valid", false)):
+			return false
+		reconciled[chunk_id] = parsed["coordinate"]
+	_managed_chunk_ids = reconciled
+	return true
 
 func _finish_async_sync_request(request_id: int, success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary) -> void:
 	if request_id != _active_async_request_id:
@@ -912,7 +933,7 @@ func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 	var success := true
 	for entry in chunks:
-		if not _controller_ready_for_sync() or not chunk_factory.is_valid():
+		if not _controller_ready_for_sync():
 			success = false
 			break
 		var id: String = str(entry.get("id", ""))
@@ -927,6 +948,9 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 				continue
 			success = false
 			continue
+		if not chunk_factory.is_valid():
+			success = false
+			break
 		var candidate: Variant = chunk_factory.call(coord)
 		if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 			_free_unowned_root(candidate)

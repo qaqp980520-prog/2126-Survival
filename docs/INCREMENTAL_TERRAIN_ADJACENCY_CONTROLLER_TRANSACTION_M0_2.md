@@ -14,7 +14,9 @@ Make the existing full-rebuild terrain path rollback-safe before wiring the deta
   - Unload ordering outside a batch: save state and unregister minerals, commit adjacency while the departing root and patch Nodes remain attached, then remove Controller maps and queue the root for deletion.
   - Unload ordering inside an adjacency batch: save state and unregister minerals, record a pending retirement, and keep the root/maps attached. The final batch commit excludes all pending roots in one rebind, then retires them only after collider synchronization succeeds.
   - If a batch rebind fails, cancel every pending retirement, re-register minerals and restore only the departing chunk's object-state records while retaining the exact old roots and maps.
-  - Director rollback checks for an already-held root first and cancels its pending retirement instead of generating a duplicate replacement root.
+  - Per-chunk object-record restoration prevents cancelling one pending retirement from reintroducing another chunk's state record.
+  - Director rollback checks for an already-held root before requiring a factory and cancels its pending retirement instead of generating a duplicate replacement root.
+  - If batch finalization fails, the Director reconciles its managed-ID map from the Controller's actual loaded surface IDs; unknown ID formats fail closed without replacing the existing map.
 
 ## Transaction invariants
 
@@ -64,7 +66,7 @@ The fault-injected test builds three real `SurfaceTerrainPatch` nodes with two r
 - the committed descriptor snapshot and world-object registry snapshot are unchanged.
 
 The test then retries with the fake manager succeeding and verifies that the departing edge is removed, the unaffected edge remains, the new descriptor snapshot is published, and the old root is queued only after the adjacency commit.
-The batch regression loads a replacement chunk and stages an old chunk for retirement, then verifies one shared synchronization commits both changes before the old root is detached. A separate injected batch-commit failure verifies that the exact old root, reciprocal adjacency, mineral registration and world-object registry snapshot are restored. Another rollback path cancels a pending retirement without creating a replacement root. A failing adapter verifies that failed mineral registration never publishes terrain adjacency.
+The batch regression loads a replacement chunk and stages two old chunks for retirement, then verifies one shared synchronization commits both changes before either old root is detached. A multi-retirement injected batch-commit failure verifies that both exact roots, reciprocal adjacency, mineral registration and each chunk's independent world-object records are restored. A Director rollback case cancels a pending retirement even when no factory is available, without generating a replacement root. A separate fake-controller test verifies managed-ID reconciliation after failed batch finalization and confirms unknown IDs fail closed. A failing adapter verifies that failed mineral registration never publishes terrain adjacency.
 
 ## Limits and next steps
 
