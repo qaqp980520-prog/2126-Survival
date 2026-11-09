@@ -242,6 +242,81 @@ func _run() -> void:
 	duplicate_rebuild.queue_free()
 	await process_frame
 
+	# A removal plan must reject a patch whose world-object snapshot changes before commit.
+	var removed_snapshot_patch: Node3D = _new_patch(holder, "RemovedSnapshot", Vector3(4.005, 0.0, -2.0))
+	await process_frame
+	var add_removed_snapshot: Dictionary = index.plan_delta([], [
+		{"stable_id": "terrain/removed_snapshot", "patch": removed_snapshot_patch}
+	])
+	_expect(bool(add_removed_snapshot.get("ok", false)), "removal-snapshot fixture can be staged")
+	if bool(add_removed_snapshot.get("ok", false)):
+		var add_removed_summary: Dictionary = add_removed_snapshot.get("summary", {})
+		var add_removed_commit: Dictionary = index.commit_delta(str(add_removed_summary.get("plan_id", "")))
+		_expect(bool(add_removed_commit.get("ok", false)), "removal-snapshot fixture is committed")
+		current_patches.append(removed_snapshot_patch)
+		current_ids[removed_snapshot_patch.get_instance_id()] = "terrain/removed_snapshot"
+		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "removal-snapshot fixture")
+
+	var removed_snapshot_generation: int = index.get_generation()
+	var stale_removed_snapshot_plan: Dictionary = index.plan_delta(["terrain/removed_snapshot"], [])
+	_expect(bool(stale_removed_snapshot_plan.get("ok", false)), "pure removal plan captures the committed patch snapshot")
+	if bool(stale_removed_snapshot_plan.get("ok", false)):
+		var stale_removed_summary: Dictionary = stale_removed_snapshot_plan.get("summary", {})
+		var original_removed_state: Dictionary = removed_snapshot_patch.call("get_world_object_state")
+		var changed_removed_state: Dictionary = original_removed_state.duplicate(true)
+		changed_removed_state["height_level"] = 1
+		changed_removed_state["revision"] = int(changed_removed_state.get("revision", 0)) + 1
+		_expect(bool(removed_snapshot_patch.call("apply_world_object_state", changed_removed_state)), "removed patch state can change after planning")
+		var stale_removed_snapshot_commit: Dictionary = index.commit_delta(str(stale_removed_summary.get("plan_id", "")))
+		_expect(
+			not bool(stale_removed_snapshot_commit.get("ok", true))
+			and str(stale_removed_snapshot_commit.get("error", "")) == "stale_patch_snapshot",
+			"commit rejects a removed patch whose state changed after planning"
+		)
+		_expect(index.get_generation() == removed_snapshot_generation, "rejected removed-patch snapshot leaves the committed generation unchanged")
+		_expect(index.get_patch("terrain/removed_snapshot") == removed_snapshot_patch, "rejected removal preserves the committed patch instance")
+		_expect(bool(removed_snapshot_patch.call("apply_world_object_state", original_removed_state)), "removed patch can restore its original snapshot for oracle comparison")
+		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "rejected removed-patch snapshot")
+
+	# An expired WeakRef on the removal side must also reject the transaction.
+	var removed_freed_patch: Node3D = _new_patch(holder, "RemovedFreed", Vector3(6.005, 0.0, -2.0))
+	await process_frame
+	var add_removed_freed: Dictionary = index.plan_delta([], [
+		{"stable_id": "terrain/removed_freed", "patch": removed_freed_patch}
+	])
+	_expect(bool(add_removed_freed.get("ok", false)), "removal-WeakRef fixture can be staged")
+	if bool(add_removed_freed.get("ok", false)):
+		var add_freed_summary: Dictionary = add_removed_freed.get("summary", {})
+		var add_freed_commit: Dictionary = index.commit_delta(str(add_freed_summary.get("plan_id", "")))
+		_expect(bool(add_freed_commit.get("ok", false)), "removal-WeakRef fixture is committed")
+		current_patches.append(removed_freed_patch)
+		current_ids[removed_freed_patch.get_instance_id()] = "terrain/removed_freed"
+		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "removal-WeakRef fixture")
+
+	var removed_freed_instance_id: int = removed_freed_patch.get_instance_id()
+	var removed_freed_generation: int = index.get_generation()
+	var removed_freed_count: int = index.get_patch_count()
+	var stale_removed_ref_plan: Dictionary = index.plan_delta(["terrain/removed_freed"], [])
+	_expect(bool(stale_removed_ref_plan.get("ok", false)), "removal plan can be prepared before the old Node is released")
+	if bool(stale_removed_ref_plan.get("ok", false)):
+		var stale_removed_ref_summary: Dictionary = stale_removed_ref_plan.get("summary", {})
+		current_patches.erase(removed_freed_patch)
+		current_ids.erase(removed_freed_instance_id)
+		removed_freed_patch.queue_free()
+		await process_frame
+		var stale_removed_ref_commit: Dictionary = index.commit_delta(str(stale_removed_ref_summary.get("plan_id", "")))
+		_expect(
+			not bool(stale_removed_ref_commit.get("ok", true))
+			and str(stale_removed_ref_commit.get("error", "")) == "stale_patch_reference",
+			"commit rejects a removed patch whose WeakRef expired after planning"
+		)
+		_expect(index.get_generation() == removed_freed_generation, "rejected removed-WeakRef plan leaves the generation unchanged")
+		_expect(index.get_patch_count() == removed_freed_count, "rejected removed-WeakRef plan preserves the committed index snapshot")
+		_expect(index.get_patch("terrain/removed_freed") == null, "released removed patch is observable as an expired WeakRef")
+		var cleanup_rebuild: Dictionary = index.rebuild(current_patches, current_ids)
+		_expect(bool(cleanup_rebuild.get("ok", false)), "full rebuild can reconcile the index after an externally released removed patch")
+		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "removed WeakRef cleanup rebuild")
+
 	holder.queue_free()
 	await process_frame
 	await process_frame
