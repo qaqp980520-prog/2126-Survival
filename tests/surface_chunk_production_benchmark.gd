@@ -264,6 +264,9 @@ func _run() -> void:
 		await _wait_frames(RELEASE_WAIT_FRAMES)
 		_expect(_all_refs_released(previous_center_refs), "radius %d repeated full-window expansion releases the previous center root" % radius)
 		_emit_metrics("repeat_full_expand", radius, expected_count, repeat_expand_diagnostic, repeat_expand.get("frame_samples_ms", []), controller)
+		var repeat_center_ids: Array[String] = [repeat_full_center_id]
+		var repeat_center_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_center_ids)
+		_expect(repeat_center_refs.size() == 1, "radius %d repeated full-window expansion captures the retained center root identity" % radius)
 		var repeat_departed_refs: Array[WeakRef] = _capture_surface_root_refs(controller, repeat_full_center_id)
 		_expect(repeat_departed_refs.size() == expected_count - 1, "radius %d repeated full-window contraction captures every non-center root" % radius)
 		director.set("load_radius", 0)
@@ -287,7 +290,8 @@ func _run() -> void:
 		_expect(_factory_calls == 0, "radius %d repeated full-window contraction does not invoke the factory" % radius)
 		await _wait_frames(RELEASE_WAIT_FRAMES)
 		_expect(_all_refs_released(repeat_departed_refs), "radius %d repeated full-window contraction releases every non-center root" % radius)
-		_expect(controller.call("get_chunk_root", repeat_full_center_id) != null, "radius %d repeated full-window contraction preserves its center root" % radius)
+		_expect(_all_refs_alive(repeat_center_refs), "radius %d repeated full-window contraction preserves the same center root instance" % radius)
+		_expect(controller.call("get_chunk_root", repeat_full_center_id) != null, "radius %d repeated full-window contraction keeps its center root registered" % radius)
 		_emit_metrics("repeat_full_contract", radius, 1, repeat_contract_diagnostic, repeat_contract.get("frame_samples_ms", []), controller)
 		target = repeat_full_target
 		previous_surface_count = 1
