@@ -95,7 +95,7 @@ func _run() -> void:
 	var old_center_ref: WeakRef = weakref(center)
 	center.queue_free()
 	await process_frame
-	_expect(old_center_ref.get_ref() == null, "WeakRef index does not keep the replaced Node alive")
+	_expect(old_center_ref.get_ref() == null, "WeakRef resolves null after the replaced Node is freed")
 	var current_patches: Array[Node3D] = [west, replacement, south, far]
 	var current_ids: Dictionary = {
 		west.get_instance_id(): "terrain/west",
