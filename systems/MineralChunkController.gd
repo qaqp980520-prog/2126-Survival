@@ -677,7 +677,7 @@ func _capture_terrain_patch_adjacency_snapshot(patches: Array[Node3D]) -> Dictio
 		if not seen_instance_ids.has(instance_id):
 			seen_instance_ids[instance_id] = true
 			captured.append(patch)
-		if not patch.has_method("get_bound_neighbor_patch") or not patch.has_method("is_shared_transition_active") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("bind_neighbor_patch") or not patch.has_method("set_shared_transition_active"):
+		if not patch.has_method("get_bound_neighbor_patch") or not patch.has_method("is_shared_transition_active") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("bind_neighbor_patch") or not patch.has_method("set_shared_transition_active") or not patch.has_method("begin_collision_segmentation_batch") or not patch.has_method("end_collision_segmentation_batch"):
 			return {"ok": false, "error": "patch_snapshot_api_missing"}
 
 	# Clearing a selected patch also clears the reciprocal side on its old neighbor.
@@ -691,7 +691,7 @@ func _capture_terrain_patch_adjacency_snapshot(patches: Array[Node3D]) -> Dictio
 				continue
 			if not neighbor.is_inside_tree() or neighbor.is_queued_for_deletion():
 				return {"ok": false, "error": "invalid_bound_neighbor"}
-			if not neighbor.has_method("get_bound_neighbor_patch") or not neighbor.has_method("is_shared_transition_active") or not neighbor.has_method("clear_neighbor_edge_state") or not neighbor.has_method("bind_neighbor_patch") or not neighbor.has_method("set_shared_transition_active"):
+			if not neighbor.has_method("get_bound_neighbor_patch") or not neighbor.has_method("is_shared_transition_active") or not neighbor.has_method("clear_neighbor_edge_state") or not neighbor.has_method("bind_neighbor_patch") or not neighbor.has_method("set_shared_transition_active") or not neighbor.has_method("begin_collision_segmentation_batch") or not neighbor.has_method("end_collision_segmentation_batch"):
 				return {"ok": false, "error": "neighbor_snapshot_api_missing"}
 			var neighbor_instance_id: int = neighbor.get_instance_id()
 			if not seen_instance_ids.has(neighbor_instance_id):
