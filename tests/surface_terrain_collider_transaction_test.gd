@@ -17,6 +17,7 @@ func _run() -> void:
     await _test_prepare_abort_preserves_committed_corner_caps()
     await _test_commit_publishes_replacement_edge()
     await _test_stale_patch_snapshot_rejects_commit()
+    await _test_removed_patch_snapshot_rejects_commit()
     await _test_activation_failure_restores_patch_flags()
     await _test_clear_all_aborts_pending_transaction()
     if failures.is_empty():
@@ -175,6 +176,30 @@ func _test_stale_patch_snapshot_rejects_commit() -> void:
     _expect(staged_ref.get_ref() == null, "stale transaction releases its staged edge")
     _expect(is_instance_valid(original_body) and manager.call("get_transition_body", edge_key) == original_body and original_body.collision_layer == 1, "stale transaction preserves the previously committed edge")
     _expect(int(lower.call("get_world_object_state").get("revision", -1)) == int(changed_state["revision"]), "stale transaction does not overwrite the external patch state")
+    await _release_holder(holder)
+
+
+func _test_removed_patch_snapshot_rejects_commit() -> void:
+    var fixture: Dictionary = await _make_two_patch_fixture(false)
+    if fixture.is_empty():
+        return
+    var holder: Node3D = fixture["holder"]
+    var manager: Variant = fixture["manager"]
+    var lower: Node3D = fixture["lower"]
+    var edge_key: String = str(fixture["edge_key"])
+    var original_body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", {}, {})
+    _expect(bool(prepared.get("ok", false)), "empty candidate set prepares removal of the committed edge")
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    var changed_state: Dictionary = lower.call("get_world_object_state")
+    changed_state["revision"] = int(changed_state.get("revision", 0)) + 1
+    _expect(bool(lower.call("apply_world_object_state", changed_state)), "retiring patch state changes after prepare")
+
+    var rejected: Dictionary = manager.call("commit_sync_transitions", transaction_id)
+    _expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "stale_transaction_snapshot", "commit rejects a changed patch that exists only in the retiring map")
+    _expect(is_instance_valid(original_body) and manager.call("get_transition_body", edge_key) == original_body and original_body.collision_layer == 1, "stale removal preserves the old committed edge")
+    _expect(int(lower.call("get_world_object_state").get("revision", -1)) == int(changed_state["revision"]), "stale removal does not overwrite the retiring patch state")
     await _release_holder(holder)
 
 
