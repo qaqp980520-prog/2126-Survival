@@ -59,7 +59,9 @@ static func build_closure(
 
 	var visited_edges: Dictionary = {}
 	var visited_junctions: Dictionary = {}
-	var queue: Array[String] = seeds.duplicate()
+	var queue: Array[String] = []
+	for seed_key in seeds:
+		queue.append(seed_key)
 	var queue_index: int = 0
 	while queue_index < queue.size():
 		var edge_key: String = queue[queue_index]
