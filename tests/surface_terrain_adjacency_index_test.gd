@@ -68,6 +68,8 @@ func _run() -> void:
 	_expect(not bool(duplicate_plan.get("ok", true)) and str(duplicate_plan.get("error", "")) == "duplicate_position", "delta preflight rejects a duplicate position across adjacent negative buckets")
 	_expect(index.get_generation() == initial_generation, "rejected duplicate-position plan leaves the committed generation unchanged")
 	_expect(index.get_patch("terrain/center") == center, "rejected plan preserves the committed patch instance")
+	duplicate.queue_free()
+	await process_frame
 
 	var replacement: Node3D = _new_patch(holder, "ReplacementCenter", center.position)
 	await process_frame
@@ -90,6 +92,10 @@ func _run() -> void:
 		_expect(bool(replacement_commit.get("ok", false)), "replacement delta commits after its Node snapshot remains unchanged")
 	_expect(index.get_patch("terrain/center") == replacement, "committed replacement points to the new patch instance")
 	_expect(index.get_neighbors("terrain/center") == ["terrain/south", "terrain/west"], "replacement preserves the same cardinal neighborhood")
+	var old_center_ref: WeakRef = weakref(center)
+	center.queue_free()
+	await process_frame
+	_expect(old_center_ref.get_ref() == null, "WeakRef index does not keep the replaced Node alive")
 	var current_patches: Array[Node3D] = [west, replacement, south, far]
 	var current_ids: Dictionary = {
 		west.get_instance_id(): "terrain/west",
@@ -149,6 +155,8 @@ func _run() -> void:
 		var commit_b: Dictionary = index.commit_delta(str(summary_b.get("plan_id", "")))
 		_expect(not bool(commit_b.get("ok", true)) and str(commit_b.get("error", "")) == "stale_generation", "second same-generation plan is rejected as stale")
 	_expect(index.get_patch("terrain/stale_b") == null, "stale plan does not leak its candidate patch into the index")
+	stale_b.queue_free()
+	await process_frame
 
 	var changed_snapshot: Node3D = _new_patch(holder, "ChangedSnapshot", Vector3(4.005, 0.0, -2.0))
 	await process_frame
@@ -166,6 +174,8 @@ func _run() -> void:
 		_expect(not bool(stale_snapshot_commit.get("ok", true)) and str(stale_snapshot_commit.get("error", "")) == "stale_patch_snapshot", "commit rejects a patch whose state changed after planning")
 	_expect(index.get_patch("terrain/changed_snapshot") == null, "stale snapshot is not committed")
 	_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "rejected stale snapshot")
+	changed_snapshot.queue_free()
+	await process_frame
 
 	var freed_patch: Node3D = _new_patch(holder, "FreedBeforeCommit", Vector3(6.005, 0.0, -2.0))
 	await process_frame
@@ -193,6 +203,8 @@ func _run() -> void:
 		_expect(index.abort_delta(abort_id), "prepared delta can be aborted")
 		var after_abort: Dictionary = index.commit_delta(abort_id)
 		_expect(not bool(after_abort.get("ok", true)) and str(after_abort.get("error", "")) == "unknown_plan", "aborted plan cannot later be committed")
+	abort_patch.queue_free()
+	await process_frame
 
 	var unknown_remove: Dictionary = index.plan_delta(["terrain/missing"], [])
 	_expect(not bool(unknown_remove.get("ok", true)) and str(unknown_remove.get("error", "")) == "unknown_remove_stable_id", "unknown removals are rejected before mutation")
@@ -206,6 +218,8 @@ func _run() -> void:
 		{"stable_id": "terrain/alternate_size", "patch": alternate}
 	])
 	_expect(not bool(mixed_size_plan.get("ok", true)) and str(mixed_size_plan.get("error", "")) == "mixed_patch_sizes", "delta preflight rejects a mixed patch-size candidate")
+	alternate.queue_free()
+	await process_frame
 
 	var duplicate_rebuild: Node3D = _new_patch(holder, "DuplicateRebuild", west.position)
 	await process_frame
@@ -225,6 +239,8 @@ func _run() -> void:
 	_expect(index.get_generation() == generation_before_failed_rebuild, "failed full rebuild preserves the prior committed generation")
 	_expect(index.get_patch("terrain/center") == replacement, "failed full rebuild preserves the prior committed index")
 	_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "failed rebuild rollback")
+	duplicate_rebuild.queue_free()
+	await process_frame
 
 	holder.queue_free()
 	await process_frame
