@@ -16,7 +16,7 @@ The tests use a subclass only to inject a deterministic failure at an internal s
 ## Coverage
 
 1. **Edge staging failure after partial staging**: begin with two independently committed real transition bodies, change both geometries, allow the first replacement body to stage, then reject the second. Assert the manager aborts, preserves both exact old bodies and active collision layers, and releases the first staged body.
-2. **Corner-cap staging failure after partial staging**: begin with a real checkerboard four-way junction and four committed cap bodies. Translate all four height levels uniformly so the junction remains eligible but all cap signatures change. Allow one replacement cap to stage, then reject the next. Assert all four old cap instances remain active and the staged replacement is released.
+2. **Corner-cap staging failure after partial staging**: begin with a real checkerboard four-way junction and four committed cap bodies. Invert all four corner heights (0↔2), preserving the checkerboard and its midpoint while changing every cap top-height signature. Allow one replacement cap to stage, then reject the next. Assert all four old cap instances remain active and the staged replacement is released.
 3. **Second-endpoint activation rejection**: begin with one committed transition body, change its geometry, make both patch transition flags inactive, allow the first endpoint to activate, then reject the second endpoint. Assert the first endpoint is rolled back, the rejecting endpoint remains inactive, the exact old managed collider remains active, and the new staged body is released.
 
 ## Test and import
