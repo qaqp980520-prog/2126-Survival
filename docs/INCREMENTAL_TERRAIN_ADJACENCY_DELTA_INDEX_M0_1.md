@@ -34,12 +34,14 @@ The index stores `WeakRef` values rather than owning Node references. The spatia
 ## Regression coverage
 
 - Initial rebuild and full descriptor enumeration.
+- Full-rebuild binder oracle comparison after initial build, same-Stable-ID replacement, one-patch addition, pure removal, stale-plan rejection and failed rebuild.
 - Negative-coordinate spatial buckets and tolerance-sized cardinal adjacency.
 - Duplicate-position rejection without mutating the committed generation.
 - Remove/re-add of the same Stable ID with a new Node instance.
-- Local edge delta scoping for a one-patch addition.
+- Local edge delta scoping for a one-patch addition and a pure removal.
 - Concurrent same-generation plans; the second commit must fail as stale.
 - Patch-state mutation between plan and commit; commit must fail as stale.
+- Patch release between plan and commit; commit must reject the stale WeakRef.
 - Explicit plan abort and unknown-removal rejection.
 - Mixed patch-size rejection.
 - Failed full rebuild preserving the previously committed index.
@@ -54,8 +56,7 @@ The index stores `WeakRef` values rather than owning Node references. The spatia
 
 ## Next
 
-1. Run the focused index regression and full Godot 4.3 compatibility gate on this exact HEAD.
-2. Compare every prepared delta against the existing full-rebuild descriptor oracle in deterministic fixtures.
-3. Add full affected junction↔edge connected-component closure and preserve-set ownership planning before any production edge/cap mutation.
-4. Add injected preflight/activation failures and exact rollback assertions.
-5. Keep the Controller on the full rebuild until those regressions pass at exact HEAD.
+1. Complete the focused index regression and full Godot 4.3 compatibility gate on this exact HEAD.
+2. Add full affected junction↔edge connected-component closure and preserve-set ownership planning before any production edge/cap mutation.
+3. Add injected preflight/activation failures and exact rollback assertions.
+4. Keep the Controller on the full rebuild until those regressions pass at exact HEAD.
