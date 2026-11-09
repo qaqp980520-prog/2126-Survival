@@ -84,3 +84,22 @@ The regression suite covers edge prepare/abort, corner-cap prepare/abort, succes
 ## Next
 
 Integrate the detached Edge↔Junction closure and preserve/stage/retire planners into this transaction boundary. The next stage must scope candidate geometry and resource staging to affected edges/junctions while retaining full rebuild as explicit fallback and differential oracle.
+
+
+## Run 189 — staged and committed collider-state snapshot hardening
+
+The exact-head review added a second layer of transaction validation:
+
+- Capture each previously committed edge/corner-cap body's validity, instance ID, queued-for-deletion flag, parent, collision layer and collision mask at prepare time.
+- Reject commit if a committed resource is externally changed, detached, queued or freed after prepare. The snapshot records the observed state rather than assuming every old resource was healthy before prepare, so a subsequent full-rebuild sync can replace a stale body.
+- Preflight every newly staged edge and cap before changing patch-side flags. A staged body must still be valid, attached to this manager, not queued for deletion and collision-disabled.
+- Repeat the staged-body check immediately before publishing collision layers, protecting against patch activation side effects.
+- Reused resources are checked through the committed-map snapshot and are not mistaken for newly staged collision-disabled bodies.
+
+New focused regressions:
+- Staged edge externally enabled between prepare and commit: reject before patch activation, disable and release the staged body, preserve the old committed edge.
+- Staged corner cap externally enabled between prepare and commit: reject before patch activation, disable and release staged caps, preserve all old caps.
+- Committed edge collision layer changed after prepare: reject stale transaction, then recover through the existing full-rebuild sync_transitions() compatibility path.
+- Committed corner-cap collision layer changed after prepare: reject stale transaction, then recover all four caps through full rebuild.
+
+Exact-head validation for this hardening is pending the new GitHub Actions runs. Do not reuse the earlier 97-PASS focused or 553/553 full-gate results as evidence for the updated HEAD.
