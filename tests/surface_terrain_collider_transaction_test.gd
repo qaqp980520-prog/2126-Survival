@@ -15,6 +15,10 @@ func _initialize() -> void:
 func _run() -> void:
     await _test_prepare_abort_preserves_committed_edge()
     await _test_prepare_abort_preserves_committed_corner_caps()
+    await _test_staged_edge_mutation_rejects_before_activation()
+    await _test_staged_corner_cap_mutation_rejects_before_activation()
+    await _test_committed_edge_mutation_rejects_and_recovers()
+    await _test_committed_corner_cap_mutation_rejects_and_recovers()
     await _test_commit_publishes_replacement_edge()
     await _test_stale_patch_snapshot_rejects_commit()
     await _test_removed_patch_snapshot_rejects_commit()
@@ -118,6 +122,154 @@ func _test_prepare_abort_preserves_committed_corner_caps() -> void:
         var current_body: StaticBody3D = manager.call("get_corner_cap_body", parts[0], parts[1]) as StaticBody3D
         var old_body: StaticBody3D = original_caps[key] as StaticBody3D
         _expect(is_instance_valid(old_body) and current_body == old_body and current_body.collision_layer == 1, key + " retains its exact committed cap after abort")
+    await _release_holder(holder)
+
+
+func _test_staged_edge_mutation_rejects_before_activation() -> void:
+    var fixture: Dictionary = await _make_two_patch_fixture(false)
+    if fixture.is_empty():
+        return
+    var holder: Node3D = fixture["holder"]
+    var manager: Variant = fixture["manager"]
+    var lower: Node3D = fixture["lower"]
+    var higher: Node3D = fixture["higher"]
+    var edge_key: String = str(fixture["edge_key"])
+    var original_body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+    _expect(_apply_height(higher, 1, 2), "staged-edge mutation candidate changes geometry")
+    var binding: Dictionary = _bind_fixture(fixture)
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(prepared.get("ok", false)), "staged-edge mutation transaction prepares")
+    var staged_ref: WeakRef = manager.last_staged_edge_ref
+    var staged_body: StaticBody3D = staged_ref.get_ref() as StaticBody3D
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    var first_active_before: bool = bool(lower.call("is_shared_transition_active", str(fixture["first_side"])))
+    var second_active_before: bool = bool(higher.call("is_shared_transition_active", str(fixture["second_side"])))
+    _expect(is_instance_valid(staged_body) and staged_body.collision_layer == 0, "new staged edge begins collision-disabled")
+    if is_instance_valid(staged_body):
+        staged_body.collision_layer = 1
+    var rejected: Dictionary = manager.call("commit_sync_transitions", transaction_id)
+    _expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "staged_edge_invalid_before_commit", "externally activated staged edge is rejected before patch activation")
+    _expect(bool(lower.call("is_shared_transition_active", str(fixture["first_side"]))) == first_active_before, "staged-edge preflight rejection leaves first patch flags unchanged")
+    _expect(bool(higher.call("is_shared_transition_active", str(fixture["second_side"]))) == second_active_before, "staged-edge preflight rejection leaves second patch flags unchanged")
+    if is_instance_valid(staged_body):
+        _expect(staged_body.collision_layer == 0, "rejected staged edge is disabled before queued release")
+    await process_frame
+    await process_frame
+    _expect(staged_ref.get_ref() == null, "rejected staged edge is released")
+    _expect(is_instance_valid(original_body) and manager.call("get_transition_body", edge_key) == original_body and original_body.collision_layer == 1, "staged-edge rejection preserves the committed edge")
+    await _release_holder(holder)
+
+
+func _test_staged_corner_cap_mutation_rejects_before_activation() -> void:
+    var fixture: Dictionary = await _make_checkerboard_fixture()
+    if fixture.is_empty():
+        return
+    var holder: Node3D = fixture["holder"]
+    var manager: Variant = fixture["manager"]
+    var patches: Array[Node3D] = fixture["patches"]
+    var original_caps: Dictionary = {}
+    for entry in fixture["corner_refs"]:
+        var stable_id: String = str(entry["stable_id"])
+        var corner: String = str(entry["corner"])
+        original_caps[stable_id + "|" + corner] = manager.call("get_corner_cap_body", stable_id, corner)
+    for patch in patches:
+        var state: Dictionary = patch.call("get_world_object_state")
+        var current_height: int = int(state.get("height_level", 0))
+        _expect(_apply_height(patch, 2 - current_height, 2), patch.name + " accepts cap mutation candidate")
+    var binding: Dictionary = _bind_fixture(fixture)
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(prepared.get("ok", false)), "staged-cap mutation transaction prepares")
+    var staged_ref: WeakRef = manager.last_staged_corner_ref
+    var staged_body: StaticBody3D = staged_ref.get_ref() as StaticBody3D
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    _expect(is_instance_valid(staged_body) and staged_body.collision_layer == 0, "new staged corner cap begins collision-disabled")
+    if is_instance_valid(staged_body):
+        staged_body.collision_layer = 1
+    var rejected: Dictionary = manager.call("commit_sync_transitions", transaction_id)
+    _expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "staged_corner_cap_invalid_before_commit", "externally activated staged cap is rejected before patch activation")
+    if is_instance_valid(staged_body):
+        _expect(staged_body.collision_layer == 0, "rejected staged cap is disabled before queued release")
+    await process_frame
+    await process_frame
+    _expect(staged_ref.get_ref() == null, "rejected staged cap is released")
+    for key in original_caps.keys():
+        var parts: PackedStringArray = key.split("|")
+        var current_body: StaticBody3D = manager.call("get_corner_cap_body", parts[0], parts[1]) as StaticBody3D
+        var old_body: StaticBody3D = original_caps[key] as StaticBody3D
+        _expect(is_instance_valid(old_body) and current_body == old_body and current_body.collision_layer == 1, key + " preserves its committed cap after staged-cap rejection")
+    await _release_holder(holder)
+
+
+func _test_committed_edge_mutation_rejects_and_recovers() -> void:
+    var fixture: Dictionary = await _make_two_patch_fixture(false)
+    if fixture.is_empty():
+        return
+    var holder: Node3D = fixture["holder"]
+    var manager: Variant = fixture["manager"]
+    var higher: Node3D = fixture["higher"]
+    var edge_key: String = str(fixture["edge_key"])
+    var original_body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+    _expect(_apply_height(higher, 1, 2), "committed-edge mutation candidate changes geometry")
+    var binding: Dictionary = _bind_fixture(fixture)
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(prepared.get("ok", false)), "committed-edge mutation transaction prepares")
+    var staged_ref: WeakRef = manager.last_staged_edge_ref
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    original_body.collision_layer = 0
+    var rejected: Dictionary = manager.call("commit_sync_transitions", transaction_id)
+    _expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "stale_transaction_snapshot", "committed edge mutation after prepare rejects the transaction")
+    await process_frame
+    await process_frame
+    _expect(staged_ref.get_ref() == null, "stale committed-edge transaction releases replacement")
+    _expect(manager.call("get_transition_body", edge_key) == original_body and original_body.collision_layer == 0, "stale rejection does not overwrite the externally changed committed edge")
+    var recovered: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(recovered.get("ok", false)), "full-rebuild compatibility path recovers a stale committed edge on the next sync")
+    var replacement: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+    _expect(is_instance_valid(replacement) and replacement != original_body and replacement.collision_layer == 1, "recovery publishes a fresh active edge body")
+    await process_frame
+    await process_frame
+    _expect(not is_instance_valid(original_body), "recovered full rebuild releases the stale old edge")
+    await _release_holder(holder)
+
+
+func _test_committed_corner_cap_mutation_rejects_and_recovers() -> void:
+    var fixture: Dictionary = await _make_checkerboard_fixture()
+    if fixture.is_empty():
+        return
+    var holder: Node3D = fixture["holder"]
+    var manager: Variant = fixture["manager"]
+    var patches: Array[Node3D] = fixture["patches"]
+    var original_caps: Dictionary = {}
+    for entry in fixture["corner_refs"]:
+        var stable_id: String = str(entry["stable_id"])
+        var corner: String = str(entry["corner"])
+        original_caps[stable_id + "|" + corner] = manager.call("get_corner_cap_body", stable_id, corner)
+    for patch in patches:
+        var state: Dictionary = patch.call("get_world_object_state")
+        var current_height: int = int(state.get("height_level", 0))
+        _expect(_apply_height(patch, 2 - current_height, 2), patch.name + " accepts committed-cap mutation candidate")
+    var binding: Dictionary = _bind_fixture(fixture)
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(prepared.get("ok", false)), "committed-cap mutation transaction prepares")
+    var staged_ref: WeakRef = manager.last_staged_corner_ref
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    var mutated_key: String = str(fixture["corner_refs"][0]["stable_id"]) + "|" + str(fixture["corner_refs"][0]["corner"])
+    var mutated_body: StaticBody3D = original_caps[mutated_key] as StaticBody3D
+    mutated_body.collision_layer = 0
+    var rejected: Dictionary = manager.call("commit_sync_transitions", transaction_id)
+    _expect(not bool(rejected.get("ok", true)) and str(rejected.get("error", "")) == "stale_transaction_snapshot", "committed corner-cap mutation after prepare rejects the transaction")
+    await process_frame
+    await process_frame
+    _expect(staged_ref.get_ref() == null, "stale committed-cap transaction releases replacement")
+    _expect(manager.call("get_corner_cap_body", str(fixture["corner_refs"][0]["stable_id"]), str(fixture["corner_refs"][0]["corner"])) == mutated_body and mutated_body.collision_layer == 0, "stale rejection preserves the externally changed committed cap")
+    var recovered: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
+    _expect(bool(recovered.get("ok", false)), "full-rebuild compatibility path recovers stale committed corner caps")
+    _expect(int(recovered.get("corner_cap_count", -1)) == 4, "recovery publishes all four corner caps")
+    for entry in fixture["corner_refs"]:
+        var current_body: StaticBody3D = manager.call("get_corner_cap_body", str(entry["stable_id"]), str(entry["corner"])) as StaticBody3D
+        _expect(is_instance_valid(current_body) and current_body.collision_layer == 1, str(entry["stable_id"]) + " publishes an active recovered cap")
+    await process_frame
+    await process_frame
     await _release_holder(holder)
 
 
