@@ -15,8 +15,12 @@ const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflict
 var _managed_edges: Dictionary = {}
 var _managed_corner_caps: Dictionary = {}
 var _last_blocked_corner_reports: Array[Dictionary] = []
+var _next_sync_transaction_id: int = 1
+var _pending_sync_transaction: Dictionary = {}
 
-func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
+func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
+    if not _pending_sync_transaction.is_empty():
+        return {"ok": false, "error": "transaction_in_progress", "active_count": _managed_edges.size()}
     var total_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var candidate_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var candidates: Dictionary = {}
@@ -156,45 +160,142 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         staged_edge_count += 1
 
     var resource_staging_usec: int = Time.get_ticks_usec() - staging_started_usec if profile_enabled else 0
-    var commit_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
-    var newly_activated: Array[Dictionary] = []
+    var patch_snapshot_result: Dictionary = _capture_patch_snapshots(candidates)
+    if not bool(patch_snapshot_result.get("ok", false)):
+        _free_staged(staged, reused_edge_keys)
+        _free_staged_caps(staged_caps, reused_cap_keys)
+        return {"ok": false, "error": str(patch_snapshot_result.get("error", "patch_snapshot_failed")), "active_count": _managed_edges.size()}
+
+    var transaction_id: int = _next_sync_transaction_id
+    _next_sync_transaction_id += 1
+    _pending_sync_transaction = {
+        "transaction_id": transaction_id,
+        "staged_edges": staged,
+        "staged_caps": staged_caps,
+        "reused_edge_keys": reused_edge_keys,
+        "reused_cap_keys": reused_cap_keys,
+        "reactivated_edge_keys": reactivated_edge_keys,
+        "blocked_edges": blocked_edges,
+        "blocked_corner_reports": blocked_corner_reports,
+        "patch_snapshots": patch_snapshot_result.get("snapshots", {}),
+        "old_edges_snapshot": _managed_edges.duplicate(),
+        "old_caps_snapshot": _managed_corner_caps.duplicate(),
+        "candidate_geometry_usec": candidate_geometry_usec,
+        "corner_resolution_usec": corner_resolution_usec,
+        "resource_staging_usec": resource_staging_usec,
+        "total_started_usec": total_started_usec,
+        "profile_enabled": profile_enabled,
+        "staged_edge_count": staged_edge_count,
+        "staged_cap_count": staged_cap_count
+    }
+    return {
+        "ok": true,
+        "transaction_id": transaction_id,
+        "active_count": _managed_edges.size(),
+        "pending_staged_edge_count": staged_edge_count,
+        "pending_reused_edge_count": reused_edge_keys.size(),
+        "pending_staged_corner_cap_count": staged_cap_count,
+        "pending_reused_corner_cap_count": reused_cap_keys.size(),
+        "blocked_count": blocked_edges.size()
+    }
+
+
+func commit_sync_transitions(transaction_id: int) -> Dictionary:
+    if _pending_sync_transaction.is_empty():
+        return {"ok": false, "error": "no_pending_transaction", "active_count": _managed_edges.size()}
+    if int(_pending_sync_transaction.get("transaction_id", -1)) != transaction_id:
+        return {"ok": false, "error": "invalid_transaction_id", "active_count": _managed_edges.size()}
+
+    var pending: Dictionary = _pending_sync_transaction
+    var staged: Dictionary = pending.get("staged_edges", {})
+    var staged_caps: Dictionary = pending.get("staged_caps", {})
+    var reused_edge_keys: Dictionary = pending.get("reused_edge_keys", {})
+    var reused_cap_keys: Dictionary = pending.get("reused_cap_keys", {})
+    var reactivated_edge_keys: Dictionary = pending.get("reactivated_edge_keys", {})
+    var patch_snapshots: Dictionary = pending.get("patch_snapshots", {})
+    if (
+        not _managed_map_matches_snapshot(_managed_edges, pending.get("old_edges_snapshot", {}), "edge")
+        or not _managed_map_matches_snapshot(_managed_corner_caps, pending.get("old_caps_snapshot", {}), "corner_cap")
+        or not _patch_snapshots_match(patch_snapshots)
+    ):
+        _abort_pending_transaction()
+        return {"ok": false, "error": "stale_transaction_snapshot", "active_count": _managed_edges.size()}
+
+    var commit_started_usec: int = Time.get_ticks_usec()
     for edge_key in staged.keys():
         if reused_edge_keys.has(str(edge_key)) and not reactivated_edge_keys.has(str(edge_key)):
             continue
         var edge: Dictionary = staged[edge_key]
-        var first_patch: Node3D = edge["first_patch"]
-        var second_patch: Node3D = edge["second_patch"]
-        var first_side: String = str(edge["first_side"])
-        var second_side: String = str(edge["second_side"])
-        var first_was_active: bool = bool(first_patch.call("is_shared_transition_active", first_side)) if first_patch.has_method("is_shared_transition_active") else false
-        var second_was_active: bool = bool(second_patch.call("is_shared_transition_active", second_side)) if second_patch.has_method("is_shared_transition_active") else false
+        var first_patch: Node3D = edge.get("first_patch") as Node3D
+        var second_patch: Node3D = edge.get("second_patch") as Node3D
+        var first_side: String = str(edge.get("first_side", ""))
+        var second_side: String = str(edge.get("second_side", ""))
+        if not is_instance_valid(first_patch) or not is_instance_valid(second_patch):
+            var rollback_after_missing_patch: bool = _restore_patch_snapshots(patch_snapshots)
+            _abort_pending_transaction()
+            return {
+                "ok": false,
+                "error": "missing_patch_during_commit",
+                "rollback_ok": rollback_after_missing_patch,
+                "active_count": _managed_edges.size()
+            }
         var first_activated: bool = bool(first_patch.call("set_shared_transition_active", first_side, true))
         if not first_activated:
-            _rollback_patch_activations(newly_activated)
-            _free_staged(staged, reused_edge_keys)
-            _free_staged_caps(staged_caps, reused_cap_keys)
-            return {"ok": false, "error": "first_patch_activation_failed", "active_count": _managed_edges.size()}
-        if not first_was_active:
-            newly_activated.append({"patch": first_patch, "side": first_side})
+            var rollback_first: bool = _restore_patch_snapshots(patch_snapshots)
+            _abort_pending_transaction()
+            return {
+                "ok": false,
+                "error": "first_patch_activation_failed",
+                "rollback_ok": rollback_first,
+                "active_count": _managed_edges.size()
+            }
         var second_activated: bool = bool(second_patch.call("set_shared_transition_active", second_side, true))
         if not second_activated:
-            if not first_was_active:
-                first_patch.call("set_shared_transition_active", first_side, false)
-            _rollback_patch_activations(newly_activated)
-            _free_staged(staged, reused_edge_keys)
-            _free_staged_caps(staged_caps, reused_cap_keys)
-            return {"ok": false, "error": "second_patch_activation_failed", "active_count": _managed_edges.size()}
-        if not second_was_active:
-            newly_activated.append({"patch": second_patch, "side": second_side})
+            var rollback_second: bool = _restore_patch_snapshots(patch_snapshots)
+            _abort_pending_transaction()
+            return {
+                "ok": false,
+                "error": "second_patch_activation_failed",
+                "rollback_ok": rollback_second,
+                "active_count": _managed_edges.size()
+            }
+
+    # Publish new collision bodies before retiring the old set. All replacements
+    # were staged with collision disabled, so abort never exposes partial geometry.
+    for edge in staged.values():
+        var body: StaticBody3D = edge.get("body") as StaticBody3D
+        if not is_instance_valid(body) or body.is_queued_for_deletion() or body.get_parent() != self:
+            var rollback_staged_edge: bool = _restore_patch_snapshots(patch_snapshots)
+            _abort_pending_transaction()
+            return {
+                "ok": false,
+                "error": "staged_edge_invalid_during_commit",
+                "rollback_ok": rollback_staged_edge,
+                "active_count": _managed_edges.size()
+            }
+        body.collision_layer = COLLISION_LAYER
+    for cap in staged_caps.values():
+        var cap_body: StaticBody3D = cap.get("body") as StaticBody3D
+        if not is_instance_valid(cap_body) or cap_body.is_queued_for_deletion() or cap_body.get_parent() != self:
+            var rollback_staged_cap: bool = _restore_patch_snapshots(patch_snapshots)
+            _abort_pending_transaction()
+            return {
+                "ok": false,
+                "error": "staged_corner_cap_invalid_during_commit",
+                "rollback_ok": rollback_staged_cap,
+                "active_count": _managed_edges.size()
+            }
+        cap_body.collision_layer = COLLISION_LAYER
 
     var retired_edge_count: int = 0
     for old_key in _managed_edges.keys():
         var old_edge: Dictionary = _managed_edges[old_key]
-        var replacement: Dictionary = staged.get(str(old_key), {})
-        if replacement.get("body") == old_edge.get("body"):
+        var replacement_edge: Dictionary = staged.get(str(old_key), {})
+        if replacement_edge.get("body") == old_edge.get("body"):
             continue
         retired_edge_count += 1
-        _retire_old_edge(old_edge, replacement)
+        _retire_old_edge(old_edge, replacement_edge)
+
     var retired_corner_cap_count: int = 0
     for old_cap_key in _managed_corner_caps.keys():
         var old_cap: Dictionary = _managed_corner_caps[old_cap_key]
@@ -204,53 +305,199 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
         retired_corner_cap_count += 1
         _retire_old_cap(old_cap)
 
-    for edge in staged.values():
-        var body: StaticBody3D = edge["body"] as StaticBody3D
-        body.collision_layer = COLLISION_LAYER
-    for cap in staged_caps.values():
-        var cap_body: StaticBody3D = cap["body"] as StaticBody3D
-        cap_body.collision_layer = COLLISION_LAYER
-
     _managed_edges = staged
     _managed_corner_caps = staged_caps
     _last_blocked_corner_reports.clear()
-    for report_value in blocked_corner_reports:
+    for report_value in pending.get("blocked_corner_reports", []):
         if report_value is Dictionary:
             _last_blocked_corner_reports.append(report_value.duplicate(true))
+
     var profile_usec: Dictionary = {}
-    if profile_enabled:
+    if bool(pending.get("profile_enabled", false)):
         profile_usec = {
-            "candidate_geometry_usec": candidate_geometry_usec,
-            "corner_resolution_usec": corner_resolution_usec,
-            "resource_staging_usec": resource_staging_usec,
+            "candidate_geometry_usec": int(pending.get("candidate_geometry_usec", 0)),
+            "corner_resolution_usec": int(pending.get("corner_resolution_usec", 0)),
+            "resource_staging_usec": int(pending.get("resource_staging_usec", 0)),
             "activation_commit_usec": Time.get_ticks_usec() - commit_started_usec,
             "reused_edge_count": reused_edge_keys.size(),
             "reactivated_edge_count": reactivated_edge_keys.size(),
-            "staged_edge_count": staged_edge_count,
+            "staged_edge_count": int(pending.get("staged_edge_count", 0)),
             "retired_edge_count": retired_edge_count,
             "reused_corner_cap_count": reused_cap_keys.size(),
-            "staged_corner_cap_count": staged_cap_count,
+            "staged_corner_cap_count": int(pending.get("staged_cap_count", 0)),
             "retired_corner_cap_count": retired_corner_cap_count,
-            "total_usec": Time.get_ticks_usec() - total_started_usec
+            "total_usec": Time.get_ticks_usec() - int(pending.get("total_started_usec", commit_started_usec))
         }
-    return {
+
+    var result: Dictionary = {
         "ok": true,
+        "transaction_id": transaction_id,
         "active_count": _managed_edges.size(),
-        "blocked_count": blocked_edges.size(),
-        "blocked_edge_keys": _sorted_keys(blocked_edges),
+        "blocked_count": (pending.get("blocked_edges", {}) as Dictionary).size(),
+        "blocked_edge_keys": _sorted_keys(pending.get("blocked_edges", {})),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
         "corner_cap_count": _managed_corner_caps.size(),
         "reused_edge_count": reused_edge_keys.size(),
         "reactivated_edge_count": reactivated_edge_keys.size(),
-        "staged_edge_count": staged_edge_count,
+        "staged_edge_count": int(pending.get("staged_edge_count", 0)),
         "retired_edge_count": retired_edge_count,
         "reused_corner_cap_count": reused_cap_keys.size(),
-        "staged_corner_cap_count": staged_cap_count,
+        "staged_corner_cap_count": int(pending.get("staged_cap_count", 0)),
         "retired_corner_cap_count": retired_corner_cap_count,
         "profile_usec": profile_usec
     }
+    _pending_sync_transaction.clear()
+    return result
+
+
+func abort_sync_transitions(transaction_id: int) -> Dictionary:
+    if _pending_sync_transaction.is_empty():
+        return {"ok": false, "error": "no_pending_transaction", "active_count": _managed_edges.size()}
+    if int(_pending_sync_transaction.get("transaction_id", -1)) != transaction_id:
+        return {"ok": false, "error": "invalid_transaction_id", "active_count": _managed_edges.size()}
+    _abort_pending_transaction()
+    return {"ok": true, "aborted": true, "active_count": _managed_edges.size()}
+
+
+func _abort_pending_transaction() -> void:
+    if _pending_sync_transaction.is_empty():
+        return
+    var staged_edges: Dictionary = _pending_sync_transaction.get("staged_edges", {})
+    var staged_caps: Dictionary = _pending_sync_transaction.get("staged_caps", {})
+    var reused_edge_keys: Dictionary = _pending_sync_transaction.get("reused_edge_keys", {})
+    var reused_cap_keys: Dictionary = _pending_sync_transaction.get("reused_cap_keys", {})
+    _free_staged(staged_edges, reused_edge_keys)
+    _free_staged_caps(staged_caps, reused_cap_keys)
+    _pending_sync_transaction.clear()
+
+
+func _capture_patch_snapshots(candidates: Dictionary) -> Dictionary:
+    var snapshots: Dictionary = {}
+    for edge_value in candidates.values():
+        if not (edge_value is Dictionary):
+            continue
+        var edge: Dictionary = edge_value
+        var endpoints: Array[Dictionary] = [
+            {"patch": edge.get("first_patch"), "side": str(edge.get("first_side", ""))},
+            {"patch": edge.get("second_patch"), "side": str(edge.get("second_side", ""))}
+        ]
+        for endpoint in endpoints:
+            var patch: Node3D = endpoint.get("patch") as Node3D
+            var side: String = str(endpoint.get("side", ""))
+            if not is_instance_valid(patch) or patch.is_queued_for_deletion() or side.is_empty():
+                return {"ok": false, "error": "invalid_patch_snapshot_endpoint"}
+            var instance_id: int = patch.get_instance_id()
+            if not snapshots.has(instance_id):
+                var has_world_state: bool = patch.has_method("get_world_object_state")
+                var world_state: Dictionary = {}
+                if has_world_state:
+                    var state_value: Variant = patch.call("get_world_object_state")
+                    if not (state_value is Dictionary):
+                        return {"ok": false, "error": "invalid_patch_world_state_snapshot"}
+                    world_state = state_value.duplicate(true)
+                snapshots[instance_id] = {
+                    "patch": patch,
+                    "global_transform": patch.global_transform,
+                    "has_world_state": has_world_state,
+                    "world_state": world_state,
+                    "sides": {}
+                }
+            var snapshot: Dictionary = snapshots[instance_id]
+            var side_states: Dictionary = snapshot.get("sides", {})
+            if not side_states.has(side):
+                var has_active_query: bool = patch.has_method("is_shared_transition_active")
+                side_states[side] = {
+                    "has_active_query": has_active_query,
+                    "active": bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
+                }
+                snapshot["sides"] = side_states
+                snapshots[instance_id] = snapshot
+    return {"ok": true, "snapshots": snapshots}
+
+
+func _patch_snapshots_match(snapshots: Dictionary) -> bool:
+    for snapshot_value in snapshots.values():
+        if not (snapshot_value is Dictionary):
+            return false
+        var snapshot: Dictionary = snapshot_value
+        var patch: Node3D = snapshot.get("patch") as Node3D
+        if not is_instance_valid(patch) or patch.is_queued_for_deletion():
+            return false
+        if patch.global_transform != snapshot.get("global_transform", Transform3D.IDENTITY):
+            return false
+        if bool(snapshot.get("has_world_state", false)):
+            if not patch.has_method("get_world_object_state"):
+                return false
+            var state_value: Variant = patch.call("get_world_object_state")
+            if not (state_value is Dictionary) or state_value != snapshot.get("world_state", {}):
+                return false
+        var side_states: Dictionary = snapshot.get("sides", {})
+        for side_value in side_states.keys():
+            var side: String = str(side_value)
+            var side_snapshot: Dictionary = side_states[side_value]
+            var has_active_query: bool = bool(side_snapshot.get("has_active_query", false))
+            if patch.has_method("is_shared_transition_active") != has_active_query:
+                return false
+            var current_active: bool = bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
+            if current_active != bool(side_snapshot.get("active", false)):
+                return false
+    return true
+
+
+func _restore_patch_snapshots(snapshots: Dictionary) -> bool:
+    var restored: bool = true
+    for snapshot_value in snapshots.values():
+        if not (snapshot_value is Dictionary):
+            restored = false
+            continue
+        var snapshot: Dictionary = snapshot_value
+        var patch: Node3D = snapshot.get("patch") as Node3D
+        if not is_instance_valid(patch) or patch.is_queued_for_deletion():
+            restored = false
+            continue
+        var side_states: Dictionary = snapshot.get("sides", {})
+        for side_value in side_states.keys():
+            var side: String = str(side_value)
+            var side_snapshot: Dictionary = side_states[side_value]
+            var target_active: bool = bool(side_snapshot.get("active", false))
+            var current_active: bool = bool(patch.call("is_shared_transition_active", side)) if patch.has_method("is_shared_transition_active") else false
+            if current_active == target_active:
+                continue
+            if not patch.has_method("set_shared_transition_active") or not bool(patch.call("set_shared_transition_active", side, target_active)):
+                restored = false
+    return restored
+
+
+func _managed_map_matches_snapshot(current: Dictionary, snapshot: Dictionary, resource_kind: String) -> bool:
+    if current.size() != snapshot.size():
+        return false
+    for key_value in snapshot.keys():
+        if not current.has(key_value):
+            return false
+        var current_record_value: Variant = current[key_value]
+        var snapshot_record_value: Variant = snapshot[key_value]
+        if not (current_record_value is Dictionary) or not (snapshot_record_value is Dictionary):
+            return false
+        var current_record: Dictionary = current_record_value
+        var snapshot_record: Dictionary = snapshot_record_value
+        if current_record.get("body") != snapshot_record.get("body"):
+            return false
+        if current_record.get("reuse_signature", []) != snapshot_record.get("reuse_signature", []):
+            return false
+        if resource_kind == "edge":
+            for field in ["first_patch", "second_patch", "first_side", "second_side"]:
+                if current_record.get(field) != snapshot_record.get(field):
+                    return false
+        elif resource_kind == "corner_cap":
+            for field in ["stable_id", "corner", "junction_key"]:
+                if current_record.get(field) != snapshot_record.get(field):
+                    return false
+    return true
+
+
 
 func clear_all() -> void:
+    _abort_pending_transaction()
     for edge in _managed_edges.values():
         _retire_old_edge(edge, {})
     for cap in _managed_corner_caps.values():
