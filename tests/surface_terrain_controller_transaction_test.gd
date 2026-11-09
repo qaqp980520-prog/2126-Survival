@@ -312,7 +312,8 @@ func _run() -> void:
 	_expect(bool(controller.call("begin_terrain_adjacency_batch")), "pending-retirement cancellation batch begins")
 	_expect(bool(controller.call("unload_chunk", "chunk_d", 104)), "replacement chunk can be staged for retirement")
 	_expect(controller.get("_pending_chunk_unloads").has("chunk_d"), "replacement chunk retirement is pending")
-	var director_restore_ok: bool = bool(rollback_director.call("_restore_unloaded_chunks", [{"id": "chunk_d", "coord": Vector2i(2, 0)}], 104))
+	var director_restore_entries: Array[Dictionary] = [{"id": "chunk_d", "coord": Vector2i(2, 0)}]
+	var director_restore_ok: bool = bool(rollback_director.call("_restore_unloaded_chunks", director_restore_entries, 104))
 	_expect(director_restore_ok, "Director rollback restores a held pending root without requiring a factory")
 	_expect(not controller.get("_pending_chunk_unloads").has("chunk_d"), "Director cancellation removes the pending retirement")
 	_expect(controller.is_chunk_loaded("chunk_d") and batch_root.get_parent() == controller, "Director cancellation preserves the exact replacement root")
