@@ -291,7 +291,9 @@ func _run() -> void:
 		await _wait_frames(RELEASE_WAIT_FRAMES)
 		_expect(_all_refs_released(repeat_departed_refs), "radius %d repeated full-window contraction releases every non-center root" % radius)
 		_expect(_all_refs_alive(repeat_center_refs), "radius %d repeated full-window contraction preserves the same center root instance" % radius)
-		_expect(controller.call("get_chunk_root", repeat_full_center_id) != null, "radius %d repeated full-window contraction keeps its center root registered" % radius)
+		var repeat_center_object: Object = repeat_center_refs[0].get_ref()
+		var repeat_registered_center: Node3D = controller.call("get_chunk_root", repeat_full_center_id) as Node3D
+		_expect(is_instance_valid(repeat_center_object) and is_instance_valid(repeat_registered_center) and repeat_center_object == repeat_registered_center, "radius %d repeated full-window contraction keeps the exact same center root instance registered" % radius)
 		_emit_metrics("repeat_full_contract", radius, 1, repeat_contract_diagnostic, repeat_contract.get("frame_samples_ms", []), controller)
 		target = repeat_full_target
 		previous_surface_count = 1
