@@ -118,7 +118,7 @@ class FailingMineralAdapter:
 
 
 class FakeReconcileController:
-	extends Node
+	extends Node3D
 
 	var loaded_ids: PackedStringArray = PackedStringArray(["surface/chunk_2_3"])
 
