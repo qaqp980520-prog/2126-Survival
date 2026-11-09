@@ -195,12 +195,6 @@ func _run() -> void:
 	_expect(bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "failed unload re-registers the chunk through the real lifecycle adapter")
 	_expect(fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "failed unload restores the registered vein identity")
 
-	# A failed mineral registration must happen before any terrain adjacency is published.
-	var failing_adapter := FailingMineralAdapter.new()
-	failing_adapter.name = "FailingMineralAdapter"
-	controller.add_child(failing_adapter)
-	controller.set("adapter", failing_adapter)
-
 	# The director batches newly loaded chunks. A successful unload must flush the
 	# already-published deferred load exactly once and clear the batch dirty bit.
 	_expect(bool(controller.call("begin_terrain_adjacency_batch")), "terrain adjacency batch begins")
@@ -233,6 +227,10 @@ func _run() -> void:
 	_expect(not is_instance_valid(patch_c), "successful unload releases the departing patch after the commit")
 
 	# Mineral registration failure must not invoke the terrain transaction at all.
+	var failing_adapter := FailingMineralAdapter.new()
+	failing_adapter.name = "FailingMineralAdapter"
+	controller.add_child(failing_adapter)
+	controller.set("adapter", failing_adapter)
 	var registry_before_load: Dictionary = object_registry.call("to_save_dict")
 	var candidate_root := Node3D.new()
 	candidate_root.name = "ChunkE"
