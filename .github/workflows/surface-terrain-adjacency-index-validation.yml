@@ -1,0 +1,45 @@
+name: Surface Terrain Adjacency Index Validation
+
+on:
+  pull_request:
+    paths:
+      - 'systems/SurfaceTerrainAdjacencyIndex.gd'
+      - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainTransitionDescriptor.gd'
+      - 'tests/surface_terrain_adjacency_index_test.gd'
+      - 'project.godot'
+      - '.github/workflows/surface-terrain-adjacency-index-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: surface-terrain-adjacency-index-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  index-regression:
+    name: Godot 4.3 adjacency index regression
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify exact test inputs
+        run: |
+          godot --version
+          test -f project.godot
+          test -f systems/SurfaceTerrainAdjacencyIndex.gd
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f tests/surface_terrain_adjacency_index_test.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run incremental adjacency index and full-rebuild oracle regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/surface_terrain_adjacency_index_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency index tests passed."
