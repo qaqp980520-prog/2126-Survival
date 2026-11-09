@@ -59,6 +59,8 @@ func _test_prepare_abort_preserves_committed_edge() -> void:
     _expect(is_instance_valid(staged_ref.get_ref()), "wrong transaction id leaves staged resource owned")
     var second_prepare: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
     _expect(not bool(second_prepare.get("ok", true)) and str(second_prepare.get("error", "")) == "transaction_in_progress", "manager rejects a concurrent second prepare")
+    var first_active_before_abort: bool = bool(fixture["lower"].call("is_shared_transition_active", str(fixture["first_side"])))
+    var second_active_before_abort: bool = bool(higher.call("is_shared_transition_active", str(fixture["second_side"])))
 
     var aborted: Dictionary = manager.call("abort_sync_transitions", transaction_id)
     _expect(bool(aborted.get("ok", false)) and bool(aborted.get("aborted", false)), "matching transaction id aborts successfully")
@@ -66,7 +68,8 @@ func _test_prepare_abort_preserves_committed_edge() -> void:
     await process_frame
     _expect(staged_ref.get_ref() == null, "abort releases the staged replacement edge")
     _expect(is_instance_valid(original_body) and manager.call("get_transition_body", edge_key) == original_body and original_body.collision_layer == 1, "abort preserves the exact old committed edge")
-    _expect(bool(fixture["lower"].call("is_shared_transition_active", str(fixture["first_side"]))) and bool(higher.call("is_shared_transition_active", str(fixture["second_side"]))), "abort leaves both committed patch transition flags unchanged")
+    _expect(bool(fixture["lower"].call("is_shared_transition_active", str(fixture["first_side"]))) == first_active_before_abort, "abort leaves the first patch transition flag unchanged")
+    _expect(bool(higher.call("is_shared_transition_active", str(fixture["second_side"]))) == second_active_before_abort, "abort leaves the second patch transition flag unchanged")
     await _release_holder(holder)
 
 
