@@ -917,6 +917,16 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 			break
 		var id: String = str(entry.get("id", ""))
 		var coord: Vector2i = entry["coord"]
+		if chunk_controller.has_method("is_chunk_loaded") and bool(chunk_controller.call("is_chunk_loaded", id)):
+			var pending_cancel_ok: bool = (
+				not chunk_controller.has_method("cancel_pending_chunk_unload")
+				or bool(chunk_controller.call("cancel_pending_chunk_unload", id, now_unix))
+			)
+			if pending_cancel_ok:
+				_managed_chunk_ids[id] = coord
+				continue
+			success = false
+			continue
 		var candidate: Variant = chunk_factory.call(coord)
 		if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 			_free_unowned_root(candidate)

@@ -11,8 +11,10 @@ Make the existing full-rebuild terrain path rollback-safe before wiring the deta
   - If the binder, transition-manager creation, or collider synchronization fails, restore the captured reciprocal links and activation flags.
   - Do not clear the committed transition-manager resources or descriptor snapshot on a failed candidate synchronization.
   - Load ordering: attach/restore candidate root, register minerals, then publish adjacency; if adjacency fails, unregister the candidate minerals before detaching the root.
-  - Unload ordering: save state and unregister minerals, prepare/commit adjacency while the departing root and patch Nodes remain attached, then remove Controller maps and queue the root for deletion.
-  - If unload adjacency fails, re-register minerals and restore the object-state registry snapshot while retaining the old root and maps.
+  - Unload ordering outside a batch: save state and unregister minerals, commit adjacency while the departing root and patch Nodes remain attached, then remove Controller maps and queue the root for deletion.
+  - Unload ordering inside an adjacency batch: save state and unregister minerals, record a pending retirement, and keep the root/maps attached. The final batch commit excludes all pending roots in one rebind, then retires them only after collider synchronization succeeds.
+  - If a batch rebind fails, cancel every pending retirement, re-register minerals and restore only the departing chunk's object-state records while retaining the exact old roots and maps.
+  - Director rollback checks for an already-held root first and cancels its pending retirement instead of generating a duplicate replacement root.
 
 ## Transaction invariants
 
@@ -27,6 +29,7 @@ Make the existing full-rebuild terrain path rollback-safe before wiring the deta
 ## Files
 
 - `systems/MineralChunkController.gd`
+- `systems/MineralGridStreamingDirector.gd`
 - `tests/surface_terrain_controller_transaction_test.gd`
 - `.github/workflows/godot-validation.yml`
 - `.github/workflows/surface-terrain-controller-transaction-validation.yml`
@@ -61,15 +64,14 @@ The fault-injected test builds three real `SurfaceTerrainPatch` nodes with two r
 - the committed descriptor snapshot and world-object registry snapshot are unchanged.
 
 The test then retries with the fake manager succeeding and verifies that the departing edge is removed, the unaffected edge remains, the new descriptor snapshot is published, and the old root is queued only after the adjacency commit.
-It also loads a replacement chunk inside an adjacency batch, unloads the old chunk, and verifies one immediate synchronization plus a zero-rebuild batch end. The unload rollback uses the real MineralChunkLifecycleAdapter with a fake registry to verify mineral re-registration; a separate failing adapter verifies that failed mineral registration never publishes terrain adjacency.
-It also loads a replacement chunk inside an adjacency batch, unloads the old chunk, and verifies one immediate synchronization plus a zero-rebuild batch end. A second fault case verifies failed mineral registration does not call the transition manager or bind the candidate patch.
+The batch regression loads a replacement chunk and stages an old chunk for retirement, then verifies one shared synchronization commits both changes before the old root is detached. A separate injected batch-commit failure verifies that the exact old root, reciprocal adjacency, mineral registration and world-object registry snapshot are restored. Another rollback path cancels a pending retirement without creating a replacement root. A failing adapter verifies that failed mineral registration never publishes terrain adjacency.
 
 ## Limits and next steps
 
-- The unload path preserves batch correctness and avoids a redundant final rebuild, but multiple unloads in one batch may still perform one immediate full rebind each; a deferred pending-retire transaction is a future performance improvement.
-
+- Multiple unloads in one async batch now share one full-rebuild commit; the implementation still uses the full-rebuild binder rather than the detached incremental index.
+- The pending-retirement queue is in-memory transaction state only and is never serialized.
 - This is a Controller-level rollback stage, not the final detached-index/edge-junction transaction manager.
 - The injected failure exercises the Controller's manager-failure contract; it does not simulate every real collision-shape allocation or physics-server failure.
 - The full rebuild still performs global adjacency work.
 - Rendered/GPU, iPhone, and target-device QA are not covered.
-- Next: run the exact-head focused and full Godot 4.3 workflows; add real manager staging/activation fault injection; then design the edge↔junction affected-component closure and preserve-set transaction around the verified rollback boundary.
+- Next: run exact-head focused, production benchmark and full Godot 4.3 workflows; add real manager staging/activation fault injection; then implement the edge↔junction affected-component closure and preserve-set transaction around the verified rollback boundary.

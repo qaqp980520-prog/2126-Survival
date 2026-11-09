@@ -18,6 +18,7 @@ var _chunk_roots: Dictionary = {} # chunk ID -> Node3D root
 var _chunk_veins: Dictionary = {} # chunk ID -> local vein ID -> MineralMiningNode
 var _chunk_crops: Dictionary = {} # chunk ID -> local crop path -> CropPlotVisual
 var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful Node3D
+var _pending_chunk_unloads: Dictionary = {} # chunk ID -> root, veins, object snapshot and timestamp
 var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
 var _terrain_transition_collider_manager: Node3D
 var _terrain_adjacency_batch_depth: int = 0
@@ -229,6 +230,8 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 	if not is_instance_valid(chunk_root):
 		return false
+	if _pending_chunk_unloads.has(chunk_id):
+		return true
 	var veins: Dictionary = _chunk_veins[chunk_id]
 	var object_snapshot: Dictionary = {}
 	if not _chunk_objects.get(chunk_id, {}).is_empty():
@@ -251,6 +254,20 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 			push_error("Failed to restore world-object registry after mineral chunk unload failed.")
 		return false
 
+	# During a batch, keep the old root, maps and patch Nodes alive until one
+	# shared adjacency/collider commit has excluded every pending retirement.
+	# This preserves removal-side WeakRef validation without rebuilding once per
+	# stale chunk in a large window contraction.
+	if _terrain_adjacency_batch_depth > 0:
+		_pending_chunk_unloads[chunk_id] = {
+			"root": chunk_root,
+			"veins": veins.duplicate(),
+			"object_snapshot": object_snapshot.duplicate(true),
+			"now_unix": now_unix
+		}
+		_terrain_adjacency_batch_dirty = true
+		return true
+
 	# Keep the old root and all of its patch Nodes alive until the candidate
 	# adjacency/collider state commits. This is required by removal-side WeakRef
 	# validation and gives the adapter an inverse operation if rebind fails.
@@ -269,13 +286,6 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
 			push_error("Failed to restore world-object registry after terrain adjacency unload failed.")
 		return false
-
-	# An unload inside an async adjacency batch performs an immediate commit so the
-	# departing root can stay alive through removal-side validation. That commit
-	# already includes every currently published (including previously deferred)
-	# load/state change, so clear the dirty bit; later operations will set it again.
-	if _terrain_adjacency_batch_depth > 0:
-		_terrain_adjacency_batch_dirty = false
 
 	_chunk_roots.erase(chunk_id)
 	_chunk_veins.erase(chunk_id)
@@ -311,6 +321,8 @@ func get_loaded_chunk_ids() -> PackedStringArray:
 func get_loaded_mineral_nodes() -> Array[Node3D]:
 	var nodes: Array[Node3D] = []
 	for chunk_id in _chunk_roots.keys():
+		if _pending_chunk_unloads.has(str(chunk_id)):
+			continue
 		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 			continue
@@ -323,6 +335,8 @@ func get_loaded_mineral_nodes() -> Array[Node3D]:
 
 func refresh_crop_plots() -> void:
 	for chunk_id in _chunk_roots.keys():
+		if _pending_chunk_unloads.has(str(chunk_id)):
+			continue
 		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 			continue
@@ -335,6 +349,8 @@ func refresh_crop_plots() -> void:
 func get_loaded_crop_plots() -> Array[Node3D]:
 	var plots: Array[Node3D] = []
 	for chunk_id in _chunk_roots.keys():
+		if _pending_chunk_unloads.has(str(chunk_id)):
+			continue
 		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 			continue
@@ -348,6 +364,8 @@ func get_loaded_crop_plots() -> Array[Node3D]:
 func get_loaded_world_state_nodes() -> Array[Node3D]:
 	var nodes: Array[Node3D] = []
 	for chunk_id in _chunk_roots.keys():
+		if _pending_chunk_unloads.has(str(chunk_id)):
+			continue
 		var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 		if not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 			continue
@@ -459,7 +477,7 @@ func restore_save_dict(payload: Dictionary, now_unix: int = -1) -> bool:
 func _collect_loaded_terrain_patches(excluded_chunk_id: String = "") -> Array[Node3D]:
 	var patches: Array[Node3D] = []
 	for chunk_id_value in _chunk_objects.keys():
-		if str(chunk_id_value) == excluded_chunk_id:
+		if str(chunk_id_value) == excluded_chunk_id or _pending_chunk_unloads.has(str(chunk_id_value)):
 			continue
 		var chunk_objects: Dictionary = _chunk_objects[chunk_id_value]
 		for node_value in chunk_objects.values():
@@ -527,8 +545,18 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	_terrain_adjacency_batch_depth -= 1
 	if _terrain_adjacency_batch_depth > 0:
 		return {"ok": true, "deferred": true}
-	if not _terrain_adjacency_batch_dirty:
+	if not _terrain_adjacency_batch_dirty and _pending_chunk_unloads.is_empty():
 		return {"ok": true, "rebuild_count": 0}
+
+	var pending_validation: Dictionary = _validate_pending_chunk_unloads()
+	if not bool(pending_validation.get("ok", false)):
+		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		return {
+			"ok": false,
+			"error": "pending_chunk_unload_validation_failed:" + str(pending_validation.get("error", "unknown")),
+			"pending_unload_rollback_ok": pending_rollback_ok
+		}
+
 	_terrain_adjacency_batch_dirty = false
 	var collect_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	var patches: Array[Node3D] = _collect_loaded_terrain_patches()
@@ -540,7 +568,119 @@ func end_terrain_adjacency_batch() -> Dictionary:
 		profile["batch_total_usec"] = int(profile.get("controller_rebind_total_usec", 0)) + collect_usec
 		_last_terrain_adjacency_profile = profile
 		result["profile_usec"] = profile.duplicate(true)
+
+	if not bool(result.get("ok", false)):
+		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		result["pending_unload_rollback_ok"] = pending_rollback_ok
+		if not pending_rollback_ok:
+			result["error"] = "terrain_adjacency_failed_and_pending_unload_rollback_failed"
+		return result
+
+	var finalize_result: Dictionary = _finalize_pending_chunk_unloads()
+	if not bool(finalize_result.get("ok", false)):
+		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		var adjacency_restore: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+		return {
+			"ok": false,
+			"error": "terrain_adjacency_committed_but_chunk_retirement_failed",
+			"pending_unload_rollback_ok": pending_rollback_ok,
+			"adjacency_restore_ok": bool(adjacency_restore.get("ok", false))
+		}
+	result["retired_chunk_count"] = int(finalize_result.get("retired_chunk_count", 0))
 	return result
+
+func cancel_pending_chunk_unload(chunk_id: String, now_unix: int = -1) -> bool:
+	if not _pending_chunk_unloads.has(chunk_id):
+		return is_chunk_loaded(chunk_id)
+	var entry: Dictionary = _pending_chunk_unloads[chunk_id]
+	var chunk_root: Node3D = entry.get("root") as Node3D
+	if not is_instance_valid(chunk_root) or chunk_root.get_parent() != self or chunk_root.is_queued_for_deletion():
+		return false
+
+	var restore_time: int = now_unix if now_unix > 0 else int(entry.get("now_unix", -1))
+	var veins: Dictionary = entry.get("veins", {})
+	var adapter_restored: bool = false
+	if not veins.is_empty():
+		if adapter == null or not is_instance_valid(adapter) or not adapter.has_method("load_chunk") or not bool(adapter.call("load_chunk", chunk_id, veins, restore_time)):
+			return false
+		adapter_restored = true
+
+	var object_snapshot: Dictionary = entry.get("object_snapshot", {})
+	if not object_snapshot.is_empty():
+		var current_snapshot: Dictionary = object_state_registry.call("to_save_dict") if object_state_registry != null and is_instance_valid(object_state_registry) else {}
+		var current_objects_value: Variant = current_snapshot.get("objects", {})
+		var previous_objects_value: Variant = object_snapshot.get("objects", {})
+		if not current_snapshot.has("schema_version") or not (current_objects_value is Dictionary) or not (previous_objects_value is Dictionary):
+			if adapter_restored and not bool(adapter.call("unload_chunk", chunk_id, restore_time)):
+				push_error("Failed to undo mineral registration after pending chunk-unload snapshot validation failed.")
+			return false
+		var current_objects: Dictionary = current_objects_value.duplicate(true)
+		var previous_objects: Dictionary = previous_objects_value
+		for stable_id in _chunk_objects.get(chunk_id, {}).keys():
+			if previous_objects.has(stable_id):
+				current_objects[stable_id] = previous_objects[stable_id].duplicate(true)
+			else:
+				current_objects.erase(stable_id)
+		current_snapshot["objects"] = current_objects
+		if not bool(object_state_registry.call("restore_save_dict", current_snapshot)):
+			if adapter_restored and not bool(adapter.call("unload_chunk", chunk_id, restore_time)):
+				push_error("Failed to undo mineral registration after pending chunk-unload cancellation failed.")
+			return false
+
+	_pending_chunk_unloads.erase(chunk_id)
+	if _terrain_adjacency_batch_depth > 0:
+		_terrain_adjacency_batch_dirty = true
+	return true
+
+func _validate_pending_chunk_unloads() -> Dictionary:
+	for raw_chunk_id in _pending_chunk_unloads.keys():
+		var chunk_id: String = str(raw_chunk_id)
+		var entry: Dictionary = _pending_chunk_unloads[raw_chunk_id]
+		var chunk_root: Node3D = entry.get("root") as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.get_parent() != self or chunk_root.is_queued_for_deletion():
+			return {"ok": false, "error": "pending_root_invalid:" + chunk_id}
+		if not _chunk_roots.has(chunk_id) or _chunk_roots[chunk_id] != chunk_root:
+			return {"ok": false, "error": "pending_root_owner_mismatch:" + chunk_id}
+		var veins: Dictionary = entry.get("veins", {})
+		if not veins.is_empty() and (
+			adapter == null
+			or not is_instance_valid(adapter)
+			or not adapter.has_method("is_chunk_loaded")
+			or bool(adapter.call("is_chunk_loaded", chunk_id))
+		):
+			return {"ok": false, "error": "pending_mineral_registration_still_active:" + chunk_id}
+	return {"ok": true}
+
+func _cancel_all_pending_chunk_unloads() -> bool:
+	var chunk_ids: Array[String] = []
+	for raw_chunk_id in _pending_chunk_unloads.keys():
+		chunk_ids.append(str(raw_chunk_id))
+	chunk_ids.sort()
+	var success: bool = true
+	for chunk_id in chunk_ids:
+		if not cancel_pending_chunk_unload(chunk_id):
+			success = false
+	return success
+
+func _finalize_pending_chunk_unloads() -> Dictionary:
+	var chunk_ids: Array[String] = []
+	for raw_chunk_id in _pending_chunk_unloads.keys():
+		chunk_ids.append(str(raw_chunk_id))
+	chunk_ids.sort()
+	for chunk_id in chunk_ids:
+		var entry: Dictionary = _pending_chunk_unloads.get(chunk_id, {})
+		var chunk_root: Node3D = entry.get("root") as Node3D
+		if not is_instance_valid(chunk_root) or chunk_root.get_parent() != self or chunk_root.is_queued_for_deletion():
+			return {"ok": false, "error": "pending_root_changed_during_finalize:" + chunk_id}
+		_chunk_roots.erase(chunk_id)
+		_chunk_veins.erase(chunk_id)
+		_chunk_crops.erase(chunk_id)
+		_chunk_objects.erase(chunk_id)
+		remove_child(chunk_root)
+		if not chunk_root.is_queued_for_deletion():
+			chunk_root.queue_free()
+		_pending_chunk_unloads.erase(chunk_id)
+	return {"ok": true, "retired_chunk_count": chunk_ids.size()}
 
 func get_terrain_adjacency_rebuild_count() -> int:
 	return _terrain_adjacency_rebuild_count
@@ -581,7 +721,7 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 	var stable_ids_by_instance: Dictionary = {}
 	var patches_by_stable_id: Dictionary = {}
 	for chunk_id_value in _chunk_objects.keys():
-		if str(chunk_id_value) == excluded_chunk_id:
+		if str(chunk_id_value) == excluded_chunk_id or _pending_chunk_unloads.has(str(chunk_id_value)):
 			continue
 		var chunk_objects: Dictionary = _chunk_objects[chunk_id_value]
 		for stable_id in chunk_objects.keys():

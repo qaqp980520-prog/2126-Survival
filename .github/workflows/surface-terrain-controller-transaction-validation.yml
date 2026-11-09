@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'systems/MineralChunkController.gd'
+      - 'systems/MineralGridStreamingDirector.gd'
       - 'systems/SurfaceTerrainAdjacencyBinder.gd'
       - 'systems/SurfaceTerrainPatch.gd'
       - 'tests/surface_terrain_controller_transaction_test.gd'
@@ -30,6 +31,7 @@ jobs:
           godot --version
           test -f project.godot
           test -f systems/MineralChunkController.gd
+          test -f systems/MineralGridStreamingDirector.gd
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
           test -f systems/SurfaceTerrainPatch.gd
           test -f tests/surface_terrain_controller_transaction_test.gd
