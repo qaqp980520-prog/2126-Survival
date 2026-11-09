@@ -236,18 +236,34 @@ func commit_delta(plan_id: String) -> Dictionary:
 		return {"ok": false, "error": "stale_generation"}
 
 	var candidate_entries: Dictionary = plan["candidate_entries"]
-	# Validate only the changed patches and their immediate neighbors. Unchanged buckets
-	# and records remain persistent; a full scan here would erase the benefit of the index.
+	var committed_entries: Dictionary = _entries_by_stable_id
+	# Validate the committed side as well as the candidate side. Removed IDs are absent
+	# from candidate_entries, but their old WeakRefs/snapshots still define this transaction.
+	# Replacements must validate both the old and new Node instances before the index swaps.
 	var touched_ids: Array = plan["summary"].get("touched_stable_ids", [])
 	for stable_id_value in touched_ids:
 		var stable_id: String = str(stable_id_value)
-		if not candidate_entries.has(stable_id):
-			continue
-		var record: Dictionary = candidate_entries[stable_id]
-		var current_result: Dictionary = _record_matches_current(stable_id, record)
-		if not bool(current_result.get("ok", false)):
-			_pending_plans.erase(plan_id)
-			return current_result
+		var has_committed_record: bool = committed_entries.has(stable_id)
+		if has_committed_record:
+			var committed_record: Dictionary = committed_entries[stable_id]
+			var committed_result: Dictionary = _record_matches_current(stable_id, committed_record)
+			if not bool(committed_result.get("ok", false)):
+				_pending_plans.erase(plan_id)
+				return committed_result
+		if candidate_entries.has(stable_id):
+			var candidate_record: Dictionary = candidate_entries[stable_id]
+			var validate_candidate: bool = not has_committed_record
+			if has_committed_record:
+				var prior_record: Dictionary = committed_entries[stable_id]
+				validate_candidate = (
+					int(candidate_record.get("instance_id", -1))
+					!= int(prior_record.get("instance_id", -1))
+				)
+			if validate_candidate:
+				var candidate_result: Dictionary = _record_matches_current(stable_id, candidate_record)
+				if not bool(candidate_result.get("ok", false)):
+					_pending_plans.erase(plan_id)
+					return candidate_result
 
 	_entries_by_stable_id = candidate_entries.duplicate()
 	_bucket_to_stable_ids = plan["candidate_buckets"]
