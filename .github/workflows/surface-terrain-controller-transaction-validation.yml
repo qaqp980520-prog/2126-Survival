@@ -1,0 +1,59 @@
+name: Surface Terrain Controller Transaction Validation
+
+on:
+  pull_request:
+    paths:
+      - 'systems/MineralChunkController.gd'
+      - 'systems/MineralGridStreamingDirector.gd'
+      - 'systems/WorldObjectStateRegistry.gd'
+      - 'tests/world_object_state_registry_test.gd'
+      - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainPatch.gd'
+      - 'tests/surface_terrain_controller_transaction_test.gd'
+      - '.github/workflows/godot-validation.yml'
+      - '.github/workflows/surface-terrain-controller-transaction-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: surface-terrain-controller-transaction-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controller-transaction:
+    name: Godot 4.3 terrain controller transaction regression
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify exact test inputs
+        run: |
+          godot --version
+          test -f project.godot
+          test -f systems/MineralChunkController.gd
+          test -f systems/MineralGridStreamingDirector.gd
+          test -f systems/WorldObjectStateRegistry.gd
+          test -f tests/world_object_state_registry_test.gd
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainPatch.gd
+          test -f tests/surface_terrain_controller_transaction_test.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run terrain controller transaction rollback regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/surface_terrain_controller_transaction_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain controller transaction tests passed."
+      - name: Run chunk-scoped world-object registry regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/world_object_state_registry_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World object state registry tests passed."

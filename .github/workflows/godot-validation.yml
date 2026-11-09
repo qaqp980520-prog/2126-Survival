@@ -4747,6 +4747,15 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid async registration result contract tests passed."
 
+      - name: Run terrain adjacency controller transaction rollback regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/surface_terrain_controller_transaction_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain controller transaction tests passed."
+
       - name: Remove generated untracked Godot import metadata
         if: always()
         shell: bash
