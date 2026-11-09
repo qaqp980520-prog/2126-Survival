@@ -13,7 +13,7 @@ Implement the first isolated Edge↔Junction affected-component closure primitiv
 ## Contract
 
 - Input is the changed edge-key seed set, old resolver reports with the old Stable-ID-to-Patch map, candidate resolver reports with the candidate map, and the common patch size.
-- Every resolver report participates, including step-fallback/ineligible reports. The planner does not filter on policy.
+- Every resolver report participates, including step-fallback/ineligible reports. The planner does not filter on policy. A real checkerboard fixture exercises both shared-corner-cap eligible reports and step-fallback reports after one patch height changes and the eight midpoint samples disagree.
 - Build a bipartite graph from edge key to the junction derived from the report's patch position and corner. Merge old and candidate graphs before breadth-first expansion.
 - The result is the sorted union of all connected edge keys and junction keys reached from the seed edges. A seed with no corner reports remains a one-edge component.
 - Empty seeds return an empty successful result. Malformed reports, missing patch references, invalid corners, duplicate edge keys within one report, and invalid seed keys fail closed.
