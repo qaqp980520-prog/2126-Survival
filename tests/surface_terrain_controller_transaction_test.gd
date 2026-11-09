@@ -2,6 +2,7 @@ extends SceneTree
 
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
+const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
 
 
 class FakeTransitionManager:
@@ -190,7 +191,7 @@ func _run() -> void:
 	var candidate_root := Node3D.new()
 	candidate_root.name = "ChunkD"
 	var candidate_patch: Node3D = _new_patch(candidate_root, "TerrainD", Vector3(4.0, 0.0, 0.0))
-	var candidate_ore: Node3D = preload("res://systems/MineralMiningNode.gd").new()
+	var candidate_ore: Node3D = MiningNodeScript.new()
 	candidate_ore.name = "IronVein"
 	candidate_root.add_child(candidate_ore)
 	var manager_calls_before_load: int = transition_manager.sync_calls
@@ -201,6 +202,7 @@ func _run() -> void:
 	_expect(candidate_root.get_parent() == null and not candidate_root.is_queued_for_deletion(), "failed candidate load leaves root detached and caller-owned")
 	_expect(not controller.get("_chunk_roots").has("chunk_d"), "failed candidate load does not publish Controller chunk maps")
 	_expect(patch_b.call("get_bound_neighbor_patch", "east") == null, "failed candidate load leaves the existing boundary unchanged")
+	_expect(candidate_patch.call("get_bound_neighbor_patch", "west") == null, "failed candidate load leaves the candidate patch unbound")
 	_expect(object_registry.call("to_save_dict") == registry_before_load, "failed candidate load restores the world-object registry snapshot")
 	candidate_root.free()
 
