@@ -3,6 +3,7 @@ extends SceneTree
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MiningNodeScript = preload("res://systems/MineralMiningNode.gd")
+const LifecycleAdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 
 
 class FakeTransitionManager:
@@ -58,8 +59,26 @@ class FakeObjectStateRegistry:
 class FakeMineralRegistry:
 	extends Node
 
+	var registered_veins: Dictionary = {}
+
 	func get_registered_ids() -> PackedStringArray:
-		return PackedStringArray()
+		var ids := PackedStringArray()
+		for stable_id in registered_veins.keys():
+			ids.append(str(stable_id))
+		ids.sort()
+		return ids
+
+	func register_vein(stable_id: String, vein: Node, _now_unix: int = -1) -> bool:
+		if stable_id.is_empty() or registered_veins.has(stable_id) or not is_instance_valid(vein):
+			return false
+		registered_veins[stable_id] = vein
+		return true
+
+	func unregister_vein(stable_id: String, vein: Node, _now_unix: int = -1) -> bool:
+		if not registered_veins.has(stable_id) or registered_veins[stable_id] != vein:
+			return false
+		registered_veins.erase(stable_id)
+		return true
 
 
 class FailingMineralAdapter:
@@ -106,6 +125,9 @@ func _run() -> void:
 	var patch_a: Node3D = _new_patch(chunk_a, "TerrainA", Vector3(0.0, 0.0, 0.0))
 	var patch_b: Node3D = _new_patch(chunk_b, "TerrainB", Vector3(2.0, 0.0, 0.0))
 	var patch_c: Node3D = _new_patch(chunk_c, "TerrainC", Vector3(4.0, 0.0, 0.0))
+	var vein_c: Node3D = MiningNodeScript.new()
+	vein_c.name = "IronVein"
+	chunk_c.add_child(vein_c)
 	await process_frame
 
 	_expect(bool(patch_b.call("apply_world_object_state", {"height_level": 1, "surface_type": "soil", "revision": 1})), "middle patch receives a valid elevated terrain state")
@@ -119,10 +141,17 @@ func _run() -> void:
 	_expect(bool(patch_b.call("set_shared_transition_active", "east", true)), "B-east shared transition starts active")
 	_expect(bool(patch_c.call("set_shared_transition_active", "west", true)), "C-west shared transition starts active")
 
-	var fake_registry := Node.new()
-	fake_registry.name = "FakeMineralRegistry"
-	controller.add_child(fake_registry)
-	controller.set("registry", fake_registry)
+	var fake_mineral_registry := FakeMineralRegistry.new()
+	fake_mineral_registry.name = "FakeMineralRegistry"
+	controller.add_child(fake_mineral_registry)
+	controller.set("registry", fake_mineral_registry)
+	var lifecycle_adapter = LifecycleAdapterScript.new()
+	lifecycle_adapter.name = "RealMineralChunkLifecycleAdapter"
+	controller.add_child(lifecycle_adapter)
+	_expect(bool(lifecycle_adapter.call("bind_registry", fake_mineral_registry)), "real mineral lifecycle adapter binds the fake registry")
+	controller.set("adapter", lifecycle_adapter)
+	_expect(bool(lifecycle_adapter.call("load_chunk", "chunk_c", {"ChunkC/IronVein": vein_c}, 99)), "initial chunk C mineral registration succeeds")
+	_expect(fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "initial chunk C vein is present in the registry")
 
 	var object_registry := FakeObjectStateRegistry.new()
 	object_registry.name = "FakeWorldObjectStateRegistry"
@@ -139,7 +168,7 @@ func _run() -> void:
 	controller.set("_terrain_transition_descriptors", {"preserved": {"edge_key": "before-failed-sync"}})
 
 	controller.set("_chunk_roots", {"chunk_a": chunk_a, "chunk_b": chunk_b, "chunk_c": chunk_c})
-	controller.set("_chunk_veins", {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}})
+	controller.set("_chunk_veins", {"chunk_a": {}, "chunk_b": {}, "chunk_c": {"ChunkC/IronVein": vein_c}})
 	controller.set("_chunk_crops", {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}})
 	controller.set("_chunk_objects", {
 		"chunk_a": {"chunk_a/object/terrain": patch_a},
@@ -163,12 +192,10 @@ func _run() -> void:
 	_expect(bool(patch_c.call("is_shared_transition_active", "west")), "failed unload restores C-west transition activation")
 	_expect(controller.call("get_terrain_transition_descriptors") == {"preserved": {"edge_key": "before-failed-sync"}}, "failed collider sync preserves the committed descriptor snapshot")
 	_expect(object_registry.call("to_save_dict") == registry_before, "failed unload restores the world-object registry snapshot")
+	_expect(bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "failed unload re-registers the chunk through the real lifecycle adapter")
+	_expect(fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "failed unload restores the registered vein identity")
 
 	# A failed mineral registration must happen before any terrain adjacency is published.
-	var fake_mineral_registry := FakeMineralRegistry.new()
-	fake_mineral_registry.name = "FakeMineralRegistryForLoad"
-	controller.add_child(fake_mineral_registry)
-	controller.set("registry", fake_mineral_registry)
 	var failing_adapter := FailingMineralAdapter.new()
 	failing_adapter.name = "FailingMineralAdapter"
 	controller.add_child(failing_adapter)
@@ -195,6 +222,8 @@ func _run() -> void:
 	_expect(batch_patch.call("get_bound_neighbor_patch", "west") == patch_b, "successful unload binds the replacement patch reciprocally")
 	_expect(patch_c.call("get_bound_neighbor_patch", "west") == null, "successful unload clears the departing reciprocal C-west edge")
 	_expect(controller.call("get_terrain_transition_descriptors").size() == 2, "successful unload publishes descriptors for both remaining transition edges")
+	_expect(not bool(lifecycle_adapter.call("is_chunk_loaded", "chunk_c")), "successful unload unregisters the chunk through the real lifecycle adapter")
+	_expect(not fake_mineral_registry.registered_veins.has("chunk_c/vein/ChunkC/IronVein"), "successful unload removes the registered vein identity")
 
 	var batch_end: Dictionary = controller.call("end_terrain_adjacency_batch")
 	_expect(bool(batch_end.get("ok", false)) and int(batch_end.get("rebuild_count", -1)) == 0, "successful unload clears the dirty bit after flushing the batch")
