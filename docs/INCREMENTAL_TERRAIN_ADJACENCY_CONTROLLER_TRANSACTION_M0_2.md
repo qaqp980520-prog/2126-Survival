@@ -61,6 +61,7 @@ The fault-injected test builds three real `SurfaceTerrainPatch` nodes with two r
 - the committed descriptor snapshot and world-object registry snapshot are unchanged.
 
 The test then retries with the fake manager succeeding and verifies that the departing edge is removed, the unaffected edge remains, the new descriptor snapshot is published, and the old root is queued only after the adjacency commit.
+It also loads a replacement chunk inside an adjacency batch, unloads the old chunk, and verifies one immediate synchronization plus a zero-rebuild batch end. The unload rollback uses the real MineralChunkLifecycleAdapter with a fake registry to verify mineral re-registration; a separate failing adapter verifies that failed mineral registration never publishes terrain adjacency.
 It also loads a replacement chunk inside an adjacency batch, unloads the old chunk, and verifies one immediate synchronization plus a zero-rebuild batch end. A second fault case verifies failed mineral registration does not call the transition manager or bind the candidate patch.
 
 ## Limits and next steps
