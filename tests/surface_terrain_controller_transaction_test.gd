@@ -164,21 +164,7 @@ func _run() -> void:
 	_expect(controller.call("get_terrain_transition_descriptors") == {"preserved": {"edge_key": "before-failed-sync"}}, "failed collider sync preserves the committed descriptor snapshot")
 	_expect(object_registry.call("to_save_dict") == registry_before, "failed unload restores the world-object registry snapshot")
 
-	var successful_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 101))
-	_expect(successful_unload, "chunk unload succeeds after the injected failure is removed")
-	_expect(transition_manager.sync_calls == 2, "successful retry commits one new adjacency synchronization")
-	_expect(not controller.get("_chunk_roots").has("chunk_c"), "successful unload removes the Controller chunk-root entry")
-	_expect(chunk_c.get_parent() == null and chunk_c.is_queued_for_deletion(), "successful unload detaches and queues the old root only after adjacency commit")
-	_expect(patch_a.call("get_bound_neighbor_patch", "east") == patch_b, "successful unload retains the unaffected A-east/B-west edge")
-	_expect(patch_b.call("get_bound_neighbor_patch", "east") == null, "successful unload clears the departing B-east edge")
-	_expect(patch_c.call("get_bound_neighbor_patch", "west") == null, "successful unload clears the departing reciprocal C-west edge")
-	_expect(controller.call("get_terrain_transition_descriptors").size() == 1, "successful unload publishes the new descriptor snapshot")
-
-	await process_frame
-	_expect(not is_instance_valid(patch_c), "successful unload releases the departing patch after the commit")
-
 	# A failed mineral registration must happen before any terrain adjacency is published.
-	var registry_before_load: Dictionary = object_registry.call("to_save_dict")
 	var fake_mineral_registry := FakeMineralRegistry.new()
 	fake_mineral_registry.name = "FakeMineralRegistryForLoad"
 	controller.add_child(fake_mineral_registry)
@@ -188,20 +174,51 @@ func _run() -> void:
 	controller.add_child(failing_adapter)
 	controller.set("adapter", failing_adapter)
 
+	# The director batches newly loaded chunks. A successful unload must flush the
+	# already-published deferred load exactly once and clear the batch dirty bit.
+	_expect(bool(controller.call("begin_terrain_adjacency_batch")), "terrain adjacency batch begins")
+	var batch_root := Node3D.new()
+	batch_root.name = "ChunkD"
+	var batch_patch: Node3D = _new_patch(batch_root, "TerrainD", Vector3(4.0, 0.0, 0.0))
+	var batch_load: bool = bool(controller.call("load_chunk", "chunk_d", batch_root, 101))
+	_expect(batch_load, "candidate chunk load is accepted into the active adjacency batch")
+	_expect(transition_manager.sync_calls == 1, "batched candidate load defers transition synchronization")
+	_expect(controller.get("_terrain_adjacency_batch_dirty"), "batched candidate load marks adjacency dirty")
+
+	var successful_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 102))
+	_expect(successful_unload, "chunk unload succeeds after the injected failure is removed")
+	_expect(transition_manager.sync_calls == 2, "successful unload commits one synchronization including the deferred candidate load")
+	_expect(not controller.get("_chunk_roots").has("chunk_c"), "successful unload removes the Controller chunk-root entry")
+	_expect(chunk_c.get_parent() == null and chunk_c.is_queued_for_deletion(), "successful unload detaches and queues the old root only after adjacency commit")
+	_expect(patch_a.call("get_bound_neighbor_patch", "east") == patch_b, "successful unload retains the unaffected A-east/B-west edge")
+	_expect(patch_b.call("get_bound_neighbor_patch", "east") == batch_patch, "successful unload binds the replacement D patch at the departing boundary")
+	_expect(batch_patch.call("get_bound_neighbor_patch", "west") == patch_b, "successful unload binds the replacement patch reciprocally")
+	_expect(patch_c.call("get_bound_neighbor_patch", "west") == null, "successful unload clears the departing reciprocal C-west edge")
+	_expect(controller.call("get_terrain_transition_descriptors").size() == 2, "successful unload publishes descriptors for both remaining transition edges")
+
+	var batch_end: Dictionary = controller.call("end_terrain_adjacency_batch")
+	_expect(bool(batch_end.get("ok", false)) and int(batch_end.get("rebuild_count", -1)) == 0, "successful unload clears the dirty bit after flushing the batch")
+	_expect(transition_manager.sync_calls == 2, "batch end does not perform a redundant second terrain rebuild")
+
+	await process_frame
+	_expect(not is_instance_valid(patch_c), "successful unload releases the departing patch after the commit")
+
+	# Mineral registration failure must not invoke the terrain transaction at all.
+	var registry_before_load: Dictionary = object_registry.call("to_save_dict")
 	var candidate_root := Node3D.new()
-	candidate_root.name = "ChunkD"
-	var candidate_patch: Node3D = _new_patch(candidate_root, "TerrainD", Vector3(4.0, 0.0, 0.0))
+	candidate_root.name = "ChunkE"
+	var candidate_patch: Node3D = _new_patch(candidate_root, "TerrainE", Vector3(6.0, 0.0, 0.0))
 	var candidate_ore: Node3D = MiningNodeScript.new()
 	candidate_ore.name = "IronVein"
 	candidate_root.add_child(candidate_ore)
 	var manager_calls_before_load: int = transition_manager.sync_calls
-	var failed_load: bool = bool(controller.call("load_chunk", "chunk_d", candidate_root, 200))
+	var failed_load: bool = bool(controller.call("load_chunk", "chunk_e", candidate_root, 200))
 	_expect(not failed_load, "injected mineral registration failure rejects candidate chunk load")
 	_expect(failing_adapter.load_calls == 1 and failing_adapter.unload_calls == 0, "failed candidate registration is not followed by an adapter inverse call")
 	_expect(transition_manager.sync_calls == manager_calls_before_load, "failed mineral registration does not publish or synchronize candidate terrain adjacency")
 	_expect(candidate_root.get_parent() == null and not candidate_root.is_queued_for_deletion(), "failed candidate load leaves root detached and caller-owned")
-	_expect(not controller.get("_chunk_roots").has("chunk_d"), "failed candidate load does not publish Controller chunk maps")
-	_expect(patch_b.call("get_bound_neighbor_patch", "east") == null, "failed candidate load leaves the existing boundary unchanged")
+	_expect(not controller.get("_chunk_roots").has("chunk_e"), "failed candidate load does not publish Controller chunk maps")
+	_expect(batch_patch.call("get_bound_neighbor_patch", "east") == null, "failed candidate load leaves the existing boundary unchanged")
 	_expect(candidate_patch.call("get_bound_neighbor_patch", "west") == null, "failed candidate load leaves the candidate patch unbound")
 	_expect(object_registry.call("to_save_dict") == registry_before_load, "failed candidate load restores the world-object registry snapshot")
 	candidate_root.free()
