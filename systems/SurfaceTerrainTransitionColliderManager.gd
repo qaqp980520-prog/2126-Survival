@@ -185,8 +185,8 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         "blocked_edges": blocked_edges,
         "blocked_corner_reports": blocked_corner_reports,
         "patch_snapshots": patch_snapshot_result.get("snapshots", {}),
-        "old_edges_snapshot": _managed_edges.duplicate(),
-        "old_caps_snapshot": _managed_corner_caps.duplicate(),
+        "old_edges_snapshot": _capture_managed_map_snapshot(_managed_edges),
+        "old_caps_snapshot": _capture_managed_map_snapshot(_managed_corner_caps),
         "candidate_geometry_usec": candidate_geometry_usec,
         "corner_resolution_usec": corner_resolution_usec,
         "resource_staging_usec": resource_staging_usec,
@@ -227,6 +227,25 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
     ):
         _abort_pending_transaction()
         return {"ok": false, "error": "stale_transaction_snapshot", "active_count": _managed_edges.size()}
+
+    # Validate every newly staged body before changing patch-side state. A body
+    # externally activated or detached between prepare and commit must fail closed.
+    for edge_key in staged.keys():
+        if reused_edge_keys.has(str(edge_key)):
+            continue
+        var staged_edge_record: Dictionary = staged[edge_key]
+        var staged_edge_body: StaticBody3D = staged_edge_record.get("body") as StaticBody3D
+        if not _is_staged_body_ready(staged_edge_body):
+            _abort_pending_transaction()
+            return {"ok": false, "error": "staged_edge_invalid_before_commit", "active_count": _managed_edges.size()}
+    for cap_key in staged_caps.keys():
+        if reused_cap_keys.has(str(cap_key)):
+            continue
+        var staged_cap_record: Dictionary = staged_caps[cap_key]
+        var staged_cap_body: StaticBody3D = staged_cap_record.get("body") as StaticBody3D
+        if not _is_staged_body_ready(staged_cap_body):
+            _abort_pending_transaction()
+            return {"ok": false, "error": "staged_corner_cap_invalid_before_commit", "active_count": _managed_edges.size()}
 
     var commit_started_usec: int = Time.get_ticks_usec()
     for edge_key in staged.keys():
@@ -269,9 +288,12 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
 
     # Publish new collision bodies before retiring the old set. All replacements
     # were staged with collision disabled, so abort never exposes partial geometry.
-    for edge in staged.values():
+    for edge_key in staged.keys():
+        if reused_edge_keys.has(str(edge_key)):
+            continue
+        var edge: Dictionary = staged[edge_key]
         var body: StaticBody3D = edge.get("body") as StaticBody3D
-        if not is_instance_valid(body) or body.is_queued_for_deletion() or body.get_parent() != self:
+        if not _is_staged_body_ready(body):
             var rollback_staged_edge: bool = _restore_patch_snapshots(patch_snapshots)
             _abort_pending_transaction()
             return {
@@ -281,9 +303,12 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
                 "active_count": _managed_edges.size()
             }
         body.collision_layer = COLLISION_LAYER
-    for cap in staged_caps.values():
+    for cap_key in staged_caps.keys():
+        if reused_cap_keys.has(str(cap_key)):
+            continue
+        var cap: Dictionary = staged_caps[cap_key]
         var cap_body: StaticBody3D = cap.get("body") as StaticBody3D
-        if not is_instance_valid(cap_body) or cap_body.is_queued_for_deletion() or cap_body.get_parent() != self:
+        if not _is_staged_body_ready(cap_body):
             var rollback_staged_cap: bool = _restore_patch_snapshots(patch_snapshots)
             _abort_pending_transaction()
             return {
@@ -479,6 +504,48 @@ func _restore_patch_snapshots(snapshots: Dictionary) -> bool:
     return restored
 
 
+func _capture_managed_map_snapshot(source: Dictionary) -> Dictionary:
+    var snapshot: Dictionary = {}
+    for key_value in source.keys():
+        var record_value: Variant = source[key_value]
+        if not (record_value is Dictionary):
+            snapshot[key_value] = record_value
+            continue
+        var record: Dictionary = record_value.duplicate()
+        record["_transaction_body_state"] = _capture_managed_body_state(record.get("body"))
+        snapshot[key_value] = record
+    return snapshot
+
+
+func _capture_managed_body_state(body_value: Variant) -> Dictionary:
+    var body: StaticBody3D = body_value as StaticBody3D
+    var state: Dictionary = {"valid": is_instance_valid(body)}
+    if not is_instance_valid(body):
+        return state
+    state["instance_id"] = body.get_instance_id()
+    state["queued_for_deletion"] = body.is_queued_for_deletion()
+    state["parent"] = body.get_parent()
+    state["collision_layer"] = body.collision_layer
+    state["collision_mask"] = body.collision_mask
+    return state
+
+
+func _managed_body_matches_snapshot(body_value: Variant, snapshot: Dictionary) -> bool:
+    var body: StaticBody3D = body_value as StaticBody3D
+    var expected_valid: bool = bool(snapshot.get("valid", false))
+    if is_instance_valid(body) != expected_valid:
+        return false
+    if not expected_valid:
+        return true
+    return (
+        body.get_instance_id() == int(snapshot.get("instance_id", -1))
+        and body.is_queued_for_deletion() == bool(snapshot.get("queued_for_deletion", false))
+        and body.get_parent() == snapshot.get("parent")
+        and body.collision_layer == int(snapshot.get("collision_layer", -1))
+        and body.collision_mask == int(snapshot.get("collision_mask", -1))
+    )
+
+
 func _managed_map_matches_snapshot(current: Dictionary, snapshot: Dictionary, resource_kind: String) -> bool:
     if current.size() != snapshot.size():
         return false
@@ -492,6 +559,9 @@ func _managed_map_matches_snapshot(current: Dictionary, snapshot: Dictionary, re
         var current_record: Dictionary = current_record_value
         var snapshot_record: Dictionary = snapshot_record_value
         if current_record.get("body") != snapshot_record.get("body"):
+            return false
+        var body_state_value: Variant = snapshot_record.get("_transaction_body_state", {})
+        if not (body_state_value is Dictionary) or not _managed_body_matches_snapshot(current_record.get("body"), body_state_value):
             return false
         if current_record.get("reuse_signature", []) != snapshot_record.get("reuse_signature", []):
             return false
@@ -1014,6 +1084,15 @@ func _free_staged_caps(staged: Dictionary, preserved_keys: Dictionary = {}) -> v
             continue
         var cap: Dictionary = staged[cap_key]
         _retire_old_cap(cap)
+
+func _is_staged_body_ready(candidate: StaticBody3D) -> bool:
+    return (
+        is_instance_valid(candidate)
+        and not candidate.is_queued_for_deletion()
+        and candidate.get_parent() == self
+        and candidate.collision_layer == 0
+    )
+
 
 func _is_reusable_managed_body(candidate: StaticBody3D) -> bool:
     return (
