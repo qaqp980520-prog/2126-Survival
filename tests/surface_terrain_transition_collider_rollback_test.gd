@@ -78,8 +78,9 @@ func _test_corner_cap_staging_failure_preserves_committed_resources() -> void:
 	_expect(int(manager.call("get_transition_count")) == 4 and int(manager.call("get_corner_cap_count")) == 4, "checkerboard fixture commits four edges and four real corner-cap bodies")
 	for patch in patches:
 		var state: Dictionary = patch.call("get_world_object_state")
-		var next_height: int = int(state.get("height_level", 0)) + 1
-		_expect(_apply_height(patch, next_height, 2), "%s accepts uniform height translation" % patch.name)
+		var current_height: int = int(state.get("height_level", 0))
+		var flipped_height: int = 2 - current_height
+		_expect(_apply_height(patch, flipped_height, 2), "%s accepts checkerboard height inversion" % patch.name)
 	var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
 	_expect(bool(binding.get("ok", false)), "translated checkerboard descriptors rebuild successfully")
 	if not bool(binding.get("ok", false)):
