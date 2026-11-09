@@ -387,7 +387,7 @@ func _capture_patch_snapshots(candidates: Dictionary, old_edges: Dictionary) -> 
             if not (edge_value is Dictionary):
                 continue
             var edge: Dictionary = edge_value
-                var endpoints: Array[Dictionary] = [
+            var endpoints: Array[Dictionary] = [
                 {"patch": edge.get("first_patch"), "side": str(edge.get("first_side", ""))},
                 {"patch": edge.get("second_patch"), "side": str(edge.get("second_side", ""))}
             ]
@@ -423,6 +423,7 @@ func _capture_patch_snapshots(candidates: Dictionary, old_edges: Dictionary) -> 
                     snapshot["sides"] = side_states
                     snapshots[instance_id] = snapshot
     return {"ok": true, "snapshots": snapshots}
+
 
 
 func _patch_snapshots_match(snapshots: Dictionary) -> bool:
