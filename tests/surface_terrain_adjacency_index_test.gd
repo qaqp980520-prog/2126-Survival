@@ -78,9 +78,12 @@ func _run() -> void:
 		var summary: Dictionary = replacement_plan.get("summary", {})
 		_expect(summary.get("removed_stable_ids", []) == ["terrain/center"], "replacement plan records the removed Stable ID")
 		_expect(summary.get("added_stable_ids", []) == ["terrain/center"], "replacement plan records the re-added Stable ID")
-		_expect((summary.get("affected_edge_keys", []) as Array).size() == 2, "replacement plan scopes both incident edge keys")
-		_expect((summary.get("old_descriptors", {}) as Dictionary).size() == 2, "replacement plan snapshots both old incident descriptors")
-		_expect((summary.get("new_descriptors", {}) as Dictionary).size() == 2, "replacement plan derives both new incident descriptors")
+		var replacement_edges: Array = summary.get("affected_edge_keys", [])
+		var old_descriptors: Dictionary = summary.get("old_descriptors", {})
+		var new_descriptors: Dictionary = summary.get("new_descriptors", {})
+		_expect(replacement_edges.size() == 2, "replacement plan scopes both incident edge keys")
+		_expect(old_descriptors.size() == 2, "replacement plan snapshots both old incident descriptors")
+		_expect(new_descriptors.size() == 2, "replacement plan derives both new incident descriptors")
 		var replacement_commit: Dictionary = index.commit_delta(str(summary.get("plan_id", "")))
 		_expect(bool(replacement_commit.get("ok", false)), "replacement delta commits after its Node snapshot remains unchanged")
 	_expect(index.get_patch("terrain/center") == replacement, "committed replacement points to the new patch instance")
@@ -94,8 +97,10 @@ func _run() -> void:
 	_expect(bool(east_plan.get("ok", false)), "adding one adjacent patch creates a valid delta")
 	if bool(east_plan.get("ok", false)):
 		var east_summary: Dictionary = east_plan.get("summary", {})
-		_expect((east_summary.get("added_edge_keys", []) as Array).size() == 1, "one-patch addition stages exactly one new cardinal edge")
-		_expect((east_summary.get("affected_edge_keys", []) as Array).size() == 1, "one-patch addition does not mark unrelated edges as affected")
+		var east_added_edges: Array = east_summary.get("added_edge_keys", [])
+		var east_affected_edges: Array = east_summary.get("affected_edge_keys", [])
+		_expect(east_added_edges.size() == 1, "one-patch addition stages exactly one new cardinal edge")
+		_expect(east_affected_edges.size() == 1, "one-patch addition does not mark unrelated edges as affected")
 		var east_commit: Dictionary = index.commit_delta(str(east_summary.get("plan_id", "")))
 		_expect(bool(east_commit.get("ok", false)), "one-patch addition commits")
 	_expect(index.get_neighbors("terrain/center") == ["terrain/east", "terrain/south", "terrain/west"], "committed index returns all three center neighbors")
@@ -159,8 +164,13 @@ func _run() -> void:
 
 	var duplicate_rebuild: Node3D = _new_patch(holder, "DuplicateRebuild", west.position)
 	await process_frame
-	var duplicate_rebuild_ids: Dictionary = stable_ids.duplicate()
-	duplicate_rebuild_ids[duplicate_rebuild.get_instance_id()] = "terrain/duplicate_rebuild"
+	var duplicate_rebuild_ids: Dictionary = {
+		west.get_instance_id(): "terrain/west",
+		replacement.get_instance_id(): "terrain/center",
+		south.get_instance_id(): "terrain/south",
+		far.get_instance_id(): "terrain/far",
+		duplicate_rebuild.get_instance_id(): "terrain/duplicate_rebuild"
+	}
 	var generation_before_failed_rebuild: int = index.get_generation()
 	var failed_rebuild: Dictionary = index.rebuild(
 		[west, replacement, south, far, duplicate_rebuild],
