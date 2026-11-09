@@ -18,6 +18,13 @@ var _last_blocked_corner_reports: Array[Dictionary] = []
 var _next_sync_transaction_id: int = 1
 var _pending_sync_transaction: Dictionary = {}
 
+func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
+    var prepared: Dictionary = prepare_sync_transitions(descriptors, patches_by_stable_id, profile_enabled)
+    if not bool(prepared.get("ok", false)):
+        return prepared
+    return commit_sync_transitions(int(prepared.get("transaction_id", -1)))
+
+
 func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
     if not _pending_sync_transaction.is_empty():
         return {"ok": false, "error": "transaction_in_progress", "active_count": _managed_edges.size()}
