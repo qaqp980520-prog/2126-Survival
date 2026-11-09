@@ -270,6 +270,13 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 			push_error("Failed to restore world-object registry after terrain adjacency unload failed.")
 		return false
 
+	# An unload inside an async adjacency batch performs an immediate commit so the
+	# departing root can stay alive through removal-side validation. That commit
+	# already includes every currently published (including previously deferred)
+	# load/state change, so clear the dirty bit; later operations will set it again.
+	if _terrain_adjacency_batch_depth > 0:
+		_terrain_adjacency_batch_dirty = false
+
 	_chunk_roots.erase(chunk_id)
 	_chunk_veins.erase(chunk_id)
 	_chunk_crops.erase(chunk_id)
