@@ -45,7 +45,7 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 		if _has_duplicate_position(record, candidate_buckets, candidate_entries):
 			return {"ok": false, "error": "duplicate_position"}
 		candidate_entries[stable_id] = record
-		_add_bucket_id(candidate_buckets, record["bucket"], stable_id)
+		_add_bucket_id(candidate_buckets, record["bucket"], stable_id, copied_buckets)
 
 	var descriptor_result: Dictionary = _build_descriptors_for_all(
 		candidate_entries,
@@ -60,12 +60,13 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 	_patch_size = candidate_patch_size
 	_generation += 1
 	_pending_plans.clear()
+	var descriptors: Dictionary = descriptor_result.get("descriptors", {})
 	return {
 		"ok": true,
 		"generation": _generation,
 		"patch_count": _entries_by_stable_id.size(),
 		"bucket_count": _bucket_to_stable_ids.size(),
-		"edge_count": (descriptor_result.get("descriptors", {}) as Dictionary).size()
+		"edge_count": descriptors.size()
 	}
 
 
@@ -74,7 +75,9 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 ## Returned summaries are detached copies; the internal candidate snapshot is addressed by plan_id.
 func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	var candidate_entries: Dictionary = _entries_by_stable_id.duplicate()
-	var candidate_buckets: Dictionary = _clone_bucket_map(_bucket_to_stable_ids)
+	# Dictionary.duplicate() copies the bucket map; arrays are copied only when a bucket is touched.
+	var candidate_buckets: Dictionary = _bucket_to_stable_ids.duplicate()
+	var copied_buckets: Dictionary = {}
 	var removed_ids: Array[String] = []
 	var added_ids: Array[String] = []
 	var changed_ids: Dictionary = {}
@@ -90,7 +93,7 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 			return {"ok": false, "error": "unknown_remove_stable_id"}
 		removed_seen[stable_id] = true
 		var old_record: Dictionary = candidate_entries[stable_id]
-		_remove_bucket_id(candidate_buckets, old_record["bucket"], stable_id)
+		_remove_bucket_id(candidate_buckets, old_record["bucket"], stable_id, copied_buckets)
 		candidate_entries.erase(stable_id)
 		removed_ids.append(stable_id)
 		changed_ids[stable_id] = true
@@ -232,8 +235,13 @@ func commit_delta(plan_id: String) -> Dictionary:
 		return {"ok": false, "error": "stale_generation"}
 
 	var candidate_entries: Dictionary = plan["candidate_entries"]
-	for stable_id_value in candidate_entries.keys():
+	# Validate only the changed patches and their immediate neighbors. Unchanged buckets
+	# and records remain persistent; a full scan here would erase the benefit of the index.
+	var touched_ids: Array = plan["summary"].get("touched_stable_ids", [])
+	for stable_id_value in touched_ids:
 		var stable_id: String = str(stable_id_value)
+		if not candidate_entries.has(stable_id):
+			continue
 		var record: Dictionary = candidate_entries[stable_id]
 		var current_result: Dictionary = _record_matches_current(stable_id, record)
 		if not bool(current_result.get("ok", false)):
@@ -241,7 +249,7 @@ func commit_delta(plan_id: String) -> Dictionary:
 			return current_result
 
 	_entries_by_stable_id = candidate_entries.duplicate()
-	_bucket_to_stable_ids = _clone_bucket_map(plan["candidate_buckets"])
+	_bucket_to_stable_ids = plan["candidate_buckets"]
 	_patch_size = float(plan["candidate_patch_size"])
 	_generation += 1
 	_pending_plans.erase(plan_id)
@@ -414,25 +422,24 @@ func _first_patch_size(entries: Dictionary) -> float:
 	return float(first_record["snapshot"]["patch_size"])
 
 
-func _clone_bucket_map(source: Dictionary) -> Dictionary:
-	var result: Dictionary = {}
-	for bucket_value in source.keys():
-		var bucket: Vector3i = bucket_value
-		var ids: Array = source[bucket]
-		result[bucket] = ids.duplicate()
-	return result
+func _ensure_bucket_array_for_write(buckets: Dictionary, bucket: Vector3i, copied_buckets: Dictionary) -> Array:
+	if not copied_buckets.has(bucket):
+		var existing_ids: Array = buckets.get(bucket, [])
+		buckets[bucket] = existing_ids.duplicate()
+		copied_buckets[bucket] = true
+	return buckets[bucket]
 
 
-func _add_bucket_id(buckets: Dictionary, bucket: Vector3i, stable_id: String) -> void:
-	var ids: Array = buckets.get(bucket, [])
+func _add_bucket_id(buckets: Dictionary, bucket: Vector3i, stable_id: String, copied_buckets: Dictionary) -> void:
+	var ids: Array = _ensure_bucket_array_for_write(buckets, bucket, copied_buckets)
 	ids.append(stable_id)
 	buckets[bucket] = ids
 
 
-func _remove_bucket_id(buckets: Dictionary, bucket: Vector3i, stable_id: String) -> void:
+func _remove_bucket_id(buckets: Dictionary, bucket: Vector3i, stable_id: String, copied_buckets: Dictionary) -> void:
 	if not buckets.has(bucket):
 		return
-	var ids: Array = buckets[bucket]
+	var ids: Array = _ensure_bucket_array_for_write(buckets, bucket, copied_buckets)
 	ids.erase(stable_id)
 	if ids.is_empty():
 		buckets.erase(bucket)
