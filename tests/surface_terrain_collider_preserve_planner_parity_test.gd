@@ -21,6 +21,7 @@ func _run() -> void:
 	await _test_corner_cap_addition_parity()
 	await _test_corner_cap_removal_parity()
 	await _test_corner_cap_replacement_parity()
+	await _test_connected_two_junction_component_parity()
 	if failures.is_empty():
 		print("Surface terrain preserve planner full-rebuild parity tests passed.")
 		quit(0)
@@ -169,6 +170,70 @@ func _test_corner_cap_replacement_parity() -> void:
 	await _release_holder(holder)
 
 
+func _test_connected_two_junction_component_parity() -> void:
+	var holder := _new_holder("ConnectedTwoJunctionComponentParity")
+	var north_west: Node3D = _new_patch(holder, "NW", Vector3.ZERO)
+	var north_east: Node3D = _new_patch(holder, "NE", Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0))
+	var north_outer: Node3D = _new_patch(holder, "N2", Vector3(PatchScript.PATCH_SIZE * 2.0, 0.0, 0.0))
+	var south_west: Node3D = _new_patch(holder, "SW", Vector3(0.0, 0.0, PatchScript.PATCH_SIZE))
+	var south_east: Node3D = _new_patch(holder, "SE", Vector3(PatchScript.PATCH_SIZE, 0.0, PatchScript.PATCH_SIZE))
+	var south_outer: Node3D = _new_patch(holder, "S2", Vector3(PatchScript.PATCH_SIZE * 2.0, 0.0, PatchScript.PATCH_SIZE))
+	await process_frame
+	_expect(_apply_height(north_west, 0), "connected component north-west state is valid")
+	_expect(_apply_height(north_east, 2), "connected component north-east state is valid")
+	_expect(_apply_height(north_outer, 0), "connected component north-outer state is valid")
+	_expect(_apply_height(south_west, 2), "connected component south-west state is valid")
+	_expect(_apply_height(south_east, 0), "connected component south-east state is valid")
+	_expect(_apply_height(south_outer, 2), "connected component south-outer state is valid")
+	var all_patches: Array[Node3D] = [
+		north_west,
+		north_east,
+		north_outer,
+		south_west,
+		south_east,
+		south_outer
+	]
+	var stable_ids_by_name: Dictionary = {
+		"NW": "cap/nw",
+		"NE": "cap/ne",
+		"N2": "cap/n2",
+		"SW": "cap/sw",
+		"SE": "cap/se",
+		"S2": "cap/s2"
+	}
+	var left_junction_key: String = ClosurePlannerScript.junction_key_for_corner(
+		north_east.global_position,
+		"south_west",
+		PatchScript.PATCH_SIZE
+	)
+	var right_junction_key: String = ClosurePlannerScript.junction_key_for_corner(
+		north_outer.global_position,
+		"south_west",
+		PatchScript.PATCH_SIZE
+	)
+	var seed_patch_names: Array[String] = ["N2"]
+	var required_junction_keys: Array[String] = [left_junction_key, right_junction_key]
+	_expect(
+		not left_junction_key.is_empty()
+		and not right_junction_key.is_empty()
+		and left_junction_key != right_junction_key,
+		"connected component exposes two distinct adjacent junction keys"
+	)
+	await _run_parity_case(
+		"connected two-junction fallback propagation",
+		holder,
+		all_patches,
+		all_patches,
+		stable_ids_by_name,
+		{"N2": 1},
+		false,
+		{"retire_corner_cap_count": 8},
+		seed_patch_names,
+		required_junction_keys
+	)
+	await _release_holder(holder)
+
+
 func _run_parity_case(
 	label: String,
 	holder: Node3D,
@@ -177,7 +242,9 @@ func _run_parity_case(
 	stable_ids_by_name: Dictionary,
 	candidate_height_changes: Dictionary,
 	force_reactivation: bool,
-	expected_plan_counts: Dictionary
+	expected_plan_counts: Dictionary,
+	seed_patch_names: Array[String] = [],
+	required_junction_keys: Array[String] = []
 ) -> void:
 	var old_maps: Dictionary = _build_patch_maps(old_patches, stable_ids_by_name)
 	var old_binding: Dictionary = BinderScript.bind_patches(old_patches, old_maps["by_instance"])
@@ -227,6 +294,10 @@ func _run_parity_case(
 	var candidate_caps: Dictionary = _capture_cap_snapshot(candidate_manager, false)
 	var candidate_reports: Array = _manager_reports(candidate_manager)
 	var seed_edge_keys: Array[String] = _collect_seed_edge_keys(old_edges, candidate_edges, old_reports, candidate_reports)
+	if not seed_patch_names.is_empty():
+		var managers: Array[Node3D] = [old_manager, candidate_manager]
+		seed_edge_keys = _collect_seed_edge_keys_for_patch_names(managers, stable_ids_by_name, seed_patch_names)
+		_expect(seed_edge_keys.size() == 2, label + ": changed patch contributes exactly two transition-edge seeds")
 	var closure: Dictionary = ClosurePlannerScript.build_closure(
 		seed_edge_keys,
 		old_reports,
@@ -238,6 +309,12 @@ func _run_parity_case(
 	_expect(bool(closure.get("ok", false)), label + ": old/candidate topology closure succeeds")
 	if not bool(closure.get("ok", false)):
 		return
+	var closure_junction_keys: Array = closure.get("junction_keys", [])
+	for required_junction_key in required_junction_keys:
+		_expect(
+			closure_junction_keys.has(required_junction_key),
+			label + ": affected closure reaches connected junction " + required_junction_key
+		)
 
 	var edge_scope: Dictionary = _to_set(closure.get("edge_keys", []))
 	var junction_scope: Dictionary = _to_set(closure.get("junction_keys", []))
@@ -415,6 +492,43 @@ func _collect_seed_edge_keys(
 			for edge_key_value in edge_keys_value:
 				if edge_key_value is String and not str(edge_key_value).is_empty():
 					unique[str(edge_key_value)] = true
+	var result: Array[String] = []
+	for key_value in unique.keys():
+		result.append(str(key_value))
+	result.sort()
+	return result
+
+
+func _collect_seed_edge_keys_for_patch_names(
+	managers: Array[Node3D],
+	stable_ids_by_name: Dictionary,
+	patch_names: Array[String]
+) -> Array[String]:
+	var changed_stable_ids: Dictionary = {}
+	for patch_name in patch_names:
+		var stable_id: String = str(stable_ids_by_name.get(patch_name, ""))
+		if stable_id.is_empty():
+			_expect(false, "changed patch has a registered Stable ID: " + patch_name)
+			continue
+		changed_stable_ids[stable_id] = true
+	var unique: Dictionary = {}
+	for manager in managers:
+		var raw_value: Variant = manager.get("_managed_edges")
+		if not (raw_value is Dictionary):
+			_expect(false, "manager exposes committed edge records for changed-patch seed discovery")
+			continue
+		var raw_edges: Dictionary = raw_value
+		for key_value in raw_edges.keys():
+			var record_value: Variant = raw_edges[key_value]
+			if not (record_value is Dictionary):
+				_expect(false, "managed edge record is a Dictionary during seed discovery")
+				continue
+			var record: Dictionary = record_value
+			if (
+				changed_stable_ids.has(str(record.get("first_id", "")))
+				or changed_stable_ids.has(str(record.get("second_id", "")))
+			):
+				unique[str(key_value)] = true
 	var result: Array[String] = []
 	for key_value in unique.keys():
 		result.append(str(key_value))
