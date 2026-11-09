@@ -20,6 +20,7 @@ var _pending_plans: Dictionary = {}
 func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dictionary:
 	var candidate_entries: Dictionary = {}
 	var candidate_buckets: Dictionary = {}
+	var copied_buckets: Dictionary = {}
 	var seen_instances: Dictionary = {}
 	var candidate_patch_size: float = -1.0
 
@@ -132,7 +133,7 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		if _has_duplicate_position(record, candidate_buckets, candidate_entries):
 			return {"ok": false, "error": "duplicate_position"}
 		candidate_entries[stable_id] = record
-		_add_bucket_id(candidate_buckets, record["bucket"], stable_id)
+		_add_bucket_id(candidate_buckets, record["bucket"], stable_id, copied_buckets)
 		added_ids.append(stable_id)
 		changed_ids[stable_id] = true
 
@@ -423,7 +424,7 @@ func _first_patch_size(entries: Dictionary) -> float:
 
 
 func _ensure_bucket_array_for_write(buckets: Dictionary, bucket: Vector3i, copied_buckets: Dictionary) -> Array:
-	if not copied_buckets.has(bucket):
+	if not copied_buckets.has(bucket) or not buckets.has(bucket):
 		var existing_ids: Array = buckets.get(bucket, [])
 		buckets[bucket] = existing_ids.duplicate()
 		copied_buckets[bucket] = true
@@ -510,8 +511,6 @@ func _build_descriptors_for_ids(
 			stable_id
 		)
 		for neighbor_id in neighbors:
-			if stable_id >= neighbor_id:
-				continue
 			var built: Dictionary = TransitionDescriptorScript.build(
 				record["snapshot"],
 				entries[neighbor_id]["snapshot"]
@@ -519,7 +518,9 @@ func _build_descriptors_for_ids(
 			if not bool(built.get("ok", false)):
 				return {"ok": false, "error": "descriptor_invalid:" + str(built.get("error", "unknown"))}
 			var descriptor: Dictionary = built.get("descriptor", {})
-			descriptors[str(descriptor.get("edge_key", ""))] = descriptor.duplicate(true)
+			var edge_key: String = str(descriptor.get("edge_key", ""))
+			if not descriptors.has(edge_key):
+				descriptors[edge_key] = descriptor.duplicate(true)
 	return {"ok": true, "descriptors": descriptors}
 
 
