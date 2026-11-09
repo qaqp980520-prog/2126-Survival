@@ -70,10 +70,11 @@ The batch regression loads a replacement chunk and stages two old chunks for ret
 
 ## Limits and next steps
 
-- Multiple unloads in one async batch now share one full-rebuild commit; the implementation still uses the full-rebuild binder rather than the detached incremental index.
+- Multiple unloads in one async batch share one full-rebuild commit; the implementation still uses the full-rebuild binder rather than the detached incremental index.
+- World-object rollback now uses a chunk-local stable-ID index and chunk-scoped snapshots. This avoids deep-copying the entire world registry for every loaded or unloaded chunk while preserving neighboring chunks' newer records.
 - The pending-retirement queue is in-memory transaction state only and is never serialized.
 - This is a Controller-level rollback stage, not the final detached-index/edge-junction transaction manager.
 - The injected failure exercises the Controller's manager-failure contract; it does not simulate every real collision-shape allocation or physics-server failure.
 - The full rebuild still performs global adjacency work.
 - Rendered/GPU, iPhone, and target-device QA are not covered.
-- Next: run exact-head focused, production benchmark and full Godot 4.3 workflows; add real manager staging/activation fault injection; then implement the edge↔junction affected-component closure and preserve-set transaction around the verified rollback boundary.
+- Next: run exact-head focused, production benchmark and full Godot 4.3 workflows; compare radius-8 contraction non-factory time with the previous 6.217 s baseline on a comparable runner; then add real manager staging/activation fault injection and implement the edge↔junction affected-component closure.

@@ -5,6 +5,8 @@ on:
     paths:
       - 'systems/MineralChunkController.gd'
       - 'systems/MineralGridStreamingDirector.gd'
+      - 'systems/WorldObjectStateRegistry.gd'
+      - 'tests/world_object_state_registry_test.gd'
       - 'systems/SurfaceTerrainAdjacencyBinder.gd'
       - 'systems/SurfaceTerrainPatch.gd'
       - 'tests/surface_terrain_controller_transaction_test.gd'
@@ -32,6 +34,8 @@ jobs:
           test -f project.godot
           test -f systems/MineralChunkController.gd
           test -f systems/MineralGridStreamingDirector.gd
+          test -f systems/WorldObjectStateRegistry.gd
+          test -f tests/world_object_state_registry_test.gd
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
           test -f systems/SurfaceTerrainPatch.gd
           test -f tests/surface_terrain_controller_transaction_test.gd
@@ -45,3 +49,11 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Surface terrain controller transaction tests passed."
+      - name: Run chunk-scoped world-object registry regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/world_object_state_registry_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World object state registry tests passed."

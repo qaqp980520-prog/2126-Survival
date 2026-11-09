@@ -14,6 +14,7 @@ const MAX_TOTAL_PROPERTIES: int = 100000
 const MAX_TOTAL_STRING_CHARS: int = 1000000
 
 var _records: Dictionary = {}
+var _ids_by_chunk: Dictionary = {} # chunk ID -> stable ID set
 var _total_properties: int = 0
 var _total_string_chars: int = 0
 
@@ -23,7 +24,8 @@ func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) ->
 		return false
 	if _records.has(stable_id) and str(_records[stable_id].get("chunk_id", "")) != chunk_id:
 		return false
-	if not _records.has(stable_id) and _records.size() >= MAX_RECORDS:
+	var is_new_record: bool = not _records.has(stable_id)
+	if is_new_record and _records.size() >= MAX_RECORDS:
 		return false
 	var new_usage: Dictionary = _measure_state(state)
 	var old_usage: Dictionary = {"properties": 0, "string_chars": 0}
@@ -35,6 +37,10 @@ func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) ->
 		return false
 	candidate["state"] = state.duplicate(true)
 	_records[stable_id] = candidate
+	if is_new_record:
+		var chunk_ids: Dictionary = _ids_by_chunk.get(chunk_id, {})
+		chunk_ids[stable_id] = true
+		_ids_by_chunk[chunk_id] = chunk_ids
 	_total_properties = next_properties
 	_total_string_chars = next_string_chars
 	return true
@@ -54,19 +60,86 @@ func get_object_state(stable_id: String) -> Dictionary:
 
 func get_chunk_states(chunk_id: String) -> Dictionary:
 	var result: Dictionary = {}
-	for stable_id in _records.keys():
-		var record: Dictionary = _records[stable_id]
-		if str(record.get("chunk_id", "")) == chunk_id:
-			result[stable_id] = record.duplicate(true)
+	var chunk_ids: Dictionary = _ids_by_chunk.get(chunk_id, {})
+	for stable_id in chunk_ids.keys():
+		if _records.has(stable_id):
+			result[stable_id] = _records[stable_id].duplicate(true)
 	return result
+
+func restore_chunk_states(chunk_id: String, snapshot: Dictionary) -> bool:
+	if chunk_id.is_empty() or chunk_id.length() > MAX_CHUNK_ID_LENGTH or chunk_id.contains("\n") or chunk_id.contains("\r"):
+		return false
+	if not (snapshot is Dictionary):
+		return false
+	var prepared: Dictionary = {}
+	var prepared_properties: int = 0
+	var prepared_string_chars: int = 0
+	for raw_stable_id in snapshot.keys():
+		if not (raw_stable_id is String):
+			return false
+		var stable_id: String = raw_stable_id
+		var raw_record: Variant = snapshot[raw_stable_id]
+		if not (raw_record is Dictionary) or not _is_valid_record(stable_id, raw_record):
+			return false
+		if str(raw_record.get("chunk_id", "")) != chunk_id:
+			return false
+		var normalized_record: Dictionary = raw_record.duplicate(true)
+		var usage: Dictionary = _measure_state(normalized_record["state"])
+		prepared_properties += int(usage["properties"])
+		prepared_string_chars += int(usage["string_chars"])
+		if prepared_properties > MAX_TOTAL_PROPERTIES or prepared_string_chars > MAX_TOTAL_STRING_CHARS:
+			return false
+		prepared[stable_id] = normalized_record
+	var current_ids: Dictionary = _ids_by_chunk.get(chunk_id, {})
+	var current_properties: int = 0
+	var current_string_chars: int = 0
+	for stable_id in current_ids.keys():
+		if not _records.has(stable_id):
+			return false
+		var current_record: Dictionary = _records[stable_id]
+		if str(current_record.get("chunk_id", "")) != chunk_id:
+			return false
+		var current_usage: Dictionary = _measure_state(current_record["state"])
+		current_properties += int(current_usage["properties"])
+		current_string_chars += int(current_usage["string_chars"])
+	for stable_id in prepared.keys():
+		if _records.has(stable_id) and not current_ids.has(stable_id):
+			return false
+	var next_record_count: int = _records.size() - current_ids.size() + prepared.size()
+	var next_properties: int = _total_properties - current_properties + prepared_properties
+	var next_string_chars: int = _total_string_chars - current_string_chars + prepared_string_chars
+	if next_record_count > MAX_RECORDS or next_properties > MAX_TOTAL_PROPERTIES or next_string_chars > MAX_TOTAL_STRING_CHARS:
+		return false
+	for stable_id in current_ids.keys():
+		_records.erase(stable_id)
+	for stable_id in prepared.keys():
+		_records[stable_id] = prepared[stable_id]
+	if prepared.is_empty():
+		_ids_by_chunk.erase(chunk_id)
+	else:
+		var restored_ids: Dictionary = {}
+		for stable_id in prepared.keys():
+			restored_ids[stable_id] = true
+		_ids_by_chunk[chunk_id] = restored_ids
+	_total_properties = next_properties
+	_total_string_chars = next_string_chars
+	return true
 
 func forget_object_state(stable_id: String) -> bool:
 	if not _records.has(stable_id):
 		return false
-	var usage: Dictionary = _measure_state(_records[stable_id]["state"])
+	var record: Dictionary = _records[stable_id]
+	var chunk_id: String = str(record.get("chunk_id", ""))
+	var usage: Dictionary = _measure_state(record["state"])
 	_total_properties -= int(usage["properties"])
 	_total_string_chars -= int(usage["string_chars"])
 	_records.erase(stable_id)
+	var chunk_ids: Dictionary = _ids_by_chunk.get(chunk_id, {})
+	chunk_ids.erase(stable_id)
+	if chunk_ids.is_empty():
+		_ids_by_chunk.erase(chunk_id)
+	else:
+		_ids_by_chunk[chunk_id] = chunk_ids
 	return true
 
 func get_saved_ids() -> PackedStringArray:
@@ -90,6 +163,7 @@ func restore_save_dict(data: Dictionary) -> bool:
 	_records = prepared["records"]
 	_total_properties = int(prepared["total_properties"])
 	_total_string_chars = int(prepared["total_string_chars"])
+	_rebuild_chunk_index()
 	return true
 
 func _prepare_restore(data: Dictionary) -> Dictionary:
@@ -122,6 +196,14 @@ func _prepare_restore(data: Dictionary) -> Dictionary:
 		"total_properties": total_properties,
 		"total_string_chars": total_string_chars
 	}
+
+func _rebuild_chunk_index() -> void:
+	_ids_by_chunk.clear()
+	for stable_id in _records.keys():
+		var chunk_id: String = str(_records[stable_id].get("chunk_id", ""))
+		var chunk_ids: Dictionary = _ids_by_chunk.get(chunk_id, {})
+		chunk_ids[stable_id] = true
+		_ids_by_chunk[chunk_id] = chunk_ids
 
 func _is_valid_record(stable_id: String, record: Dictionary) -> bool:
 	if stable_id.is_empty() or stable_id.length() > MAX_STABLE_ID_LENGTH or stable_id.contains("\n") or stable_id.contains("\r"):
