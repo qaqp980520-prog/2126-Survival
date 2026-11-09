@@ -44,10 +44,35 @@ class FakeObjectStateRegistry:
 		records = payload["objects"].duplicate(true)
 		return true
 
+	func get_object_state(stable_id: String) -> Dictionary:
+		return records.get(stable_id, {}).duplicate(true)
+
 	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
 		if stable_id.is_empty() or chunk_id.is_empty():
 			return false
 		records[stable_id] = {"chunk_id": chunk_id, "state": state.duplicate(true)}
+		return true
+
+
+class FakeMineralRegistry:
+	extends Node
+
+	func get_registered_ids() -> PackedStringArray:
+		return PackedStringArray()
+
+
+class FailingMineralAdapter:
+	extends Node
+
+	var load_calls: int = 0
+	var unload_calls: int = 0
+
+	func load_chunk(_chunk_id: String, _veins: Dictionary, _now_unix: int = -1) -> bool:
+		load_calls += 1
+		return false
+
+	func unload_chunk(_chunk_id: String, _now_unix: int = -1) -> bool:
+		unload_calls += 1
 		return true
 
 
@@ -150,6 +175,34 @@ func _run() -> void:
 
 	await process_frame
 	_expect(not is_instance_valid(patch_c), "successful unload releases the departing patch after the commit")
+
+	# A failed mineral registration must happen before any terrain adjacency is published.
+	var registry_before_load: Dictionary = object_registry.call("to_save_dict")
+	var fake_mineral_registry := FakeMineralRegistry.new()
+	fake_mineral_registry.name = "FakeMineralRegistryForLoad"
+	controller.add_child(fake_mineral_registry)
+	controller.set("registry", fake_mineral_registry)
+	var failing_adapter := FailingMineralAdapter.new()
+	failing_adapter.name = "FailingMineralAdapter"
+	controller.add_child(failing_adapter)
+	controller.set("adapter", failing_adapter)
+
+	var candidate_root := Node3D.new()
+	candidate_root.name = "ChunkD"
+	var candidate_patch: Node3D = _new_patch(candidate_root, "TerrainD", Vector3(4.0, 0.0, 0.0))
+	var candidate_ore: Node3D = preload("res://systems/MineralMiningNode.gd").new()
+	candidate_ore.name = "IronVein"
+	candidate_root.add_child(candidate_ore)
+	var manager_calls_before_load: int = transition_manager.sync_calls
+	var failed_load: bool = bool(controller.call("load_chunk", "chunk_d", candidate_root, 200))
+	_expect(not failed_load, "injected mineral registration failure rejects candidate chunk load")
+	_expect(failing_adapter.load_calls == 1 and failing_adapter.unload_calls == 0, "failed candidate registration is not followed by an adapter inverse call")
+	_expect(transition_manager.sync_calls == manager_calls_before_load, "failed mineral registration does not publish or synchronize candidate terrain adjacency")
+	_expect(candidate_root.get_parent() == null and not candidate_root.is_queued_for_deletion(), "failed candidate load leaves root detached and caller-owned")
+	_expect(not controller.get("_chunk_roots").has("chunk_d"), "failed candidate load does not publish Controller chunk maps")
+	_expect(patch_b.call("get_bound_neighbor_patch", "east") == null, "failed candidate load leaves the existing boundary unchanged")
+	_expect(object_registry.call("to_save_dict") == registry_before_load, "failed candidate load restores the world-object registry snapshot")
+	candidate_root.free()
 
 	holder.queue_free()
 	await process_frame
