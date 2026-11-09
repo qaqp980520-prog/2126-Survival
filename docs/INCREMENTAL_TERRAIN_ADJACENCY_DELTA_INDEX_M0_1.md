@@ -11,6 +11,7 @@ The existing `SurfaceTerrainAdjacencyBinder.bind_patches()` full rebuild remains
 - `systems/SurfaceTerrainAdjacencyIndex.gd`
 - `tests/surface_terrain_adjacency_index_test.gd`
 - `.github/workflows/godot-validation.yml`
+- `.github/workflows/surface-terrain-adjacency-index-validation.yml`
 - `docs/INCREMENTAL_TERRAIN_ADJACENCY_DELTA_INDEX_M0_1.md`
 
 ## API
@@ -29,7 +30,7 @@ The index stores `WeakRef` values rather than owning Node references. The spatia
 - `SurfaceTerrainPatch.gd` patch profile and world-object-state validation API.
 - `SurfaceTerrainTransitionDescriptor.gd` pure cardinal-edge descriptor builder.
 - No external plugins, services, network access, assets or save-schema migration.
-- No special import step. From the repository root, the full Godot validation workflow imports the project and runs `res://tests/surface_terrain_adjacency_index_test.gd`.
+- No special import step. The dedicated `Surface Terrain Adjacency Index Validation` workflow imports the root project and runs `res://tests/surface_terrain_adjacency_index_test.gd`; the full Godot compatibility workflow also runs the same regression.
 
 ## Regression coverage
 
@@ -52,7 +53,7 @@ The index stores `WeakRef` values rather than owning Node references. The spatia
 - No production adjacency mutation or transition-manager delta API is enabled.
 - Corner-cap fallback closure across the junction↔edge graph is not implemented in this version.
 - Transactional rollback of patch edges, descriptors and manager-owned resources is not implemented in this version.
-- Exact-head Godot 4.3 CI is required before this PR can be marked Ready. Local Godot, rendered/GPU, physical iPhone and target-device performance tests are not available in this run.
+- Exact-head Godot 4.3 focused and full CI are required before this PR can be marked Ready. Local Godot, rendered/GPU, physical iPhone and target-device performance tests are not available in this run.
 
 ## Next
 
