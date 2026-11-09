@@ -1,6 +1,8 @@
 extends SceneTree
 
 const PlannerScript = preload("res://systems/SurfaceTerrainAffectedComponentPlanner.gd")
+const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 
 var failures: Array[String] = []
@@ -30,6 +32,7 @@ func _run() -> void:
 	_test_seed_without_corner_reports()
 	_test_invalid_reports_fail_closed(old_patch)
 	_test_corner_keys_match_transition_manager(old_patch)
+	await _test_real_resolver_reports_include_ineligible_fallback()
 
 	holder.queue_free()
 	await process_frame
@@ -147,6 +150,110 @@ func _test_corner_keys_match_transition_manager(patch: Node3D) -> void:
 		_expect(actual == expected, "%s junction key matches the production manager format" % corner)
 	_expect(PlannerScript.junction_key_for_corner(patch.global_position, "invalid", 2.0).is_empty(), "unknown corner does not produce a junction key")
 	manager.queue_free()
+
+
+func _test_real_resolver_reports_include_ineligible_fallback() -> void:
+	var holder := Node3D.new()
+	holder.name = "RealResolverAffectedComponentFixture"
+	root.add_child(holder)
+	var north_west: Node3D = PatchScript.new()
+	north_west.name = "NorthWest"
+	var north_east: Node3D = PatchScript.new()
+	north_east.name = "NorthEast"
+	north_east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	var south_west: Node3D = PatchScript.new()
+	south_west.name = "SouthWest"
+	south_west.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE)
+	var south_east: Node3D = PatchScript.new()
+	south_east.name = "SouthEast"
+	south_east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, PatchScript.PATCH_SIZE)
+	var patches: Array[Node3D] = [north_west, north_east, south_west, south_east]
+	for patch in patches:
+		holder.add_child(patch)
+	await process_frame
+	_expect(_apply_patch_state(north_west, 0, 1), "real checkerboard north-west baseline is valid")
+	_expect(_apply_patch_state(north_east, 2, 1), "real checkerboard north-east baseline is valid")
+	_expect(_apply_patch_state(south_west, 2, 1), "real checkerboard south-west baseline is valid")
+	_expect(_apply_patch_state(south_east, 0, 1), "real checkerboard south-east baseline is valid")
+	var stable_ids: Dictionary = {
+		north_west.get_instance_id(): "real/north_west",
+		north_east.get_instance_id(): "real/north_east",
+		south_west.get_instance_id(): "real/south_west",
+		south_east.get_instance_id(): "real/south_east"
+	}
+	var patches_by_stable_id: Dictionary = {
+		"real/north_west": north_west,
+		"real/north_east": north_east,
+		"real/south_west": south_west,
+		"real/south_east": south_east
+	}
+	var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	_expect(bool(binding.get("ok", false)), "real checkerboard binder builds its four-edge topology")
+	if not bool(binding.get("ok", false)):
+		holder.queue_free()
+		await process_frame
+		return
+	var edge_keys: Array[String] = []
+	for key in binding.get("descriptors", {}).keys():
+		edge_keys.append(str(key))
+	edge_keys.sort()
+	var manager: Node3D = ManagerScript.new()
+	holder.add_child(manager)
+	await process_frame
+	var initial: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches_by_stable_id)
+	_expect(bool(initial.get("ok", false)) and int(initial.get("corner_cap_count", -1)) == 4, "real manager commits the eligible four-way checkerboard caps")
+	var eligible_reports: Array = manager.call("get_blocked_corner_reports")
+	_expect(eligible_reports.size() == 4 and edge_keys.size() == 4, "real resolver emits four corner reports for the junction")
+	var eligible_closure: Dictionary = PlannerScript.build_closure(
+		[edge_keys[0]],
+		eligible_reports,
+		patches_by_stable_id,
+		[],
+		{},
+		PatchScript.PATCH_SIZE
+	)
+	_expect(bool(eligible_closure.get("ok", false)), "planner accepts the real resolver's eligible reports")
+	_expect(eligible_closure.get("edge_keys", []) == edge_keys, "one seeded edge reaches all four real checkerboard edges")
+	_expect(eligible_closure.get("junction_keys", []).size() == 1, "eligible checkerboard closure contains its single shared junction")
+
+	_expect(_apply_patch_state(north_west, 1, 2), "one corner height change creates a valid but cap-ineligible checkerboard")
+	var changed_binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	_expect(bool(changed_binding.get("ok", false)), "cap-ineligible checkerboard still has valid edge descriptors")
+	var changed_sync: Dictionary = manager.call("sync_transitions", changed_binding.get("descriptors", {}), patches_by_stable_id)
+	_expect(bool(changed_sync.get("ok", false)) and int(manager.call("get_corner_cap_count")) == 0, "real manager falls back to steps when the eight midpoints disagree")
+	var fallback_reports: Array = manager.call("get_blocked_corner_reports")
+	_expect(fallback_reports.size() == 4, "real resolver retains all four reports after cap eligibility fails")
+	var all_fallback: bool = true
+	for report_value in fallback_reports:
+		if not (report_value is Dictionary) or str(report_value.get("policy", "")) != "step_fallback":
+			all_fallback = false
+	_expect(all_fallback, "ineligible real resolver reports retain the step-fallback policy")
+	var fallback_closure: Dictionary = PlannerScript.build_closure(
+		[edge_keys[0]],
+		[],
+		{},
+		fallback_reports,
+		patches_by_stable_id,
+		PatchScript.PATCH_SIZE
+	)
+	_expect(bool(fallback_closure.get("ok", false)), "planner accepts real ineligible fallback reports")
+	_expect(fallback_closure.get("edge_keys", []) == edge_keys, "fallback reports still connect the full four-edge affected component")
+	await _release_holder(holder)
+
+
+func _apply_patch_state(patch: Node3D, height_level: int, revision: int) -> bool:
+	return bool(patch.call("apply_world_object_state", {
+		"height_level": height_level,
+		"surface_type": "metal" if height_level >= 2 else "soil",
+		"revision": revision
+	}))
+
+
+func _release_holder(holder: Node3D) -> void:
+	if is_instance_valid(holder):
+		holder.queue_free()
+	await process_frame
+	await process_frame
 
 
 func _expect(condition: bool, description: String) -> void:
