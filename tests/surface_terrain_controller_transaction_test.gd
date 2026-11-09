@@ -57,6 +57,25 @@ class FakeObjectStateRegistry:
 		records[stable_id] = {"chunk_id": chunk_id, "state": state.duplicate(true)}
 		return true
 
+	func get_chunk_states(chunk_id: String) -> Dictionary:
+		var result: Dictionary = {}
+		for stable_id in records.keys():
+			if str(records[stable_id].get("chunk_id", "")) == chunk_id:
+				result[stable_id] = records[stable_id].duplicate(true)
+		return result
+
+	func restore_chunk_states(chunk_id: String, snapshot: Dictionary) -> bool:
+		if not (snapshot is Dictionary):
+			return false
+		for stable_id in records.keys():
+			if str(records[stable_id].get("chunk_id", "")) == chunk_id:
+				records.erase(stable_id)
+		for stable_id in snapshot.keys():
+			if not (snapshot[stable_id] is Dictionary) or str(snapshot[stable_id].get("chunk_id", "")) != chunk_id:
+				return false
+			records[stable_id] = snapshot[stable_id].duplicate(true)
+		return true
+
 
 class FakeMineralRegistry:
 	extends Node

@@ -59,7 +59,7 @@ func bind_crop_controller(candidate: Node) -> bool:
 func bind_object_state_registry(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["get_object_state", "set_object_state", "to_save_dict", "validate_save_dict", "restore_save_dict"]:
+	for method_name in ["get_object_state", "set_object_state", "get_chunk_states", "restore_chunk_states", "to_save_dict", "validate_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and object_state_registry != candidate:
@@ -145,7 +145,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	var object_registry_snapshot: Dictionary = {}
 	var initial_object_states: Dictionary = {}
 	if not world_objects.is_empty():
-		if not object_state_registry.has_method("get_chunk_states"):
+		if not object_state_registry.has_method("get_chunk_states") or not object_state_registry.has_method("restore_chunk_states"):
 			if not crop_snapshot.is_empty():
 				crop_controller.call("restore_save_dict", crop_snapshot)
 				for plot_value in crops.values():
@@ -245,7 +245,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	if not _chunk_objects.get(chunk_id, {}).is_empty():
 		if object_state_registry == null:
 			return false
-		if not object_state_registry.has_method("get_chunk_states"):
+		if not object_state_registry.has_method("get_chunk_states") or not object_state_registry.has_method("restore_chunk_states"):
 			return false
 		object_snapshot = object_state_registry.call("get_chunk_states", chunk_id)
 		if not (object_snapshot is Dictionary):
@@ -260,7 +260,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 				object_state_registry.call("restore_chunk_states", chunk_id, object_snapshot)
 				return false
 	if not veins.is_empty() and not bool(adapter.unload_chunk(chunk_id, now_unix)):
-		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_chunk_states", chunk_id, object_snapshot)):
+		if not _chunk_objects.get(chunk_id, {}).is_empty() and not bool(object_state_registry.call("restore_chunk_states", chunk_id, object_snapshot)):
 			push_error("Failed to restore world-object registry after mineral chunk unload failed.")
 		return false
 
@@ -293,7 +293,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 			var adapter_rollback_ok: bool = bool(adapter.load_chunk(chunk_id, veins, now_unix))
 			if not adapter_rollback_ok:
 				push_error("Failed to restore mineral registration after terrain adjacency unload failed.")
-		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_chunk_states", chunk_id, object_snapshot)):
+		if not _chunk_objects.get(chunk_id, {}).is_empty() and not bool(object_state_registry.call("restore_chunk_states", chunk_id, object_snapshot)):
 			push_error("Failed to restore world-object registry after terrain adjacency unload failed.")
 		return false
 
@@ -1024,8 +1024,8 @@ func _restore_world_object_nodes(chunk_id: String, objects: Dictionary, registry
 
 func _rollback_world_object_restore(chunk_id: String, initial_states: Dictionary, registry_snapshot: Dictionary) -> void:
 	_restore_live_world_object_snapshot(initial_states)
-	if object_state_registry != null and not initial_states.is_empty():
-		if not bool(object_state_registry.call("restore_chunk_states", chunk_id, registry_snapshot)):
+	if object_state_registry != null and is_instance_valid(object_state_registry) and not initial_states.is_empty():
+		if not object_state_registry.has_method("restore_chunk_states") or not bool(object_state_registry.call("restore_chunk_states", chunk_id, registry_snapshot)):
 			push_error("Failed to restore chunk-scoped world-object registry snapshot after chunk object-state failure.")
 
 func _make_world_object_stable_id(chunk_id: String, local_path: String) -> String:

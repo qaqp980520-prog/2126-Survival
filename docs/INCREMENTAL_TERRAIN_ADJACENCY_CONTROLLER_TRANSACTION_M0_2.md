@@ -72,6 +72,7 @@ The batch regression loads a replacement chunk and stages two old chunks for ret
 
 - Multiple unloads in one async batch share one full-rebuild commit; the implementation still uses the full-rebuild binder rather than the detached incremental index.
 - World-object rollback now uses a chunk-local stable-ID index and chunk-scoped snapshots. This avoids deep-copying the entire world registry for every loaded or unloaded chunk while preserving neighboring chunks' newer records.
+- Controller binding now requires both chunk-scoped snapshot APIs; the transaction-test fake registry implements the same contract, including restoring an empty prior snapshot.
 - The pending-retirement queue is in-memory transaction state only and is never serialized.
 - This is a Controller-level rollback stage, not the final detached-index/edge-junction transaction manager.
 - The injected failure exercises the Controller's manager-failure contract; it does not simulate every real collision-shape allocation or physics-server failure.
