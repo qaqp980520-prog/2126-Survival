@@ -329,12 +329,13 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
             "total_usec": Time.get_ticks_usec() - int(pending.get("total_started_usec", commit_started_usec))
         }
 
+    var blocked_edges: Dictionary = pending.get("blocked_edges", {})
     var result: Dictionary = {
         "ok": true,
         "transaction_id": transaction_id,
         "active_count": _managed_edges.size(),
-        "blocked_count": (pending.get("blocked_edges", {}) as Dictionary).size(),
-        "blocked_edge_keys": _sorted_keys(pending.get("blocked_edges", {})),
+        "blocked_count": blocked_edges.size(),
+        "blocked_edge_keys": _sorted_keys(blocked_edges),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
         "corner_cap_count": _managed_corner_caps.size(),
         "reused_edge_count": reused_edge_keys.size(),
