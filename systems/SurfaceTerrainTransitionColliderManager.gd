@@ -167,7 +167,7 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         staged_edge_count += 1
 
     var resource_staging_usec: int = Time.get_ticks_usec() - staging_started_usec if profile_enabled else 0
-    var patch_snapshot_result: Dictionary = _capture_patch_snapshots(candidates)
+    var patch_snapshot_result: Dictionary = _capture_patch_snapshots(candidates, _managed_edges)
     if not bool(patch_snapshot_result.get("ok", false)):
         _free_staged(staged, reused_edge_keys)
         _free_staged_caps(staged_caps, reused_cap_keys)
@@ -379,47 +379,49 @@ func _abort_pending_transaction() -> void:
     _pending_sync_transaction.clear()
 
 
-func _capture_patch_snapshots(candidates: Dictionary) -> Dictionary:
+func _capture_patch_snapshots(candidates: Dictionary, old_edges: Dictionary) -> Dictionary:
     var snapshots: Dictionary = {}
-    for edge_value in candidates.values():
-        if not (edge_value is Dictionary):
-            continue
-        var edge: Dictionary = edge_value
-        var endpoints: Array[Dictionary] = [
-            {"patch": edge.get("first_patch"), "side": str(edge.get("first_side", ""))},
-            {"patch": edge.get("second_patch"), "side": str(edge.get("second_side", ""))}
-        ]
-        for endpoint in endpoints:
-            var patch: Node3D = endpoint.get("patch") as Node3D
-            var side: String = str(endpoint.get("side", ""))
-            if not is_instance_valid(patch) or patch.is_queued_for_deletion() or side.is_empty():
-                return {"ok": false, "error": "invalid_patch_snapshot_endpoint"}
-            var instance_id: int = patch.get_instance_id()
-            if not snapshots.has(instance_id):
-                var has_world_state: bool = patch.has_method("get_world_object_state")
-                var world_state: Dictionary = {}
-                if has_world_state:
-                    var state_value: Variant = patch.call("get_world_object_state")
-                    if not (state_value is Dictionary):
-                        return {"ok": false, "error": "invalid_patch_world_state_snapshot"}
-                    world_state = state_value.duplicate(true)
-                snapshots[instance_id] = {
-                    "patch": patch,
-                    "global_transform": patch.global_transform,
-                    "has_world_state": has_world_state,
-                    "world_state": world_state,
-                    "sides": {}
-                }
-            var snapshot: Dictionary = snapshots[instance_id]
-            var side_states: Dictionary = snapshot.get("sides", {})
-            if not side_states.has(side):
-                var has_active_query: bool = patch.has_method("is_shared_transition_active")
-                side_states[side] = {
-                    "has_active_query": has_active_query,
-                    "active": bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
-                }
-                snapshot["sides"] = side_states
-                snapshots[instance_id] = snapshot
+    var edge_sources: Array[Dictionary] = [old_edges, candidates]
+    for edge_source in edge_sources:
+        for edge_value in edge_source.values():
+            if not (edge_value is Dictionary):
+                continue
+            var edge: Dictionary = edge_value
+                var endpoints: Array[Dictionary] = [
+                {"patch": edge.get("first_patch"), "side": str(edge.get("first_side", ""))},
+                {"patch": edge.get("second_patch"), "side": str(edge.get("second_side", ""))}
+            ]
+            for endpoint in endpoints:
+                var patch: Node3D = endpoint.get("patch") as Node3D
+                var side: String = str(endpoint.get("side", ""))
+                if not is_instance_valid(patch) or patch.is_queued_for_deletion() or side.is_empty():
+                    return {"ok": false, "error": "invalid_patch_snapshot_endpoint"}
+                var instance_id: int = patch.get_instance_id()
+                if not snapshots.has(instance_id):
+                    var has_world_state: bool = patch.has_method("get_world_object_state")
+                    var world_state: Dictionary = {}
+                    if has_world_state:
+                        var state_value: Variant = patch.call("get_world_object_state")
+                        if not (state_value is Dictionary):
+                            return {"ok": false, "error": "invalid_patch_world_state_snapshot"}
+                        world_state = state_value.duplicate(true)
+                    snapshots[instance_id] = {
+                        "patch": patch,
+                        "global_transform": patch.global_transform,
+                        "has_world_state": has_world_state,
+                        "world_state": world_state,
+                        "sides": {}
+                    }
+                var snapshot: Dictionary = snapshots[instance_id]
+                var side_states: Dictionary = snapshot.get("sides", {})
+                if not side_states.has(side):
+                    var has_active_query: bool = patch.has_method("is_shared_transition_active")
+                    side_states[side] = {
+                        "has_active_query": has_active_query,
+                        "active": bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
+                    }
+                    snapshot["sides"] = side_states
+                    snapshots[instance_id] = snapshot
     return {"ok": true, "snapshots": snapshots}
 
 
