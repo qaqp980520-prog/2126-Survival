@@ -84,11 +84,13 @@ func _test_old_and_candidate_topology_union(old_patch: Node3D, candidate_patch: 
 	_expect(not result.get("edge_keys", []).has("isolated_a") and not result.get("edge_keys", []).has("isolated_b"), "disconnected ineligible fallback component remains outside the closure")
 	_expect(int(result.get("old_report_count", -1)) == 1 and int(result.get("candidate_report_count", -1)) == 2, "closure records both old and candidate report counts")
 
+	var reordered_reports: Array = candidate_reports.duplicate(true)
+	reordered_reports.reverse()
 	var reordered: Dictionary = PlannerScript.build_closure(
 		["tail", "seed", "seed"],
-		[],
+		old_reports.duplicate(true),
 		old_patches,
-		candidate_reports.duplicate(true),
+		reordered_reports,
 		candidate_patches,
 		2.0
 	)
@@ -138,7 +140,6 @@ func _test_invalid_reports_fail_closed(patch: Node3D) -> void:
 func _test_corner_keys_match_transition_manager(patch: Node3D) -> void:
 	var manager: Node3D = ManagerScript.new()
 	root.add_child(manager)
-	await process_frame
 	for corner in ["north_east", "south_east", "south_west", "north_west"]:
 		var offset: Vector3 = manager.call("_corner_offset", corner)
 		var expected: String = str(manager.call("_corner_key", patch.global_position + offset))
@@ -146,7 +147,6 @@ func _test_corner_keys_match_transition_manager(patch: Node3D) -> void:
 		_expect(actual == expected, "%s junction key matches the production manager format" % corner)
 	_expect(PlannerScript.junction_key_for_corner(patch.global_position, "invalid", 2.0).is_empty(), "unknown corner does not produce a junction key")
 	manager.queue_free()
-	await process_frame
 
 
 func _expect(condition: bool, description: String) -> void:
