@@ -70,8 +70,12 @@ jobs:
           set -o pipefail
           timeout -k 10s 1700s godot --headless --path . --script res://tests/surface_chunk_production_benchmark.gd 2>&1 | tee surface_chunk_production_benchmark.log
           grep -q "Surface chunk production benchmark completed." surface_chunk_production_benchmark.log
-          test "$(grep -c '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log)" -eq 20
+          test "$(grep -Fc 'captures the retained center root identity' surface_chunk_production_benchmark.log)" -eq 5
+          test "$(grep -Fc 'keeps the exact same center root instance registered' surface_chunk_production_benchmark.log)" -eq 5
+          test "$(grep -c '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log)" -eq 30
           grep '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log | sed 's/^SURFACE_CHUNK_BENCHMARK_JSON://' > surface_chunk_production_benchmark.jsonl
+          test "$(grep -c '"phase":"repeat_full_expand"' surface_chunk_production_benchmark.jsonl)" -eq 5
+          test "$(grep -c '"phase":"repeat_full_contract"' surface_chunk_production_benchmark.jsonl)" -eq 5
       - name: Upload reproducible benchmark output
         if: always()
         uses: actions/upload-artifact@v4

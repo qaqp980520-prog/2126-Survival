@@ -229,6 +229,73 @@ func _run() -> void:
 		if radius == 1:
 			var contraction_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(contraction_profile.get("collider_retired_edge_count", 0)) > 0, "radius 1 contraction retires the seeded production transition collider")
+		# Repeat a complete, non-overlapping full-window cycle at every supported radius.
+		# This catches stale ownership/root leaks that a single expansion/contraction pass can miss.
+		var previous_center: Vector2i = director.call("get_grid_coordinate", target)
+		var previous_center_id: String = "surface/chunk_%d_%d" % [previous_center.x, previous_center.y]
+		var repeat_full_target: Vector3 = target + Vector3(boundary_chunk_size_x * float(radius * 2 + 1), 0.0, 0.0)
+		var repeat_full_center: Vector2i = director.call("get_grid_coordinate", repeat_full_target)
+		var repeat_full_center_id: String = "surface/chunk_%d_%d" % [repeat_full_center.x, repeat_full_center.y]
+		var expected_repeat_full_ids: PackedStringArray = _expected_surface_ids(repeat_full_center, radius)
+		var previous_center_refs: Array[WeakRef] = _capture_surface_root_refs(controller)
+		_expect(previous_center_refs.size() == 1, "radius %d repeated full-window cycle starts from one retained center root" % radius)
+		_expect(not expected_repeat_full_ids.has(previous_center_id), "radius %d repeated full-window target does not overlap the previous center" % radius)
+		director.set("load_radius", radius)
+		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
+		_reset_factory_metrics()
+		var repeat_expand_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var repeat_expand: Dictionary = await _run_async_request(director, repeat_full_target)
+		var repeat_expand_diagnostic: Dictionary = repeat_expand.get("diagnostic", {})
+		if not bool(repeat_expand.get("ok", false)):
+			_expect(false, "radius %d repeated full-window expansion completes: %s" % [radius, str(repeat_expand.get("error", repeat_expand_diagnostic.get("phase", "unknown")))])
+			break
+		var repeat_expand_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - repeat_expand_rebuilds_before
+		_expect(repeat_expand_rebuild_delta == 1, "radius %d repeated full-window expansion commits one adjacency rebuild" % radius)
+		var repeat_expand_ids: PackedStringArray = _surface_ids(controller)
+		_expect(repeat_expand_ids == expected_repeat_full_ids, "radius %d repeated full-window expansion commits the exact window" % radius)
+		_expect(repeat_expand_ids.size() == expected_count, "radius %d repeated full-window expansion commits %d chunks" % [radius, expected_count])
+		var repeat_expand_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(repeat_expand_managed_ids == repeat_expand_ids, "radius %d repeated full-window expansion preserves Director/Controller ownership parity" % radius)
+		_expect(int(repeat_expand_diagnostic.get("desired_count", -1)) == expected_count, "radius %d repeated full-window expansion reports the desired count" % radius)
+		_expect(int(repeat_expand_diagnostic.get("staged_count", -1)) == expected_count, "radius %d repeated full-window expansion stages every new root" % radius)
+		_expect(int(repeat_expand_diagnostic.get("newly_loaded_count", -1)) == expected_count, "radius %d repeated full-window expansion commits every staged root" % radius)
+		_expect(int(repeat_expand_diagnostic.get("unloaded_stale_count", -1)) == 1, "radius %d repeated full-window expansion retires the previous center root" % radius)
+		_expect(_factory_calls == expected_count, "radius %d repeated full-window expansion calls the production factory exactly %d times" % [radius, expected_count])
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(previous_center_refs), "radius %d repeated full-window expansion releases the previous center root" % radius)
+		_emit_metrics("repeat_full_expand", radius, expected_count, repeat_expand_diagnostic, repeat_expand.get("frame_samples_ms", []), controller)
+		var repeat_center_ids: Array[String] = [repeat_full_center_id]
+		var repeat_center_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_center_ids)
+		_expect(repeat_center_refs.size() == 1, "radius %d repeated full-window expansion captures the retained center root identity" % radius)
+		var repeat_departed_refs: Array[WeakRef] = _capture_surface_root_refs(controller, repeat_full_center_id)
+		_expect(repeat_departed_refs.size() == expected_count - 1, "radius %d repeated full-window contraction captures every non-center root" % radius)
+		director.set("load_radius", 0)
+		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
+		_reset_factory_metrics()
+		var repeat_contract_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var repeat_contract: Dictionary = await _run_async_request(director, repeat_full_target)
+		var repeat_contract_diagnostic: Dictionary = repeat_contract.get("diagnostic", {})
+		if not bool(repeat_contract.get("ok", false)):
+			_expect(false, "radius %d repeated full-window contraction completes: %s" % [radius, str(repeat_contract.get("error", repeat_contract_diagnostic.get("phase", "unknown")))])
+			break
+		var repeat_contract_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - repeat_contract_rebuilds_before
+		_expect(repeat_contract_rebuild_delta == 1, "radius %d repeated full-window contraction commits one adjacency rebuild" % radius)
+		var repeat_contract_ids: PackedStringArray = _surface_ids(controller)
+		_expect(repeat_contract_ids.size() == 1 and repeat_contract_ids.has(repeat_full_center_id), "radius %d repeated full-window contraction retains only its center root" % radius)
+		var repeat_contract_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(repeat_contract_managed_ids == repeat_contract_ids, "radius %d repeated full-window contraction preserves Director/Controller ownership parity" % radius)
+		_expect(int(repeat_contract_diagnostic.get("desired_count", -1)) == 1, "radius %d repeated full-window contraction reports one desired chunk" % radius)
+		_expect(int(repeat_contract_diagnostic.get("staged_count", -1)) == 0 and int(repeat_contract_diagnostic.get("newly_loaded_count", -1)) == 0, "radius %d repeated full-window contraction stages and loads no new roots" % radius)
+		_expect(int(repeat_contract_diagnostic.get("unloaded_stale_count", -1)) == expected_count - 1, "radius %d repeated full-window contraction unloads every departed root" % radius)
+		_expect(_factory_calls == 0, "radius %d repeated full-window contraction does not invoke the factory" % radius)
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(repeat_departed_refs), "radius %d repeated full-window contraction releases every non-center root" % radius)
+		_expect(_all_refs_alive(repeat_center_refs), "radius %d repeated full-window contraction preserves the same center root instance" % radius)
+		var repeat_center_object: Object = repeat_center_refs[0].get_ref()
+		var repeat_registered_center: Node3D = controller.call("get_chunk_root", repeat_full_center_id) as Node3D
+		_expect(is_instance_valid(repeat_center_object) and is_instance_valid(repeat_registered_center) and repeat_center_object == repeat_registered_center, "radius %d repeated full-window contraction keeps the exact same center root instance registered" % radius)
+		_emit_metrics("repeat_full_contract", radius, 1, repeat_contract_diagnostic, repeat_contract.get("frame_samples_ms", []), controller)
+		target = repeat_full_target
 		previous_surface_count = 1
 
 	director.set("chunk_factory", _delegate_factory)
