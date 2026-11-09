@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_edge_closure_fail_closed()
 	_test_corner_cap_preserve_stage_retire_partition()
 	_test_corner_cap_closure_fail_closed()
+	await _test_real_manager_edge_records()
 	await _test_real_manager_corner_cap_records()
 	if failures.is_empty():
 		print("Surface terrain collider preserve planner tests passed.")
@@ -116,6 +117,93 @@ func _test_corner_cap_closure_fail_closed() -> void:
 	}
 	var stale: Dictionary = PlannerScript.build_plan([], [], {}, {}, stale_caps, {})
 	_expect(not bool(stale.get("ok", true)) and str(stale.get("error", "")) == "stale_corner_cap_outside_affected_closure", "stale old cap outside the closure is rejected")
+
+
+func _test_real_manager_edge_records() -> void:
+	var holder := Node3D.new()
+	holder.name = "RealManagerEdgePreserveFixture"
+	root.add_child(holder)
+	var lower: Node3D = PatchScript.new()
+	lower.name = "Lower"
+	var higher: Node3D = PatchScript.new()
+	higher.name = "Higher"
+	higher.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	holder.add_child(lower)
+	holder.add_child(higher)
+	await process_frame
+	_expect(_apply_patch_state(lower, 0), "real edge fixture lower patch state is valid")
+	_expect(_apply_patch_state(higher, 2), "real edge fixture higher patch state is valid")
+	var patches: Array[Node3D] = [lower, higher]
+	var stable_ids: Dictionary = {
+		lower.get_instance_id(): "real_edge/lower",
+		higher.get_instance_id(): "real_edge/higher"
+	}
+	var patches_by_stable_id: Dictionary = {
+		"real_edge/lower": lower,
+		"real_edge/higher": higher
+	}
+	var binding: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	_expect(bool(binding.get("ok", false)), "real edge fixture binder succeeds")
+	if not bool(binding.get("ok", false)):
+		await _release_holder(holder)
+		return
+	var manager: Node3D = ManagerScript.new()
+	holder.add_child(manager)
+	await process_frame
+	var sync_result: Dictionary = manager.call("sync_transitions", binding.get("descriptors", {}), patches_by_stable_id)
+	_expect(bool(sync_result.get("ok", false)) and int(manager.call("get_transition_count")) == 1, "real manager commits one sloped transition edge")
+	if not bool(sync_result.get("ok", false)) or int(manager.call("get_transition_count")) != 1:
+		await _release_holder(holder)
+		return
+	var managed_value: Variant = manager.get("_managed_edges")
+	_expect(managed_value is Dictionary, "real manager exposes the expected managed edge dictionary")
+	if not (managed_value is Dictionary):
+		await _release_holder(holder)
+		return
+	var managed: Dictionary = managed_value
+	var edge_key: String = str(managed.keys()[0])
+	var record: Dictionary = managed[edge_key]
+	var body: StaticBody3D = record.get("body") as StaticBody3D
+	var signature: Array = record.get("reuse_signature", []).duplicate(true)
+	var old_record: Dictionary = {
+		"reuse_signature": signature,
+		"body_reusable": bool(manager.call("_is_reusable_managed_body", body)),
+		"patch_states_active": bool(manager.call("_edge_patch_states_are_active", record))
+	}
+	var old_edges: Dictionary = {edge_key: old_record}
+	var candidate_edges: Dictionary = {edge_key: {"reuse_signature": signature.duplicate(true)}}
+	var unchanged: Dictionary = PlannerScript.build_plan([edge_key], [], old_edges, candidate_edges, {}, {})
+	_expect(bool(unchanged.get("ok", false)), "planner accepts actual manager-owned edge records")
+	_expect(int(unchanged.get("preserve_edge_count", -1)) == 1 and int(unchanged.get("stage_edge_count", -1)) == 0, "unchanged real edge signature preserves its existing collider")
+	var first_patch: Node3D = record.get("first_patch") as Node3D
+	var second_patch: Node3D = record.get("second_patch") as Node3D
+	first_patch.call("set_shared_transition_active", str(record.get("first_side", "")), false)
+	second_patch.call("set_shared_transition_active", str(record.get("second_side", "")), false)
+	var inactive_old: Dictionary = old_record.duplicate(true)
+	inactive_old["patch_states_active"] = false
+	var reactivation: Dictionary = PlannerScript.build_plan(
+		[edge_key],
+		[],
+		{edge_key: inactive_old},
+		candidate_edges,
+		{},
+		{}
+	)
+	_expect(bool(reactivation.get("ok", false)), "inactive patch flags do not invalidate a reusable real edge body")
+	_expect(reactivation.get("preserve_edge_keys", []) == [edge_key] and reactivation.get("reactivate_edge_keys", []) == [edge_key], "reusable real edge is preserved and separately scheduled for patch reactivation")
+	var changed_signature: Array = signature.duplicate(true)
+	changed_signature[0] = "changed/" + str(changed_signature[0])
+	var changed: Dictionary = PlannerScript.build_plan(
+		[edge_key],
+		[],
+		old_edges,
+		{edge_key: {"reuse_signature": changed_signature}},
+		{},
+		{}
+	)
+	_expect(bool(changed.get("ok", false)), "changed real edge signature produces a valid replacement plan")
+	_expect(changed.get("stage_edge_keys", []) == [edge_key] and changed.get("retire_edge_keys", []) == [edge_key], "changed real edge is staged and old collider retired")
+	await _release_holder(holder)
 
 
 func _test_real_manager_corner_cap_records() -> void:
