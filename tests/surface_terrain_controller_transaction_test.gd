@@ -96,7 +96,7 @@ func _run() -> void:
 	var fake_registry := Node.new()
 	fake_registry.name = "FakeMineralRegistry"
 	controller.add_child(fake_registry)
-	controller.registry = fake_registry
+	controller.set("registry", fake_registry)
 
 	var object_registry := FakeObjectStateRegistry.new()
 	object_registry.name = "FakeWorldObjectStateRegistry"
@@ -104,28 +104,28 @@ func _run() -> void:
 		"persistent/keep": {"chunk_id": "persistent", "state": {"value": 7}}
 	}
 	controller.add_child(object_registry)
-	controller.object_state_registry = object_registry
+	controller.set("object_state_registry", object_registry)
 
 	var transition_manager := FakeTransitionManager.new()
 	transition_manager.name = "InjectedTransitionManager"
 	controller.add_child(transition_manager)
-	controller._terrain_transition_collider_manager = transition_manager
-	controller._terrain_transition_descriptors = {"preserved": {"edge_key": "before-failed-sync"}}
+	controller.set("_terrain_transition_collider_manager", transition_manager)
+	controller.set("_terrain_transition_descriptors", {"preserved": {"edge_key": "before-failed-sync"}})
 
-	controller._chunk_roots = {"chunk_a": chunk_a, "chunk_b": chunk_b, "chunk_c": chunk_c}
-	controller._chunk_veins = {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}}
-	controller._chunk_crops = {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}}
-	controller._chunk_objects = {
+	controller.set("_chunk_roots", {"chunk_a": chunk_a, "chunk_b": chunk_b, "chunk_c": chunk_c})
+	controller.set("_chunk_veins", {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}})
+	controller.set("_chunk_crops", {"chunk_a": {}, "chunk_b": {}, "chunk_c": {}})
+	controller.set("_chunk_objects", {
 		"chunk_a": {"chunk_a/object/terrain": patch_a},
 		"chunk_b": {"chunk_b/object/terrain": patch_b},
 		"chunk_c": {"chunk_c/object/terrain": patch_c}
-	}
+	})
 
 	var registry_before: Dictionary = object_registry.call("to_save_dict")
 	var failed_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 100))
 	_expect(not failed_unload, "injected collider staging failure rejects chunk unload")
 	_expect(transition_manager.sync_calls == 1, "failed unload reaches the transition manager exactly once")
-	_expect(controller._chunk_roots.has("chunk_c"), "failed unload retains the Controller chunk-root entry")
+	_expect(controller.get("_chunk_roots").has("chunk_c"), "failed unload retains the Controller chunk-root entry")
 	_expect(chunk_c.get_parent() == controller and not chunk_c.is_queued_for_deletion(), "failed unload keeps the old chunk root attached and alive")
 	_expect(patch_a.call("get_bound_neighbor_patch", "east") == patch_b, "failed unload restores A-east/B-west adjacency")
 	_expect(patch_b.call("get_bound_neighbor_patch", "west") == patch_a, "failed unload restores the reciprocal B-west/A-east adjacency")
@@ -141,7 +141,7 @@ func _run() -> void:
 	var successful_unload: bool = bool(controller.call("unload_chunk", "chunk_c", 101))
 	_expect(successful_unload, "chunk unload succeeds after the injected failure is removed")
 	_expect(transition_manager.sync_calls == 2, "successful retry commits one new adjacency synchronization")
-	_expect(not controller._chunk_roots.has("chunk_c"), "successful unload removes the Controller chunk-root entry")
+	_expect(not controller.get("_chunk_roots").has("chunk_c"), "successful unload removes the Controller chunk-root entry")
 	_expect(chunk_c.get_parent() == null and chunk_c.is_queued_for_deletion(), "successful unload detaches and queues the old root only after adjacency commit")
 	_expect(patch_a.call("get_bound_neighbor_patch", "east") == patch_b, "successful unload retains the unaffected A-east/B-west edge")
 	_expect(patch_b.call("get_bound_neighbor_patch", "east") == null, "successful unload clears the departing B-east edge")
