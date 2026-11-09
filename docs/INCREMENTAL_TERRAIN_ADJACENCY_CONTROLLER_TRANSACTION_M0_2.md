@@ -22,6 +22,7 @@ Make the existing full-rebuild terrain path rollback-safe before wiring the deta
 4. The old chunk root remains alive through removal-side validation and the candidate collider-manager commit.
 5. The existing `SurfaceTerrainTransitionColliderManager.sync_transitions()` remains the resource owner; this change relies on its current contract that staged resources are freed and old managed bodies are retained on pre-commit failure.
 6. The full-rebuild binder remains the production adjacency algorithm and correctness oracle.
+7. An unload inside an async adjacency batch commits immediately while the old root is alive. That commit includes all currently published deferred loads/state changes, so it clears the dirty bit and prevents a redundant batch-end rebuild; later operations set it again. Consecutive unloads can still each force a full rebind; a pending-retire queue is a future optimization, not implemented here.
 
 ## Files
 
@@ -60,8 +61,11 @@ The fault-injected test builds three real `SurfaceTerrainPatch` nodes with two r
 - the committed descriptor snapshot and world-object registry snapshot are unchanged.
 
 The test then retries with the fake manager succeeding and verifies that the departing edge is removed, the unaffected edge remains, the new descriptor snapshot is published, and the old root is queued only after the adjacency commit.
+It also loads a replacement chunk inside an adjacency batch, unloads the old chunk, and verifies one immediate synchronization plus a zero-rebuild batch end. A second fault case verifies failed mineral registration does not call the transition manager or bind the candidate patch.
 
 ## Limits and next steps
+
+- The unload path preserves batch correctness and avoids a redundant final rebuild, but multiple unloads in one batch may still perform one immediate full rebind each; a deferred pending-retire transaction is a future performance improvement.
 
 - This is a Controller-level rollback stage, not the final detached-index/edge-junction transaction manager.
 - The injected failure exercises the Controller's manager-failure contract; it does not simulate every real collision-shape allocation or physics-server failure.
