@@ -7,12 +7,19 @@ const ScopedTransactionScript = preload("res://systems/SurfaceTerrainAdjacencySc
 
 class FaultInjectingPatch extends SurfaceTerrainPatch:
     var clear_failures_remaining: int = 0
+    var end_batch_failures_remaining: int = 0
 
     func clear_neighbor_edge_state(side: String) -> bool:
         if clear_failures_remaining > 0:
             clear_failures_remaining -= 1
             return false
         return super.clear_neighbor_edge_state(side)
+
+    func end_collision_segmentation_batch() -> bool:
+        if end_batch_failures_remaining > 0:
+            end_batch_failures_remaining -= 1
+            return false
+        return super.end_collision_segmentation_batch()
 
 var failures: Array[String] = []
 
@@ -188,15 +195,25 @@ func _test_apply_recovery_retains_pending_transaction_for_retry() -> void:
     _expect(not bool(failed_apply.get("ok", true)), "injected old-edge clear failure aborts Apply")
     _expect(str(failed_apply.get("error", "")) == "apply_failed_and_rollback_failed", "injected rollback failure is reported explicitly")
     _expect(not bool(failed_apply.get("rollback_restored", true)), "injected rollback failure is not reported as restored")
-    _expect(bool(failed_apply.get("batches_ended", false)), "segmentation batches that did close are reported as ended")
+    _expect(not bool(failed_apply.get("batches_ended", true)), "one injected segmentation-batch close failure is reported")
     _expect(bool(failed_apply.get("pending_retained", false)), "failed recovery retains its pending transaction and strong Patch references")
+    _expect(int(failed_apply.get("remaining_batch_count", -1)) == 1, "only the batch that failed to close remains pending")
     _expect(transaction.has_pending_transaction(), "caller can still recover the failed transaction")
-    _expect(transaction.get("_pending").get("batch_patches", []).is_empty(), "successfully ended batches are removed from the retry list")
+    var pending_batches: Array = transaction.get("_pending").get("batch_patches", [])
+    _expect(pending_batches.size() == 1 and pending_batches[0] == a, "already-ended batches are removed while the failed Patch batch is retained")
+    _expect(int(b.get("_collision_segmentation_batch_depth")) == 0 and int(b_replacement.get("_collision_segmentation_batch_depth")) == 0, "successfully closed Patch batches are not left open")
+
+    var premature_finalize: Dictionary = transaction.call("finalize", transaction_id)
+    _expect(not bool(premature_finalize.get("ok", true)) and str(premature_finalize.get("error", "")) == "transaction_recovery_required", "Finalize cannot discard a transaction that still requires rollback")
+    _expect(transaction.has_pending_transaction(), "rejected Finalize retains the recovery transaction")
 
     a.clear_failures_remaining = 0
+    a.end_batch_failures_remaining = 0
     var retried_rollback: Dictionary = transaction.call("rollback", transaction_id)
     _expect(bool(retried_rollback.get("ok", false)), "rollback can be retried after the transient failure is removed")
     _expect(not transaction.has_pending_transaction(), "successful retry finally releases pending transaction references")
+    _expect(int(a.get("_collision_segmentation_batch_depth")) == 0, "retry closes the previously failed Patch batch exactly once")
+    _expect(int(b.get("_collision_segmentation_batch_depth")) == 0 and int(b_replacement.get("_collision_segmentation_batch_depth")) == 0, "retry does not double-close batches that succeeded earlier")
     _expect(a.call("get_bound_neighbor_patch", "east") == b, "retry restores the exact original first neighbor Node")
     _expect(b.call("get_bound_neighbor_patch", "west") == a, "retry restores the exact original reciprocal neighbor Node")
     _expect(b_replacement.call("get_bound_neighbor_patch", "west") == null, "retry leaves the replacement Patch unbound")
