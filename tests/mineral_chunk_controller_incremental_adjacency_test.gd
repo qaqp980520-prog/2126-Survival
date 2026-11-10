@@ -326,11 +326,11 @@ func _assert_full_descriptor_parity(controller: Node3D, label: String) -> void:
 			if is_instance_valid(patch) and patch.is_inside_tree() and patch.has_method("bind_neighbor_patch"):
 				patches.append(patch)
 				stable_ids_by_instance[patch.get_instance_id()] = str(stable_id_value)
-	var oracle = IndexScript.new()
-	var rebuilt: Dictionary = oracle.call("rebuild", patches, stable_ids_by_instance)
+	var oracle: SurfaceTerrainAdjacencyIndex = IndexScript.new()
+	var rebuilt: Dictionary = oracle.rebuild(patches, stable_ids_by_instance)
 	_expect(bool(rebuilt.get("ok", false)), label + " full Index rebuild oracle succeeds")
 	if bool(rebuilt.get("ok", false)):
-		_expect(oracle.call("get_edge_descriptors") == controller.call("get_terrain_transition_descriptors"), label + " incremental descriptors equal the full rebuild oracle")
+		_expect(oracle.get_edge_descriptors() == controller.call("get_terrain_transition_descriptors"), label + " incremental descriptors equal the full rebuild oracle")
 	var pure: Dictionary = BinderScript.build_candidate_descriptors(patches, stable_ids_by_instance)
 	_expect(bool(pure.get("ok", false)), label + " non-mutating Binder candidate builder succeeds")
 	if bool(pure.get("ok", false)):
