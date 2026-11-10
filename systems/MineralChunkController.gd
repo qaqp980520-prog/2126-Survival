@@ -596,15 +596,20 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	var patches: Array[Node3D] = _collect_loaded_terrain_patches()
 	var collect_usec: int = Time.get_ticks_usec() - collect_started_usec if _terrain_adjacency_profiling_enabled else 0
 	var result: Dictionary
-	var incremental_path: bool = _ensure_transition_collider_manager() and _supports_incremental_terrain_adjacency()
-	if incremental_path:
+	var incremental_available: bool = _ensure_transition_collider_manager() and _supports_incremental_terrain_adjacency()
+	var used_incremental_path: bool = false
+	if incremental_available and _terrain_adjacency_batch_dirty_ids.is_empty():
 		if _terrain_adjacency_index == null and _has_untracked_existing_terrain_patches():
 			# A controller upgraded or externally populated before the Index existed.
 			# Bootstrap from the authoritative full Binder once, then use deltas next time.
 			result = _rebind_terrain_patches(patches)
 		else:
+			used_incremental_path = true
 			result = _run_incremental_terrain_adjacency_batch()
 	else:
+		# In-place terrain edits change the live Patch snapshot before planning. The
+		# current Index intentionally rejects stale committed snapshots, so keep this
+		# less frequent path on the full Binder until it gains an explicit edit reservation.
 		result = _rebind_terrain_patches(patches)
 	if _terrain_adjacency_profiling_enabled:
 		var profile: Dictionary = _last_terrain_adjacency_profile.duplicate(true)
@@ -622,7 +627,7 @@ func end_terrain_adjacency_batch() -> Dictionary:
 		result["pending_unload_rollback_ok"] = pending_rollback_ok
 		if not pending_rollback_ok:
 			result["error"] = "terrain_adjacency_failed_and_pending_unload_rollback_failed"
-		if incremental_path:
+		if used_incremental_path:
 			# A failed delta leaves newly registered roots alive. Reconcile the actual
 			# live set through the authoritative full path before the Director retries.
 			_terrain_adjacency_recovery_required = true
@@ -815,12 +820,19 @@ func _ensure_terrain_adjacency_runtime() -> bool:
 	))
 
 
-func _install_terrain_adjacency_index(candidate_index: RefCounted) -> bool:
+func _install_terrain_adjacency_index(candidate_index: RefCounted, patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> bool:
 	if candidate_index == null:
 		return false
 	if is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.call("has_pending_transaction")):
 		return false
-	_terrain_adjacency_index = candidate_index
+	if _terrain_adjacency_index == null:
+		_terrain_adjacency_index = candidate_index
+	else:
+		var rebuild_result: Dictionary = _terrain_adjacency_index.call("rebuild", patches, stable_ids_by_instance)
+		if not bool(rebuild_result.get("ok", false)):
+			return false
+		if _terrain_adjacency_index.call("get_edge_descriptors") != candidate_index.call("get_edge_descriptors"):
+			return false
 	if not _supports_incremental_terrain_adjacency():
 		return true
 	if _terrain_adjacency_scoped_transaction == null:
@@ -836,6 +848,8 @@ func _install_terrain_adjacency_index(candidate_index: RefCounted) -> bool:
 
 
 func _run_incremental_terrain_adjacency_batch() -> Dictionary:
+	if not _terrain_adjacency_batch_dirty_ids.is_empty():
+		return {"ok": false, "error": "in_place_patch_edit_requires_full_rebind"}
 	if not _ensure_terrain_adjacency_runtime():
 		return {"ok": false, "error": "incremental_adjacency_runtime_unavailable"}
 	var old_result: Dictionary = _terrain_adjacency_index.call("get_patches_by_stable_id")
@@ -1160,7 +1174,7 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 			collider_failure["error"] = "transition_collider_sync_failed_and_rollback_failed"
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), collider_failure)
 		return collider_failure
-	if not _install_terrain_adjacency_index(candidate_index):
+	if not _install_terrain_adjacency_index(candidate_index, patches, stable_ids_by_instance):
 		var install_failure: Dictionary = {"ok": false, "error": "adjacency_index_coordinator_install_failed"}
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), install_failure)
 		return install_failure
