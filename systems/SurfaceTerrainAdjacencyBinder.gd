@@ -6,6 +6,7 @@ const SIDES: Array[String] = ["east", "west", "north", "south"]
 const POSITION_TOLERANCE: float = 0.01
 const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransitionDescriptor.gd")
 
+## Builds complete candidate descriptors without clearing, binding, or refreshing any live patch state.
 ## stable_ids_by_instance maps live Node instance IDs to persistent world-object Stable IDs.
 ## When omitted, node paths are accepted for isolated fixtures only; production callers pass registry IDs.
 static func build_candidate_descriptors(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
