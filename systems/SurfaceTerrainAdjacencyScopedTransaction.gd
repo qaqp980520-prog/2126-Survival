@@ -321,6 +321,7 @@ func _validate_patch(patch: Node3D) -> Dictionary:
         return {"ok": false, "error": "invalid_patch"}
     for method_name in [
         "get_world_object_state",
+        "validate_world_object_state",
         "get_bound_neighbor_patch",
         "bind_neighbor_patch",
         "clear_neighbor_edge_state",
@@ -331,6 +332,9 @@ func _validate_patch(patch: Node3D) -> Dictionary:
     ]:
         if not patch.has_method(method_name):
             return {"ok": false, "error": "patch_missing_" + method_name}
+    var world_state: Variant = patch.call("get_world_object_state")
+    if not (world_state is Dictionary) or not bool(patch.call("validate_world_object_state", world_state)):
+        return {"ok": false, "error": "invalid_patch_world_state"}
     return {"ok": true}
 
 
