@@ -242,7 +242,7 @@ func _test_director_retries_controller_recovery_for_sync_and_async_requests() ->
 	_expect(controller.retry_count == 2, "async Director also retries retained Controller recovery before staging")
 	_expect(str(diagnostics.get("phase", "")) == "complete", "async request reaches its terminal complete phase")
 	_expect(controller.get_loaded_chunk_ids().size() == 1, "async window shift retires the stale root after successful batch close")
-	_expect(controller.get_loaded_chunk_ids()[0] == "chunk_1_0", "async Director and Controller agree on the shifted window")
+	_expect(controller.get_loaded_chunk_ids()[0] == "surface/chunk_1_0", "async Director and Controller agree on the shifted window")
 	holder.queue_free()
 	await process_frame
 	await process_frame
