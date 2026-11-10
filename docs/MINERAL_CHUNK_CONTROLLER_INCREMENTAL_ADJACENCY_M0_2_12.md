@@ -92,3 +92,16 @@ Full project validation remains the existing Godot 4.3 compatibility gate (554 s
 ## Next step
 
 Run the focused Controller workflow and complete 554-step Godot 4.3 gate on the exact PR head. Then extend the production integration test to a multi-Junction Radius 8 window with real Corner Cap resources and capture the actual number of preserved/staged/retired collider bodies. After that, profile the synchronous Director's end-to-end window shift on a representative hardware target.
+
+
+## Exact-head integration validation corrections — 2026-11-10
+
+The first exact-head run for PR #307 HEAD `46175ccd01339b74fc5fb26059a697fb6e2268dd` exposed three validation defects, corrected in the follow-up validation commit:
+
+- Godot headless focused suites did not resolve the three newly referenced global script-class type names while loading `MineralChunkController.gd` through independent test entry points. The Controller now keeps these runtime-created collaborators dynamically typed and instantiates them through the existing preloaded Script constants. The parity test likewise uses its preloaded Index script without a global type annotation. This avoids a global-class-cache dependency without changing runtime object types or call order.
+- The async recovery test used world X=32 while the Director's default chunk width is 64. `floori(32 / 64)` remains chunk 0, so the test did not actually shift the window. It now uses X=64 and explicitly asserts grid coordinate `(1, 0)` before checking the loaded ID.
+- The production benchmark's old boundary assertion expected Collider endpoint reactivation after a full Binder clear. The incremental path intentionally does not clear unrelated endpoint bindings. The benchmark now verifies zero reactivation, exact Collider Node identity preservation, and reciprocal Patch neighbor links for the preserved seam.
+
+The same-world full-Binder reuse fixture still expects its explicit reactivation pass; only the subsequent incremental boundary-crossing expectation changed.
+
+Exact-head focused, lifecycle, benchmark, and full Godot 4.3 validation must be rerun after this correction. No pass is claimed for the uncorrected HEAD. PR #307 remains Draft and unmerged.

@@ -24,9 +24,9 @@ var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful N
 var _pending_chunk_unloads: Dictionary = {} # chunk ID -> root, veins, object snapshot and timestamp
 var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
 var _terrain_transition_collider_manager: Node3D
-var _terrain_adjacency_index: SurfaceTerrainAdjacencyIndex
-var _terrain_adjacency_scoped_transaction: SurfaceTerrainAdjacencyScopedTransaction
-var _terrain_adjacency_coordinator: SurfaceTerrainAdjacencyCoordinator
+var _terrain_adjacency_index
+var _terrain_adjacency_scoped_transaction
+var _terrain_adjacency_coordinator
 var _terrain_adjacency_recovery_required: bool = false
 var _terrain_adjacency_recovery_in_progress: bool = false
 var _terrain_adjacency_batch_depth: int = 0
@@ -833,7 +833,7 @@ func _ensure_terrain_adjacency_runtime() -> bool:
 	if not _ensure_transition_collider_manager() or not _supports_incremental_terrain_adjacency():
 		return false
 	if _terrain_adjacency_index == null:
-		var empty_index: SurfaceTerrainAdjacencyIndex = TerrainAdjacencyIndexScript.new()
+		var empty_index = TerrainAdjacencyIndexScript.new()
 		var empty_patches: Array[Node3D] = []
 		var empty_result: Dictionary = empty_index.rebuild(empty_patches, {})
 		if not bool(empty_result.get("ok", false)):
@@ -1170,7 +1170,7 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), snapshot_failure)
 		return snapshot_failure
 	var adjacency_snapshot: Dictionary = adjacency_snapshot_result.get("snapshot", {})
-	var candidate_index: SurfaceTerrainAdjacencyIndex = TerrainAdjacencyIndexScript.new()
+	var candidate_index = TerrainAdjacencyIndexScript.new()
 	var candidate_index_result: Dictionary = candidate_index.rebuild(patches, stable_ids_by_instance)
 	if not bool(candidate_index_result.get("ok", false)):
 		var index_failure: Dictionary = {"ok": false, "error": "adjacency_index_candidate_failed:" + str(candidate_index_result.get("error", "unknown"))}

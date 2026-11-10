@@ -232,7 +232,9 @@ func _test_director_retries_controller_recovery_for_sync_and_async_requests() ->
 	_expect(controller.get_loaded_chunk_ids().size() == 1, "synchronous Director leaves one managed root at radius zero")
 
 	controller.pending_recovery = true
-	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3(32.0, 0.0, 0.0), 401, 1))
+	var shifted_target: Vector3 = Vector3(64.0, 0.0, 0.0)
+	_expect(director.call("get_grid_coordinate", shifted_target) == Vector2i(1, 0), "async recovery test target crosses exactly one 64-unit chunk boundary")
+	var request_id: int = int(director.call("request_sync_to_world_position_async", shifted_target, 401, 1))
 	_expect(request_id > 0, "async Director request is accepted after its Controller recovery retry")
 	for _frame in range(24):
 		await process_frame
@@ -326,7 +328,7 @@ func _assert_full_descriptor_parity(controller: Node3D, label: String) -> void:
 			if is_instance_valid(patch) and patch.is_inside_tree() and patch.has_method("bind_neighbor_patch"):
 				patches.append(patch)
 				stable_ids_by_instance[patch.get_instance_id()] = str(stable_id_value)
-	var oracle: SurfaceTerrainAdjacencyIndex = IndexScript.new()
+	var oracle = IndexScript.new()
 	var rebuilt: Dictionary = oracle.rebuild(patches, stable_ids_by_instance)
 	_expect(bool(rebuilt.get("ok", false)), label + " full Index rebuild oracle succeeds")
 	if bool(rebuilt.get("ok", false)):

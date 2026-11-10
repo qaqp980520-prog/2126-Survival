@@ -145,7 +145,25 @@ func _run() -> void:
 		if radius == 1:
 			var boundary_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(boundary_profile.get("collider_reused_edge_count", 0)) > 0, "radius 1 production boundary shift preserves the seeded transition collider")
-			_expect(int(boundary_profile.get("collider_reactivated_edge_count", 0)) > 0, "radius 1 production boundary shift reactivates the preserved seam endpoints")
+			var preserved_edge_key: String = str(reuse_fixture.get("edge_key", ""))
+			var preserved_body: StaticBody3D = reuse_fixture.get("body") as StaticBody3D
+			var preserved_descriptor: Dictionary = controller.call("get_terrain_transition_descriptors").get(preserved_edge_key, {})
+			var first_patch: Node3D = _find_terrain_patch_by_stable_id(controller, str(preserved_descriptor.get("first_stable_id", "")))
+			var second_patch: Node3D = _find_terrain_patch_by_stable_id(controller, str(preserved_descriptor.get("second_stable_id", "")))
+			var first_side: String = str(preserved_descriptor.get("first_side", ""))
+			var second_side: String = str(preserved_descriptor.get("second_side", ""))
+			var endpoint_links_preserved: bool = (
+				is_instance_valid(first_patch)
+				and is_instance_valid(second_patch)
+				and not first_side.is_empty()
+				and not second_side.is_empty()
+				and first_patch.call("get_bound_neighbor_patch", first_side) == second_patch
+				and second_patch.call("get_bound_neighbor_patch", second_side) == first_patch
+			)
+			_expect(int(boundary_profile.get("collider_reused_edge_count", 0)) > 0, "radius 1 incremental boundary shift reuses the preserved production collider")
+			_expect(int(boundary_profile.get("collider_reactivated_edge_count", 0)) == 0, "radius 1 incremental boundary shift preserves endpoint bindings without a full reactivation pass")
+			_expect(is_instance_valid(preserved_body) and controller.call("get_terrain_transition_collider", preserved_edge_key) == preserved_body, "radius 1 incremental boundary shift preserves the exact seeded collider body")
+			_expect(endpoint_links_preserved, "radius 1 incremental boundary shift preserves reciprocal seam endpoint bindings")
 		target = boundary_target
 
 		# Collect four additional same-runner radius-8 boundary samples. Alternating
@@ -300,9 +318,26 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 		"staged_edge_count": staged_edge_count,
 		"retired_edge_count": retired_edge_count,
 		"body_identity_preserved": body_after == body_before,
+		"body": body_before,
 		"edge_key": edge_key,
 		"profile_usec": profile
 	}
+
+
+func _find_terrain_patch_by_stable_id(controller: Node, stable_id: String) -> Node3D:
+	if stable_id.is_empty():
+		return null
+	var objects_by_chunk: Dictionary = controller.get("_chunk_objects")
+	for objects_value in objects_by_chunk.values():
+		if not (objects_value is Dictionary):
+			continue
+		var objects: Dictionary = objects_value
+		if not objects.has(stable_id):
+			continue
+		var patch: Node3D = objects[stable_id] as Node3D
+		if is_instance_valid(patch) and patch.has_method("get_bound_neighbor_patch"):
+			return patch
+	return null
 
 func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
 	var started_usec: int = Time.get_ticks_usec()
