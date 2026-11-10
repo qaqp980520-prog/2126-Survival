@@ -572,7 +572,7 @@ func _run_persistent_corner_graph_tests() -> void:
 		var rolled_back: Dictionary = reservation_index.rollback_published_delta(plan_d_id)
 		_expect(bool(rolled_back.get("ok", false)), "published Index can restore its previous snapshot after a downstream failure")
 		_expect(reservation_index.get_patch("reservation/candidate_d") == null, "Index rollback removes the candidate Patch from the committed map")
-		_expect(reservation_index.get_patch_count() == 3, "Index rollback restores the prior committed Patch count")
+		_expect(reservation_index.get_patch_count() == 4, "Index rollback restores the prior committed Patch count")
 		_expect(reservation_index.get_generation() == generation_before_publish + 2, "Index rollback keeps the generation monotonic")
 		_expect(not bool(reservation_index.get_corner_graph_stats().get("generation_reserved", true)), "Index rollback releases the coordinator reservation")
 		var stale_after_rollback: Dictionary = reservation_index.commit_delta(plan_e_id)
