@@ -128,6 +128,7 @@ func _run() -> void:
 		initial_refresh_counts[patch.get_instance_id()] = _segmentation_refresh_count(patch)
 	var pure_candidate: Dictionary = BinderScript.build_candidate_descriptors([west, east, south, far], stable_ids)
 	_expect(bool(pure_candidate.get("ok", false)), "non-mutating candidate builder accepts the valid live patch set")
+	_expect(not pure_candidate.has("_pair_descriptors"), "public candidate result does not retain or expose strong patch Node references")
 	_expect(int(pure_candidate.get("pair_count", -1)) == 2 and int(pure_candidate.get("descriptor_count", -1)) == 2, "candidate builder returns the same two cardinal transition descriptors")
 	_expect(west.call("get_bound_neighbor_patch", "east") == null and east.call("get_bound_neighbor_patch", "west") == null, "candidate builder does not mutate reciprocal east/west neighbor bindings")
 	_expect(west.call("get_bound_neighbor_patch", "south") == null and south.call("get_bound_neighbor_patch", "north") == null, "candidate builder does not mutate reciprocal north/south neighbor bindings")
