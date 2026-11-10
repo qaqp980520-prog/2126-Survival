@@ -19,12 +19,22 @@ class FaultInjectingPatch extends SurfaceTerrainPatch:
 
 class FaultInjectingColliderManager extends SurfaceTerrainTransitionColliderManager:
 	var fail_commit_once: bool = false
+	var abort_failures_remaining: int = 0
 
 	func commit_sync_transitions(transaction_id: int) -> Dictionary:
 		if fail_commit_once:
 			fail_commit_once = false
 			return {"ok": false, "error": "injected_commit_failure"}
 		return super.commit_sync_transitions(transaction_id)
+
+	func abort_sync_transitions(transaction_id: int) -> Dictionary:
+		if abort_failures_remaining > 0:
+			abort_failures_remaining -= 1
+			return {"ok": false, "error": "injected_abort_failure"}
+		return super.abort_sync_transitions(transaction_id)
+
+	func has_test_pending_transaction() -> bool:
+	return not _pending_sync_transaction.is_empty()
 
 
 var failures: Array[String] = []
@@ -37,6 +47,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await _test_successful_three_participant_publish()
 	await _test_collider_commit_failure_rolls_back_all_participants()
+	await _test_collider_abort_failure_retains_all_participants_for_retry()
 	await _test_finalize_retry_keeps_published_generation_reserved()
 	await _test_index_only_delta_skips_patch_and_collider_participants()
 	if failures.is_empty():
@@ -97,6 +108,49 @@ func _test_collider_commit_failure_rolls_back_all_participants() -> void:
 	_expect(int(fixture["index"].call("get_generation")) == generation_before + 2, "publish plus rollback advances the Index generation monotonically")
 	_expect(not bool(fixture["index"].call("get_corner_graph_stats").get("generation_reserved", true)), "successful rollback releases the Index generation reservation")
 	_expect(not bool(fixture["coordinator"].call("has_pending_transaction")), "successful three-participant rollback clears coordinator pending state")
+	await _release_fixture(fixture)
+
+
+func _test_collider_abort_failure_retains_all_participants_for_retry() -> void:
+	var fixture: Dictionary = await _make_fixture(true, false)
+	if fixture.is_empty():
+		return
+	var holder: Node3D = fixture["holder"]
+	var manager: FaultInjectingColliderManager = fixture["manager"] as FaultInjectingColliderManager
+	var replacement: Node3D = _new_patch(holder, "ReplacementBAbortFailure", Vector3(2.0, 0.0, 0.0), 2)
+	await process_frame
+	manager.fail_commit_once = true
+	manager.abort_failures_remaining = 2
+	var generation_before: int = int(fixture["index"].call("get_generation"))
+	var result: Dictionary = fixture["coordinator"].execute_delta(
+		["patch/b"],
+		[{"stable_id": "patch/b", "patch": replacement}]
+	)
+	_expect(not bool(result.get("ok", true)), "injected Collider commit failure is rejected when cleanup is also failing")
+	_expect(str(result.get("error", "")) == "collider_abort_pending", "coordinator reports the retained Collider abort phase")
+	_expect(bool(result.get("pending_retained", false)) and bool(fixture["coordinator"].call("has_pending_transaction")), "coordinator retains all participant snapshots while Collider abort is incomplete")
+	_expect(manager.has_test_pending_transaction(), "staged Collider resources remain owned by the pending manager transaction")
+	_expect(fixture["index"].call("get_patch", "patch/b") == replacement, "published Index remains on the candidate while Collider cleanup is pending")
+	_expect(fixture["a"].call("get_bound_neighbor_patch", "east") == replacement, "scoped Patch state remains on the candidate while Collider cleanup is pending")
+	_expect(is_instance_valid(fixture["old_body"]) and fixture["manager"].call("get_transition_body", fixture["edge_key"]) == fixture["old_body"], "previously committed Collider body remains active during abort retry")
+
+	var first_retry: Dictionary = fixture["coordinator"].call("retry_pending")
+	_expect(not bool(first_retry.get("ok", true)) and str(first_retry.get("error", "")) == "collider_abort_still_pending", "failed abort retry does not advance to Patch or Index rollback")
+	_expect(bool(fixture["coordinator"].call("has_pending_transaction")) and manager.has_test_pending_transaction(), "coordinator and Collider manager both retain pending ownership after the first retry")
+	_expect(fixture["index"].call("get_patch", "patch/b") == replacement, "Index remains published until staged Collider resources are actually aborted")
+	_expect(fixture["a"].call("get_bound_neighbor_patch", "east") == replacement, "Patch neighbor state is not rolled back ahead of Collider cleanup")
+
+	var second_retry: Dictionary = fixture["coordinator"].call("retry_pending")
+	_expect(bool(second_retry.get("ok", false)) and bool(second_retry.get("rolled_back", false)), "second abort retry completes Collider cleanup before rolling back other participants")
+	_expect(not manager.has_test_pending_transaction(), "successful retry clears the staged Collider transaction")
+	_expect(fixture["index"].call("get_patch", "patch/b") == fixture["b"], "Index rollback restores the exact original Patch instance")
+	_expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "Patch rollback restores the exact original neighbor instance")
+	_expect(replacement.call("get_bound_neighbor_patch", "west") == null, "candidate replacement is left unbound after recovery")
+	_expect(fixture["manager"].call("get_transition_body", fixture["edge_key"]) == fixture["old_body"], "Collider rollback preserves the exact old body")
+	_expect(is_instance_valid(fixture["old_body"]) and fixture["old_body"].collision_layer == 1, "old Collider body remains active after complete recovery")
+	_expect(int(fixture["index"].call("get_generation")) == generation_before + 2, "Index generation remains monotonic across publish and rollback")
+	_expect(not bool(fixture["index"].call("get_corner_graph_stats").get("generation_reserved", true)), "successful recovery releases the Index reservation")
+	_expect(not bool(fixture["coordinator"].call("has_pending_transaction")), "successful recovery clears coordinator pending state")
 	await _release_fixture(fixture)
 
 
