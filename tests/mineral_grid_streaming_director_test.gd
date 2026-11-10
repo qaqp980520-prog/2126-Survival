@@ -205,7 +205,7 @@ func _test_queued_root_recovery_uses_unbatched_fallback() -> void:
 	assert(director.sync_to_world_position(Vector3(1, 0, 1), 4001), "same-ID queued-root recovery uses the immediate replacement path")
 	var replacement_root: Node3D = controller.get_chunk_root(chunk_id)
 	assert(is_instance_valid(replacement_root) and replacement_root != old_root, "queued-root recovery registers a new root instance")
-	assert(controller.get_terrain_adjacency_rebuild_count() == 2, "queued-root replacement performs one immediate rebind instead of a pending batch overwrite")
+	assert(controller.get_terrain_adjacency_rebuild_count() == 3, "queued-root replacement preserves the immediate unload/reload rebind path instead of a pending batch overwrite")
 	await process_frame
 	assert(old_root_ref.get_ref() == null, "replaced queued root is released after recovery")
 	director.queue_free()
