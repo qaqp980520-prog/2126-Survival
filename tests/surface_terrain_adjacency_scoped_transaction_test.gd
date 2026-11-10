@@ -134,13 +134,19 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
     var candidate_scoped: Dictionary = _filter_descriptors(fixture["candidate_report"].get("descriptors", {}), ["patch/b"])
     var changed_keys: Array[String] = _union_keys(old_scoped, candidate_scoped)
     var changed_edge_key: String = changed_keys[0]
+    var west_edge_key: String = ""
     var unrelated_edge_key: String = ""
     for key_value in fixture["old_report"].get("descriptors", {}).keys():
         var key: String = str(key_value)
-        if key != changed_edge_key:
+        if key == changed_edge_key:
+            continue
+        var descriptor: Dictionary = fixture["old_report"].get("descriptors", {}).get(key, {})
+        if str(descriptor.get("first_stable_id", "")) == "patch/a" and str(descriptor.get("second_stable_id", "")) == "patch/e":
+            west_edge_key = key
+        else:
             unrelated_edge_key = key
-            break
     var old_body: StaticBody3D = manager.call("get_transition_body", changed_edge_key) as StaticBody3D
+    var west_body: StaticBody3D = manager.call("get_transition_body", west_edge_key) as StaticBody3D
     var unrelated_body: StaticBody3D = manager.call("get_transition_body", unrelated_edge_key) as StaticBody3D
 
     var collider_prepared: Dictionary = manager.call(
@@ -179,12 +185,21 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
         await _release_fixture(fixture)
         return
 
+    var unscoped_flag_changed: bool = bool(fixture["a"].call("set_shared_transition_active", "west", false))
+    _expect(unscoped_flag_changed, "unaffected west-side transition can be toggled during the scoped transaction")
+    var unscoped_rejected: Dictionary = manager.call(
+        "accept_scoped_neighbor_state_apply",
+        int(collider_prepared.get("transaction_id", -1)),
+        scoped_applied.get("endpoint_expectations", [])
+    )
+    _expect(not bool(unscoped_rejected.get("ok", true)) and str(unscoped_rejected.get("error", "")) == "unexpected_unscoped_patch_flag_change", "collider handshake rejects an unlisted side-state mutation")
+    _expect(bool(fixture["a"].call("set_shared_transition_active", "west", true)), "unaffected west-side transition is restored before retry")
     var accepted: Dictionary = manager.call(
         "accept_scoped_neighbor_state_apply",
         int(collider_prepared.get("transaction_id", -1)),
         scoped_applied.get("endpoint_expectations", [])
     )
-    _expect(bool(accepted.get("ok", false)), "collider manager rebases only the explicitly changed Patch-side snapshot flags")
+    _expect(bool(accepted.get("ok", false)), "collider manager rebases only explicitly changed endpoints and preserves every other side snapshot")
     var committed: Dictionary = manager.call("commit_sync_transitions", int(collider_prepared.get("transaction_id", -1)))
     _expect(bool(committed.get("ok", false)), "real partial collider commit succeeds after scoped neighbor-state apply")
     if bool(committed.get("ok", false)):
@@ -192,11 +207,13 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
         _expect(bool(finalized.get("ok", false)), "scoped neighbor transaction finalizes after real collider commit")
         var replacement_body: StaticBody3D = manager.call("get_transition_body", changed_edge_key) as StaticBody3D
         _expect(is_instance_valid(replacement_body) and replacement_body != old_body and replacement_body.collision_layer == 1 and replacement_body.collision_mask == 0, "collider manager publishes the replacement body with valid collision invariants")
-        _expect(manager.call("get_transition_body", unrelated_edge_key) == unrelated_body, "partial collider commit preserves the unrelated exact body Node")
+        _expect(manager.call("get_transition_body", west_edge_key) == west_body, "partial collider commit preserves the same Patch opposite-side body by exact Node identity")
+        _expect(manager.call("get_transition_body", unrelated_edge_key) == unrelated_body, "partial collider commit preserves the distant exact body Node")
         _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b_replacement"], "successful cross-participant commit publishes the replacement neighbor Node")
         _expect(fixture["b"].call("get_bound_neighbor_patch", "west") == null, "successful cross-participant commit retires the old reciprocal neighbor")
         _expect(bool(fixture["a"].call("is_shared_transition_active", "east")), "successful collider commit activates the new first Patch side")
         _expect(bool(fixture["b_replacement"].call("is_shared_transition_active", "west")), "successful collider commit activates the new reciprocal Patch side")
+        _expect(bool(fixture["a"].call("is_shared_transition_active", "west")), "successful partial commit preserves the unaffected opposite-side transition flag")
     else:
         scoped.call("rollback", scoped_id)
     await _release_fixture(fixture)
@@ -288,13 +305,15 @@ func _test_partial_collider_failure_rolls_back_scoped_neighbor_apply() -> void:
     await process_frame
     _expect(staged_ref.get_ref() == null, "failed staged collider body is released")
     _expect(manager.call("get_transition_body", changed_edge_key) == old_body and is_instance_valid(old_body) and old_body.collision_layer == 1 and old_body.collision_mask == 0, "downstream failure preserves the exact old committed collider body")
-    _expect(manager.call("get_transition_body", unrelated_edge_key) == unrelated_body, "downstream failure preserves the unrelated exact collider body")
+    _expect(manager.call("get_transition_body", west_edge_key) == west_body, "downstream failure preserves the same Patch opposite-side collider body")
+    _expect(manager.call("get_transition_body", unrelated_edge_key) == unrelated_body, "downstream failure preserves the distant exact collider body")
     _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "downstream failure restores the exact old neighbor Node")
     _expect(fixture["b"].call("get_bound_neighbor_patch", "west") == fixture["a"], "downstream failure restores the reciprocal old neighbor Node")
     _expect(fixture["b_replacement"].call("get_bound_neighbor_patch", "west") == null, "downstream failure clears the replacement neighbor binding")
     _expect(bool(fixture["a"].call("is_shared_transition_active", "east")), "downstream failure restores the old first Patch transition flag")
     _expect(bool(fixture["b"].call("is_shared_transition_active", "west")), "downstream failure restores the old reciprocal Patch transition flag")
     _expect(not bool(fixture["b_replacement"].call("is_shared_transition_active", "west")), "downstream failure clears the replacement Patch transition flag")
+    _expect(bool(fixture["a"].call("is_shared_transition_active", "west")), "downstream failure preserves the unaffected opposite-side transition flag")
     await _release_fixture(fixture)
 
 
