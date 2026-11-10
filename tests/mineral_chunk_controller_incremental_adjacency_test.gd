@@ -1,6 +1,7 @@
 extends SceneTree
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
+const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 const IndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
@@ -26,6 +27,58 @@ class FaultInjectingColliderManager extends SurfaceTerrainTransitionColliderMana
 		return super.abort_sync_transitions(transaction_id)
 
 
+
+class FakeStreamingController extends Node3D:
+	var pending_recovery: bool = true
+	var retry_count: int = 0
+	var batch_depth: int = 0
+	var roots: Dictionary = {}
+
+	func has_pending_terrain_adjacency_recovery() -> bool:
+		return pending_recovery
+
+	func retry_terrain_adjacency_recovery() -> Dictionary:
+		retry_count += 1
+		pending_recovery = false
+		return {"ok": true, "rolled_back": true}
+
+	func begin_terrain_adjacency_batch() -> bool:
+		batch_depth += 1
+		return true
+
+	func end_terrain_adjacency_batch() -> Dictionary:
+		batch_depth = maxi(0, batch_depth - 1)
+		return {"ok": true}
+
+	func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
+		if roots.has(chunk_id) or not is_instance_valid(chunk_root) or chunk_root.get_parent() != null:
+			return false
+		add_child(chunk_root)
+		roots[chunk_id] = chunk_root
+		return true
+
+	func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
+		if not roots.has(chunk_id):
+			return false
+		var chunk_root: Node3D = roots[chunk_id] as Node3D
+		roots.erase(chunk_id)
+		remove_child(chunk_root)
+		chunk_root.queue_free()
+		return true
+
+	func is_chunk_loaded(chunk_id: String) -> bool:
+		return roots.has(chunk_id)
+
+	func get_chunk_root(chunk_id: String) -> Node3D:
+		return roots.get(chunk_id) as Node3D
+
+	func get_loaded_chunk_ids() -> PackedStringArray:
+		var ids := PackedStringArray()
+		for chunk_id_value in roots.keys():
+			ids.append(str(chunk_id_value))
+		ids.sort()
+		return ids
+
 var failures: Array[String] = []
 
 
@@ -37,6 +90,7 @@ func _run() -> void:
 	await _test_incremental_chunk_window_preserves_unaffected_resources()
 	await _test_patch_state_edit_uses_safe_full_rebind()
 	await _test_retained_coordinator_abort_recovery_keeps_chunk_roots()
+	await _test_director_retries_controller_recovery_for_sync_and_async_requests()
 	if failures.is_empty():
 		print("Mineral chunk controller incremental adjacency tests passed.")
 		quit(0)
@@ -158,6 +212,47 @@ func _test_retained_coordinator_abort_recovery_keeps_chunk_roots() -> void:
 	_expect(int(controller.call("get_terrain_transition_collider_count")) == 3, "recovery rebind leaves all three live transition collider bodies")
 	_assert_full_descriptor_parity(controller, "Coordinator Abort recovery")
 	await _release_fixture(fixture)
+
+
+
+func _test_director_retries_controller_recovery_for_sync_and_async_requests() -> void:
+	var holder := Node3D.new()
+	holder.name = "DirectorRecoveryFixture"
+	root.add_child(holder)
+	var controller := FakeStreamingController.new()
+	controller.name = "FakeStreamingController"
+	holder.add_child(controller)
+	var director: Node3D = DirectorScript.new()
+	director.name = "MineralGridStreamingDirector"
+	holder.add_child(director)
+	_expect(bool(director.call("bind_controller", controller)), "Director binds the recovery-aware Controller")
+	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_fake_chunk"))), "Director binds a deterministic test chunk factory")
+	director.set("load_radius", 0)
+	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, 400)), "synchronous Director request retries Controller recovery before loading")
+	_expect(controller.retry_count == 1, "synchronous Director performs exactly one retained-recovery retry")
+	_expect(controller.get_loaded_chunk_ids().size() == 1, "synchronous Director leaves one managed root at radius zero")
+
+	controller.pending_recovery = true
+	var request_id: int = int(director.call("request_sync_to_world_position_async", Vector3(32.0, 0.0, 0.0), 401, 1))
+	_expect(request_id > 0, "async Director request is accepted after its Controller recovery retry")
+	for _frame in range(24):
+		await process_frame
+		if int(director.call("get_active_async_request_id")) < 0:
+			break
+	var diagnostics: Dictionary = director.call("get_async_request_diagnostics", request_id)
+	_expect(controller.retry_count == 2, "async Director also retries retained Controller recovery before staging")
+	_expect(str(diagnostics.get("phase", "")) == "complete", "async request reaches its terminal complete phase")
+	_expect(controller.get_loaded_chunk_ids().size() == 1, "async window shift retires the stale root after successful batch close")
+	_expect(controller.get_loaded_chunk_ids()[0] == "chunk_1_0", "async Director and Controller agree on the shifted window")
+	holder.queue_free()
+	await process_frame
+	await process_frame
+
+
+func _make_fake_chunk(coord: Vector2i) -> Node3D:
+	var chunk := Node3D.new()
+	chunk.name = "Chunk_%d_%d" % [coord.x, coord.y]
+	return chunk
 
 
 func _make_fixture(holder_name: String) -> Dictionary:
