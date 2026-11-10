@@ -118,8 +118,9 @@ The transaction now:
 - Marks the transaction with `recovery_required` and returns `pending_retained=true`.
 - Removes each successfully ended segmentation batch from the pending retry list, so a later retry never decrements the same batch depth twice.
 - Uses the same retry-safe batch close helper from Rollback and Finalize. A partial close can be retried without re-ending batches that already closed.
+- Refuses Finalize while `recovery_required` is set, so a caller cannot accidentally discard an incomplete rollback by taking the success path.
 - Clears pending references only after restoration and all remaining batch closures succeed.
 
-A new Godot 4.3 regression uses a fault-injecting SurfaceTerrainPatch subclass to make Apply fail and the first rollback attempt fail transiently. It verifies that the transaction remains pending, already-closed batches are removed, and a second Rollback restores the exact original reciprocal Patch Node references before releasing pending state.
+A new Godot 4.3 regression uses a fault-injecting SurfaceTerrainPatch subclass to make Apply fail, make the first rollback attempt fail, and make one Patch's segmentation-batch close fail transiently. It verifies that the transaction remains pending, already-closed batches are removed, premature Finalize is rejected, and a second Rollback restores the exact original reciprocal Patch Node references and closes only the remaining batch before releasing pending state.
 
 This is a fail-closed recovery guarantee; it does not claim that a permanently invalid/freed Patch can be repaired automatically. If a required batch endpoint becomes invalid, the transaction intentionally remains retained and reports the unresolved batch instead of silently discarding recovery state.
