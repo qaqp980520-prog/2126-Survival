@@ -125,7 +125,7 @@ func _test_underseeded_projection_is_rejected_without_mutation() -> void:
         underseeded
     )
     _expect(not bool(rejected.get("ok", true)), "scoped prepare rejects an incomplete changed-edge projection")
-    _expect(str(rejected.get("error", "")) == "changed_edge_key_mismatch", "under-seeded projection reports an exact key-set mismatch")
+    _expect(str(rejected.get("error", "")) == "descriptor_outside_changed_edge_set", "under-seeded projection identifies the omitted old/new descriptor key")
     _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "under-seeded rejection preserves the first old binding")
     _expect(fixture["c"].call("get_bound_neighbor_patch", "east") == fixture["d"], "under-seeded rejection preserves the second old binding")
     _expect(fixture["b_replacement"].call("get_bound_neighbor_patch", "west") == null, "under-seeded rejection leaves the first replacement untouched")
