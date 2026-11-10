@@ -240,13 +240,19 @@ func _test_partial_collider_failure_rolls_back_scoped_neighbor_apply() -> void:
     var candidate_scoped: Dictionary = _filter_descriptors(fixture["candidate_report"].get("descriptors", {}), ["patch/b"])
     var changed_keys: Array[String] = _union_keys(old_scoped, candidate_scoped)
     var changed_edge_key: String = changed_keys[0]
+    var west_edge_key: String = ""
     var unrelated_edge_key: String = ""
     for key_value in fixture["old_report"].get("descriptors", {}).keys():
         var key: String = str(key_value)
-        if key != changed_edge_key:
+        if key == changed_edge_key:
+            continue
+        var descriptor: Dictionary = fixture["old_report"].get("descriptors", {}).get(key, {})
+        if str(descriptor.get("first_stable_id", "")) == "patch/a" and str(descriptor.get("second_stable_id", "")) == "patch/e":
+            west_edge_key = key
+        else:
             unrelated_edge_key = key
-            break
     var old_body: StaticBody3D = manager.call("get_transition_body", changed_edge_key) as StaticBody3D
+    var west_body: StaticBody3D = manager.call("get_transition_body", west_edge_key) as StaticBody3D
     var unrelated_body: StaticBody3D = manager.call("get_transition_body", unrelated_edge_key) as StaticBody3D
 
     var collider_prepared: Dictionary = manager.call(
