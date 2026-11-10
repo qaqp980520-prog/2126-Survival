@@ -64,7 +64,7 @@ For a one-chunk horizontal shift at load radius 8, 17 roots are staged. The expe
 | 2 | 8 |
 | 4 | 4 |
 
-The benchmark uses two samples per budget on one warmed Runner, alternating east/west shifts. It records total request duration, factory time, Director phase timings, Controller adjacency batch profile, and frame-interval samples. No cross-runner speedup claim is allowed.
+The benchmark uses three samples per budget on one warmed Runner, alternating east/west shifts; the initial budget-1 crossing plus eight repeat crossings yield three samples for each budget. It records total request duration, factory time, Director phase timings, Controller adjacency batch profile, and frame-interval samples. No cross-runner speedup claim is allowed.
 
 ## Limitations
 
