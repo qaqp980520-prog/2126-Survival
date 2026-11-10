@@ -108,3 +108,6 @@ Exact-head focused, lifecycle, benchmark, and full Godot 4.3 validation must be 
 
 
 A follow-up focused run after the dynamic Controller type correction exposed one remaining global-class-cache dependency in the test fixture itself: its nested fault-injecting subclass extended `SurfaceTerrainTransitionColliderManager` by global class name. The fixture now extends `res://systems/SurfaceTerrainTransitionColliderManager.gd` directly, so the focused test resolves the exact production base script without depending on the editor's global script-class cache.
+
+
+The corrected benchmark then exposed a GDScript block-scope issue in the test itself: `reuse_fixture` had been declared inside the first `if radius == 1` block and referenced from a later sibling block. It is now initialized in the enclosing radius-loop scope and assigned inside the first block, so the preserved Collider/endpoint assertions can read the same fixture after the boundary crossing.

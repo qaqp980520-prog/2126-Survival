@@ -87,9 +87,10 @@ func _run() -> void:
 		_expect(_all_refs_released(old_root_refs), "radius %d expansion releases all departed production roots" % radius)
 		_emit_metrics("expand_stage_commit", radius, expected_count, expansion_diagnostic, expansion.get("frame_samples_ms", []), controller)
 
+		var reuse_fixture: Dictionary = {}
 		if radius == 1:
 			_reset_factory_metrics()
-			var reuse_fixture: Dictionary = _seed_production_transition_reuse_fixture(controller, director, target)
+			reuse_fixture = _seed_production_transition_reuse_fixture(controller, director, target)
 			_expect(bool(reuse_fixture.get("ok", false)), "radius 1 production fixture creates and reuses a real factory transition seam: %s" % str(reuse_fixture.get("error", "")))
 			_expect(int(reuse_fixture.get("active_edge_count", 0)) > 0, "radius 1 production fixture has at least one active transition edge")
 			_expect(int(reuse_fixture.get("reused_edge_count", 0)) == int(reuse_fixture.get("active_edge_count", -1)), "radius 1 same-world sync reuses every production transition edge")

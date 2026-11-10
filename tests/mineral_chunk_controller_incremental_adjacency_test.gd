@@ -9,6 +9,7 @@ const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const WorldObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 
 
+# The focused entry point may run before Godot populates the global script-class cache.
 class FaultInjectingColliderManager extends "res://systems/SurfaceTerrainTransitionColliderManager.gd":
 	var fail_commit_once: bool = false
 	var abort_failures_remaining: int = 0
