@@ -200,9 +200,15 @@ func finalize(transaction_id: int) -> Dictionary:
         return {"ok": false, "error": "invalid_transaction_id"}
     if not bool(_pending.get("applied", false)):
         return {"ok": false, "error": "transaction_not_applied"}
-    var ended: bool = _end_batches(_pending.get("batch_patches", []))
+    var ended: bool = _end_pending_batches()
     if not ended:
-        return {"ok": false, "error": "segmentation_batch_end_failed"}
+        _pending["finalize_pending"] = true
+        return {
+            "ok": false,
+            "error": "segmentation_batch_end_failed",
+            "pending_retained": true,
+            "remaining_batch_count": _pending.get("batch_patches", []).size()
+        }
     _pending.clear()
     return {"ok": true, "finalized": true, "transaction_id": transaction_id}
 
@@ -218,9 +224,17 @@ func rollback(transaction_id: int) -> Dictionary:
         _pending.clear()
         return {"ok": true, "rolled_back": true, "transaction_id": transaction_id, "noop": true}
     var restored: bool = _restore_old_state()
-    var ended: bool = _end_batches(_pending.get("batch_patches", []))
+    var ended: bool = _end_pending_batches()
     if not restored or not ended:
-        return {"ok": false, "error": "rollback_failed", "restored": restored, "batches_ended": ended}
+        _pending["recovery_required"] = true
+        return {
+            "ok": false,
+            "error": "rollback_failed",
+            "restored": restored,
+            "batches_ended": ended,
+            "pending_retained": true,
+            "remaining_batch_count": _pending.get("batch_patches", []).size()
+        }
     _pending.clear()
     return {"ok": true, "rolled_back": true, "transaction_id": transaction_id}
 
@@ -466,14 +480,31 @@ func _restore_old_state() -> bool:
 
 func _restore_and_discard(error_code: String) -> Dictionary:
     var restored: bool = _restore_old_state()
-    var ended: bool = _end_batches(_pending.get("batch_patches", []))
+    var ended: bool = _end_pending_batches()
     var transaction_id: int = int(_pending.get("transaction_id", -1))
-    _pending.clear()
+    if restored and ended:
+        _pending.clear()
+        return {
+            "ok": false,
+            "error": error_code,
+            "rollback_restored": true,
+            "batches_ended": true,
+            "pending_retained": false,
+            "transaction_id": transaction_id
+        }
+
+    # Keep every snapshot and strong Patch reference when recovery is incomplete.
+    # A caller can retry rollback() after a transient failure; already-ended batches
+    # have been removed from the retry list and therefore cannot be ended twice.
+    _pending["recovery_required"] = true
+    _pending["recovery_error"] = error_code
     return {
         "ok": false,
-        "error": error_code if restored and ended else "apply_failed_and_rollback_failed",
+        "error": "apply_failed_and_rollback_failed",
         "rollback_restored": restored,
         "batches_ended": ended,
+        "pending_retained": true,
+        "remaining_batch_count": _pending.get("batch_patches", []).size(),
         "transaction_id": transaction_id
     }
 
@@ -483,10 +514,14 @@ func _discard_unapplied(error_code: String) -> Dictionary:
     return {"ok": false, "error": error_code}
 
 
-func _end_batches(batch_patches: Array) -> bool:
-    var all_ok: bool = true
+func _end_pending_batches() -> bool:
+    var batch_patches: Array = _pending.get("batch_patches", [])
+    var remaining: Array = []
     for index in range(batch_patches.size() - 1, -1, -1):
-        var patch: Node3D = batch_patches[index] as Node3D
-        if not is_instance_valid(patch) or not bool(patch.call("end_collision_segmentation_batch")):
-            all_ok = false
-    return all_ok
+        var patch_value: Variant = batch_patches[index]
+        var patch: Node3D = patch_value as Node3D
+        if is_instance_valid(patch) and bool(patch.call("end_collision_segmentation_batch")):
+            continue
+        remaining.push_front(patch_value)
+    _pending["batch_patches"] = remaining
+    return remaining.is_empty()
