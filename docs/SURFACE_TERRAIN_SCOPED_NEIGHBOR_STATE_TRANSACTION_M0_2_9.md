@@ -107,3 +107,19 @@ Focused workflow: `.github/workflows/surface-terrain-adjacency-scoped-transactio
 3. Prove the Index generation, Patch neighbor state, and collider resource maps all remain on the old generation after abort.
 4. Wire the coordinator into MineralChunkController only after the cross-participant rollback test passes.
 5. Profile a non-zero Transition Collider workload; the existing Radius-8 benchmark has zero colliders and cannot prove partial-collider runtime performance.
+
+
+## Failure-recovery retention hardening — Run 195
+
+A code audit found that the Apply failure helper previously cleared `_pending` even when restoring old Patch state or closing segmentation batches failed. That discarded the only retained strong Patch references and removed the transaction state needed for recovery.
+
+The transaction now:
+- Retains `_pending`, snapshots, old/candidate pairs, and strong Patch references whenever recovery is incomplete.
+- Marks the transaction with `recovery_required` and returns `pending_retained=true`.
+- Removes each successfully ended segmentation batch from the pending retry list, so a later retry never decrements the same batch depth twice.
+- Uses the same retry-safe batch close helper from Rollback and Finalize. A partial close can be retried without re-ending batches that already closed.
+- Clears pending references only after restoration and all remaining batch closures succeed.
+
+A new Godot 4.3 regression uses a fault-injecting SurfaceTerrainPatch subclass to make Apply fail and the first rollback attempt fail transiently. It verifies that the transaction remains pending, already-closed batches are removed, and a second Rollback restores the exact original reciprocal Patch Node references before releasing pending state.
+
+This is a fail-closed recovery guarantee; it does not claim that a permanently invalid/freed Patch can be repaired automatically. If a required batch endpoint becomes invalid, the transaction intentionally remains retained and reports the unresolved batch instead of silently discarding recovery state.
