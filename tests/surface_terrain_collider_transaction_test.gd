@@ -531,6 +531,7 @@ func _test_committed_corner_cap_collision_mask_before_prepare_is_replaced() -> v
         return
     var holder: Node3D = fixture["holder"]
     var manager: Variant = fixture["manager"]
+    var binding: Dictionary = _bind_fixture(fixture)
     var original_caps: Dictionary = {}
     for entry in fixture["corner_refs"]:
         var key: String = str(entry["stable_id"]) + "|" + str(entry["corner"])
@@ -540,7 +541,7 @@ func _test_committed_corner_cap_collision_mask_before_prepare_is_replaced() -> v
     _expect(is_instance_valid(mutated_body) and mutated_body.collision_layer == 1 and mutated_body.collision_mask == 0, "committed corner cap begins with canonical collision state")
     if is_instance_valid(mutated_body):
         mutated_body.collision_mask = 1
-    var prepared: Dictionary = manager.call("prepare_sync_transitions", fixture["descriptors"], fixture["patches_by_stable_id"])
+    var prepared: Dictionary = manager.call("prepare_sync_transitions", binding.get("descriptors", {}), fixture["patches_by_stable_id"])
     _expect(bool(prepared.get("ok", false)), "pre-corrupted committed corner cap is safely prepared for replacement")
     if not bool(prepared.get("ok", false)):
         await _release_holder(holder)
