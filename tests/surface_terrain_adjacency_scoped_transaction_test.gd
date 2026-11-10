@@ -191,6 +191,7 @@ func _test_apply_recovery_retains_pending_transaction_for_retry() -> void:
 
     var transaction_id: int = int(prepared.get("transaction_id", -1))
     a.clear_failures_remaining = 3
+    a.end_batch_failures_remaining = 1
     var failed_apply: Dictionary = transaction.call("apply", transaction_id)
     _expect(not bool(failed_apply.get("ok", true)), "injected old-edge clear failure aborts Apply")
     _expect(str(failed_apply.get("error", "")) == "apply_failed_and_rollback_failed", "injected rollback failure is reported explicitly")
