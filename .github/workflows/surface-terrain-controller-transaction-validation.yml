@@ -8,8 +8,13 @@ on:
       - 'systems/WorldObjectStateRegistry.gd'
       - 'tests/world_object_state_registry_test.gd'
       - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainAdjacencyIndex.gd'
+      - 'systems/SurfaceTerrainAdjacencyScopedTransaction.gd'
+      - 'systems/SurfaceTerrainAdjacencyCoordinator.gd'
+      - 'systems/SurfaceTerrainTransitionColliderManager.gd'
       - 'systems/SurfaceTerrainPatch.gd'
       - 'tests/surface_terrain_controller_transaction_test.gd'
+      - 'tests/mineral_chunk_controller_incremental_adjacency_test.gd'
       - '.github/workflows/godot-validation.yml'
       - '.github/workflows/surface-terrain-controller-transaction-validation.yml'
   workflow_dispatch:
@@ -37,8 +42,13 @@ jobs:
           test -f systems/WorldObjectStateRegistry.gd
           test -f tests/world_object_state_registry_test.gd
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainAdjacencyIndex.gd
+          test -f systems/SurfaceTerrainAdjacencyScopedTransaction.gd
+          test -f systems/SurfaceTerrainAdjacencyCoordinator.gd
+          test -f systems/SurfaceTerrainTransitionColliderManager.gd
           test -f systems/SurfaceTerrainPatch.gd
           test -f tests/surface_terrain_controller_transaction_test.gd
+          test -f tests/mineral_chunk_controller_incremental_adjacency_test.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run terrain controller transaction rollback regression
@@ -49,6 +59,14 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Surface terrain controller transaction tests passed."
+      - name: Run production Controller incremental adjacency regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/mineral_chunk_controller_incremental_adjacency_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral chunk controller incremental adjacency tests passed."
       - name: Run chunk-scoped world-object registry regression
         shell: bash
         run: |
