@@ -509,6 +509,8 @@ func _run_persistent_corner_graph_tests() -> void:
 	var candidate_a: Node3D = _new_patch(reservation_holder, "CandidateA", Vector3(40.0, 0.0, 0.0))
 	var candidate_b: Node3D = _new_patch(reservation_holder, "CandidateB", Vector3(60.0, 0.0, 0.0))
 	var candidate_c: Node3D = _new_patch(reservation_holder, "CandidateC", Vector3(80.0, 0.0, 0.0))
+	var candidate_d: Node3D = _new_patch(reservation_holder, "CandidateD", Vector3(100.0, 0.0, 0.0))
+	var candidate_e: Node3D = _new_patch(reservation_holder, "CandidateE", Vector3(120.0, 0.0, 0.0))
 	await process_frame
 	var reservation_index = IndexScript.new()
 	var reservation_ids: Dictionary = {
@@ -543,6 +545,50 @@ func _run_persistent_corner_graph_tests() -> void:
 		_expect(bool(reservation_index.reserve_delta(plan_c_id).get("ok", false)), "later plan acquires a fresh generation reservation")
 		_expect(reservation_index.release_delta_reservation(plan_c_id), "coordinator can explicitly release a reservation before publication")
 		_expect(bool(reservation_index.commit_delta(plan_c_id).get("ok", false)), "released plan remains valid and can commit normally")
+
+	var plan_d: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_d", "patch": candidate_d}
+	])
+	var plan_e: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_e", "patch": candidate_e}
+	])
+	_expect(bool(plan_d.get("ok", false)) and bool(plan_e.get("ok", false)), "reversible publication fixture prepares two competing plans")
+	if bool(plan_d.get("ok", false)) and bool(plan_e.get("ok", false)):
+		var plan_d_id: String = str(plan_d.get("summary", {}).get("plan_id", ""))
+		var plan_e_id: String = str(plan_e.get("summary", {}).get("plan_id", ""))
+		var plan_patches: Dictionary = reservation_index.get_plan_patches_by_stable_id(plan_d_id)
+		_expect(bool(plan_patches.get("ok", false)), "prepared plan exposes a validated candidate Patch map")
+		_expect(plan_patches.get("patches_by_stable_id", {}).get("reservation/candidate_d") == candidate_d, "prepared Patch map resolves the exact candidate Node")
+		var plan_descriptors: Dictionary = reservation_index.get_plan_edge_descriptors(plan_d_id)
+		_expect(bool(plan_descriptors.get("ok", false)), "prepared plan exposes its full candidate descriptor cache")
+		var generation_before_publish: int = reservation_index.get_generation()
+		_expect(bool(reservation_index.reserve_delta(plan_d_id).get("ok", false)), "reversible publication plan reserves its generation")
+		var published: Dictionary = reservation_index.publish_delta(plan_d_id)
+		_expect(bool(published.get("ok", false)) and bool(published.get("published", false)), "Index can publish a candidate while retaining its rollback snapshot")
+		_expect(reservation_index.get_patch("reservation/candidate_d") == candidate_d, "published Index exposes the candidate Patch before finalization")
+		_expect(bool(reservation_index.get_corner_graph_stats().get("generation_reserved", false)), "published Index keeps its generation reservation until coordinator finalization")
+		var blocked_competitor: Dictionary = reservation_index.commit_delta(plan_e_id)
+		_expect(str(blocked_competitor.get("error", "")) == "generation_reserved", "competing plan cannot publish while a candidate is reversibly published")
+		var rolled_back: Dictionary = reservation_index.rollback_published_delta(plan_d_id)
+		_expect(bool(rolled_back.get("ok", false)), "published Index can restore its previous snapshot after a downstream failure")
+		_expect(reservation_index.get_patch("reservation/candidate_d") == null, "Index rollback removes the candidate Patch from the committed map")
+		_expect(reservation_index.get_patch_count() == 3, "Index rollback restores the prior committed Patch count")
+		_expect(reservation_index.get_generation() == generation_before_publish + 2, "Index rollback keeps the generation monotonic")
+		_expect(not bool(reservation_index.get_corner_graph_stats().get("generation_reserved", true)), "Index rollback releases the coordinator reservation")
+		var stale_after_rollback: Dictionary = reservation_index.commit_delta(plan_e_id)
+		_expect(str(stale_after_rollback.get("error", "")) == "stale_generation", "plans based on the pre-publish generation become stale after rollback")
+
+	var final_plan: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_d", "patch": candidate_d}
+	])
+	_expect(bool(final_plan.get("ok", false)), "candidate can be prepared again after a reversible rollback")
+	if bool(final_plan.get("ok", false)):
+		var final_plan_id: String = str(final_plan.get("summary", {}).get("plan_id", ""))
+		_expect(bool(reservation_index.reserve_delta(final_plan_id).get("ok", false)), "final candidate reserves the current generation")
+		_expect(bool(reservation_index.publish_delta(final_plan_id).get("ok", false)), "final candidate publishes for coordinator finalization")
+		_expect(bool(reservation_index.finalize_delta(final_plan_id).get("ok", false)), "Index finalization discards the retained rollback snapshot")
+		_expect(reservation_index.get_patch("reservation/candidate_d") == candidate_d, "finalized Index keeps the candidate Patch committed")
+		_expect(not bool(reservation_index.get_corner_graph_stats().get("generation_reserved", true)), "finalization releases the generation reservation")
 
 	graph_holder.queue_free()
 	reservation_holder.queue_free()
