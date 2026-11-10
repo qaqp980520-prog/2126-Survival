@@ -218,11 +218,21 @@ func _test_connected_two_junction_closure_preserves_unrelated_edge() -> void:
     var manager: Node3D = fixture["manager"]
     var independent_edge: String = str(fixture["independent_edge"])
     var independent_body: StaticBody3D = manager.call("get_transition_body", independent_edge) as StaticBody3D
-    var old_grid_edges: Dictionary = {}
+    var old_grid_edge_refs: Dictionary = {}
     for edge_key_value in fixture["grid_edge_keys"]:
         var edge_key: String = str(edge_key_value)
-        old_grid_edges[edge_key] = manager.call("get_transition_body", edge_key)
-    var old_caps: Dictionary = manager.get("_managed_corner_caps").duplicate(false)
+        var old_grid_body: StaticBody3D = manager.call("get_transition_body", edge_key) as StaticBody3D
+        _expect(is_instance_valid(old_grid_body), "connected fixture grid edge body exists: " + edge_key)
+        if is_instance_valid(old_grid_body):
+            old_grid_edge_refs[edge_key] = weakref(old_grid_body)
+    var old_caps: Dictionary = {}
+    var committed_caps: Dictionary = manager.get("_managed_corner_caps")
+    for cap_key_value in committed_caps.keys():
+        var cap_record: Dictionary = committed_caps[cap_key_value]
+        var cap_body: StaticBody3D = cap_record.get("body") as StaticBody3D
+        _expect(is_instance_valid(cap_body), "connected fixture corner cap body exists: " + str(cap_key_value))
+        if is_instance_valid(cap_body):
+            old_caps[str(cap_key_value)] = weakref(cap_body)
     _expect(int(manager.call("get_corner_cap_count")) == 8, "connected fixture begins with eight eligible corner caps")
 
     _expect(_apply_height(fixture["nw"], 1), "changed NW patch accepts a new height")
@@ -251,13 +261,12 @@ func _test_connected_two_junction_closure_preserves_unrelated_edge() -> void:
     _expect(int(manager.call("get_corner_cap_count")) == 0, "both linked junctions fall back without corner caps")
     await process_frame
     await process_frame
-    for edge_key_value in old_grid_edges.keys():
-        var old_body: StaticBody3D = old_grid_edges[edge_key_value] as StaticBody3D
-        _expect(not is_instance_valid(old_body), "retired connected grid edge is released: " + str(edge_key_value))
+    for edge_key_value in old_grid_edge_refs.keys():
+        var old_body_ref: WeakRef = old_grid_edge_refs[edge_key_value] as WeakRef
+        _expect(old_body_ref.get_ref() == null, "retired connected grid edge is released: " + str(edge_key_value))
     for cap_key_value in old_caps.keys():
-        var old_cap: Dictionary = old_caps[cap_key_value]
-        var old_body: StaticBody3D = old_cap.get("body") as StaticBody3D
-        _expect(not is_instance_valid(old_body), "retired connected corner cap is released: " + str(cap_key_value))
+        var old_cap_ref: WeakRef = old_caps[cap_key_value] as WeakRef
+        _expect(old_cap_ref.get_ref() == null, "retired connected corner cap is released: " + str(cap_key_value))
     await _release_holder(holder)
 
 
