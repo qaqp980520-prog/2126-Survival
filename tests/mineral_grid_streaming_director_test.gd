@@ -90,6 +90,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_queued_root_recovery_uses_unbatched_fallback()
 	await process_frame
+	await _test_async_phase_diagnostics_split_frame_waits()
+	await process_frame
 	print("Mineral grid streaming director tests passed.")
 	quit(0)
 
@@ -208,6 +210,62 @@ func _test_queued_root_recovery_uses_unbatched_fallback() -> void:
 	assert(controller.get_terrain_adjacency_rebuild_count() == 3, "queued-root replacement preserves the immediate unload/reload rebind path instead of a pending batch overwrite")
 	await process_frame
 	assert(old_root_ref.get_ref() == null, "replaced queued root is released after recovery")
+	director.queue_free()
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
+func _test_async_phase_diagnostics_split_frame_waits() -> void:
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	var director: Node = Director.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	root.add_child(director)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	director.chunk_size_x = 10.0
+	director.chunk_size_z = 10.0
+	director.load_radius = 1
+	assert(director.bind_controller(controller))
+	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
+	assert(director.sync_to_world_position(Vector3(1, 0, 1), 5000), "profiling fixture establishes the initial nine-chunk window")
+	assert(not director.is_async_phase_profiling_enabled(), "async phase profiling is disabled by default")
+	director.set_async_phase_profiling_enabled(true)
+	var request_id: int = director.request_sync_to_world_position_async(Vector3(11, 0, 1), 5001, 1)
+	assert(request_id > 0, "profiled async boundary request is accepted")
+	var diagnostic: Dictionary = {}
+	for frame_index in range(120):
+		await process_frame
+		diagnostic = director.get_async_request_diagnostics(request_id)
+		if bool(diagnostic.get("terminal", false)):
+			break
+	assert(bool(diagnostic.get("terminal", false)), "profiled async boundary request reaches a terminal state")
+	assert(bool(diagnostic.get("success", false)), "profiled async boundary request succeeds")
+	assert(bool(diagnostic.get("phase_profile_enabled", false)), "request records that opt-in phase profiling was enabled")
+	assert(int(diagnostic.get("max_staged_per_frame", -1)) == 1, "diagnostic records the effective one-root frame budget")
+	assert(int(diagnostic.get("staged_count", -1)) == 3, "one-chunk boundary shift stages exactly three new roots")
+	assert(int(diagnostic.get("newly_loaded_count", -1)) == 3, "one-chunk boundary shift registers exactly three new roots")
+	assert(int(diagnostic.get("unloaded_stale_count", -1)) == 3, "one-chunk boundary shift retires exactly three stale roots")
+	assert(int(diagnostic.get("frame_yield_count", -1)) == 3, "one-root frame budget yields exactly once per staged root")
+	var phase_keys: Array[String] = [
+		"planning_usec",
+		"factory_build_usec",
+		"staged_validation_usec",
+		"frame_yield_wait_usec",
+		"controller_registration_usec",
+		"staged_map_erase_usec",
+		"stale_unload_usec",
+		"adjacency_finalize_call_usec"
+	]
+	var profiled_total_usec: int = 0
+	for phase_key in phase_keys:
+		assert(diagnostic.has(phase_key), "async phase profile includes %s" % phase_key)
+		var phase_usec: int = int(diagnostic.get(phase_key, -1))
+		assert(phase_usec >= 0, "async phase profile records non-negative %s" % phase_key)
+		profiled_total_usec += phase_usec
+	assert(int(diagnostic.get("frame_yield_wait_usec", 0)) > 0, "intentional process-frame waits are measured separately")
+	assert(profiled_total_usec <= int(diagnostic.get("duration_usec", 0)), "non-overlapping Director phase timings fit inside total request duration")
 	director.queue_free()
 	controller.queue_free()
 	registry.queue_free()
