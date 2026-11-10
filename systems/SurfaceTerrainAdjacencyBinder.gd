@@ -29,7 +29,7 @@ static func build_candidate_descriptors(patches: Array[Node3D], stable_ids_by_in
 
 ## Internal builder retains patch references only for the synchronous full Binder apply step.
 ## Public callers must use build_candidate_descriptors(), which returns descriptor data only.
-static func _build_candidate_topology
+static func _build_candidate_topology(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
 	var seen_instances: Dictionary = {}
 	var seen_stable_ids: Dictionary = {}
 	var positions: Array[Vector3] = []
