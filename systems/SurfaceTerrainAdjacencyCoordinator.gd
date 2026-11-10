@@ -75,7 +75,9 @@ func execute_delta(
 		return {"ok": false, "error": "index_plan_id_missing"}
 	var reservation: Dictionary = _index.call("reserve_delta", plan_id)
 	if not bool(reservation.get("ok", false)):
-		_index.call("abort_delta", plan_id)
+		var reservation_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_generation_reservation_failed")
+		if not bool(reservation_cleanup.get("ok", false)):
+			return reservation_cleanup
 		return {"ok": false, "error": "index_generation_reservation_failed:" + str(reservation.get("error", "unknown"))}
 
 	var old_patch_result: Dictionary = _index.call("get_patches_by_stable_id")
@@ -86,7 +88,9 @@ func execute_delta(
 		or not bool(candidate_patch_result.get("ok", false))
 		or not bool(candidate_descriptor_result.get("ok", false))
 	):
-		_index.call("abort_delta", plan_id)
+		var snapshot_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_candidate_snapshot_unavailable")
+		if not bool(snapshot_cleanup.get("ok", false)):
+			return snapshot_cleanup
 		return {"ok": false, "error": "index_candidate_snapshot_unavailable"}
 
 	var old_patches: Dictionary = old_patch_result.get("patches_by_stable_id", {})
@@ -112,21 +116,28 @@ func execute_delta(
 		profile_enabled
 	)
 	if not bool(collider_prepare.get("ok", false)):
-		_index.call("abort_delta", plan_id)
+		var prepare_cleanup: Dictionary = _abort_index_or_retain(plan_id, "collider_prepare_failed")
+		if not bool(prepare_cleanup.get("ok", false)):
+			return prepare_cleanup
 		return {"ok": false, "error": "collider_prepare_failed:" + str(collider_prepare.get("error", "unknown"))}
 	var collider_transaction_id: int = int(collider_prepare.get("transaction_id", -1))
 	if collider_transaction_id <= 0:
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
-		_index.call("abort_delta", plan_id)
-		return {"ok": false, "error": "collider_transaction_id_invalid"}
+		_store_pending("manual_recovery", plan_id, collider_transaction_id, -1, false, true, "collider_transaction_id_invalid")
+		return {"ok": false, "error": "collider_transaction_id_invalid", "pending_retained": true}
 
 	var manager_edges: Array[String] = _sorted_strings(collider_prepare.get("affected_edge_keys", []))
 	var manager_junctions: Array[String] = _sorted_strings(collider_prepare.get("affected_junction_keys", []))
 	var index_edges: Array[String] = _sorted_strings(summary.get("closure_edge_keys", []))
 	var index_junctions: Array[String] = _sorted_strings(summary.get("closure_junction_keys", []))
 	if manager_edges != index_edges or manager_junctions != index_junctions:
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
-		_index.call("abort_delta", plan_id)
+		var closure_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, -1, false, false, "index_collider_closure_mismatch"
+		)
+		if not bool(closure_cleanup.get("ok", false)):
+			return closure_cleanup
+		var closure_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_collider_closure_mismatch")
+		if not bool(closure_index_cleanup.get("ok", false)):
+			return closure_index_cleanup
 		return {
 			"ok": false,
 			"error": "index_collider_closure_mismatch",
@@ -145,13 +156,25 @@ func execute_delta(
 		scoped_changed_edge_keys
 	)
 	if not bool(scoped_prepare.get("ok", false)):
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
-		_index.call("abort_delta", plan_id)
+		var scoped_prepare_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, -1, false, false, "scoped_prepare_failed"
+		)
+		if not bool(scoped_prepare_cleanup.get("ok", false)):
+			return scoped_prepare_cleanup
+		var scoped_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "scoped_prepare_failed")
+		if not bool(scoped_index_cleanup.get("ok", false)):
+			return scoped_index_cleanup
 		return {"ok": false, "error": "scoped_prepare_failed:" + str(scoped_prepare.get("error", "unknown"))}
 	var scoped_transaction_id: int = int(scoped_prepare.get("transaction_id", 0))
 	if bool(scoped_prepare.get("noop", false)) or scoped_transaction_id <= 0:
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
-		_index.call("abort_delta", plan_id)
+		var noop_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, -1, false, false, "scoped_transaction_unexpected_noop"
+		)
+		if not bool(noop_cleanup.get("ok", false)):
+			return noop_cleanup
+		var noop_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "scoped_transaction_unexpected_noop")
+		if not bool(noop_index_cleanup.get("ok", false)):
+			return noop_index_cleanup
 		return {"ok": false, "error": "scoped_transaction_unexpected_noop"}
 
 	var scoped_apply: Dictionary = _scoped_transaction.call("apply", scoped_transaction_id)
@@ -167,8 +190,14 @@ func execute_delta(
 				str(scoped_apply.get("error", "scoped_apply_failed"))
 			)
 			return {"ok": false, "error": "scoped_apply_recovery_required", "pending_retained": true}
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
-		_index.call("abort_delta", plan_id)
+		var apply_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, -1, false, false, "scoped_apply_failed"
+		)
+		if not bool(apply_cleanup.get("ok", false)):
+			return apply_cleanup
+		var apply_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "scoped_apply_failed")
+		if not bool(apply_index_cleanup.get("ok", false)):
+			return apply_index_cleanup
 		return {"ok": false, "error": "scoped_apply_failed:" + str(scoped_apply.get("error", "unknown"))}
 
 	var accepted: Dictionary = _collider_manager.call(
@@ -177,27 +206,43 @@ func execute_delta(
 		scoped_apply.get("endpoint_expectations", [])
 	)
 	if not bool(accepted.get("ok", false)):
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
+		var accept_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, scoped_transaction_id, false, true, "collider_accept_failed"
+		)
+		if not bool(accept_cleanup.get("ok", false)):
+			return accept_cleanup
 		var accept_rollback: Dictionary = _scoped_transaction.call("rollback", scoped_transaction_id)
 		if not bool(accept_rollback.get("ok", false)):
-			_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, false, true, "scoped_accept_rollback_failed")
+			_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, false, false, "scoped_accept_rollback_failed")
 			return {"ok": false, "error": "collider_accept_failed_and_scoped_rollback_pending", "pending_retained": true}
-		_index.call("abort_delta", plan_id)
+		var accept_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "collider_accept_failed")
+		if not bool(accept_index_cleanup.get("ok", false)):
+			return accept_index_cleanup
 		return {"ok": false, "error": "collider_accept_failed:" + str(accepted.get("error", "unknown"))}
 
 	var published: Dictionary = _index.call("publish_delta", plan_id)
 	if not bool(published.get("ok", false)):
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
+		var publish_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, scoped_transaction_id, false, true, "index_publish_failed"
+		)
+		if not bool(publish_cleanup.get("ok", false)):
+			return publish_cleanup
 		var publish_rollback: Dictionary = _scoped_transaction.call("rollback", scoped_transaction_id)
 		if not bool(publish_rollback.get("ok", false)):
-			_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, false, true, "index_publish_rollback_failed")
+			_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, false, false, "index_publish_rollback_failed")
 			return {"ok": false, "error": "index_publish_failed_and_scoped_rollback_pending", "pending_retained": true}
-		_index.call("abort_delta", plan_id)
+		var publish_index_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_publish_failed")
+		if not bool(publish_index_cleanup.get("ok", false)):
+			return publish_index_cleanup
 		return {"ok": false, "error": "index_publish_failed:" + str(published.get("error", "unknown"))}
 
 	var collider_commit: Dictionary = _collider_manager.call("commit_sync_transitions", collider_transaction_id)
 	if not bool(collider_commit.get("ok", false)):
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
+		var commit_cleanup: Dictionary = _abort_collider_or_retain(
+			plan_id, collider_transaction_id, scoped_transaction_id, true, true, "collider_commit_failed"
+		)
+		if not bool(commit_cleanup.get("ok", false)):
+			return commit_cleanup
 		var commit_rollback: Dictionary = _scoped_transaction.call("rollback", scoped_transaction_id)
 		if not bool(commit_rollback.get("ok", false)):
 			_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, true, false, "collider_commit_rollback_pending")
@@ -251,20 +296,30 @@ func retry_pending() -> Dictionary:
 	var plan_id: String = str(_pending.get("plan_id", ""))
 	var collider_transaction_id: int = int(_pending.get("collider_transaction_id", -1))
 	var scoped_transaction_id: int = int(_pending.get("scoped_transaction_id", -1))
+	if stage == "abort_collider":
+		var collider_abort: Dictionary = _abort_collider_transaction(collider_transaction_id)
+		if not bool(collider_abort.get("ok", false)):
+			return {"ok": false, "error": "collider_abort_still_pending", "pending": collider_abort}
+		var index_abort: Dictionary = _abort_index_plan(plan_id)
+		if not bool(index_abort.get("ok", false)):
+			_pending["stage"] = "index_abort"
+			return {"ok": false, "error": "index_abort_still_pending", "pending": index_abort}
+		_pending.clear()
+		return {"ok": true, "aborted": true, "index": index_abort}
 	if stage == "rollback":
-		_collider_manager.call("abort_sync_transitions", collider_transaction_id)
+		var collider_abort: Dictionary = _abort_collider_transaction(collider_transaction_id)
+		if not bool(collider_abort.get("ok", false)):
+			return {"ok": false, "error": "collider_abort_still_pending", "pending": collider_abort}
 		var scoped_rollback: Dictionary = _scoped_transaction.call("rollback", scoped_transaction_id)
 		if not bool(scoped_rollback.get("ok", false)):
 			return {"ok": false, "error": "scoped_rollback_still_pending", "pending": scoped_rollback}
 		var index_rollback: Dictionary
 		if bool(_pending.get("index_published", false)):
 			index_rollback = _index.call("rollback_published_delta", plan_id)
-		elif bool(_index.call("has_pending_plan", plan_id)):
-			index_rollback = {"ok": bool(_index.call("abort_delta", plan_id))}
 		else:
-			index_rollback = {"ok": str(_index.call("get_reserved_plan_id")).is_empty(), "already_discarded": true}
+			index_rollback = _abort_index_plan(plan_id)
 		if not bool(index_rollback.get("ok", false)):
-			_pending["stage"] = "index_rollback"
+			_pending["stage"] = "index_rollback" if bool(_pending.get("index_published", false)) else "index_abort"
 			return {"ok": false, "error": "index_rollback_still_pending", "pending": index_rollback}
 		_pending.clear()
 		return {"ok": true, "rolled_back": true, "index": index_rollback, "scoped": scoped_rollback}
@@ -290,6 +345,12 @@ func retry_pending() -> Dictionary:
 			return {"ok": false, "error": "index_rollback_still_pending", "pending": retry_index_rollback}
 		_pending.clear()
 		return {"ok": true, "rolled_back": true, "index": retry_index_rollback}
+	if stage == "index_abort":
+		var retry_index_abort: Dictionary = _abort_index_plan(plan_id)
+		if not bool(retry_index_abort.get("ok", false)):
+			return {"ok": false, "error": "index_abort_still_pending", "pending": retry_index_abort}
+		_pending.clear()
+		return {"ok": true, "aborted": true, "index": retry_index_abort}
 	if stage == "manual_recovery":
 		return {"ok": false, "error": "manual_recovery_required", "pending": _pending.duplicate(true)}
 	return {"ok": false, "error": "unknown_coordinator_pending_stage", "stage": stage}
@@ -298,13 +359,70 @@ func retry_pending() -> Dictionary:
 func _publish_and_finalize_index_only(plan_id: String, summary: Dictionary) -> Dictionary:
 	var published: Dictionary = _index.call("publish_delta", plan_id)
 	if not bool(published.get("ok", false)):
-		_index.call("abort_delta", plan_id)
+		var cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_only_publish_failed")
+		if not bool(cleanup.get("ok", false)):
+			return cleanup
 		return {"ok": false, "error": "index_only_publish_failed:" + str(published.get("error", "unknown"))}
 	var finalized: Dictionary = _index.call("finalize_delta", plan_id)
 	if not bool(finalized.get("ok", false)):
 		_store_pending("index_finalize", plan_id, -1, -1, true, false, str(finalized.get("error", "index_finalize_failed")))
 		return {"ok": false, "error": "index_only_finalize_pending", "pending_retained": true}
 	return {"ok": true, "finalized": true, "index_only": true, "generation": int(finalized.get("generation", -1)), "summary": summary.duplicate(true)}
+
+
+func _abort_collider_transaction(transaction_id: int) -> Dictionary:
+	if not is_instance_valid(_collider_manager) or not _collider_manager.has_method("abort_sync_transitions"):
+		return {"ok": false, "error": "collider_abort_participant_unavailable"}
+	var result_value: Variant = _collider_manager.call("abort_sync_transitions", transaction_id)
+	if not (result_value is Dictionary):
+		return {"ok": false, "error": "invalid_collider_abort_result"}
+	var result: Dictionary = result_value
+	if bool(result.get("ok", false)):
+		return result
+	# Production commit failure paths may already abort and clear their staged transaction.
+	# Treat an absent pending transaction as idempotent success; every other failure must
+	# retain the coordinator snapshot so cleanup can be retried before another participant rolls back.
+	if str(result.get("error", "")) == "no_pending_transaction":
+		return {"ok": true, "already_aborted": true}
+	return result
+
+
+func _abort_collider_or_retain(
+	plan_id: String,
+	collider_transaction_id: int,
+	scoped_transaction_id: int,
+	index_published: bool,
+	scoped_rollback_required: bool,
+	error_code: String
+) -> Dictionary:
+	var abort_result: Dictionary = _abort_collider_transaction(collider_transaction_id)
+	if bool(abort_result.get("ok", false)):
+		return {"ok": true, "already_aborted": bool(abort_result.get("already_aborted", false))}
+	if scoped_rollback_required:
+		_store_pending("rollback", plan_id, collider_transaction_id, scoped_transaction_id, index_published, true, error_code)
+	else:
+		_store_pending("abort_collider", plan_id, collider_transaction_id, -1, index_published, true, error_code)
+	return {"ok": false, "error": "collider_abort_pending", "pending_retained": true, "abort": abort_result}
+
+
+func _abort_index_plan(plan_id: String) -> Dictionary:
+	if plan_id.is_empty():
+		return {"ok": false, "error": "index_plan_id_missing"}
+	if bool(_index.call("has_pending_plan", plan_id)):
+		var aborted: bool = bool(_index.call("abort_delta", plan_id))
+		return {"ok": aborted, "aborted": aborted}
+	var reserved_plan_id: String = str(_index.call("get_reserved_plan_id"))
+	if reserved_plan_id.is_empty():
+		return {"ok": true, "already_aborted": true}
+	return {"ok": false, "error": "another_index_generation_reserved", "reserved_plan_id": reserved_plan_id}
+
+
+func _abort_index_or_retain(plan_id: String, error_code: String) -> Dictionary:
+	var result: Dictionary = _abort_index_plan(plan_id)
+	if bool(result.get("ok", false)):
+		return result
+	_store_pending("index_abort", plan_id, -1, -1, false, false, error_code)
+	return {"ok": false, "error": "index_abort_pending", "pending_retained": true, "index": result}
 
 
 func _store_pending(
