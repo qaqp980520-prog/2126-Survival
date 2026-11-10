@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "systems/MineralGridStreamingDirector.gd"
+      - "tests/surface_chunk_production_benchmark.gd"
+      - "docs/MINERAL_GRID_ASYNC_DIRECTOR_PHASE_PROFILING_M0_2_13_1.md"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_director_test.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
@@ -17,6 +19,8 @@ on:
     branches: [main]
     paths:
       - "systems/MineralGridStreamingDirector.gd"
+      - "tests/surface_chunk_production_benchmark.gd"
+      - "docs/MINERAL_GRID_ASYNC_DIRECTOR_PHASE_PROFILING_M0_2_13_1.md"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_director_test.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
@@ -53,6 +57,8 @@ jobs:
           grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
           grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'set_async_phase_profiling_enabled' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'frame_yield_wait_usec' systems/MineralGridStreamingDirector.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run synchronous mineral chunk registration lifecycle regression
