@@ -31,8 +31,9 @@ The changed-edge list must exactly equal the union of the scoped old/new descrip
 2. Prepare captures the old endpoint neighbor Node, shared-transition flag, global transform, and world-object state. Replacement candidate endpoints are also snapshotted as clean/unbound.
 3. Apply revalidates snapshots immediately before mutation, opens segmentation batches only for the affected endpoint Patches, clears old scoped pairs, and binds candidate pairs reciprocally.
 4. Segmentation batches remain open after Apply. The caller can now commit the matching partial collider-manager transaction; collider activation updates are coalesced into the same Patch refresh.
-5. If the downstream collider commit succeeds, call Finalize to flush each affected Patch segmentation once and release temporary strong Node references.
-6. If the downstream collider commit fails, call Rollback. It clears candidate pairs, restores old reciprocal Node bindings, restores the exact old shared-transition flags, and then closes the segmentation batches.
+5. After Apply, pass the returned `endpoint_expectations` to `SurfaceTerrainTransitionColliderManager.accept_scoped_neighbor_state_apply(manager_transaction_id, endpoint_expectations)`. This verifies exact live neighbor references and rebases only the explicitly changed shared-transition flags in the manager's Prepare snapshots; transforms, world state, and every unlisted side flag remain anchored to Prepare.
+6. If the downstream collider commit succeeds, call Finalize to flush each affected Patch segmentation once and release temporary strong Node references.
+7. If the downstream collider commit fails, call Rollback. It clears candidate pairs, restores old reciprocal Node bindings, restores the exact old shared-transition flags, and then closes the segmentation batches.
 7. Abort is safe before Apply; after Apply it delegates to Rollback.
 
 The transaction deliberately holds strong Patch references only while pending so an old Chunk cannot disappear between Prepare and downstream Commit. Finalize, successful Rollback, or Abort releases those references.
@@ -57,6 +58,7 @@ The coordinator itself is not wired in this PR. Index generation commit and post
 ## Files and dependencies
 
 - `systems/SurfaceTerrainAdjacencyScopedTransaction.gd` — reversible scoped transaction coordinator.
+- `systems/SurfaceTerrainTransitionColliderManager.gd` — explicit handshake to accept only the scoped endpoint/flag changes before collider Commit.
 - `tests/surface_terrain_adjacency_scoped_transaction_test.gd` — real SurfaceTerrainPatch replacement, batching, rollback, and under-seed regressions.
 - `.github/workflows/surface-terrain-adjacency-scoped-transaction-validation.yml` — Godot 4.3 focused validation.
 - `docs/SURFACE_TERRAIN_SCOPED_NEIGHBOR_STATE_TRANSACTION_M0_2_9.md` — this contract.
