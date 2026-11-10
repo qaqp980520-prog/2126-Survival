@@ -194,12 +194,12 @@ func _run() -> void:
 			_expect(endpoint_links_preserved, "radius 1 incremental boundary shift preserves reciprocal seam endpoint bindings")
 		target = boundary_target
 
-		# Collect four additional same-runner radius-8 boundary samples. Alternating
-		# west/east keeps each transaction to one chunk while exercising both edges
-		# of the same warmed production window before contraction.
+		# Collect eight additional same-runner radius-8 boundary samples. Alternating
+		# west/east keeps each transaction to one chunk, provides three samples per
+		# staging budget, and ends back on the east boundary center before contraction.
 		if radius == 8:
 			var repeat_sequence_ok: bool = true
-			var repeat_budgets: Array[int] = [2, 4, 1, 2, 4]
+			var repeat_budgets: Array[int] = [2, 4, 1, 2, 4, 1, 2, 4]
 			for repeat_index in range(repeat_budgets.size()):
 				var repeat_direction: float = -1.0 if repeat_index % 2 == 0 else 1.0
 				var repeat_direction_name: String = "west" if repeat_direction < 0.0 else "east"
