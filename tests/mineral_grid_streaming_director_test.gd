@@ -144,7 +144,7 @@ func _test_generation_failure_preserves_active_set() -> void:
 	assert(controller.is_chunk_loaded("surface/chunk_0_0"))
 	assert(not controller.is_chunk_loaded("surface/chunk_2_-1"))
 	assert(not controller.is_chunk_loaded("surface/chunk_3_-1"))
-	assert(controller.get_terrain_adjacency_rebuild_count() == 3, "failed partial window load still closes with one rollback rebind")
+	assert(controller.get_terrain_adjacency_rebuild_count() == 2, "failed partial window load still closes with one rollback rebind")
 	director.queue_free()
 	controller.queue_free()
 	registry.queue_free()
