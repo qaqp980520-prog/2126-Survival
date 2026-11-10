@@ -27,7 +27,9 @@ This version is measurement-only. It does not change the staging budget default,
 
 The Director phase timings are disjoint wall-clock intervals:
 
-- `planning_usec`
+- `request_plan_usec` — world-position to center coordinate, desired-window construction, and sorting before dispatch.
+- `dispatch_wait_usec` — the scheduled `call_deferred` wait before the async request coroutine begins.
+- `planning_usec` — live Controller membership comparison and construction of the desired/load sets inside the coroutine.
 - `factory_build_usec`
 - `staged_validation_usec`
 - `frame_yield_wait_usec`
@@ -36,7 +38,7 @@ The Director phase timings are disjoint wall-clock intervals:
 - `stale_unload_usec`
 - `adjacency_finalize_call_usec`
 
-Their sum is checked against the request's `duration_usec`. The Controller's `batch_total_usec` is a nested measurement spanning Controller registration, stale retirement, and adjacency finalization; it must not be added to the Director phase sum.
+All phases are measured as non-overlapping intervals. The request-plan and dispatch-wait phases close the previous measurement gap between request acceptance and coroutine execution. Their sum is checked against the request's `duration_usec`. The Controller's `batch_total_usec` is a nested measurement spanning Controller registration, stale retirement, and adjacency finalization; it must not be added to the Director phase sum.
 
 The legacy `async_other_ms` field remains for historical comparability and still includes frame-yield latency. New analysis should use `director_phase_profile_usec` and `director_unattributed_ms`.
 
