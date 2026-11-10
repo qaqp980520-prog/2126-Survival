@@ -5,6 +5,8 @@ on:
     paths:
       - 'systems/SurfaceTerrainAdjacencyIndex.gd'
       - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainAffectedComponentPlanner.gd'
+      - 'systems/SurfaceTerrainCornerConflictResolver.gd'
       - 'systems/SurfaceTerrainTransitionDescriptor.gd'
       - 'tests/surface_terrain_adjacency_index_test.gd'
       - 'project.godot'
@@ -31,8 +33,13 @@ jobs:
           test -f project.godot
           test -f systems/SurfaceTerrainAdjacencyIndex.gd
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainAffectedComponentPlanner.gd
+          test -f systems/SurfaceTerrainCornerConflictResolver.gd
           test -f systems/SurfaceTerrainTransitionDescriptor.gd
           test -f tests/surface_terrain_adjacency_index_test.gd
+          grep -Fq 'reserve_delta' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq '_build_union_corner_closure' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'get_corner_graph_stats' systems/SurfaceTerrainAdjacencyIndex.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run incremental adjacency index and full-rebuild oracle regressions
