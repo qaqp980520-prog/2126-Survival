@@ -10,6 +10,26 @@ const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransiti
 ## stable_ids_by_instance maps live Node instance IDs to persistent world-object Stable IDs.
 ## When omitted, node paths are accepted for isolated fixtures only; production callers pass registry IDs.
 static func build_candidate_descriptors(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
+	var candidate: Dictionary = _build_candidate_topology(patches, stable_ids_by_instance, profile_enabled)
+	if not bool(candidate.get("ok", false)):
+		return candidate
+	return {
+		"ok": true,
+		"patch_count": int(candidate.get("patch_count", 0)),
+		"pair_count": int(candidate.get("pair_count", 0)),
+		"descriptor_count": int(candidate.get("descriptor_count", 0)),
+		"duplicate_position_candidate_checks": int(candidate.get("duplicate_position_candidate_checks", 0)),
+		"position_bucket_lookups": int(candidate.get("position_bucket_lookups", 0)),
+		"adjacency_candidate_checks": int(candidate.get("adjacency_candidate_checks", 0)),
+		"adjacency_bucket_lookups": int(candidate.get("adjacency_bucket_lookups", 0)),
+		"profile_usec": candidate.get("profile_usec", {}),
+		"descriptors": candidate.get("descriptors", {})
+	}
+
+
+## Internal builder retains patch references only for the synchronous full Binder apply step.
+## Public callers must use build_candidate_descriptors(), which returns descriptor data only.
+static func _build_candidate_topology
 	var seen_instances: Dictionary = {}
 	var seen_stable_ids: Dictionary = {}
 	var positions: Array[Vector3] = []
@@ -175,7 +195,7 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state"):
 			return {"ok": false, "error": "unsupported_patch"}
 
-	var candidate: Dictionary = build_candidate_descriptors(patches, stable_ids_by_instance, profile_enabled)
+	var candidate: Dictionary = _build_candidate_topology(patches, stable_ids_by_instance, profile_enabled)
 	if not bool(candidate.get("ok", false)):
 		return candidate
 	var pair_descriptors: Array[Dictionary] = candidate.get("_pair_descriptors", [])
