@@ -88,6 +88,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_batch_commit_restores_previous_window()
 	await process_frame
+	await _test_queued_root_recovery_uses_unbatched_fallback()
+	await process_frame
 	print("Mineral grid streaming director tests passed.")
 	quit(0)
 
@@ -177,6 +179,38 @@ func _test_failed_batch_commit_restores_previous_window() -> void:
 	assert(controller.begin_calls == 3 and controller.end_calls == 3, "one failed commit is recovered by exactly one second batch")
 	controller.queue_free()
 	director.queue_free()
+	await process_frame
+
+func _test_queued_root_recovery_uses_unbatched_fallback() -> void:
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	var director: Node = Director.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	root.add_child(director)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	director.chunk_size_x = 10.0
+	director.chunk_size_z = 10.0
+	director.load_radius = 0
+	assert(director.bind_controller(controller))
+	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
+	assert(director.sync_to_world_position(Vector3(1, 0, 1), 4000))
+	var chunk_id := "surface/chunk_0_0"
+	var old_root: Node3D = controller.get_chunk_root(chunk_id)
+	var old_root_ref: WeakRef = weakref(old_root)
+	assert(is_instance_valid(old_root))
+	old_root.queue_free()
+	assert(not controller.is_chunk_loaded(chunk_id), "queued root is not reported as a live chunk")
+	assert(director.sync_to_world_position(Vector3(1, 0, 1), 4001), "same-ID queued-root recovery uses the immediate replacement path")
+	var replacement_root: Node3D = controller.get_chunk_root(chunk_id)
+	assert(is_instance_valid(replacement_root) and replacement_root != old_root, "queued-root recovery registers a new root instance")
+	assert(controller.get_terrain_adjacency_rebuild_count() == 2, "queued-root replacement performs one immediate rebind instead of a pending batch overwrite")
+	await process_frame
+	assert(old_root_ref.get_ref() == null, "replaced queued root is released after recovery")
+	director.queue_free()
+	controller.queue_free()
+	registry.queue_free()
 	await process_frame
 
 func _make_chunk(coord: Vector2i) -> Node3D:
