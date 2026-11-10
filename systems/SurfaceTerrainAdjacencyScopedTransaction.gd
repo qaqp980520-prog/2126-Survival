@@ -186,7 +186,8 @@ func apply(transaction_id: int) -> Dictionary:
         "ok": true,
         "applied": true,
         "transaction_id": transaction_id,
-        "changed_edge_count": int(_pending.get("changed_edge_count", 0))
+        "changed_edge_count": int(_pending.get("changed_edge_count", 0)),
+        "endpoint_expectations": _build_endpoint_expectations()
     }
 
 
@@ -365,6 +366,35 @@ func _opposite_side(side: String) -> String:
         "south": return "north"
         _: return ""
 
+
+
+
+func _build_endpoint_expectations() -> Array[Dictionary]:
+    var expectations: Dictionary = {}
+    for snapshot_value in _pending.get("snapshots", []):
+        var snapshot: Dictionary = snapshot_value
+        var patch: Node3D = snapshot.get("patch") as Node3D
+        var side: String = str(snapshot.get("side", ""))
+        if not is_instance_valid(patch) or side.is_empty():
+            continue
+        var token: String = "%d:%s" % [patch.get_instance_id(), side]
+        expectations[token] = {"patch": patch, "side": side, "neighbor": null}
+    for pair_value in _pending.get("candidate_pairs", []):
+        var pair: Dictionary = pair_value
+        var first_patch: Node3D = pair.get("first_patch") as Node3D
+        var second_patch: Node3D = pair.get("second_patch") as Node3D
+        var first_side: String = str(pair.get("first_side", ""))
+        var second_side: String = str(pair.get("second_side", ""))
+        if is_instance_valid(first_patch):
+            var first_token: String = "%d:%s" % [first_patch.get_instance_id(), first_side]
+            expectations[first_token] = {"patch": first_patch, "side": first_side, "neighbor": second_patch}
+        if is_instance_valid(second_patch):
+            var second_token: String = "%d:%s" % [second_patch.get_instance_id(), second_side]
+            expectations[second_token] = {"patch": second_patch, "side": second_side, "neighbor": first_patch}
+    var result: Array[Dictionary] = []
+    for expectation_value in expectations.values():
+        result.append(expectation_value)
+    return result
 
 
 func _make_patch_snapshot(patch: Node3D, side: String, neighbor: Node3D) -> Dictionary:
