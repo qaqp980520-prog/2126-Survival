@@ -927,7 +927,34 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 	)
 	if _terrain_adjacency_profiling_enabled:
 		var elapsed_usec: int = Time.get_ticks_usec() - started_usec
+		var collider_result: Dictionary = result.get("collider", {})
+		var collider_profile: Dictionary = collider_result.get("profile_usec", {})
+		var collider_commit_present: bool = result.has("collider")
+		var active_edge_count: int = int(_terrain_transition_collider_manager.call("get_transition_count"))
+		var active_corner_cap_count: int = int(_terrain_transition_collider_manager.call("get_corner_cap_count"))
 		_last_terrain_adjacency_profile = {
+			"stable_id_map_usec": 0,
+			"binder_total_usec": 0,
+			"binder_validation_usec": 0,
+			"binder_adjacency_discovery_usec": 0,
+			"binder_edge_apply_usec": 0,
+			"collider_sync_total_usec": int(collider_profile.get("total_usec", 0)),
+			"collider_candidate_geometry_usec": int(collider_profile.get("candidate_geometry_usec", 0)),
+			"collider_corner_resolution_usec": int(collider_profile.get("corner_resolution_usec", 0)),
+			"collider_resource_staging_usec": int(collider_profile.get("resource_staging_usec", 0)),
+			"collider_activation_commit_usec": int(collider_profile.get("activation_commit_usec", 0)),
+			"collider_reused_edge_count": int(collider_result.get("reused_edge_count", active_edge_count if not collider_commit_present else 0)),
+			"collider_reactivated_edge_count": int(collider_result.get("reactivated_edge_count", 0)),
+			"collider_staged_edge_count": int(collider_result.get("staged_edge_count", 0)),
+			"collider_retired_edge_count": int(collider_result.get("retired_edge_count", 0)),
+			"collider_reused_corner_cap_count": int(collider_result.get("reused_corner_cap_count", active_corner_cap_count if not collider_commit_present else 0)),
+			"collider_staged_corner_cap_count": int(collider_result.get("staged_corner_cap_count", 0)),
+			"collider_retired_corner_cap_count": int(collider_result.get("retired_corner_cap_count", 0)),
+			"transition_collider_count": active_edge_count,
+			"corner_cap_count": active_corner_cap_count,
+			"patch_count": int(_terrain_adjacency_index.get_patch_count()),
+			"descriptor_count": _terrain_adjacency_index.get_edge_descriptors().size(),
+			"controller_rebind_total_usec": elapsed_usec,
 			"incremental_coordinator_total_usec": elapsed_usec,
 			"incremental_removed_patch_count": remove_ids.size(),
 			"incremental_added_patch_count": additions.size(),
