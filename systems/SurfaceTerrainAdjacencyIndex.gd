@@ -731,7 +731,7 @@ func _mutable_graph_array(source: Dictionary, key: String, copied: Dictionary) -
 
 
 func _corner_graph_link_key(edge_key: String, junction_key: String) -> String:
-	return edge_key + "\n" + junction_key
+	return "%d:%s%d:%s" % [edge_key.length(), edge_key, junction_key.length(), junction_key]
 
 
 func _build_union_corner_closure(
