@@ -10,6 +10,7 @@ on:
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
       - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
       - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - "docs/MINERAL_GRID_SYNC_WINDOW_ADJACENCY_BATCH_M0_2_11.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
   push:
@@ -22,6 +23,7 @@ on:
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
       - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
       - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - "docs/MINERAL_GRID_SYNC_WINDOW_ADJACENCY_BATCH_M0_2_11.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
 
