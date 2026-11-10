@@ -35,6 +35,7 @@ var _next_async_request_id: int = 1
 var _active_async_request_id: int = -1
 var _async_staged_roots_by_request: Dictionary = {}
 var _async_request_diagnostics: Dictionary = {}
+var _async_phase_profiling_enabled: bool = false
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null or not is_instance_valid(candidate) or not candidate.is_inside_tree() or candidate.is_queued_for_deletion():
@@ -59,6 +60,39 @@ func bind_chunk_factory(factory: Callable) -> bool:
 	# Keep one factory identity for the entire multi-frame staging transaction.
 	_chunk_factory = factory
 	return true
+
+## Opt-in profiling for async Director phases. Disabled by default to avoid timing overhead in normal play.
+func set_async_phase_profiling_enabled(enabled: bool) -> void:
+	_async_phase_profiling_enabled = enabled
+
+func is_async_phase_profiling_enabled() -> bool:
+	return _async_phase_profiling_enabled
+
+func _start_async_phase_timer(request_id: int) -> int:
+	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	return Time.get_ticks_usec() if bool(diagnostic.get("phase_profile_enabled", false)) else -1
+
+func _finish_async_phase_timer(request_id: int, key: String, started_usec: int) -> void:
+	if started_usec < 0:
+		return
+	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	if diagnostic.is_empty() or not bool(diagnostic.get("phase_profile_enabled", false)):
+		return
+	diagnostic[key] = int(diagnostic.get(key, 0)) + maxi(0, Time.get_ticks_usec() - started_usec)
+	_async_request_diagnostics[request_id] = diagnostic
+
+func _increment_async_phase_counter(request_id: int, key: String) -> void:
+	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	if diagnostic.is_empty() or not bool(diagnostic.get("phase_profile_enabled", false)):
+		return
+	diagnostic[key] = int(diagnostic.get(key, 0)) + 1
+	_async_request_diagnostics[request_id] = diagnostic
+
+func _validate_async_staged_roots_profiled(request_id: int, staged_roots: Dictionary) -> Dictionary:
+	var started_usec: int = _start_async_phase_timer(request_id)
+	var result: Dictionary = _validate_async_staged_roots(staged_roots)
+	_finish_async_phase_timer(request_id, "staged_validation_usec", started_usec)
+	return result
 
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
@@ -381,6 +415,17 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		"desired_count": 0,
 		"newly_loaded_count": 0,
 		"unloaded_stale_count": 0,
+		"phase_profile_enabled": _async_phase_profiling_enabled,
+		"max_staged_per_frame": clampi(max_staged_per_frame, 1, 8),
+		"frame_yield_count": 0,
+		"planning_usec": 0,
+		"factory_build_usec": 0,
+		"staged_validation_usec": 0,
+		"frame_yield_wait_usec": 0,
+		"controller_registration_usec": 0,
+		"staged_map_erase_usec": 0,
+		"stale_unload_usec": 0,
+		"adjacency_finalize_call_usec": 0,
 		"rollback_complete": true,
 		"terminal": false,
 		"details": {}
@@ -471,6 +516,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, 0)
 		return
+	var planning_started_usec: int = _start_async_phase_timer(request_id)
 	var desired_ids: Dictionary = {}
 	var to_load: Array[Dictionary] = []
 	for coord in desired:
@@ -479,6 +525,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if _managed_chunk_ids.has(id) and chunk_controller.is_chunk_loaded(id):
 			continue
 		to_load.append({"id": id, "coord": coord})
+	_finish_async_phase_timer(request_id, "planning_usec", planning_started_usec)
 
 	var staged_count: int = 0
 	for entry in to_load:
@@ -489,14 +536,16 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not _async_dependencies_available():
 			_abort_async_sync_request(request_id, staged_roots, staged_count)
 			return
-		var staged_validation_before_factory: Dictionary = _validate_async_staged_roots(staged_roots)
+		var staged_validation_before_factory: Dictionary = _validate_async_staged_roots_profiled(request_id, staged_roots)
 		if not bool(staged_validation_before_factory.get("ok", false)):
 			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_before_factory, null, [], now_unix)
 			return
 		var id: String = str(entry["id"])
 		var coord: Vector2i = entry["coord"]
+		var factory_started_usec: int = _start_async_phase_timer(request_id)
 		var candidate: Variant = chunk_factory.call(coord)
-		var staged_validation_after_factory: Dictionary = _validate_async_staged_roots(staged_roots)
+		_finish_async_phase_timer(request_id, "factory_build_usec", factory_started_usec)
+		var staged_validation_after_factory: Dictionary = _validate_async_staged_roots_profiled(request_id, staged_roots)
 		if not bool(staged_validation_after_factory.get("ok", false)):
 			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_factory, candidate, [], now_unix)
 			return
@@ -533,7 +582,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		staged_count += 1
 		_record_async_diagnostic(request_id, "staging", {"staged_count": staged_count}, false)
 		if staged_count % max_staged_per_frame == 0:
+			var frame_yield_started_usec: int = _start_async_phase_timer(request_id)
 			await get_tree().process_frame
+			_finish_async_phase_timer(request_id, "frame_yield_wait_usec", frame_yield_started_usec)
+			_increment_async_phase_counter(request_id, "frame_yield_count")
 			if request_id != _active_async_request_id:
 				_release_async_staged_roots(request_id, staged_roots)
 				_emit_async_cancelled(request_id, staged_count)
@@ -541,7 +593,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			if not _async_dependencies_available():
 				_abort_async_sync_request(request_id, staged_roots, staged_count)
 				return
-			var staged_validation_after_yield: Dictionary = _validate_async_staged_roots(staged_roots)
+			var staged_validation_after_yield: Dictionary = _validate_async_staged_roots_profiled(request_id, staged_roots)
 			if not bool(staged_validation_after_yield.get("ok", false)):
 				_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_after_yield, null, [], now_unix)
 				return
@@ -553,7 +605,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count)
 		return
-	var staged_validation_before_commit: Dictionary = _validate_async_staged_roots(staged_roots)
+	var staged_validation_before_commit: Dictionary = _validate_async_staged_roots_profiled(request_id, staged_roots)
 	if not bool(staged_validation_before_commit.get("ok", false)):
 		_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_before_commit, null, [], now_unix)
 		return
@@ -572,7 +624,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if not _async_dependencies_available():
 			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, [])
 			return
-		var staged_validation_during_commit: Dictionary = _validate_async_staged_roots(staged_roots)
+		var staged_validation_during_commit: Dictionary = _validate_async_staged_roots_profiled(request_id, staged_roots)
 		if not bool(staged_validation_during_commit.get("ok", false)):
 			_fail_async_staged_root_validation(request_id, staged_roots, staged_count, desired.size(), staged_validation_during_commit, null, newly_loaded, now_unix)
 			return
@@ -586,7 +638,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			and candidate.get_parent() == null
 		)
 		if load_succeeded:
+			var registration_started_usec: int = _start_async_phase_timer(request_id)
 			load_succeeded = chunk_controller.load_chunk(id, candidate, now_unix)
+			_finish_async_phase_timer(request_id, "controller_registration_usec", registration_started_usec)
 		var controller_alive_after_load: bool = chunk_controller != null and is_instance_valid(chunk_controller)
 		var controller_queued_after_load: bool = controller_alive_after_load and chunk_controller.is_queued_for_deletion()
 		var controller_ready_after_load: bool = _controller_ready_for_sync()
@@ -630,7 +684,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				"new_loads_rollback_ok": new_loads_rollback_ok
 			})
 			return
+		var transfer_started_usec: int = _start_async_phase_timer(request_id)
 		staged_roots.erase(id)
+		_finish_async_phase_timer(request_id, "staged_map_erase_usec", transfer_started_usec)
 
 	_release_async_staged_roots(request_id, staged_roots)
 	var stale_ids: Array[String] = []
@@ -644,7 +700,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
 			return
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
-		if not chunk_controller.unload_chunk(id, now_unix):
+		var stale_unload_started_usec: int = _start_async_phase_timer(request_id)
+		var stale_unload_succeeded: bool = chunk_controller.unload_chunk(id, now_unix)
+		_finish_async_phase_timer(request_id, "stale_unload_usec", stale_unload_started_usec)
+		if not stale_unload_succeeded:
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
 			var stale_failure_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
@@ -671,7 +730,9 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 	if not _async_dependencies_available():
 		_abort_async_sync_request(request_id, staged_roots, staged_count, now_unix, newly_loaded, unloaded_stale)
 		return
+	var adjacency_finalize_started_usec: int = _start_async_phase_timer(request_id)
 	var success_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
+	_finish_async_phase_timer(request_id, "adjacency_finalize_call_usec", adjacency_finalize_started_usec)
 	if not bool(success_adjacency_finalize.get("ok", false)):
 		if chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
 			_reconcile_managed_chunk_ids_from_controller()
