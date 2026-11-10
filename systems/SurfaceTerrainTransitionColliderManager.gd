@@ -425,6 +425,9 @@ func _prepare_sync_transitions_internal(
         "pending_reused_corner_cap_count": reused_cap_keys.size(),
         "blocked_count": blocked_edges.size(),
         "partial_update": partial_update,
+        "changed_seed_edge_keys": partial_context.get("changed_seed_edge_keys", []).duplicate(),
+        "affected_edge_keys": partial_context.get("affected_edge_keys", []).duplicate(),
+        "affected_junction_keys": partial_context.get("affected_junction_keys", []).duplicate(),
         "affected_edge_count": partial_context.get("affected_edge_keys", []).size(),
         "affected_junction_count": partial_context.get("affected_junction_keys", []).size()
     }

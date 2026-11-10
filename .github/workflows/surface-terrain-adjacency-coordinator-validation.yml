@@ -1,0 +1,68 @@
+name: Surface Terrain Adjacency Coordinator
+
+on:
+  pull_request:
+    paths:
+      - 'systems/SurfaceTerrainAdjacencyCoordinator.gd'
+      - 'systems/SurfaceTerrainAdjacencyIndex.gd'
+      - 'systems/SurfaceTerrainAdjacencyScopedTransaction.gd'
+      - 'systems/SurfaceTerrainTransitionColliderManager.gd'
+      - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainTransitionDescriptor.gd'
+      - 'systems/SurfaceTerrainCornerConflictResolver.gd'
+      - 'systems/SurfaceTerrainAffectedComponentPlanner.gd'
+      - 'systems/SurfaceTerrainPatch.gd'
+      - 'tests/surface_terrain_adjacency_coordinator_test.gd'
+      - '.github/workflows/surface-terrain-adjacency-coordinator-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: surface-terrain-adjacency-coordinator-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adjacency-coordinator:
+    name: Godot 4.3 three-participant adjacency transaction
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify exact transaction inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/SurfaceTerrainAdjacencyCoordinator.gd
+          test -f systems/SurfaceTerrainAdjacencyIndex.gd
+          test -f systems/SurfaceTerrainAdjacencyScopedTransaction.gd
+          test -f systems/SurfaceTerrainTransitionColliderManager.gd
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f systems/SurfaceTerrainCornerConflictResolver.gd
+          test -f systems/SurfaceTerrainAffectedComponentPlanner.gd
+          test -f systems/SurfaceTerrainPatch.gd
+          test -f tests/surface_terrain_adjacency_coordinator_test.gd
+          grep -Fq 'publish_delta' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'rollback_published_delta' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'accept_scoped_neighbor_state_apply' systems/SurfaceTerrainTransitionColliderManager.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run three-participant coordinator regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_coordinator_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency coordinator transaction tests passed."
+      - name: Verify clean workspace
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          test -z "$(git status --porcelain)"
