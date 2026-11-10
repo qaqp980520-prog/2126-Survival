@@ -179,7 +179,8 @@ func _test_partial_junction_uses_committed_weak_refs_without_edge_bodies() -> vo
     _expect(bool(initial.get("ok", false)), "ineligible initial junction commits its fallback topology")
     _expect(manager.call("get_transition_count") == 0, "ineligible initial junction has no managed edge bodies")
     _expect(manager.call("get_corner_cap_count") == 0, "ineligible initial junction has no corner-cap bodies")
-    _expect((manager.call("get_blocked_corner_reports") as Array).size() == 4, "ineligible initial junction still stores four committed corner reports")
+    var initial_reports: Variant = manager.call("get_blocked_corner_reports")
+    _expect(initial_reports is Array and initial_reports.size() == 4, "ineligible initial junction still stores four committed corner reports")
     if not bool(initial.get("ok", false)):
         await _release_holder(holder)
         return
