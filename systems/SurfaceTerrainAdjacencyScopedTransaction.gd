@@ -63,6 +63,7 @@ func prepare(
         endpoint_keys[str(endpoint_key)] = true
 
     var snapshots: Array[Dictionary] = []
+    var candidate_snapshots: Array[Dictionary] = []
     var snapshot_keys: Dictionary = {}
     var scope_patches: Array[Node3D] = []
     var scope_patch_ids: Dictionary = {}
@@ -102,12 +103,7 @@ func prepare(
             var snapshot_key: String = "%d:%s" % [old_patch.get_instance_id(), side]
             if not snapshot_keys.has(snapshot_key):
                 snapshot_keys[snapshot_key] = true
-                snapshots.append({
-                    "patch": old_patch,
-                    "side": side,
-                    "neighbor": actual_old_neighbor,
-                    "shared_active": bool(old_patch.call("is_shared_transition_active", side))
-                })
+                snapshots.append(_make_patch_snapshot(old_patch, side, actual_old_neighbor))
         elif old_result.get("endpoint_records", {}).has(endpoint_key):
             return {"ok": false, "error": "missing_old_endpoint_patch", "stable_id": stable_id}
 
@@ -119,6 +115,7 @@ func prepare(
                 var candidate_neighbor: Node3D = candidate_patch.call("get_bound_neighbor_patch", side) as Node3D
                 if is_instance_valid(candidate_neighbor) or bool(candidate_patch.call("is_shared_transition_active", side)):
                     return {"ok": false, "error": "replacement_candidate_endpoint_not_clean", "stable_id": stable_id, "side": side}
+                candidate_snapshots.append(_make_patch_snapshot(candidate_patch, side, null))
         elif candidate_result.get("endpoint_records", {}).has(endpoint_key):
             return {"ok": false, "error": "missing_candidate_endpoint_patch", "stable_id": stable_id}
 
@@ -129,6 +126,8 @@ func prepare(
         "old_pairs": old_result.get("pairs", []),
         "candidate_pairs": candidate_result.get("pairs", []),
         "snapshots": snapshots,
+        "candidate_snapshots": candidate_snapshots,
+        "changed_edge_count": changed_set.size(),
         "scope_patches": scope_patches,
         "batch_patches": [],
         "applied": false
@@ -153,6 +152,9 @@ func apply(transaction_id: int) -> Dictionary:
         return {"ok": false, "error": "invalid_transaction_id"}
     if bool(_pending.get("applied", false)):
         return {"ok": false, "error": "transaction_already_applied"}
+    if not _snapshots_match():
+        _pending.clear()
+        return {"ok": false, "error": "stale_patch_snapshot"}
 
     var batch_patches: Array[Node3D] = _pending.get("scope_patches", [])
     for patch in batch_patches:
@@ -184,7 +186,7 @@ func apply(transaction_id: int) -> Dictionary:
         "ok": true,
         "applied": true,
         "transaction_id": transaction_id,
-        "changed_edge_count": _pending.get("old_pairs", []).size() + _pending.get("candidate_pairs", []).size()
+        "changed_edge_count": int(_pending.get("changed_edge_count", 0))
     }
 
 
@@ -318,6 +320,7 @@ func _validate_patch(patch: Node3D) -> Dictionary:
     if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
         return {"ok": false, "error": "invalid_patch"}
     for method_name in [
+        "get_world_object_state",
         "get_bound_neighbor_patch",
         "bind_neighbor_patch",
         "clear_neighbor_edge_state",
@@ -358,6 +361,36 @@ func _opposite_side(side: String) -> String:
         "south": return "north"
         _: return ""
 
+
+
+func _make_patch_snapshot(patch: Node3D, side: String, neighbor: Node3D) -> Dictionary:
+    return {
+        "patch": patch,
+        "side": side,
+        "neighbor": neighbor,
+        "shared_active": bool(patch.call("is_shared_transition_active", side)),
+        "global_transform": patch.global_transform,
+        "world_state": patch.call("get_world_object_state").duplicate(true)
+    }
+
+
+func _snapshots_match() -> bool:
+    for snapshot_source in [_pending.get("snapshots", []), _pending.get("candidate_snapshots", [])]:
+        for snapshot_value in snapshot_source:
+            var snapshot: Dictionary = snapshot_value
+            var patch: Node3D = snapshot.get("patch") as Node3D
+            if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
+                return false
+            var side: String = str(snapshot.get("side", ""))
+            if patch.call("get_bound_neighbor_patch", side) != snapshot.get("neighbor"):
+                return false
+            if bool(patch.call("is_shared_transition_active", side)) != bool(snapshot.get("shared_active", false)):
+                return false
+            if patch.global_transform != snapshot.get("global_transform"):
+                return false
+            if patch.call("get_world_object_state") != snapshot.get("world_state"):
+                return false
+    return true
 
 func _restore_old_state() -> bool:
     var all_ok: bool = true
