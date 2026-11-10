@@ -44,6 +44,99 @@ func prepare_partial_sync_transitions(
     return _prepare_sync_transitions_internal(descriptors, patches_by_stable_id, profile_enabled, changed_edge_keys, true)
 
 
+
+## Rebase only the explicitly changed Patch-side active flags after the scoped neighbor
+## transaction has applied. Geometry/world-state snapshots remain anchored to Prepare;
+## unrelated side flags must remain unchanged. This lets the collider Commit validate
+## the intentional neighbor transaction without accepting arbitrary Patch mutations.
+func accept_scoped_neighbor_state_apply(transaction_id: int, endpoint_expectations: Array) -> Dictionary:
+    if _pending_sync_transaction.is_empty():
+        return {"ok": false, "error": "no_pending_transaction", "active_count": _managed_edges.size()}
+    if int(_pending_sync_transaction.get("transaction_id", -1)) != transaction_id:
+        return {"ok": false, "error": "invalid_transaction_id", "active_count": _managed_edges.size()}
+    if not bool(_pending_sync_transaction.get("partial_update", false)):
+        return {"ok": false, "error": "not_partial_transaction", "active_count": _managed_edges.size()}
+    if bool(_pending_sync_transaction.get("scoped_neighbor_state_accepted", false)):
+        return {"ok": false, "error": "scoped_neighbor_state_already_accepted", "active_count": _managed_edges.size()}
+    if endpoint_expectations.is_empty():
+        return {"ok": false, "error": "empty_scoped_endpoint_expectations", "active_count": _managed_edges.size()}
+
+    var expected_endpoints: Dictionary = {}
+    for expectation_value in endpoint_expectations:
+        if not (expectation_value is Dictionary):
+            return {"ok": false, "error": "invalid_scoped_endpoint_expectation", "active_count": _managed_edges.size()}
+        var expectation: Dictionary = expectation_value
+        var patch: Node3D = expectation.get("patch") as Node3D
+        var side: String = str(expectation.get("side", ""))
+        var neighbor_value: Variant = expectation.get("neighbor", null)
+        var expected_neighbor: Node3D = neighbor_value as Node3D
+        if (
+            not is_instance_valid(patch)
+            or patch.is_queued_for_deletion()
+            or not patch.is_inside_tree()
+            or not VALID_SIDES.has(side)
+            or not patch.has_method("get_bound_neighbor_patch")
+            or not patch.has_method("is_shared_transition_active")
+        ):
+            return {"ok": false, "error": "invalid_scoped_endpoint_patch", "active_count": _managed_edges.size()}
+        if neighbor_value != null:
+            if not is_instance_valid(expected_neighbor) or expected_neighbor.is_queued_for_deletion() or not expected_neighbor.is_inside_tree():
+                return {"ok": false, "error": "invalid_scoped_expected_neighbor", "active_count": _managed_edges.size()}
+            if expected_neighbor.call("get_bound_neighbor_patch", _opposite_side(side)) != patch:
+                return {"ok": false, "error": "scoped_neighbor_not_reciprocal", "active_count": _managed_edges.size()}
+        if patch.call("get_bound_neighbor_patch", side) != expected_neighbor:
+            return {"ok": false, "error": "scoped_neighbor_expectation_mismatch", "active_count": _managed_edges.size()}
+        var endpoint_token: String = "%d:%s" % [patch.get_instance_id(), side]
+        if expected_endpoints.has(endpoint_token):
+            return {"ok": false, "error": "duplicate_scoped_endpoint_expectation", "active_count": _managed_edges.size()}
+        expected_endpoints[endpoint_token] = true
+
+    var patch_snapshots: Dictionary = _pending_sync_transaction.get("patch_snapshots", {})
+    var updated_snapshots: Dictionary = patch_snapshots.duplicate(false)
+    var rebased_side_count: int = 0
+    for instance_id_value in patch_snapshots.keys():
+        var snapshot: Dictionary = patch_snapshots[instance_id_value].duplicate(false)
+        var patch: Node3D = snapshot.get("patch") as Node3D
+        if not is_instance_valid(patch) or patch.is_queued_for_deletion() or not patch.is_inside_tree():
+            return {"ok": false, "error": "stale_patch_snapshot", "active_count": _managed_edges.size()}
+        if patch.global_transform != snapshot.get("global_transform", Transform3D.IDENTITY):
+            return {"ok": false, "error": "stale_patch_transform_snapshot", "active_count": _managed_edges.size()}
+        if bool(snapshot.get("has_world_state", false)):
+            if not patch.has_method("get_world_object_state"):
+                return {"ok": false, "error": "missing_patch_world_state_api", "active_count": _managed_edges.size()}
+            var state_value: Variant = patch.call("get_world_object_state")
+            if not (state_value is Dictionary) or state_value != snapshot.get("world_state", {}):
+                return {"ok": false, "error": "stale_patch_world_state_snapshot", "active_count": _managed_edges.size()}
+
+        var side_states: Dictionary = snapshot.get("sides", {}).duplicate(true)
+        for side_value in side_states.keys():
+            var side: String = str(side_value)
+            var side_snapshot: Dictionary = side_states[side_value]
+            var has_active_query: bool = bool(side_snapshot.get("has_active_query", false))
+            if patch.has_method("is_shared_transition_active") != has_active_query:
+                return {"ok": false, "error": "patch_transition_api_changed", "active_count": _managed_edges.size()}
+            var current_active: bool = bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
+            var endpoint_token: String = "%d:%s" % [patch.get_instance_id(), side]
+            if expected_endpoints.has(endpoint_token):
+                side_snapshot["active"] = current_active
+                side_states[side_value] = side_snapshot
+                rebased_side_count += 1
+            elif current_active != bool(side_snapshot.get("active", false)):
+                return {"ok": false, "error": "unexpected_unscoped_patch_flag_change", "active_count": _managed_edges.size()}
+        snapshot["sides"] = side_states
+        updated_snapshots[instance_id_value] = snapshot
+
+    _pending_sync_transaction["patch_snapshots"] = updated_snapshots
+    _pending_sync_transaction["scoped_neighbor_state_accepted"] = true
+    return {
+        "ok": true,
+        "accepted": true,
+        "verified_endpoint_count": expected_endpoints.size(),
+        "rebased_snapshot_side_count": rebased_side_count,
+        "active_count": _managed_edges.size()
+    }
+
+
 func _prepare_sync_transitions_internal(
     descriptors: Dictionary,
     patches_by_stable_id: Dictionary,
