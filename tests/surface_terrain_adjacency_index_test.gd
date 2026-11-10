@@ -3,6 +3,8 @@ extends SceneTree
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const IndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
+const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
+const AffectedComponentPlannerScript = preload("res://systems/SurfaceTerrainAffectedComponentPlanner.gd")
 
 class AlternateSizePatch:
 	extends Node3D
@@ -382,6 +384,12 @@ func _run_persistent_corner_graph_tests() -> void:
 	_expect(int(graph_stats.get("junction_count", -1)) == 2, "checkerboard rebuild stores two connected Junctions")
 
 	var descriptors: Dictionary = graph_index.get_edge_descriptors()
+	var initial_report_oracle: Dictionary = _build_corner_report_oracle(grid_patches, grid_ids, descriptors, graph_index.get_patch_size())
+	_expect(bool(initial_report_oracle.get("ok", false)), "full resolver report oracle succeeds after initial rebuild")
+	_expect(
+		graph_index.get_corner_reports_by_stable_id() == initial_report_oracle.get("reports_by_stable_id", {}),
+		"persistent corner report cache matches the full resolver oracle after rebuild"
+	)
 	var isolated_edge_key: String = ""
 	var grid_seed_edge_key: String = ""
 	for edge_key_value in descriptors.keys():
@@ -475,6 +483,17 @@ func _run_persistent_corner_graph_tests() -> void:
 			oracle.get("descriptors", {}) == graph_index.get_edge_descriptors(),
 			"persistent descriptor cache matches the full Binder oracle after the delta"
 		)
+		var committed_report_oracle: Dictionary = _build_corner_report_oracle(
+			grid_patches,
+			grid_ids,
+			graph_index.get_edge_descriptors(),
+			graph_index.get_patch_size()
+		)
+		_expect(bool(committed_report_oracle.get("ok", false)), "full resolver report oracle succeeds after the graph delta")
+		_expect(
+			graph_index.get_corner_reports_by_stable_id() == committed_report_oracle.get("reports_by_stable_id", {}),
+			"persistent corner report cache matches the full resolver oracle after the delta"
+		)
 		top_center.queue_free()
 		if is_instance_valid(competing_patch):
 			competing_patch.queue_free()
@@ -528,6 +547,59 @@ func _run_persistent_corner_graph_tests() -> void:
 	graph_holder.queue_free()
 	reservation_holder.queue_free()
 	await process_frame
+
+
+func _build_corner_report_oracle(
+	patches: Array[Node3D],
+	stable_ids_by_instance: Dictionary,
+	descriptors: Dictionary,
+	patch_size: float
+) -> Dictionary:
+	var resolver_candidates: Dictionary = {}
+	for edge_key_value in descriptors.keys():
+		var edge_key: String = str(edge_key_value)
+		var descriptor: Dictionary = descriptors[edge_key]
+		if not bool(descriptor.get("transition_required", false)):
+			continue
+		resolver_candidates[edge_key] = {
+			"first_id": str(descriptor.get("first_stable_id", "")),
+			"second_id": str(descriptor.get("second_stable_id", "")),
+			"first_side": str(descriptor.get("first_side", "")),
+			"second_side": str(descriptor.get("second_side", ""))
+		}
+	var resolved: Dictionary = CornerResolverScript.resolve(resolver_candidates)
+	if not bool(resolved.get("ok", false)):
+		return {"ok": false, "error": str(resolved.get("error", "resolver_failed"))}
+	var patches_by_stable_id: Dictionary = {}
+	for patch in patches:
+		if not is_instance_valid(patch):
+			return {"ok": false, "error": "invalid_patch"}
+		var stable_id: String = str(stable_ids_by_instance.get(patch.get_instance_id(), ""))
+		if stable_id.is_empty():
+			return {"ok": false, "error": "missing_stable_id"}
+		patches_by_stable_id[stable_id] = patch
+	var reports_by_stable_id: Dictionary = {}
+	for report_value in resolved.get("reports", []):
+		var report: Dictionary = report_value
+		var stable_id: String = str(report.get("stable_id", ""))
+		var patch: Node3D = patches_by_stable_id.get(stable_id) as Node3D
+		if not is_instance_valid(patch):
+			return {"ok": false, "error": "missing_report_patch"}
+		var junction_key: String = AffectedComponentPlannerScript.junction_key_for_corner(
+			patch.global_position,
+			str(report.get("corner", "")),
+			patch_size
+		)
+		if junction_key.is_empty():
+			return {"ok": false, "error": "invalid_report_junction"}
+		var stored_report: Dictionary = report.duplicate(true)
+		stored_report["junction_key"] = junction_key
+		if not reports_by_stable_id.has(stable_id):
+			reports_by_stable_id[stable_id] = []
+		var stable_reports: Array = reports_by_stable_id[stable_id]
+		stable_reports.append(stored_report)
+		reports_by_stable_id[stable_id] = stable_reports
+	return {"ok": true, "reports_by_stable_id": reports_by_stable_id}
 
 
 func _set_height_level(patch: Node3D, height_level: int) -> bool:
