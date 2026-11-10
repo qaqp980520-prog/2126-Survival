@@ -1060,12 +1060,14 @@ func _retire_old_edge(old_edge: Dictionary, replacement: Dictionary) -> void:
             old_second.call("set_shared_transition_active", str(old_edge["second_side"]), false)
     if is_instance_valid(old_body):
         old_body.collision_layer = 0
+        old_body.collision_mask = 0
         old_body.queue_free()
 
 func _retire_old_cap(old_cap: Dictionary) -> void:
     var body: StaticBody3D = old_cap.get("body") as StaticBody3D
     if is_instance_valid(body):
         body.collision_layer = 0
+        body.collision_mask = 0
         body.queue_free()
 
 func _free_staged(staged: Dictionary, preserved_keys: Dictionary = {}) -> void:
@@ -1076,6 +1078,7 @@ func _free_staged(staged: Dictionary, preserved_keys: Dictionary = {}) -> void:
         var body: StaticBody3D = edge.get("body") as StaticBody3D
         if is_instance_valid(body):
             body.collision_layer = 0
+            body.collision_mask = 0
             body.queue_free()
 
 func _free_staged_caps(staged: Dictionary, preserved_keys: Dictionary = {}) -> void:
@@ -1091,6 +1094,7 @@ func _is_staged_body_ready(candidate: StaticBody3D) -> bool:
         and not candidate.is_queued_for_deletion()
         and candidate.get_parent() == self
         and candidate.collision_layer == 0
+        and candidate.collision_mask == 0
     )
 
 
@@ -1100,6 +1104,7 @@ func _is_reusable_managed_body(candidate: StaticBody3D) -> bool:
         and not candidate.is_queued_for_deletion()
         and candidate.get_parent() == self
         and candidate.collision_layer == COLLISION_LAYER
+        and candidate.collision_mask == 0
     )
 
 func _edge_patch_states_are_active(edge: Dictionary) -> bool:
