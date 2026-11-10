@@ -33,6 +33,11 @@ func _run() -> void:
 	if controller == null or director == null:
 		await _finish(world)
 		return
+	var async_profile_api_available: bool = director.has_method("set_async_phase_profiling_enabled") and director.has_method("is_async_phase_profiling_enabled")
+	_expect(async_profile_api_available, "production Director exposes opt-in async phase profiling")
+	if async_profile_api_available:
+		_expect(not bool(director.call("is_async_phase_profiling_enabled")), "async phase profiling is disabled by default in production")
+		director.call("set_async_phase_profiling_enabled", true)
 	var profiling_api_available: bool = controller.has_method("set_terrain_adjacency_profiling_enabled") and controller.has_method("get_last_terrain_adjacency_profile")
 	_expect(profiling_api_available, "production controller exposes opt-in terrain adjacency phase profiling")
 	if profiling_api_available:
@@ -134,7 +139,7 @@ func _run() -> void:
 		var retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, retained_ids)
 		_reset_factory_metrics()
 		var boundary_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
-		var boundary_result: Dictionary = await _run_async_request(director, boundary_target)
+		var boundary_result: Dictionary = await _run_async_request(director, boundary_target, 1)
 		var boundary_diagnostic: Dictionary = boundary_result.get("diagnostic", {})
 		if not bool(boundary_result.get("ok", false)):
 			_expect(false, "radius %d one-chunk boundary crossing completes: %s" % [radius, str(boundary_result.get("error", boundary_diagnostic.get("phase", "unknown")))])
@@ -150,6 +155,7 @@ func _run() -> void:
 		_expect(int(boundary_diagnostic.get("staged_count", -1)) == expected_boundary_delta, "radius %d boundary crossing stages exactly %d new roots" % [radius, expected_boundary_delta])
 		_expect(int(boundary_diagnostic.get("newly_loaded_count", -1)) == expected_boundary_delta, "radius %d boundary crossing commits exactly %d new roots" % [radius, expected_boundary_delta])
 		_expect(int(boundary_diagnostic.get("unloaded_stale_count", -1)) == expected_boundary_delta, "radius %d boundary crossing retires exactly %d stale roots" % [radius, expected_boundary_delta])
+		_expect(int(boundary_diagnostic.get("max_staged_per_frame", -1)) == 1 and int(boundary_diagnostic.get("frame_yield_count", -1)) == expected_boundary_delta, "radius %d one-root staging budget records one yield per incoming root" % radius)
 		_expect(_factory_calls == expected_boundary_delta, "radius %d boundary crossing calls the real factory exactly %d times" % [radius, expected_boundary_delta])
 		await _wait_frames(RELEASE_WAIT_FRAMES)
 		_expect(_all_refs_released(departing_refs), "radius %d boundary crossing releases every departing root" % radius)
@@ -188,12 +194,13 @@ func _run() -> void:
 			_expect(endpoint_links_preserved, "radius 1 incremental boundary shift preserves reciprocal seam endpoint bindings")
 		target = boundary_target
 
-		# Collect four additional same-runner radius-8 boundary samples. Alternating
-		# west/east keeps each transaction to one chunk while exercising both edges
-		# of the same warmed production window before contraction.
+		# Collect eight additional same-runner radius-8 boundary samples. Alternating
+		# west/east keeps each transaction to one chunk, provides three samples per
+		# staging budget, and ends back on the east boundary center before contraction.
 		if radius == 8:
 			var repeat_sequence_ok: bool = true
-			for repeat_index in range(4):
+			var repeat_budgets: Array[int] = [2, 4, 1, 2, 4, 1, 2, 4]
+			for repeat_index in range(repeat_budgets.size()):
 				var repeat_direction: float = -1.0 if repeat_index % 2 == 0 else 1.0
 				var repeat_direction_name: String = "west" if repeat_direction < 0.0 else "east"
 				var repeat_target: Vector3 = target + Vector3(boundary_chunk_size_x * repeat_direction, 0.0, 0.0)
@@ -213,8 +220,9 @@ func _run() -> void:
 				var repeat_departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_departing_ids)
 				var repeat_retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_retained_ids)
 				_reset_factory_metrics()
+				var repeat_budget: int = repeat_budgets[repeat_index]
 				var repeat_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
-				var repeat_result: Dictionary = await _run_async_request(director, repeat_target)
+				var repeat_result: Dictionary = await _run_async_request(director, repeat_target, repeat_budget)
 				var repeat_diagnostic: Dictionary = repeat_result.get("diagnostic", {})
 				if not bool(repeat_result.get("ok", false)):
 					_expect(false, "radius %d repeat %d %s boundary crossing completes: %s" % [radius, repeat_index + 1, repeat_direction_name, str(repeat_result.get("error", repeat_diagnostic.get("phase", "unknown")))])
@@ -230,6 +238,8 @@ func _run() -> void:
 				_expect(int(repeat_diagnostic.get("staged_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s stages exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
 				_expect(int(repeat_diagnostic.get("newly_loaded_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s commits exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
 				_expect(int(repeat_diagnostic.get("unloaded_stale_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s retires exactly %d stale roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				var expected_repeat_yields: int = floori(float(expected_repeat_delta) / float(repeat_budget))
+				_expect(int(repeat_diagnostic.get("max_staged_per_frame", -1)) == repeat_budget and int(repeat_diagnostic.get("frame_yield_count", -1)) == expected_repeat_yields, "radius %d repeat %d %s records budget %d and %d intentional frame yields" % [radius, repeat_index + 1, repeat_direction_name, repeat_budget, expected_repeat_yields])
 				_expect(_factory_calls == expected_repeat_delta, "radius %d repeat %d %s calls the production factory exactly %d times" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
 				await _wait_frames(RELEASE_WAIT_FRAMES)
 				_expect(_all_refs_released(repeat_departing_refs), "radius %d repeat %d %s releases all departing roots" % [radius, repeat_index + 1, repeat_direction_name])
@@ -424,12 +434,12 @@ func _reset_factory_metrics() -> void:
 	_factory_build_usec = 0
 	_factory_calls = 0
 
-func _run_async_request(director: Node, target: Vector3) -> Dictionary:
+func _run_async_request(director: Node, target: Vector3, max_staged_per_frame: int = 1) -> Dictionary:
 	var request_id: int = int(director.call(
 		"request_sync_to_world_position_async",
 		target,
 		int(Time.get_unix_time_from_system()),
-		1
+		max_staged_per_frame
 	))
 	if request_id < 0:
 		return {"ok": false, "error": "production async request was rejected", "diagnostic": {}, "frame_samples_ms": []}
@@ -553,6 +563,32 @@ func _emit_metrics(
 	var adjacency_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile") if controller.has_method("get_last_terrain_adjacency_profile") else {}
 	var adjacency_batch_ms: float = float(adjacency_profile.get("batch_total_usec", 0)) / 1000.0
 	var async_other_ms: float = maxf(0.0, async_total_ms - factory_build_ms - adjacency_batch_ms)
+	var director_phase_keys: Array[String] = [
+		"planning_usec",
+		"factory_build_usec",
+		"staged_validation_usec",
+		"frame_yield_wait_usec",
+		"controller_registration_usec",
+		"staged_map_erase_usec",
+		"stale_unload_usec",
+		"adjacency_finalize_call_usec"
+	]
+	var director_phase_profile: Dictionary = {}
+	var director_phase_profile_valid: bool = bool(diagnostic.get("phase_profile_enabled", false))
+	var director_phase_total_usec: int = 0
+	if director_phase_profile_valid:
+		for director_phase_key in director_phase_keys:
+			if not diagnostic.has(director_phase_key) or int(diagnostic.get(director_phase_key, -1)) < 0:
+				director_phase_profile_valid = false
+				continue
+			var phase_usec: int = int(diagnostic.get(director_phase_key, 0))
+			director_phase_profile[director_phase_key] = phase_usec
+			director_phase_total_usec += phase_usec
+		var expected_yields: int = floori(float(int(diagnostic.get("staged_count", 0))) / float(maxi(1, int(diagnostic.get("max_staged_per_frame", 1)))))
+		director_phase_profile_valid = director_phase_profile_valid and int(diagnostic.get("frame_yield_count", -1)) == expected_yields
+		director_phase_profile_valid = director_phase_profile_valid and director_phase_total_usec <= int(diagnostic.get("duration_usec", 0))
+		_expect(director_phase_profile_valid, "radius %d %s records non-overlapping Director phase timings and exact frame-yield count" % [radius, phase])
+	var director_unattributed_ms: float = maxf(0.0, async_total_ms - float(director_phase_total_usec) / 1000.0) if director_phase_profile_valid else -1.0
 	var profile_keys: Array[String] = [
 		"collect_loaded_patches_usec",
 		"stable_id_map_usec",
@@ -599,6 +635,12 @@ func _emit_metrics(
 		"async_non_factory_ms": maxf(0.0, async_total_ms - factory_build_ms),
 		"terrain_adjacency_batch_ms": adjacency_batch_ms,
 		"async_other_ms": async_other_ms,
+		"max_staged_per_frame": int(diagnostic.get("max_staged_per_frame", -1)),
+		"frame_yield_count": int(diagnostic.get("frame_yield_count", 0)),
+		"director_phase_profile_valid": director_phase_profile_valid,
+		"director_phase_profile_usec": director_phase_profile,
+		"director_profiled_phase_total_ms": float(director_phase_total_usec) / 1000.0,
+		"director_unattributed_ms": director_unattributed_ms,
 		"terrain_adjacency_profile_usec": adjacency_profile,
 		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
 		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
