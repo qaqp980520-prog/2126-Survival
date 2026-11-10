@@ -1,6 +1,9 @@
 name: Surface Terrain Controller Transaction Validation
 
 on:
+  push:
+    branches:
+      - feat/mineral-chunk-controller-incremental-adjacency-coordinator-2026-11-10
   pull_request:
     paths:
       - 'systems/MineralChunkController.gd'
