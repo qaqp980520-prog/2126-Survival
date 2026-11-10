@@ -834,7 +834,8 @@ func _ensure_terrain_adjacency_runtime() -> bool:
 		return false
 	if _terrain_adjacency_index == null:
 		var empty_index: RefCounted = TerrainAdjacencyIndexScript.new()
-		var empty_result: Dictionary = empty_index.call("rebuild", [], {})
+		var empty_patches: Array[Node3D] = []
+		var empty_result: Dictionary = empty_index.call("rebuild", empty_patches, {})
 		if not bool(empty_result.get("ok", false)):
 			return false
 		_terrain_adjacency_index = empty_index
