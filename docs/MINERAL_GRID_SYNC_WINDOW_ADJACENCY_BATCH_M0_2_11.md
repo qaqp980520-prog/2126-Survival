@@ -63,11 +63,12 @@ CI status is pending until GitHub Actions runs against the PR head. Do not treat
 
 ## Limitations
 
-- This change batches synchronous window shifts; it does not yet replace the controller's one-per-batch full Binder rebind with the M0.2.10 Index/Coordinator delta path.
-- The asynchronous path already has its own staging/commit batch and is not rewritten here.
-- A persistent controller recovery failure remains reported as incomplete; the Director does not claim success or silently discard the controller's ownership state.
+- M0.2.12 now connects the persistent Index/Coordinator delta path to the production Controller batch boundary for pure chunk additions/removals.
+- In-place terrain-state edits still use the authoritative full Binder fallback because the current Index rejects a committed Patch snapshot that has already changed in place.
+- A retained Coordinator failure is preserved by the Controller; the Director retries it before opening another window shift.
+- The asynchronous path uses the same Controller batch contract, but a dedicated end-to-end asynchronous retry test remains outstanding.
 - GPU, rendered FPS, mobile device performance, and physics-server allocation failure injection are outside this validation.
 
 ## Next step
 
-Integrate the persistent adjacency Index and three-participant Coordinator into the controller batch boundary, retaining this single-batch synchronous wrapper as the outer transaction boundary. Then benchmark a real Radius 8 shift with non-zero Transition Edge and Corner Cap resources.
+Complete the focused production Controller regression and full Godot 4.3 gate on PR #307. Then benchmark a real Radius 8 window with non-zero Transition Edge and Corner Cap resources, including preserved/staged/retired counts and an end-to-end Director timing breakdown.
