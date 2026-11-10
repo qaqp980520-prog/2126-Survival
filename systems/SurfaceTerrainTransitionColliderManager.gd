@@ -80,7 +80,7 @@ func accept_scoped_neighbor_state_apply(transaction_id: int, endpoint_expectatio
         ):
             return {"ok": false, "error": "invalid_scoped_endpoint_patch", "active_count": _managed_edges.size()}
         if neighbor_value != null:
-            if not is_instance_valid(expected_neighbor) or expected_neighbor.is_queued_for_deletion() or not expected_neighbor.is_inside_tree():
+            if not is_instance_valid(expected_neighbor) or expected_neighbor.is_queued_for_deletion() or not expected_neighbor.is_inside_tree() or not expected_neighbor.has_method("get_bound_neighbor_patch"):
                 return {"ok": false, "error": "invalid_scoped_expected_neighbor", "active_count": _managed_edges.size()}
             if expected_neighbor.call("get_bound_neighbor_patch", _opposite_side(side)) != patch:
                 return {"ok": false, "error": "scoped_neighbor_not_reciprocal", "active_count": _managed_edges.size()}
@@ -367,6 +367,13 @@ func _prepare_sync_transitions_internal(
         _free_staged(staged, reused_edge_keys)
         _free_staged_caps(staged_caps, reused_cap_keys)
         return {"ok": false, "error": str(patch_snapshot_result.get("error", "patch_snapshot_failed")), "active_count": _managed_edges.size()}
+    if partial_update:
+        var expanded_patch_snapshots: Dictionary = patch_snapshot_result.get("snapshots", {})
+        if not _extend_patch_snapshots_with_all_sides(expanded_patch_snapshots):
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
+            return {"ok": false, "error": "partial_patch_side_snapshot_failed", "active_count": _managed_edges.size()}
+        patch_snapshot_result["snapshots"] = expanded_patch_snapshots
 
     var candidate_patch_refs_by_stable_id: Dictionary = {}
     for stable_id_value in patches_by_stable_id.keys():
@@ -849,6 +856,27 @@ func _capture_patch_snapshots(candidates: Dictionary, old_edges: Dictionary) -> 
                     snapshots[instance_id] = snapshot
     return {"ok": true, "snapshots": snapshots}
 
+
+
+
+func _extend_patch_snapshots_with_all_sides(snapshots: Dictionary) -> bool:
+    for instance_id_value in snapshots.keys():
+        var snapshot: Dictionary = snapshots[instance_id_value]
+        var patch: Node3D = snapshot.get("patch") as Node3D
+        if not is_instance_valid(patch) or patch.is_queued_for_deletion() or not patch.is_inside_tree():
+            return false
+        var side_states: Dictionary = snapshot.get("sides", {}).duplicate(true)
+        for side in VALID_SIDES:
+            if side_states.has(side):
+                continue
+            var has_active_query: bool = patch.has_method("is_shared_transition_active")
+            side_states[side] = {
+                "has_active_query": has_active_query,
+                "active": bool(patch.call("is_shared_transition_active", side)) if has_active_query else false
+            }
+        snapshot["sides"] = side_states
+        snapshots[instance_id_value] = snapshot
+    return true
 
 
 func _patch_snapshots_match(snapshots: Dictionary) -> bool:
