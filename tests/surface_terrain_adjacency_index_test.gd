@@ -317,6 +317,8 @@ func _run() -> void:
 		_expect(bool(cleanup_rebuild.get("ok", false)), "full rebuild can reconcile the index after an externally released removed patch")
 		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "removed WeakRef cleanup rebuild")
 
+	await _run_persistent_corner_graph_tests()
+
 	holder.queue_free()
 	await process_frame
 	await process_frame
@@ -327,6 +329,217 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+
+func _run_persistent_corner_graph_tests() -> void:
+	var graph_holder := Node3D.new()
+	graph_holder.name = "PersistentCornerGraphTestRoot"
+	root.add_child(graph_holder)
+
+	var top_left: Node3D = _new_patch(graph_holder, "TopLeft", Vector3(0.0, 0.0, 0.0))
+	var top_center: Node3D = _new_patch(graph_holder, "TopCenter", Vector3(2.0, 0.0, 0.0))
+	var top_right: Node3D = _new_patch(graph_holder, "TopRight", Vector3(4.0, 0.0, 0.0))
+	var bottom_left: Node3D = _new_patch(graph_holder, "BottomLeft", Vector3(0.0, 0.0, 2.0))
+	var bottom_center: Node3D = _new_patch(graph_holder, "BottomCenter", Vector3(2.0, 0.0, 2.0))
+	var bottom_right: Node3D = _new_patch(graph_holder, "BottomRight", Vector3(4.0, 0.0, 2.0))
+	var isolated_a: Node3D = _new_patch(graph_holder, "IsolatedA", Vector3(100.0, 0.0, 0.0))
+	var isolated_b: Node3D = _new_patch(graph_holder, "IsolatedB", Vector3(102.0, 0.0, 0.0))
+	_expect(_set_height_level(top_left, 0), "corner graph fixture sets top-left height")
+	_expect(_set_height_level(top_center, 1), "corner graph fixture sets top-center height")
+	_expect(_set_height_level(top_right, 0), "corner graph fixture sets top-right height")
+	_expect(_set_height_level(bottom_left, 1), "corner graph fixture sets bottom-left height")
+	_expect(_set_height_level(bottom_center, 0), "corner graph fixture sets bottom-center height")
+	_expect(_set_height_level(bottom_right, 1), "corner graph fixture sets bottom-right height")
+	_expect(_set_height_level(isolated_a, 0), "isolated edge fixture sets first height")
+	_expect(_set_height_level(isolated_b, 1), "isolated edge fixture sets second height")
+	await process_frame
+
+	var grid_patches: Array[Node3D] = [
+		top_left, top_center, top_right,
+		bottom_left, bottom_center, bottom_right,
+		isolated_a, isolated_b
+	]
+	var grid_ids: Dictionary = {
+		top_left.get_instance_id(): "grid/top_left",
+		top_center.get_instance_id(): "grid/top_center",
+		top_right.get_instance_id(): "grid/top_right",
+		bottom_left.get_instance_id(): "grid/bottom_left",
+		bottom_center.get_instance_id(): "grid/bottom_center",
+		bottom_right.get_instance_id(): "grid/bottom_right",
+		isolated_a.get_instance_id(): "grid/isolated_a",
+		isolated_b.get_instance_id(): "grid/isolated_b"
+	}
+	var graph_index = IndexScript.new()
+	var graph_rebuild: Dictionary = graph_index.rebuild(grid_patches, grid_ids)
+	_expect(bool(graph_rebuild.get("ok", false)), "persistent corner graph rebuild succeeds for a checkerboard grid")
+	if not bool(graph_rebuild.get("ok", false)):
+		graph_holder.queue_free()
+		await process_frame
+		return
+	_expect(int(graph_rebuild.get("edge_count", -1)) == 8, "persistent graph caches all seven grid edges plus one isolated edge")
+	var graph_stats: Dictionary = graph_index.get_corner_graph_stats()
+	_expect(int(graph_stats.get("report_count", -1)) == 8, "checkerboard rebuild stores eight corner reports")
+	_expect(int(graph_stats.get("junction_count", -1)) == 2, "checkerboard rebuild stores two connected Junctions")
+
+	var descriptors: Dictionary = graph_index.get_edge_descriptors()
+	var isolated_edge_key: String = ""
+	var grid_seed_edge_key: String = ""
+	for edge_key_value in descriptors.keys():
+		var edge_key: String = str(edge_key_value)
+		var descriptor: Dictionary = descriptors[edge_key]
+		var first_id: String = str(descriptor.get("first_stable_id", ""))
+		var second_id: String = str(descriptor.get("second_stable_id", ""))
+		if first_id == "grid/isolated_a" or second_id == "grid/isolated_a":
+			isolated_edge_key = edge_key
+		elif grid_seed_edge_key.is_empty() and first_id.begins_with("grid/") and second_id.begins_with("grid/"):
+			grid_seed_edge_key = edge_key
+	var initial_closure: Dictionary = graph_index.get_corner_graph_closure([grid_seed_edge_key])
+	_expect(bool(initial_closure.get("ok", false)), "persistent graph can query a committed connected closure")
+	_expect(initial_closure.get("edge_keys", []).size() == 7, "two connected Junctions close over exactly seven grid edges")
+	_expect(initial_closure.get("junction_keys", []).size() == 2, "two connected Junctions are both reachable from one seed")
+	_expect(not initial_closure.get("edge_keys", []).has(isolated_edge_key), "unrelated isolated transition edge stays outside the closure")
+
+	var replacement: Node3D = _new_patch(graph_holder, "ReplacementTopCenter", Vector3(2.0, 0.0, 0.0))
+	_expect(_set_height_level(replacement, 0), "replacement patch changes height to remove its three transition edges")
+	await process_frame
+	var delta_result: Dictionary = graph_index.plan_delta(
+		["grid/top_center"],
+		[{"stable_id": "grid/top_center", "patch": replacement}]
+	)
+	_expect(bool(delta_result.get("ok", false)), "height-changing same-Stable-ID replacement plans a corner graph delta")
+	if bool(delta_result.get("ok", false)):
+		var summary: Dictionary = delta_result.get("summary", {})
+		var closure_edges: Array = summary.get("closure_edge_keys", [])
+		var closure_junctions: Array = summary.get("closure_junction_keys", [])
+		var old_reports: Array = summary.get("old_closure_reports", [])
+		var new_reports: Array = summary.get("new_closure_reports", [])
+		_expect(closure_edges.size() == 7, "old/new union closure retains all seven edges across the two connected Junctions")
+		_expect(closure_junctions.size() == 2, "old/new union closure retains both Junctions while topology changes")
+		_expect(summary.get("old_closure_descriptors", {}).size() == 7, "old closure carries every old descriptor needed for retirement")
+		_expect(summary.get("new_closure_descriptors", {}).size() == 7, "candidate closure carries every candidate descriptor needed for staging")
+		_expect(old_reports.size() == 8, "old closure exposes all eight prior corner reports")
+		_expect(new_reports.size() == 2, "candidate closure exposes only the two surviving corner reports")
+		_expect(not closure_edges.has(isolated_edge_key), "delta closure does not include the unrelated isolated edge")
+
+		var plan_id: String = str(summary.get("plan_id", ""))
+		var reservation: Dictionary = graph_index.reserve_delta(plan_id)
+		_expect(bool(reservation.get("ok", false)), "prepared delta reserves the committed index generation")
+		var competing_patch: Node3D = _new_patch(graph_holder, "CompetingPatch", Vector3(200.0, 0.0, 0.0))
+		await process_frame
+		var competing_plan: Dictionary = graph_index.plan_delta([], [
+			{"stable_id": "grid/competing", "patch": competing_patch}
+		])
+		_expect(bool(competing_plan.get("ok", false)), "a second plan may be prepared while the first generation is reserved")
+		if bool(competing_plan.get("ok", false)):
+			var competing_id: String = str(competing_plan.get("summary", {}).get("plan_id", ""))
+			var blocked_commit: Dictionary = graph_index.commit_delta(competing_id)
+			_expect(
+				not bool(blocked_commit.get("ok", true))
+				and str(blocked_commit.get("error", "")) == "generation_reserved",
+				"generation reservation blocks another plan from publishing"
+			)
+			var blocked_rebuild: Dictionary = graph_index.rebuild(grid_patches, grid_ids)
+			_expect(
+				not bool(blocked_rebuild.get("ok", true))
+				and str(blocked_rebuild.get("error", "")) == "generation_reserved",
+				"full rebuild cannot invalidate a reserved cross-participant transaction"
+			)
+		var committed: Dictionary = graph_index.commit_delta(plan_id)
+		_expect(bool(committed.get("ok", false)), "reserved delta publishes the candidate corner graph atomically with the index")
+		if bool(competing_plan.get("ok", false)):
+			var stale_competing: Dictionary = graph_index.commit_delta(str(competing_plan.get("summary", {}).get("plan_id", "")))
+			_expect(
+				not bool(stale_competing.get("ok", true))
+				and str(stale_competing.get("error", "")) == "stale_generation",
+				"competing plan becomes stale after the reserved generation commits"
+			)
+		_expect(graph_index.get_patch("grid/top_center") == replacement, "committed delta points at the replacement Patch instance")
+		var committed_stats: Dictionary = graph_index.get_corner_graph_stats()
+		_expect(int(committed_stats.get("report_count", -1)) == 2, "committed graph retains only the two surviving reports")
+		_expect(int(committed_stats.get("junction_count", -1)) == 2, "committed graph retains the two now-disconnected Junctions")
+		_expect(graph_index.get_edge_descriptors().has(isolated_edge_key), "committed local delta preserves the isolated descriptor")
+		if not new_reports.is_empty():
+			var first_new_report: Dictionary = new_reports[0]
+			var candidate_seed: String = str(first_new_report.get("edge_keys", [""])[0])
+			var candidate_closure: Dictionary = graph_index.get_corner_graph_closure([candidate_seed])
+			_expect(candidate_closure.get("edge_keys", []).size() == 2, "committed graph closure is reduced to the surviving local two-edge component")
+			_expect(candidate_closure.get("junction_keys", []).size() == 1, "committed graph no longer traverses the removed middle connection")
+
+		grid_patches.erase(top_center)
+		grid_ids.erase(top_center.get_instance_id())
+		grid_patches.append(replacement)
+		grid_ids[replacement.get_instance_id()] = "grid/top_center"
+		var oracle: Dictionary = BinderScript.bind_patches(grid_patches, grid_ids)
+		_expect(bool(oracle.get("ok", false)), "full Binder oracle succeeds after the persistent graph delta")
+		_expect(
+			oracle.get("descriptors", {}) == graph_index.get_edge_descriptors(),
+			"persistent descriptor cache matches the full Binder oracle after the delta"
+		)
+		top_center.queue_free()
+		if is_instance_valid(competing_patch):
+			competing_patch.queue_free()
+	else:
+		replacement.queue_free()
+	await process_frame
+
+	var reservation_holder := Node3D.new()
+	reservation_holder.name = "AdjacencyGenerationReservationTestRoot"
+	root.add_child(reservation_holder)
+	var base_a: Node3D = _new_patch(reservation_holder, "BaseA", Vector3(0.0, 0.0, 0.0))
+	var base_b: Node3D = _new_patch(reservation_holder, "BaseB", Vector3(20.0, 0.0, 0.0))
+	var candidate_a: Node3D = _new_patch(reservation_holder, "CandidateA", Vector3(40.0, 0.0, 0.0))
+	var candidate_b: Node3D = _new_patch(reservation_holder, "CandidateB", Vector3(60.0, 0.0, 0.0))
+	var candidate_c: Node3D = _new_patch(reservation_holder, "CandidateC", Vector3(80.0, 0.0, 0.0))
+	await process_frame
+	var reservation_index = IndexScript.new()
+	var reservation_ids: Dictionary = {
+		base_a.get_instance_id(): "reservation/base_a",
+		base_b.get_instance_id(): "reservation/base_b"
+	}
+	var reservation_rebuild: Dictionary = reservation_index.rebuild([base_a, base_b], reservation_ids)
+	_expect(bool(reservation_rebuild.get("ok", false)), "generation reservation fixture rebuild succeeds")
+	var plan_a: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_a", "patch": candidate_a}
+	])
+	var plan_b: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_b", "patch": candidate_b}
+	])
+	_expect(bool(plan_a.get("ok", false)) and bool(plan_b.get("ok", false)), "two independent candidate plans share the same base generation")
+	if bool(plan_a.get("ok", false)) and bool(plan_b.get("ok", false)):
+		var plan_a_id: String = str(plan_a.get("summary", {}).get("plan_id", ""))
+		var plan_b_id: String = str(plan_b.get("summary", {}).get("plan_id", ""))
+		_expect(bool(reservation_index.reserve_delta(plan_a_id).get("ok", false)), "first candidate acquires the generation reservation")
+		var competing: Dictionary = reservation_index.commit_delta(plan_b_id)
+		_expect(str(competing.get("error", "")) == "generation_reserved", "unreserved candidate cannot commit through another transaction's reservation")
+		_expect(bool(reservation_index.commit_delta(plan_a_id).get("ok", false)), "reserved candidate commits successfully")
+		var stale: Dictionary = reservation_index.commit_delta(plan_b_id)
+		_expect(str(stale.get("error", "")) == "stale_generation", "unreserved candidate is rejected after the generation advances")
+
+	var plan_c: Dictionary = reservation_index.plan_delta([], [
+		{"stable_id": "reservation/candidate_c", "patch": candidate_c}
+	])
+	_expect(bool(plan_c.get("ok", false)), "a later plan can be prepared after the prior reservation is released by commit")
+	if bool(plan_c.get("ok", false)):
+		var plan_c_id: String = str(plan_c.get("summary", {}).get("plan_id", ""))
+		_expect(bool(reservation_index.reserve_delta(plan_c_id).get("ok", false)), "later plan acquires a fresh generation reservation")
+		_expect(reservation_index.release_delta_reservation(plan_c_id), "coordinator can explicitly release a reservation before publication")
+		_expect(bool(reservation_index.commit_delta(plan_c_id).get("ok", false)), "released plan remains valid and can commit normally")
+
+	graph_holder.queue_free()
+	reservation_holder.queue_free()
+	await process_frame
+
+
+func _set_height_level(patch: Node3D, height_level: int) -> bool:
+	if not is_instance_valid(patch) or not patch.has_method("get_world_object_state") or not patch.has_method("apply_world_object_state"):
+		return false
+	var state_value: Variant = patch.call("get_world_object_state")
+	if not (state_value is Dictionary):
+		return false
+	var state: Dictionary = state_value
+	state["height_level"] = height_level
+	state["revision"] = int(state.get("revision", 0)) + 1
+	return bool(patch.call("apply_world_object_state", state))
 
 
 func _assert_matches_full_rebuild_oracle(index, patches: Array[Node3D], stable_ids: Dictionary, label: String) -> void:
