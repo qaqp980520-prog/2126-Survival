@@ -24,7 +24,9 @@ func bind_participants(index: RefCounted, scoped_transaction: RefCounted, collid
 		"abort_delta",
 		"get_patches_by_stable_id",
 		"get_plan_patches_by_stable_id",
-		"get_plan_edge_descriptors"
+		"get_plan_edge_descriptors",
+		"has_pending_plan",
+		"get_reserved_plan_id"
 	]:
 		if not index.has_method(method_name):
 			return false
@@ -257,8 +259,10 @@ func retry_pending() -> Dictionary:
 		var index_rollback: Dictionary
 		if bool(_pending.get("index_published", false)):
 			index_rollback = _index.call("rollback_published_delta", plan_id)
-		else:
+		elif bool(_index.call("has_pending_plan", plan_id)):
 			index_rollback = {"ok": bool(_index.call("abort_delta", plan_id))}
+		else:
+			index_rollback = {"ok": str(_index.call("get_reserved_plan_id")).is_empty(), "already_discarded": true}
 		if not bool(index_rollback.get("ok", false)):
 			_pending["stage"] = "index_rollback"
 			return {"ok": false, "error": "index_rollback_still_pending", "pending": index_rollback}
