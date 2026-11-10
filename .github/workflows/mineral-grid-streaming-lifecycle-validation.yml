@@ -58,6 +58,8 @@ jobs:
           grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'set_async_phase_profiling_enabled' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'request_plan_usec' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'dispatch_wait_usec' systems/MineralGridStreamingDirector.gd
           grep -Fq 'frame_yield_wait_usec' systems/MineralGridStreamingDirector.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
