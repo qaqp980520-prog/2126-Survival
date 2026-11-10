@@ -11,6 +11,8 @@ const POSITION_TOLERANCE: float = 0.01
 const VALID_SIDES: Array[String] = ["east", "west", "north", "south"]
 const CORNER_NAMES: Array[String] = ["north_east", "south_east", "south_west", "north_west"]
 const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
+const AffectedComponentPlannerScript = preload("res://systems/SurfaceTerrainAffectedComponentPlanner.gd")
+const ColliderPreservePlannerScript = preload("res://systems/SurfaceTerrainColliderPreservePlanner.gd")
 
 var _managed_edges: Dictionary = {}
 var _managed_corner_caps: Dictionary = {}
@@ -26,6 +28,28 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary,
 
 
 func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
+    return _prepare_sync_transitions_internal(descriptors, patches_by_stable_id, profile_enabled, [], false)
+
+
+## Prepare a collider-only partial update. Descriptors must describe the complete candidate
+## topology; changed_edge_keys must include every directly changed, added, or removed edge seed.
+## Unlike bind_patches(), this API does not clear or rebind unrelated patch neighbor state.
+func prepare_partial_sync_transitions(
+    descriptors: Dictionary,
+    patches_by_stable_id: Dictionary,
+    changed_edge_keys: Array,
+    profile_enabled: bool = false
+) -> Dictionary:
+    return _prepare_sync_transitions_internal(descriptors, patches_by_stable_id, profile_enabled, changed_edge_keys, true)
+
+
+func _prepare_sync_transitions_internal(
+    descriptors: Dictionary,
+    patches_by_stable_id: Dictionary,
+    profile_enabled: bool,
+    changed_edge_keys: Array,
+    partial_update: bool
+) -> Dictionary:
     if not _pending_sync_transaction.is_empty():
         return {"ok": false, "error": "transaction_in_progress", "active_count": _managed_edges.size()}
     var total_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
@@ -108,6 +132,24 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
             report["junction_key"] = str(policy.get("junction_key", ""))
             report["midpoint_height"] = float(policy.get("midpoint_height", 0.0))
 
+    var partial_context: Dictionary = {}
+    if partial_update:
+        partial_context = _build_partial_resource_plan(
+            candidates,
+            blocked_edges,
+            cap_specs,
+            edge_junctions,
+            blocked_corner_reports,
+            patches_by_stable_id,
+            changed_edge_keys
+        )
+        if not bool(partial_context.get("ok", false)):
+            return {
+                "ok": false,
+                "error": str(partial_context.get("error", "partial_plan_failed")),
+                "active_count": _managed_edges.size()
+            }
+
     var corner_resolution_usec: int = Time.get_ticks_usec() - corner_started_usec if profile_enabled else 0
     var staging_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var staged_caps: Dictionary = {}
@@ -129,7 +171,16 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
             var cap_signature: Array = _corner_cap_reuse_signature(cap_spec, corner_entry)
             var old_cap: Dictionary = _managed_corner_caps.get(cap_key, {})
             var old_cap_body: StaticBody3D = old_cap.get("body") as StaticBody3D
-            if not cap_signature.is_empty() and _signatures_match(old_cap.get("reuse_signature", []), cap_signature) and _is_reusable_managed_body(old_cap_body):
+            if partial_update:
+                var preserve_cap_set: Dictionary = partial_context.get("preserve_cap_set", {})
+                var stage_cap_set: Dictionary = partial_context.get("stage_cap_set", {})
+                if preserve_cap_set.has(cap_key):
+                    staged_caps[cap_key] = old_cap
+                    reused_cap_keys[cap_key] = true
+                    continue
+                if not stage_cap_set.has(cap_key):
+                    continue
+            elif not cap_signature.is_empty() and _signatures_match(old_cap.get("reuse_signature", []), cap_signature) and _is_reusable_managed_body(old_cap_body):
                 staged_caps[cap_key] = old_cap
                 reused_cap_keys[cap_key] = true
                 continue
@@ -139,6 +190,17 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
                 return {"ok": false, "error": "corner_cap_staging_failed", "active_count": _managed_edges.size()}
             staged_caps[cap_key] = staged_cap
             staged_cap_count += 1
+
+    if partial_update:
+        for key_value in partial_context.get("preserve_cap_keys", []):
+            var preserve_key: String = str(key_value)
+            if staged_caps.has(preserve_key):
+                continue
+            if not _managed_corner_caps.has(preserve_key):
+                _free_staged_caps(staged_caps, reused_cap_keys)
+                return {"ok": false, "error": "missing_preserved_corner_cap", "active_count": _managed_edges.size()}
+            staged_caps[preserve_key] = _managed_corner_caps[preserve_key]
+            reused_cap_keys[preserve_key] = true
 
     var staged: Dictionary = {}
     var reused_edge_keys: Dictionary = {}
@@ -152,7 +214,18 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         var edge_signature: Array = _edge_reuse_signature(str(edge_key), edge, junction_positions)
         var old_edge: Dictionary = _managed_edges.get(str(edge_key), {})
         var old_edge_body: StaticBody3D = old_edge.get("body") as StaticBody3D
-        if not edge_signature.is_empty() and _signatures_match(old_edge.get("reuse_signature", []), edge_signature) and _is_reusable_managed_body(old_edge_body):
+        if partial_update:
+            var preserve_edge_set: Dictionary = partial_context.get("preserve_edge_set", {})
+            var stage_edge_set: Dictionary = partial_context.get("stage_edge_set", {})
+            if preserve_edge_set.has(str(edge_key)):
+                staged[str(edge_key)] = old_edge
+                reused_edge_keys[str(edge_key)] = true
+                if partial_context.get("reactivate_edge_set", {}).has(str(edge_key)):
+                    reactivated_edge_keys[str(edge_key)] = true
+                continue
+            if not stage_edge_set.has(str(edge_key)):
+                continue
+        elif not edge_signature.is_empty() and _signatures_match(old_edge.get("reuse_signature", []), edge_signature) and _is_reusable_managed_body(old_edge_body):
             staged[str(edge_key)] = old_edge
             reused_edge_keys[str(edge_key)] = true
             if not _edge_patch_states_are_active(old_edge):
@@ -166,8 +239,36 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         staged[str(edge_key)] = staged_edge
         staged_edge_count += 1
 
+    if partial_update:
+        for key_value in partial_context.get("preserve_edge_keys", []):
+            var preserve_key: String = str(key_value)
+            if staged.has(preserve_key):
+                continue
+            if not _managed_edges.has(preserve_key):
+                _free_staged(staged, reused_edge_keys)
+                _free_staged_caps(staged_caps, reused_cap_keys)
+                return {"ok": false, "error": "missing_preserved_edge", "active_count": _managed_edges.size()}
+            staged[preserve_key] = _managed_edges[preserve_key]
+            reused_edge_keys[preserve_key] = true
+            if partial_context.get("reactivate_edge_set", {}).has(preserve_key):
+                reactivated_edge_keys[preserve_key] = true
+
     var resource_staging_usec: int = Time.get_ticks_usec() - staging_started_usec if profile_enabled else 0
-    var patch_snapshot_result: Dictionary = _capture_patch_snapshots(candidates, _managed_edges)
+    var snapshot_candidates: Dictionary = candidates
+    var snapshot_old_edges: Dictionary = _managed_edges
+    if partial_update:
+        snapshot_candidates = {}
+        snapshot_old_edges = {}
+        var affected_edge_set: Dictionary = partial_context.get("affected_edge_set", {})
+        for key_value in candidates.keys():
+            var key: String = str(key_value)
+            if affected_edge_set.has(key):
+                snapshot_candidates[key] = candidates[key_value]
+        for key_value in _managed_edges.keys():
+            var key: String = str(key_value)
+            if affected_edge_set.has(key):
+                snapshot_old_edges[key] = _managed_edges[key_value]
+    var patch_snapshot_result: Dictionary = _capture_patch_snapshots(snapshot_candidates, snapshot_old_edges)
     if not bool(patch_snapshot_result.get("ok", false)):
         _free_staged(staged, reused_edge_keys)
         _free_staged_caps(staged_caps, reused_cap_keys)
@@ -193,7 +294,11 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         "total_started_usec": total_started_usec,
         "profile_enabled": profile_enabled,
         "staged_edge_count": staged_edge_count,
-        "staged_cap_count": staged_cap_count
+        "staged_cap_count": staged_cap_count,
+        "partial_update": partial_update,
+        "changed_seed_edge_keys": partial_context.get("changed_seed_edge_keys", []),
+        "affected_edge_keys": partial_context.get("affected_edge_keys", []),
+        "affected_junction_keys": partial_context.get("affected_junction_keys", [])
     }
     return {
         "ok": true,
@@ -203,8 +308,198 @@ func prepare_sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dic
         "pending_reused_edge_count": reused_edge_keys.size(),
         "pending_staged_corner_cap_count": staged_cap_count,
         "pending_reused_corner_cap_count": reused_cap_keys.size(),
-        "blocked_count": blocked_edges.size()
+        "blocked_count": blocked_edges.size(),
+        "partial_update": partial_update,
+        "affected_edge_count": partial_context.get("affected_edge_keys", []).size(),
+        "affected_junction_count": partial_context.get("affected_junction_keys", []).size()
     }
+
+
+func _build_partial_resource_plan(
+    candidates: Dictionary,
+    blocked_edges: Dictionary,
+    cap_specs: Array,
+    edge_junctions: Dictionary,
+    candidate_reports: Array,
+    patches_by_stable_id: Dictionary,
+    changed_edge_keys: Array
+) -> Dictionary:
+    if changed_edge_keys.is_empty():
+        return {"ok": false, "error": "empty_changed_edge_seeds"}
+
+    var old_patches_by_stable_id: Dictionary = {}
+    for edge_value in _managed_edges.values():
+        if not (edge_value is Dictionary):
+            return {"ok": false, "error": "invalid_committed_edge_record"}
+        var edge: Dictionary = edge_value
+        var endpoints: Array[Dictionary] = [
+            {"stable_id": str(edge.get("first_id", "")), "patch": edge.get("first_patch")},
+            {"stable_id": str(edge.get("second_id", "")), "patch": edge.get("second_patch")}
+        ]
+        for endpoint in endpoints:
+            var stable_id: String = str(endpoint.get("stable_id", ""))
+            var patch: Node3D = endpoint.get("patch") as Node3D
+            if stable_id.is_empty() or not is_instance_valid(patch) or patch.is_queued_for_deletion():
+                return {"ok": false, "error": "invalid_committed_patch_endpoint"}
+            if old_patches_by_stable_id.has(stable_id) and old_patches_by_stable_id[stable_id] != patch:
+                return {"ok": false, "error": "conflicting_committed_patch_identity"}
+            old_patches_by_stable_id[stable_id] = patch
+
+    var closure: Dictionary = AffectedComponentPlannerScript.build_closure(
+        changed_edge_keys,
+        _last_blocked_corner_reports,
+        old_patches_by_stable_id,
+        candidate_reports,
+        patches_by_stable_id,
+        PATCH_SIZE
+    )
+    if not bool(closure.get("ok", false)):
+        return closure
+    var affected_edge_keys: Array = closure.get("edge_keys", [])
+    var affected_junction_keys: Array = closure.get("junction_keys", [])
+    var affected_edge_set: Dictionary = _string_array_to_set(affected_edge_keys)
+    var affected_junction_set: Dictionary = _string_array_to_set(affected_junction_keys)
+
+    var old_edge_records: Dictionary = {}
+    for key_value in _managed_edges.keys():
+        var key: String = str(key_value)
+        var old_record: Dictionary = _managed_edges[key_value].duplicate(false)
+        var old_body: StaticBody3D = old_record.get("body") as StaticBody3D
+        old_record["body_reusable"] = _is_reusable_managed_body(old_body)
+        old_record["patch_states_active"] = _edge_patch_states_are_active(old_record)
+        old_edge_records[key] = old_record
+
+    var candidate_edge_records: Dictionary = {}
+    for key_value in candidates.keys():
+        var key: String = str(key_value)
+        if blocked_edges.has(key):
+            continue
+        var edge: Dictionary = candidates[key_value]
+        var signature: Array = _edge_reuse_signature(key, edge, edge_junctions.get(key, []))
+        if signature.is_empty():
+            return {"ok": false, "error": "invalid_candidate_edge_signature", "key": key}
+        candidate_edge_records[key] = {"reuse_signature": signature}
+
+    var old_cap_records: Dictionary = {}
+    for key_value in _managed_corner_caps.keys():
+        var key: String = str(key_value)
+        var old_record: Dictionary = _managed_corner_caps[key_value].duplicate(false)
+        var old_body: StaticBody3D = old_record.get("body") as StaticBody3D
+        old_record["body_reusable"] = _is_reusable_managed_body(old_body)
+        old_cap_records[key] = old_record
+
+    var candidate_cap_records: Dictionary = {}
+    for cap_spec_value in cap_specs:
+        if not (cap_spec_value is Dictionary):
+            return {"ok": false, "error": "invalid_candidate_corner_cap_spec"}
+        var cap_spec: Dictionary = cap_spec_value
+        var junction_key: String = str(cap_spec.get("junction_key", ""))
+        for corner_value in cap_spec.get("corners", []):
+            if not (corner_value is Dictionary):
+                return {"ok": false, "error": "invalid_candidate_corner_cap_entry"}
+            var corner_entry: Dictionary = corner_value
+            var cap_key: String = _report_token(
+                str(corner_entry.get("stable_id", "")),
+                str(corner_entry.get("corner", ""))
+            )
+            var signature: Array = _corner_cap_reuse_signature(cap_spec, corner_entry)
+            if signature.is_empty() or candidate_cap_records.has(cap_key):
+                return {"ok": false, "error": "invalid_candidate_corner_cap_signature", "key": cap_key}
+            candidate_cap_records[cap_key] = {
+                "junction_key": junction_key,
+                "reuse_signature": signature
+            }
+
+    var scoped_candidate_edges: Dictionary = {}
+    for key_value in candidate_edge_records.keys():
+        var key: String = str(key_value)
+        if affected_edge_set.has(key):
+            scoped_candidate_edges[key] = candidate_edge_records[key_value]
+    var scoped_candidate_caps: Dictionary = {}
+    for key_value in candidate_cap_records.keys():
+        var key: String = str(key_value)
+        var record: Dictionary = candidate_cap_records[key_value]
+        if affected_junction_set.has(str(record.get("junction_key", ""))):
+            scoped_candidate_caps[key] = record
+
+    var plan: Dictionary = ColliderPreservePlannerScript.build_plan(
+        affected_edge_keys,
+        affected_junction_keys,
+        old_edge_records,
+        scoped_candidate_edges,
+        old_cap_records,
+        scoped_candidate_caps
+    )
+    if not bool(plan.get("ok", false)):
+        return plan
+
+    # Fail closed if the caller omitted a changed seed. Every resource outside the
+    # closure must still have an identical candidate signature and active patch state.
+    for key_value in candidate_edge_records.keys():
+        var key: String = str(key_value)
+        if affected_edge_set.has(key):
+            continue
+        if not old_edge_records.has(key):
+            return {"ok": false, "error": "candidate_edge_added_outside_affected_closure", "key": key}
+        var old_edge: Dictionary = old_edge_records[key]
+        if (
+            not bool(old_edge.get("body_reusable", false))
+            or not bool(old_edge.get("patch_states_active", false))
+            or not _signatures_match(old_edge.get("reuse_signature", []), candidate_edge_records[key].get("reuse_signature", []))
+        ):
+            return {"ok": false, "error": "candidate_edge_changed_outside_affected_closure", "key": key}
+    for key_value in old_edge_records.keys():
+        var key: String = str(key_value)
+        if not affected_edge_set.has(key) and not candidate_edge_records.has(key):
+            return {"ok": false, "error": "committed_edge_removed_outside_affected_closure", "key": key}
+
+    for key_value in candidate_cap_records.keys():
+        var key: String = str(key_value)
+        var candidate_cap: Dictionary = candidate_cap_records[key]
+        if affected_junction_set.has(str(candidate_cap.get("junction_key", ""))):
+            continue
+        if not old_cap_records.has(key):
+            return {"ok": false, "error": "candidate_corner_cap_added_outside_affected_closure", "key": key}
+        var old_cap: Dictionary = old_cap_records[key]
+        if (
+            not bool(old_cap.get("body_reusable", false))
+            or str(old_cap.get("junction_key", "")) != str(candidate_cap.get("junction_key", ""))
+            or not _signatures_match(old_cap.get("reuse_signature", []), candidate_cap.get("reuse_signature", []))
+        ):
+            return {"ok": false, "error": "candidate_corner_cap_changed_outside_affected_closure", "key": key}
+    for key_value in old_cap_records.keys():
+        var key: String = str(key_value)
+        if affected_junction_set.has(str(old_cap_records[key].get("junction_key", ""))):
+            continue
+        if not candidate_cap_records.has(key):
+            return {"ok": false, "error": "committed_corner_cap_removed_outside_affected_closure", "key": key}
+
+    var preserve_edge_keys: Array = plan.get("preserve_edge_keys", [])
+    var preserve_cap_keys: Array = plan.get("preserve_corner_cap_keys", [])
+    var reactivate_edge_keys: Array = plan.get("reactivate_edge_keys", [])
+    return {
+        "ok": true,
+        "plan": plan,
+        "changed_seed_edge_keys": changed_edge_keys.duplicate(),
+        "affected_edge_keys": affected_edge_keys,
+        "affected_junction_keys": affected_junction_keys,
+        "affected_edge_set": affected_edge_set,
+        "affected_junction_set": affected_junction_set,
+        "preserve_edge_keys": preserve_edge_keys,
+        "preserve_edge_set": _string_array_to_set(preserve_edge_keys),
+        "stage_edge_set": _string_array_to_set(plan.get("stage_edge_keys", [])),
+        "reactivate_edge_set": _string_array_to_set(reactivate_edge_keys),
+        "preserve_cap_keys": preserve_cap_keys,
+        "preserve_cap_set": _string_array_to_set(preserve_cap_keys),
+        "stage_cap_set": _string_array_to_set(plan.get("stage_corner_cap_keys", []))
+    }
+
+
+func _string_array_to_set(values: Array) -> Dictionary:
+    var result: Dictionary = {}
+    for value in values:
+        result[str(value)] = true
+    return result
 
 
 func commit_sync_transitions(transaction_id: int) -> Dictionary:
@@ -377,6 +672,12 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
         "reused_corner_cap_count": reused_cap_keys.size(),
         "staged_corner_cap_count": int(pending.get("staged_cap_count", 0)),
         "retired_corner_cap_count": retired_corner_cap_count,
+        "partial_update": bool(pending.get("partial_update", false)),
+        "changed_seed_edge_keys": pending.get("changed_seed_edge_keys", []).duplicate(),
+        "affected_edge_keys": pending.get("affected_edge_keys", []).duplicate(),
+        "affected_junction_keys": pending.get("affected_junction_keys", []).duplicate(),
+        "affected_edge_count": pending.get("affected_edge_keys", []).size(),
+        "affected_junction_count": pending.get("affected_junction_keys", []).size(),
         "profile_usec": profile_usec
     }
     _pending_sync_transaction.clear()
