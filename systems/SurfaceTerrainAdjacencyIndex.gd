@@ -336,17 +336,25 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 
 ## Commits only the index snapshot. Production edge/cap mutation is intentionally not wired here.
 ## A stale generation or changed Node snapshot is rejected without changing committed state.
-func commit_delta(plan_id: String) -> Dictionary:
+## Publishes the prepared Index candidate but retains the old snapshot and generation
+## reservation so a coordinator can still roll back if a later participant fails.
+func publish_delta(plan_id: String) -> Dictionary:
 	if not _reserved_plan_id.is_empty() and _reserved_plan_id != plan_id:
 		return {"ok": false, "error": "generation_reserved", "reserved_plan_id": _reserved_plan_id}
 	if not _pending_plans.has(plan_id):
 		return {"ok": false, "error": "unknown_plan"}
 	var plan: Dictionary = _pending_plans[plan_id]
+	if bool(plan.get("published", false)):
+		return {"ok": false, "error": "already_published"}
 	if int(plan.get("base_generation", -1)) != _generation:
 		_pending_plans.erase(plan_id)
 		if _reserved_plan_id == plan_id:
 			_reserved_plan_id = ""
 		return {"ok": false, "error": "stale_generation"}
+	if _reserved_plan_id.is_empty():
+		var reservation: Dictionary = reserve_delta(plan_id)
+		if not bool(reservation.get("ok", false)):
+			return reservation
 
 	var candidate_entries: Dictionary = plan["candidate_entries"]
 	var committed_entries: Dictionary = _entries_by_stable_id
@@ -362,8 +370,7 @@ func commit_delta(plan_id: String) -> Dictionary:
 			var committed_result: Dictionary = _record_matches_current(stable_id, committed_record)
 			if not bool(committed_result.get("ok", false)):
 				_pending_plans.erase(plan_id)
-				if _reserved_plan_id == plan_id:
-					_reserved_plan_id = ""
+				_reserved_plan_id = ""
 				return committed_result
 		if candidate_entries.has(stable_id):
 			var candidate_record: Dictionary = candidate_entries[stable_id]
@@ -378,12 +385,26 @@ func commit_delta(plan_id: String) -> Dictionary:
 				var candidate_result: Dictionary = _record_matches_current(stable_id, candidate_record)
 				if not bool(candidate_result.get("ok", false)):
 					_pending_plans.erase(plan_id)
-					if _reserved_plan_id == plan_id:
-						_reserved_plan_id = ""
+					_reserved_plan_id = ""
 					return candidate_result
 
-	_entries_by_stable_id = candidate_entries.duplicate()
-	_bucket_to_stable_ids = plan["candidate_buckets"]
+	var previous_state: Dictionary = {
+		"entries": _entries_by_stable_id.duplicate(false),
+		"buckets": _bucket_to_stable_ids.duplicate(false),
+		"patch_size": _patch_size,
+		"descriptors": _descriptors_by_edge_key.duplicate(false),
+		"corner_reports": _corner_reports_by_stable_id.duplicate(false),
+		"edge_to_junctions": _edge_to_junctions.duplicate(false),
+		"junction_to_edges": _junction_to_edges.duplicate(false),
+		"edge_junction_refcounts": _edge_junction_refcounts.duplicate(false)
+	}
+	plan["previous_state"] = previous_state
+	plan["published"] = true
+	plan["published_generation"] = _generation + 1
+	_pending_plans[plan_id] = plan
+
+	_entries_by_stable_id = candidate_entries.duplicate(false)
+	_bucket_to_stable_ids = plan["candidate_buckets"].duplicate(false)
 	_patch_size = float(plan["candidate_patch_size"])
 	_descriptors_by_edge_key = plan.get("candidate_descriptors", {}).duplicate(false)
 	_corner_reports_by_stable_id = plan.get("candidate_corner_reports_by_stable_id", {}).duplicate(false)
@@ -391,18 +412,86 @@ func commit_delta(plan_id: String) -> Dictionary:
 	_junction_to_edges = plan.get("candidate_junction_to_edges", {}).duplicate(false)
 	_edge_junction_refcounts = plan.get("candidate_edge_junction_refcounts", {}).duplicate(false)
 	_generation += 1
-	_pending_plans.erase(plan_id)
-	if _reserved_plan_id == plan_id:
-		_reserved_plan_id = ""
 	return {
 		"ok": true,
+		"published": true,
 		"generation": _generation,
 		"patch_count": _entries_by_stable_id.size(),
 		"summary": plan["summary"].duplicate(true)
 	}
 
 
+## Finalizes a published delta after every external participant has finalized successfully.
+func finalize_delta(plan_id: String) -> Dictionary:
+	if not _pending_plans.has(plan_id):
+		return {"ok": false, "error": "unknown_plan"}
+	var plan: Dictionary = _pending_plans[plan_id]
+	if not bool(plan.get("published", false)):
+		return {"ok": false, "error": "plan_not_published"}
+	if _reserved_plan_id != plan_id:
+		return {"ok": false, "error": "generation_reservation_lost"}
+	if _generation != int(plan.get("published_generation", -1)):
+		return {"ok": false, "error": "published_generation_changed"}
+	_pending_plans.erase(plan_id)
+	_reserved_plan_id = ""
+	return {
+		"ok": true,
+		"finalized": true,
+		"generation": _generation,
+		"patch_count": _entries_by_stable_id.size(),
+		"summary": plan.get("summary", {}).duplicate(true)
+	}
+
+
+## Restores the exact pre-publish Index snapshot. Generation remains monotonic so any
+## competing plans prepared against the previous generation become stale after rollback.
+func rollback_published_delta(plan_id: String) -> Dictionary:
+	if not _pending_plans.has(plan_id):
+		return {"ok": false, "error": "unknown_plan"}
+	var plan: Dictionary = _pending_plans[plan_id]
+	if not bool(plan.get("published", false)):
+		return {"ok": false, "error": "plan_not_published"}
+	if _reserved_plan_id != plan_id:
+		return {"ok": false, "error": "generation_reservation_lost"}
+	if _generation != int(plan.get("published_generation", -1)):
+		return {"ok": false, "error": "published_generation_changed"}
+	var previous_state: Dictionary = plan.get("previous_state", {})
+	if previous_state.is_empty():
+		return {"ok": false, "error": "previous_snapshot_missing"}
+	_entries_by_stable_id = previous_state.get("entries", {}).duplicate(false)
+	_bucket_to_stable_ids = previous_state.get("buckets", {}).duplicate(false)
+	_patch_size = float(previous_state.get("patch_size", -1.0))
+	_descriptors_by_edge_key = previous_state.get("descriptors", {}).duplicate(false)
+	_corner_reports_by_stable_id = previous_state.get("corner_reports", {}).duplicate(false)
+	_edge_to_junctions = previous_state.get("edge_to_junctions", {}).duplicate(false)
+	_junction_to_edges = previous_state.get("junction_to_edges", {}).duplicate(false)
+	_edge_junction_refcounts = previous_state.get("edge_junction_refcounts", {}).duplicate(false)
+	_generation += 1
+	_pending_plans.erase(plan_id)
+	_reserved_plan_id = ""
+	return {
+		"ok": true,
+		"rolled_back": true,
+		"generation": _generation,
+		"patch_count": _entries_by_stable_id.size()
+	}
+
+
+## Compatibility wrapper for callers that do not coordinate external participants.
+func commit_delta(plan_id: String) -> Dictionary:
+	var published: Dictionary = publish_delta(plan_id)
+	if not bool(published.get("ok", false)):
+		return published
+	return finalize_delta(plan_id)
+
+
 func abort_delta(plan_id: String) -> bool:
+	if not _pending_plans.has(plan_id):
+		if _reserved_plan_id == plan_id:
+			_reserved_plan_id = ""
+		return false
+	if bool(_pending_plans[plan_id].get("published", false)):
+		return bool(rollback_published_delta(plan_id).get("ok", false))
 	if _reserved_plan_id == plan_id:
 		_reserved_plan_id = ""
 	return _pending_plans.erase(plan_id)
@@ -422,10 +511,44 @@ func reserve_delta(plan_id: String) -> Dictionary:
 
 
 func release_delta_reservation(plan_id: String) -> bool:
-	if _reserved_plan_id != plan_id:
+	if _reserved_plan_id != plan_id or not _pending_plans.has(plan_id):
+		return false
+	if bool(_pending_plans[plan_id].get("published", false)):
 		return false
 	_reserved_plan_id = ""
 	return true
+
+
+func get_patches_by_stable_id() -> Dictionary:
+	return _resolve_patch_map(_entries_by_stable_id)
+
+
+func get_plan_patches_by_stable_id(plan_id: String) -> Dictionary:
+	if not _pending_plans.has(plan_id):
+		return {"ok": false, "error": "unknown_plan"}
+	return _resolve_patch_map(_pending_plans[plan_id].get("candidate_entries", {}))
+
+
+func get_plan_edge_descriptors(plan_id: String) -> Dictionary:
+	if not _pending_plans.has(plan_id):
+		return {"ok": false, "error": "unknown_plan"}
+	return {
+		"ok": true,
+		"descriptors": _pending_plans[plan_id].get("candidate_descriptors", {}).duplicate(true)
+	}
+
+
+func _resolve_patch_map(entries: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for stable_id_value in entries.keys():
+		var stable_id: String = str(stable_id_value)
+		var record: Dictionary = entries[stable_id_value]
+		var patch_ref: Variant = record.get("patch_ref", null)
+		var patch: Node3D = patch_ref.get_ref() as Node3D if patch_ref is WeakRef else null
+		if not is_instance_valid(patch) or patch.is_queued_for_deletion() or not patch.is_inside_tree():
+			return {"ok": false, "error": "patch_reference_invalid:" + stable_id}
+		result[stable_id] = patch
+	return {"ok": true, "patches_by_stable_id": result}
 
 
 func get_corner_reports_by_stable_id() -> Dictionary:
