@@ -28,6 +28,7 @@ var _terrain_adjacency_index: RefCounted
 var _terrain_adjacency_scoped_transaction: RefCounted
 var _terrain_adjacency_coordinator: RefCounted
 var _terrain_adjacency_recovery_required: bool = false
+var _terrain_adjacency_recovery_in_progress: bool = false
 var _terrain_adjacency_batch_depth: int = 0
 var _terrain_adjacency_batch_dirty: bool = false
 var _terrain_adjacency_batch_added_patches: Dictionary = {}
@@ -584,11 +585,19 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	var pending_validation: Dictionary = _validate_pending_chunk_unloads()
 	if not bool(pending_validation.get("ok", false)):
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		if not pending_rollback_ok:
+			_terrain_adjacency_recovery_required = true
+			return {
+				"ok": false,
+				"error": "pending_chunk_unload_validation_and_rollback_failed:" + str(pending_validation.get("error", "unknown")),
+				"pending_unload_rollback_ok": false,
+				"pending_recovery_required": true
+			}
 		_clear_terrain_adjacency_batch_delta()
 		return {
 			"ok": false,
 			"error": "pending_chunk_unload_validation_failed:" + str(pending_validation.get("error", "unknown")),
-			"pending_unload_rollback_ok": pending_rollback_ok
+			"pending_unload_rollback_ok": true
 		}
 
 	_terrain_adjacency_batch_dirty = false
@@ -626,7 +635,10 @@ func end_terrain_adjacency_batch() -> Dictionary:
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
 		result["pending_unload_rollback_ok"] = pending_rollback_ok
 		if not pending_rollback_ok:
+			_terrain_adjacency_recovery_required = true
 			result["error"] = "terrain_adjacency_failed_and_pending_unload_rollback_failed"
+			result["pending_recovery_required"] = true
+			return result
 		if used_incremental_path:
 			# A failed delta leaves newly registered roots alive. Reconcile the actual
 			# live set through the authoritative full path before the Director retries.
@@ -640,8 +652,16 @@ func end_terrain_adjacency_batch() -> Dictionary:
 
 	var finalize_result: Dictionary = _finalize_pending_chunk_unloads()
 	if not bool(finalize_result.get("ok", false)):
-		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
 		_terrain_adjacency_recovery_required = true
+		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		if not pending_rollback_ok:
+			_clear_terrain_adjacency_batch_delta()
+			return {
+				"ok": false,
+				"error": "terrain_adjacency_committed_but_chunk_retirement_and_restore_failed",
+				"pending_recovery_required": true,
+				"pending_unload_rollback_ok": false
+			}
 		var adjacency_restore: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 		if bool(adjacency_restore.get("ok", false)):
 			_terrain_adjacency_recovery_required = false
@@ -680,7 +700,10 @@ func retry_terrain_adjacency_recovery() -> Dictionary:
 			return {"ok": true, "finalized": true, "retired_chunk_count": int(finalized_roots.get("retired_chunk_count", 0))}
 		if bool(retry_result.get("rolled_back", false)) or bool(retry_result.get("aborted", false)):
 			_terrain_transition_descriptors = _terrain_adjacency_index.call("get_edge_descriptors")
-			if not _cancel_all_pending_chunk_unloads():
+			_terrain_adjacency_recovery_in_progress = true
+			var pending_roots_restored: bool = _cancel_all_pending_chunk_unloads()
+			_terrain_adjacency_recovery_in_progress = false
+			if not pending_roots_restored:
 				_terrain_adjacency_recovery_required = true
 				return {"ok": false, "error": "coordinator_rollback_chunk_restore_failed"}
 			_terrain_adjacency_recovery_required = true
@@ -693,6 +716,12 @@ func retry_terrain_adjacency_recovery() -> Dictionary:
 		return {"ok": false, "error": "coordinator_retry_result_unrecognized", "retry": retry_result}
 
 	if _terrain_adjacency_recovery_required:
+		if not _pending_chunk_unloads.is_empty():
+			_terrain_adjacency_recovery_in_progress = true
+			var pending_roots_restored: bool = _cancel_all_pending_chunk_unloads()
+			_terrain_adjacency_recovery_in_progress = false
+			if not pending_roots_restored:
+				return {"ok": false, "error": "pending_chunk_roots_still_unrestorable"}
 		var reconciled: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 		if not bool(reconciled.get("ok", false)):
 			return {"ok": false, "error": "terrain_adjacency_full_reconcile_failed", "reconcile": reconciled}
@@ -703,7 +732,8 @@ func retry_terrain_adjacency_recovery() -> Dictionary:
 
 
 func cancel_pending_chunk_unload(chunk_id: String, now_unix: int = -1) -> bool:
-	if has_pending_terrain_adjacency_recovery() and _terrain_adjacency_batch_depth <= 0:
+	var coordinator_pending: bool = is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.call("has_pending_transaction"))
+	if _terrain_adjacency_batch_depth <= 0 and (coordinator_pending or (_terrain_adjacency_recovery_required and not _terrain_adjacency_recovery_in_progress)):
 		return false
 	if not _pending_chunk_unloads.has(chunk_id):
 		return is_chunk_loaded(chunk_id)
