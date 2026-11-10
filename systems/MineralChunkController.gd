@@ -1175,7 +1175,8 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), collider_failure)
 		return collider_failure
 	if not _install_terrain_adjacency_index(candidate_index, patches, stable_ids_by_instance):
-		var install_failure: Dictionary = {"ok": false, "error": "adjacency_index_coordinator_install_failed"}
+		_terrain_adjacency_recovery_required = true
+		var install_failure: Dictionary = {"ok": false, "error": "adjacency_index_coordinator_install_failed", "recovery_required": true}
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), install_failure)
 		return install_failure
 	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
