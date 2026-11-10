@@ -564,6 +564,8 @@ func _emit_metrics(
 	var adjacency_batch_ms: float = float(adjacency_profile.get("batch_total_usec", 0)) / 1000.0
 	var async_other_ms: float = maxf(0.0, async_total_ms - factory_build_ms - adjacency_batch_ms)
 	var director_phase_keys: Array[String] = [
+		"request_plan_usec",
+		"dispatch_wait_usec",
 		"planning_usec",
 		"factory_build_usec",
 		"staged_validation_usec",
