@@ -200,6 +200,13 @@ func finalize(transaction_id: int) -> Dictionary:
         return {"ok": false, "error": "invalid_transaction_id"}
     if not bool(_pending.get("applied", false)):
         return {"ok": false, "error": "transaction_not_applied"}
+    if bool(_pending.get("recovery_required", false)):
+        return {
+            "ok": false,
+            "error": "transaction_recovery_required",
+            "pending_retained": true,
+            "remaining_batch_count": _pending.get("batch_patches", []).size()
+        }
     var ended: bool = _end_pending_batches()
     if not ended:
         _pending["finalize_pending"] = true
