@@ -653,7 +653,9 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	var finalize_result: Dictionary = _finalize_pending_chunk_unloads()
 	if not bool(finalize_result.get("ok", false)):
 		_terrain_adjacency_recovery_required = true
+		_terrain_adjacency_recovery_in_progress = true
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		_terrain_adjacency_recovery_in_progress = false
 		if not pending_rollback_ok:
 			_clear_terrain_adjacency_batch_delta()
 			return {
