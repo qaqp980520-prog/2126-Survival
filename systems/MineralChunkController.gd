@@ -1094,7 +1094,12 @@ func _request_terrain_adjacency_rebind(
 	return _rebind_terrain_patches(patches, candidate_chunk_id, candidate_objects)
 
 func refresh_terrain_adjacency() -> bool:
+	if has_pending_terrain_adjacency_recovery():
+		var recovery: Dictionary = retry_terrain_adjacency_recovery()
+		return bool(recovery.get("ok", false))
 	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	if bool(result.get("ok", false)):
+		_terrain_adjacency_recovery_required = false
 	return bool(result.get("ok", false))
 
 func _on_terrain_patch_state_changed(patch: Node3D) -> void:
