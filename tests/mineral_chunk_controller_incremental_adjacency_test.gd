@@ -3,7 +3,6 @@ extends SceneTree
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const DirectorScript = preload("res://systems/MineralGridStreamingDirector.gd")
 const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
-const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 const IndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
 const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
@@ -222,7 +221,7 @@ func _test_director_retries_controller_recovery_for_sync_and_async_requests() ->
 	var controller := FakeStreamingController.new()
 	controller.name = "FakeStreamingController"
 	holder.add_child(controller)
-	var director: Node3D = DirectorScript.new()
+	var director: Node = DirectorScript.new()
 	director.name = "MineralGridStreamingDirector"
 	holder.add_child(director)
 	_expect(bool(director.call("bind_controller", controller)), "Director binds the recovery-aware Controller")
