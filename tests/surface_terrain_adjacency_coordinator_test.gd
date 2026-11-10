@@ -34,7 +34,7 @@ class FaultInjectingColliderManager extends SurfaceTerrainTransitionColliderMana
 		return super.abort_sync_transitions(transaction_id)
 
 	func has_test_pending_transaction() -> bool:
-	return not _pending_sync_transaction.is_empty()
+		return not _pending_sync_transaction.is_empty()
 
 
 var failures: Array[String] = []
