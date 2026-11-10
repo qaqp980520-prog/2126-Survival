@@ -423,7 +423,7 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		"staged_validation_usec": 0,
 		"frame_yield_wait_usec": 0,
 		"controller_registration_usec": 0,
-		"staged_root_transfer_usec": 0,
+		"staged_map_erase_usec": 0,
 		"stale_unload_usec": 0,
 		"adjacency_finalize_call_usec": 0,
 		"rollback_complete": true,
@@ -686,7 +686,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			return
 		var transfer_started_usec: int = _start_async_phase_timer(request_id)
 		staged_roots.erase(id)
-		_finish_async_phase_timer(request_id, "staged_root_transfer_usec", transfer_started_usec)
+		_finish_async_phase_timer(request_id, "staged_map_erase_usec", transfer_started_usec)
 
 	_release_async_staged_roots(request_id, staged_roots)
 	var stale_ids: Array[String] = []
