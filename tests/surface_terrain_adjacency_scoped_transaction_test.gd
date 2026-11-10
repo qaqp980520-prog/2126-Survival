@@ -410,11 +410,13 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
     var candidate_patches: Array[Node3D] = [a, b_replacement, c, d]
     if replace_two_pairs:
         candidate_patches = [a, b_replacement, c, d_replacement]
+    var d_candidate: Node3D = d_replacement if replace_two_pairs else d
     var candidate_instance_ids: Dictionary = {
         a.get_instance_id(): "patch/a",
         b_replacement.get_instance_id(): "patch/b",
         c.get_instance_id(): "patch/c",
-        d.get_instance_id(): "patch/d" if replace_two_pairs else "patch/d"
+        d_candidate.get_instance_id(): "patch/d",
+        e.get_instance_id(): "patch/e"
     }
     var candidate_report: Dictionary = BinderScript.build_candidate_descriptors(candidate_patches, candidate_instance_ids)
     _expect(bool(candidate_report.get("ok", false)), "candidate production Patch set produces descriptors")
