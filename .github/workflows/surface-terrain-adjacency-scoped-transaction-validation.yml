@@ -5,6 +5,7 @@ on:
     paths:
       - 'systems/SurfaceTerrainAdjacencyScopedTransaction.gd'
       - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainTransitionColliderManager.gd'
       - 'systems/SurfaceTerrainTransitionDescriptor.gd'
       - 'systems/SurfaceTerrainPatch.gd'
       - 'tests/surface_terrain_adjacency_scoped_transaction_test.gd'
@@ -33,6 +34,7 @@ jobs:
           test -f project.godot
           test -f systems/SurfaceTerrainAdjacencyScopedTransaction.gd
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainTransitionColliderManager.gd
           test -f systems/SurfaceTerrainPatch.gd
           test -f tests/surface_terrain_adjacency_scoped_transaction_test.gd
       - name: Import and parse root project
