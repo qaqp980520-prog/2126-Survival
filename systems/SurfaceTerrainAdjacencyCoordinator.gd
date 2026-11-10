@@ -211,7 +211,7 @@ func execute_delta(
 	var committed_edges: Array[String] = _sorted_strings(collider_commit.get("affected_edge_keys", []))
 	var committed_junctions: Array[String] = _sorted_strings(collider_commit.get("affected_junction_keys", []))
 	if committed_edges != index_edges or committed_junctions != index_junctions:
-		_store_pending("finalize", plan_id, collider_transaction_id, scoped_transaction_id, true, true, "post_commit_closure_mismatch")
+		_store_pending("manual_recovery", plan_id, collider_transaction_id, scoped_transaction_id, true, false, "post_commit_closure_mismatch")
 		return {
 			"ok": false,
 			"error": "post_commit_closure_mismatch",
@@ -290,6 +290,8 @@ func retry_pending() -> Dictionary:
 			return {"ok": false, "error": "index_rollback_still_pending", "pending": retry_index_rollback}
 		_pending.clear()
 		return {"ok": true, "rolled_back": true, "index": retry_index_rollback}
+	if stage == "manual_recovery":
+		return {"ok": false, "error": "manual_recovery_required", "pending": _pending.duplicate(true)}
 	return {"ok": false, "error": "unknown_coordinator_pending_stage", "stage": stage}
 
 
