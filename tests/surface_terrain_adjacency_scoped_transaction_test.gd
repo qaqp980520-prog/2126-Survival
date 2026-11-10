@@ -432,9 +432,9 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
     await process_frame
     await physics_frame
 
-    var candidate_patches: Array[Node3D] = [a, b_replacement, c, d]
+    var candidate_patches: Array[Node3D] = [a, b_replacement, c, d, e]
     if replace_two_pairs:
-        candidate_patches = [a, b_replacement, c, d_replacement]
+        candidate_patches = [a, b_replacement, c, d_replacement, e]
     var d_candidate: Node3D = d_replacement if replace_two_pairs else d
     var candidate_instance_ids: Dictionary = {
         a.get_instance_id(): "patch/a",
