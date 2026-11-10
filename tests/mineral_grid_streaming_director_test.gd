@@ -249,6 +249,8 @@ func _test_async_phase_diagnostics_split_frame_waits() -> void:
 	assert(int(diagnostic.get("unloaded_stale_count", -1)) == 3, "one-chunk boundary shift retires exactly three stale roots")
 	assert(int(diagnostic.get("frame_yield_count", -1)) == 3, "one-root frame budget yields exactly once per staged root")
 	var phase_keys: Array[String] = [
+		"request_plan_usec",
+		"dispatch_wait_usec",
 		"planning_usec",
 		"factory_build_usec",
 		"staged_validation_usec",
