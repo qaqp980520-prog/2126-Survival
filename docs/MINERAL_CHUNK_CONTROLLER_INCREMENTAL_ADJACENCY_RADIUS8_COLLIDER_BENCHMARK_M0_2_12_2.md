@@ -60,3 +60,12 @@ Required exact-head workflow:
 - Radius-8 resource counts and reuse/retirement are measured; this fixture does not claim GPU or iPhone performance.
 
 The fixture intentionally does not call apply_world_object_state before the root enters the scene tree: that method refreshes CollisionShape3D nodes which are created in SurfaceTerrainPatch._ready(). Initial serialized fields are set before _ready() so the production collision geometry is built from the checkerboard heights without a premature null-shape refresh.
+
+
+## Exact-head log-hygiene correction — 2026-11-10
+
+The first non-zero Radius-8 benchmark artifact (run #42805717049, artifact 13758760559) completed with 263 PASS assertions and 0 benchmark FAIL assertions, but its captured Godot log contained 20 engine ERROR lines. Each of the four fixture Patch nodes was added to the detached chunk root twice (four duplicate-parent errors at each of radii 1, 2, 3, 4, and 8). The fixture remained attached once and the measured topology/results were valid, but the log was not clean and must not be described as error-free.
+
+Corrected in commit `9412a9a47ad7cab7dd7097a76042245ae7330608`: initialize the serialized height/revision fields before the detached root enters the scene, then add each Patch exactly once. The fixture topology and production runtime code are unchanged.
+
+The corrected exact-head benchmark and full compatibility validation are pending. The earlier 263-PASS artifact remains the structural baseline only; it is not accepted as clean-log evidence.
