@@ -6,9 +6,30 @@ const SIDES: Array[String] = ["east", "west", "north", "south"]
 const POSITION_TOLERANCE: float = 0.01
 const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransitionDescriptor.gd")
 
+## Builds complete candidate descriptors without clearing, binding, or refreshing any live patch state.
 ## stable_ids_by_instance maps live Node instance IDs to persistent world-object Stable IDs.
 ## When omitted, node paths are accepted for isolated fixtures only; production callers pass registry IDs.
-static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
+static func build_candidate_descriptors(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
+	var candidate: Dictionary = _build_candidate_topology(patches, stable_ids_by_instance, profile_enabled)
+	if not bool(candidate.get("ok", false)):
+		return candidate
+	return {
+		"ok": true,
+		"patch_count": int(candidate.get("patch_count", 0)),
+		"pair_count": int(candidate.get("pair_count", 0)),
+		"descriptor_count": int(candidate.get("descriptor_count", 0)),
+		"duplicate_position_candidate_checks": int(candidate.get("duplicate_position_candidate_checks", 0)),
+		"position_bucket_lookups": int(candidate.get("position_bucket_lookups", 0)),
+		"adjacency_candidate_checks": int(candidate.get("adjacency_candidate_checks", 0)),
+		"adjacency_bucket_lookups": int(candidate.get("adjacency_bucket_lookups", 0)),
+		"profile_usec": candidate.get("profile_usec", {}),
+		"descriptors": candidate.get("descriptors", {})
+	}
+
+
+## Internal builder retains patch references only for the synchronous full Binder apply step.
+## Public callers must use build_candidate_descriptors(), which returns descriptor data only.
+static func _build_candidate_topology(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
 	var seen_instances: Dictionary = {}
 	var seen_stable_ids: Dictionary = {}
 	var positions: Array[Vector3] = []
@@ -28,7 +49,7 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		var patch: Node3D = patches[patch_index]
 		if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
 			return {"ok": false, "error": "invalid_patch"}
-		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state") or not patch.has_method("get_edge_ramp_profile") or not patch.has_method("get_world_object_state") or not patch.has_method("validate_world_object_state"):
+		if not patch.has_method("get_edge_ramp_profile") or not patch.has_method("get_world_object_state") or not patch.has_method("validate_world_object_state"):
 			return {"ok": false, "error": "unsupported_patch"}
 		var instance_id: int = patch.get_instance_id()
 		if seen_instances.has(instance_id):
@@ -137,6 +158,56 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 			})
 
 	var adjacency_discovery_usec: int = Time.get_ticks_usec() - adjacency_started_usec if profile_enabled else 0
+
+	var descriptors: Dictionary = {}
+	for pair in pair_descriptors:
+		var descriptor: Dictionary = pair["descriptor"]
+		descriptors[str(descriptor["edge_key"])] = descriptor.duplicate(true)
+
+	var profile_usec: Dictionary = {}
+	if profile_enabled:
+		profile_usec = {
+			"validation_usec": validation_usec,
+			"adjacency_discovery_usec": adjacency_discovery_usec,
+			"candidate_build_usec": Time.get_ticks_usec() - total_started_usec
+		}
+	return {
+		"ok": true,
+		"patch_count": patches.size(),
+		"pair_count": pair_descriptors.size(),
+		"descriptor_count": descriptors.size(),
+		"duplicate_position_candidate_checks": duplicate_position_candidate_checks,
+		"position_bucket_lookups": position_bucket_lookups,
+		"adjacency_candidate_checks": adjacency_candidate_checks,
+		"adjacency_bucket_lookups": adjacency_bucket_lookups,
+		"profile_usec": profile_usec,
+		"descriptors": descriptors,
+		"_pair_descriptors": pair_descriptors
+	}
+
+
+static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
+	var total_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	# Validate the mutating interface before the shared, non-mutating descriptor preflight.
+	for patch in patches:
+		if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion():
+			return {"ok": false, "error": "invalid_patch"}
+		if not patch.has_method("bind_neighbor_patch") or not patch.has_method("clear_neighbor_edge_state"):
+			return {"ok": false, "error": "unsupported_patch"}
+
+	var candidate: Dictionary = _build_candidate_topology(patches, stable_ids_by_instance, profile_enabled)
+	if not bool(candidate.get("ok", false)):
+		return candidate
+	var pair_descriptors: Array[Dictionary] = candidate.get("_pair_descriptors", [])
+	var descriptors: Dictionary = candidate.get("descriptors", {})
+	var profile_values: Dictionary = candidate.get("profile_usec", {})
+	var validation_usec: int = int(profile_values.get("validation_usec", 0))
+	var adjacency_discovery_usec: int = int(profile_values.get("adjacency_discovery_usec", 0))
+	var duplicate_position_candidate_checks: int = int(candidate.get("duplicate_position_candidate_checks", 0))
+	var position_bucket_lookups: int = int(candidate.get("position_bucket_lookups", 0))
+	var adjacency_candidate_checks: int = int(candidate.get("adjacency_candidate_checks", 0))
+	var adjacency_bucket_lookups: int = int(candidate.get("adjacency_bucket_lookups", 0))
+
 	var edge_apply_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
 	# Snapshot reciprocal endpoints before clearing mutates either side. If a custom
 	# patch does not expose the optional query API, retain the legacy clear-every-side path.
@@ -148,18 +219,15 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		_end_collision_segmentation_batches(segmentation_batch_patches)
 		return {"ok": false, "error": "clear_neighbor_failed"}
 
-	var descriptors: Dictionary = {}
 	for pair in pair_descriptors:
 		var first: Node3D = pair["first"]
 		var second: Node3D = pair["second"]
-		var descriptor: Dictionary = pair["descriptor"]
 		var first_side: String = str(pair["first_side"])
 		var second_side: String = str(pair["second_side"])
 		if not bool(first.call("bind_neighbor_patch", first_side, second)) or not bool(second.call("bind_neighbor_patch", second_side, first)):
 			_clear_all(patches)
 			_end_collision_segmentation_batches(segmentation_batch_patches)
 			return {"ok": false, "error": "neighbor_bind_failed"}
-		descriptors[str(descriptor["edge_key"])] = descriptor.duplicate(true)
 
 	_end_collision_segmentation_batches(segmentation_batch_patches)
 	var edge_apply_usec: int = Time.get_ticks_usec() - edge_apply_started_usec if profile_enabled else 0

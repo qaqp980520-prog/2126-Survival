@@ -1,0 +1,52 @@
+name: Surface Terrain Non-mutating Candidate Descriptor Builder
+
+on:
+  pull_request:
+    paths:
+      - 'systems/SurfaceTerrainAdjacencyBinder.gd'
+      - 'systems/SurfaceTerrainTransitionDescriptor.gd'
+      - 'systems/SurfaceTerrainPatch.gd'
+      - 'tests/surface_terrain_adjacency_binder_test.gd'
+      - '.github/workflows/surface-terrain-adjacency-candidate-builder-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: surface-terrain-candidate-builder-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate-descriptor-builder:
+    name: Godot 4.3 non-mutating descriptor builder regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify exact test inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f tests/surface_terrain_adjacency_binder_test.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run adjacency binder and pure candidate builder regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 150s godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency binder tests passed."
+      - name: Verify clean workspace
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          test -z "$(git status --porcelain)"
