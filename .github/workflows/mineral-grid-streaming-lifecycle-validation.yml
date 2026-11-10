@@ -17,6 +17,7 @@ on:
     paths:
       - "systems/MineralGridStreamingDirector.gd"
       - "tests/helpers/FakeMineralChunkController.gd"
+      - "tests/mineral_grid_streaming_director_test.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
       - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
