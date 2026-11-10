@@ -227,6 +227,13 @@ func rollback(transaction_id: int) -> Dictionary:
         return {"ok": false, "error": "no_pending_transaction"}
     if int(_pending.get("transaction_id", -1)) != transaction_id:
         return {"ok": false, "error": "invalid_transaction_id"}
+    if bool(_pending.get("finalize_pending", false)):
+        return {
+            "ok": false,
+            "error": "finalize_recovery_required",
+            "pending_retained": true,
+            "remaining_batch_count": _pending.get("batch_patches", []).size()
+        }
     if not bool(_pending.get("applied", false)):
         _pending.clear()
         return {"ok": true, "rolled_back": true, "transaction_id": transaction_id, "noop": true}
