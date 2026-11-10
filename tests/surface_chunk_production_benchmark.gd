@@ -569,7 +569,7 @@ func _emit_metrics(
 		"staged_validation_usec",
 		"frame_yield_wait_usec",
 		"controller_registration_usec",
-		"staged_root_transfer_usec",
+		"staged_map_erase_usec",
 		"stale_unload_usec",
 		"adjacency_finalize_call_usec"
 	]
