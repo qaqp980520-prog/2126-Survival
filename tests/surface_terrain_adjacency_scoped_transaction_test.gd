@@ -5,6 +5,15 @@ const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const ManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 const ScopedTransactionScript = preload("res://systems/SurfaceTerrainAdjacencyScopedTransaction.gd")
 
+class FaultInjectingPatch extends SurfaceTerrainPatch:
+    var clear_failures_remaining: int = 0
+
+    func clear_neighbor_edge_state(side: String) -> bool:
+        if clear_failures_remaining > 0:
+            clear_failures_remaining -= 1
+            return false
+        return super.clear_neighbor_edge_state(side)
+
 var failures: Array[String] = []
 
 
@@ -16,6 +25,7 @@ func _run() -> void:
     await _test_prepare_is_non_mutating()
     await _test_apply_rebinds_only_scoped_endpoints_and_batches_refresh()
     await _test_rollback_restores_old_nodes_and_shared_flags()
+    await _test_apply_recovery_retains_pending_transaction_for_retry()
     await _test_partial_collider_commit_coordinates_scoped_neighbor_apply()
     await _test_partial_collider_failure_rolls_back_scoped_neighbor_apply()
     await _test_stale_old_snapshot_is_rejected_before_mutation()
@@ -111,6 +121,89 @@ func _test_rollback_restores_old_nodes_and_shared_flags() -> void:
     await _release_fixture(fixture)
 
 
+
+
+func _test_apply_recovery_retains_pending_transaction_for_retry() -> void:
+    var holder := Node3D.new()
+    holder.name = "ScopedNeighborRecoveryFixture"
+    root.add_child(holder)
+
+    var a: FaultInjectingPatch = FaultInjectingPatch.new()
+    a.name = "FaultInjectingA"
+    a.position = Vector3.ZERO
+    holder.add_child(a)
+    a.call("apply_world_object_state", {
+        "height_level": 1,
+        "surface_type": "soil",
+        "revision": 2
+    })
+    var b: Node3D = _new_patch(holder, "B", Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0), 0)
+    await process_frame
+    await physics_frame
+
+    var old_patches: Array[Node3D] = [a, b]
+    var old_instance_ids: Dictionary = {
+        a.get_instance_id(): "patch/a",
+        b.get_instance_id(): "patch/b"
+    }
+    var old_report: Dictionary = BinderScript.build_candidate_descriptors(old_patches, old_instance_ids)
+    _expect(bool(old_report.get("ok", false)), "recovery fixture builds the committed old descriptor")
+    var old_bind: Dictionary = BinderScript.bind_patches(old_patches, old_instance_ids)
+    _expect(bool(old_bind.get("ok", false)), "recovery fixture binds the original reciprocal edge")
+
+    var b_replacement: Node3D = _new_patch(holder, "BReplacement", Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0), 0)
+    await process_frame
+    await physics_frame
+    var candidate_patches: Array[Node3D] = [a, b_replacement]
+    var candidate_instance_ids: Dictionary = {
+        a.get_instance_id(): "patch/a",
+        b_replacement.get_instance_id(): "patch/b"
+    }
+    var candidate_report: Dictionary = BinderScript.build_candidate_descriptors(candidate_patches, candidate_instance_ids)
+    _expect(bool(candidate_report.get("ok", false)), "recovery fixture builds the replacement candidate descriptor")
+
+    var old_map: Dictionary = {"patch/a": a, "patch/b": b}
+    var candidate_map: Dictionary = {"patch/a": a, "patch/b": b_replacement}
+    var old_descriptors: Dictionary = old_report.get("descriptors", {})
+    var candidate_descriptors: Dictionary = candidate_report.get("descriptors", {})
+    var changed_keys: Array[String] = _union_keys(old_descriptors, candidate_descriptors)
+    var transaction = ScopedTransactionScript.new()
+    var prepared: Dictionary = transaction.call(
+        "prepare",
+        old_descriptors,
+        candidate_descriptors,
+        old_map,
+        candidate_map,
+        changed_keys
+    )
+    _expect(bool(prepared.get("ok", false)), "recovery fixture prepares before injecting a transient clear failure")
+    if not bool(prepared.get("ok", false)):
+        holder.queue_free()
+        await process_frame
+        return
+
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    a.clear_failures_remaining = 3
+    var failed_apply: Dictionary = transaction.call("apply", transaction_id)
+    _expect(not bool(failed_apply.get("ok", true)), "injected old-edge clear failure aborts Apply")
+    _expect(str(failed_apply.get("error", "")) == "apply_failed_and_rollback_failed", "injected rollback failure is reported explicitly")
+    _expect(not bool(failed_apply.get("rollback_restored", true)), "injected rollback failure is not reported as restored")
+    _expect(bool(failed_apply.get("batches_ended", false)), "segmentation batches that did close are reported as ended")
+    _expect(bool(failed_apply.get("pending_retained", false)), "failed recovery retains its pending transaction and strong Patch references")
+    _expect(transaction.has_pending_transaction(), "caller can still recover the failed transaction")
+    _expect(transaction.get("_pending").get("batch_patches", []).is_empty(), "successfully ended batches are removed from the retry list")
+
+    a.clear_failures_remaining = 0
+    var retried_rollback: Dictionary = transaction.call("rollback", transaction_id)
+    _expect(bool(retried_rollback.get("ok", false)), "rollback can be retried after the transient failure is removed")
+    _expect(not transaction.has_pending_transaction(), "successful retry finally releases pending transaction references")
+    _expect(a.call("get_bound_neighbor_patch", "east") == b, "retry restores the exact original first neighbor Node")
+    _expect(b.call("get_bound_neighbor_patch", "west") == a, "retry restores the exact original reciprocal neighbor Node")
+    _expect(b_replacement.call("get_bound_neighbor_patch", "west") == null, "retry leaves the replacement Patch unbound")
+
+    holder.queue_free()
+    await process_frame
+    await process_frame
 
 
 func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
