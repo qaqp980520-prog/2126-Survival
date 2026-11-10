@@ -277,8 +277,8 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	)
 	if not bool(closure_result.get("ok", false)):
 		return closure_result
-	var closure_edge_keys: Array[String] = closure_result.get("edge_keys", [])
-	var closure_junction_keys: Array[String] = closure_result.get("junction_keys", [])
+	var closure_edge_keys: Array = closure_result.get("edge_keys", [])
+	var closure_junction_keys: Array = closure_result.get("junction_keys", [])
 	var closure_junction_set: Dictionary = {}
 	for junction_key in closure_junction_keys:
 		closure_junction_set[junction_key] = true
