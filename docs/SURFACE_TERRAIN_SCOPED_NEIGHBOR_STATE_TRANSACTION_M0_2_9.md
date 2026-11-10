@@ -49,10 +49,10 @@ The future Chunk/World coordinator should:
 6. Apply the scoped neighbor-state transaction.
 7. Commit the collider-manager transaction.
 8. On collider failure, Rollback the scoped neighbor-state transaction and abort any still-pending participants.
-9. On success, Finalize the scoped neighbor-state transaction and commit the index snapshot while the coordinator's single-threaded critical section is still held.
+9. The future coordinator must commit the index generation and collider resource map under one explicit cross-participant protocol. A simple sequential commit is not yet proven atomic: if the index generation commit fails after collider publication, the coordinator must restore the previous collider map as well as Rollback the scoped neighbor transaction.
 10. Only after every participant succeeds may the coordinator detach and free retiring Chunk roots.
 
-The coordinator itself is not wired in this PR. In particular, index generation commit and post-collider failure recovery still need one owner in the future Controller integration. Do not call the legacy full mutating Binder before this scoped transaction; it clears neighbor state outside the affected closure.
+The coordinator itself is not wired in this PR. Index generation commit and post-collider failure recovery still need one owner in the future Controller integration. Do not call the legacy full mutating Binder before this scoped transaction; it clears neighbor state outside the affected closure.
 
 ## Files and dependencies
 
@@ -86,12 +86,14 @@ Focused workflow: `.github/workflows/surface-terrain-adjacency-scoped-transactio
 - Finalize refreshes each affected Patch once and does not refresh unrelated Patches.
 - Rollback restores the exact old neighbor Node instances and shared-transition flags after a simulated downstream collider failure.
 - An under-seeded old/new descriptor projection is rejected before creating a pending transaction or changing live Patch state.
+- Old or replacement Patch world-state/transform/neighbor changes between Prepare and Apply are rejected as stale before any neighbor mutation.
 
 ## Limits
 
 - This PR adds a reversible scoped neighbor-state participant; it does not wire the production MineralChunkController or SurfaceWorld coordinator.
 - The candidate descriptor builder still produces the complete supplied candidate descriptor map; spatial-index delta-to-scoped projection wiring remains in the Controller.
 - The existing partial collider manager still resolves candidate corner reports from the complete candidate set.
+- This participant restores neighbor links and shared-transition flags only. It does not undo world-object state or transform changes made before Prepare. For a Stable ID whose terrain state/transform changes, the coordinator must stage a separate candidate Patch Node or pair this participant with a separate reversible world-state participant; do not mutate the committed old Patch in place and expect this class to reconstruct its prior state.
 - PhysicsServer-internal allocation failure injection, GPU/Rendered FPS, iPhone, target-device memory, and touch QA are not covered.
 - Full Binder and full collider rebuild remain the compatibility/fallback oracle.
 - No main merge is included.
