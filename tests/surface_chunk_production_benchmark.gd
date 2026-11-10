@@ -591,6 +591,23 @@ func _emit_metrics(
 		director_phase_profile_valid = director_phase_profile_valid and director_phase_total_usec <= int(diagnostic.get("duration_usec", 0))
 		_expect(director_phase_profile_valid, "radius %d %s records non-overlapping Director phase timings and exact frame-yield count" % [radius, phase])
 	var director_unattributed_ms: float = maxf(0.0, async_total_ms - float(director_phase_total_usec) / 1000.0) if director_phase_profile_valid else -1.0
+	var registration_samples: Array = diagnostic.get("controller_registration_samples", [])
+	var stale_unload_samples: Array = diagnostic.get("stale_unload_samples", [])
+	var registration_sample_summary: Dictionary = {}
+	var stale_unload_sample_summary: Dictionary = {}
+	if director_phase_profile_valid:
+		registration_sample_summary = _summarize_async_phase_samples(
+			registration_samples,
+			int(diagnostic.get("newly_loaded_count", 0)),
+			int(diagnostic.get("controller_registration_usec", -1))
+		)
+		stale_unload_sample_summary = _summarize_async_phase_samples(
+			stale_unload_samples,
+			int(diagnostic.get("unloaded_stale_count", 0)),
+			int(diagnostic.get("stale_unload_usec", -1))
+		)
+		_expect(bool(registration_sample_summary.get("valid", false)), "radius %d %s records one unique, duration-consistent Controller registration sample per loaded Chunk" % [radius, phase])
+		_expect(bool(stale_unload_sample_summary.get("valid", false)), "radius %d %s records one unique, duration-consistent stale-unload sample per retired Chunk" % [radius, phase])
 	var profile_keys: Array[String] = [
 		"collect_loaded_patches_usec",
 		"stable_id_map_usec",
@@ -643,6 +660,10 @@ func _emit_metrics(
 		"director_phase_profile_usec": director_phase_profile,
 		"director_profiled_phase_total_ms": float(director_phase_total_usec) / 1000.0,
 		"director_unattributed_ms": director_unattributed_ms,
+		"controller_registration_samples": registration_samples.duplicate(true),
+		"controller_registration_sample_summary": registration_sample_summary,
+		"stale_unload_samples": stale_unload_samples.duplicate(true),
+		"stale_unload_sample_summary": stale_unload_sample_summary,
 		"terrain_adjacency_profile_usec": adjacency_profile,
 		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
 		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
@@ -669,6 +690,53 @@ func _emit_metrics(
 		"processor_count": OS.get_processor_count()
 	}
 	print("SURFACE_CHUNK_BENCHMARK_JSON:" + JSON.stringify(record))
+
+func _summarize_async_phase_samples(samples: Array, expected_count: int, expected_total_usec: int) -> Dictionary:
+	var valid: bool = samples.size() == expected_count
+	var seen_chunk_ids: Dictionary = {}
+	var durations_usec: Array[int] = []
+	var total_usec: int = 0
+	var slowest_chunk_id: String = ""
+	var slowest_duration_usec: int = -1
+	for sample_value in samples:
+		if not sample_value is Dictionary:
+			valid = false
+			continue
+		var sample: Dictionary = sample_value
+		var chunk_id: String = str(sample.get("chunk_id", ""))
+		var duration_usec: int = int(sample.get("duration_usec", -1))
+		if chunk_id.is_empty() or seen_chunk_ids.has(chunk_id) or duration_usec < 0:
+			valid = false
+		seen_chunk_ids[chunk_id] = true
+		var safe_duration_usec: int = maxi(0, duration_usec)
+		durations_usec.append(safe_duration_usec)
+		total_usec += safe_duration_usec
+		if duration_usec > slowest_duration_usec:
+			slowest_duration_usec = duration_usec
+			slowest_chunk_id = chunk_id
+	valid = valid and total_usec == expected_total_usec
+	durations_usec.sort()
+	var median_usec: float = 0.0
+	var p95_usec: float = 0.0
+	if not durations_usec.is_empty():
+		var middle: int = durations_usec.size() / 2
+		if durations_usec.size() % 2 == 1:
+			median_usec = float(durations_usec[middle])
+		else:
+			median_usec = (float(durations_usec[middle - 1]) + float(durations_usec[middle])) * 0.5
+		var p95_index: int = clampi(int(ceil(float(durations_usec.size() - 1) * 0.95)), 0, durations_usec.size() - 1)
+		p95_usec = float(durations_usec[p95_index])
+	return {
+		"valid": valid,
+		"count": samples.size(),
+		"total_usec": total_usec,
+		"min_usec": int(durations_usec[0]) if not durations_usec.is_empty() else 0,
+		"median_usec": median_usec,
+		"p95_usec": p95_usec,
+		"max_usec": int(durations_usec[durations_usec.size() - 1]) if not durations_usec.is_empty() else 0,
+		"slowest_chunk_id": slowest_chunk_id
+	}
+
 
 func _wait_frames(frame_count: int) -> void:
 	for frame_index in range(frame_count):
