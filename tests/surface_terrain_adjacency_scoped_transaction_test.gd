@@ -125,7 +125,7 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
         fixture["old_report"].get("descriptors", {}),
         fixture["old_patches_by_stable_id"]
     )
-    _expect(bool(initial.get("ok", false)) and int(initial.get("active_count", -1)) == 2, "real collider manager commits both initial transition edges")
+    _expect(bool(initial.get("ok", false)) and int(initial.get("active_count", -1)) == 3, "real collider manager commits all three initial transition edges")
     if not bool(initial.get("ok", false)):
         await _release_fixture(fixture)
         return
@@ -151,7 +151,7 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
     )
     _expect(bool(collider_prepared.get("ok", false)), "partial collider manager prepares the same scoped edge delta")
     _expect(int(collider_prepared.get("pending_staged_edge_count", -1)) == 1, "partial collider manager stages only the replaced edge")
-    _expect(int(collider_prepared.get("pending_reused_edge_count", -1)) == 1, "partial collider manager preserves the unrelated edge")
+    _expect(int(collider_prepared.get("pending_reused_edge_count", -1)) == 2, "partial collider manager preserves both unrelated edges")
     if not bool(collider_prepared.get("ok", false)):
         await _release_fixture(fixture)
         return
@@ -214,7 +214,7 @@ func _test_partial_collider_failure_rolls_back_scoped_neighbor_apply() -> void:
         fixture["old_report"].get("descriptors", {}),
         fixture["old_patches_by_stable_id"]
     )
-    _expect(bool(initial.get("ok", false)) and int(initial.get("active_count", -1)) == 2, "failure fixture commits both initial transition edges")
+    _expect(bool(initial.get("ok", false)) and int(initial.get("active_count", -1)) == 3, "failure fixture commits all three initial transition edges")
     if not bool(initial.get("ok", false)):
         await _release_fixture(fixture)
         return
@@ -385,15 +385,17 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
     var b: Node3D = _new_patch(holder, "B", Vector3(patch_size, 0.0, 0.0), 0)
     var c: Node3D = _new_patch(holder, "C", Vector3(20.0, 0.0, 0.0), 1)
     var d: Node3D = _new_patch(holder, "D", Vector3(20.0 + patch_size, 0.0, 0.0), 0)
+    var e: Node3D = _new_patch(holder, "E", Vector3(-patch_size, 0.0, 0.0), 0)
     await process_frame
     await physics_frame
 
-    var old_patches: Array[Node3D] = [a, b, c, d]
+    var old_patches: Array[Node3D] = [a, b, c, d, e]
     var old_instance_ids: Dictionary = {
         a.get_instance_id(): "patch/a",
         b.get_instance_id(): "patch/b",
         c.get_instance_id(): "patch/c",
-        d.get_instance_id(): "patch/d"
+        d.get_instance_id(): "patch/d",
+        e.get_instance_id(): "patch/e"
     }
     var old_report: Dictionary = BinderScript.build_candidate_descriptors(old_patches, old_instance_ids)
     _expect(bool(old_report.get("ok", false)), "old production Patch set produces candidate descriptors")
@@ -417,7 +419,7 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
     var candidate_report: Dictionary = BinderScript.build_candidate_descriptors(candidate_patches, candidate_instance_ids)
     _expect(bool(candidate_report.get("ok", false)), "candidate production Patch set produces descriptors")
 
-    for patch in [a, b, c, d, b_replacement, d_replacement]:
+    for patch in [a, b, c, d, e, b_replacement, d_replacement]:
         patch.call("set_collision_segmentation_refresh_counter_enabled", true)
         patch.call("set_collision_segmentation_refresh_counter_enabled", false)
         patch.call("set_collision_segmentation_refresh_counter_enabled", true)
@@ -426,13 +428,15 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
         "patch/a": a,
         "patch/b": b,
         "patch/c": c,
-        "patch/d": d
+        "patch/d": d,
+        "patch/e": e
     }
     var candidate_map: Dictionary = {
         "patch/a": a,
         "patch/b": b_replacement,
         "patch/c": c,
-        "patch/d": d_replacement if replace_two_pairs else d
+        "patch/d": d_replacement if replace_two_pairs else d,
+        "patch/e": e
     }
     return {
         "holder": holder,
@@ -440,6 +444,7 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
         "b": b,
         "c": c,
         "d": d,
+        "e": e,
         "b_replacement": b_replacement,
         "d_replacement": d_replacement,
         "old_report": old_report,
@@ -499,7 +504,7 @@ func _union_keys(first: Dictionary, second: Dictionary) -> Array[String]:
 
 
 func _reset_refresh_counters(fixture: Dictionary) -> void:
-    for patch in [fixture["a"], fixture["b"], fixture["c"], fixture["d"], fixture["b_replacement"], fixture["d_replacement"]]:
+    for patch in [fixture["a"], fixture["b"], fixture["c"], fixture["d"], fixture["e"], fixture["b_replacement"], fixture["d_replacement"]]:
         patch.call("set_collision_segmentation_refresh_counter_enabled", false)
         patch.call("set_collision_segmentation_refresh_counter_enabled", true)
 
