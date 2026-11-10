@@ -124,3 +124,10 @@ The transaction now:
 A new Godot 4.3 regression uses a fault-injecting SurfaceTerrainPatch subclass to make Apply fail, make the first rollback attempt fail, and make one Patch's segmentation-batch close fail transiently. It verifies that the transaction remains pending, already-closed batches are removed, premature Finalize is rejected, and a second Rollback restores the exact original reciprocal Patch Node references and closes only the remaining batch before releasing pending state.
 
 This is a fail-closed recovery guarantee; it does not claim that a permanently invalid/freed Patch can be repaired automatically. If a required batch endpoint becomes invalid, the transaction intentionally remains retained and reports the unresolved batch instead of silently discarding recovery state.
+
+
+## Finalize-recovery guard — Run 195 follow-up
+
+A second cross-participant safety check covers the case where the collider manager has already committed but Patch segmentation batch closure fails during `finalize()`. The transaction marks `finalize_pending`; Rollback and Abort now refuse with `finalize_recovery_required` instead of reverting neighbor links while the collider resource map is already on the new generation. The caller can retry Finalize, which closes only the remaining batches and then releases pending references.
+
+The new regression injects one batch-close failure after Apply, verifies that the other Patch batches close and are removed, verifies both Rollback and Abort are rejected while finalization is pending, then retries Finalize and checks the candidate reciprocal Node bindings remain committed.
