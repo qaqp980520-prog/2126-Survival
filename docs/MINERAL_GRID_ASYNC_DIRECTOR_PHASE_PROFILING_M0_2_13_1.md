@@ -10,7 +10,7 @@ This version is measurement-only. It does not change the staging budget default,
 
 - `systems/MineralGridStreamingDirector.gd`
   - Adds opt-in asynchronous phase profiling, disabled by default.
-  - Measures planning, factory calls, staged-root validation, intentional frame waits, Controller registration, staged-root ownership transfer, stale unload, and adjacency-finalize call time.
+  - Measures planning, factory calls, staged-root validation, intentional frame waits, Controller registration, staged-map reference erase after Controller registration, stale unload, and adjacency-finalize call time.
   - Records the effective `max_staged_per_frame` and exact frame-yield count per request.
 - `tests/mineral_grid_streaming_director_test.gd`
   - Adds a real Controller/Director boundary-shift regression.
@@ -32,7 +32,7 @@ The Director phase timings are disjoint wall-clock intervals:
 - `staged_validation_usec`
 - `frame_yield_wait_usec`
 - `controller_registration_usec`
-- `staged_root_transfer_usec`
+- `staged_map_erase_usec`
 - `stale_unload_usec`
 - `adjacency_finalize_call_usec`
 
