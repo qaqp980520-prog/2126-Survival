@@ -418,6 +418,8 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		"phase_profile_enabled": _async_phase_profiling_enabled,
 		"max_staged_per_frame": clampi(max_staged_per_frame, 1, 8),
 		"frame_yield_count": 0,
+		"request_plan_usec": 0,
+		"dispatch_wait_usec": 0,
 		"planning_usec": 0,
 		"factory_build_usec": 0,
 		"staged_validation_usec": 0,
@@ -431,6 +433,7 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		"details": {}
 	}
 	_prune_async_diagnostics()
+	var request_plan_started_usec: int = _start_async_phase_timer(request_id)
 	var center := Vector2i(
 		floori(world_position.x / chunk_size_x),
 		floori(world_position.z / chunk_size_z)
@@ -440,7 +443,12 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		for x in range(center.x - load_radius, center.x + load_radius + 1):
 			desired.append(Vector2i(x, z))
 	desired.sort_custom(_coordinate_less)
+	_finish_async_phase_timer(request_id, "request_plan_usec", request_plan_started_usec)
 	var timestamp: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var request_diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	if bool(request_diagnostic.get("phase_profile_enabled", false)):
+		request_diagnostic["scheduled_usec"] = Time.get_ticks_usec()
+		_async_request_diagnostics[request_id] = request_diagnostic
 	call_deferred("_run_async_sync_request", request_id, desired, timestamp, clampi(max_staged_per_frame, 1, 8))
 	return request_id
 
@@ -506,6 +514,13 @@ func _prune_async_diagnostics() -> void:
 			_async_request_diagnostics.erase(oldest_request_id)
 
 func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix: int, max_staged_per_frame: int) -> void:
+	var request_diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	var dispatch_started_usec: int = int(request_diagnostic.get("scheduled_usec", -1))
+	if dispatch_started_usec >= 0:
+		_finish_async_phase_timer(request_id, "dispatch_wait_usec", dispatch_started_usec)
+		request_diagnostic = _async_request_diagnostics.get(request_id, {})
+		request_diagnostic.erase("scheduled_usec")
+		_async_request_diagnostics[request_id] = request_diagnostic
 	var staged_roots: Dictionary = {}
 	_async_staged_roots_by_request[request_id] = staged_roots
 	_record_async_diagnostic(request_id, "staging", {"desired_count": desired.size()}, false)
@@ -513,10 +528,11 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		_release_async_staged_roots(request_id, staged_roots)
 		_emit_async_cancelled(request_id, 0)
 		return
+	var planning_started_usec: int = _start_async_phase_timer(request_id)
 	if not _async_dependencies_available():
+		_finish_async_phase_timer(request_id, "planning_usec", planning_started_usec)
 		_abort_async_sync_request(request_id, staged_roots, 0)
 		return
-	var planning_started_usec: int = _start_async_phase_timer(request_id)
 	var desired_ids: Dictionary = {}
 	var to_load: Array[Dictionary] = []
 	for coord in desired:
