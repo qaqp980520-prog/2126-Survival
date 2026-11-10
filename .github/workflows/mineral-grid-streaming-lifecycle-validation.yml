@@ -6,6 +6,8 @@ on:
       - "systems/MineralGridStreamingDirector.gd"
       - "tests/surface_chunk_production_benchmark.gd"
       - "docs/MINERAL_GRID_ASYNC_DIRECTOR_PHASE_PROFILING_M0_2_13_1.md"
+      - "docs/MINERAL_GRID_DIRECTOR_PER_CHUNK_PHASE_SAMPLES_M0_2_13_3.md"
+      - "docs/GODOT_CI_DETERMINISTIC_IMPORT_BARRIER_M0_2_13_4.md"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_director_test.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
@@ -21,6 +23,8 @@ on:
       - "systems/MineralGridStreamingDirector.gd"
       - "tests/surface_chunk_production_benchmark.gd"
       - "docs/MINERAL_GRID_ASYNC_DIRECTOR_PHASE_PROFILING_M0_2_13_1.md"
+      - "docs/MINERAL_GRID_DIRECTOR_PER_CHUNK_PHASE_SAMPLES_M0_2_13_3.md"
+      - "docs/GODOT_CI_DETERMINISTIC_IMPORT_BARRIER_M0_2_13_4.md"
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_director_test.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
@@ -58,11 +62,15 @@ jobs:
           grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'set_async_phase_profiling_enabled' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'godot --headless --path . --import' .github/workflows/mineral-grid-streaming-lifecycle-validation.yml
           grep -Fq 'request_plan_usec' systems/MineralGridStreamingDirector.gd
           grep -Fq 'dispatch_wait_usec' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'controller_registration_samples' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'stale_unload_samples' systems/MineralGridStreamingDirector.gd
+          grep -Fq '_summarize_async_phase_samples' tests/surface_chunk_production_benchmark.gd
           grep -Fq 'frame_yield_wait_usec' systems/MineralGridStreamingDirector.gd
       - name: Import and parse root project
-        run: godot --headless --path . --editor --quit
+        run: godot --headless --path . --import
       - name: Run synchronous mineral chunk registration lifecycle regression
         shell: bash
         run: |

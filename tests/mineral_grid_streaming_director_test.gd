@@ -268,10 +268,42 @@ func _test_async_phase_diagnostics_split_frame_waits() -> void:
 		profiled_total_usec += phase_usec
 	assert(int(diagnostic.get("frame_yield_wait_usec", 0)) > 0, "intentional process-frame waits are measured separately")
 	assert(profiled_total_usec <= int(diagnostic.get("duration_usec", 0)), "non-overlapping Director phase timings fit inside total request duration")
+	_assert_async_phase_samples(diagnostic, "controller_registration_samples", "controller_registration_usec", 3, "Controller registration")
+	_assert_async_phase_samples(diagnostic, "stale_unload_samples", "stale_unload_usec", 3, "stale unload")
 	director.queue_free()
 	controller.queue_free()
 	registry.queue_free()
 	await process_frame
+
+func _assert_async_phase_samples(
+	diagnostic: Dictionary,
+	sample_key: String,
+	total_key: String,
+	expected_count: int,
+	label: String
+) -> void:
+	var samples_value: Variant = diagnostic.get(sample_key, null)
+	assert(samples_value is Array, "%s exposes an Array of per-chunk samples" % label)
+	if not samples_value is Array:
+		return
+	var samples: Array = samples_value
+	assert(samples.size() == expected_count, "%s records one sample for every successful operation" % label)
+	var seen_chunk_ids: Dictionary = {}
+	var sample_total_usec: int = 0
+	for sample_value in samples:
+		assert(sample_value is Dictionary, "%s sample is a Dictionary" % label)
+		if not sample_value is Dictionary:
+			continue
+		var sample: Dictionary = sample_value
+		var chunk_id: String = str(sample.get("chunk_id", ""))
+		var duration_usec: int = int(sample.get("duration_usec", -1))
+		assert(not chunk_id.is_empty(), "%s sample includes its Chunk ID" % label)
+		assert(not seen_chunk_ids.has(chunk_id), "%s samples each Chunk ID only once" % label)
+		seen_chunk_ids[chunk_id] = true
+		assert(duration_usec >= 0, "%s sample duration is non-negative" % label)
+		sample_total_usec += maxi(0, duration_usec)
+	assert(sample_total_usec == int(diagnostic.get(total_key, -1)), "%s sample durations sum exactly to the aggregate phase timer" % label)
+
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	if coord == _fail_coordinate:

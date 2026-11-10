@@ -72,13 +72,28 @@ func _start_async_phase_timer(request_id: int) -> int:
 	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
 	return Time.get_ticks_usec() if bool(diagnostic.get("phase_profile_enabled", false)) else -1
 
-func _finish_async_phase_timer(request_id: int, key: String, started_usec: int) -> void:
+func _finish_async_phase_timer(request_id: int, key: String, started_usec: int) -> int:
 	if started_usec < 0:
-		return
+		return 0
+	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
+	if diagnostic.is_empty() or not bool(diagnostic.get("phase_profile_enabled", false)):
+		return 0
+	var elapsed_usec: int = maxi(0, Time.get_ticks_usec() - started_usec)
+	diagnostic[key] = int(diagnostic.get(key, 0)) + elapsed_usec
+	_async_request_diagnostics[request_id] = diagnostic
+	return elapsed_usec
+
+## Record an individual Controller operation without adding profiling work when disabled.
+func _record_async_phase_sample(request_id: int, key: String, chunk_id: String, duration_usec: int) -> void:
 	var diagnostic: Dictionary = _async_request_diagnostics.get(request_id, {})
 	if diagnostic.is_empty() or not bool(diagnostic.get("phase_profile_enabled", false)):
 		return
-	diagnostic[key] = int(diagnostic.get(key, 0)) + maxi(0, Time.get_ticks_usec() - started_usec)
+	var samples: Array = diagnostic.get(key, [])
+	samples.append({
+		"chunk_id": chunk_id,
+		"duration_usec": maxi(0, duration_usec)
+	})
+	diagnostic[key] = samples
 	_async_request_diagnostics[request_id] = diagnostic
 
 func _increment_async_phase_counter(request_id: int, key: String) -> void:
@@ -425,8 +440,10 @@ func request_sync_to_world_position_async(world_position: Vector3, now_unix: int
 		"staged_validation_usec": 0,
 		"frame_yield_wait_usec": 0,
 		"controller_registration_usec": 0,
+		"controller_registration_samples": [],
 		"staged_map_erase_usec": 0,
 		"stale_unload_usec": 0,
+		"stale_unload_samples": [],
 		"adjacency_finalize_call_usec": 0,
 		"rollback_complete": true,
 		"terminal": false,
@@ -656,7 +673,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		if load_succeeded:
 			var registration_started_usec: int = _start_async_phase_timer(request_id)
 			load_succeeded = chunk_controller.load_chunk(id, candidate, now_unix)
-			_finish_async_phase_timer(request_id, "controller_registration_usec", registration_started_usec)
+			var registration_elapsed_usec: int = _finish_async_phase_timer(request_id, "controller_registration_usec", registration_started_usec)
+			_record_async_phase_sample(request_id, "controller_registration_samples", id, registration_elapsed_usec)
 		var controller_alive_after_load: bool = chunk_controller != null and is_instance_valid(chunk_controller)
 		var controller_queued_after_load: bool = controller_alive_after_load and chunk_controller.is_queued_for_deletion()
 		var controller_ready_after_load: bool = _controller_ready_for_sync()
@@ -718,7 +736,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		var stale_unload_started_usec: int = _start_async_phase_timer(request_id)
 		var stale_unload_succeeded: bool = chunk_controller.unload_chunk(id, now_unix)
-		_finish_async_phase_timer(request_id, "stale_unload_usec", stale_unload_started_usec)
+		var stale_unload_elapsed_usec: int = _finish_async_phase_timer(request_id, "stale_unload_usec", stale_unload_started_usec)
+		_record_async_phase_sample(request_id, "stale_unload_samples", id, stale_unload_elapsed_usec)
 		if not stale_unload_succeeded:
 			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
