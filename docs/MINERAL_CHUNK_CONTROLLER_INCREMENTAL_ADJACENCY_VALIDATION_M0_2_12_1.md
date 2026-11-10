@@ -48,6 +48,6 @@ Godot 4.3 and the existing M0.2.10/M0.2.12 scripts. No new external packages, im
 ## Limitations
 
 - In-place same-Node terrain-state edits still use the authoritative full Binder fallback.
-- A full Radius-8 benchmark with non-zero Transition Edge and Corner Cap resources is still outstanding.
+- The Radius-8 non-zero Transition Edge / Corner Cap benchmark fixture is implemented in M0.2.12.2; exact-head CI evidence is pending.
 - PhysicsServer-internal allocation failure, GPU/rendered FPS, iPhone, device memory, and touch QA remain untested.
 - Keep PR #307 Draft and unmerged until corrected exact-head CI and parent-chain independent review are complete.

@@ -111,3 +111,12 @@ A follow-up focused run after the dynamic Controller type correction exposed one
 
 
 The corrected benchmark then exposed a GDScript block-scope issue in the test itself: `reuse_fixture` had been declared inside the first `if radius == 1` block and referenced from a later sibling block. It is now initialized in the enclosing radius-loop scope and assigned inside the first block, so the preserved Collider/endpoint assertions can read the same fixture after the boundary crossing.
+
+
+## Radius-8 non-zero production collider fixture — M0.2.12.2
+
+The production benchmark wrapper now injects four test-only SurfaceTerrainPatch nodes into the center chunk returned by the real SurfaceChunkFactory. The patches form a 2x2 checkerboard (height levels 0/2/2/0) using the production PATCH_SIZE, producing four real unequal-height Transition Edges and four real Corner Cap resources through the normal Controller registration and adjacency transaction path.
+
+At Radius 8 (2,023 normal production patches plus four deterministic benchmark patches), the eastward one-chunk incremental boundary shift asserts that all four Edge bodies and all four Corner Cap bodies are reused, none are staged or retired, and all four Patch Node instances remain alive. Contracting to the shifted center asserts that all four Edge and Corner Cap resources retire and all four fixture Patch Nodes are released. The benchmark still emits 20 JSONL records; the existing Radius-1 real-factory seam test remains intact.
+
+This is a benchmark-only fixture added by the test wrapper; SurfaceChunkFactory.gd and shipped world content are unchanged.

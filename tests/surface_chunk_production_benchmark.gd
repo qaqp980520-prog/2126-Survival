@@ -1,6 +1,7 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const RADII: Array[int] = [1, 2, 3, 4, 8]
 const MAX_REQUEST_FRAMES: int = 7200
 const RELEASE_WAIT_FRAMES: int = 2
@@ -10,6 +11,8 @@ var failures: Array[String] = []
 var _delegate_factory: Callable
 var _factory_build_usec: int = 0
 var _factory_calls: int = 0
+var _benchmark_fixture_center: Vector2i = Vector2i.ZERO
+var _benchmark_corner_fixture_injected: bool = false
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -59,6 +62,10 @@ func _run() -> void:
 			0.0,
 			20000.0 + float(index) * 10000.0 + 5.0
 		)
+		_benchmark_fixture_center = director.call("get_grid_coordinate", target)
+		_benchmark_corner_fixture_injected = false
+		var expansion_center: Vector2i = _benchmark_fixture_center
+		var expansion_center_id: String = "surface/chunk_%d_%d" % [expansion_center.x, expansion_center.y]
 		var old_root_refs: Array[WeakRef] = _capture_surface_root_refs(controller)
 		director.set("load_radius", radius)
 		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
@@ -70,6 +77,7 @@ func _run() -> void:
 			_expect(false, "radius %d production expansion completes: %s" % [radius, str(expansion.get("error", expansion_diagnostic.get("phase", "unknown")))])
 			break
 
+		_expect(_benchmark_corner_fixture_injected, "radius %d production factory injects the deterministic 2x2 corner-cap fixture into its center chunk" % radius)
 		var expansion_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - expansion_rebuilds_before
 		_expect(expansion_rebuild_delta == 1, "radius %d expansion commits one terrain adjacency rebuild instead of one per chunk" % radius)
 		var expected_count: int = (radius * 2 + 1) * (radius * 2 + 1)
@@ -87,6 +95,10 @@ func _run() -> void:
 		_expect(_all_refs_released(old_root_refs), "radius %d expansion releases all departed production roots" % radius)
 		_emit_metrics("expand_stage_commit", radius, expected_count, expansion_diagnostic, expansion.get("frame_samples_ms", []), controller)
 
+		var radius8_corner_fixture_refs: Array[WeakRef] = []
+		if radius == 8:
+			radius8_corner_fixture_refs = _capture_benchmark_corner_fixture_refs(controller, expansion_center_id)
+			_expect(radius8_corner_fixture_refs.size() == 4, "radius 8 fixture captures all four production-controller corner patches before the boundary shift")
 		var reuse_fixture: Dictionary = {}
 		if radius == 1:
 			_reset_factory_metrics()
@@ -143,6 +155,15 @@ func _run() -> void:
 		_expect(_all_refs_released(departing_refs), "radius %d boundary crossing releases every departing root" % radius)
 		_expect(_all_refs_alive(retained_refs), "radius %d boundary crossing preserves every overlapping root" % radius)
 		_emit_metrics("boundary_cross_east", radius, expected_count, boundary_diagnostic, boundary_result.get("frame_samples_ms", []), controller)
+		if radius == 8:
+			var radius8_boundary_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+			_expect(int(radius8_boundary_profile.get("transition_collider_count", 0)) >= 4, "radius 8 production Controller retains four real transition Edge bodies")
+			_expect(int(radius8_boundary_profile.get("corner_cap_count", 0)) >= 4, "radius 8 production Controller retains four real Corner Cap bodies")
+			_expect(int(radius8_boundary_profile.get("collider_reused_edge_count", 0)) >= 4, "radius 8 incremental boundary shift reuses all four fixture Edge bodies")
+			_expect(int(radius8_boundary_profile.get("collider_reused_corner_cap_count", 0)) >= 4, "radius 8 incremental boundary shift reuses all four fixture Corner Cap bodies")
+			_expect(int(radius8_boundary_profile.get("collider_staged_edge_count", 0)) == 0 and int(radius8_boundary_profile.get("collider_retired_edge_count", 0)) == 0, "radius 8 preserved fixture does not stage or retire unrelated Edge bodies")
+			_expect(int(radius8_boundary_profile.get("collider_staged_corner_cap_count", 0)) == 0 and int(radius8_boundary_profile.get("collider_retired_corner_cap_count", 0)) == 0, "radius 8 preserved fixture does not stage or retire unrelated Corner Cap bodies")
+			_expect(_all_refs_alive(radius8_corner_fixture_refs), "radius 8 boundary shift preserves all four fixture Patch Node instances")
 		if radius == 1:
 			var boundary_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(boundary_profile.get("collider_reused_edge_count", 0)) > 0, "radius 1 production boundary shift preserves the seeded transition collider")
@@ -248,6 +269,12 @@ func _run() -> void:
 		if radius == 1:
 			var contraction_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(contraction_profile.get("collider_retired_edge_count", 0)) > 0, "radius 1 contraction retires the seeded production transition collider")
+			_expect(int(contraction_profile.get("collider_retired_corner_cap_count", 0)) >= 4, "radius 1 contraction retires all four production corner caps")
+		if radius == 8:
+			var radius8_contraction_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+			_expect(int(radius8_contraction_profile.get("collider_retired_edge_count", 0)) >= 4, "radius 8 contraction retires all four production fixture Edge bodies")
+			_expect(int(radius8_contraction_profile.get("collider_retired_corner_cap_count", 0)) >= 4, "radius 8 contraction retires all four production fixture Corner Cap bodies")
+			_expect(_all_refs_released(radius8_corner_fixture_refs), "radius 8 contraction releases all four departing fixture Patch Node instances")
 		previous_surface_count = 1
 
 	director.set("chunk_factory", _delegate_factory)
@@ -340,12 +367,64 @@ func _find_terrain_patch_by_stable_id(controller: Node, stable_id: String) -> No
 			return patch
 	return null
 
+func _inject_benchmark_corner_fixture(chunk_root: Node3D) -> bool:
+	# Four real SurfaceTerrainPatch nodes form a 2x2 checkerboard at the
+	# center of one production chunk. Their four unequal-height edges meet at
+	# one Junction and produce four managed Corner Cap bodies.
+	var patch_size: float = float(TerrainPatchScript.PATCH_SIZE)
+	var specs: Array[Dictionary] = [
+		{"suffix": "NW", "position": Vector3(6.0, 0.0, 4.0), "height": 0},
+		{"suffix": "NE", "position": Vector3(6.0 + patch_size, 0.0, 4.0), "height": 2},
+		{"suffix": "SW", "position": Vector3(6.0, 0.0, 4.0 + patch_size), "height": 2},
+		{"suffix": "SE", "position": Vector3(6.0 + patch_size, 0.0, 4.0 + patch_size), "height": 0}
+	]
+	var created: Array[Node3D] = []
+	for spec in specs:
+		var patch: Node3D = TerrainPatchScript.new() as Node3D
+		if not is_instance_valid(patch):
+			for previous in created:
+				chunk_root.remove_child(previous)
+				previous.free()
+			return false
+		patch.name = "TerrainPatch_BenchmarkCorner_" + str(spec.get("suffix", ""))
+		patch.position = spec.get("position", Vector3.ZERO)
+		chunk_root.add_child(patch)
+		var state: Dictionary = patch.call("get_world_object_state")
+		state["height_level"] = int(spec.get("height", 0))
+		state["revision"] = 1
+		if not bool(patch.call("apply_world_object_state", state)):
+			chunk_root.remove_child(patch)
+			patch.free()
+			for previous in created:
+				chunk_root.remove_child(previous)
+				previous.free()
+			return false
+		created.append(patch)
+	_benchmark_corner_fixture_injected = created.size() == 4
+	return _benchmark_corner_fixture_injected
+
+
+func _capture_benchmark_corner_fixture_refs(controller: Node, chunk_id: String) -> Array[WeakRef]:
+	var refs: Array[WeakRef] = []
+	var chunk_root: Node3D = controller.call("get_chunk_root", chunk_id) as Node3D
+	if not is_instance_valid(chunk_root):
+		return refs
+	for suffix in ["NW", "NE", "SW", "SE"]:
+		var patch: Node3D = chunk_root.get_node_or_null("TerrainPatch_BenchmarkCorner_" + suffix) as Node3D
+		if is_instance_valid(patch):
+			refs.append(weakref(patch))
+	return refs
+
 func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
 	var started_usec: int = Time.get_ticks_usec()
 	var candidate: Variant = _delegate_factory.call(coord)
+	var candidate_root: Node3D = candidate as Node3D
+	if is_instance_valid(candidate_root) and coord == _benchmark_fixture_center and not _benchmark_corner_fixture_injected:
+		if not _inject_benchmark_corner_fixture(candidate_root):
+			_expect(false, "production factory center chunk accepts the deterministic four-patch corner fixture")
 	_factory_build_usec += Time.get_ticks_usec() - started_usec
 	_factory_calls += 1
-	return candidate as Node3D
+	return candidate_root
 
 func _reset_factory_metrics() -> void:
 	_factory_build_usec = 0
