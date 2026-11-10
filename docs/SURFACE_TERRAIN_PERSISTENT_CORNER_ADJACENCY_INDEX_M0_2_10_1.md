@@ -83,6 +83,7 @@ The focused index test now builds a 3×2 checkerboard with seven connected grid 
 - After commit, the candidate graph contains only the two surviving reports; a candidate-only closure reaches one Junction and two edges.
 - The independent descriptor remains present.
 - The committed descriptor cache matches the legacy full Binder oracle.
+- The committed per-Stable-ID corner report cache matches an independently executed full CornerConflictResolver oracle after both rebuild and delta commit.
 
 Generation-reservation regressions:
 
