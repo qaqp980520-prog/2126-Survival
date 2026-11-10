@@ -63,6 +63,12 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
+	if _controller_ready_for_sync() and chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var recovery_result: Dictionary = chunk_controller.call("retry_terrain_adjacency_recovery")
+		if not bool(recovery_result.get("ok", false)):
+			_set_sync_report(false, "terrain_adjacency_recovery", "Controller must finish its retained terrain transaction before another window shift.", false, {"recovery": recovery_result.duplicate(true)})
+			return false
+		_reconcile_managed_chunk_ids_from_controller()
 	# A queued root may still occupy the Controller's Stable-ID slot. Its same-ID
 	# replacement path must retire that root immediately, not stage it as a pending
 	# batch unload and overwrite the slot before the old root is finalized.
@@ -117,6 +123,18 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	# Restore the prior window in a second batch: retire newly loaded roots, recreate any
 	# stale roots that the failed finalize already retired, then publish one coherent rebind.
 	var commit_failure_details: Dictionary = sync_report.get("details", {}).duplicate(true)
+	if chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var pending_map_reconciled: bool = _reconcile_managed_chunk_ids_from_controller()
+		commit_failure_details["controller_recovery_pending"] = true
+		commit_failure_details["managed_map_reconciled"] = pending_map_reconciled
+		_set_sync_report(
+			false,
+			"terrain_adjacency_recovery_pending",
+			"Controller retained a multi-participant terrain transaction; chunk roots remain owned until its retry completes.",
+			false,
+			commit_failure_details
+		)
+		return false
 	var newly_loaded_ids: Array[String] = []
 	for raw_id in commit_failure_details.get("newly_loaded_ids", []):
 		newly_loaded_ids.append(str(raw_id))
