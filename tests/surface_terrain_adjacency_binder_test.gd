@@ -124,12 +124,21 @@ func _run() -> void:
 		far.get_instance_id(): "test/chunk/object/Far"
 	}
 	var initial_refresh_counts: Dictionary = {}
+	var pure_candidate: Dictionary = BinderScript.build_candidate_descriptors([west, east, south, far], stable_ids)
+	_expect(bool(pure_candidate.get("ok", false)), "non-mutating candidate builder accepts the valid live patch set")
+	_expect(int(pure_candidate.get("pair_count", -1)) == 2 and int(pure_candidate.get("descriptor_count", -1)) == 2, "candidate builder returns the same two cardinal transition descriptors")
+	_expect(west.call("get_bound_neighbor_patch", "east") == null and east.call("get_bound_neighbor_patch", "west") == null, "candidate builder does not mutate reciprocal east/west neighbor bindings")
+	_expect(west.call("get_bound_neighbor_patch", "south") == null and south.call("get_bound_neighbor_patch", "north") == null, "candidate builder does not mutate reciprocal north/south neighbor bindings")
+	_expect(_ramp_enabled(west, "East") and _ramp_enabled(east, "West") and _ramp_enabled(west, "South") and _ramp_enabled(south, "North"), "candidate builder leaves all shared-transition ramps unchanged")
+	for patch in [west, east, south, far]:
+		_expect(_segmentation_refresh_count(patch) == int(initial_refresh_counts.get(patch.get_instance_id(), _segmentation_refresh_count(patch))), "%s candidate build does not refresh collision segmentation" % patch.name)
 	for patch in [west, east, south, far]:
 		initial_refresh_counts[patch.get_instance_id()] = _segmentation_refresh_count(patch)
 	var report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
 	_expect(bool(report.get("ok", false)), "binder accepts a valid live patch set with persistent Stable IDs")
 	_expect(int(report.get("pair_count", -1)) == 2, "binder discovers exactly the east and south adjacent pairs")
 	_expect(int(report.get("descriptor_count", -1)) == 2, "binder returns one deterministic descriptor for each adjacent pair")
+	_expect(report.get("descriptors", {}) == pure_candidate.get("descriptors", {}), "mutating binder and pure candidate builder return identical descriptor maps")
 	for patch in [west, east, south, far]:
 		var refresh_delta: int = _segmentation_refresh_count(patch) - int(initial_refresh_counts[patch.get_instance_id()])
 		_expect(refresh_delta == 0, "%s empty-side clear does not refresh unchanged segmentation during initial bind" % patch.name)
