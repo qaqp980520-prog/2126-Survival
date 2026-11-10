@@ -155,7 +155,7 @@ func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
         fixture["candidate_patches_by_stable_id"],
         changed_keys
     )
-    _expect(bool(collider_prepared.get("ok", false)), "partial collider manager prepares the same scoped edge delta")
+    _expect(bool(collider_prepared.get("ok", false)), "partial collider manager prepares the same scoped edge delta: " + str(collider_prepared))
     _expect(int(collider_prepared.get("pending_staged_edge_count", -1)) == 1, "partial collider manager stages only the replaced edge")
     _expect(int(collider_prepared.get("pending_reused_edge_count", -1)) == 2, "partial collider manager preserves both unrelated edges")
     if not bool(collider_prepared.get("ok", false)):
@@ -261,7 +261,7 @@ func _test_partial_collider_failure_rolls_back_scoped_neighbor_apply() -> void:
         fixture["candidate_patches_by_stable_id"],
         changed_keys
     )
-    _expect(bool(collider_prepared.get("ok", false)), "failure fixture partial collider transaction prepares")
+    _expect(bool(collider_prepared.get("ok", false)), "failure fixture partial collider transaction prepares: " + str(collider_prepared))
     if not bool(collider_prepared.get("ok", false)):
         await _release_fixture(fixture)
         return
