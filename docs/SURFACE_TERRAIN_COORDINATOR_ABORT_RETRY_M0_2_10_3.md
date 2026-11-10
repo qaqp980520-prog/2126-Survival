@@ -4,6 +4,12 @@
 
 Implementation and a focused fault-injection regression are committed on a child branch of PR #304. Exact-head CI must complete before this change is treated as validated. No merge is performed.
 
+## Exact branch and validation status
+
+- Child PR: [#305](https://github.com/qaqp980520-prog/2126-Survival/pull/305), based on PR #304.
+- Exact branch HEAD before this status commit: `179397be15e03fbe809a8838092d834de9a5bb20`.
+- The focused coordinator workflow and the full Godot 4.3 gate must be checked on the final synchronized HEAD. No pass is claimed in this document until those exact-head runs complete.
+
 ## Problem
 
 The three-participant coordinator previously called `abort_sync_transitions()` but ignored its result. On a downstream Collider Commit failure, it could continue to roll back the scoped Patch neighbor state and the published Index even when the Collider Manager still owned staged replacement bodies.
