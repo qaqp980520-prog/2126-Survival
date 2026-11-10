@@ -17,7 +17,7 @@ This version is measurement-only. It does not change the staging budget default,
   - Verifies profiling is off by default, the 1-root budget yields exactly three times for a three-root shift, all timing fields are present and non-negative, and the non-overlapping phase sum does not exceed request duration.
 - `tests/surface_chunk_production_benchmark.gd`
   - Enables opt-in profiling for the production benchmark.
-  - Sweeps the warmed Radius-8 one-chunk boundary shifts through budgets 1, 2, and 4, with two samples per budget.
+  - Sweeps the warmed Radius-8 one-chunk boundary shifts through budgets 1, 2, and 4, with three samples per budget.
   - Emits phase timings and frame-yield counts into the JSONL artifact.
 - `.github/workflows/mineral-grid-streaming-lifecycle-validation.yml`
   - Includes the production benchmark and profiling document in its path filters.
