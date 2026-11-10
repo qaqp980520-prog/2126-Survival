@@ -23,7 +23,7 @@ The updated path opens one adjacency batch around the complete synchronous shift
   - Verifies that a window shift with three new chunks and three stale chunks produces exactly one additional rebind.
   - Verifies that a partial factory failure closes one rollback batch and preserves the previous window.
   - Adds a batch-aware fake controller that injects one batch-commit failure and proves the Director restores the previous nine-chunk window in one recovery batch.
-  - Uses the production Controller to verify same-coordinate queued-root recovery still replaces the stale root immediately and does not enter the pending-unload batch path.
+  - Uses the production Controller to verify same-coordinate queued-root recovery retains the immediate unload/reload replacement path and does not enter the pending-unload batch path.
 
 - `.github/workflows/mineral-grid-streaming-lifecycle-validation.yml`
   - Adds the Director regression test to pull-request and push path filters.
