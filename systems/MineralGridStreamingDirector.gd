@@ -350,6 +350,12 @@ func _exit_tree() -> void:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
+	if _controller_ready_for_sync() and chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var recovery_result: Dictionary = chunk_controller.call("retry_terrain_adjacency_recovery")
+		if not bool(recovery_result.get("ok", false)):
+			_set_sync_report(false, "terrain_adjacency_recovery", "Controller must finish its retained terrain transaction before async staging can begin.", false, {"recovery": recovery_result.duplicate(true)})
+			return -1
+		_reconcile_managed_chunk_ids_from_controller()
 	if not _async_dependencies_available():
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
