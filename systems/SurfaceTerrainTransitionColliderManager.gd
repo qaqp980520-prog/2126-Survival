@@ -17,6 +17,7 @@ const ColliderPreservePlannerScript = preload("res://systems/SurfaceTerrainColli
 var _managed_edges: Dictionary = {}
 var _managed_corner_caps: Dictionary = {}
 var _last_blocked_corner_reports: Array[Dictionary] = []
+var _last_patch_refs_by_stable_id: Dictionary = {}
 var _next_sync_transaction_id: int = 1
 var _pending_sync_transaction: Dictionary = {}
 
@@ -274,6 +275,19 @@ func _prepare_sync_transitions_internal(
         _free_staged_caps(staged_caps, reused_cap_keys)
         return {"ok": false, "error": str(patch_snapshot_result.get("error", "patch_snapshot_failed")), "active_count": _managed_edges.size()}
 
+    var candidate_patch_refs_by_stable_id: Dictionary = {}
+    for stable_id_value in patches_by_stable_id.keys():
+        if not (stable_id_value is String) or str(stable_id_value).strip_edges().is_empty():
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
+            return {"ok": false, "error": "invalid_candidate_patch_stable_id", "active_count": _managed_edges.size()}
+        var candidate_patch: Node3D = patches_by_stable_id[stable_id_value] as Node3D
+        if not is_instance_valid(candidate_patch) or candidate_patch.is_queued_for_deletion() or not candidate_patch.is_inside_tree():
+            _free_staged(staged, reused_edge_keys)
+            _free_staged_caps(staged_caps, reused_cap_keys)
+            return {"ok": false, "error": "invalid_candidate_patch_reference", "active_count": _managed_edges.size()}
+        candidate_patch_refs_by_stable_id[str(stable_id_value)] = weakref(candidate_patch)
+
     var transaction_id: int = _next_sync_transaction_id
     _next_sync_transaction_id += 1
     _pending_sync_transaction = {
@@ -285,6 +299,7 @@ func _prepare_sync_transitions_internal(
         "reactivated_edge_keys": reactivated_edge_keys,
         "blocked_edges": blocked_edges,
         "blocked_corner_reports": blocked_corner_reports,
+        "candidate_patch_refs_by_stable_id": candidate_patch_refs_by_stable_id,
         "patch_snapshots": patch_snapshot_result.get("snapshots", {}),
         "old_edges_snapshot": _capture_managed_map_snapshot(_managed_edges),
         "old_caps_snapshot": _capture_managed_map_snapshot(_managed_corner_caps),
@@ -328,22 +343,12 @@ func _build_partial_resource_plan(
         return {"ok": false, "error": "empty_changed_edge_seeds"}
 
     var old_patches_by_stable_id: Dictionary = {}
-    for edge_value in _managed_edges.values():
-        if not (edge_value is Dictionary):
-            return {"ok": false, "error": "invalid_committed_edge_record"}
-        var edge: Dictionary = edge_value
-        var endpoints: Array[Dictionary] = [
-            {"stable_id": str(edge.get("first_id", "")), "patch": edge.get("first_patch")},
-            {"stable_id": str(edge.get("second_id", "")), "patch": edge.get("second_patch")}
-        ]
-        for endpoint in endpoints:
-            var stable_id: String = str(endpoint.get("stable_id", ""))
-            var patch: Node3D = endpoint.get("patch") as Node3D
-            if stable_id.is_empty() or not is_instance_valid(patch) or patch.is_queued_for_deletion():
-                return {"ok": false, "error": "invalid_committed_patch_endpoint"}
-            if old_patches_by_stable_id.has(stable_id) and old_patches_by_stable_id[stable_id] != patch:
-                return {"ok": false, "error": "conflicting_committed_patch_identity"}
-            old_patches_by_stable_id[stable_id] = patch
+    for stable_id_value in _last_patch_refs_by_stable_id.keys():
+        var stable_id: String = str(stable_id_value)
+        var patch_ref: WeakRef = _last_patch_refs_by_stable_id[stable_id_value] as WeakRef
+        var old_patch: Node3D = patch_ref.get_ref() as Node3D if patch_ref != null else null
+        if is_instance_valid(old_patch) and not old_patch.is_queued_for_deletion() and old_patch.is_inside_tree():
+            old_patches_by_stable_id[stable_id] = old_patch
 
     var closure: Dictionary = AffectedComponentPlannerScript.build_closure(
         changed_edge_keys,
@@ -638,6 +643,7 @@ func commit_sync_transitions(transaction_id: int) -> Dictionary:
     for report_value in pending.get("blocked_corner_reports", []):
         if report_value is Dictionary:
             _last_blocked_corner_reports.append(report_value.duplicate(true))
+    _last_patch_refs_by_stable_id = pending.get("candidate_patch_refs_by_stable_id", {}).duplicate()
 
     var profile_usec: Dictionary = {}
     if bool(pending.get("profile_enabled", false)):
@@ -887,6 +893,7 @@ func clear_all() -> void:
     _managed_edges.clear()
     _managed_corner_caps.clear()
     _last_blocked_corner_reports.clear()
+    _last_patch_refs_by_stable_id.clear()
 
 func get_blocked_corner_reports() -> Array[Dictionary]:
     return _last_blocked_corner_reports.duplicate(true)
