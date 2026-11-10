@@ -63,8 +63,18 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
+	# A queued root may still occupy the Controller's Stable-ID slot. Its same-ID
+	# replacement path must retire that root immediately, not stage it as a pending
+	# batch unload and overwrite the slot before the old root is finalized.
+	var has_unloaded_managed_root: bool = false
+	if _controller_ready_for_sync():
+		for chunk_id_value in _managed_chunk_ids.keys():
+			if not chunk_controller.is_chunk_loaded(str(chunk_id_value)):
+				has_unloaded_managed_root = true
+				break
 	var supports_adjacency_batch: bool = (
 		_controller_ready_for_sync()
+		and not has_unloaded_managed_root
 		and chunk_controller.has_method("begin_terrain_adjacency_batch")
 		and chunk_controller.has_method("end_terrain_adjacency_batch")
 	)
