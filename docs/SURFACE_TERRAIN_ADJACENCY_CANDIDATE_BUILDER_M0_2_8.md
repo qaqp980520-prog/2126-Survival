@@ -17,7 +17,7 @@ The function:
 - Builds canonical `SurfaceTerrainTransitionDescriptor` records in deterministic pair order.
 - Returns a complete descriptor dictionary plus counts and optional candidate-build timing.
 - Does not call `bind_neighbor_patch()`, `clear_neighbor_edge_state()`, segmentation batch APIs, or any shared-transition mutation API.
-- Returns the internal pair records only for the legacy Binder to apply after preflight; callers that only need candidate topology should consume `descriptors`.
+- Returns descriptor data and counters only; it does not expose internal pair records or strong Node references. The mutating Binder uses a private shared topology helper synchronously, so callers cannot accidentally retain unloaded Patch Nodes through the public candidate result.
 
 ## Full Binder compatibility
 
