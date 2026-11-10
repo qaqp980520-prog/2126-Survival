@@ -33,6 +33,7 @@ func _run() -> void:
     await _test_apply_rebinds_only_scoped_endpoints_and_batches_refresh()
     await _test_rollback_restores_old_nodes_and_shared_flags()
     await _test_apply_recovery_retains_pending_transaction_for_retry()
+    await _test_finalize_retry_blocks_rollback_after_collider_commit()
     await _test_partial_collider_commit_coordinates_scoped_neighbor_apply()
     await _test_partial_collider_failure_rolls_back_scoped_neighbor_apply()
     await _test_stale_old_snapshot_is_rejected_before_mutation()
@@ -222,6 +223,51 @@ func _test_apply_recovery_retains_pending_transaction_for_retry() -> void:
     holder.queue_free()
     await process_frame
     await process_frame
+
+
+func _test_finalize_retry_blocks_rollback_after_collider_commit() -> void:
+    var fixture: Dictionary = await _make_fixture(false, true)
+    if fixture.is_empty():
+        return
+    var transaction = ScopedTransactionScript.new()
+    var prepared: Dictionary = _prepare_replacement(transaction, fixture, ["patch/b"])
+    _expect(bool(prepared.get("ok", false)), "finalize-retry fixture prepares")
+    if not bool(prepared.get("ok", false)):
+        await _release_fixture(fixture)
+        return
+
+    var transaction_id: int = int(prepared.get("transaction_id", -1))
+    var applied: Dictionary = transaction.call("apply", transaction_id)
+    _expect(bool(applied.get("ok", false)), "finalize-retry fixture applies the candidate neighbor state")
+    if not bool(applied.get("ok", false)):
+        await _release_fixture(fixture)
+        return
+
+    var fault_a: FaultInjectingPatch = fixture["a"] as FaultInjectingPatch
+    fault_a.end_batch_failures_remaining = 1
+    var failed_finalize: Dictionary = transaction.call("finalize", transaction_id)
+    _expect(not bool(failed_finalize.get("ok", true)), "transient batch-close failure prevents Finalize")
+    _expect(str(failed_finalize.get("error", "")) == "segmentation_batch_end_failed", "Finalize reports the remaining batch-close failure")
+    _expect(bool(failed_finalize.get("pending_retained", false)) and transaction.has_pending_transaction(), "Finalize retains its pending transaction for retry")
+    _expect(int(failed_finalize.get("remaining_batch_count", -1)) == 1, "Finalize retains only the Patch batch that failed to close")
+    _expect(int(fixture["b"].get("_collision_segmentation_batch_depth")) == 0 and int(fixture["b_replacement"].get("_collision_segmentation_batch_depth")) == 0, "other Patch batches are already closed and removed from the retry list")
+
+    var rejected_rollback: Dictionary = transaction.call("rollback", transaction_id)
+    _expect(not bool(rejected_rollback.get("ok", true)) and str(rejected_rollback.get("error", "")) == "finalize_recovery_required", "Rollback cannot undo neighbor state after downstream collider Commit")
+    var rejected_abort: Dictionary = transaction.call("abort", transaction_id)
+    _expect(not bool(rejected_abort.get("ok", true)) and str(rejected_abort.get("error", "")) == "finalize_recovery_required", "Abort cannot undo neighbor state after downstream collider Commit")
+    _expect(transaction.has_pending_transaction(), "rejected Rollback and Abort retain the Finalize retry state")
+
+    fault_a.end_batch_failures_remaining = 0
+    var retried_finalize: Dictionary = transaction.call("finalize", transaction_id)
+    _expect(bool(retried_finalize.get("ok", false)), "Finalize can be retried after the transient batch-close failure is removed")
+    _expect(not transaction.has_pending_transaction(), "successful Finalize retry releases pending references")
+    _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b_replacement"], "Finalize retry keeps the committed candidate first neighbor")
+    _expect(fixture["b_replacement"].call("get_bound_neighbor_patch", "west") == fixture["a"], "Finalize retry keeps the committed reciprocal candidate neighbor")
+    _expect(fixture["b"].call("get_bound_neighbor_patch", "west") == null, "Finalize retry leaves the retired Patch unbound")
+    _expect(int(fault_a.get("_collision_segmentation_batch_depth")) == 0, "Finalize retry closes the remaining Patch batch exactly once")
+
+    await _release_fixture(fixture)
 
 
 func _test_partial_collider_commit_coordinates_scoped_neighbor_apply() -> void:
@@ -511,13 +557,13 @@ func _test_underseeded_projection_is_rejected_without_mutation() -> void:
     await _release_fixture(fixture)
 
 
-func _make_fixture(replace_two_pairs: bool) -> Dictionary:
+func _make_fixture(replace_two_pairs: bool, fault_first_patch: bool = false) -> Dictionary:
     var holder := Node3D.new()
     holder.name = "ScopedNeighborStateTransactionFixture"
     root.add_child(holder)
 
     var patch_size: float = PatchScript.PATCH_SIZE
-    var a: Node3D = _new_patch(holder, "A", Vector3.ZERO, 1)
+    var a: Node3D = _new_patch(holder, "A", Vector3.ZERO, 1, fault_first_patch)
     var b: Node3D = _new_patch(holder, "B", Vector3(patch_size, 0.0, 0.0), 0)
     var c: Node3D = _new_patch(holder, "C", Vector3(20.0, 0.0, 0.0), 1)
     var d: Node3D = _new_patch(holder, "D", Vector3(20.0 + patch_size, 0.0, 0.0), 0)
@@ -592,8 +638,8 @@ func _make_fixture(replace_two_pairs: bool) -> Dictionary:
     }
 
 
-func _new_patch(holder: Node3D, patch_name: String, patch_position: Vector3, height: int) -> Node3D:
-    var patch: Node3D = PatchScript.new()
+func _new_patch(holder: Node3D, patch_name: String, patch_position: Vector3, height: int, fault_injection: bool = false) -> Node3D:
+    var patch: Node3D = FaultInjectingPatch.new() if fault_injection else PatchScript.new()
     patch.name = patch_name
     patch.position = patch_position
     holder.add_child(patch)
