@@ -120,3 +120,6 @@ The production benchmark wrapper now injects four test-only SurfaceTerrainPatch 
 At Radius 8 (2,023 normal production patches plus four deterministic benchmark patches), the eastward one-chunk incremental boundary shift asserts that all four Edge bodies and all four Corner Cap bodies are reused, none are staged or retired, and all four Patch Node instances remain alive. Contracting to the shifted center asserts that all four Edge and Corner Cap resources retire and all four fixture Patch Nodes are released. The benchmark still emits 20 JSONL records; the existing Radius-1 real-factory seam test remains intact.
 
 This is a benchmark-only fixture added by the test wrapper; SurfaceChunkFactory.gd and shipped world content are unchanged.
+
+
+The Radius-8 checkerboard fixture initializes each production SurfaceTerrainPatch's initial serialized height/revision fields before the detached chunk root enters the scene tree. It does not call apply_world_object_state before _ready(), because that API refreshes CollisionShape3D nodes created by _ready(). The production Patch _ready() path therefore constructs collision geometry directly from the intended initial height levels.

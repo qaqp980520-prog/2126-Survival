@@ -13,7 +13,7 @@ The benchmark wrapper injects four SurfaceTerrainPatch nodes into the center chu
 - SW: height 2
 - SE: height 0
 
-The four patches create four unequal-height Transition Edges around one shared Junction. The normal MineralChunkController load path registers the nodes; the normal SurfaceTerrainAdjacencyIndex, SurfaceTerrainAdjacencyCoordinator, scoped Patch transaction, and partial Collider transaction create the four Edge bodies and four Corner Cap bodies. No production factory or shipped world content is modified.
+The four patches create four unequal-height Transition Edges around one shared Junction. The fixture seeds the production Patch script's serialized initial height/revision fields before the detached chunk root enters the tree; SurfaceTerrainPatch._ready() then creates collision nodes and builds geometry at those heights. The normal MineralChunkController load path registers the nodes; the normal SurfaceTerrainAdjacencyIndex, SurfaceTerrainAdjacencyCoordinator, scoped Patch transaction, and partial Collider transaction create the four Edge bodies and four Corner Cap bodies. No production factory or shipped world content is modified.
 
 ## Exact Radius-8 assertions
 
@@ -58,3 +58,5 @@ Required exact-head workflow:
 - The four extra patches are deterministic benchmark-only nodes in one production chunk; they are not shipped gameplay content.
 - The benchmark remains headless, so GPU rendering, visible collision response, FPS, and device-specific physics performance are not measured.
 - Radius-8 resource counts and reuse/retirement are measured; this fixture does not claim GPU or iPhone performance.
+
+The fixture intentionally does not call apply_world_object_state before the root enters the scene tree: that method refreshes CollisionShape3D nodes which are created in SurfaceTerrainPatch._ready(). Initial serialized fields are set before _ready() so the production collision geometry is built from the checkerboard heights without a premature null-shape refresh.

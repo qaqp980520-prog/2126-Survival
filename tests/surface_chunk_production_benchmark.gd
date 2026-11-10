@@ -389,16 +389,11 @@ func _inject_benchmark_corner_fixture(chunk_root: Node3D) -> bool:
 		patch.name = "TerrainPatch_BenchmarkCorner_" + str(spec.get("suffix", ""))
 		patch.position = spec.get("position", Vector3.ZERO)
 		chunk_root.add_child(patch)
-		var state: Dictionary = patch.call("get_world_object_state")
-		state["height_level"] = int(spec.get("height", 0))
-		state["revision"] = 1
-		if not bool(patch.call("apply_world_object_state", state)):
-			chunk_root.remove_child(patch)
-			patch.free()
-			for previous in created:
-				chunk_root.remove_child(previous)
-				previous.free()
-			return false
+		# Seed the serialized initial fields before the detached root enters the tree.
+		# SurfaceTerrainPatch._ready() creates CollisionShape3D before geometry refresh.
+		patch.set("_height_level", int(spec.get("height", 0)))
+		patch.set("_revision", 1)
+		chunk_root.add_child(patch)
 		created.append(patch)
 	_benchmark_corner_fixture_injected = created.size() == 4
 	return _benchmark_corner_fixture_injected
