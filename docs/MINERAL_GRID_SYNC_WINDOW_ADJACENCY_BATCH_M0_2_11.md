@@ -16,12 +16,14 @@ The updated path opens one adjacency batch around the complete synchronous shift
   - Successful reports include both `newly_loaded_ids` and `unloaded_stale_ids`.
   - If the first batch commit fails after registrations succeeded, the Director opens a recovery batch, retires newly loaded roots, restores any stale roots that were already retired, and reconciles its managed-ID mirror from the controller.
   - If the inner load/registration operation fails, the existing rollback is completed inside the open batch and the wrapper closes that batch before returning.
+  - If the Director mirror contains a managed ID whose Controller root is no longer live (for example, an externally queued root), retain the immediate unbatched replacement path. This prevents a same-ID replacement from overwriting the Controller slot while the old root is still a pending batch retirement.
 
 - `tests/mineral_grid_streaming_director_test.gd`
   - Verifies that a nine-chunk initial window produces exactly one controller adjacency rebind.
   - Verifies that a window shift with three new chunks and three stale chunks produces exactly one additional rebind.
   - Verifies that a partial factory failure closes one rollback batch and preserves the previous window.
   - Adds a batch-aware fake controller that injects one batch-commit failure and proves the Director restores the previous nine-chunk window in one recovery batch.
+  - Uses the production Controller to verify same-coordinate queued-root recovery still replaces the stale root immediately and does not enter the pending-unload batch path.
 
 - `.github/workflows/mineral-grid-streaming-lifecycle-validation.yml`
   - Adds the Director regression test to pull-request and push path filters.
