@@ -63,6 +63,109 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
+	# A queued root may still occupy the Controller's Stable-ID slot. Its same-ID
+	# replacement path must retire that root immediately, not stage it as a pending
+	# batch unload and overwrite the slot before the old root is finalized.
+	var has_unloaded_managed_root: bool = false
+	if _controller_ready_for_sync():
+		for chunk_id_value in _managed_chunk_ids.keys():
+			if not chunk_controller.is_chunk_loaded(str(chunk_id_value)):
+				has_unloaded_managed_root = true
+				break
+	var supports_adjacency_batch: bool = (
+		_controller_ready_for_sync()
+		and not has_unloaded_managed_root
+		and chunk_controller.has_method("begin_terrain_adjacency_batch")
+		and chunk_controller.has_method("end_terrain_adjacency_batch")
+	)
+	if not supports_adjacency_batch:
+		return _sync_to_world_position_unbatched(world_position, now_unix)
+	if not bool(chunk_controller.call("begin_terrain_adjacency_batch")):
+		_set_sync_report(false, "terrain_adjacency_batch", "Controller rejected the synchronous terrain adjacency batch.", true)
+		return false
+
+	var previous_managed: Dictionary = _managed_chunk_ids.duplicate(true)
+	var sync_succeeded: bool = _sync_to_world_position_unbatched(world_position, now_unix)
+	var sync_report: Dictionary = get_last_sync_report()
+	var batch_result: Dictionary = _end_controller_terrain_adjacency_batch()
+	if sync_succeeded and bool(batch_result.get("ok", false)):
+		var success_details: Dictionary = sync_report.get("details", {}).duplicate(true)
+		success_details["adjacency_batch"] = batch_result.duplicate(true)
+		_set_sync_report(true, "complete", "", true, success_details)
+		return true
+
+	if not sync_succeeded:
+		var failure_details: Dictionary = sync_report.get("details", {}).duplicate(true)
+		failure_details["adjacency_batch"] = batch_result.duplicate(true)
+		var rollback_complete: bool = (
+			bool(sync_report.get("rollback_complete", false))
+			and bool(batch_result.get("ok", false))
+		)
+		if not bool(batch_result.get("ok", false)):
+			failure_details["adjacency_batch_error"] = str(batch_result.get("error", "unknown"))
+		_reconcile_managed_chunk_ids_from_controller()
+		_set_sync_report(
+			false,
+			str(sync_report.get("phase", "terrain_adjacency_batch")),
+			str(sync_report.get("message", "Synchronous chunk window update failed.")),
+			rollback_complete,
+			failure_details
+		)
+		return false
+
+	# The chunk registrations succeeded, but the shared terrain batch did not commit.
+	# Restore the prior window in a second batch: retire newly loaded roots, recreate any
+	# stale roots that the failed finalize already retired, then publish one coherent rebind.
+	var commit_failure_details: Dictionary = sync_report.get("details", {}).duplicate(true)
+	var newly_loaded_ids: Array[String] = []
+	for raw_id in commit_failure_details.get("newly_loaded_ids", []):
+		newly_loaded_ids.append(str(raw_id))
+	var unloaded_stale_ids: Array[String] = []
+	for raw_id in commit_failure_details.get("unloaded_stale_ids", []):
+		unloaded_stale_ids.append(str(raw_id))
+	var stale_restore_entries: Array[Dictionary] = []
+	for stale_id in unloaded_stale_ids:
+		if previous_managed.has(stale_id):
+			stale_restore_entries.append({"id": stale_id, "coord": previous_managed[stale_id]})
+
+	var recovery_started: bool = (
+		_controller_ready_for_sync()
+		and chunk_controller.has_method("begin_terrain_adjacency_batch")
+		and bool(chunk_controller.call("begin_terrain_adjacency_batch"))
+	)
+	var new_loads_rollback_ok: bool = false
+	var stale_restore_ok: bool = false
+	var recovery_batch_result: Dictionary = {"ok": false, "error": "recovery_batch_not_started"}
+	if recovery_started:
+		new_loads_rollback_ok = _rollback_new_loads(newly_loaded_ids, now_unix)
+		stale_restore_ok = _restore_unloaded_chunks(stale_restore_entries, now_unix)
+		recovery_batch_result = _end_controller_terrain_adjacency_batch()
+	var managed_map_reconciled: bool = _reconcile_managed_chunk_ids_from_controller()
+	var recovery_complete: bool = (
+		recovery_started
+		and new_loads_rollback_ok
+		and stale_restore_ok
+		and bool(recovery_batch_result.get("ok", false))
+		and managed_map_reconciled
+	)
+	commit_failure_details["adjacency_batch_commit"] = batch_result.duplicate(true)
+	commit_failure_details["recovery_batch"] = recovery_batch_result.duplicate(true)
+	commit_failure_details["new_loads_rollback_ok"] = new_loads_rollback_ok
+	commit_failure_details["stale_restore_ok"] = stale_restore_ok
+	commit_failure_details["managed_map_reconciled"] = managed_map_reconciled
+	_set_sync_report(
+		false,
+		"terrain_adjacency_commit",
+		"Controller failed to commit the synchronous terrain adjacency batch.",
+		recovery_complete,
+		commit_failure_details
+	)
+	if not recovery_complete:
+		push_warning("Synchronous terrain batch recovery was incomplete; inspect get_last_sync_report().")
+	return false
+
+
+func _sync_to_world_position_unbatched(world_position: Vector3, now_unix: int = -1) -> bool:
 	if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller must be alive, inside the scene tree and not queued for deletion; chunk factory must be available.", true)
 		return false
@@ -204,10 +307,14 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		unloaded_stale.append({"id": id, "coord": stale_coord})
 		_managed_chunk_ids.erase(id)
 
+	var unloaded_stale_ids: Array[String] = []
+	for entry in unloaded_stale:
+		unloaded_stale_ids.append(str(entry.get("id", "")))
 	_set_sync_report(true, "complete", "", true, {
 		"center": center,
 		"desired_count": desired.size(),
-		"newly_loaded_ids": newly_loaded.duplicate()
+		"newly_loaded_ids": newly_loaded.duplicate(),
+		"unloaded_stale_ids": unloaded_stale_ids
 	})
 	return true
 
