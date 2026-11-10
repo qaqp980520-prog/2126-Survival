@@ -11,6 +11,7 @@ Record the exact-head corrections required after the first PR #307 production in
   - Continue constructing the same runtime classes through the existing preloaded Script constants.
 - `tests/mineral_chunk_controller_incremental_adjacency_test.gd`
   - Remove a global Index type annotation from the full-rebuild oracle.
+  - Make the fault-injecting Collider Manager test subclass extend the production script path directly instead of depending on the global `SurfaceTerrainTransitionColliderManager` class cache.
   - Move the async Director test target from X=32 to X=64, because the default chunk width is 64; explicitly assert the expected grid coordinate before submitting the request.
 - `tests/surface_chunk_production_benchmark.gd`
   - Replace the obsolete expectation that an incremental boundary shift reactivates preserved endpoints.
@@ -21,7 +22,7 @@ Record the exact-head corrections required after the first PR #307 production in
 
 ## Root-cause evidence
 
-- Controller-focused and several existing streaming focused jobs on HEAD `46175ccd01339b74fc5fb26059a697fb6e2268dd` failed to parse `MineralChunkController.gd` because `SurfaceTerrainAdjacencyIndex`, `SurfaceTerrainAdjacencyScopedTransaction`, and `SurfaceTerrainAdjacencyCoordinator` were not available as global types in those headless entry points. The scripts are already preloaded explicitly; dynamic declarations avoid relying on the global class cache.
+- Controller-focused and several existing streaming focused jobs on HEAD `46175ccd01339b74fc5fb26059a697fb6e2268dd` failed to parse `MineralChunkController.gd` because `SurfaceTerrainAdjacencyIndex`, `SurfaceTerrainAdjacencyScopedTransaction`, and `SurfaceTerrainAdjacencyCoordinator` were not available as global types in those headless entry points. The scripts are already preloaded explicitly; dynamic declarations avoid relying on the global class cache. A follow-up run then exposed the same cache dependency in the nested test subclass base, which is now referenced by its direct script path.
 - The new async recovery test failed its expected ID because X=32 / 64 floors to coordinate (0, 0), not (1, 0).
 - The production benchmark failed because it expected a full-Binder reactivation count on an incremental transaction. Incremental preservation intentionally keeps unaffected Patch endpoint bindings intact and therefore must not reactivate them.
 

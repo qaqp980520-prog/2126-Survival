@@ -105,3 +105,6 @@ The first exact-head run for PR #307 HEAD `46175ccd01339b74fc5fb26059a697fb6e226
 The same-world full-Binder reuse fixture still expects its explicit reactivation pass; only the subsequent incremental boundary-crossing expectation changed.
 
 Exact-head focused, lifecycle, benchmark, and full Godot 4.3 validation must be rerun after this correction. No pass is claimed for the uncorrected HEAD. PR #307 remains Draft and unmerged.
+
+
+A follow-up focused run after the dynamic Controller type correction exposed one remaining global-class-cache dependency in the test fixture itself: its nested fault-injecting subclass extended `SurfaceTerrainTransitionColliderManager` by global class name. The fixture now extends `res://systems/SurfaceTerrainTransitionColliderManager.gd` directly, so the focused test resolves the exact production base script without depending on the editor's global script-class cache.

@@ -9,7 +9,7 @@ const VeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
 const WorldObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 
 
-class FaultInjectingColliderManager extends SurfaceTerrainTransitionColliderManager:
+class FaultInjectingColliderManager extends "res://systems/SurfaceTerrainTransitionColliderManager.gd":
 	var fail_commit_once: bool = false
 	var abort_failures_remaining: int = 0
 
