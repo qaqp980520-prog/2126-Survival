@@ -124,6 +124,8 @@ func _run() -> void:
 		far.get_instance_id(): "test/chunk/object/Far"
 	}
 	var initial_refresh_counts: Dictionary = {}
+	for patch in [west, east, south, far]:
+		initial_refresh_counts[patch.get_instance_id()] = _segmentation_refresh_count(patch)
 	var pure_candidate: Dictionary = BinderScript.build_candidate_descriptors([west, east, south, far], stable_ids)
 	_expect(bool(pure_candidate.get("ok", false)), "non-mutating candidate builder accepts the valid live patch set")
 	_expect(int(pure_candidate.get("pair_count", -1)) == 2 and int(pure_candidate.get("descriptor_count", -1)) == 2, "candidate builder returns the same two cardinal transition descriptors")
@@ -131,9 +133,7 @@ func _run() -> void:
 	_expect(west.call("get_bound_neighbor_patch", "south") == null and south.call("get_bound_neighbor_patch", "north") == null, "candidate builder does not mutate reciprocal north/south neighbor bindings")
 	_expect(_ramp_enabled(west, "East") and _ramp_enabled(east, "West") and _ramp_enabled(west, "South") and _ramp_enabled(south, "North"), "candidate builder leaves all shared-transition ramps unchanged")
 	for patch in [west, east, south, far]:
-		_expect(_segmentation_refresh_count(patch) == int(initial_refresh_counts.get(patch.get_instance_id(), _segmentation_refresh_count(patch))), "%s candidate build does not refresh collision segmentation" % patch.name)
-	for patch in [west, east, south, far]:
-		initial_refresh_counts[patch.get_instance_id()] = _segmentation_refresh_count(patch)
+		_expect(_segmentation_refresh_count(patch) == int(initial_refresh_counts[patch.get_instance_id()]), "%s candidate build does not refresh collision segmentation" % patch.name)
 	var report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
 	_expect(bool(report.get("ok", false)), "binder accepts a valid live patch set with persistent Stable IDs")
 	_expect(int(report.get("pair_count", -1)) == 2, "binder discovers exactly the east and south adjacent pairs")
@@ -156,6 +156,9 @@ func _run() -> void:
 	var invalid_ids: Dictionary = stable_ids.duplicate()
 	invalid_ids[east.get_instance_id()] = ""
 	var invalid_report: Dictionary = BinderScript.bind_patches([west, east, south, far], invalid_ids)
+	var pure_invalid_report: Dictionary = BinderScript.build_candidate_descriptors([west, east, south, far], invalid_ids)
+	_expect(not bool(pure_invalid_report.get("ok", true)) and str(pure_invalid_report.get("error", "")) == "invalid_stable_id", "pure candidate builder rejects an invalid Stable ID")
+	_expect(west.call("get_bound_neighbor_patch", "east") == east and east.call("get_bound_neighbor_patch", "west") == west, "pure candidate preflight leaves existing reciprocal adjacency untouched")
 	_expect(not bool(invalid_report.get("ok", true)) and str(invalid_report.get("error", "")) == "invalid_stable_id", "empty production Stable IDs are rejected during preflight")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "invalid Stable ID rejection leaves existing live adjacency unchanged")
 
