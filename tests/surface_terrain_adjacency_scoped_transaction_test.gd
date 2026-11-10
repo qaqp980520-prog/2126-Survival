@@ -15,6 +15,8 @@ func _run() -> void:
     await _test_prepare_is_non_mutating()
     await _test_apply_rebinds_only_scoped_endpoints_and_batches_refresh()
     await _test_rollback_restores_old_nodes_and_shared_flags()
+    await _test_stale_old_snapshot_is_rejected_before_mutation()
+    await _test_stale_candidate_snapshot_is_rejected_before_mutation()
     await _test_underseeded_projection_is_rejected_without_mutation()
     if failures.is_empty():
         print("Surface terrain scoped neighbor-state transaction tests passed.")
@@ -103,6 +105,56 @@ func _test_rollback_restores_old_nodes_and_shared_flags() -> void:
     _expect(bool(fixture["b"].call("is_shared_transition_active", "west")), "rollback restores the old reciprocal shared-transition flag")
     _expect(not bool(fixture["b_replacement"].call("is_shared_transition_active", "west")), "rollback clears the replacement shared-transition flag")
     _expect(_refresh_count(fixture["c"]) == 0 and _refresh_count(fixture["d"]) == 0, "rollback never refreshes unrelated Patch segmentation")
+    await _release_fixture(fixture)
+
+
+
+func _test_stale_old_snapshot_is_rejected_before_mutation() -> void:
+    var fixture: Dictionary = await _make_fixture(false)
+    if fixture.is_empty():
+        return
+    var transaction = ScopedTransactionScript.new()
+    var prepared: Dictionary = _prepare_replacement(transaction, fixture, ["patch/b"])
+    _expect(bool(prepared.get("ok", false)), "old-snapshot fixture prepares")
+    if not bool(prepared.get("ok", false)):
+        await _release_fixture(fixture)
+        return
+    fixture["a"].call("apply_world_object_state", {
+        "height_level": 2,
+        "surface_type": "soil",
+        "revision": 3
+    })
+    var rejected: Dictionary = transaction.apply(int(prepared.get("transaction_id", -1)))
+    _expect(not bool(rejected.get("ok", true)), "apply rejects an old Patch changed after Prepare")
+    _expect(str(rejected.get("error", "")) == "stale_patch_snapshot", "old Patch mutation reports stale snapshot")
+    _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "stale old-snapshot rejection preserves the old neighbor Node")
+    _expect(fixture["b"].call("get_bound_neighbor_patch", "west") == fixture["a"], "stale old-snapshot rejection preserves reciprocal binding")
+    _expect(fixture["b_replacement"].call("get_bound_neighbor_patch", "west") == null, "stale old-snapshot rejection leaves replacement unbound")
+    _expect(not transaction.has_pending_transaction(), "stale old-snapshot rejection releases pending transaction state")
+    await _release_fixture(fixture)
+
+
+func _test_stale_candidate_snapshot_is_rejected_before_mutation() -> void:
+    var fixture: Dictionary = await _make_fixture(false)
+    if fixture.is_empty():
+        return
+    var transaction = ScopedTransactionScript.new()
+    var prepared: Dictionary = _prepare_replacement(transaction, fixture, ["patch/b"])
+    _expect(bool(prepared.get("ok", false)), "candidate-snapshot fixture prepares")
+    if not bool(prepared.get("ok", false)):
+        await _release_fixture(fixture)
+        return
+    fixture["b_replacement"].call("apply_world_object_state", {
+        "height_level": 1,
+        "surface_type": "soil",
+        "revision": 2
+    })
+    var rejected: Dictionary = transaction.apply(int(prepared.get("transaction_id", -1)))
+    _expect(not bool(rejected.get("ok", true)), "apply rejects a replacement Patch changed after Prepare")
+    _expect(str(rejected.get("error", "")) == "stale_patch_snapshot", "candidate Patch mutation reports stale snapshot")
+    _expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "stale candidate-snapshot rejection preserves the old neighbor Node")
+    _expect(fixture["b_replacement"].call("get_bound_neighbor_patch", "west") == null, "stale candidate-snapshot rejection leaves replacement unbound")
+    _expect(not transaction.has_pending_transaction(), "stale candidate-snapshot rejection releases pending transaction state")
     await _release_fixture(fixture)
 
 
