@@ -40,6 +40,7 @@ jobs:
           grep -Fq 'reserve_delta' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq '_build_union_corner_closure' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'get_corner_graph_stats' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'get_corner_reports_by_stable_id' systems/SurfaceTerrainAdjacencyIndex.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run incremental adjacency index and full-rebuild oracle regressions
