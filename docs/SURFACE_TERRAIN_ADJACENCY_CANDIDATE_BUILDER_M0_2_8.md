@@ -21,7 +21,7 @@ The function:
 
 ## Full Binder compatibility
 
-`bind_patches()` now performs the mutating-method capability preflight, calls `build_candidate_descriptors()`, then applies the returned pair records through the existing reciprocal-clear deduplication and segmentation-batch path.
+`bind_patches()` now performs the mutating-method capability preflight, calls the private shared topology helper, then applies its internal pair records through the existing reciprocal-clear deduplication and segmentation-batch path. Public callers receive descriptor data only.
 
 The descriptor map returned by the pure builder must equal the map returned by a successful full bind for the same patch set. Existing error behavior and full-rebuild semantics remain the compatibility path.
 
