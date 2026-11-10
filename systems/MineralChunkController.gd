@@ -7,6 +7,9 @@ const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const CropPlotScript = preload("res://systems/CropPlotVisual.gd")
 const AdapterScript = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 const TerrainAdjacencyBinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
+const TerrainAdjacencyIndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
+const TerrainAdjacencyScopedTransactionScript = preload("res://systems/SurfaceTerrainAdjacencyScopedTransaction.gd")
+const TerrainAdjacencyCoordinatorScript = preload("res://systems/SurfaceTerrainAdjacencyCoordinator.gd")
 const TerrainTransitionColliderManagerScript = preload("res://systems/SurfaceTerrainTransitionColliderManager.gd")
 const TERRAIN_ADJACENCY_SIDES: Array[String] = ["east", "west", "north", "south"]
 
@@ -21,8 +24,16 @@ var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful N
 var _pending_chunk_unloads: Dictionary = {} # chunk ID -> root, veins, object snapshot and timestamp
 var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
 var _terrain_transition_collider_manager: Node3D
+var _terrain_adjacency_index
+var _terrain_adjacency_scoped_transaction
+var _terrain_adjacency_coordinator
+var _terrain_adjacency_recovery_required: bool = false
+var _terrain_adjacency_recovery_in_progress: bool = false
 var _terrain_adjacency_batch_depth: int = 0
 var _terrain_adjacency_batch_dirty: bool = false
+var _terrain_adjacency_batch_added_patches: Dictionary = {}
+var _terrain_adjacency_batch_removed_ids: Dictionary = {}
+var _terrain_adjacency_batch_dirty_ids: Dictionary = {}
 var _terrain_adjacency_rebuild_count: int = 0
 var _terrain_adjacency_profiling_enabled: bool = false
 var _last_terrain_adjacency_profile: Dictionary = {}
@@ -70,6 +81,8 @@ func bind_object_state_registry(candidate: Node) -> bool:
 ## Accepts an instantiated, unparented chunk root. Mineral and crop local IDs are
 ## derived from node names/hierarchy; registry records persist after the scene unloads.
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
+	if has_pending_terrain_adjacency_recovery() and _terrain_adjacency_batch_depth <= 0:
+		return false
 	if registry == null or adapter == null or not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
 		return false
 	if AdapterScript.make_stable_id(chunk_id, "probe").is_empty():
@@ -222,6 +235,8 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	for local_path in world_objects.keys():
 		stable_objects[_make_world_object_stable_id(chunk_id, str(local_path))] = world_objects[local_path]
 	_chunk_objects[chunk_id] = stable_objects
+	if _terrain_adjacency_batch_depth > 0:
+		_record_terrain_batch_chunk_additions(chunk_id, stable_objects)
 	for node_value in stable_objects.values():
 		var stateful_node: Node = node_value as Node
 		if is_instance_valid(stateful_node) and stateful_node.has_signal("terrain_state_changed"):
@@ -233,6 +248,8 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 ## Captures mineral state before freeing a chunk. Crop records remain in CropRegistry;
 ## the next root with the same chunk ID reuses the same stable crop IDs.
 func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
+	if has_pending_terrain_adjacency_recovery() and _terrain_adjacency_batch_depth <= 0:
+		return false
 	if registry == null or not _chunk_roots.has(chunk_id):
 		return false
 	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
@@ -275,6 +292,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 			"object_snapshot": object_snapshot.duplicate(true),
 			"now_unix": now_unix
 		}
+		_record_terrain_batch_chunk_removals(chunk_id, _chunk_objects.get(chunk_id, {}))
 		_terrain_adjacency_batch_dirty = true
 		return true
 
@@ -542,14 +560,16 @@ func _ensure_transition_collider_manager() -> bool:
 	return true
 
 func begin_terrain_adjacency_batch() -> bool:
-	if not is_inside_tree() or is_queued_for_deletion():
+	if not is_inside_tree() or is_queued_for_deletion() or has_pending_terrain_adjacency_recovery():
 		return false
 	if _terrain_adjacency_batch_depth == 0:
 		if not _pending_chunk_unloads.is_empty():
 			return false
 		_terrain_adjacency_batch_dirty = false
+		_clear_terrain_adjacency_batch_delta()
 	_terrain_adjacency_batch_depth += 1
 	return true
+
 
 func end_terrain_adjacency_batch() -> Dictionary:
 	if _terrain_adjacency_batch_depth <= 0:
@@ -558,50 +578,165 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	if _terrain_adjacency_batch_depth > 0:
 		return {"ok": true, "deferred": true}
 	if not _terrain_adjacency_batch_dirty and _pending_chunk_unloads.is_empty():
+		_clear_terrain_adjacency_batch_delta()
 		return {"ok": true, "rebuild_count": 0}
-
+	if has_pending_terrain_adjacency_recovery():
+		return {"ok": false, "error": "terrain_adjacency_recovery_pending", "pending_chunk_roots_retained": true}
 	var pending_validation: Dictionary = _validate_pending_chunk_unloads()
 	if not bool(pending_validation.get("ok", false)):
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		if not pending_rollback_ok:
+			_terrain_adjacency_recovery_required = true
+			return {
+				"ok": false,
+				"error": "pending_chunk_unload_validation_and_rollback_failed:" + str(pending_validation.get("error", "unknown")),
+				"pending_unload_rollback_ok": false,
+				"pending_recovery_required": true
+			}
+		_clear_terrain_adjacency_batch_delta()
 		return {
 			"ok": false,
 			"error": "pending_chunk_unload_validation_failed:" + str(pending_validation.get("error", "unknown")),
-			"pending_unload_rollback_ok": pending_rollback_ok
+			"pending_unload_rollback_ok": true
 		}
 
 	_terrain_adjacency_batch_dirty = false
 	var collect_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	var patches: Array[Node3D] = _collect_loaded_terrain_patches()
 	var collect_usec: int = Time.get_ticks_usec() - collect_started_usec if _terrain_adjacency_profiling_enabled else 0
-	var result: Dictionary = _rebind_terrain_patches(patches)
+	var result: Dictionary
+	var incremental_available: bool = _ensure_transition_collider_manager() and _supports_incremental_terrain_adjacency()
+	var used_incremental_path: bool = false
+	if incremental_available and _terrain_adjacency_batch_dirty_ids.is_empty():
+		if _terrain_adjacency_index == null and _has_untracked_existing_terrain_patches():
+			# A controller upgraded or externally populated before the Index existed.
+			# Bootstrap from the authoritative full Binder once, then use deltas next time.
+			result = _rebind_terrain_patches(patches)
+		else:
+			used_incremental_path = true
+			result = _run_incremental_terrain_adjacency_batch()
+	else:
+		# In-place terrain edits change the live Patch snapshot before planning. The
+		# current Index intentionally rejects stale committed snapshots, so keep this
+		# less frequent path on the full Binder until it gains an explicit edit reservation.
+		result = _rebind_terrain_patches(patches)
 	if _terrain_adjacency_profiling_enabled:
 		var profile: Dictionary = _last_terrain_adjacency_profile.duplicate(true)
 		profile["collect_loaded_patches_usec"] = collect_usec
-		profile["batch_total_usec"] = int(profile.get("controller_rebind_total_usec", 0)) + collect_usec
+		profile["batch_total_usec"] = int(profile.get("controller_rebind_total_usec", profile.get("incremental_coordinator_total_usec", 0))) + collect_usec
 		_last_terrain_adjacency_profile = profile
 		result["profile_usec"] = profile.duplicate(true)
 
 	if not bool(result.get("ok", false)):
+		if has_pending_terrain_adjacency_recovery():
+			result["pending_chunk_roots_retained"] = true
+			result["pending_recovery_required"] = true
+			return result
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
 		result["pending_unload_rollback_ok"] = pending_rollback_ok
 		if not pending_rollback_ok:
+			_terrain_adjacency_recovery_required = true
 			result["error"] = "terrain_adjacency_failed_and_pending_unload_rollback_failed"
+			result["pending_recovery_required"] = true
+			return result
+		if used_incremental_path:
+			# A failed delta leaves newly registered roots alive. Reconcile the actual
+			# live set through the authoritative full path before the Director retries.
+			_terrain_adjacency_recovery_required = true
+			var reconcile: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+			result["fallback_reconcile_ok"] = bool(reconcile.get("ok", false))
+			if bool(reconcile.get("ok", false)):
+				_terrain_adjacency_recovery_required = false
+		_clear_terrain_adjacency_batch_delta()
 		return result
 
 	var finalize_result: Dictionary = _finalize_pending_chunk_unloads()
 	if not bool(finalize_result.get("ok", false)):
+		_terrain_adjacency_recovery_required = true
+		_terrain_adjacency_recovery_in_progress = true
 		var pending_rollback_ok: bool = _cancel_all_pending_chunk_unloads()
+		_terrain_adjacency_recovery_in_progress = false
+		if not pending_rollback_ok:
+			_clear_terrain_adjacency_batch_delta()
+			return {
+				"ok": false,
+				"error": "terrain_adjacency_committed_but_chunk_retirement_and_restore_failed",
+				"pending_recovery_required": true,
+				"pending_unload_rollback_ok": false
+			}
 		var adjacency_restore: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+		if bool(adjacency_restore.get("ok", false)):
+			_terrain_adjacency_recovery_required = false
+		_clear_terrain_adjacency_batch_delta()
 		return {
 			"ok": false,
 			"error": "terrain_adjacency_committed_but_chunk_retirement_failed",
 			"pending_unload_rollback_ok": pending_rollback_ok,
 			"adjacency_restore_ok": bool(adjacency_restore.get("ok", false))
 		}
+	_clear_terrain_adjacency_batch_delta()
 	result["retired_chunk_count"] = int(finalize_result.get("retired_chunk_count", 0))
 	return result
 
+
+func has_pending_terrain_adjacency_recovery() -> bool:
+	return _terrain_adjacency_recovery_required or (
+		is_instance_valid(_terrain_adjacency_coordinator)
+		and bool(_terrain_adjacency_coordinator.has_pending_transaction())
+	)
+
+
+func retry_terrain_adjacency_recovery() -> Dictionary:
+	if is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.has_pending_transaction()):
+		var retry_result: Dictionary = _terrain_adjacency_coordinator.retry_pending()
+		if not bool(retry_result.get("ok", false)):
+			return {"ok": false, "error": "terrain_adjacency_coordinator_retry_failed", "pending": retry_result}
+		if bool(retry_result.get("finalized", false)):
+			_terrain_transition_descriptors = _terrain_adjacency_index.get_edge_descriptors()
+			var finalized_roots: Dictionary = _finalize_pending_chunk_unloads()
+			if not bool(finalized_roots.get("ok", false)):
+				_terrain_adjacency_recovery_required = true
+				return {"ok": false, "error": "coordinator_finalized_but_chunk_retirement_failed", "retirement": finalized_roots}
+			_terrain_adjacency_recovery_required = false
+			_clear_terrain_adjacency_batch_delta()
+			return {"ok": true, "finalized": true, "retired_chunk_count": int(finalized_roots.get("retired_chunk_count", 0))}
+		if bool(retry_result.get("rolled_back", false)) or bool(retry_result.get("aborted", false)):
+			_terrain_transition_descriptors = _terrain_adjacency_index.get_edge_descriptors()
+			_terrain_adjacency_recovery_in_progress = true
+			var pending_roots_restored: bool = _cancel_all_pending_chunk_unloads()
+			_terrain_adjacency_recovery_in_progress = false
+			if not pending_roots_restored:
+				_terrain_adjacency_recovery_required = true
+				return {"ok": false, "error": "coordinator_rollback_chunk_restore_failed"}
+			_terrain_adjacency_recovery_required = true
+			var restored: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+			if not bool(restored.get("ok", false)):
+				return {"ok": false, "error": "coordinator_rollback_full_reconcile_failed", "reconcile": restored}
+			_terrain_adjacency_recovery_required = false
+			_clear_terrain_adjacency_batch_delta()
+			return {"ok": true, "rolled_back": true, "full_reconcile": true}
+		return {"ok": false, "error": "coordinator_retry_result_unrecognized", "retry": retry_result}
+
+	if _terrain_adjacency_recovery_required:
+		if not _pending_chunk_unloads.is_empty():
+			_terrain_adjacency_recovery_in_progress = true
+			var pending_roots_restored: bool = _cancel_all_pending_chunk_unloads()
+			_terrain_adjacency_recovery_in_progress = false
+			if not pending_roots_restored:
+				return {"ok": false, "error": "pending_chunk_roots_still_unrestorable"}
+		var reconciled: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+		if not bool(reconciled.get("ok", false)):
+			return {"ok": false, "error": "terrain_adjacency_full_reconcile_failed", "reconcile": reconciled}
+		_terrain_adjacency_recovery_required = false
+		_clear_terrain_adjacency_batch_delta()
+		return {"ok": true, "reconciled": true}
+	return {"ok": true, "noop": true}
+
+
 func cancel_pending_chunk_unload(chunk_id: String, now_unix: int = -1) -> bool:
+	var coordinator_pending: bool = is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.has_pending_transaction())
+	if _terrain_adjacency_batch_depth <= 0 and (coordinator_pending or (_terrain_adjacency_recovery_required and not _terrain_adjacency_recovery_in_progress)):
+		return false
 	if not _pending_chunk_unloads.has(chunk_id):
 		return is_chunk_loaded(chunk_id)
 	var entry: Dictionary = _pending_chunk_unloads[chunk_id]
@@ -626,6 +761,7 @@ func cancel_pending_chunk_unload(chunk_id: String, now_unix: int = -1) -> bool:
 
 	_pending_chunk_unloads.erase(chunk_id)
 	if _terrain_adjacency_batch_depth > 0:
+		_record_terrain_batch_chunk_restored(chunk_id, _chunk_objects.get(chunk_id, {}))
 		_terrain_adjacency_batch_dirty = true
 	return true
 
@@ -679,6 +815,285 @@ func _finalize_pending_chunk_unloads() -> Dictionary:
 		_pending_chunk_unloads.erase(chunk_id)
 	return {"ok": true, "retired_chunk_count": chunk_ids.size()}
 
+func _supports_incremental_terrain_adjacency() -> bool:
+	if not is_instance_valid(_terrain_transition_collider_manager):
+		return false
+	for method_name in [
+		"prepare_partial_sync_transitions",
+		"accept_scoped_neighbor_state_apply",
+		"commit_sync_transitions",
+		"abort_sync_transitions"
+	]:
+		if not _terrain_transition_collider_manager.has_method(method_name):
+			return false
+	return true
+
+
+func _ensure_terrain_adjacency_runtime() -> bool:
+	if not _ensure_transition_collider_manager() or not _supports_incremental_terrain_adjacency():
+		return false
+	if _terrain_adjacency_index == null:
+		var empty_index = TerrainAdjacencyIndexScript.new()
+		var empty_patches: Array[Node3D] = []
+		var empty_result: Dictionary = empty_index.rebuild(empty_patches, {})
+		if not bool(empty_result.get("ok", false)):
+			return false
+		_terrain_adjacency_index = empty_index
+	if _terrain_adjacency_scoped_transaction == null:
+		_terrain_adjacency_scoped_transaction = TerrainAdjacencyScopedTransactionScript.new()
+	if _terrain_adjacency_coordinator == null:
+		_terrain_adjacency_coordinator = TerrainAdjacencyCoordinatorScript.new()
+	if bool(_terrain_adjacency_coordinator.has_pending_transaction()):
+		return false
+	return bool(_terrain_adjacency_coordinator.bind_participants(
+		_terrain_adjacency_index,
+		_terrain_adjacency_scoped_transaction,
+		_terrain_transition_collider_manager
+	))
+
+
+func _install_terrain_adjacency_index(candidate_index: RefCounted, patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> bool:
+	if candidate_index == null:
+		return false
+	if is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.has_pending_transaction()):
+		return false
+	if _terrain_adjacency_index == null:
+		_terrain_adjacency_index = candidate_index
+	else:
+		var rebuild_result: Dictionary = _terrain_adjacency_index.rebuild(patches, stable_ids_by_instance)
+		if not bool(rebuild_result.get("ok", false)):
+			return false
+		if _terrain_adjacency_index.get_edge_descriptors() != candidate_index.get_edge_descriptors():
+			return false
+	if not _supports_incremental_terrain_adjacency():
+		return true
+	if _terrain_adjacency_scoped_transaction == null:
+		_terrain_adjacency_scoped_transaction = TerrainAdjacencyScopedTransactionScript.new()
+	if _terrain_adjacency_coordinator == null:
+		_terrain_adjacency_coordinator = TerrainAdjacencyCoordinatorScript.new()
+	return bool(_terrain_adjacency_coordinator.bind_participants(
+		_terrain_adjacency_index,
+		_terrain_adjacency_scoped_transaction,
+		_terrain_transition_collider_manager
+	))
+
+
+func _run_incremental_terrain_adjacency_batch() -> Dictionary:
+	if not _terrain_adjacency_batch_dirty_ids.is_empty():
+		return {"ok": false, "error": "in_place_patch_edit_requires_full_rebind"}
+	if not _ensure_terrain_adjacency_runtime():
+		return {"ok": false, "error": "incremental_adjacency_runtime_unavailable"}
+	var old_result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+	if not bool(old_result.get("ok", false)):
+		return {"ok": false, "error": "incremental_index_snapshot_unavailable"}
+	var old_patches: Dictionary = old_result.get("patches_by_stable_id", {})
+	var remove_set: Dictionary = {}
+	var additions_by_id: Dictionary = _terrain_adjacency_batch_added_patches.duplicate()
+	for stable_id_value in _terrain_adjacency_batch_removed_ids.keys():
+		var stable_id: String = str(stable_id_value)
+		if old_patches.has(stable_id):
+			remove_set[stable_id] = true
+	for stable_id_value in _terrain_adjacency_batch_dirty_ids.keys():
+		var stable_id: String = str(stable_id_value)
+		if additions_by_id.has(stable_id) or remove_set.has(stable_id):
+			continue
+		if old_patches.has(stable_id):
+			remove_set[stable_id] = true
+			additions_by_id[stable_id] = old_patches[stable_id]
+		else:
+			var current_patch: Node3D = _find_current_terrain_patch_by_stable_id(stable_id)
+			if is_instance_valid(current_patch):
+				additions_by_id[stable_id] = current_patch
+	for stable_id_value in additions_by_id.keys():
+		var stable_id: String = str(stable_id_value)
+		if old_patches.has(stable_id):
+			remove_set[stable_id] = true
+
+	var remove_ids: Array[String] = _sorted_terrain_stable_ids(remove_set.keys())
+	var addition_ids: Array[String] = _sorted_terrain_stable_ids(additions_by_id.keys())
+	var additions: Array[Dictionary] = []
+	for stable_id in addition_ids:
+		var patch: Node3D = additions_by_id[stable_id] as Node3D
+		if not is_instance_valid(patch) or not patch.is_inside_tree() or patch.is_queued_for_deletion() or not patch.has_method("bind_neighbor_patch"):
+			return {"ok": false, "error": "incremental_candidate_patch_invalid", "stable_id": stable_id}
+		additions.append({"stable_id": stable_id, "patch": patch})
+
+	_terrain_adjacency_rebuild_count += 1
+	var started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
+	var result: Dictionary = _terrain_adjacency_coordinator.execute_delta(
+		remove_ids,
+		additions,
+		_terrain_adjacency_profiling_enabled
+	)
+	if _terrain_adjacency_profiling_enabled:
+		var elapsed_usec: int = Time.get_ticks_usec() - started_usec
+		var collider_result: Dictionary = result.get("collider", {})
+		var collider_profile: Dictionary = collider_result.get("profile_usec", {})
+		var collider_commit_present: bool = result.has("collider")
+		var active_edge_count: int = int(_terrain_transition_collider_manager.call("get_transition_count"))
+		var active_corner_cap_count: int = int(_terrain_transition_collider_manager.call("get_corner_cap_count"))
+		_last_terrain_adjacency_profile = {
+			"stable_id_map_usec": 0,
+			"binder_total_usec": 0,
+			"binder_validation_usec": 0,
+			"binder_adjacency_discovery_usec": 0,
+			"binder_edge_apply_usec": 0,
+			"collider_sync_total_usec": int(collider_profile.get("total_usec", 0)),
+			"collider_candidate_geometry_usec": int(collider_profile.get("candidate_geometry_usec", 0)),
+			"collider_corner_resolution_usec": int(collider_profile.get("corner_resolution_usec", 0)),
+			"collider_resource_staging_usec": int(collider_profile.get("resource_staging_usec", 0)),
+			"collider_activation_commit_usec": int(collider_profile.get("activation_commit_usec", 0)),
+			"collider_reused_edge_count": int(collider_result.get("reused_edge_count", active_edge_count if not collider_commit_present else 0)),
+			"collider_reactivated_edge_count": int(collider_result.get("reactivated_edge_count", 0)),
+			"collider_staged_edge_count": int(collider_result.get("staged_edge_count", 0)),
+			"collider_retired_edge_count": int(collider_result.get("retired_edge_count", 0)),
+			"collider_reused_corner_cap_count": int(collider_result.get("reused_corner_cap_count", active_corner_cap_count if not collider_commit_present else 0)),
+			"collider_staged_corner_cap_count": int(collider_result.get("staged_corner_cap_count", 0)),
+			"collider_retired_corner_cap_count": int(collider_result.get("retired_corner_cap_count", 0)),
+			"transition_collider_count": active_edge_count,
+			"corner_cap_count": active_corner_cap_count,
+			"patch_count": int(_terrain_adjacency_index.get_patch_count()),
+			"descriptor_count": _terrain_adjacency_index.get_edge_descriptors().size(),
+			"controller_rebind_total_usec": elapsed_usec,
+			"incremental_coordinator_total_usec": elapsed_usec,
+			"incremental_removed_patch_count": remove_ids.size(),
+			"incremental_added_patch_count": additions.size(),
+			"incremental_generation": int(_terrain_adjacency_index.get_generation()),
+			"incremental_patch_count": int(_terrain_adjacency_index.get_patch_count()),
+			"incremental": true
+		}
+		result["profile_usec"] = _last_terrain_adjacency_profile.duplicate(true)
+	if bool(result.get("ok", false)) and (bool(result.get("finalized", false)) or bool(result.get("noop", false))):
+		_terrain_transition_descriptors = _terrain_adjacency_index.get_edge_descriptors()
+		result["incremental"] = true
+		result["index_generation"] = int(_terrain_adjacency_index.get_generation())
+		result["index_patch_count"] = int(_terrain_adjacency_index.get_patch_count())
+	elif has_pending_terrain_adjacency_recovery():
+		result["pending_retained"] = true
+	else:
+		_terrain_transition_descriptors = _terrain_adjacency_index.get_edge_descriptors()
+	return result
+
+
+func _get_terrain_index_patch_map() -> Dictionary:
+	if _terrain_adjacency_index == null:
+		return {}
+	var result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+	if not bool(result.get("ok", false)):
+		return {}
+	return result.get("patches_by_stable_id", {}).duplicate()
+
+
+func _record_terrain_batch_chunk_additions(_chunk_id: String, objects: Dictionary) -> void:
+	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	for stable_id_value in objects.keys():
+		var stable_id: String = str(stable_id_value)
+		var patch: Node3D = objects[stable_id_value] as Node3D
+		if not is_instance_valid(patch) or not patch.has_method("bind_neighbor_patch"):
+			continue
+		if old_patches.has(stable_id) and old_patches[stable_id] == patch:
+			_terrain_adjacency_batch_removed_ids.erase(stable_id)
+			_terrain_adjacency_batch_added_patches.erase(stable_id)
+		else:
+			if old_patches.has(stable_id):
+				_terrain_adjacency_batch_removed_ids[stable_id] = true
+			_terrain_adjacency_batch_added_patches[stable_id] = patch
+
+
+func _record_terrain_batch_chunk_removals(_chunk_id: String, objects: Dictionary) -> void:
+	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	for stable_id_value in objects.keys():
+		var stable_id: String = str(stable_id_value)
+		var patch: Node3D = objects[stable_id_value] as Node3D
+		if not is_instance_valid(patch) or not patch.has_method("bind_neighbor_patch"):
+			continue
+		if old_patches.has(stable_id) and old_patches[stable_id] == patch:
+			_terrain_adjacency_batch_removed_ids[stable_id] = true
+			_terrain_adjacency_batch_added_patches.erase(stable_id)
+		else:
+			# A chunk added and removed within the same batch has no net Index delta.
+			_terrain_adjacency_batch_removed_ids.erase(stable_id)
+			_terrain_adjacency_batch_added_patches.erase(stable_id)
+
+
+func _record_terrain_batch_chunk_restored(_chunk_id: String, objects: Dictionary) -> void:
+	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	for stable_id_value in objects.keys():
+		var stable_id: String = str(stable_id_value)
+		var patch: Node3D = objects[stable_id_value] as Node3D
+		if not is_instance_valid(patch) or not patch.has_method("bind_neighbor_patch"):
+			continue
+		if old_patches.has(stable_id) and old_patches[stable_id] == patch:
+			_terrain_adjacency_batch_removed_ids.erase(stable_id)
+			_terrain_adjacency_batch_added_patches.erase(stable_id)
+		else:
+			if old_patches.has(stable_id):
+				_terrain_adjacency_batch_removed_ids[stable_id] = true
+			_terrain_adjacency_batch_added_patches[stable_id] = patch
+
+
+func _find_terrain_patch_stable_id(patch: Node3D) -> String:
+	if not is_instance_valid(patch):
+		return ""
+	for chunk_objects_value in _chunk_objects.values():
+		if not (chunk_objects_value is Dictionary):
+			continue
+		for stable_id_value in chunk_objects_value.keys():
+			if chunk_objects_value[stable_id_value] == patch:
+				return str(stable_id_value) if patch.has_method("bind_neighbor_patch") else ""
+	return ""
+
+
+func _find_current_terrain_patch_by_stable_id(stable_id: String) -> Node3D:
+	for chunk_objects_value in _chunk_objects.values():
+		if not (chunk_objects_value is Dictionary) or not chunk_objects_value.has(stable_id):
+			continue
+		var patch: Node3D = chunk_objects_value[stable_id] as Node3D
+		if is_instance_valid(patch) and patch.is_inside_tree() and not patch.is_queued_for_deletion():
+			return patch if patch.has_method("bind_neighbor_patch") else null
+	return null
+
+
+func _has_untracked_existing_terrain_patches() -> bool:
+	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	for chunk_id_value in _chunk_objects.keys():
+		if _pending_chunk_unloads.has(str(chunk_id_value)):
+			continue
+		var objects: Dictionary = _chunk_objects[chunk_id_value]
+		for stable_id_value in objects.keys():
+			var stable_id: String = str(stable_id_value)
+			var patch: Node3D = objects[stable_id_value] as Node3D
+			if is_instance_valid(patch) and patch.is_inside_tree() and patch.has_method("bind_neighbor_patch") and not old_patches.has(stable_id) and not _terrain_adjacency_batch_added_patches.has(stable_id):
+				return true
+	return false
+
+
+func _clear_terrain_adjacency_batch_delta() -> void:
+	_terrain_adjacency_batch_added_patches.clear()
+	_terrain_adjacency_batch_removed_ids.clear()
+	_terrain_adjacency_batch_dirty_ids.clear()
+
+
+func _sorted_terrain_stable_ids(values: Array) -> Array[String]:
+	var result: Array[String] = []
+	for value in values:
+		result.append(str(value))
+	result.sort()
+	return result
+
+
+func get_terrain_adjacency_index_generation() -> int:
+	if _terrain_adjacency_index == null:
+		return -1
+	return int(_terrain_adjacency_index.get_generation())
+
+
+func get_terrain_adjacency_index_patch_count() -> int:
+	if _terrain_adjacency_index == null:
+		return 0
+	return int(_terrain_adjacency_index.get_patch_count())
+
+
 func get_terrain_adjacency_rebuild_count() -> int:
 	return _terrain_adjacency_rebuild_count
 
@@ -699,18 +1114,33 @@ func _request_terrain_adjacency_rebind(
 	if _terrain_adjacency_batch_depth > 0:
 		_terrain_adjacency_batch_dirty = true
 		return {"ok": true, "deferred": true}
+	if has_pending_terrain_adjacency_recovery():
+		return {"ok": false, "error": "terrain_adjacency_recovery_pending"}
 	return _rebind_terrain_patches(patches, candidate_chunk_id, candidate_objects)
 
 func refresh_terrain_adjacency() -> bool:
+	if has_pending_terrain_adjacency_recovery():
+		var recovery: Dictionary = retry_terrain_adjacency_recovery()
+		return bool(recovery.get("ok", false))
 	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	if bool(result.get("ok", false)):
+		_terrain_adjacency_recovery_required = false
 	return bool(result.get("ok", false))
 
-func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
+func _on_terrain_patch_state_changed(patch: Node3D) -> void:
+	if _terrain_adjacency_batch_depth > 0:
+		var stable_id: String = _find_terrain_patch_stable_id(patch)
+		if not stable_id.is_empty():
+			_terrain_adjacency_batch_dirty_ids[stable_id] = true
+		_terrain_adjacency_batch_dirty = true
+		return
 	var result: Dictionary = _request_terrain_adjacency_rebind(_collect_loaded_terrain_patches())
 	if not bool(result.get("ok", false)):
 		push_error("Terrain transition descriptor rebuild failed after terrain edit: %s" % str(result.get("error", "unknown")))
 
 func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String = "", candidate_objects: Dictionary = {}, excluded_chunk_id: String = "") -> Dictionary:
+	if is_instance_valid(_terrain_adjacency_coordinator) and bool(_terrain_adjacency_coordinator.has_pending_transaction()):
+		return {"ok": false, "error": "coordinator_recovery_pending"}
 	var total_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	_terrain_adjacency_rebuild_count += 1
 	var profile: Dictionary = {}
@@ -740,6 +1170,12 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), snapshot_failure)
 		return snapshot_failure
 	var adjacency_snapshot: Dictionary = adjacency_snapshot_result.get("snapshot", {})
+	var candidate_index = TerrainAdjacencyIndexScript.new()
+	var candidate_index_result: Dictionary = candidate_index.rebuild(patches, stable_ids_by_instance)
+	if not bool(candidate_index_result.get("ok", false)):
+		var index_failure: Dictionary = {"ok": false, "error": "adjacency_index_candidate_failed:" + str(candidate_index_result.get("error", "unknown"))}
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), index_failure)
+		return index_failure
 
 	var binder_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance, _terrain_adjacency_profiling_enabled)
@@ -756,6 +1192,11 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 			result["error"] = "terrain_binder_failed_and_rollback_failed"
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), result)
 		return result
+	if candidate_index.get_edge_descriptors() != result.get("descriptors", {}):
+		var parity_rollback: Dictionary = _restore_terrain_patch_adjacency_snapshot(adjacency_snapshot)
+		var parity_failure: Dictionary = {"ok": false, "error": "adjacency_index_binder_descriptor_parity_mismatch", "rollback_ok": bool(parity_rollback.get("ok", false))}
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), parity_failure)
+		return parity_failure
 	if not _ensure_transition_collider_manager():
 		var manager_failure: Dictionary = {"ok": false, "error": "transition_manager_unavailable"}
 		var manager_rollback: Dictionary = _restore_terrain_patch_adjacency_snapshot(adjacency_snapshot)
@@ -795,6 +1236,11 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 			collider_failure["error"] = "transition_collider_sync_failed_and_rollback_failed"
 		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), collider_failure)
 		return collider_failure
+	if not _install_terrain_adjacency_index(candidate_index, patches, stable_ids_by_instance):
+		_terrain_adjacency_recovery_required = true
+		var install_failure: Dictionary = {"ok": false, "error": "adjacency_index_coordinator_install_failed", "recovery_required": true}
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), install_failure)
+		return install_failure
 	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
 	result["transition_collider_count"] = int(transition_result.get("active_count", 0))
 	result["corner_cap_count"] = int(transition_result.get("corner_cap_count", 0))

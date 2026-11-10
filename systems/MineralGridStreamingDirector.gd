@@ -63,6 +63,12 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
+	if _controller_ready_for_sync() and chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var recovery_result: Dictionary = chunk_controller.call("retry_terrain_adjacency_recovery")
+		if not bool(recovery_result.get("ok", false)):
+			_set_sync_report(false, "terrain_adjacency_recovery", "Controller must finish its retained terrain transaction before another window shift.", false, {"recovery": recovery_result.duplicate(true)})
+			return false
+		_reconcile_managed_chunk_ids_from_controller()
 	# A queued root may still occupy the Controller's Stable-ID slot. Its same-ID
 	# replacement path must retire that root immediately, not stage it as a pending
 	# batch unload and overwrite the slot before the old root is finalized.
@@ -117,6 +123,18 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	# Restore the prior window in a second batch: retire newly loaded roots, recreate any
 	# stale roots that the failed finalize already retired, then publish one coherent rebind.
 	var commit_failure_details: Dictionary = sync_report.get("details", {}).duplicate(true)
+	if chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var pending_map_reconciled: bool = _reconcile_managed_chunk_ids_from_controller()
+		commit_failure_details["controller_recovery_pending"] = true
+		commit_failure_details["managed_map_reconciled"] = pending_map_reconciled
+		_set_sync_report(
+			false,
+			"terrain_adjacency_recovery_pending",
+			"Controller retained a multi-participant terrain transaction; chunk roots remain owned until its retry completes.",
+			false,
+			commit_failure_details
+		)
+		return false
 	var newly_loaded_ids: Array[String] = []
 	for raw_id in commit_failure_details.get("newly_loaded_ids", []):
 		newly_loaded_ids.append(str(raw_id))
@@ -332,6 +350,12 @@ func _exit_tree() -> void:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
+	if _controller_ready_for_sync() and chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+		var recovery_result: Dictionary = chunk_controller.call("retry_terrain_adjacency_recovery")
+		if not bool(recovery_result.get("ok", false)):
+			_set_sync_report(false, "terrain_adjacency_recovery", "Controller must finish its retained terrain transaction before async staging can begin.", false, {"recovery": recovery_result.duplicate(true)})
+			return -1
+		_reconcile_managed_chunk_ids_from_controller()
 	if not _async_dependencies_available():
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
@@ -649,6 +673,15 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 		return
 	var success_adjacency_finalize: Dictionary = _end_controller_terrain_adjacency_batch()
 	if not bool(success_adjacency_finalize.get("ok", false)):
+		if chunk_controller.has_method("has_pending_terrain_adjacency_recovery") and bool(chunk_controller.call("has_pending_terrain_adjacency_recovery")):
+			_reconcile_managed_chunk_ids_from_controller()
+			_finish_async_sync_request(request_id, false, "terrain_adjacency_recovery_pending", "Controller retained a multi-participant terrain transaction; staged and departing roots remain owned until retry completes.", false, {
+				"adjacency_finalize": success_adjacency_finalize,
+				"controller_recovery_pending": true,
+				"newly_loaded_ids": newly_loaded.duplicate(),
+				"unloaded_stale_count": unloaded_stale.size()
+			})
+			return
 		var adjacency_failure_new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
 		var adjacency_failure_stale_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix) if adjacency_failure_new_loads_restored else false
 		var adjacency_failure_refresh_ok: bool = bool(chunk_controller.call("refresh_terrain_adjacency")) if _controller_ready_for_sync() and chunk_controller.has_method("refresh_terrain_adjacency") else false
