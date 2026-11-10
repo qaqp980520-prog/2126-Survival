@@ -232,7 +232,7 @@ func _test_async_phase_diagnostics_split_frame_waits() -> void:
 	assert(director.sync_to_world_position(Vector3(1, 0, 1), 5000), "profiling fixture establishes the initial nine-chunk window")
 	assert(not director.is_async_phase_profiling_enabled(), "async phase profiling is disabled by default")
 	director.set_async_phase_profiling_enabled(true)
-	var request_id: int = director.request_sync_to_world_position_async(Vector3(21, 0, 1), 5001, 1)
+	var request_id: int = director.request_sync_to_world_position_async(Vector3(11, 0, 1), 5001, 1)
 	assert(request_id > 0, "profiled async boundary request is accepted")
 	var diagnostic: Dictionary = {}
 	for frame_index in range(120):
