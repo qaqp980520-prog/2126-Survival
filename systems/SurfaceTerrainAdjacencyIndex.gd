@@ -551,6 +551,14 @@ func _resolve_patch_map(entries: Dictionary) -> Dictionary:
 	return {"ok": true, "patches_by_stable_id": result}
 
 
+func has_pending_plan(plan_id: String) -> bool:
+	return _pending_plans.has(plan_id)
+
+
+func get_reserved_plan_id() -> String:
+	return _reserved_plan_id
+
+
 func get_corner_reports_by_stable_id() -> Dictionary:
 	return _corner_reports_by_stable_id.duplicate(true)
 
