@@ -133,6 +133,7 @@ func _test_retained_coordinator_abort_recovery_keeps_chunk_roots() -> void:
 	_expect(bool(controller.call("load_chunk", "recovery_b", b["root"], 300)), "recovery fixture loads B")
 	_expect(bool(controller.call("load_chunk", "recovery_d", d["root"], 300)), "recovery fixture loads D")
 	_expect(bool(controller.call("load_chunk", "recovery_e", e["root"], 300)), "recovery fixture loads E")
+	var descriptors_before_failure: Dictionary = controller.call("get_terrain_transition_descriptors")
 	var f: Dictionary = await _make_chunk(holder, "RecoveryF", Vector3(24.0, 0.0, 0.0), 0)
 	manager.fail_commit_once = true
 	manager.abort_failures_remaining = 1
@@ -144,7 +145,7 @@ func _test_retained_coordinator_abort_recovery_keeps_chunk_roots() -> void:
 	_expect(bool(controller.call("has_pending_terrain_adjacency_recovery")), "Controller exposes retained Coordinator recovery")
 	_expect(controller.get("_pending_chunk_unloads").has("recovery_d"), "old D retirement remains pending while Collider Abort is incomplete")
 	_expect(d["root"].get_parent() == controller and not d["root"].is_queued_for_deletion(), "old D root remains attached and alive during recovery")
-	_expect(controller.call("get_terrain_transition_descriptors").size() == 2, "published candidate Index does not overwrite the last finalized descriptor snapshot")
+	_expect(controller.call("get_terrain_transition_descriptors") == descriptors_before_failure, "published candidate Index does not overwrite the exact last-finalized descriptor snapshot")
 
 	var recovered: Dictionary = controller.call("retry_terrain_adjacency_recovery")
 	_expect(bool(recovered.get("ok", false)) and bool(recovered.get("rolled_back", false)), "retry aborts the staged Collider, rolls back Patch/Index, and reconciles the live root set")
