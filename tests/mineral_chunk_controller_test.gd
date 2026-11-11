@@ -286,6 +286,10 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 		var patch: Node3D = TerrainPatch.new()
 		patch.name = "TerrainPatch"
 		patch.position.x = float(index) * 2.0
+		if index == 1:
+			var patch_state: Dictionary = patch.call("get_world_object_state")
+			patch_state["height_level"] = 1
+			assert(bool(patch.call("apply_world_object_state", patch_state)), "Second adjacent Patch receives a raised surface for a real transition")
 		chunk.add_child(patch)
 		assert(controller.load_chunk("earth/batch-snapshot-%d" % index, chunk, now))
 		assert(
