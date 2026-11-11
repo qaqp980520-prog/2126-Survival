@@ -27,6 +27,13 @@ class RetryablePatchMapIndex extends RefCounted:
 			return {"ok": false, "error": "temporary_snapshot_unavailable"}
 		return {"ok": true, "patches_by_stable_id": patches_by_stable_id.duplicate()}
 
+class CountingAdjacencyIndex extends "res://systems/SurfaceTerrainAdjacencyIndex.gd":
+	var patch_map_reads: int = 0
+
+	func get_patches_by_stable_id() -> Dictionary:
+		patch_map_reads += 1
+		return super.get_patches_by_stable_id()
+
 class CountingController extends "res://systems/MineralChunkController.gd":
 	var loaded_patch_collection_calls: int = 0
 	var index_patch_map_calls: int = 0
@@ -266,8 +273,11 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 	await process_frame
 	assert(controller.bind_registry(registry))
 	assert(controller.bind_object_state_registry(object_registry))
-	assert(bool(controller.call("_ensure_terrain_adjacency_runtime")), "Incremental Index runtime initializes before the batch")
-	assert(controller.index_patch_map_calls == 0, "Runtime initialization does not copy the Index patch map")
+	var counting_index: CountingAdjacencyIndex = CountingAdjacencyIndex.new()
+	assert(bool(counting_index.rebuild([], {}).get("ok", false)), "Counting Index starts from an empty committed generation")
+	controller.set("_terrain_adjacency_index", counting_index)
+	assert(bool(controller.call("_ensure_terrain_adjacency_runtime")), "Incremental Index runtime binds the counting Index before the batch")
+	assert(controller.index_patch_map_calls == 0 and counting_index.patch_map_reads == 0, "Runtime initialization does not resolve the Index patch map")
 	assert(controller.begin_terrain_adjacency_batch())
 
 	for index in range(2):
@@ -279,29 +289,29 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 		chunk.add_child(patch)
 		assert(controller.load_chunk("earth/batch-snapshot-%d" % index, chunk, now))
 		assert(
-			controller.index_patch_map_calls == 1,
+			controller.index_patch_map_calls == 1 and counting_index.patch_map_reads == 1,
 			"Every Chunk addition in one batch reuses the single original Index snapshot"
 		)
 
 	var first_batch_result: Dictionary = controller.end_terrain_adjacency_batch()
 	assert(bool(first_batch_result.get("ok", false)), "Initial batch commits with the cached baseline")
 	assert(controller.get_terrain_adjacency_index_patch_count() == 2, "Both added Patches are committed to the Index")
-	assert(controller.index_patch_map_calls == 1, "Finalization does not recopy the original batch baseline")
+	assert(controller.index_patch_map_calls == 1 and counting_index.patch_map_reads == 1, "Finalization and Coordinator reuse the captured baseline without another full Index-map resolution")
 
 	assert(controller.begin_terrain_adjacency_batch(), "A second batch can start after successful finalization")
 	assert(controller.unload_chunk("earth/batch-snapshot-0", now), "Existing Chunk enters pending retirement")
 	assert(
-		controller.index_patch_map_calls == 2,
+		controller.index_patch_map_calls == 2 and counting_index.patch_map_reads == 2,
 		"The first removal lazily captures one original Index snapshot for the new batch"
 	)
 	assert(controller.cancel_pending_chunk_unload("earth/batch-snapshot-0", now), "Pending retirement can be restored before commit")
 	assert(
-		controller.index_patch_map_calls == 2,
+		controller.index_patch_map_calls == 2 and counting_index.patch_map_reads == 2,
 		"Removal and restore operations reuse the same original Index snapshot"
 	)
 	var restored_batch_result: Dictionary = controller.end_terrain_adjacency_batch()
 	assert(bool(restored_batch_result.get("ok", false)), "A removal followed by restore finalizes as a no-op")
-	assert(controller.index_patch_map_calls == 2, "The second batch uses exactly one Index snapshot")
+	assert(controller.index_patch_map_calls == 2 and counting_index.patch_map_reads == 2, "The second batch, including Coordinator finalization, uses exactly one full Index-map resolution")
 	assert(controller.get_terrain_adjacency_index_patch_count() == 2, "No-op restoration preserves both committed Patches")
 	assert(controller.is_chunk_loaded("earth/batch-snapshot-0"), "Restored Chunk root remains registered")
 
