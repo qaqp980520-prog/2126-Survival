@@ -432,7 +432,7 @@ func _test_plan_delta_phase_profile() -> void:
 	_expect(unattributed_usec == total_usec - measured_usec, "Index plan profile reports the exact unattributed remainder")
 	if bool(plan.get("ok", false)):
 		var summary: Dictionary = plan.get("summary", {})
-		_expect(bool(profile_index.abort_delta(str(summary.get("plan_id", ""))).get("ok", false)), "profiled Index plan can be aborted without publishing")
+		_expect(profile_index.abort_delta(str(summary.get("plan_id", ""))), "profiled Index plan can be aborted without publishing")
 	holder.queue_free()
 	await process_frame
 
