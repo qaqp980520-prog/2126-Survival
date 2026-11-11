@@ -44,3 +44,13 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 1. Run the exact-head Godot 4.3 Full Compatibility Gate and focused Backrooms portal director test.
 2. Keep the PR Draft and unmerged until exact-head CI and independent review complete.
 3. When production Backrooms integration is designed, include portal RNG state in the existing WorldSession save/restore transaction.
+
+
+## Run 217 — parser boundary and legacy-stream regression hardening
+
+- Clarified the loader contract: a new save carries a canonical decimal representation of the RNG state; the code does not claim that zero is an invalid state.
+- Extended malformed-state regression coverage to include positive and negative signed-64-bit overflow strings, non-canonical decimal forms (`+1`, `01`, `-0`), and a non-string numeric JSON value.
+- Every rejected payload is checked against the complete pre-load save dictionary to prove that the director's RNG and portal state remain unchanged.
+- Strengthened schema-1 legacy compatibility: a payload without `rng_state` must load while retaining the receiving director's constructor RNG stream, rather than silently adopting the source director's state.
+- Dependencies and import remain unchanged: Godot 4.3; `godot --headless --path . --import`; focused test `godot --headless --path . --script res://tests/backrooms_portal_director_test.gd`.
+- These are test and documentation hardening changes; exact-head Full Compatibility Gate must be rerun after the commits. No local Godot executable is available.
