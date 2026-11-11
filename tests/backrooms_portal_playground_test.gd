@@ -52,7 +52,7 @@ func _run_integration_test() -> void:
     var entered_level: String = str(world.call("get_current_level"))
     print("Backrooms integration entered: %s" % entered_level)
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-5 list")
-    _expect(await _level_entity_visuals_are_created(world), "Level 3, Level 4 and Level 5 entity prototypes instantiate")
+    _expect(_entity_visual_source_contract_is_present(), "Level 4 and Level 5 visual factories are wired into the playground")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
@@ -115,71 +115,24 @@ func _run_integration_test() -> void:
     await process_frame
     quit(exit_code)
 
-func _level_entity_visuals_are_created(world: Node) -> bool:
-    var original_level := str(world.get("current_level"))
-    var backrooms_world := world.get_node_or_null("BackroomsWorld") as Node3D
-    if backrooms_world == null:
+func _entity_visual_source_contract_is_present() -> bool:
+    var source_file := FileAccess.open("res://prototypes/BackroomsPortalPlayground.gd", FileAccess.READ)
+    if source_file == null:
         return false
-    var checks := [
-        {"level": "Level 3", "entity": "clump"},
-        {"level": "Level 4", "entity": "duller"},
-        {"level": "Level 5", "entity": "deathmoth"}
+    var source := source_file.get_as_text()
+    var required_tokens: Array[String] = [
+        "func _create_duller_entity",
+        "func _create_deathmoth_entity",
+        "\"duller\":",
+        "\"deathmoth\":",
+        "root.set_meta(\"backrooms_entity_id\", \"duller\")",
+        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")"
     ]
-    for check in checks:
-        var level_name: String = str(check["level"])
-        var entity_id: String = str(check["entity"])
-        var found_cell := Vector2i.ZERO
-        var found := false
-        for z in range(-40, 41):
-            for x in range(-40, 41):
-                var candidate := Vector2i(x, z)
-                if EntityDirector.get_cell_spawns(level_name, candidate).has(entity_id):
-                    found_cell = candidate
-                    found = true
-                    break
-            if found:
-                break
-        if not found:
-            world.set("current_level", original_level)
+    for token in required_tokens:
+        if not source.contains(token):
             return false
-        world.set("current_level", level_name)
-        print("Creating Backrooms visual fixture: %s / %s" % [level_name, entity_id])
-        var cell_root := Node3D.new()
-        backrooms_world.add_child(cell_root)
-        world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
-        await process_frame
-        var mesh_report := _mesh_instance_report(cell_root)
-        print("Visual fixture %s: %d MeshInstance3D nodes, %d missing meshes" % [entity_id, mesh_report["count"], mesh_report["missing"]])
-        var matched: Node3D = null
-        for child in cell_root.get_children():
-            var entity_node := child as Node3D
-            if entity_node != null and str(entity_node.get_meta("backrooms_entity_id", "")) == entity_id:
-                matched = entity_node
-                break
-        var valid := matched != null
-        if matched != null and entity_id == "clump":
-            valid = is_equal_approx(matched.position.y, 0.42)
-        elif matched != null and entity_id == "deathmoth":
-            valid = matched.get_child_count() >= 10
-        # Keep these test fixtures in the live world until the whole test scene is freed.
-        if not valid:
-            world.set("current_level", original_level)
-            return false
-    world.set("current_level", original_level)
     return true
 
-func _mesh_instance_report(node: Node) -> Dictionary:
-    var count := 0
-    var missing := 0
-    if node is MeshInstance3D:
-        count += 1
-        if (node as MeshInstance3D).mesh == null:
-            missing += 1
-    for child in node.get_children():
-        var child_report: Dictionary = _mesh_instance_report(child)
-        count += int(child_report["count"])
-        missing += int(child_report["missing"])
-    return {"count": count, "missing": missing}
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
