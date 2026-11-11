@@ -138,25 +138,28 @@ func _entity_visual_source_contract_is_present() -> bool:
     var required_tokens: Array[String] = [
         "func _create_duller_entity",
         "func _create_deathmoth_entity",
-        "root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 0.42,",
-        "\"duller\":",
-        "\"deathmoth\":",
-        "root.set_meta(\"backrooms_entity_id\", \"duller\")",
-        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")",
-        "if is_headless and entity_id != \"window\":",
+        "func _prepare_entity_root",
+        "if _prepare_entity_root(smiler_root, cell, \\"smiler\\"):",
+        "if _prepare_entity_root(root, cell, \\"hound\\"):",
+        "if _prepare_entity_root(root, cell, \\"skin_stealer\\"):",
+        "if _prepare_entity_root(root, cell, \\"clump\\"):",
+        "if _prepare_entity_root(root, cell, \\"faceling\\"):",
+        "if _prepare_entity_root(root, cell, \\"duller\\"):",
+        "if _prepare_entity_root(root, cell, \\"deathmoth\\"):",
         "var wall_direction := _window_wall_direction_for_cell(cell)",
         "_create_window_entity(cell_root, cell, wall_direction)",
         "func _window_wall_direction_for_cell",
         "func _window_entity_transform_for_wall",
         "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
-        "window_root.set_meta(\"wall_direction\", wall_direction)",
-        "if DisplayServer.get_name() == \"headless\":"
+        "window_root.set_meta(\\"wall_direction\\", wall_direction)",
+        "if DisplayServer.get_name() == \\"headless\\":"
     ]
     for token in required_tokens:
         if not source.contains(token):
             return false
+    if source.contains("if is_headless and entity_id != \\"window\\":"):
+        return false
     return true
-
 func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
     if DisplayServer.get_name() != "headless":
         return true
@@ -223,12 +226,18 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         return false
 
     var checks := [
-        {"level": "Level 4", "entity": "duller"},
-        {"level": "Level 5", "entity": "deathmoth"}
+        {"level": "Level 1", "entity": "smiler", "node": "Entity_Smiler"},
+        {"level": "Level 2", "entity": "hound", "node": "Entity_Hound"},
+        {"level": "Level 2", "entity": "skin_stealer", "node": "Entity_SkinStealer"},
+        {"level": "Level 3", "entity": "clump", "node": "Entity_Clump"},
+        {"level": "Level 3", "entity": "faceling", "node": "Entity_Faceling"},
+        {"level": "Level 4", "entity": "duller", "node": "Entity_Duller"},
+        {"level": "Level 5", "entity": "deathmoth", "node": "Entity_Deathmoth"}
     ]
     for check in checks:
         var level_name: String = str(check["level"])
         var entity_id: String = str(check["entity"])
+        var node_name: String = str(check["node"])
         var found_cell := Vector2i.ZERO
         var found := false
         for z in range(-40, 41):
@@ -248,15 +257,21 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         var cell_root := Node3D.new()
         room.add_child(cell_root)
         world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
-        var contains_mesh := _contains_mesh_instance(cell_root)
+        var entity_root := cell_root.get_node_or_null(node_name) as Node3D
+        var entity_valid := entity_root != null
+        if entity_valid:
+            entity_valid = (
+                str(entity_root.get_meta("backrooms_entity_id", "")) == entity_id
+                and entity_root.get_meta("spawn_cell", Vector2i(-999, -999)) == found_cell
+                and not _contains_mesh_instance(cell_root)
+            )
         cell_root.queue_free()
-        if contains_mesh:
+        if not entity_valid:
             world.set("current_level", original_level)
             return false
 
     world.set("current_level", original_level)
     return true
-
 func _contains_mesh_instance(node: Node) -> bool:
     if node is MeshInstance3D:
         return true
