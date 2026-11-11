@@ -549,12 +549,7 @@ func _create_maze_cell(cell: Vector2i) -> void:
     _spawn_level_entities_for_cell(root, cell)
 
 func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
-    # Headless mode may create a metadata-only Window root for integration tests.
-    # Other entity factories remain render-only and are skipped without a renderer.
-    var is_headless := DisplayServer.get_name() == "headless"
     for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
-        if is_headless and entity_id != "window":
-            continue
         match entity_id:
             "window":
                 var wall_direction := _window_wall_direction_for_cell(cell)
@@ -574,6 +569,14 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
                 _create_duller_entity(cell_root, cell)
             "deathmoth":
                 _create_deathmoth_entity(cell_root, cell)
+
+func _prepare_entity_root(root: Node3D, cell: Vector2i, entity_id: String) -> bool:
+    # Preserve the real spawn root, position and metadata in headless CI while
+    # avoiding renderer-only resources. Graphical mode continues into the
+    # existing visual factory below this guard.
+    root.set_meta("backrooms_entity_id", entity_id)
+    root.set_meta("spawn_cell", cell)
+    return DisplayServer.get_name() == "headless"
 
 func _window_wall_direction_for_cell(cell: Vector2i) -> Vector2i:
     # This cell owns its north and west boundary walls. Selecting only these
@@ -678,6 +681,8 @@ func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var offset_z := float(posmod(_hash_value(cell.x, cell.y, 911), 5) - 2) * 0.72
     smiler_root.position = Vector3(offset_x, 1.75, offset_z)
     cell_root.add_child(smiler_root)
+    if _prepare_entity_root(smiler_root, cell, "smiler"):
+        return
 
     var darkness := StandardMaterial3D.new()
     darkness.albedo_color = Color(0.002, 0.002, 0.004)
@@ -706,8 +711,6 @@ func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
         eye.material_override = eye_material
         eye.position = Vector3(-0.14 if eye_index == 0 else 0.14, 0.08, -0.43)
         smiler_root.add_child(eye)
-    smiler_root.set_meta("backrooms_entity_id", "smiler")
-    smiler_root.set_meta("spawn_cell", cell)
 
 
 func _create_hound_entity(cell_root: Node3D, cell: Vector2i) -> void:
@@ -715,6 +718,8 @@ func _create_hound_entity(cell_root: Node3D, cell: Vector2i) -> void:
     root.name = "Entity_Hound"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 1524), 5) - 2) * 0.55, 0.55, float(posmod(_hash_value(cell.x, cell.y, 1525), 5) - 2) * 0.55)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "hound"):
+        return
     var hide := StandardMaterial3D.new()
     hide.albedo_color = Color(0.055, 0.035, 0.03)
     var eye := StandardMaterial3D.new()
@@ -737,14 +742,14 @@ func _create_hound_entity(cell_root: Node3D, cell: Vector2i) -> void:
         eye_mesh.material_override = eye
         eye_mesh.position = Vector3(x_offset, 0.24, -0.57)
         root.add_child(eye_mesh)
-    root.set_meta("backrooms_entity_id", "hound")
-    root.set_meta("spawn_cell", cell)
 
 func _create_skin_stealer_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_SkinStealer"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2033), 5) - 2) * 0.62, 0.0, float(posmod(_hash_value(cell.x, cell.y, 2034), 5) - 2) * 0.62)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "skin_stealer"):
+        return
     var material := StandardMaterial3D.new()
     material.albedo_color = Color(0.28, 0.19, 0.16)
     material.roughness = 0.95
@@ -761,14 +766,14 @@ func _create_skin_stealer_entity(cell_root: Node3D, cell: Vector2i) -> void:
     for x_offset in [-0.32, 0.32]:
         _add_entity_box(root, "Arm", Vector3(x_offset, 1.05, 0.0), Vector3(0.16, 0.82, 0.2), material)
         _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.34, 0.0), Vector3(0.18, 0.68, 0.22), material)
-    root.set_meta("backrooms_entity_id", "skin_stealer")
-    root.set_meta("spawn_cell", cell)
 
 func _create_clump_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_Clump"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 0.42, float(posmod(_hash_value(cell.x, cell.y, 2711), 5) - 2) * 0.58)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "clump"):
+        return
     var material := StandardMaterial3D.new()
     material.albedo_color = Color(0.018, 0.014, 0.012)
     material.roughness = 1.0
@@ -783,14 +788,14 @@ func _create_clump_entity(cell_root: Node3D, cell: Vector2i) -> void:
         var angle := float(i) * TAU / 7.0
         part.position = Vector3(cos(angle) * 0.28, float(i % 2) * 0.24, sin(angle) * 0.28)
         root.add_child(part)
-    root.set_meta("backrooms_entity_id", "clump")
-    root.set_meta("spawn_cell", cell)
 
 func _create_faceling_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_Faceling"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 3184), 5) - 2) * 0.62, 0.0, float(posmod(_hash_value(cell.x, cell.y, 3185), 5) - 2) * 0.62)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "faceling"):
+        return
     var material := StandardMaterial3D.new()
     material.albedo_color = Color(0.62, 0.57, 0.48)
     material.roughness = 0.92
@@ -807,14 +812,14 @@ func _create_faceling_entity(cell_root: Node3D, cell: Vector2i) -> void:
     for x_offset in [-0.29, 0.29]:
         _add_entity_box(root, "Arm", Vector3(x_offset, 1.02, 0.0), Vector3(0.14, 0.72, 0.18), material)
         _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.35, 0.0), Vector3(0.16, 0.68, 0.2), material)
-    root.set_meta("backrooms_entity_id", "faceling")
-    root.set_meta("spawn_cell", cell)
 
 func _create_duller_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_Duller"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 3652), 5) - 2) * 0.62, 0.0, float(posmod(_hash_value(cell.x, cell.y, 3653), 5) - 2) * 0.62)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "duller"):
+        return
     var material := StandardMaterial3D.new()
     material.albedo_color = Color(0.075, 0.085, 0.095)
     material.roughness = 1.0
@@ -831,14 +836,14 @@ func _create_duller_entity(cell_root: Node3D, cell: Vector2i) -> void:
     for x_offset in [-0.33, 0.33]:
         _add_entity_box(root, "LongArm", Vector3(x_offset, 1.05, 0.0), Vector3(0.13, 0.92, 0.18), material)
         _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.34, 0.0), Vector3(0.16, 0.68, 0.2), material)
-    root.set_meta("backrooms_entity_id", "duller")
-    root.set_meta("spawn_cell", cell)
 
 func _create_deathmoth_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_Deathmoth"
     root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 4188), 5) - 2) * 0.62, 1.55, float(posmod(_hash_value(cell.x, cell.y, 4189), 5) - 2) * 0.62)
     cell_root.add_child(root)
+    if _prepare_entity_root(root, cell, "deathmoth"):
+        return
 
     var body_material := StandardMaterial3D.new()
     body_material.albedo_color = Color(0.12, 0.085, 0.055)
@@ -895,8 +900,6 @@ func _create_deathmoth_entity(cell_root: Node3D, cell: Vector2i) -> void:
             var leg_z: float = 0.24 - float(leg_index) * 0.22
             _add_entity_box(root, "Leg", Vector3(side * 0.16, -0.2, leg_z), Vector3(0.045, 0.3, 0.045), body_material)
 
-    root.set_meta("backrooms_entity_id", "deathmoth")
-    root.set_meta("spawn_cell", cell)
 
 func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3, box_size: Vector3, material: Material) -> void:
     var mesh_instance := MeshInstance3D.new()
