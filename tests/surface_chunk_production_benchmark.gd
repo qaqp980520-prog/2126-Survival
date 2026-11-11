@@ -2,6 +2,9 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const MineralNodeScript = preload("res://systems/MineralMiningNode.gd")
+const CropPlotScript = preload("res://systems/CropPlotVisual.gd")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const RADII: Array[int] = [1, 2, 3, 4, 8]
 const MAX_REQUEST_FRAMES: int = 7200
 const RELEASE_WAIT_FRAMES: int = 2
@@ -13,6 +16,7 @@ var _factory_build_usec: int = 0
 var _factory_calls: int = 0
 var _benchmark_fixture_center: Vector2i = Vector2i.ZERO
 var _benchmark_corner_fixture_injected: bool = false
+var _chunk_content_scan_comparison: Dictionary = {}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -33,6 +37,12 @@ func _run() -> void:
 	if controller == null or director == null:
 		await _finish(world)
 		return
+	var typed_controller: MineralChunkController = controller as MineralChunkController
+	_expect(typed_controller != null, "production Controller exposes the MineralChunkController collector methods")
+	if typed_controller == null:
+		await _finish(world)
+		return
+	_chunk_content_scan_comparison = _run_chunk_content_scan_comparison(typed_controller)
 	var async_profile_api_available: bool = director.has_method("set_async_phase_profiling_enabled") and director.has_method("is_async_phase_profiling_enabled")
 	_expect(async_profile_api_available, "production Director exposes opt-in async phase profiling")
 	if async_profile_api_available:
@@ -529,6 +539,161 @@ func _count_surface_nodes(controller: Node) -> int:
 			count += _count_nodes(chunk_root)
 	return count
 
+
+func _run_chunk_content_scan_comparison(controller: MineralChunkController) -> Dictionary:
+	# Compare the old three-pass path and the new combined path in the same process,
+	# on the same synthetic tree, with alternating measurement order.
+	var chunk_root := Node3D.new()
+	chunk_root.name = "CollectorBenchmarkChunk"
+	var category_counts := {"minerals": 0, "crops": 0, "world_objects": 0}
+	for group_index in range(8):
+		var group := Node3D.new()
+		group.name = "Group_%02d" % group_index
+		chunk_root.add_child(group)
+		for child_index in range(64):
+			var flat_index: int = group_index * 64 + child_index
+			var child: Node3D
+			if flat_index % 29 == 0:
+				child = MineralNodeScript.new() as Node3D
+				category_counts["minerals"] = int(category_counts["minerals"]) + 1
+			elif flat_index % 31 == 0:
+				child = CropPlotScript.new() as Node3D
+				category_counts["crops"] = int(category_counts["crops"]) + 1
+			elif flat_index % 37 == 0:
+				child = StatefulPropScript.new() as Node3D
+				category_counts["world_objects"] = int(category_counts["world_objects"]) + 1
+			else:
+				child = Node3D.new()
+			child.name = "Node_%03d" % child_index
+			group.add_child(child)
+
+	var legacy_veins: Dictionary = {}
+	var legacy_crops: Dictionary = {}
+	var legacy_objects: Dictionary = {}
+	var combined_veins: Dictionary = {}
+	var combined_crops: Dictionary = {}
+	var combined_objects: Dictionary = {}
+	var legacy_ok: bool = (
+		controller._collect_mineral_nodes(chunk_root, str(chunk_root.name), legacy_veins)
+		and controller._collect_crop_plots(chunk_root, str(chunk_root.name), legacy_crops)
+		and controller._collect_world_state_nodes(chunk_root, str(chunk_root.name), legacy_objects)
+	)
+	var combined_ok: bool = controller._collect_chunk_content_nodes(
+		chunk_root,
+		str(chunk_root.name),
+		combined_veins,
+		combined_crops,
+		combined_objects
+	)
+	_expect(legacy_ok and combined_ok, "legacy and combined collectors accept the synthetic production-shaped Chunk tree")
+	_expect(legacy_veins == combined_veins, "single-pass mineral discovery exactly matches the three-pass baseline")
+	_expect(legacy_crops == combined_crops, "single-pass crop discovery exactly matches the three-pass baseline")
+	_expect(legacy_objects == combined_objects, "single-pass world-object discovery exactly matches the three-pass baseline")
+	_expect(legacy_veins.size() == int(category_counts["minerals"]), "collector benchmark discovers the expected mineral-node count")
+	_expect(legacy_crops.size() == int(category_counts["crops"]), "collector benchmark discovers the expected crop-node count")
+	_expect(legacy_objects.size() == int(category_counts["world_objects"]), "collector benchmark discovers the expected stateful-object count")
+
+	var all_iterations_ok: bool = legacy_ok and combined_ok
+	for warmup_index in range(5):
+		legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
+		combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
+		all_iterations_ok = all_iterations_ok and legacy_ok and combined_ok
+	var legacy_samples_usec: Array[int] = []
+	var single_pass_samples_usec: Array[int] = []
+	for iteration in range(40):
+		var legacy_elapsed_usec: int = 0
+		var single_pass_elapsed_usec: int = 0
+		var legacy_started_usec: int = 0
+		var single_pass_started_usec: int = 0
+		if iteration % 2 == 0:
+			legacy_started_usec = Time.get_ticks_usec()
+			legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
+			legacy_elapsed_usec = maxi(0, Time.get_ticks_usec() - legacy_started_usec)
+			single_pass_started_usec = Time.get_ticks_usec()
+			combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
+			single_pass_elapsed_usec = maxi(0, Time.get_ticks_usec() - single_pass_started_usec)
+		else:
+			single_pass_started_usec = Time.get_ticks_usec()
+			combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
+			single_pass_elapsed_usec = maxi(0, Time.get_ticks_usec() - single_pass_started_usec)
+			legacy_started_usec = Time.get_ticks_usec()
+			legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
+			legacy_elapsed_usec = maxi(0, Time.get_ticks_usec() - legacy_started_usec)
+		legacy_samples_usec.append(legacy_elapsed_usec)
+		single_pass_samples_usec.append(single_pass_elapsed_usec)
+		all_iterations_ok = all_iterations_ok and legacy_ok and combined_ok
+
+	var legacy_summary: Dictionary = _summarize_usec_samples(legacy_samples_usec)
+	var single_pass_summary: Dictionary = _summarize_usec_samples(single_pass_samples_usec)
+	var legacy_median_usec: float = float(legacy_summary.get("median_usec", 0.0))
+	var single_pass_median_usec: float = float(single_pass_summary.get("median_usec", 0.0))
+	var ratio: float = single_pass_median_usec / legacy_median_usec if legacy_median_usec > 0.0 else 0.0
+	_expect(all_iterations_ok, "all repeated legacy and single-pass collector measurements complete")
+	_expect(legacy_samples_usec.size() == 40 and single_pass_samples_usec.size() == 40, "collector comparison records all 40 paired iterations")
+	var result := {
+		"valid": all_iterations_ok and legacy_samples_usec.size() == 40 and single_pass_samples_usec.size() == 40,
+		"node_count": _count_nodes(chunk_root),
+		"mineral_node_count": int(category_counts["minerals"]),
+		"crop_node_count": int(category_counts["crops"]),
+		"stateful_object_node_count": int(category_counts["world_objects"]),
+		"warmup_iterations_per_algorithm": 5,
+		"measured_iterations_per_algorithm": 40,
+		"measurement_order": "alternating",
+		"legacy_three_walks": legacy_summary,
+		"single_pass_one_walk": single_pass_summary,
+		"single_pass_to_legacy_median_ratio": ratio,
+		"median_change_percent": (ratio - 1.0) * 100.0
+	}
+	chunk_root.free()
+	return result
+
+func _run_legacy_chunk_content_collectors(controller: MineralChunkController, chunk_root: Node) -> bool:
+	var veins: Dictionary = {}
+	var crops: Dictionary = {}
+	var world_objects: Dictionary = {}
+	return (
+		controller._collect_mineral_nodes(chunk_root, str(chunk_root.name), veins)
+		and controller._collect_crop_plots(chunk_root, str(chunk_root.name), crops)
+		and controller._collect_world_state_nodes(chunk_root, str(chunk_root.name), world_objects)
+	)
+
+func _run_single_pass_chunk_content_collector(controller: MineralChunkController, chunk_root: Node) -> bool:
+	var veins: Dictionary = {}
+	var crops: Dictionary = {}
+	var world_objects: Dictionary = {}
+	return controller._collect_chunk_content_nodes(
+		chunk_root,
+		str(chunk_root.name),
+		veins,
+		crops,
+		world_objects
+	)
+
+func _summarize_usec_samples(samples: Array[int]) -> Dictionary:
+	var sorted_samples: Array[int] = samples.duplicate()
+	sorted_samples.sort()
+	var total_usec: int = 0
+	for sample_usec in sorted_samples:
+		total_usec += sample_usec
+	var median_usec: float = 0.0
+	var p95_usec: float = 0.0
+	if not sorted_samples.is_empty():
+		var middle: int = sorted_samples.size() / 2
+		if sorted_samples.size() % 2 == 1:
+			median_usec = float(sorted_samples[middle])
+		else:
+			median_usec = (float(sorted_samples[middle - 1]) + float(sorted_samples[middle])) * 0.5
+		var p95_index: int = clampi(int(ceil(float(sorted_samples.size() - 1) * 0.95)), 0, sorted_samples.size() - 1)
+		p95_usec = float(sorted_samples[p95_index])
+	return {
+		"count": sorted_samples.size(),
+		"total_usec": total_usec,
+		"min_usec": int(sorted_samples[0]) if not sorted_samples.is_empty() else 0,
+		"median_usec": median_usec,
+		"p95_usec": p95_usec,
+		"max_usec": int(sorted_samples[sorted_samples.size() - 1]) if not sorted_samples.is_empty() else 0
+	}
+
 func _emit_metrics(
 	phase: String,
 	radius: int,
@@ -689,6 +854,8 @@ func _emit_metrics(
 		"processor": OS.get_processor_name(),
 		"processor_count": OS.get_processor_count()
 	}
+	if phase == "expand_stage_commit" and radius == 8:
+		record["chunk_content_scan_comparison"] = _chunk_content_scan_comparison.duplicate(true)
 	print("SURFACE_CHUNK_BENCHMARK_JSON:" + JSON.stringify(record))
 
 func _summarize_async_phase_samples(samples: Array, expected_count: int, expected_total_usec: int) -> Dictionary:

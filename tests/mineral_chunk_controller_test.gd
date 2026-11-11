@@ -20,6 +20,10 @@ func _initialize() -> void:
 	call_deferred("_run_tests")
 
 func _run_tests() -> void:
+	await _test_single_pass_chunk_content_collection()
+	await process_frame
+	await _test_single_pass_invalid_category_paths()
+	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
 	await _test_empty_chunk_and_duplicate_id()
@@ -40,6 +44,118 @@ func _run_tests() -> void:
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
+
+func _test_single_pass_chunk_content_collection() -> void:
+	var controller: Node3D = Controller.new()
+	var chunk := Node3D.new()
+	chunk.name = "ChunkRoot"
+	var gold: Node3D = MiningNode.new()
+	gold.name = "gold-01"
+	var crop: Node3D = CropPlot.new()
+	crop.name = "CropPlot_0"
+	var prop: Node3D = StatefulProp.new()
+	prop.name = "SalvageCrate"
+	var decor := Node3D.new()
+	decor.name = "Decor"
+	var iron: Node3D = MiningNode.new()
+	iron.name = "iron-02"
+	decor.add_child(iron)
+	chunk.add_child(gold)
+	chunk.add_child(crop)
+	chunk.add_child(prop)
+	chunk.add_child(decor)
+
+	var veins: Dictionary = {}
+	var crops: Dictionary = {}
+	var world_objects: Dictionary = {}
+	assert(bool(controller.call(
+		"_collect_chunk_content_nodes",
+		chunk,
+		"ChunkRoot",
+		veins,
+		crops,
+		world_objects
+	)), "Single-pass collection accepts a valid mixed Chunk tree")
+	assert(veins.size() == 2, "Single-pass collection discovers every mineral vein")
+	assert(veins.get("ChunkRoot/gold-01") == gold, "Single-pass collection preserves the root-level mineral path")
+	assert(veins.get("ChunkRoot/Decor/iron-02") == iron, "Single-pass collection preserves nested mineral paths")
+	assert(crops.size() == 1 and crops.get("ChunkRoot/CropPlot_0") == crop, "Single-pass collection preserves crop paths")
+	assert(world_objects.size() == 1 and world_objects.get("ChunkRoot/SalvageCrate") == prop, "Single-pass collection preserves stateful world-object paths")
+
+	# Compare with the former category collectors to guard exact discovery semantics.
+	var legacy_veins: Dictionary = {}
+	var legacy_crops: Dictionary = {}
+	var legacy_objects: Dictionary = {}
+	assert(bool(controller.call("_collect_mineral_nodes", chunk, "ChunkRoot", legacy_veins)))
+	assert(bool(controller.call("_collect_crop_plots", chunk, "ChunkRoot", legacy_crops)))
+	assert(bool(controller.call("_collect_world_state_nodes", chunk, "ChunkRoot", legacy_objects)))
+	assert(veins == legacy_veins, "Combined mineral discovery matches the former mineral collector")
+	assert(crops == legacy_crops, "Combined crop discovery matches the former crop collector")
+	assert(world_objects == legacy_objects, "Combined world-object discovery matches the former object collector")
+
+	var invalid_veins: Dictionary = {}
+	var invalid_crops: Dictionary = {}
+	var invalid_objects: Dictionary = {}
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		chunk,
+		"ChunkRoot//Invalid",
+		invalid_veins,
+		invalid_crops,
+		invalid_objects
+	)), "Single-pass collection preserves invalid stable-path rejection")
+	chunk.free()
+	controller.free()
+
+
+func _test_single_pass_invalid_category_paths() -> void:
+	var controller: Node3D = Controller.new()
+
+	var mineral_root := Node3D.new()
+	mineral_root.name = "ChunkRoot"
+	var mineral: Node3D = MiningNode.new()
+	mineral.name = "Mineral"
+	mineral_root.add_child(mineral)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		mineral_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid mineral-path rejection")
+	mineral_root.free()
+
+	var crop_root := Node3D.new()
+	crop_root.name = "ChunkRoot"
+	var crop: Node3D = CropPlot.new()
+	crop.name = "Crop"
+	crop_root.add_child(crop)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		crop_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid crop-path rejection")
+	crop_root.free()
+
+	var object_root := Node3D.new()
+	object_root.name = "ChunkRoot"
+	var stateful_object: Node3D = StatefulProp.new()
+	stateful_object.name = "StatefulObject"
+	object_root.add_child(stateful_object)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		object_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid world-object-path rejection")
+	object_root.free()
+	controller.free()
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
 	var base_time: int = int(Time.get_unix_time_from_system()) - 5

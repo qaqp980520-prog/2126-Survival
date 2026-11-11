@@ -58,11 +58,13 @@ jobs:
           test -f systems/SurfaceTerrainCornerConflictResolver.gd
           test -f systems/SurfaceTerrainTransitionDescriptor.gd
           test -f tests/surface_chunk_production_benchmark.gd
+          grep -Fq 'godot --headless --path . --import' .github/workflows/surface-chunk-production-benchmark.yml
+          grep -Fq 'chunk_content_scan_comparison' tests/surface_chunk_production_benchmark.gd
           grep -Fq 'SurfaceChunkFactoryScript.make_chunk' world/SurfaceWorld.gd
           grep -Fq 'get_managed_chunk_ids' systems/MineralGridStreamingDirector.gd
           grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
       - name: Import and parse root project
-        run: godot --headless --path . --editor --quit
+        run: godot --headless --path . --import
       - name: Run real production factory/controller benchmark
         shell: bash
         run: |
@@ -77,6 +79,7 @@ jobs:
           actual_jsonl_count="$(grep -c '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log)"
           test "$actual_jsonl_count" -eq "$expected_jsonl_count"
           grep '^SURFACE_CHUNK_BENCHMARK_JSON:' surface_chunk_production_benchmark.log | sed 's/^SURFACE_CHUNK_BENCHMARK_JSON://' > surface_chunk_production_benchmark.jsonl
+          grep -Fq '"chunk_content_scan_comparison"' surface_chunk_production_benchmark.jsonl
       - name: Upload reproducible benchmark output
         if: always()
         uses: actions/upload-artifact@v4
