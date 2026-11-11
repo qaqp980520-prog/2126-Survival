@@ -593,10 +593,11 @@ func _run_chunk_content_scan_comparison(controller: MineralChunkController) -> D
 	_expect(legacy_crops.size() == int(category_counts["crops"]), "collector benchmark discovers the expected crop-node count")
 	_expect(legacy_objects.size() == int(category_counts["world_objects"]), "collector benchmark discovers the expected stateful-object count")
 
+	var all_iterations_ok: bool = legacy_ok and combined_ok
 	for warmup_index in range(5):
 		legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
 		combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
-	var all_iterations_ok: bool = legacy_ok and combined_ok
+		all_iterations_ok = all_iterations_ok and legacy_ok and combined_ok
 	var legacy_samples_usec: Array[int] = []
 	var single_pass_samples_usec: Array[int] = []
 	for iteration in range(40):
