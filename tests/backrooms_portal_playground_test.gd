@@ -61,6 +61,8 @@ func _run_integration_test() -> void:
     _expect(_maze_edges_are_symmetric(world), "maze edge openings match from both adjacent cells")
     _expect(_maze_region_is_connected(world), "procedural maze region remains connected to the origin")
     _expect(_maze_streaming_cell_boundaries(world), "streaming cell selection changes at actual half-cell boundaries")
+    _expect(_window_wall_placement_contract_is_valid(world), "Level 1 windows choose a closed owned wall and sit flush with its inner face")
+    _expect(_window_geometry_specs_are_valid(world), "Level 1 Window render geometry matches the headless-testable pane and frame contract")
     _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
     _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
@@ -140,13 +142,20 @@ func _entity_visual_source_contract_is_present() -> bool:
         "\"duller\":",
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",
-        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")"
+        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")",
+        "if is_headless and entity_id != \"window\":",
+        "var wall_direction := _window_wall_direction_for_cell(cell)",
+        "_create_window_entity(cell_root, cell, wall_direction)",
+        "func _window_wall_direction_for_cell",
+        "func _window_entity_transform_for_wall",
+        "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
+        "window_root.set_meta(\"wall_direction\", wall_direction)",
+        "if DisplayServer.get_name() == \"headless\":"
     ]
     for token in required_tokens:
         if not source.contains(token):
             return false
     return true
-
 
 func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
     if DisplayServer.get_name() != "headless":
@@ -156,6 +165,63 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         return false
 
     var original_level := str(world.get("current_level"))
+    var window_cell := Vector2i.ZERO
+    var window_direction := Vector2i.ZERO
+    var open_candidate_cell := Vector2i.ZERO
+    var found_window_cell := false
+    var found_open_candidate := false
+    for z in range(-40, 41):
+        for x in range(-40, 41):
+            var candidate := Vector2i(x, z)
+            if not EntityDirector.get_cell_spawns("Level 1", candidate).has("window"):
+                continue
+            var direction: Vector2i = world.call("_window_wall_direction_for_cell", candidate)
+            if direction == Vector2i.ZERO and not found_open_candidate:
+                open_candidate_cell = candidate
+                found_open_candidate = true
+            elif direction != Vector2i.ZERO and not found_window_cell:
+                window_cell = candidate
+                window_direction = direction
+                found_window_cell = true
+            if found_window_cell and found_open_candidate:
+                break
+        if found_window_cell and found_open_candidate:
+            break
+
+    if not found_window_cell or not found_open_candidate:
+        world.set("current_level", original_level)
+        return false
+
+    world.set("current_level", "Level 1")
+    var window_cell_root := Node3D.new()
+    room.add_child(window_cell_root)
+    world.call("_spawn_level_entities_for_cell", window_cell_root, window_cell)
+    var window_root := window_cell_root.get_node_or_null("Entity_Window") as Node3D
+    var expected_transform: Transform3D = world.call("_window_entity_transform_for_wall", window_direction)
+    var window_valid := window_root != null
+    if window_valid:
+        window_valid = (
+            str(window_root.get_meta("backrooms_entity_id")) == "window"
+            and window_root.get_meta("spawn_cell") == window_cell
+            and window_root.get_meta("wall_direction") == window_direction
+            and window_root.transform.origin.is_equal_approx(expected_transform.origin)
+            and window_root.transform.basis.z.is_equal_approx(expected_transform.basis.z)
+            and not _contains_mesh_instance(window_cell_root)
+        )
+    window_cell_root.queue_free()
+    if not window_valid:
+        world.set("current_level", original_level)
+        return false
+
+    var open_cell_root := Node3D.new()
+    room.add_child(open_cell_root)
+    world.call("_spawn_level_entities_for_cell", open_cell_root, open_candidate_cell)
+    var unexpected_window := open_cell_root.get_node_or_null("Entity_Window") != null
+    open_cell_root.queue_free()
+    if unexpected_window:
+        world.set("current_level", original_level)
+        return false
+
     var checks := [
         {"level": "Level 4", "entity": "duller"},
         {"level": "Level 5", "entity": "deathmoth"}
@@ -191,7 +257,6 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
     world.set("current_level", original_level)
     return true
 
-
 func _contains_mesh_instance(node: Node) -> bool:
     if node is MeshInstance3D:
         return true
@@ -200,6 +265,153 @@ func _contains_mesh_instance(node: Node) -> bool:
             return true
     return false
 
+
+
+func _window_wall_placement_contract_is_valid(world: Node) -> bool:
+    var north := Vector2i(0, -1)
+    var west := Vector2i(-1, 0)
+    var saw_north := false
+    var saw_west := false
+    var sample_cells := 0
+    var candidate_count := 0
+    var placed_candidate_count := 0
+    var blocked_candidate_count := 0
+    var north_candidate_count := 0
+    var west_candidate_count := 0
+    for z in range(-40, 41):
+        for x in range(-40, 41):
+            sample_cells += 1
+            var cell := Vector2i(x, z)
+            var is_window_candidate: bool = EntityDirector.get_cell_spawns("Level 1", cell).has("window")
+            if is_window_candidate:
+                candidate_count += 1
+            var north_closed: bool = not bool(world.call("_edge_is_open", cell, north))
+            var west_closed: bool = not bool(world.call("_edge_is_open", cell, west))
+            var direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
+            var repeated_direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
+            if direction != repeated_direction:
+                return false
+            if direction == Vector2i.ZERO:
+                if north_closed or west_closed:
+                    return false
+                if is_window_candidate:
+                    blocked_candidate_count += 1
+                continue
+
+            var expected_position := Vector3.ZERO
+            var expected_yaw: float = 0.0
+            if direction == north and north_closed:
+                expected_position = Vector3(0.0, 1.85, -4.0 + 0.19)
+                saw_north = true
+            elif direction == west and west_closed:
+                expected_position = Vector3(-4.0 + 0.19, 1.85, 0.0)
+                expected_yaw = PI * 0.5
+                saw_west = true
+            else:
+                return false
+
+            var transform: Transform3D = world.call("_window_entity_transform_for_wall", direction)
+            if not transform.origin.is_equal_approx(expected_position):
+                return false
+            var expected_normal := Vector3(0.0, 0.0, 1.0).rotated(Vector3.UP, expected_yaw)
+            if not transform.basis.z.is_equal_approx(expected_normal):
+                return false
+
+            var frame_wall_edge: float = transform.origin.z - 0.08 if direction == north else transform.origin.x - 0.08
+            if not is_equal_approx(frame_wall_edge, -4.0 + 0.11):
+                return false
+            if is_window_candidate:
+                placed_candidate_count += 1
+                if direction == north:
+                    north_candidate_count += 1
+                else:
+                    west_candidate_count += 1
+
+    if sample_cells == 0 or candidate_count == 0:
+        return false
+    var candidate_rate: float = float(candidate_count) / float(sample_cells) * 100.0
+    var realized_rate: float = float(placed_candidate_count) / float(sample_cells) * 100.0
+    var candidate_realization: float = float(placed_candidate_count) / float(candidate_count) * 100.0
+    print("WINDOW_PLACEMENT_RATE sample=%d candidates=%d placed=%d blocked=%d candidate_rate=%.2f%% realized_rate=%.2f%% candidate_realization=%.2f%% north=%d west=%d" % [
+        sample_cells,
+        candidate_count,
+        placed_candidate_count,
+        blocked_candidate_count,
+        candidate_rate,
+        realized_rate,
+        candidate_realization,
+        north_candidate_count,
+        west_candidate_count
+    ])
+    return (
+        saw_north
+        and saw_west
+        and placed_candidate_count > 0
+        and placed_candidate_count + blocked_candidate_count == candidate_count
+    )
+
+
+func _window_geometry_specs_are_valid(world: Node) -> bool:
+    var specs: Array = world.call("_window_entity_geometry_specs")
+    if specs.size() != 5:
+        return false
+
+    var by_name: Dictionary = {}
+    for spec_value in specs:
+        if not (spec_value is Dictionary):
+            return false
+        var spec: Dictionary = spec_value
+        var part_name: String = str(spec.get("name", ""))
+        if part_name.is_empty() or by_name.has(part_name):
+            return false
+        var position_value: Variant = spec.get("position", null)
+        var size_value: Variant = spec.get("size", null)
+        if typeof(position_value) != TYPE_VECTOR3 or typeof(size_value) != TYPE_VECTOR3:
+            return false
+        var size: Vector3 = size_value
+        if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+            return false
+        var material_key: String = str(spec.get("material", ""))
+        if material_key != "frame" and material_key != "glass":
+            return false
+        by_name[part_name] = spec
+
+    if not by_name.has("DarkWindowPane") or not by_name.has("FrameTop") or not by_name.has("FrameBottom") or not by_name.has("FrameLeft") or not by_name.has("FrameRight"):
+        return false
+
+    var pane: Dictionary = by_name["DarkWindowPane"]
+    var top: Dictionary = by_name["FrameTop"]
+    var bottom: Dictionary = by_name["FrameBottom"]
+    var left: Dictionary = by_name["FrameLeft"]
+    var right: Dictionary = by_name["FrameRight"]
+    var pane_position: Vector3 = pane["position"]
+    var pane_size: Vector3 = pane["size"]
+    var top_position: Vector3 = top["position"]
+    var top_size: Vector3 = top["size"]
+    var bottom_position: Vector3 = bottom["position"]
+    var bottom_size: Vector3 = bottom["size"]
+    var left_position: Vector3 = left["position"]
+    var left_size: Vector3 = left["size"]
+    var right_position: Vector3 = right["position"]
+    var right_size: Vector3 = right["size"]
+
+    if str(pane["material"]) != "glass" or not pane_position.is_equal_approx(Vector3.ZERO):
+        return false
+    if not pane_size.is_equal_approx(Vector3(1.45, 1.45, 0.07)):
+        return false
+    if str(top["material"]) != "frame" or str(bottom["material"]) != "frame" or str(left["material"]) != "frame" or str(right["material"]) != "frame":
+        return false
+    if not top_position.is_equal_approx(Vector3(0.0, 0.78, 0.0)) or not bottom_position.is_equal_approx(Vector3(0.0, -0.78, 0.0)):
+        return false
+    if not left_position.is_equal_approx(Vector3(-0.78, 0.0, 0.0)) or not right_position.is_equal_approx(Vector3(0.78, 0.0, 0.0)):
+        return false
+    if not top_size.is_equal_approx(Vector3(1.65, 0.12, 0.16)) or not bottom_size.is_equal_approx(top_size):
+        return false
+    if not left_size.is_equal_approx(Vector3(0.12, 1.45, 0.16)) or not right_size.is_equal_approx(left_size):
+        return false
+    if pane_size.x >= top_size.x or pane_size.y >= (abs(top_position.y) + top_size.y * 0.5) * 2.0:
+        return false
+    return pane_size.z < top_size.z
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
