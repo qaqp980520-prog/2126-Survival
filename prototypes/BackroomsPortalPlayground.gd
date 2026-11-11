@@ -1,6 +1,7 @@
 extends Node3D
 
 const Director = preload("res://systems/BackroomsPortalDirector.gd")
+const EntityDirector = preload("res://systems/BackroomsEntityDirector.gd")
 const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
@@ -541,6 +542,85 @@ func _create_maze_cell(cell: Vector2i) -> void:
             _flicker_lights.append(ceiling_light)
             ceiling_light.light_energy = 1.45 if _high_graphics else 1.2
             ceiling_light.omni_range = 10.0 if _high_graphics else 8.5
+
+    _spawn_level_entities_for_cell(root, cell)
+
+func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
+    for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
+        match entity_id:
+            "window":
+                _create_window_entity(cell_root, cell)
+            "smiler":
+                _create_smiler_entity(cell_root, cell)
+
+func _create_window_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var window_root := Node3D.new()
+    window_root.name = "Entity_Window"
+    window_root.position = Vector3(0.0, 1.85, -CELL_SIZE * 0.5 + 0.34)
+    cell_root.add_child(window_root)
+
+    var frame_material := StandardMaterial3D.new()
+    frame_material.albedo_color = Color(0.18, 0.19, 0.17)
+    frame_material.roughness = 0.9
+    var glass_material := StandardMaterial3D.new()
+    glass_material.albedo_color = Color(0.008, 0.012, 0.014)
+    glass_material.roughness = 0.2
+    glass_material.metallic = 0.25
+    _add_entity_box(window_root, "DarkWindowPane", Vector3(0.0, 0.0, 0.0), Vector3(1.45, 1.45, 0.07), glass_material)
+    _add_entity_box(window_root, "FrameTop", Vector3(0.0, 0.78, 0.0), Vector3(1.65, 0.12, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, 0.16), frame_material)
+    window_root.set_meta("backrooms_entity_id", "window")
+    window_root.set_meta("spawn_cell", cell)
+
+func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var smiler_root := Node3D.new()
+    smiler_root.name = "Entity_Smiler"
+    var offset_x := float(posmod(_hash_value(cell.x, cell.y, 910), 5) - 2) * 0.72
+    var offset_z := float(posmod(_hash_value(cell.x, cell.y, 911), 5) - 2) * 0.72
+    smiler_root.position = Vector3(offset_x, 1.75, offset_z)
+    cell_root.add_child(smiler_root)
+
+    var darkness := StandardMaterial3D.new()
+    darkness.albedo_color = Color(0.002, 0.002, 0.004)
+    darkness.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    var silhouette := SphereMesh.new()
+    silhouette.radius = 0.48
+    silhouette.height = 0.96
+    var body := MeshInstance3D.new()
+    body.name = "DarkSilhouette"
+    body.mesh = silhouette
+    body.material_override = darkness
+    smiler_root.add_child(body)
+
+    var eye_material := StandardMaterial3D.new()
+    eye_material.albedo_color = Color(1.0, 0.93, 0.68)
+    eye_material.emission_enabled = true
+    eye_material.emission = Color(1.0, 0.82, 0.42)
+    eye_material.emission_energy_multiplier = 2.2
+    for eye_index in range(2):
+        var eye := MeshInstance3D.new()
+        eye.name = "Eye_%d" % eye_index
+        var eye_mesh := SphereMesh.new()
+        eye_mesh.radius = 0.055
+        eye_mesh.height = 0.11
+        eye.mesh = eye_mesh
+        eye.material_override = eye_material
+        eye.position = Vector3(-0.14 if eye_index == 0 else 0.14, 0.08, -0.43)
+        smiler_root.add_child(eye)
+    smiler_root.set_meta("backrooms_entity_id", "smiler")
+    smiler_root.set_meta("spawn_cell", cell)
+
+func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3, box_size: Vector3, material: Material) -> void:
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = node_name
+    var mesh := BoxMesh.new()
+    mesh.size = box_size
+    mesh_instance.mesh = mesh
+    mesh_instance.material_override = material
+    mesh_instance.position = local_position
+    parent.add_child(mesh_instance)
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
     var neighbor := cell + direction
