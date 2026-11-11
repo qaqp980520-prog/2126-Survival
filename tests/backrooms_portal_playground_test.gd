@@ -226,13 +226,13 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         return false
 
     var checks := [
-        {"level": "Level 1", "entity": "smiler", "node": "Entity_Smiler"},
-        {"level": "Level 2", "entity": "hound", "node": "Entity_Hound"},
-        {"level": "Level 2", "entity": "skin_stealer", "node": "Entity_SkinStealer"},
-        {"level": "Level 3", "entity": "clump", "node": "Entity_Clump"},
-        {"level": "Level 3", "entity": "faceling", "node": "Entity_Faceling"},
-        {"level": "Level 4", "entity": "duller", "node": "Entity_Duller"},
-        {"level": "Level 5", "entity": "deathmoth", "node": "Entity_Deathmoth"}
+        {"level": "Level 1", "entity": "smiler", "node": "Entity_Smiler", "salt_x": 910, "salt_z": 911, "height": 1.75, "scale": 0.72},
+        {"level": "Level 2", "entity": "hound", "node": "Entity_Hound", "salt_x": 1524, "salt_z": 1525, "height": 0.55, "scale": 0.55},
+        {"level": "Level 2", "entity": "skin_stealer", "node": "Entity_SkinStealer", "salt_x": 2033, "salt_z": 2034, "height": 0.0, "scale": 0.62},
+        {"level": "Level 3", "entity": "clump", "node": "Entity_Clump", "salt_x": 2710, "salt_z": 2711, "height": 0.42, "scale": 0.58},
+        {"level": "Level 3", "entity": "faceling", "node": "Entity_Faceling", "salt_x": 3184, "salt_z": 3185, "height": 0.0, "scale": 0.62},
+        {"level": "Level 4", "entity": "duller", "node": "Entity_Duller", "salt_x": 3652, "salt_z": 3653, "height": 0.0, "scale": 0.62},
+        {"level": "Level 5", "entity": "deathmoth", "node": "Entity_Deathmoth", "salt_x": 4188, "salt_z": 4189, "height": 1.55, "scale": 0.62}
     ]
     for check in checks:
         var level_name: String = str(check["level"])
@@ -258,11 +258,16 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         room.add_child(cell_root)
         world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
         var entity_root := cell_root.get_node_or_null(node_name) as Node3D
+        var expected_scale: float = float(check["scale"])
+        var expected_x: float = float(posmod(int(world.call("_hash_value", found_cell.x, found_cell.y, int(check["salt_x"]))), 5) - 2) * expected_scale
+        var expected_z: float = float(posmod(int(world.call("_hash_value", found_cell.x, found_cell.y, int(check["salt_z"]))), 5) - 2) * expected_scale
+        var expected_position := Vector3(expected_x, float(check["height"]), expected_z)
         var entity_valid := entity_root != null
         if entity_valid:
             entity_valid = (
                 str(entity_root.get_meta("backrooms_entity_id", "")) == entity_id
                 and entity_root.get_meta("spawn_cell", Vector2i(-999, -999)) == found_cell
+                and entity_root.position.is_equal_approx(expected_position)
                 and not _contains_mesh_instance(cell_root)
             )
         cell_root.queue_free()
