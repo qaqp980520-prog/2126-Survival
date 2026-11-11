@@ -602,18 +602,20 @@ func _run_chunk_content_scan_comparison(controller: MineralChunkController) -> D
 	for iteration in range(40):
 		var legacy_elapsed_usec: int = 0
 		var single_pass_elapsed_usec: int = 0
+		var legacy_started_usec: int = 0
+		var single_pass_started_usec: int = 0
 		if iteration % 2 == 0:
-			var legacy_started_usec: int = Time.get_ticks_usec()
+			legacy_started_usec = Time.get_ticks_usec()
 			legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
 			legacy_elapsed_usec = maxi(0, Time.get_ticks_usec() - legacy_started_usec)
-			var single_pass_started_usec: int = Time.get_ticks_usec()
+			single_pass_started_usec = Time.get_ticks_usec()
 			combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
 			single_pass_elapsed_usec = maxi(0, Time.get_ticks_usec() - single_pass_started_usec)
 		else:
-			var single_pass_started_usec: int = Time.get_ticks_usec()
+			single_pass_started_usec = Time.get_ticks_usec()
 			combined_ok = _run_single_pass_chunk_content_collector(controller, chunk_root)
 			single_pass_elapsed_usec = maxi(0, Time.get_ticks_usec() - single_pass_started_usec)
-			var legacy_started_usec: int = Time.get_ticks_usec()
+			legacy_started_usec = Time.get_ticks_usec()
 			legacy_ok = _run_legacy_chunk_content_collectors(controller, chunk_root)
 			legacy_elapsed_usec = maxi(0, Time.get_ticks_usec() - legacy_started_usec)
 		legacy_samples_usec.append(legacy_elapsed_usec)
