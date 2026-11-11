@@ -22,6 +22,8 @@ func _initialize() -> void:
 func _run_tests() -> void:
 	await _test_single_pass_chunk_content_collection()
 	await process_frame
+	await _test_single_pass_invalid_category_paths()
+	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
 	await _test_empty_chunk_and_duplicate_id()
@@ -103,6 +105,56 @@ func _test_single_pass_chunk_content_collection() -> void:
 		invalid_objects
 	)), "Single-pass collection preserves invalid stable-path rejection")
 	chunk.free()
+	controller.free()
+
+
+func _test_single_pass_invalid_category_paths() -> void:
+	var controller: Node3D = Controller.new()
+
+	var mineral_root := Node3D.new()
+	mineral_root.name = "ChunkRoot"
+	var mineral: Node3D = MiningNode.new()
+	mineral.name = "Mineral"
+	mineral_root.add_child(mineral)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		mineral_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid mineral-path rejection")
+	mineral_root.free()
+
+	var crop_root := Node3D.new()
+	crop_root.name = "ChunkRoot"
+	var crop: Node3D = CropPlot.new()
+	crop.name = "Crop"
+	crop_root.add_child(crop)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		crop_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid crop-path rejection")
+	crop_root.free()
+
+	var object_root := Node3D.new()
+	object_root.name = "ChunkRoot"
+	var stateful_object: Node3D = StatefulProp.new()
+	stateful_object.name = "StatefulObject"
+	object_root.add_child(stateful_object)
+	assert(not bool(controller.call(
+		"_collect_chunk_content_nodes",
+		object_root,
+		" ChunkRoot",
+		{},
+		{},
+		{}
+	)), "Single-pass collection preserves invalid world-object-path rejection")
+	object_root.free()
 	controller.free()
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
