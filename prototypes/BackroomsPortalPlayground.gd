@@ -554,6 +554,14 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
                     _create_window_entity(cell_root, cell)
             "smiler":
                 _create_smiler_entity(cell_root, cell)
+            "hound":
+                _create_hound_entity(cell_root, cell)
+            "skin_stealer":
+                _create_skin_stealer_entity(cell_root, cell)
+            "clump":
+                _create_clump_entity(cell_root, cell)
+            "faceling":
+                _create_faceling_entity(cell_root, cell)
 
 func _create_window_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var window_root := Node3D.new()
@@ -613,6 +621,107 @@ func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
         smiler_root.add_child(eye)
     smiler_root.set_meta("backrooms_entity_id", "smiler")
     smiler_root.set_meta("spawn_cell", cell)
+
+
+func _create_hound_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_Hound"
+    root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 1524), 5) - 2) * 0.55, 0.55, float(posmod(_hash_value(cell.x, cell.y, 1525), 5) - 2) * 0.55)
+    cell_root.add_child(root)
+    var hide := StandardMaterial3D.new()
+    hide.albedo_color = Color(0.055, 0.035, 0.03)
+    var eye := StandardMaterial3D.new()
+    eye.albedo_color = Color(0.9, 0.18, 0.08)
+    eye.emission_enabled = true
+    eye.emission = Color(0.8, 0.08, 0.02)
+    eye.emission_energy_multiplier = 1.2
+    _add_entity_box(root, "Body", Vector3(0.0, 0.0, 0.0), Vector3(0.95, 0.42, 0.48), hide)
+    _add_entity_box(root, "Head", Vector3(0.0, 0.16, -0.38), Vector3(0.42, 0.38, 0.36), hide)
+    for x_offset in [-0.32, 0.32]:
+        for z_offset in [-0.16, 0.16]:
+            _add_entity_box(root, "Leg", Vector3(x_offset, -0.25, z_offset), Vector3(0.14, 0.5, 0.14), hide)
+    for x_offset in [-0.12, 0.12]:
+        var eye_mesh := MeshInstance3D.new()
+        eye_mesh.name = "Eye"
+        var sphere := SphereMesh.new()
+        sphere.radius = 0.045
+        sphere.height = 0.09
+        eye_mesh.mesh = sphere
+        eye_mesh.material_override = eye
+        eye_mesh.position = Vector3(x_offset, 0.24, -0.57)
+        root.add_child(eye_mesh)
+    root.set_meta("backrooms_entity_id", "hound")
+    root.set_meta("spawn_cell", cell)
+
+func _create_skin_stealer_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_SkinStealer"
+    root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2033), 5) - 2) * 0.62, 0.0, float(posmod(_hash_value(cell.x, cell.y, 2034), 5) - 2) * 0.62)
+    cell_root.add_child(root)
+    var material := StandardMaterial3D.new()
+    material.albedo_color = Color(0.28, 0.19, 0.16)
+    material.roughness = 0.95
+    _add_entity_box(root, "Torso", Vector3(0.0, 1.05, 0.0), Vector3(0.48, 0.9, 0.28), material)
+    var head := SphereMesh.new()
+    head.radius = 0.2
+    head.height = 0.4
+    var head_node := MeshInstance3D.new()
+    head_node.name = "Head"
+    head_node.mesh = head
+    head_node.material_override = material
+    head_node.position = Vector3(0.0, 1.68, 0.0)
+    root.add_child(head_node)
+    for x_offset in [-0.32, 0.32]:
+        _add_entity_box(root, "Arm", Vector3(x_offset, 1.05, 0.0), Vector3(0.16, 0.82, 0.2), material)
+        _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.34, 0.0), Vector3(0.18, 0.68, 0.22), material)
+    root.set_meta("backrooms_entity_id", "skin_stealer")
+    root.set_meta("spawn_cell", cell)
+
+func _create_clump_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_Clump"
+    root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 1.0, float(posmod(_hash_value(cell.x, cell.y, 2711), 5) - 2) * 0.58)
+    cell_root.add_child(root)
+    var material := StandardMaterial3D.new()
+    material.albedo_color = Color(0.018, 0.014, 0.012)
+    material.roughness = 1.0
+    for i in range(7):
+        var part := MeshInstance3D.new()
+        part.name = "Mass_%d" % i
+        var sphere := SphereMesh.new()
+        sphere.radius = 0.28 + float(i % 3) * 0.07
+        sphere.height = sphere.radius * 2.0
+        part.mesh = sphere
+        part.material_override = material
+        var angle := float(i) * TAU / 7.0
+        part.position = Vector3(cos(angle) * 0.28, float(i % 2) * 0.24, sin(angle) * 0.28)
+        root.add_child(part)
+    root.set_meta("backrooms_entity_id", "clump")
+    root.set_meta("spawn_cell", cell)
+
+func _create_faceling_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_Faceling"
+    root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 3184), 5) - 2) * 0.62, 0.0, float(posmod(_hash_value(cell.x, cell.y, 3185), 5) - 2) * 0.62)
+    cell_root.add_child(root)
+    var material := StandardMaterial3D.new()
+    material.albedo_color = Color(0.62, 0.57, 0.48)
+    material.roughness = 0.92
+    _add_entity_box(root, "Torso", Vector3(0.0, 1.0, 0.0), Vector3(0.42, 0.82, 0.25), material)
+    var head := MeshInstance3D.new()
+    head.name = "FeaturelessHead"
+    var sphere := SphereMesh.new()
+    sphere.radius = 0.2
+    sphere.height = 0.4
+    head.mesh = sphere
+    head.material_override = material
+    head.position = Vector3(0.0, 1.62, 0.0)
+    root.add_child(head)
+    for x_offset in [-0.29, 0.29]:
+        _add_entity_box(root, "Arm", Vector3(x_offset, 1.02, 0.0), Vector3(0.14, 0.72, 0.18), material)
+        _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.35, 0.0), Vector3(0.16, 0.68, 0.2), material)
+    root.set_meta("backrooms_entity_id", "faceling")
+    root.set_meta("spawn_cell", cell)
 
 func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3, box_size: Vector3, material: Material) -> void:
     var mesh_instance := MeshInstance3D.new()
