@@ -31,6 +31,7 @@ class CountingController extends "res://systems/MineralChunkController.gd":
 	var loaded_patch_collection_calls: int = 0
 	var index_patch_map_calls: int = 0
 	var last_collected_patch_count: int = -1
+	var fail_next_index_patch_map_read: bool = false
 
 	func _collect_loaded_terrain_patches(excluded_chunk_id: String = "") -> Array[Node3D]:
 		loaded_patch_collection_calls += 1
@@ -40,6 +41,9 @@ class CountingController extends "res://systems/MineralChunkController.gd":
 
 	func _read_terrain_index_patch_map_for_batch() -> Dictionary:
 		index_patch_map_calls += 1
+		if fail_next_index_patch_map_read:
+			fail_next_index_patch_map_read = false
+			return {"ok": false, "error": "injected_temporary_snapshot_failure"}
 		return super._read_terrain_index_patch_map_for_batch()
 
 func _initialize() -> void:
@@ -55,6 +59,8 @@ func _run_tests() -> void:
 	await _test_batch_reuses_original_index_patch_snapshot()
 	await process_frame
 	await _test_batch_index_snapshot_retries_transient_failure()
+	await process_frame
+	await _test_batch_removal_falls_back_after_snapshot_failure()
 	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
@@ -326,6 +332,52 @@ func _test_batch_index_snapshot_retries_transient_failure() -> void:
 
 	patch.free()
 	controller.free()
+
+
+func _test_batch_removal_falls_back_after_snapshot_failure() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var controller: CountingController = CountingController.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var chunk_id := "earth/snapshot-failure-removal"
+	var chunk := Node3D.new()
+	chunk.name = "SnapshotFailureChunk"
+	var patch: Node3D = TerrainPatch.new()
+	patch.name = "TerrainPatch"
+	chunk.add_child(patch)
+	assert(controller.load_chunk(chunk_id, chunk, now), "Initial Chunk registers through the authoritative full Binder")
+	assert(controller.get_terrain_adjacency_index_patch_count() == 1, "Initial Patch is committed to the Index")
+
+	assert(controller.begin_terrain_adjacency_batch(), "Removal batch begins")
+	controller.fail_next_index_patch_map_read = true
+	assert(controller.unload_chunk(chunk_id, now), "Existing Chunk enters pending retirement despite a transient snapshot-read failure")
+	assert(controller.index_patch_map_calls == 1, "The removal attempts exactly one baseline read")
+	assert(
+		bool(controller.get("_terrain_adjacency_batch_requires_full_rebind")),
+		"A failed baseline read marks the whole batch for authoritative reconciliation"
+	)
+
+	var result: Dictionary = controller.end_terrain_adjacency_batch()
+	assert(bool(result.get("ok", false)), "The full Binder fallback safely commits the removal")
+	assert(
+		str(result.get("incremental_fallback_reason", "")) == "batch_index_snapshot_unavailable",
+		"The result reports why incremental delta classification was bypassed"
+	)
+	assert(controller.get_terrain_adjacency_index_patch_count() == 0, "The removed Patch is absent from the committed Index")
+	assert(not controller.is_chunk_loaded(chunk_id), "The retired Chunk root is released only after the full rebind succeeds")
+	assert(not controller.has_pending_terrain_adjacency_recovery(), "A successful full rebind leaves no pending recovery")
+	assert(
+		not bool(controller.get("_terrain_adjacency_batch_requires_full_rebind")),
+		"The batch fallback marker is cleared after successful finalization"
+	)
+
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
 
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
