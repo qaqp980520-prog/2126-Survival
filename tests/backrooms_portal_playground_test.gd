@@ -1,7 +1,8 @@
 extends SceneTree
 
 const PlaygroundScene = preload("res://prototypes/BackroomsPortalPlayground.tscn")
-const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3"]
+const EntityDirector = preload("res://systems/BackroomsEntityDirector.gd")
+const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]
 
 var failures: Array[String] = []
 var watchdog: Timer
@@ -49,7 +50,8 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
-    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-5 list")
+    _expect(_level_entity_visuals_are_created(world), "Level 3, Level 4 and Level 5 entity prototypes instantiate")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
@@ -111,6 +113,51 @@ func _run_integration_test() -> void:
         watchdog.queue_free()
     await process_frame
     quit(exit_code)
+
+func _level_entity_visuals_are_created(world: Node) -> bool:
+    var original_level := str(world.get("current_level"))
+    var checks := [
+        {"level": "Level 3", "entity": "clump"},
+        {"level": "Level 4", "entity": "duller"},
+        {"level": "Level 5", "entity": "deathmoth"}
+    ]
+    for check in checks:
+        var level_name: String = str(check["level"])
+        var entity_id: String = str(check["entity"])
+        var found_cell := Vector2i.ZERO
+        var found := false
+        for z in range(-40, 41):
+            for x in range(-40, 41):
+                var candidate := Vector2i(x, z)
+                if EntityDirector.get_cell_spawns(level_name, candidate).has(entity_id):
+                    found_cell = candidate
+                    found = true
+                    break
+            if found:
+                break
+        if not found:
+            world.set("current_level", original_level)
+            return false
+        world.set("current_level", level_name)
+        var cell_root := Node3D.new()
+        world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
+        var matched: Node3D
+        for child in cell_root.get_children():
+            var entity_node := child as Node3D
+            if entity_node != null and str(entity_node.get_meta("backrooms_entity_id", "")) == entity_id:
+                matched = entity_node
+                break
+        var valid := matched != null
+        if matched != null and entity_id == "clump":
+            valid = is_equal_approx(matched.position.y, 0.42)
+        elif matched != null and entity_id == "deathmoth":
+            valid = matched.get_child_count() >= 10
+        cell_root.free()
+        if not valid:
+            world.set("current_level", original_level)
+            return false
+    world.set("current_level", original_level)
+    return true
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
