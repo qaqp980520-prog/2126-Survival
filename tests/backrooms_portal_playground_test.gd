@@ -136,7 +136,7 @@ func _entity_visual_source_contract_is_present() -> bool:
     var required_tokens: Array[String] = [
         "func _create_duller_entity",
         "func _create_deathmoth_entity",
-        "root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 0.42,"
+        "root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 0.42,",
         "\"duller\":",
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",
