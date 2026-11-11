@@ -19,6 +19,7 @@ class FakeCornerManager extends Node3D:
 
 class CountingController extends "res://systems/MineralChunkController.gd":
 	var loaded_patch_collection_calls: int = 0
+	var index_patch_map_calls: int = 0
 	var last_collected_patch_count: int = -1
 
 	func _collect_loaded_terrain_patches(excluded_chunk_id: String = "") -> Array[Node3D]:
@@ -26,6 +27,10 @@ class CountingController extends "res://systems/MineralChunkController.gd":
 		var patches: Array[Node3D] = super._collect_loaded_terrain_patches(excluded_chunk_id)
 		last_collected_patch_count = patches.size()
 		return patches
+
+	func _get_terrain_index_patch_map() -> Dictionary:
+		index_patch_map_calls += 1
+		return super._get_terrain_index_patch_map()
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -36,6 +41,8 @@ func _run_tests() -> void:
 	await _test_single_pass_invalid_category_paths()
 	await process_frame
 	await _test_batch_load_skips_redundant_patch_collection()
+	await process_frame
+	await _test_batch_reuses_original_index_patch_snapshot()
 	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
@@ -223,6 +230,62 @@ func _test_batch_load_skips_redundant_patch_collection() -> void:
 		controller.last_collected_patch_count == 2,
 		"Non-batched registration still collects the two previously loaded patches"
 	)
+
+	controller.queue_free()
+	registry.queue_free()
+	object_registry.queue_free()
+	await process_frame
+
+
+func _test_batch_reuses_original_index_patch_snapshot() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: CountingController = CountingController.new()
+	root.add_child(registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	assert(controller.bind_object_state_registry(object_registry))
+	assert(bool(controller.call("_ensure_terrain_adjacency_runtime")), "Incremental Index runtime initializes before the batch")
+	assert(controller.index_patch_map_calls == 0, "Runtime initialization does not copy the Index patch map")
+	assert(controller.begin_terrain_adjacency_batch())
+
+	for index in range(2):
+		var chunk := Node3D.new()
+		chunk.name = "SnapshotChunk_%d" % index
+		var patch: Node3D = TerrainPatch.new()
+		patch.name = "TerrainPatch"
+		patch.position.x = float(index) * 100.0
+		chunk.add_child(patch)
+		assert(controller.load_chunk("earth/batch-snapshot-%d" % index, chunk, now))
+		assert(
+			controller.index_patch_map_calls == 1,
+			"Every Chunk addition in one batch reuses the single original Index snapshot"
+		)
+
+	var first_batch_result: Dictionary = controller.end_terrain_adjacency_batch()
+	assert(bool(first_batch_result.get("ok", false)), "Initial batch commits with the cached baseline")
+	assert(controller.get_terrain_adjacency_index_patch_count() == 2, "Both added Patches are committed to the Index")
+	assert(controller.index_patch_map_calls == 1, "Finalization does not recopy the original batch baseline")
+
+	assert(controller.begin_terrain_adjacency_batch(), "A second batch can start after successful finalization")
+	assert(controller.unload_chunk("earth/batch-snapshot-0", now), "Existing Chunk enters pending retirement")
+	assert(
+		controller.index_patch_map_calls == 2,
+		"The first removal lazily captures one original Index snapshot for the new batch"
+	)
+	assert(controller.cancel_pending_chunk_unload("earth/batch-snapshot-0", now), "Pending retirement can be restored before commit")
+	assert(
+		controller.index_patch_map_calls == 2,
+		"Removal and restore operations reuse the same original Index snapshot"
+	)
+	var restored_batch_result: Dictionary = controller.end_terrain_adjacency_batch()
+	assert(bool(restored_batch_result.get("ok", false)), "A removal followed by restore finalizes as a no-op")
+	assert(controller.index_patch_map_calls == 2, "The second batch uses exactly one Index snapshot")
+	assert(controller.get_terrain_adjacency_index_patch_count() == 2, "No-op restoration preserves both committed Patches")
+	assert(controller.is_chunk_loaded("earth/batch-snapshot-0"), "Restored Chunk root remains registered")
 
 	controller.queue_free()
 	registry.queue_free()
