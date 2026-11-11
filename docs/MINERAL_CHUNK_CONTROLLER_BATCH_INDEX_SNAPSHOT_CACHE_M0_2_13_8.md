@@ -11,7 +11,7 @@ That helper asks the persistent Index for its Stable-ID → Patch map and duplic
 In systems/MineralChunkController.gd:
 
 - Add a lazy, batch-scoped original Patch-map snapshot and a captured flag. A missing Index or a failed snapshot read is not cached; a failed read can be retried by the next delta event.
-- Add _read_terrain_index_patch_map_for_batch() as a small status-returning read seam, then _get_terrain_adjacency_batch_original_patch_map(); the first successful add/remove/restore delta captures the current Index map, and later delta records reuse the same Dictionary.
+- Add _read_terrain_index_patch_map_for_batch() as a small status-returning read seam, then _get_terrain_adjacency_batch_original_patch_map(); the first successful add/remove/restore delta captures the current Index map, and later delta records reuse the same Dictionary. SurfaceTerrainAdjacencyIndex.get_patches_by_stable_id() already resolves WeakRefs into a fresh Dictionary, so the Controller retains that detached map directly without a second O(P) duplicate.
 - Route all three delta-recording methods through the shared baseline helper.
 - Clear the cached baseline together with the batch delta maps in _clear_terrain_adjacency_batch_delta().
 - Keep the cache lazy: an empty batch or a batch that only records in-place dirty IDs does not copy the Index map. The first successful Index read is the only event that marks the baseline captured.
