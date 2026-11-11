@@ -574,6 +574,7 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
                 _create_duller_entity(cell_root, cell)
             "deathmoth":
                 _create_deathmoth_entity(cell_root, cell)
+
 func _window_wall_direction_for_cell(cell: Vector2i) -> Vector2i:
     # This cell owns its north and west boundary walls. Selecting only these
     # edges avoids depending on a neighboring streamed cell to provide the wall.
@@ -630,6 +631,7 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Ve
     _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
+
 func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var smiler_root := Node3D.new()
     smiler_root.name = "Entity_Smiler"
