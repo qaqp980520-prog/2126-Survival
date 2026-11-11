@@ -47,7 +47,7 @@ The existing direct transient-read retry test remains in place to verify that a 
 - `MineralChunkController.gd`
 - `SurfaceTerrainAdjacencyIndex.gd`
 - Existing `SurfaceTerrainAdjacencyBinder.gd`, `SurfaceTerrainAdjacencyCoordinator.gd`, and `SurfaceTerrainTransitionColliderManager.gd`.
-- Existing Mineral Chunk lifecycle adapter and vein registry.
+- Existing Mineral Chunk lifecycle adapter, vein registry, and WorldObjectStateRegistry (required by the stateful SurfaceTerrainPatch test fixture).
 
 No external packages, autoloads, project settings, scene wiring, save-schema changes, or new runtime assets. Open the repository root or run the existing headless validation workflow; the root import step uses the existing deterministic Godot `--import` barrier.
 
