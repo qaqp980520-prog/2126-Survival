@@ -17,6 +17,16 @@ class FakeCornerManager extends Node3D:
 	func get_blocked_corner_reports() -> Array[Dictionary]:
 		return reports.duplicate(true)
 
+class RetryablePatchMapIndex extends RefCounted:
+	var calls: int = 0
+	var patches_by_stable_id: Dictionary = {}
+
+	func get_patches_by_stable_id() -> Dictionary:
+		calls += 1
+		if calls == 1:
+			return {"ok": false, "error": "temporary_snapshot_unavailable"}
+		return {"ok": true, "patches_by_stable_id": patches_by_stable_id.duplicate()}
+
 class CountingController extends "res://systems/MineralChunkController.gd":
 	var loaded_patch_collection_calls: int = 0
 	var index_patch_map_calls: int = 0
@@ -43,6 +53,8 @@ func _run_tests() -> void:
 	await _test_batch_load_skips_redundant_patch_collection()
 	await process_frame
 	await _test_batch_reuses_original_index_patch_snapshot()
+	await process_frame
+	await _test_batch_index_snapshot_retries_transient_failure()
 	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
@@ -291,6 +303,29 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 	registry.queue_free()
 	object_registry.queue_free()
 	await process_frame
+
+
+func _test_batch_index_snapshot_retries_transient_failure() -> void:
+	var controller: Node3D = Controller.new()
+	var index := RetryablePatchMapIndex.new()
+	var patch := Node3D.new()
+	index.patches_by_stable_id = {"existing/patch": patch}
+	controller.set("_terrain_adjacency_index", index)
+
+	var first_snapshot: Dictionary = controller.call("_get_terrain_adjacency_batch_original_patch_map")
+	assert(first_snapshot.is_empty(), "A temporarily unavailable Index snapshot is not accepted as the batch baseline")
+	assert(
+		not bool(controller.get("_terrain_adjacency_batch_original_patch_map_captured")),
+		"A failed Index read must not mark the batch baseline as captured"
+	)
+	var second_snapshot: Dictionary = controller.call("_get_terrain_adjacency_batch_original_patch_map")
+	assert(second_snapshot.has("existing/patch"), "The next delta can retry and capture the recovered Index snapshot")
+	assert(index.calls == 2, "The transiently failed snapshot is retried exactly once")
+	var third_snapshot: Dictionary = controller.call("_get_terrain_adjacency_batch_original_patch_map")
+	assert(third_snapshot.has("existing/patch") and index.calls == 2, "A successful snapshot is reused without another Index read")
+
+	patch.free()
+	controller.free()
 
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
