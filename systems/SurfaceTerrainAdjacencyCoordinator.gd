@@ -56,7 +56,9 @@ func has_pending_transaction() -> bool:
 func execute_delta(
 	remove_stable_ids: Array,
 	additions: Array,
-	profile_enabled: bool = false
+	profile_enabled: bool = false,
+	old_patches_snapshot: Dictionary = {},
+	old_patches_snapshot_generation: int = -1
 ) -> Dictionary:
 	if has_pending_transaction():
 		return {"ok": false, "error": "coordinator_transaction_in_progress", "pending": _pending.get("stage", "")}
@@ -73,6 +75,17 @@ func execute_delta(
 	var plan_id: String = str(summary.get("plan_id", ""))
 	if plan_id.is_empty():
 		return {"ok": false, "error": "index_plan_id_missing"}
+	var use_batch_snapshot: bool = old_patches_snapshot_generation >= 0
+	if use_batch_snapshot and int(summary.get("base_generation", -1)) != old_patches_snapshot_generation:
+		var stale_snapshot_cleanup: Dictionary = _abort_index_or_retain(plan_id, "batch_index_snapshot_generation_mismatch")
+		if not bool(stale_snapshot_cleanup.get("ok", false)):
+			return stale_snapshot_cleanup
+		return {
+			"ok": false,
+			"error": "batch_index_snapshot_generation_mismatch",
+			"snapshot_generation": old_patches_snapshot_generation,
+			"plan_generation": int(summary.get("base_generation", -1))
+		}
 	var reservation: Dictionary = _index.call("reserve_delta", plan_id)
 	if not bool(reservation.get("ok", false)):
 		var reservation_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_generation_reservation_failed")
@@ -80,11 +93,13 @@ func execute_delta(
 			return reservation_cleanup
 		return {"ok": false, "error": "index_generation_reservation_failed:" + str(reservation.get("error", "unknown"))}
 
-	var old_patch_result: Dictionary = _index.call("get_patches_by_stable_id")
+	var old_patch_result: Dictionary = {}
+	if not use_batch_snapshot:
+		old_patch_result = _index.call("get_patches_by_stable_id")
 	var candidate_patch_result: Dictionary = _index.call("get_plan_patches_by_stable_id", plan_id)
 	var candidate_descriptor_result: Dictionary = _index.call("get_plan_edge_descriptors", plan_id)
 	if (
-		not bool(old_patch_result.get("ok", false))
+		(not use_batch_snapshot and not bool(old_patch_result.get("ok", false)))
 		or not bool(candidate_patch_result.get("ok", false))
 		or not bool(candidate_descriptor_result.get("ok", false))
 	):
@@ -93,7 +108,9 @@ func execute_delta(
 			return snapshot_cleanup
 		return {"ok": false, "error": "index_candidate_snapshot_unavailable"}
 
-	var old_patches: Dictionary = old_patch_result.get("patches_by_stable_id", {})
+	# Controller batches pass the exact immutable pre-delta map used to classify
+	# additions/removals. Direct Coordinator callers retain the safe Index read path.
+	var old_patches: Dictionary = old_patches_snapshot if use_batch_snapshot else old_patch_result.get("patches_by_stable_id", {})
 	var candidate_patches: Dictionary = candidate_patch_result.get("patches_by_stable_id", {})
 	var candidate_descriptors: Dictionary = candidate_descriptor_result.get("descriptors", {})
 	var old_closure_descriptors: Dictionary = summary.get("old_closure_descriptors", {})

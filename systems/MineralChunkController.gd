@@ -35,6 +35,7 @@ var _terrain_adjacency_batch_added_patches: Dictionary = {}
 var _terrain_adjacency_batch_removed_ids: Dictionary = {}
 var _terrain_adjacency_batch_original_patch_map: Dictionary = {}
 var _terrain_adjacency_batch_original_patch_map_captured: bool = false
+var _terrain_adjacency_batch_original_patch_map_generation: int = -1
 var _terrain_adjacency_batch_requires_full_rebind: bool = false
 var _terrain_adjacency_batch_dirty_ids: Dictionary = {}
 var _terrain_adjacency_rebuild_count: int = 0
@@ -891,10 +892,16 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 		return {"ok": false, "error": "in_place_patch_edit_requires_full_rebind"}
 	if not _ensure_terrain_adjacency_runtime():
 		return {"ok": false, "error": "incremental_adjacency_runtime_unavailable"}
-	var old_result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
-	if not bool(old_result.get("ok", false)):
+	# Add/remove/restore recorders capture the immutable batch baseline lazily.
+	# Reuse it here instead of resolving every Index WeakRef into another O(P) map.
+	# If no recorder needed a baseline, this call captures it once for finalization.
+	var old_patches: Dictionary = _get_terrain_adjacency_batch_original_patch_map()
+	if not _terrain_adjacency_batch_original_patch_map_captured:
 		return {"ok": false, "error": "incremental_index_snapshot_unavailable"}
-	var old_patches: Dictionary = old_result.get("patches_by_stable_id", {})
+	var baseline_generation: int = _terrain_adjacency_batch_original_patch_map_generation
+	if baseline_generation < 0 or baseline_generation != int(_terrain_adjacency_index.get_generation()):
+		_terrain_adjacency_batch_requires_full_rebind = true
+		return {"ok": false, "error": "incremental_index_generation_changed_during_batch"}
 	var remove_set: Dictionary = {}
 	var additions_by_id: Dictionary = _terrain_adjacency_batch_added_patches.duplicate()
 	for stable_id_value in _terrain_adjacency_batch_removed_ids.keys():
@@ -931,7 +938,9 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 	var result: Dictionary = _terrain_adjacency_coordinator.execute_delta(
 		remove_ids,
 		additions,
-		_terrain_adjacency_profiling_enabled
+		_terrain_adjacency_profiling_enabled,
+		old_patches,
+		baseline_generation
 	)
 	if _terrain_adjacency_profiling_enabled:
 		var elapsed_usec: int = Time.get_ticks_usec() - started_usec
@@ -1023,6 +1032,7 @@ func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
 		# get_patches_by_stable_id() resolves WeakRefs into a fresh Dictionary.
 		# Retain that detached map directly instead of making a second O(P) copy.
 		_terrain_adjacency_batch_original_patch_map = patches_value
+		_terrain_adjacency_batch_original_patch_map_generation = int(_terrain_adjacency_index.get_generation())
 		_terrain_adjacency_batch_original_patch_map_captured = true
 	return _terrain_adjacency_batch_original_patch_map
 
@@ -1117,6 +1127,7 @@ func _clear_terrain_adjacency_batch_delta() -> void:
 	_terrain_adjacency_batch_dirty_ids.clear()
 	_terrain_adjacency_batch_original_patch_map.clear()
 	_terrain_adjacency_batch_original_patch_map_captured = false
+	_terrain_adjacency_batch_original_patch_map_generation = -1
 	_terrain_adjacency_batch_requires_full_rebind = false
 
 

@@ -46,6 +46,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _test_successful_three_participant_publish()
+	await _test_stale_batch_snapshot_generation_is_rejected()
 	await _test_collider_commit_failure_rolls_back_all_participants()
 	await _test_collider_abort_failure_retains_all_participants_for_retry()
 	await _test_finalize_retry_keeps_published_generation_reserved()
@@ -81,6 +82,33 @@ func _test_successful_three_participant_publish() -> void:
 	await process_frame
 	await process_frame
 	_expect(not is_instance_valid(fixture["old_body"]), "old Collider body is released only after the transaction succeeds")
+	await _release_fixture(fixture)
+
+
+func _test_stale_batch_snapshot_generation_is_rejected() -> void:
+	var fixture: Dictionary = await _make_fixture(false, false)
+	if fixture.is_empty():
+		return
+	var holder: Node3D = fixture["holder"]
+	var replacement: Node3D = _new_patch(holder, "ReplacementBStaleSnapshot", Vector3(2.0, 0.0, 0.0), 1)
+	await process_frame
+	var snapshot_result: Dictionary = fixture["index"].call("get_patches_by_stable_id")
+	_expect(bool(snapshot_result.get("ok", false)), "test captures a valid detached pre-delta Index snapshot")
+	var snapshot_generation: int = int(fixture["index"].call("get_generation"))
+	var result: Dictionary = fixture["coordinator"].execute_delta(
+		["patch/b"],
+		[{"stable_id": "patch/b", "patch": replacement}],
+		false,
+		snapshot_result.get("patches_by_stable_id", {}),
+		snapshot_generation - 1
+	)
+	_expect(not bool(result.get("ok", true)), "Coordinator rejects a stale batch snapshot before reserving or publishing")
+	_expect(str(result.get("error", "")) == "batch_index_snapshot_generation_mismatch", "stale snapshot rejection reports the generation mismatch")
+	_expect(fixture["index"].call("get_patch", "patch/b") == fixture["b"], "stale snapshot rejection preserves the original Index mapping")
+	_expect(fixture["a"].call("get_bound_neighbor_patch", "east") == fixture["b"], "stale snapshot rejection leaves live Patch adjacency unchanged")
+	_expect(fixture["manager"].call("get_transition_body", fixture["edge_key"]) == fixture["old_body"], "stale snapshot rejection preserves the existing Collider body")
+	_expect(not bool(fixture["index"].call("get_corner_graph_stats").get("generation_reserved", true)), "stale snapshot rejection leaves no Index generation reservation")
+	_expect(not bool(fixture["coordinator"].call("has_pending_transaction")), "stale snapshot rejection leaves no pending Coordinator recovery")
 	await _release_fixture(fixture)
 
 
