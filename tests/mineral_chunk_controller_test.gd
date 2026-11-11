@@ -337,11 +337,14 @@ func _test_batch_index_snapshot_retries_transient_failure() -> void:
 func _test_batch_removal_falls_back_after_snapshot_failure() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
 	var controller: CountingController = CountingController.new()
 	root.add_child(registry)
+	root.add_child(object_registry)
 	root.add_child(controller)
 	await process_frame
 	assert(controller.bind_registry(registry))
+	assert(controller.bind_object_state_registry(object_registry))
 
 	var chunk_id := "earth/snapshot-failure-removal"
 	var chunk := Node3D.new()
@@ -377,6 +380,7 @@ func _test_batch_removal_falls_back_after_snapshot_failure() -> void:
 
 	controller.queue_free()
 	registry.queue_free()
+	object_registry.queue_free()
 	await process_frame
 
 
