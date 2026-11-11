@@ -73,6 +73,29 @@ func _run() -> void:
 	duplicate.queue_free()
 	await process_frame
 
+	var existing_instance_plan: Dictionary = index.plan_delta([], [
+		{"stable_id": "terrain/duplicate_existing_instance", "patch": west}
+	])
+	_expect(not bool(existing_instance_plan.get("ok", true)) and str(existing_instance_plan.get("error", "")) == "duplicate_instance", "delta preflight rejects an existing Patch Node reused under a second Stable ID")
+	var duplicate_addition: Node3D = _new_patch(holder, "DuplicateAdditionInstance", Vector3(100.0, 0.0, 100.0))
+	await process_frame
+	var duplicate_addition_plan: Dictionary = index.plan_delta([], [
+		{"stable_id": "terrain/duplicate_addition_a", "patch": duplicate_addition},
+		{"stable_id": "terrain/duplicate_addition_b", "patch": duplicate_addition}
+	])
+	_expect(not bool(duplicate_addition_plan.get("ok", true)) and str(duplicate_addition_plan.get("error", "")) == "duplicate_instance", "delta preflight rejects one Node repeated within the same additions batch")
+	duplicate_addition.queue_free()
+	await process_frame
+
+	var same_instance_plan: Dictionary = index.plan_delta(
+		["terrain/far"],
+		[{"stable_id": "terrain/far", "patch": far}]
+	)
+	_expect(bool(same_instance_plan.get("ok", false)), "remove-and-readd of the same Node remains valid after post-removal instance-set construction")
+	if bool(same_instance_plan.get("ok", false)):
+		var same_instance_summary: Dictionary = same_instance_plan.get("summary", {})
+		_expect(bool(index.commit_delta(str(same_instance_summary.get("plan_id", ""))).get("ok", false)), "same-Node replacement commits without changing its Stable ID")
+
 	var replacement: Node3D = _new_patch(holder, "ReplacementCenter", center.position)
 	await process_frame
 	var replacement_plan: Dictionary = index.plan_delta(
@@ -320,6 +343,7 @@ func _run() -> void:
 		_assert_matches_full_rebuild_oracle(index, current_patches, current_ids, "removed WeakRef cleanup rebuild")
 
 	await _run_persistent_corner_graph_tests()
+	await _test_patch_size_cache_after_emptying_index()
 
 	holder.queue_free()
 	await process_frame
@@ -331,6 +355,74 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+
+func _test_patch_size_cache_after_emptying_index() -> void:
+	var size_holder := Node3D.new()
+	size_holder.name = "PatchSizeCacheAfterEmptyingTestRoot"
+	root.add_child(size_holder)
+	var first: AlternateSizePatch = AlternateSizePatch.new()
+	first.name = "InitialSizeThree"
+	first.position = Vector3(0.0, 0.0, 0.0)
+	first.configured_patch_size = 3.0
+	size_holder.add_child(first)
+	await process_frame
+	var size_index = IndexScript.new()
+	var rebuild: Dictionary = size_index.rebuild(
+		[first],
+		{first.get_instance_id(): "size/first"}
+	)
+	_expect(bool(rebuild.get("ok", false)), "patch-size cache fixture builds an initial single-patch Index")
+	if not bool(rebuild.get("ok", false)):
+		size_holder.queue_free()
+		await process_frame
+		return
+	var remove_plan: Dictionary = size_index.plan_delta(["size/first"], [])
+	_expect(bool(remove_plan.get("ok", false)), "removing the last Patch creates an empty candidate Index")
+	if bool(remove_plan.get("ok", false)):
+		var remove_summary: Dictionary = remove_plan.get("summary", {})
+		var remove_commit: Dictionary = size_index.commit_delta(str(remove_summary.get("plan_id", "")))
+		_expect(bool(remove_commit.get("ok", false)) and size_index.get_patch_count() == 0, "empty candidate Index commits and clears its patch-size invariant")
+	var replacement: AlternateSizePatch = AlternateSizePatch.new()
+	replacement.name = "ReplacementSizeFour"
+	replacement.position = Vector3(10.0, 0.0, 0.0)
+	replacement.configured_patch_size = 4.0
+	size_holder.add_child(replacement)
+	await process_frame
+	var replacement_plan: Dictionary = size_index.plan_delta([], [
+		{"stable_id": "size/replacement", "patch": replacement}
+	])
+	_expect(bool(replacement_plan.get("ok", false)), "empty Index accepts a new Patch size after the previous set was removed")
+	if bool(replacement_plan.get("ok", false)):
+		var replacement_summary: Dictionary = replacement_plan.get("summary", {})
+		_expect(bool(size_index.commit_delta(str(replacement_summary.get("plan_id", ""))).get("ok", false)), "new Patch size is committed after emptying the Index")
+	_expect(size_index.get_patch("size/replacement") == replacement, "new-size Patch is the committed instance")
+	var matching: AlternateSizePatch = AlternateSizePatch.new()
+	matching.name = "MatchingSizeFour"
+	matching.position = Vector3(20.0, 0.0, 0.0)
+	matching.configured_patch_size = 4.0
+	size_holder.add_child(matching)
+	await process_frame
+	var matching_plan: Dictionary = size_index.plan_delta([], [
+		{"stable_id": "size/matching", "patch": matching}
+	])
+	_expect(bool(matching_plan.get("ok", false)), "subsequent additions use the newly committed Patch-size invariant: " + str(matching_plan.get("error", "")))
+	if bool(matching_plan.get("ok", false)):
+		var matching_summary: Dictionary = matching_plan.get("summary", {})
+		_expect(bool(size_index.commit_delta(str(matching_summary.get("plan_id", ""))).get("ok", false)), "matching Patch-size addition commits")
+	var mismatched: AlternateSizePatch = AlternateSizePatch.new()
+	mismatched.name = "MismatchedSizeThree"
+	mismatched.position = Vector3(30.0, 0.0, 0.0)
+	mismatched.configured_patch_size = 3.0
+	size_holder.add_child(mismatched)
+	await process_frame
+	var mixed_plan: Dictionary = size_index.plan_delta([], [
+		{"stable_id": "size/mismatched", "patch": mismatched}
+	])
+	_expect(not bool(mixed_plan.get("ok", true)) and str(mixed_plan.get("error", "")) == "mixed_patch_sizes", "cached Patch-size invariant still rejects mixed-size candidates")
+	size_holder.queue_free()
+	await process_frame
+	await process_frame
 
 
 func _run_persistent_corner_graph_tests() -> void:
