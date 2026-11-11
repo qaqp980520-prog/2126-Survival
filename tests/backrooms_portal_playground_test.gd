@@ -147,6 +147,8 @@ func _level_entity_visuals_are_created(world: Node) -> bool:
         var cell_root := Node3D.new()
         backrooms_world.add_child(cell_root)
         world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
+        # Let the headless renderer register the newly added mesh instances before inspection/cleanup.
+        await process_frame
         var matched: Node3D = null
         for child in cell_root.get_children():
             var entity_node := child as Node3D
