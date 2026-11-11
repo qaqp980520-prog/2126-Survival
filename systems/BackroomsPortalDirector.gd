@@ -59,7 +59,7 @@ func to_save_dict() -> Dictionary:
         "next_spawn_in": next_spawn_in,
         "portal_serial": portal_serial,
         "active_portal": portal_payload,
-        "rng_state": _rng.state
+        "rng_state": str(_rng.state)
     }
 
 func load_save_dict(data: Dictionary) -> bool:
@@ -80,7 +80,7 @@ func load_save_dict(data: Dictionary) -> bool:
     # those legacy payloads. New saves must restore a non-zero integer RNG state.
     var has_rng_state: bool = data.has("rng_state")
     var saved_rng_state: Variant = data.get("rng_state", null)
-    if has_rng_state and not (saved_rng_state is int):
+    if has_rng_state and (not (saved_rng_state is String) or not str(saved_rng_state).is_valid_int()):
         return false
     var restored_portal: Dictionary = {}
     if not saved_portal.is_empty():
@@ -97,7 +97,7 @@ func load_save_dict(data: Dictionary) -> bool:
             return false
         restored_portal = {"id": int(saved_id), "position": point}
     if has_rng_state:
-        _rng.state = int(saved_rng_state)
+        _rng.state = int(str(saved_rng_state))
     next_spawn_in = float(countdown)
     portal_serial = int(saved_serial)
     active_portal = restored_portal
