@@ -38,9 +38,9 @@ class CountingController extends "res://systems/MineralChunkController.gd":
 		last_collected_patch_count = patches.size()
 		return patches
 
-	func _get_terrain_index_patch_map() -> Dictionary:
+	func _read_terrain_index_patch_map_for_batch() -> Dictionary:
 		index_patch_map_calls += 1
-		return super._get_terrain_index_patch_map()
+		return super._read_terrain_index_patch_map_for_batch()
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
