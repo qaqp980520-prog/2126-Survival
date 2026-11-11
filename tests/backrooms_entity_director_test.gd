@@ -57,7 +57,7 @@ func _run() -> void:
             _expect(observed.has(entity_id), "%s entity %s can spawn in the sampled grid" % [level_name, entity_id])
             var expected_chance := float(EXPECTED_CHANCES[entity_id])
             var observed_chance := float(spawn_counts.get(entity_id, 0)) * 100.0 / float(SAMPLE_CELL_COUNT)
-            print("SPAWN_RATE: %s/%s expected=%.2f%% observed=%.2f%% samples=%d" % [
+            print("SPAWN_CANDIDATE_RATE: %s/%s expected=%.2f%% observed=%.2f%% samples=%d" % [
                 level_name,
                 entity_id,
                 expected_chance,
