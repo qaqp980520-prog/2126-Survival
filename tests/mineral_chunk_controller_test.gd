@@ -27,6 +27,9 @@ class RetryablePatchMapIndex extends RefCounted:
 			return {"ok": false, "error": "temporary_snapshot_unavailable"}
 		return {"ok": true, "patches_by_stable_id": patches_by_stable_id.duplicate()}
 
+	func get_generation() -> int:
+		return 1
+
 class CountingAdjacencyIndex extends "res://systems/SurfaceTerrainAdjacencyIndex.gd":
 	var patch_map_reads: int = 0
 
@@ -287,9 +290,10 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 		patch.name = "TerrainPatch"
 		patch.position.x = float(index) * 2.0
 		if index == 1:
-			var patch_state: Dictionary = patch.call("get_world_object_state")
-			patch_state["height_level"] = 1
-			assert(bool(patch.call("apply_world_object_state", patch_state)), "Second adjacent Patch receives a raised surface for a real transition")
+			# Set the fixture's persisted height before it enters the tree; _ready()
+			# then builds the real collision/visual geometry at that height.
+			patch.set("_height_level", 1)
+			assert(int(patch.call("get_world_object_state").get("height_level", -1)) == 1, "Second adjacent Patch receives a raised surface for a real transition")
 		chunk.add_child(patch)
 		assert(controller.load_chunk("earth/batch-snapshot-%d" % index, chunk, now))
 		assert(
