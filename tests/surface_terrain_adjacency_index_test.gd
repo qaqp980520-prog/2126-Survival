@@ -61,6 +61,32 @@ func _run() -> void:
 	_expect(index.get_edge_descriptors().size() == 2, "full descriptor query matches the rebuilt edge count")
 	_assert_matches_full_rebuild_oracle(index, [west, center, south, far], stable_ids, "initial rebuild")
 
+	var all_adjacent_ids: Dictionary = {
+		"terrain/west": true,
+		"terrain/center": true,
+		"terrain/south": true
+	}
+	var all_selected_result: Dictionary = index._build_descriptors_for_ids(
+		index._entries_by_stable_id,
+		index._bucket_to_stable_ids,
+		all_adjacent_ids,
+		float(index._patch_size)
+	)
+	_expect(bool(all_selected_result.get("ok", false)), "selected adjacent endpoint descriptor build succeeds")
+	_expect(int(all_selected_result.get("descriptor_build_count", -1)) == 2, "selected adjacent endpoints build each undirected descriptor once")
+	_expect(all_selected_result.get("descriptors", {}) == index.get_edge_descriptors(), "deduplicated selected descriptor set matches the committed Index")
+
+	var center_only_ids: Dictionary = {"terrain/center": true}
+	var center_only_result: Dictionary = index._build_descriptors_for_ids(
+		index._entries_by_stable_id,
+		index._bucket_to_stable_ids,
+		center_only_ids,
+		float(index._patch_size)
+	)
+	_expect(bool(center_only_result.get("ok", false)), "single selected endpoint descriptor build succeeds")
+	_expect(int(center_only_result.get("descriptor_build_count", -1)) == 2, "unselected cardinal neighbors still receive descriptors")
+	_expect(center_only_result.get("descriptors", {}) == index.get_edge_descriptors(), "single-endpoint descriptor set preserves every incident edge")
+
 	var initial_generation: int = index.get_generation()
 	var duplicate: Node3D = _new_patch(holder, "Duplicate", center.position)
 	await process_frame
