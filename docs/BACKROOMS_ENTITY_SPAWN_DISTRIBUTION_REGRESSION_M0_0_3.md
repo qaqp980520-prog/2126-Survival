@@ -31,9 +31,9 @@ No gameplay behavior, scene wiring, save data, portal destinations, project sett
 - Repeated queries for each of the 6,561 sampled cells must return identical results.
 - Every spawned entity must belong to that level's whitelist, and every configured entity must appear at least once in the sample.
 - Each entity's measured sample frequency must remain within ±1.5 percentage points of its configured chance.
-- The test prints one `SPAWN_RATE` line per entity with expected rate, observed rate and sample count, so CI logs retain concrete distribution evidence.
+- The test prints one `SPAWN_CANDIDATE_RATE` line per entity with expected rate, observed rate and sample count, so CI logs retain concrete distribution evidence.
 
-The finite grid is a deterministic regression sample, not a statistical guarantee for every possible world coordinate.
+The finite grid is a deterministic regression sample, not a statistical guarantee for every possible world coordinate. These rates measure `BackroomsEntityDirector.get_cell_spawns()` candidate selection, not the number of rendered instances. Geometry-specific placement can legitimately skip a candidate when the required wall or surface is unavailable.
 
 ## Dependencies and import
 
@@ -51,4 +51,4 @@ Local Godot is unavailable in the current execution environment; no local engine
 
 ## Next step
 
-Wait for the child PR's exact-head Full Compatibility Gate, inspect its `SPAWN_RATE` output, and keep the PR Draft / Unmerged until independent review and graphical-mode inspection are complete.
+Wait for the child PR's exact-head Full Compatibility Gate, inspect its `SPAWN_CANDIDATE_RATE` output, and keep the PR Draft / Unmerged until independent review and graphical-mode inspection are complete.
