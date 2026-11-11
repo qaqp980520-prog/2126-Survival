@@ -50,3 +50,12 @@ Inspect the north- and west-facing Window frame in graphical mode after exact-he
 - Regression now verifies a valid Window candidate creates the expected metadata/transform, a candidate with no owned north/west wall creates no Window, and no headless mesh nodes are introduced.
 - This follow-up commit requires a new exact-head Godot 4.3 Full Compatibility Gate. Local Godot remains unavailable; graphical rendering and iPhone behavior remain unverified.
 - Next: inspect the new exact-head CI result, then perform graphical-mode Window appearance and Z-fighting review; keep the stacked PR Draft / Unmerged pending independent review.
+
+
+## Headless geometry contract and realized placement measurement — Run 216
+
+- The Window factory now consumes `_window_entity_geometry_specs()` as the single source for its pane and four frame bars. The descriptor data is renderer-independent, so the same dimensions used by the graphical factory can be checked in headless Godot without constructing MeshInstance3D nodes.
+- The integration test validates the exact five part names, unique descriptors, positive Vector3 dimensions, pane/frame material roles, symmetric top/bottom and left/right placement, and the 0.16 m frame depth relative to the 0.07 m pane depth.
+- The 81 × 81 deterministic sample now reports `WINDOW_PLACEMENT_RATE`: candidate count, candidates placed on an owned closed wall, candidates rejected because both owned walls are open, candidate rate, realized rate, and candidate realization percentage. This separates EntityDirector's configured 18% candidate chance from the final wall-eligible Window spawn rate.
+- The test asserts every Window candidate is accounted for as either placed or blocked, with at least one valid placement, while retaining both north/west orientation and flush-wall checks.
+- Exact-head Godot 4.3 CI is required after this follow-up. Local Godot, graphical material/Z-fighting inspection, and iPhone verification remain unavailable/unverified.
