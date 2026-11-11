@@ -60,12 +60,18 @@ func execute_delta(
 	old_patches_snapshot: Dictionary = {},
 	old_patches_snapshot_generation: int = -1
 ) -> Dictionary:
+	var coordinator_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	var phase_profile: Dictionary = {}
+	var phase_started_usec: int = coordinator_started_usec
 	if has_pending_transaction():
 		return {"ok": false, "error": "coordinator_transaction_in_progress", "pending": _pending.get("stage", "")}
 	if not _participants_valid():
 		return {"ok": false, "error": "coordinator_participants_unavailable"}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var plan_result: Dictionary = _index.call("plan_delta", remove_stable_ids, additions)
+	if profile_enabled:
+		phase_profile["plan_delta_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(plan_result.get("ok", false)):
 		return plan_result
 	if bool(plan_result.get("noop", false)):
@@ -86,7 +92,10 @@ func execute_delta(
 			"snapshot_generation": old_patches_snapshot_generation,
 			"plan_generation": int(summary.get("base_generation", -1))
 		}
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var reservation: Dictionary = _index.call("reserve_delta", plan_id)
+	if profile_enabled:
+		phase_profile["index_reservation_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(reservation.get("ok", false)):
 		var reservation_cleanup: Dictionary = _abort_index_or_retain(plan_id, "index_generation_reservation_failed")
 		if not bool(reservation_cleanup.get("ok", false)):
@@ -96,8 +105,14 @@ func execute_delta(
 	var old_patch_result: Dictionary = {}
 	if not use_batch_snapshot:
 		old_patch_result = _index.call("get_patches_by_stable_id")
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var candidate_patch_result: Dictionary = _index.call("get_plan_patches_by_stable_id", plan_id)
+	if profile_enabled:
+		phase_profile["candidate_patch_map_usec"] = Time.get_ticks_usec() - phase_started_usec
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var candidate_descriptor_result: Dictionary = _index.call("get_plan_edge_descriptors", plan_id)
+	if profile_enabled:
+		phase_profile["candidate_descriptor_snapshot_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if (
 		(not use_batch_snapshot and not bool(old_patch_result.get("ok", false)))
 		or not bool(candidate_patch_result.get("ok", false))
@@ -125,6 +140,7 @@ func execute_delta(
 	if changed_seed_edge_keys.is_empty():
 		return _publish_and_finalize_index_only(plan_id, summary)
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var collider_prepare: Dictionary = _collider_manager.call(
 		"prepare_partial_sync_transitions",
 		candidate_descriptors,
@@ -132,6 +148,8 @@ func execute_delta(
 		changed_seed_edge_keys,
 		profile_enabled
 	)
+	if profile_enabled:
+		phase_profile["collider_prepare_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(collider_prepare.get("ok", false)):
 		var prepare_cleanup: Dictionary = _abort_index_or_retain(plan_id, "collider_prepare_failed")
 		if not bool(prepare_cleanup.get("ok", false)):
@@ -164,6 +182,7 @@ func execute_delta(
 			"manager_junction_keys": manager_junctions
 		}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var scoped_prepare: Dictionary = _scoped_transaction.call(
 		"prepare",
 		old_closure_descriptors,
@@ -172,6 +191,8 @@ func execute_delta(
 		candidate_patches,
 		scoped_changed_edge_keys
 	)
+	if profile_enabled:
+		phase_profile["scoped_prepare_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(scoped_prepare.get("ok", false)):
 		var scoped_prepare_cleanup: Dictionary = _abort_collider_or_retain(
 			plan_id, collider_transaction_id, -1, false, false, "scoped_prepare_failed"
@@ -194,7 +215,10 @@ func execute_delta(
 			return noop_index_cleanup
 		return {"ok": false, "error": "scoped_transaction_unexpected_noop"}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var scoped_apply: Dictionary = _scoped_transaction.call("apply", scoped_transaction_id)
+	if profile_enabled:
+		phase_profile["scoped_apply_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(scoped_apply.get("ok", false)):
 		if bool(_scoped_transaction.call("has_pending_transaction")):
 			_store_pending(
@@ -217,11 +241,14 @@ func execute_delta(
 			return apply_index_cleanup
 		return {"ok": false, "error": "scoped_apply_failed:" + str(scoped_apply.get("error", "unknown"))}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var accepted: Dictionary = _collider_manager.call(
 		"accept_scoped_neighbor_state_apply",
 		collider_transaction_id,
 		scoped_apply.get("endpoint_expectations", [])
 	)
+	if profile_enabled:
+		phase_profile["collider_accept_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(accepted.get("ok", false)):
 		var accept_cleanup: Dictionary = _abort_collider_or_retain(
 			plan_id, collider_transaction_id, scoped_transaction_id, false, true, "collider_accept_failed"
@@ -237,7 +264,10 @@ func execute_delta(
 			return accept_index_cleanup
 		return {"ok": false, "error": "collider_accept_failed:" + str(accepted.get("error", "unknown"))}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var published: Dictionary = _index.call("publish_delta", plan_id)
+	if profile_enabled:
+		phase_profile["index_publish_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(published.get("ok", false)):
 		var publish_cleanup: Dictionary = _abort_collider_or_retain(
 			plan_id, collider_transaction_id, scoped_transaction_id, false, true, "index_publish_failed"
@@ -253,7 +283,10 @@ func execute_delta(
 			return publish_index_cleanup
 		return {"ok": false, "error": "index_publish_failed:" + str(published.get("error", "unknown"))}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var collider_commit: Dictionary = _collider_manager.call("commit_sync_transitions", collider_transaction_id)
+	if profile_enabled:
+		phase_profile["collider_commit_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(collider_commit.get("ok", false)):
 		var commit_cleanup: Dictionary = _abort_collider_or_retain(
 			plan_id, collider_transaction_id, scoped_transaction_id, true, true, "collider_commit_failed"
@@ -284,17 +317,23 @@ func execute_delta(
 			"collider_junction_keys": committed_junctions
 		}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var scoped_finalize: Dictionary = _scoped_transaction.call("finalize", scoped_transaction_id)
+	if profile_enabled:
+		phase_profile["scoped_finalize_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(scoped_finalize.get("ok", false)):
 		_store_pending("finalize", plan_id, collider_transaction_id, scoped_transaction_id, true, true, str(scoped_finalize.get("error", "scoped_finalize_failed")))
 		return {"ok": false, "error": "scoped_finalize_pending", "pending_retained": true, "scoped": scoped_finalize, "collider": collider_commit}
 
+	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
 	var index_finalize: Dictionary = _index.call("finalize_delta", plan_id)
+	if profile_enabled:
+		phase_profile["index_finalize_usec"] = Time.get_ticks_usec() - phase_started_usec
 	if not bool(index_finalize.get("ok", false)):
 		_store_pending("index_finalize", plan_id, collider_transaction_id, scoped_transaction_id, true, false, str(index_finalize.get("error", "index_finalize_failed")))
 		return {"ok": false, "error": "index_finalize_pending", "pending_retained": true, "index": index_finalize, "collider": collider_commit}
 
-	return {
+	var success_result: Dictionary = {
 		"ok": true,
 		"finalized": true,
 		"generation": int(index_finalize.get("generation", -1)),
@@ -302,6 +341,20 @@ func execute_delta(
 		"collider": collider_commit,
 		"scoped": scoped_finalize
 	}
+	return _attach_coordinator_profile(success_result, phase_profile, coordinator_started_usec, profile_enabled)
+
+
+func _attach_coordinator_profile(result: Dictionary, phase_profile: Dictionary, started_usec: int, profile_enabled: bool) -> Dictionary:
+	if not profile_enabled:
+		return result
+	var total_usec: int = Time.get_ticks_usec() - started_usec
+	var measured_usec: int = 0
+	for key in ["plan_delta_usec", "index_reservation_usec", "candidate_patch_map_usec", "candidate_descriptor_snapshot_usec", "collider_prepare_usec", "scoped_prepare_usec", "scoped_apply_usec", "collider_accept_usec", "index_publish_usec", "collider_commit_usec", "scoped_finalize_usec", "index_finalize_usec"]:
+		measured_usec += int(phase_profile.get(key, 0))
+	phase_profile["total_usec"] = total_usec
+	phase_profile["unattributed_usec"] = total_usec - measured_usec
+	result["coordinator_profile_usec"] = phase_profile.duplicate(true)
+	return result
 
 
 ## Retries only the incomplete recovery/finalization phase. It never repeats a participant
