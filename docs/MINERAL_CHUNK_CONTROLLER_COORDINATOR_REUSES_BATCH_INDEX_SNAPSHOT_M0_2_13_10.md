@@ -24,6 +24,8 @@ The Controller now passes its batch baseline map and the generation at which it 
   - Add a counting Index subclass and assert that a batch with multiple additions, and a removal followed by restore, resolves the full committed Patch map exactly once including Coordinator finalization.
 - tests/surface_terrain_adjacency_coordinator_test.gd
   - Add a stale-generation snapshot regression proving that the Coordinator aborts the uncommitted plan without changing Index, Patch adjacency, or Collider resources.
+- .github/workflows/mineral-chunk-controller-batch-index-snapshot-validation.yml
+  - Add a focused Godot 4.3 workflow that imports the root project and runs both Controller and Coordinator transaction suites on pull requests touching this path.
 
 ## Dependencies and import
 
@@ -51,10 +53,11 @@ No external packages, autoloads, Project Settings, scene wiring, save-schema cha
 
 Exact-head validation is required for this PR:
 
-1. Mineral Chunk Controller integration regression.
-2. Surface Terrain Coordinator transaction regression, including stale-generation rejection.
-3. Full Godot 4.3 compatibility gate.
-4. Production Chunk Benchmark and artifact reconciliation.
+1. Focused Controller and Coordinator batch-snapshot workflow, including one-read-per-batch and stale-generation rejection.
+2. Mineral Chunk Controller integration regression.
+3. Surface Terrain Coordinator transaction regression, including stale-generation rejection.
+4. Full Godot 4.3 compatibility gate.
+5. Production Chunk Benchmark and artifact reconciliation.
 
 No test pass is claimed in this document until the exact child HEAD's workflows complete. Local Godot is not available in the current development environment; engine tests run on GitHub Actions with Godot 4.3.
 
