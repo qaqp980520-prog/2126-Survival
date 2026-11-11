@@ -1014,7 +1014,9 @@ func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
 		var patches_value: Variant = result.get("patches_by_stable_id", {})
 		if not (patches_value is Dictionary):
 			return {}
-		_terrain_adjacency_batch_original_patch_map = patches_value.duplicate()
+		# get_patches_by_stable_id() resolves WeakRefs into a fresh Dictionary.
+		# Retain that detached map directly instead of making a second O(P) copy.
+		_terrain_adjacency_batch_original_patch_map = patches_value
 		_terrain_adjacency_batch_original_patch_map_captured = true
 	return _terrain_adjacency_batch_original_patch_map
 
