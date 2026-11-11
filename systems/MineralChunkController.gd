@@ -946,6 +946,7 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 		var elapsed_usec: int = Time.get_ticks_usec() - started_usec
 		var collider_result: Dictionary = result.get("collider", {})
 		var collider_profile: Dictionary = collider_result.get("profile_usec", {})
+		var coordinator_profile: Dictionary = result.get("coordinator_profile_usec", {})
 		var collider_commit_present: bool = result.has("collider")
 		var active_edge_count: int = int(_terrain_transition_collider_manager.call("get_transition_count"))
 		var active_corner_cap_count: int = int(_terrain_transition_collider_manager.call("get_corner_cap_count"))
@@ -960,6 +961,21 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 			"collider_corner_resolution_usec": int(collider_profile.get("corner_resolution_usec", 0)),
 			"collider_resource_staging_usec": int(collider_profile.get("resource_staging_usec", 0)),
 			"collider_activation_commit_usec": int(collider_profile.get("activation_commit_usec", 0)),
+			"coordinator_plan_delta_usec": int(coordinator_profile.get("plan_delta_usec", 0)),
+			"coordinator_index_reservation_usec": int(coordinator_profile.get("index_reservation_usec", 0)),
+			"coordinator_candidate_patch_map_usec": int(coordinator_profile.get("candidate_patch_map_usec", 0)),
+			"coordinator_candidate_descriptor_snapshot_usec": int(coordinator_profile.get("candidate_descriptor_snapshot_usec", 0)),
+			"coordinator_collider_prepare_usec": int(coordinator_profile.get("collider_prepare_usec", 0)),
+			"coordinator_scoped_prepare_usec": int(coordinator_profile.get("scoped_prepare_usec", 0)),
+			"coordinator_scoped_apply_usec": int(coordinator_profile.get("scoped_apply_usec", 0)),
+			"coordinator_collider_accept_usec": int(coordinator_profile.get("collider_accept_usec", 0)),
+			"coordinator_index_publish_usec": int(coordinator_profile.get("index_publish_usec", 0)),
+			"coordinator_collider_commit_usec": int(coordinator_profile.get("collider_commit_usec", 0)),
+			"coordinator_scoped_finalize_usec": int(coordinator_profile.get("scoped_finalize_usec", 0)),
+			"coordinator_index_finalize_usec": int(coordinator_profile.get("index_finalize_usec", 0)),
+			"coordinator_total_usec": int(coordinator_profile.get("total_usec", 0)),
+			"coordinator_unattributed_usec": int(coordinator_profile.get("unattributed_usec", 0)),
+			"coordinator_phase_profile_valid": not coordinator_profile.is_empty(),
 			"collider_reused_edge_count": int(collider_result.get("reused_edge_count", active_edge_count if not collider_commit_present else 0)),
 			"collider_reactivated_edge_count": int(collider_result.get("reactivated_edge_count", 0)),
 			"collider_staged_edge_count": int(collider_result.get("staged_edge_count", 0)),
