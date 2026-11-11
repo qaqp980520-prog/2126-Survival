@@ -61,6 +61,7 @@ func _run_integration_test() -> void:
     _expect(_maze_edges_are_symmetric(world), "maze edge openings match from both adjacent cells")
     _expect(_maze_region_is_connected(world), "procedural maze region remains connected to the origin")
     _expect(_maze_streaming_cell_boundaries(world), "streaming cell selection changes at actual half-cell boundaries")
+    _expect(_window_wall_placement_contract_is_valid(world), "Level 1 windows choose a closed owned wall and sit flush with its inner face")
     _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
     _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
@@ -140,7 +141,11 @@ func _entity_visual_source_contract_is_present() -> bool:
         "\"duller\":",
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",
-        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")"
+        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")",
+        "func _window_wall_direction_for_cell",
+        "func _window_entity_transform_for_wall",
+        "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
+        "window_root.set_meta(\"wall_direction\", wall_direction)"
     ]
     for token in required_tokens:
         if not source.contains(token):
@@ -200,6 +205,50 @@ func _contains_mesh_instance(node: Node) -> bool:
             return true
     return false
 
+
+
+func _window_wall_placement_contract_is_valid(world: Node) -> bool:
+    var north := Vector2i(0, -1)
+    var west := Vector2i(-1, 0)
+    var saw_north := false
+    var saw_west := false
+    for z in range(-40, 41):
+        for x in range(-40, 41):
+            var cell := Vector2i(x, z)
+            var north_closed: bool = not bool(world.call("_edge_is_open", cell, north))
+            var west_closed: bool = not bool(world.call("_edge_is_open", cell, west))
+            var direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
+            var repeated_direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
+            if direction != repeated_direction:
+                return false
+            if direction == Vector2i.ZERO:
+                if north_closed or west_closed:
+                    return false
+                continue
+
+            var expected_position := Vector3.ZERO
+            var expected_yaw: float = 0.0
+            if direction == north and north_closed:
+                expected_position = Vector3(0.0, 1.85, -4.0 + 0.19)
+                saw_north = true
+            elif direction == west and west_closed:
+                expected_position = Vector3(-4.0 + 0.19, 1.85, 0.0)
+                expected_yaw = PI * 0.5
+                saw_west = true
+            else:
+                return false
+
+            var transform: Transform3D = world.call("_window_entity_transform_for_wall", direction)
+            if not transform.origin.is_equal_approx(expected_position):
+                return false
+            var expected_normal := Vector3(0.0, 0.0, 1.0).rotated(Vector3.UP, expected_yaw)
+            if not transform.basis.z.is_equal_approx(expected_normal):
+                return false
+
+            var frame_wall_edge: float = transform.origin.z - 0.08 if direction == north else transform.origin.x - 0.08
+            if not is_equal_approx(frame_wall_edge, -4.0 + 0.11):
+                return false
+    return saw_north and saw_west
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
