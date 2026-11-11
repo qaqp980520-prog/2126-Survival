@@ -50,6 +50,7 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
+    print("Backrooms integration entered: %s" % entered_level)
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-5 list")
     _expect(await _level_entity_visuals_are_created(world), "Level 3, Level 4 and Level 5 entity prototypes instantiate")
     var director: Object = world.get("director")
@@ -142,13 +143,13 @@ func _level_entity_visuals_are_created(world: Node) -> bool:
             world.set("current_level", original_level)
             return false
         world.set("current_level", level_name)
-        # Add the fixture to the live scene tree before creating MeshInstance3D
-        # nodes; headless RenderingServer resources must be initialized before cleanup.
+        print("Creating Backrooms visual fixture: %s / %s" % [level_name, entity_id])
         var cell_root := Node3D.new()
         backrooms_world.add_child(cell_root)
         world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
-        # Let the headless renderer register the newly added mesh instances before inspection/cleanup.
         await process_frame
+        var mesh_report := _mesh_instance_report(cell_root)
+        print("Visual fixture %s: %d MeshInstance3D nodes, %d missing meshes" % [entity_id, mesh_report["count"], mesh_report["missing"]])
         var matched: Node3D = null
         for child in cell_root.get_children():
             var entity_node := child as Node3D
@@ -160,13 +161,25 @@ func _level_entity_visuals_are_created(world: Node) -> bool:
             valid = is_equal_approx(matched.position.y, 0.42)
         elif matched != null and entity_id == "deathmoth":
             valid = matched.get_child_count() >= 10
-        cell_root.queue_free()
-        await process_frame
+        # Keep these test fixtures in the live world until the whole test scene is freed.
         if not valid:
             world.set("current_level", original_level)
             return false
     world.set("current_level", original_level)
     return true
+
+func _mesh_instance_report(node: Node) -> Dictionary:
+    var count := 0
+    var missing := 0
+    if node is MeshInstance3D:
+        count += 1
+        if (node as MeshInstance3D).mesh == null:
+            missing += 1
+    for child in node.get_children():
+        var child_report: Dictionary = _mesh_instance_report(child)
+        count += int(child_report["count"])
+        missing += int(child_report["missing"])
+    return {"count": count, "missing": missing}
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
