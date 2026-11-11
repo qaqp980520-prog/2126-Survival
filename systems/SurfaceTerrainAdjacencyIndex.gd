@@ -1208,8 +1208,9 @@ func _build_descriptors_for_ids(
 	patch_size: float
 ) -> Dictionary:
 	var descriptors: Dictionary = {}
+	var descriptor_build_count: int = 0
 	if patch_size <= 0.0:
-		return {"ok": true, "descriptors": descriptors}
+		return {"ok": true, "descriptors": descriptors, "descriptor_build_count": 0}
 	var stable_ids: Array[String] = []
 	for stable_id_value in selected_ids.keys():
 		stable_ids.append(str(stable_id_value))
@@ -1226,17 +1227,23 @@ func _build_descriptors_for_ids(
 			stable_id
 		)
 		for neighbor_id in neighbors:
+			# When both endpoints are selected, only the lexically smaller Stable ID
+			# builds the undirected edge. If the neighbor is outside the selected set,
+			# this endpoint remains responsible for building the edge.
+			if selected_ids.has(neighbor_id) and stable_id > neighbor_id:
+				continue
 			var built: Dictionary = TransitionDescriptorScript.build(
 				record["snapshot"],
 				entries[neighbor_id]["snapshot"]
 			)
 			if not bool(built.get("ok", false)):
 				return {"ok": false, "error": "descriptor_invalid:" + str(built.get("error", "unknown"))}
+			descriptor_build_count += 1
 			var descriptor: Dictionary = built.get("descriptor", {})
 			var edge_key: String = str(descriptor.get("edge_key", ""))
 			if not descriptors.has(edge_key):
 				descriptors[edge_key] = descriptor.duplicate(true)
-	return {"ok": true, "descriptors": descriptors}
+	return {"ok": true, "descriptors": descriptors, "descriptor_build_count": descriptor_build_count}
 
 
 func _sorted_strings(values: Array) -> Array[String]:
