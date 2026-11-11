@@ -806,6 +806,39 @@ func _emit_metrics(
 	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_corner_cap_count", -1)) + int(adjacency_profile.get("collider_staged_corner_cap_count", -1)) == int(adjacency_profile.get("corner_cap_count", -2))
 	profile_valid = profile_valid and int(adjacency_profile.get("batch_total_usec", 0)) >= int(adjacency_profile.get("collect_loaded_patches_usec", 0)) + int(adjacency_profile.get("controller_rebind_total_usec", 0))
 	_expect(profile_valid, "radius %d %s records valid non-negative phase timings with consistent totals" % [radius, phase])
+	var coordinator_phase_keys: Array[String] = [
+		"plan_delta_usec",
+		"index_reservation_usec",
+		"candidate_patch_map_usec",
+		"candidate_descriptor_snapshot_usec",
+		"collider_prepare_usec",
+		"scoped_prepare_usec",
+		"scoped_apply_usec",
+		"collider_accept_usec",
+		"index_publish_usec",
+		"collider_commit_usec",
+		"scoped_finalize_usec",
+		"index_finalize_usec"
+	]
+	var coordinator_phase_profile_usec: Dictionary = {}
+	var coordinator_phase_profile_valid: bool = false
+	if bool(adjacency_profile.get("incremental", false)):
+		coordinator_phase_profile_valid = bool(adjacency_profile.get("coordinator_phase_profile_valid", false))
+		var coordinator_measured_usec: int = 0
+		for coordinator_phase_key in coordinator_phase_keys:
+			if not adjacency_profile.has("coordinator_" + coordinator_phase_key) or int(adjacency_profile.get("coordinator_" + coordinator_phase_key, -1)) < 0:
+				coordinator_phase_profile_valid = false
+				continue
+			var coordinator_phase_usec: int = int(adjacency_profile.get("coordinator_" + coordinator_phase_key, 0))
+			coordinator_phase_profile_usec[coordinator_phase_key] = coordinator_phase_usec
+			coordinator_measured_usec += coordinator_phase_usec
+		var coordinator_total_usec: int = int(adjacency_profile.get("coordinator_total_usec", -1))
+		var coordinator_unattributed_usec: int = int(adjacency_profile.get("coordinator_unattributed_usec", -1))
+		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_total_usec > 0
+		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_measured_usec <= coordinator_total_usec
+		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_unattributed_usec == coordinator_total_usec - coordinator_measured_usec
+		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_total_usec <= int(adjacency_profile.get("controller_rebind_total_usec", -1))
+		_expect(coordinator_phase_profile_valid, "radius %d %s records complete non-overlapping Coordinator phase timings" % [radius, phase])
 	var record := {
 		"phase": phase,
 		"radius": radius,
@@ -830,6 +863,9 @@ func _emit_metrics(
 		"stale_unload_samples": stale_unload_samples.duplicate(true),
 		"stale_unload_sample_summary": stale_unload_sample_summary,
 		"terrain_adjacency_profile_usec": adjacency_profile,
+		"coordinator_phase_profile_valid": coordinator_phase_profile_valid,
+		"coordinator_phase_profile_usec": coordinator_phase_profile_usec,
+		"coordinator_phase_total_ms": float(adjacency_profile.get("coordinator_total_usec", 0)) / 1000.0,
 		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
 		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
 		"staged_transition_edge_count": int(adjacency_profile.get("collider_staged_edge_count", 0)),
