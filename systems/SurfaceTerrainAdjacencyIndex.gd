@@ -4,6 +4,19 @@ class_name SurfaceTerrainAdjacencyIndex
 ## Persistent spatial index and detached load/unload delta planner.
 ## This primitive does not mutate live patch edges or collider-manager ownership.
 const SIDES: Array[String] = ["east", "west", "north", "south"]
+const PLAN_DELTA_PROFILE_KEYS: Array[String] = [
+	"candidate_copy_usec",
+	"removal_apply_usec",
+	"candidate_instance_set_usec",
+	"addition_validation_usec",
+	"neighbor_discovery_usec",
+	"changed_descriptor_build_usec",
+	"edge_diff_usec",
+	"local_descriptor_build_usec",
+	"corner_graph_delta_usec",
+	"closure_snapshot_usec",
+	"plan_storage_usec"
+]
 const POSITION_TOLERANCE: float = 0.01
 const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransitionDescriptor.gd")
 const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
@@ -102,7 +115,13 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 ## Prepares a load/unload delta without changing the committed index or live patches.
 ## A Stable ID may appear in both arrays to represent unload/reload with a new Node instance.
 ## Returned summaries are detached copies; the internal candidate snapshot is addressed by plan_id.
-func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
+func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: bool = false) -> Dictionary:
+	var plan_profile_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	var plan_profile_usec: Dictionary = {}
+	if profile_enabled:
+		for profile_key in PLAN_DELTA_PROFILE_KEYS:
+			plan_profile_usec[profile_key] = 0
+	var phase_started_usec: int = plan_profile_started_usec
 	var candidate_entries: Dictionary = _entries_by_stable_id.duplicate()
 	# Dictionary.duplicate() copies the bucket map; arrays are copied only when a bucket is touched.
 	var candidate_buckets: Dictionary = _bucket_to_stable_ids.duplicate()
@@ -111,6 +130,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	var added_ids: Array[String] = []
 	var changed_ids: Dictionary = {}
 	var removed_seen: Dictionary = {}
+	if profile_enabled:
+		plan_profile_usec["candidate_copy_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	for stable_id_value in remove_stable_ids:
 		var stable_id: String = str(stable_id_value)
@@ -127,6 +149,10 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		removed_ids.append(stable_id)
 		changed_ids[stable_id] = true
 
+	if profile_enabled:
+		plan_profile_usec["removal_apply_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
+
 	# The committed patch size is an Index invariant maintained by rebuild/publish/rollback.
 	# Reuse it instead of allocating Dictionary.values() just to read the first record.
 	var candidate_patch_size: float = -1.0
@@ -140,6 +166,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	for stable_id_value in candidate_entries:
 		var candidate_record: Dictionary = candidate_entries[stable_id_value]
 		candidate_instance_ids[int(candidate_record.get("instance_id", -1))] = true
+	if profile_enabled:
+		plan_profile_usec["candidate_instance_set_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 	var added_seen: Dictionary = {}
 
 	for addition_value in additions:
@@ -176,8 +205,15 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		added_ids.append(stable_id)
 		changed_ids[stable_id] = true
 
+	if profile_enabled:
+		plan_profile_usec["addition_validation_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 	if removed_ids.is_empty() and added_ids.is_empty():
-		return {"ok": true, "noop": true, "generation": _generation}
+		var noop_result: Dictionary = {"ok": true, "noop": true, "generation": _generation}
+		if profile_enabled:
+			plan_profile_usec["plan_storage_usec"] = Time.get_ticks_usec() - phase_started_usec
+			return _attach_plan_delta_profile(noop_result, plan_profile_usec, plan_profile_started_usec)
+		return noop_result
 
 	var touched_ids: Dictionary = changed_ids.duplicate()
 	for stable_id in removed_ids:
@@ -200,6 +236,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 			stable_id
 		):
 			touched_ids[neighbor_id] = true
+	if profile_enabled:
+		plan_profile_usec["neighbor_discovery_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	var old_descriptor_result: Dictionary = _build_descriptors_for_ids(
 		_entries_by_stable_id,
@@ -217,6 +256,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	)
 	if not bool(new_descriptor_result.get("ok", false)):
 		return new_descriptor_result
+	if profile_enabled:
+		plan_profile_usec["changed_descriptor_build_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	var old_descriptors: Dictionary = old_descriptor_result.get("descriptors", {})
 	var new_descriptors: Dictionary = new_descriptor_result.get("descriptors", {})
@@ -236,6 +278,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		affected_edge_keys[edge_key] = true
 		if not old_descriptors.has(edge_key):
 			added_edge_keys.append(edge_key)
+	if profile_enabled:
+		plan_profile_usec["edge_diff_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	var old_local_result: Dictionary = _build_descriptors_for_ids(
 		_entries_by_stable_id,
@@ -253,6 +298,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	)
 	if not bool(new_local_result.get("ok", false)):
 		return new_local_result
+	if profile_enabled:
+		plan_profile_usec["local_descriptor_build_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 	var old_local_descriptors: Dictionary = old_local_result.get("descriptors", {})
 	var new_local_descriptors: Dictionary = new_local_result.get("descriptors", {})
 	var new_report_result: Dictionary = _build_corner_reports_by_stable_id(
@@ -270,6 +318,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 	)
 	if not bool(graph_delta.get("ok", false)):
 		return graph_delta
+	if profile_enabled:
+		plan_profile_usec["corner_graph_delta_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	# Replace only descriptor keys incident to touched Stable IDs. Descriptor records
 	# outside this local neighborhood remain shared and untouched.
@@ -303,6 +354,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		graph_delta.get("reports_by_stable_id", {}),
 		closure_junction_set
 	)
+	if profile_enabled:
+		plan_profile_usec["closure_snapshot_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
 
 	var plan_id: String = "%d:%d" % [_generation, _plan_serial]
 	_plan_serial += 1
@@ -342,7 +396,22 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		"candidate_edge_junction_refcounts": graph_delta.get("edge_junction_refcounts", {}),
 		"summary": summary.duplicate(true)
 	}
-	return {"ok": true, "noop": false, "summary": summary.duplicate(true)}
+	var success_result: Dictionary = {"ok": true, "noop": false, "summary": summary.duplicate(true)}
+	if profile_enabled:
+		plan_profile_usec["plan_storage_usec"] = Time.get_ticks_usec() - phase_started_usec
+		return _attach_plan_delta_profile(success_result, plan_profile_usec, plan_profile_started_usec)
+	return success_result
+
+
+func _attach_plan_delta_profile(result: Dictionary, profile_usec: Dictionary, started_usec: int) -> Dictionary:
+	var total_usec: int = Time.get_ticks_usec() - started_usec
+	var measured_usec: int = 0
+	for profile_key in PLAN_DELTA_PROFILE_KEYS:
+		measured_usec += int(profile_usec.get(profile_key, 0))
+	profile_usec["total_usec"] = total_usec
+	profile_usec["unattributed_usec"] = total_usec - measured_usec
+	result["plan_delta_profile_usec"] = profile_usec.duplicate(true)
+	return result
 
 
 ## Commits only the index snapshot. Production edge/cap mutation is intentionally not wired here.
