@@ -33,6 +33,8 @@ var _terrain_adjacency_batch_depth: int = 0
 var _terrain_adjacency_batch_dirty: bool = false
 var _terrain_adjacency_batch_added_patches: Dictionary = {}
 var _terrain_adjacency_batch_removed_ids: Dictionary = {}
+var _terrain_adjacency_batch_original_patch_map: Dictionary = {}
+var _terrain_adjacency_batch_original_patch_map_captured: bool = false
 var _terrain_adjacency_batch_dirty_ids: Dictionary = {}
 var _terrain_adjacency_rebuild_count: int = 0
 var _terrain_adjacency_profiling_enabled: bool = false
@@ -987,8 +989,40 @@ func _get_terrain_index_patch_map() -> Dictionary:
 	return result.get("patches_by_stable_id", {}).duplicate()
 
 
+## Returns the current Index map result without caching it. This small seam lets
+## tests count snapshot reads and inject a transient Index read failure.
+func _read_terrain_index_patch_map_for_batch() -> Dictionary:
+	if _terrain_adjacency_index == null:
+		return {"ok": false, "error": "terrain_adjacency_index_unavailable"}
+	var result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+	if not bool(result.get("ok", false)):
+		return {"ok": false, "error": "terrain_adjacency_index_snapshot_failed"}
+	var patches_value: Variant = result.get("patches_by_stable_id", {})
+	if not (patches_value is Dictionary):
+		return {"ok": false, "error": "terrain_adjacency_index_snapshot_invalid"}
+	return {"ok": true, "patches_by_stable_id": patches_value}
+
+
+## The Index is immutable for the duration of a Controller batch. Capture its
+## baseline lazily once, then reuse it for every add/remove/restore delta.
+func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
+	if not _terrain_adjacency_batch_original_patch_map_captured:
+		# Do not cache a missing Index or a failed read; later delta events retry.
+		var result: Dictionary = _read_terrain_index_patch_map_for_batch()
+		if not bool(result.get("ok", false)):
+			return {}
+		var patches_value: Variant = result.get("patches_by_stable_id", {})
+		if not (patches_value is Dictionary):
+			return {}
+		# get_patches_by_stable_id() resolves WeakRefs into a fresh Dictionary.
+		# Retain that detached map directly instead of making a second O(P) copy.
+		_terrain_adjacency_batch_original_patch_map = patches_value
+		_terrain_adjacency_batch_original_patch_map_captured = true
+	return _terrain_adjacency_batch_original_patch_map
+
+
 func _record_terrain_batch_chunk_additions(_chunk_id: String, objects: Dictionary) -> void:
-	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	var old_patches: Dictionary = _get_terrain_adjacency_batch_original_patch_map()
 	for stable_id_value in objects.keys():
 		var stable_id: String = str(stable_id_value)
 		var patch: Node3D = objects[stable_id_value] as Node3D
@@ -1004,7 +1038,7 @@ func _record_terrain_batch_chunk_additions(_chunk_id: String, objects: Dictionar
 
 
 func _record_terrain_batch_chunk_removals(_chunk_id: String, objects: Dictionary) -> void:
-	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	var old_patches: Dictionary = _get_terrain_adjacency_batch_original_patch_map()
 	for stable_id_value in objects.keys():
 		var stable_id: String = str(stable_id_value)
 		var patch: Node3D = objects[stable_id_value] as Node3D
@@ -1020,7 +1054,7 @@ func _record_terrain_batch_chunk_removals(_chunk_id: String, objects: Dictionary
 
 
 func _record_terrain_batch_chunk_restored(_chunk_id: String, objects: Dictionary) -> void:
-	var old_patches: Dictionary = _get_terrain_index_patch_map()
+	var old_patches: Dictionary = _get_terrain_adjacency_batch_original_patch_map()
 	for stable_id_value in objects.keys():
 		var stable_id: String = str(stable_id_value)
 		var patch: Node3D = objects[stable_id_value] as Node3D
@@ -1075,6 +1109,8 @@ func _clear_terrain_adjacency_batch_delta() -> void:
 	_terrain_adjacency_batch_added_patches.clear()
 	_terrain_adjacency_batch_removed_ids.clear()
 	_terrain_adjacency_batch_dirty_ids.clear()
+	_terrain_adjacency_batch_original_patch_map.clear()
+	_terrain_adjacency_batch_original_patch_map_captured = false
 
 
 func _sorted_terrain_stable_ids(values: Array) -> Array[String]:
