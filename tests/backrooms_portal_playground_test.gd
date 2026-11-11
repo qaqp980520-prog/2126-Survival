@@ -71,6 +71,18 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("load_world_state_from_dictionary", saved)), "restores valid world envelope")
     _expect(int(world.call("get_inventory_count", "berries")) == 2, "load restores prior inventory count")
     _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
+    _expect(int(saved["backrooms_portal_state"].get("schema_version", 0)) == 1, "Backrooms portal save schema remains v1")
+    for level_name in ["Level 4", "Level 5"]:
+        var level_save: Dictionary = saved.duplicate(true)
+        level_save["current_level"] = level_name
+        var restored_level := bool(world.call("load_world_state_from_dictionary", level_save))
+        _expect(restored_level, "%s save passes world-level validation" % level_name)
+        if restored_level:
+            _expect(str(world.call("get_current_level")) == level_name, "%s save restores the selected level" % level_name)
+            await process_frame
+    _expect(bool(world.call("load_world_state_from_dictionary", saved)), "restores original save after Level 4/5 compatibility checks")
+    await process_frame
+    _expect(str(world.call("get_current_level")) == entered_level, "restoring original save returns to entered level")
 
     var bridge: Node = world.get("bridge")
     _expect(bool(bridge.call("collect_world_item", "rock", 40)), "rock pickup updates shared inventory")
@@ -124,6 +136,7 @@ func _entity_visual_source_contract_is_present() -> bool:
     var required_tokens: Array[String] = [
         "func _create_duller_entity",
         "func _create_deathmoth_entity",
+        "root.position = Vector3(float(posmod(_hash_value(cell.x, cell.y, 2710), 5) - 2) * 0.58, 0.42,"
         "\"duller\":",
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",

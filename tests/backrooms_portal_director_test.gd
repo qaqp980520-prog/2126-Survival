@@ -1,9 +1,11 @@
 extends SceneTree
 
 const Director = preload("res://systems/BackroomsPortalDirector.gd")
+const EXPECTED_TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]
 const BOUNDS := Rect2(0.0, 0.0, 1000.0, 1000.0)
 
 func _initialize() -> void:
+    assert(Director.TARGET_LEVELS == EXPECTED_TARGET_LEVELS)
     _test_spawn_timer_and_distance()
     _test_spawn_retry_when_no_safe_point_exists()
     _test_portal_consumption_is_single_use()

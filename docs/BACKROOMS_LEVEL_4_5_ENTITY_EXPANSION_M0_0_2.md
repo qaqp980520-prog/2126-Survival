@@ -35,14 +35,16 @@
 ## 回歸測試
 
 - `godot --headless --path . --script res://tests/backrooms_entity_director_test.gd`
-  - 驗證 Level 0–5 精確白名單、每種實體在固定測試格網可生成、同格重載結果穩定、生成不越界、未知層級 fail-closed。
+  - 驗證 Level 0–5 精確白名單、81×81 固定座標格網上的確定性、生成不越界、每個允許實體至少可生成一次，以及未知層級 fail-closed；測試結果採彙總輸出，避免逐格刷屏。
+- `godot --headless --path . --script res://tests/backrooms_portal_director_test.gd`
+  - 驗證 Portal Director 的目的地清單精確等於 Level 0–5，並保留既有生成計時、單次使用與存檔往返測試。
 - `godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd`
-  - 驗證傳送門目的地層級清單、Level 3 Clump／Level 4 Duller／Level 5 Deathmoth 外觀實例化，以及 Clump 地面高度。
+  - 驗證 Level 4／5 視覺工廠原始碼接線、Clump 根節點高度修正、headless 模式不建立 render-only MeshInstance3D，以及 Level 4／5 世界存檔可通過驗證並可恢復原層級。這些 headless 檢查不等於圖形模式外觀驗收。
 - PR 會觸發既有 Godot 4.3 headless full compatibility gate。
 
 ## 限制與下一步
 
 - 新增實體目前只有靜態視覺原型，尚無巡邏、感知、追逐、互動或傷害 AI。
 - Level 0 仍刻意維持空白；Level 6 以後尚未加入名單。
-- 仍需圖形模式確認 Deathmoth 翼片材質與 Duller 比例；Headless 測試只驗證層級規則及不建立 render-only meshes，不能取代實際畫面檢查。
+- Headless 測試不會實例化 Duller／Deathmoth 的 MeshInstance3D；視覺工廠接線與 Clump 高度採原始碼契約檢查。仍需圖形模式確認 Deathmoth 翼片材質、Duller 比例與 Clump 實際落地效果，不能把 headless 通過視為畫面驗收。
 - 下一步先驗證本 PR exact-head Godot CI，再擴充 Level 6 以後的層級內容，避免一次把未驗證的實體鋪滿所有層級。

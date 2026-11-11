@@ -24,15 +24,21 @@ func _run() -> void:
             continue
 
         var observed: Dictionary = {}
+        var deterministic := true
+        var whitelist_valid := true
         for z in range(-40, 41):
             for x in range(-40, 41):
                 var cell := Vector2i(x, z)
                 var first: Array[String] = EntityDirector.get_cell_spawns(level_name, cell)
                 var second: Array[String] = EntityDirector.get_cell_spawns(level_name, cell)
-                _expect(first == second, "%s cell selection is deterministic" % level_name)
+                if first != second:
+                    deterministic = false
                 for entity_id in first:
-                    _expect(expected.has(entity_id), "%s spawn stays on its own whitelist" % level_name)
+                    if not expected.has(entity_id):
+                        whitelist_valid = false
                     observed[entity_id] = true
+        _expect(deterministic, "%s cell selection is deterministic across the sampled grid" % level_name)
+        _expect(whitelist_valid, "%s spawns remain on their own whitelist" % level_name)
         for entity_id in expected:
             _expect(observed.has(entity_id), "%s entity %s can spawn in the sampled grid" % [level_name, entity_id])
 
