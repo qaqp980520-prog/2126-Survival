@@ -549,7 +549,9 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
     for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
         match entity_id:
             "window":
-                _create_window_entity(cell_root, cell)
+                # A window must be attached to a solid boundary, never floating in an open corridor.
+                if not _edge_is_open(cell, Vector2i(0, -1)):
+                    _create_window_entity(cell_root, cell)
             "smiler":
                 _create_smiler_entity(cell_root, cell)
 
