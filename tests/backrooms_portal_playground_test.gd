@@ -139,27 +139,28 @@ func _entity_visual_source_contract_is_present() -> bool:
         "func _create_duller_entity",
         "func _create_deathmoth_entity",
         "func _prepare_entity_root",
-        "if _prepare_entity_root(smiler_root, cell, \\"smiler\\"):",
-        "if _prepare_entity_root(root, cell, \\"hound\\"):",
-        "if _prepare_entity_root(root, cell, \\"skin_stealer\\"):",
-        "if _prepare_entity_root(root, cell, \\"clump\\"):",
-        "if _prepare_entity_root(root, cell, \\"faceling\\"):",
-        "if _prepare_entity_root(root, cell, \\"duller\\"):",
-        "if _prepare_entity_root(root, cell, \\"deathmoth\\"):",
         "var wall_direction := _window_wall_direction_for_cell(cell)",
         "_create_window_entity(cell_root, cell, wall_direction)",
         "func _window_wall_direction_for_cell",
         "func _window_entity_transform_for_wall",
         "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
-        "window_root.set_meta(\\"wall_direction\\", wall_direction)",
-        "if DisplayServer.get_name() == \\"headless\\":"
+        "window_root.set_meta(\\\"wall_direction\\\", wall_direction)",
+        "if DisplayServer.get_name() == \\\"headless\\:",
+        "if _prepare_entity_root(smiler_root, cell, \\\"smiler\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"hound\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"skin_stealer\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"clump\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"faceling\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"duller\\\"):",
+        "if _prepare_entity_root(root, cell, \\\"deathmoth\\\"):",
     ]
     for token in required_tokens:
         if not source.contains(token):
             return false
-    if source.contains("if is_headless and entity_id != \\"window\\":"):
+    if source.contains("if is_headless and entity_id != \"window\":"):
         return false
     return true
+
 func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
     if DisplayServer.get_name() != "headless":
         return true
@@ -272,6 +273,7 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
 
     world.set("current_level", original_level)
     return true
+
 func _contains_mesh_instance(node: Node) -> bool:
     if node is MeshInstance3D:
         return true
