@@ -947,6 +947,7 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 		var collider_result: Dictionary = result.get("collider", {})
 		var collider_profile: Dictionary = collider_result.get("profile_usec", {})
 		var coordinator_profile: Dictionary = result.get("coordinator_profile_usec", {})
+		var coordinator_plan_delta_profile: Dictionary = coordinator_profile.get("plan_delta_subphases_usec", {})
 		var collider_commit_present: bool = result.has("collider")
 		var active_edge_count: int = int(_terrain_transition_collider_manager.call("get_transition_count"))
 		var active_corner_cap_count: int = int(_terrain_transition_collider_manager.call("get_corner_cap_count"))
@@ -962,6 +963,7 @@ func _run_incremental_terrain_adjacency_batch() -> Dictionary:
 			"collider_resource_staging_usec": int(collider_profile.get("resource_staging_usec", 0)),
 			"collider_activation_commit_usec": int(collider_profile.get("activation_commit_usec", 0)),
 			"coordinator_plan_delta_usec": int(coordinator_profile.get("plan_delta_usec", 0)),
+			"coordinator_plan_delta_profile_usec": coordinator_plan_delta_profile.duplicate(true),
 			"coordinator_index_reservation_usec": int(coordinator_profile.get("index_reservation_usec", 0)),
 			"coordinator_candidate_patch_map_usec": int(coordinator_profile.get("candidate_patch_map_usec", 0)),
 			"coordinator_candidate_descriptor_snapshot_usec": int(coordinator_profile.get("candidate_descriptor_snapshot_usec", 0)),

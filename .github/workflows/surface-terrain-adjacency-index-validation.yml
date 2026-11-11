@@ -8,7 +8,11 @@ on:
       - 'systems/SurfaceTerrainAffectedComponentPlanner.gd'
       - 'systems/SurfaceTerrainCornerConflictResolver.gd'
       - 'systems/SurfaceTerrainTransitionDescriptor.gd'
+      - 'systems/SurfaceTerrainAdjacencyCoordinator.gd'
+      - 'systems/MineralChunkController.gd'
       - 'tests/surface_terrain_adjacency_index_test.gd'
+      - 'tests/surface_chunk_production_benchmark.gd'
+      - 'docs/SURFACE_TERRAIN_INDEX_PLAN_DELTA_PHASE_BREAKDOWN_M0_2_13_13.md'
       - 'project.godot'
       - '.github/workflows/surface-terrain-adjacency-index-validation.yml'
   workflow_dispatch:
@@ -43,7 +47,13 @@ jobs:
           grep -Fq 'get_corner_reports_by_stable_id' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'candidate_instance_ids' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'committed_patch_size_invalid' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'PLAN_DELTA_PROFILE_KEYS' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'candidate_copy_usec' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'plan_delta_subphases_usec' systems/SurfaceTerrainAdjacencyCoordinator.gd
+          grep -Fq 'coordinator_plan_delta_profile_usec' systems/MineralChunkController.gd
+          grep -Fq 'plan_delta_phase_profile_valid' tests/surface_chunk_production_benchmark.gd
           grep -Fq '_test_patch_size_cache_after_emptying_index' tests/surface_terrain_adjacency_index_test.gd
+          grep -Fq '_test_plan_delta_phase_profile' tests/surface_terrain_adjacency_index_test.gd
       - name: Import and parse root project
         run: godot --headless --path . --import
       - name: Run incremental adjacency index and full-rebuild oracle regressions
