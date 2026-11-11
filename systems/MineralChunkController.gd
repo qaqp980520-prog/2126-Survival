@@ -35,6 +35,7 @@ var _terrain_adjacency_batch_added_patches: Dictionary = {}
 var _terrain_adjacency_batch_removed_ids: Dictionary = {}
 var _terrain_adjacency_batch_original_patch_map: Dictionary = {}
 var _terrain_adjacency_batch_original_patch_map_captured: bool = false
+var _terrain_adjacency_batch_requires_full_rebind: bool = false
 var _terrain_adjacency_batch_dirty_ids: Dictionary = {}
 var _terrain_adjacency_rebuild_count: int = 0
 var _terrain_adjacency_profiling_enabled: bool = false
@@ -611,8 +612,9 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	var collect_usec: int = Time.get_ticks_usec() - collect_started_usec if _terrain_adjacency_profiling_enabled else 0
 	var result: Dictionary
 	var incremental_available: bool = _ensure_transition_collider_manager() and _supports_incremental_terrain_adjacency()
+	var batch_requires_full_rebind: bool = _terrain_adjacency_batch_requires_full_rebind
 	var used_incremental_path: bool = false
-	if incremental_available and _terrain_adjacency_batch_dirty_ids.is_empty():
+	if incremental_available and _terrain_adjacency_batch_dirty_ids.is_empty() and not batch_requires_full_rebind:
 		if _terrain_adjacency_index == null and _has_untracked_existing_terrain_patches():
 			# A controller upgraded or externally populated before the Index existed.
 			# Bootstrap from the authoritative full Binder once, then use deltas next time.
@@ -621,10 +623,11 @@ func end_terrain_adjacency_batch() -> Dictionary:
 			used_incremental_path = true
 			result = _run_incremental_terrain_adjacency_batch()
 	else:
-		# In-place terrain edits change the live Patch snapshot before planning. The
-		# current Index intentionally rejects stale committed snapshots, so keep this
-		# less frequent path on the full Binder until it gains an explicit edit reservation.
+		# In-place terrain edits and an unavailable batch baseline both require the
+		# authoritative full Binder path; do not classify deltas against an empty map.
 		result = _rebind_terrain_patches(patches)
+		if batch_requires_full_rebind:
+			result["incremental_fallback_reason"] = "batch_index_snapshot_unavailable"
 	if _terrain_adjacency_profiling_enabled:
 		var profile: Dictionary = _last_terrain_adjacency_profile.duplicate(true)
 		profile["collect_loaded_patches_usec"] = collect_usec
@@ -644,9 +647,9 @@ func end_terrain_adjacency_batch() -> Dictionary:
 			result["error"] = "terrain_adjacency_failed_and_pending_unload_rollback_failed"
 			result["pending_recovery_required"] = true
 			return result
-		if used_incremental_path:
-			# A failed delta leaves newly registered roots alive. Reconcile the actual
-			# live set through the authoritative full path before the Director retries.
+		if used_incremental_path or batch_requires_full_rebind:
+			# A failed delta or failed-baseline fallback can leave registered roots
+			# whose Index membership needs reconciliation before the Director retries.
 			_terrain_adjacency_recovery_required = true
 			var reconcile: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 			result["fallback_reconcile_ok"] = bool(reconcile.get("ok", false))
@@ -1007,12 +1010,15 @@ func _read_terrain_index_patch_map_for_batch() -> Dictionary:
 ## baseline lazily once, then reuse it for every add/remove/restore delta.
 func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
 	if not _terrain_adjacency_batch_original_patch_map_captured:
-		# Do not cache a missing Index or a failed read; later delta events retry.
+		# A failed baseline read makes per-ID delta classification unsafe. Keep the
+		# batch on the authoritative full Binder path even if a later read succeeds.
 		var result: Dictionary = _read_terrain_index_patch_map_for_batch()
 		if not bool(result.get("ok", false)):
+			_terrain_adjacency_batch_requires_full_rebind = true
 			return {}
 		var patches_value: Variant = result.get("patches_by_stable_id", {})
 		if not (patches_value is Dictionary):
+			_terrain_adjacency_batch_requires_full_rebind = true
 			return {}
 		# get_patches_by_stable_id() resolves WeakRefs into a fresh Dictionary.
 		# Retain that detached map directly instead of making a second O(P) copy.
@@ -1111,6 +1117,7 @@ func _clear_terrain_adjacency_batch_delta() -> void:
 	_terrain_adjacency_batch_dirty_ids.clear()
 	_terrain_adjacency_batch_original_patch_map.clear()
 	_terrain_adjacency_batch_original_patch_map_captured = false
+	_terrain_adjacency_batch_requires_full_rebind = false
 
 
 func _sorted_terrain_stable_ids(values: Array) -> Array[String]:
