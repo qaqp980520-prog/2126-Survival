@@ -546,6 +546,10 @@ func _create_maze_cell(cell: Vector2i) -> void:
     _spawn_level_entities_for_cell(root, cell)
 
 func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
+    # Headless Godot uses a dummy renderer. Keep spawn rules covered by the
+    # EntityDirector tests without creating render-only MeshInstance3D nodes.
+    if DisplayServer.get_name() == "headless":
+        return
     for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
         match entity_id:
             "window":

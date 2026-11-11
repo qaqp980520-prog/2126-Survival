@@ -28,6 +28,7 @@
 
 - Godot 4.3。
 - 依賴既有 `BackroomsEntityDirector`、`BackroomsPortalDirector`、`BackroomsPortalPlayground` 與程序化 MeshInstance3D／StandardMaterial3D。
+- Headless 模式不建立實體視覺 MeshInstance3D；層級白名單與確定性生成由獨立 Director 測試驗證，避免 dummy renderer 在區塊卸載時產生無效 mesh 錯誤。圖形模式仍建立完整視覺原型。
 - 無外部套件、autoload、Project Settings、場景接線或存檔 schema 變更。
 - Repository root 執行：`godot --headless --path . --import`。
 
@@ -43,5 +44,5 @@
 
 - 新增實體目前只有靜態視覺原型，尚無巡邏、感知、追逐、互動或傷害 AI。
 - Level 0 仍刻意維持空白；Level 6 以後尚未加入名單。
-- 仍需圖形模式確認 Deathmoth 翼片材質與 Duller 比例；Headless 測試不能取代實際畫面檢查。
+- 仍需圖形模式確認 Deathmoth 翼片材質與 Duller 比例；Headless 測試只驗證層級規則及不建立 render-only meshes，不能取代實際畫面檢查。
 - 下一步先驗證本 PR exact-head Godot CI，再擴充 Level 6 以後的層級內容，避免一次把未驗證的實體鋪滿所有層級。

@@ -53,6 +53,7 @@ func _run_integration_test() -> void:
     print("Backrooms integration entered: %s" % entered_level)
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-5 list")
     _expect(_entity_visual_source_contract_is_present(), "Level 4 and Level 5 visual factories are wired into the playground")
+    _expect(_headless_entity_visual_guard_is_respected(world), "headless Level 4 and Level 5 spawns avoid dummy-renderer mesh errors")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
@@ -132,6 +133,59 @@ func _entity_visual_source_contract_is_present() -> bool:
         if not source.contains(token):
             return false
     return true
+
+
+func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
+    if DisplayServer.get_name() != "headless":
+        return true
+    var room := world.get("backrooms_room") as Node3D
+    if room == null or _contains_mesh_instance(room):
+        return false
+
+    var original_level := str(world.get("current_level"))
+    var checks := [
+        {"level": "Level 4", "entity": "duller"},
+        {"level": "Level 5", "entity": "deathmoth"}
+    ]
+    for check in checks:
+        var level_name: String = str(check["level"])
+        var entity_id: String = str(check["entity"])
+        var found_cell := Vector2i.ZERO
+        var found := false
+        for z in range(-40, 41):
+            for x in range(-40, 41):
+                var candidate := Vector2i(x, z)
+                if EntityDirector.get_cell_spawns(level_name, candidate).has(entity_id):
+                    found_cell = candidate
+                    found = true
+                    break
+            if found:
+                break
+        if not found:
+            world.set("current_level", original_level)
+            return false
+
+        world.set("current_level", level_name)
+        var cell_root := Node3D.new()
+        room.add_child(cell_root)
+        world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
+        var contains_mesh := _contains_mesh_instance(cell_root)
+        cell_root.queue_free()
+        if contains_mesh:
+            world.set("current_level", original_level)
+            return false
+
+    world.set("current_level", original_level)
+    return true
+
+
+func _contains_mesh_instance(node: Node) -> bool:
+    if node is MeshInstance3D:
+        return true
+    for child in node.get_children():
+        if _contains_mesh_instance(child):
+            return true
+    return false
 
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
