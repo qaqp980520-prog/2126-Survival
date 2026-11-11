@@ -993,7 +993,18 @@ func _get_terrain_index_patch_map() -> Dictionary:
 ## baseline lazily once, then reuse it for every add/remove/restore delta.
 func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
 	if not _terrain_adjacency_batch_original_patch_map_captured:
-		_terrain_adjacency_batch_original_patch_map = _get_terrain_index_patch_map()
+		# A missing Index is a valid empty baseline, but do not cache it: runtime
+		# bootstrap may occur before the first committed batch delta is finalized.
+		if _terrain_adjacency_index == null:
+			return {}
+		var result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+		if not bool(result.get("ok", false)):
+			# Preserve the old retry behavior when an Index snapshot is temporarily unavailable.
+			return {}
+		var patches_value: Variant = result.get("patches_by_stable_id", {})
+		if not (patches_value is Dictionary):
+			return {}
+		_terrain_adjacency_batch_original_patch_map = patches_value.duplicate()
 		_terrain_adjacency_batch_original_patch_map_captured = true
 	return _terrain_adjacency_batch_original_patch_map
 
