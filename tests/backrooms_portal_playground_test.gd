@@ -51,7 +51,7 @@ func _run_integration_test() -> void:
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
     _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-5 list")
-    _expect(_level_entity_visuals_are_created(world), "Level 3, Level 4 and Level 5 entity prototypes instantiate")
+    _expect(await _level_entity_visuals_are_created(world), "Level 3, Level 4 and Level 5 entity prototypes instantiate")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
@@ -116,6 +116,9 @@ func _run_integration_test() -> void:
 
 func _level_entity_visuals_are_created(world: Node) -> bool:
     var original_level := str(world.get("current_level"))
+    var backrooms_world := world.get_node_or_null("BackroomsWorld") as Node3D
+    if backrooms_world == null:
+        return false
     var checks := [
         {"level": "Level 3", "entity": "clump"},
         {"level": "Level 4", "entity": "duller"},
@@ -139,9 +142,12 @@ func _level_entity_visuals_are_created(world: Node) -> bool:
             world.set("current_level", original_level)
             return false
         world.set("current_level", level_name)
+        # Add the fixture to the live scene tree before creating MeshInstance3D
+        # nodes; headless RenderingServer resources must be initialized before cleanup.
         var cell_root := Node3D.new()
+        backrooms_world.add_child(cell_root)
         world.call("_spawn_level_entities_for_cell", cell_root, found_cell)
-        var matched: Node3D
+        var matched: Node3D = null
         for child in cell_root.get_children():
             var entity_node := child as Node3D
             if entity_node != null and str(entity_node.get_meta("backrooms_entity_id", "")) == entity_id:
@@ -152,7 +158,8 @@ func _level_entity_visuals_are_created(world: Node) -> bool:
             valid = is_equal_approx(matched.position.y, 0.42)
         elif matched != null and entity_id == "deathmoth":
             valid = matched.get_child_count() >= 10
-        cell_root.free()
+        cell_root.queue_free()
+        await process_frame
         if not valid:
             world.set("current_level", original_level)
             return false
