@@ -1,0 +1,71 @@
+name: Mineral Chunk Controller Batch Index Snapshot Validation
+
+on:
+  pull_request:
+    paths:
+      - "systems/MineralChunkController.gd"
+      - "systems/SurfaceTerrainAdjacencyCoordinator.gd"
+      - "tests/mineral_chunk_controller_test.gd"
+      - "tests/surface_terrain_adjacency_coordinator_test.gd"
+      - "docs/MINERAL_CHUNK_CONTROLLER_COORDINATOR_REUSES_BATCH_INDEX_SNAPSHOT_M0_2_13_10.md"
+      - ".github/workflows/mineral-chunk-controller-batch-index-snapshot-validation.yml"
+
+jobs:
+  validate:
+    name: Controller and Coordinator Batch Snapshot Regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Godot version and validation inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/MineralChunkController.gd
+          test -f systems/SurfaceTerrainAdjacencyCoordinator.gd
+          test -f tests/mineral_chunk_controller_test.gd
+          test -f tests/surface_terrain_adjacency_coordinator_test.gd
+          grep -Fq 'old_patches_snapshot_generation' systems/SurfaceTerrainAdjacencyCoordinator.gd
+          grep -Fq 'incremental_index_generation_changed_during_batch' systems/MineralChunkController.gd
+          grep -Fq 'CountingAdjacencyIndex' tests/mineral_chunk_controller_test.gd
+          grep -Fq 'batch_index_snapshot_generation_mismatch' tests/surface_terrain_adjacency_coordinator_test.gd
+
+      - name: Import and parse root project
+        run: godot --headless --path . --import
+
+      - name: Run Mineral Chunk Controller integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_chunk_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral chunk controller integration tests passed."
+
+      - name: Run Surface Terrain Coordinator transaction tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/surface_terrain_adjacency_coordinator_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency coordinator transaction tests passed."
+
+      - name: Checkout cleanup
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          git status --short
+          test -z "$(git status --porcelain)"
+
+      - name: Complete job
+        if: always()
+        run: echo "Controller and Coordinator batch snapshot validation complete."
