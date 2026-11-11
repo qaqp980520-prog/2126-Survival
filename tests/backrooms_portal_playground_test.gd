@@ -142,16 +142,19 @@ func _entity_visual_source_contract_is_present() -> bool:
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",
         "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")",
+        "if is_headless and entity_id != \"window\":",
+        "var wall_direction := _window_wall_direction_for_cell(cell)",
+        "_create_window_entity(cell_root, cell, wall_direction)",
         "func _window_wall_direction_for_cell",
         "func _window_entity_transform_for_wall",
         "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
-        "window_root.set_meta(\"wall_direction\", wall_direction)"
+        "window_root.set_meta(\"wall_direction\", wall_direction)",
+        "if DisplayServer.get_name() == \"headless\":"
     ]
     for token in required_tokens:
         if not source.contains(token):
             return false
     return true
-
 
 func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
     if DisplayServer.get_name() != "headless":
@@ -161,6 +164,63 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
         return false
 
     var original_level := str(world.get("current_level"))
+    var window_cell := Vector2i.ZERO
+    var window_direction := Vector2i.ZERO
+    var open_candidate_cell := Vector2i.ZERO
+    var found_window_cell := false
+    var found_open_candidate := false
+    for z in range(-40, 41):
+        for x in range(-40, 41):
+            var candidate := Vector2i(x, z)
+            if not EntityDirector.get_cell_spawns("Level 1", candidate).has("window"):
+                continue
+            var direction: Vector2i = world.call("_window_wall_direction_for_cell", candidate)
+            if direction == Vector2i.ZERO and not found_open_candidate:
+                open_candidate_cell = candidate
+                found_open_candidate = true
+            elif direction != Vector2i.ZERO and not found_window_cell:
+                window_cell = candidate
+                window_direction = direction
+                found_window_cell = true
+            if found_window_cell and found_open_candidate:
+                break
+        if found_window_cell and found_open_candidate:
+            break
+
+    if not found_window_cell or not found_open_candidate:
+        world.set("current_level", original_level)
+        return false
+
+    world.set("current_level", "Level 1")
+    var window_cell_root := Node3D.new()
+    room.add_child(window_cell_root)
+    world.call("_spawn_level_entities_for_cell", window_cell_root, window_cell)
+    var window_root := window_cell_root.get_node_or_null("Entity_Window") as Node3D
+    var expected_transform: Transform3D = world.call("_window_entity_transform_for_wall", window_direction)
+    var window_valid := window_root != null
+    if window_valid:
+        window_valid = (
+            str(window_root.get_meta("backrooms_entity_id")) == "window"
+            and window_root.get_meta("spawn_cell") == window_cell
+            and window_root.get_meta("wall_direction") == window_direction
+            and window_root.transform.origin.is_equal_approx(expected_transform.origin)
+            and window_root.transform.basis.z.is_equal_approx(expected_transform.basis.z)
+            and not _contains_mesh_instance(window_cell_root)
+        )
+    window_cell_root.queue_free()
+    if not window_valid:
+        world.set("current_level", original_level)
+        return false
+
+    var open_cell_root := Node3D.new()
+    room.add_child(open_cell_root)
+    world.call("_spawn_level_entities_for_cell", open_cell_root, open_candidate_cell)
+    var unexpected_window := open_cell_root.get_node_or_null("Entity_Window") != null
+    open_cell_root.queue_free()
+    if unexpected_window:
+        world.set("current_level", original_level)
+        return false
+
     var checks := [
         {"level": "Level 4", "entity": "duller"},
         {"level": "Level 5", "entity": "deathmoth"}
@@ -195,7 +255,6 @@ func _headless_entity_visual_guard_is_respected(world: Node) -> bool:
 
     world.set("current_level", original_level)
     return true
-
 
 func _contains_mesh_instance(node: Node) -> bool:
     if node is MeshInstance3D:
