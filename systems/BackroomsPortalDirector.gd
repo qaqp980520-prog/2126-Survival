@@ -77,7 +77,7 @@ func load_save_dict(data: Dictionary) -> bool:
     if not (saved_portal is Dictionary):
         return false
     # Older schema-1 saves may omit rng_state; preserve the constructor state for
-    # those legacy payloads. New saves must restore a non-zero integer RNG state.
+    # those legacy payloads. New saves restore a canonical decimal integer RNG state.
     var has_rng_state: bool = data.has("rng_state")
     var saved_rng_state: Variant = data.get("rng_state", null)
     var restored_rng_state: int = 0
