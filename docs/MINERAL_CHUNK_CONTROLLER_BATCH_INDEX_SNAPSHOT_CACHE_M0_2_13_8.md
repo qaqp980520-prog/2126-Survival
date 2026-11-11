@@ -67,5 +67,5 @@ In tests/mineral_chunk_controller_test.gd:
 
 - Parent PR #314 exact HEAD: b9b98fdcf422524cc3be576388e1a137abbf97ca.
 - Branch: perf/mineral-chunk-controller-cache-batch-index-snapshot-2026-11-11.
-- Child PR: to be created after the branch diff is reviewed.
+- Child PR #315: Open / Draft / unmerged; the PR and Run 206 record the current exact HEAD and CI status.
 - Keep this change Draft / unmerged until exact-head tests and parent-stack review complete.
