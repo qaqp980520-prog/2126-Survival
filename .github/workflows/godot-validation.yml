@@ -73,6 +73,8 @@ jobs:
           test -f systems/MineralGridStreamingDirector.gd
           test -f tests/mineral_grid_streaming_director_test.gd
           test -f tests/backrooms_player_input_test.gd
+          test -f systems/BackroomsEntityDirector.gd
+          test -f tests/backrooms_entity_director_test.gd
           test -f systems/BackroomsSettingsProfile.gd
           test -f tests/backrooms_settings_profile_test.gd
           test -f tests/backrooms_settings_integration_test.gd
