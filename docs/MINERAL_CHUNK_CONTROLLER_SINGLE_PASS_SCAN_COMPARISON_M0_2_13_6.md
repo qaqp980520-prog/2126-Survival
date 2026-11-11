@@ -28,6 +28,7 @@ This version adds an in-process A/B comparison. Both algorithms traverse the exa
   - Adds same-process legacy-versus-combined scan comparison and JSONL evidence.
 - `.github/workflows/surface-chunk-production-benchmark.yml`
   - Requires the comparison implementation and emitted JSONL payload.
+  - Uses `godot --headless --path . --import` as the deterministic root-resource import barrier, matching the full and lifecycle workflows.
 - `docs/MINERAL_CHUNK_CONTROLLER_SINGLE_PASS_SCAN_COMPARISON_M0_2_13_6.md`
   - This technical record.
 
@@ -46,9 +47,10 @@ The benchmark must:
 2. Confirm exact parity of Mineral, Crop Plot, and Stateful Object dictionaries, including Node identity.
 3. Complete five warm-up iterations for each path.
 4. Complete forty measured iterations for each path, alternating execution order.
-5. Emit one valid comparison object in the Radius-8 `expand_stage_commit` JSONL record.
-6. Preserve the existing 24 JSONL records and existing production streaming/collider invariants.
-7. Keep timing informational: no assertion requires the new path to be faster, because CI runner scheduling and process load can affect microsecond measurements.
+5. Complete the root-project import barrier before starting the benchmark process.
+6. Emit one valid comparison object in the Radius-8 `expand_stage_commit` JSONL record.
+7. Preserve the existing 24 JSONL records and existing production streaming/collider invariants.
+8. Keep timing informational: no assertion requires the new path to be faster, because CI runner scheduling and process load can affect microsecond measurements.
 
 ## GitHub version
 
@@ -64,6 +66,7 @@ The benchmark must:
 - Headless timing is not rendered FPS or target-device performance.
 - No iPhone, GPU, device-memory, touch, or PhysicsServer allocation-failure QA is claimed.
 - No speedup is claimed until the new exact-head artifact is downloaded, parsed, and the A/B output is inspected.
+- The benchmark workflow now uses the same deterministic root import barrier as the full and lifecycle workflows; it does not modify the Backrooms SVG asset or runtime.
 
 ## Next step
 
