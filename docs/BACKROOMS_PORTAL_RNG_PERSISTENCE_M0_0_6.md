@@ -9,7 +9,7 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 - Add the current Godot RandomNumberGenerator state to new portal save dictionaries as rng_state.
 - Restore the saved non-zero integer state after validating the entire candidate payload and before applying the remaining scalar/portal fields.
 - Keep schema_version at 1 and accept legacy schema-1 payloads without rng_state; those payloads retain the newly constructed director RNG state and therefore preserve old-save compatibility, but cannot guarantee exact post-load random replay.
-- Reject malformed or zero rng_state values atomically.
+- Reject non-integer rng_state values atomically. The stored value is expected to come from this director's own RandomNumberGenerator.state snapshot; Godot documents that arbitrary state values must not be supplied, so the loader cannot prove the internal PCG provenance of a manually edited integer.
 
 ## Files
 
@@ -31,7 +31,7 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 - Load it into a director constructed with a different seed.
 - Verify the saved payload round-trips, portal consumption chooses the same destination, the next spawn countdown matches, and the next spawned portal position is identical.
 - Verify a legacy schema-1 payload without rng_state still loads.
-- Verify zero and non-integer rng_state payloads are rejected without mutating the director.
+- Verify non-integer rng_state payloads are rejected without mutating the director.
 
 ## Validation status
 
