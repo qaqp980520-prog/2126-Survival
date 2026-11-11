@@ -28,23 +28,23 @@ In `systems/MineralChunkController.gd`:
 In `tests/mineral_chunk_controller_test.gd`:
 
 - Add a test-only `CountingController` subclass that counts calls to `_collect_loaded_terrain_patches()`.
-- Load two empty Chunks inside one adjacency batch.
+- Load two Chunks containing real `SurfaceTerrainPatch` Nodes inside one adjacency batch, with a real `WorldObjectStateRegistry`.
 - Assert zero full loaded-patch collections during both per-Chunk registrations.
-- Finalize the batch and assert exactly one full loaded-patch collection.
-- Load a Chunk outside a batch and assert the normal single collection still occurs.
+- Finalize the batch and assert exactly one full loaded-patch collection that includes both committed Patch Nodes.
+- Load a third Chunk outside a batch and assert the normal single collection still occurs and sees the two previously loaded Patch Nodes.
 
 This proves the optimization does not suppress the required batch-finalization snapshot or change the non-batched path.
 
 ## Dependencies and import
 
 - Godot 4.3.
-- Existing `MineralChunkController.gd`, `MineralVeinRegistry.gd`, and existing terrain adjacency Index / Coordinator / Collider Manager.
+- Existing `MineralChunkController.gd`, `MineralVeinRegistry.gd`, `WorldObjectStateRegistry.gd`, `SurfaceTerrainPatch.gd`, and terrain adjacency Index / Coordinator / Collider Manager.
 - No external packages, new runtime assets, autoloads, scene wiring, project settings, or save-schema changes.
 - Open the repository root or use the existing headless import workflow; no manual import is required.
 
 ## Validation
 
-- Focused Mineral Chunk Controller integration tests must pass, including the new collection-call-count regression.
+- Focused Mineral Chunk Controller integration tests must pass, including the new collection-call-count regression with real Patch Nodes.
 - Mineral Grid Streaming Lifecycle must pass.
 - Production Surface Chunk Benchmark must pass and produce valid per-Chunk phase samples.
 - Full Godot 4.3 compatibility gate must pass on the exact PR head before the change can be considered fully validated.
