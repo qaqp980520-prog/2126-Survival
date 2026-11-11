@@ -58,7 +58,8 @@ func to_save_dict() -> Dictionary:
         "schema_version": SAVE_SCHEMA_VERSION,
         "next_spawn_in": next_spawn_in,
         "portal_serial": portal_serial,
-        "active_portal": portal_payload
+        "active_portal": portal_payload,
+        "rng_state": _rng.state
     }
 
 func load_save_dict(data: Dictionary) -> bool:
@@ -75,6 +76,12 @@ func load_save_dict(data: Dictionary) -> bool:
     var saved_portal: Variant = data.get("active_portal", null)
     if not (saved_portal is Dictionary):
         return false
+    # Older schema-1 saves may omit rng_state; preserve the constructor state for
+    # those legacy payloads. New saves must restore a non-zero integer RNG state.
+    var has_rng_state: bool = data.has("rng_state")
+    var saved_rng_state: Variant = data.get("rng_state", null)
+    if has_rng_state and (not (saved_rng_state is int) or int(saved_rng_state) == 0):
+        return false
     var restored_portal: Dictionary = {}
     if not saved_portal.is_empty():
         var saved_id: Variant = saved_portal.get("id", null)
@@ -89,6 +96,8 @@ func load_save_dict(data: Dictionary) -> bool:
         if not world_bounds.has_point(point):
             return false
         restored_portal = {"id": int(saved_id), "position": point}
+    if has_rng_state:
+        _rng.state = int(saved_rng_state)
     next_spawn_in = float(countdown)
     portal_serial = int(saved_serial)
     active_portal = restored_portal
