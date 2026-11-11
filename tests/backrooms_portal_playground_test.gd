@@ -141,11 +141,11 @@ func _entity_visual_source_contract_is_present() -> bool:
         "\"duller\":",
         "\"deathmoth\":",
         "root.set_meta(\"backrooms_entity_id\", \"duller\")",
-        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\"),
+        "root.set_meta(\"backrooms_entity_id\", \"deathmoth\")",
         "func _window_wall_direction_for_cell",
         "func _window_entity_transform_for_wall",
         "window_root.transform = _window_entity_transform_for_wall(wall_direction)",
-        "window_root.set_meta(\"wall_direction\", wall_direction)""
+        "window_root.set_meta(\"wall_direction\", wall_direction)"
     ]
     for token in required_tokens:
         if not source.contains(token):
@@ -218,7 +218,8 @@ func _window_wall_placement_contract_is_valid(world: Node) -> bool:
             var north_closed: bool = not bool(world.call("_edge_is_open", cell, north))
             var west_closed: bool = not bool(world.call("_edge_is_open", cell, west))
             var direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
-            if direction != world.call("_window_wall_direction_for_cell", cell):
+            var repeated_direction: Vector2i = world.call("_window_wall_direction_for_cell", cell)
+            if direction != repeated_direction:
                 return false
             if direction == Vector2i.ZERO:
                 if north_closed or west_closed:
