@@ -989,17 +989,27 @@ func _get_terrain_index_patch_map() -> Dictionary:
 	return result.get("patches_by_stable_id", {}).duplicate()
 
 
+## Returns the current Index map result without caching it. This small seam lets
+## tests count snapshot reads and inject a transient Index read failure.
+func _read_terrain_index_patch_map_for_batch() -> Dictionary:
+	if _terrain_adjacency_index == null:
+		return {"ok": false, "error": "terrain_adjacency_index_unavailable"}
+	var result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+	if not bool(result.get("ok", false)):
+		return {"ok": false, "error": "terrain_adjacency_index_snapshot_failed"}
+	var patches_value: Variant = result.get("patches_by_stable_id", {})
+	if not (patches_value is Dictionary):
+		return {"ok": false, "error": "terrain_adjacency_index_snapshot_invalid"}
+	return {"ok": true, "patches_by_stable_id": patches_value}
+
+
 ## The Index is immutable for the duration of a Controller batch. Capture its
 ## baseline lazily once, then reuse it for every add/remove/restore delta.
 func _get_terrain_adjacency_batch_original_patch_map() -> Dictionary:
 	if not _terrain_adjacency_batch_original_patch_map_captured:
-		# A missing Index is a valid empty baseline, but do not cache it: runtime
-		# bootstrap may occur before the first committed batch delta is finalized.
-		if _terrain_adjacency_index == null:
-			return {}
-		var result: Dictionary = _terrain_adjacency_index.get_patches_by_stable_id()
+		# Do not cache a missing Index or a failed read; later delta events retry.
+		var result: Dictionary = _read_terrain_index_patch_map_for_batch()
 		if not bool(result.get("ok", false)):
-			# Preserve the old retry behavior when an Index snapshot is temporarily unavailable.
 			return {}
 		var patches_value: Variant = result.get("patches_by_stable_id", {})
 		if not (patches_value is Dictionary):
