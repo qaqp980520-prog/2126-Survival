@@ -9,6 +9,7 @@ const StatefulProp = preload("res://systems/WorldObjectStatefulProp.gd")
 const CropRegistry = preload("res://systems/CropRegistry.gd")
 const CropController = preload("res://systems/CropPlotController.gd")
 const CropPlot = preload("res://systems/CropPlotVisual.gd")
+const TerrainPatch = preload("res://systems/SurfaceTerrainPatch.gd")
 
 class FakeCornerManager extends Node3D:
 	var reports: Array[Dictionary] = []
@@ -18,10 +19,13 @@ class FakeCornerManager extends Node3D:
 
 class CountingController extends "res://systems/MineralChunkController.gd":
 	var loaded_patch_collection_calls: int = 0
+	var last_collected_patch_count: int = -1
 
 	func _collect_loaded_terrain_patches(excluded_chunk_id: String = "") -> Array[Node3D]:
 		loaded_patch_collection_calls += 1
-		return super._collect_loaded_terrain_patches(excluded_chunk_id)
+		var patches: Array[Node3D] = super._collect_loaded_terrain_patches(excluded_chunk_id)
+		last_collected_patch_count = patches.size()
+		return patches
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -170,16 +174,23 @@ func _test_single_pass_invalid_category_paths() -> void:
 func _test_batch_load_skips_redundant_patch_collection() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
 	var controller: CountingController = CountingController.new()
 	root.add_child(registry)
+	root.add_child(object_registry)
 	root.add_child(controller)
 	await process_frame
 	assert(controller.bind_registry(registry))
+	assert(controller.bind_object_state_registry(object_registry))
 	assert(controller.begin_terrain_adjacency_batch())
 
 	for index in range(2):
 		var chunk := Node3D.new()
 		chunk.name = "BatchChunk_%d" % index
+		var patch: Node3D = TerrainPatch.new()
+		patch.name = "TerrainPatch"
+		patch.position.x = float(index) * 100.0
+		chunk.add_child(patch)
 		assert(controller.load_chunk("earth/batch-scan-%d" % index, chunk, now))
 		assert(
 			controller.loaded_patch_collection_calls == 0,
@@ -192,17 +203,30 @@ func _test_batch_load_skips_redundant_patch_collection() -> void:
 		controller.loaded_patch_collection_calls == 1,
 		"Batch finalization collects the complete loaded patch set exactly once"
 	)
+	assert(
+		controller.last_collected_patch_count == 2,
+		"Authoritative batch collection includes both newly committed TerrainPatch Nodes"
+	)
 
 	var direct_chunk := Node3D.new()
 	direct_chunk.name = "DirectChunk"
+	var direct_patch: Node3D = TerrainPatch.new()
+	direct_patch.name = "TerrainPatch"
+	direct_patch.position.x = 200.0
+	direct_chunk.add_child(direct_patch)
 	assert(controller.load_chunk("earth/direct-scan", direct_chunk, now))
 	assert(
 		controller.loaded_patch_collection_calls == 2,
 		"Non-batched Chunk registration retains its single existing-patch collection"
 	)
+	assert(
+		controller.last_collected_patch_count == 2,
+		"Non-batched registration still collects the two previously loaded patches"
+	)
 
 	controller.queue_free()
 	registry.queue_free()
+	object_registry.queue_free()
 	await process_frame
 
 
