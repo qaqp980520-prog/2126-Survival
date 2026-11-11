@@ -6,10 +6,10 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 
 ## Runtime change
 
-- Add the current Godot RandomNumberGenerator state to new portal save dictionaries as rng_state.
+- Add the current Godot RandomNumberGenerator state to new portal save dictionaries as a decimal-string rng_state, preserving the full signed 64-bit value through JSON serialization.
 - Restore the saved non-zero integer state after validating the entire candidate payload and before applying the remaining scalar/portal fields.
 - Keep schema_version at 1 and accept legacy schema-1 payloads without rng_state; those payloads retain the newly constructed director RNG state and therefore preserve old-save compatibility, but cannot guarantee exact post-load random replay.
-- Reject non-integer rng_state values atomically. The stored value is expected to come from this director's own RandomNumberGenerator.state snapshot; Godot documents that arbitrary state values must not be supplied, so the loader cannot prove the internal PCG provenance of a manually edited integer.
+- Reject malformed non-integer rng_state strings atomically. The stored decimal string is expected to come from this director's own RandomNumberGenerator.state snapshot; Godot documents that arbitrary state values must not be supplied, so the loader cannot prove the internal PCG provenance of a manually edited integer string. The string representation also avoids losing precision when the signed 64-bit state passes through JSON.
 
 ## Files
 
@@ -31,7 +31,7 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 - Load it into a director constructed with a different seed.
 - Verify the saved payload round-trips, portal consumption chooses the same destination, the next spawn countdown matches, and the next spawned portal position is identical.
 - Verify a legacy schema-1 payload without rng_state still loads.
-- Verify non-integer rng_state payloads are rejected without mutating the director.
+- Verify malformed non-integer rng_state strings are rejected without mutating the director, and verify the saved state survives JSON.stringify/JSON.parse_string exactly.
 
 ## Validation status
 
