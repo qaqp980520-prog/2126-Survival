@@ -6,7 +6,7 @@ const MIN_SPAWN_INTERVAL: float = 45.0
 const MAX_SPAWN_INTERVAL: float = 75.0
 const RETRY_INTERVAL: float = 5.0
 const MAX_PORTAL_SERIAL: int = 1000000000
-const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3"]
+const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]
 const SPAWN_PADDING: float = 16.0
 
 var _rng: RandomNumberGenerator
