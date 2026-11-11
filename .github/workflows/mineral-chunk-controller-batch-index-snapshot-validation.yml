@@ -7,7 +7,9 @@ on:
       - "systems/SurfaceTerrainAdjacencyCoordinator.gd"
       - "tests/mineral_chunk_controller_test.gd"
       - "tests/surface_terrain_adjacency_coordinator_test.gd"
+      - "tests/surface_chunk_production_benchmark.gd"
       - "docs/MINERAL_CHUNK_CONTROLLER_COORDINATOR_REUSES_BATCH_INDEX_SNAPSHOT_M0_2_13_10.md"
+      - "docs/SURFACE_TERRAIN_COORDINATOR_PHASE_PROFILING_M0_2_13_11.md"
       - ".github/workflows/mineral-chunk-controller-batch-index-snapshot-validation.yml"
 
 jobs:
@@ -35,6 +37,10 @@ jobs:
           grep -Fq 'incremental_index_generation_changed_during_batch' systems/MineralChunkController.gd
           grep -Fq 'CountingAdjacencyIndex' tests/mineral_chunk_controller_test.gd
           grep -Fq 'batch_index_snapshot_generation_mismatch' tests/surface_terrain_adjacency_coordinator_test.gd
+          grep -Fq 'coordinator_profile_usec' systems/SurfaceTerrainAdjacencyCoordinator.gd
+          grep -Fq '_test_profiled_execution_reports_non_overlapping_phases' tests/surface_terrain_adjacency_coordinator_test.gd
+          grep -Fq 'candidate_patch_map_usec' tests/surface_chunk_production_benchmark.gd
+          grep -Fq 'coordinator_phase_profile_valid' tests/surface_chunk_production_benchmark.gd
 
       - name: Import and parse root project
         run: godot --headless --path . --import

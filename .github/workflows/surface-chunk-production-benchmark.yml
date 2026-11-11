@@ -60,6 +60,8 @@ jobs:
           test -f tests/surface_chunk_production_benchmark.gd
           grep -Fq 'godot --headless --path . --import' .github/workflows/surface-chunk-production-benchmark.yml
           grep -Fq 'chunk_content_scan_comparison' tests/surface_chunk_production_benchmark.gd
+          grep -Fq 'coordinator_phase_profile_usec' tests/surface_chunk_production_benchmark.gd
+          grep -Fq 'coordinator_profile_usec' systems/SurfaceTerrainAdjacencyCoordinator.gd
           grep -Fq 'SurfaceChunkFactoryScript.make_chunk' world/SurfaceWorld.gd
           grep -Fq 'get_managed_chunk_ids' systems/MineralGridStreamingDirector.gd
           grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
