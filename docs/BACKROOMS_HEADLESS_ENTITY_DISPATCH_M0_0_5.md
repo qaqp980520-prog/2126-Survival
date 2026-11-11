@@ -32,6 +32,7 @@ The Backrooms playground integration test invokes _spawn_level_entities_for_cell
 
 - The expected runtime factory root is created.
 - backrooms_entity_id and spawn_cell metadata match the selected entity and deterministic cell.
+- The root position matches the existing factory's deterministic coordinate hash and per-entity offset/height.
 - No MeshInstance3D is created in headless mode.
 - Existing Window tests still verify valid owned-wall placement, blocked open-boundary candidates, wall direction, transform and metadata.
 - Level 0 remains empty through the separate Director whitelist regression.
