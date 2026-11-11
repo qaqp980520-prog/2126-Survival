@@ -549,11 +549,12 @@ func _create_maze_cell(cell: Vector2i) -> void:
     _spawn_level_entities_for_cell(root, cell)
 
 func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
-    # Headless Godot uses a dummy renderer. Keep spawn rules covered by the
-    # EntityDirector tests without creating render-only MeshInstance3D nodes.
-    if DisplayServer.get_name() == "headless":
-        return
+    # Headless mode may create a metadata-only Window root for integration tests.
+    # Other entity factories remain render-only and are skipped without a renderer.
+    var is_headless := DisplayServer.get_name() == "headless"
     for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
+        if is_headless and entity_id != "window":
+            continue
         match entity_id:
             "window":
                 var wall_direction := _window_wall_direction_for_cell(cell)
@@ -573,7 +574,6 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
                 _create_duller_entity(cell_root, cell)
             "deathmoth":
                 _create_deathmoth_entity(cell_root, cell)
-
 func _window_wall_direction_for_cell(cell: Vector2i) -> Vector2i:
     # This cell owns its north and west boundary walls. Selecting only these
     # edges avoids depending on a neighboring streamed cell to provide the wall.
@@ -609,6 +609,14 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Ve
     window_root.name = "Entity_Window"
     window_root.transform = _window_entity_transform_for_wall(wall_direction)
     cell_root.add_child(window_root)
+    window_root.set_meta("backrooms_entity_id", "window")
+    window_root.set_meta("spawn_cell", cell)
+    window_root.set_meta("wall_direction", wall_direction)
+
+    # The headless integration test validates the actual spawn path and metadata
+    # without creating MeshInstance3D nodes against Godot's dummy renderer.
+    if DisplayServer.get_name() == "headless":
+        return
 
     var frame_material := StandardMaterial3D.new()
     frame_material.albedo_color = Color(0.18, 0.19, 0.17)
@@ -622,10 +630,6 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Ve
     _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
-    window_root.set_meta("backrooms_entity_id", "window")
-    window_root.set_meta("spawn_cell", cell)
-    window_root.set_meta("wall_direction", wall_direction)
-
 func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var smiler_root := Node3D.new()
     smiler_root.name = "Entity_Smiler"
