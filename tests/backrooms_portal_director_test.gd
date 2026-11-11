@@ -99,3 +99,7 @@ func _test_invalid_save_is_atomic() -> void:
     bad["rng_state"] = "invalid"
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["rng_state"] = "999999999999999999999999999999999999999999"
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
