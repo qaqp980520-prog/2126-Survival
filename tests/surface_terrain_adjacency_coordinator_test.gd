@@ -46,6 +46,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _test_successful_three_participant_publish()
+	await _test_profiled_execution_reports_non_overlapping_phases()
 	await _test_stale_batch_snapshot_generation_is_rejected()
 	await _test_collider_commit_failure_rolls_back_all_participants()
 	await _test_collider_abort_failure_retains_all_participants_for_retry()
@@ -72,6 +73,7 @@ func _test_successful_three_participant_publish() -> void:
 		[{"stable_id": "patch/b", "patch": replacement}]
 	)
 	_expect(bool(result.get("ok", false)) and bool(result.get("finalized", false)), "coordinator publishes and finalizes Index, scoped Patch state, and Collider resources")
+	_expect(not result.has("coordinator_profile_usec"), "Coordinator phase profiling remains opt-in by default")
 	_expect(fixture["index"].call("get_patch", "patch/b") == replacement, "Index commits the replacement Patch instance")
 	_expect(fixture["a"].call("get_bound_neighbor_patch", "east") == replacement, "scoped Patch state points the original neighbor at the replacement")
 	_expect(replacement.call("get_bound_neighbor_patch", "west") == fixture["a"], "replacement Patch holds the reciprocal neighbor")
@@ -82,6 +84,55 @@ func _test_successful_three_participant_publish() -> void:
 	await process_frame
 	await process_frame
 	_expect(not is_instance_valid(fixture["old_body"]), "old Collider body is released only after the transaction succeeds")
+	await _release_fixture(fixture)
+
+
+func _test_profiled_execution_reports_non_overlapping_phases() -> void:
+	var fixture: Dictionary = await _make_fixture(false, false)
+	if fixture.is_empty():
+		return
+	var holder: Node3D = fixture["holder"]
+	var replacement: Node3D = _new_patch(holder, "ReplacementBProfiled", Vector3(2.0, 0.0, 0.0), 1)
+	await process_frame
+	var snapshot_result: Dictionary = fixture["index"].call("get_patches_by_stable_id")
+	var snapshot_generation: int = int(fixture["index"].call("get_generation"))
+	var result: Dictionary = fixture["coordinator"].execute_delta(
+		["patch/b"],
+		[{"stable_id": "patch/b", "patch": replacement}],
+		true,
+		snapshot_result.get("patches_by_stable_id", {}),
+		snapshot_generation
+	)
+	_expect(bool(result.get("ok", false)) and bool(result.get("finalized", false)), "profiled Coordinator transaction still finalizes all three participants")
+	var profile: Dictionary = result.get("coordinator_profile_usec", {})
+	var phase_keys: Array[String] = [
+		"plan_delta_usec",
+		"index_reservation_usec",
+		"candidate_patch_map_usec",
+		"candidate_descriptor_snapshot_usec",
+		"collider_prepare_usec",
+		"scoped_prepare_usec",
+		"scoped_apply_usec",
+		"collider_accept_usec",
+		"index_publish_usec",
+		"collider_commit_usec",
+		"scoped_finalize_usec",
+		"index_finalize_usec"
+	]
+	var measured_usec: int = 0
+	var all_phases_valid: bool = true
+	for key in phase_keys:
+		if not profile.has(key) or int(profile.get(key, -1)) < 0:
+			all_phases_valid = false
+			continue
+		measured_usec += int(profile.get(key, 0))
+	_expect(all_phases_valid, "profiled Coordinator reports every non-negative transaction phase")
+	var total_usec: int = int(profile.get("total_usec", -1))
+	var unattributed_usec: int = int(profile.get("unattributed_usec", -1))
+	_expect(total_usec > 0, "profiled Coordinator reports a positive total duration")
+	_expect(measured_usec <= total_usec, "Coordinator phase timings do not overlap the measured total")
+	_expect(unattributed_usec == total_usec - measured_usec, "Coordinator reports the exact unattributed timing remainder")
+	_expect(int(profile.get("candidate_patch_map_usec", -1)) >= 0 and int(profile.get("candidate_descriptor_snapshot_usec", -1)) >= 0, "candidate snapshot materialization is measured separately")
 	await _release_fixture(fixture)
 
 
