@@ -41,8 +41,11 @@ jobs:
           grep -Fq '_build_union_corner_closure' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'get_corner_graph_stats' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'get_corner_reports_by_stable_id' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'candidate_instance_ids' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'committed_patch_size_invalid' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq '_test_patch_size_cache_after_emptying_index' tests/surface_terrain_adjacency_index_test.gd
       - name: Import and parse root project
-        run: godot --headless --path . --editor --quit
+        run: godot --headless --path . --import
       - name: Run incremental adjacency index and full-rebuild oracle regressions
         shell: bash
         run: |
