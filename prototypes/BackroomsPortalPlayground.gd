@@ -619,9 +619,9 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Ve
     glass_material.metallic = 0.25
     _add_entity_box(window_root, "DarkWindowPane", Vector3(0.0, 0.0, 0.0), Vector3(1.45, 1.45, 0.07), glass_material)
     _add_entity_box(window_root, "FrameTop", Vector3(0.0, 0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
-    _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
-    _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
     window_root.set_meta("backrooms_entity_id", "window")
     window_root.set_meta("spawn_cell", cell)
     window_root.set_meta("wall_direction", wall_direction)
