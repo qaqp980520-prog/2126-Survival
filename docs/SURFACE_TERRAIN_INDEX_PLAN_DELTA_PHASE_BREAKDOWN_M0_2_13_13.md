@@ -68,3 +68,10 @@ This version's new Index subphase timings have not yet been collected. Local God
 ## Next step
 
 Use the exact-head production JSONL to identify the dominant `plan_delta()` subphase. Optimize only a measured hotspot, preserve full-rebuild oracle parity, duplicate-ID/position checks, generation reservation, rollback, and stale-snapshot behavior, then repeat the exact-head focused and full compatibility gates.
+
+
+## Exact-head test correction — 2026-11-11
+
+The first exact-head Index Validation [#42981194956](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42981194956) and Full Godot 4.3 Gate [#42981194792](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/42981194792) failed during GDScript parsing at the new test's abort assertion. The log identified that `SurfaceTerrainAdjacencyIndex.abort_delta()` returns a Boolean, while the test incorrectly called `.get("ok")` on that Boolean. This was a test-only type error; the production Index, Coordinator and Controller implementation was not changed for this correction.
+
+The assertion now checks the Boolean return directly. Correction commit: `df2b02dc302b0d2919a058d817739c9e7352b82d`. The final exact-head rerun must still complete the Index Validation, Production Benchmark and Full Godot 4.3 gates before this version is considered validated. No pass is claimed from the failed initial runs.
