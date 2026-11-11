@@ -17,6 +17,9 @@ const SAFE_DISTANCE: float = 7.0
 const SAVE_PATH: String = "user://backrooms_playground_save.json"
 const CELL_SIZE: float = 8.0
 const WALL_HEIGHT: float = 3.4
+const WALL_THICKNESS: float = 0.22
+const WINDOW_FRAME_DEPTH: float = 0.16
+const WINDOW_CENTER_HEIGHT: float = 1.85
 const STREAM_RADIUS: int = 2
 
 @onready var player: CharacterBody3D = $Player
@@ -507,9 +510,9 @@ func _create_maze_cell(cell: Vector2i) -> void:
     # Each shared edge has one owner: the cell to its south/east builds it as
     # its north/west edge. This avoids duplicate collision bodies on every seam.
     if not north_open:
-        _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, 0.22))
+        _add_maze_wall(root, "NorthWall", Vector3(0, WALL_HEIGHT * 0.5, -CELL_SIZE * 0.5), Vector3(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS))
     if not west_open:
-        _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(0.22, WALL_HEIGHT, CELL_SIZE))
+        _add_maze_wall(root, "WestWall", Vector3(-CELL_SIZE * 0.5, WALL_HEIGHT * 0.5, 0), Vector3(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE))
 
     # Add deterministic interior baffles so cells feel like winding corridors,
     # not just empty squares. Both ends stay open for navigation.
@@ -553,9 +556,9 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
     for entity_id in EntityDirector.get_cell_spawns(current_level, cell):
         match entity_id:
             "window":
-                # A window must be attached to a solid boundary, never floating in an open corridor.
-                if not _edge_is_open(cell, Vector2i(0, -1)):
-                    _create_window_entity(cell_root, cell)
+                var wall_direction := _window_wall_direction_for_cell(cell)
+                if wall_direction != Vector2i.ZERO:
+                    _create_window_entity(cell_root, cell, wall_direction)
             "smiler":
                 _create_smiler_entity(cell_root, cell)
             "hound":
@@ -571,10 +574,40 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
             "deathmoth":
                 _create_deathmoth_entity(cell_root, cell)
 
-func _create_window_entity(cell_root: Node3D, cell: Vector2i) -> void:
+func _window_wall_direction_for_cell(cell: Vector2i) -> Vector2i:
+    # This cell owns its north and west boundary walls. Selecting only these
+    # edges avoids depending on a neighboring streamed cell to provide the wall.
+    var candidates: Array[Vector2i] = []
+    var north := Vector2i(0, -1)
+    var west := Vector2i(-1, 0)
+    if not _edge_is_open(cell, north):
+        candidates.append(north)
+    if not _edge_is_open(cell, west):
+        candidates.append(west)
+    if candidates.is_empty():
+        return Vector2i.ZERO
+    var selected_index: int = posmod(_hash_value(cell.x, cell.y, 4104), candidates.size())
+    return candidates[selected_index]
+
+
+func _window_entity_transform_for_wall(direction: Vector2i) -> Transform3D:
+    var wall_inset: float = WALL_THICKNESS * 0.5 + WINDOW_FRAME_DEPTH * 0.5
+    var position := Vector3.ZERO
+    var yaw: float = 0.0
+    if direction == Vector2i(0, -1):
+        position = Vector3(0.0, WINDOW_CENTER_HEIGHT, -CELL_SIZE * 0.5 + wall_inset)
+    elif direction == Vector2i(-1, 0):
+        position = Vector3(-CELL_SIZE * 0.5 + wall_inset, WINDOW_CENTER_HEIGHT, 0.0)
+        yaw = -PI * 0.5
+    else:
+        return Transform3D.IDENTITY
+    return Transform3D(Basis(Vector3.UP, yaw), position)
+
+
+func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Vector2i) -> void:
     var window_root := Node3D.new()
     window_root.name = "Entity_Window"
-    window_root.position = Vector3(0.0, 1.85, -CELL_SIZE * 0.5 + 0.34)
+    window_root.transform = _window_entity_transform_for_wall(wall_direction)
     cell_root.add_child(window_root)
 
     var frame_material := StandardMaterial3D.new()
@@ -585,12 +618,13 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i) -> void:
     glass_material.roughness = 0.2
     glass_material.metallic = 0.25
     _add_entity_box(window_root, "DarkWindowPane", Vector3(0.0, 0.0, 0.0), Vector3(1.45, 1.45, 0.07), glass_material)
-    _add_entity_box(window_root, "FrameTop", Vector3(0.0, 0.78, 0.0), Vector3(1.65, 0.12, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameTop", Vector3(0.0, 0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, 0.16), frame_material)
-    _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, 0.16), frame_material)
+    _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
     _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, 0.16), frame_material)
     window_root.set_meta("backrooms_entity_id", "window")
     window_root.set_meta("spawn_cell", cell)
+    window_root.set_meta("wall_direction", wall_direction)
 
 func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var smiler_root := Node3D.new()
