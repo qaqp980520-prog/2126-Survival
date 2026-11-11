@@ -363,6 +363,7 @@ func _test_patch_size_cache_after_emptying_index() -> void:
 	root.add_child(size_holder)
 	var first: AlternateSizePatch = AlternateSizePatch.new()
 	first.name = "InitialSizeThree"
+	first.position = Vector3(0.0, 0.0, 0.0)
 	first.configured_patch_size = 3.0
 	size_holder.add_child(first)
 	await process_frame
@@ -384,6 +385,7 @@ func _test_patch_size_cache_after_emptying_index() -> void:
 		_expect(bool(remove_commit.get("ok", false)) and size_index.get_patch_count() == 0, "empty candidate Index commits and clears its patch-size invariant")
 	var replacement: AlternateSizePatch = AlternateSizePatch.new()
 	replacement.name = "ReplacementSizeFour"
+	replacement.position = Vector3(10.0, 0.0, 0.0)
 	replacement.configured_patch_size = 4.0
 	size_holder.add_child(replacement)
 	await process_frame
@@ -397,18 +399,20 @@ func _test_patch_size_cache_after_emptying_index() -> void:
 	_expect(size_index.get_patch("size/replacement") == replacement, "new-size Patch is the committed instance")
 	var matching: AlternateSizePatch = AlternateSizePatch.new()
 	matching.name = "MatchingSizeFour"
+	matching.position = Vector3(20.0, 0.0, 0.0)
 	matching.configured_patch_size = 4.0
 	size_holder.add_child(matching)
 	await process_frame
 	var matching_plan: Dictionary = size_index.plan_delta([], [
 		{"stable_id": "size/matching", "patch": matching}
 	])
-	_expect(bool(matching_plan.get("ok", false)), "subsequent additions use the newly committed Patch-size invariant")
+	_expect(bool(matching_plan.get("ok", false)), "subsequent additions use the newly committed Patch-size invariant: " + str(matching_plan.get("error", "")))
 	if bool(matching_plan.get("ok", false)):
 		var matching_summary: Dictionary = matching_plan.get("summary", {})
 		_expect(bool(size_index.commit_delta(str(matching_summary.get("plan_id", ""))).get("ok", false)), "matching Patch-size addition commits")
 	var mismatched: AlternateSizePatch = AlternateSizePatch.new()
 	mismatched.name = "MismatchedSizeThree"
+	mismatched.position = Vector3(30.0, 0.0, 0.0)
 	mismatched.configured_patch_size = 3.0
 	size_holder.add_child(mismatched)
 	await process_frame
