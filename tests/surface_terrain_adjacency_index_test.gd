@@ -344,6 +344,7 @@ func _run() -> void:
 
 	await _run_persistent_corner_graph_tests()
 	await _test_patch_size_cache_after_emptying_index()
+	await _test_plan_delta_phase_profile()
 
 	holder.queue_free()
 	await process_frame
@@ -355,6 +356,70 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+
+func _test_plan_delta_phase_profile() -> void:
+	var holder := Node3D.new()
+	holder.name = "TerrainAdjacencyIndexPlanProfileTestRoot"
+	root.add_child(holder)
+	var west: Node3D = _new_patch(holder, "ProfileWest", Vector3(0.0, 0.0, 0.0))
+	var east: Node3D = _new_patch(holder, "ProfileEast", Vector3(2.0, 0.0, 0.0))
+	await process_frame
+	var profile_index = IndexScript.new()
+	var stable_ids: Dictionary = {
+		west.get_instance_id(): "profile/west",
+		east.get_instance_id(): "profile/east"
+	}
+	var rebuild: Dictionary = profile_index.rebuild([west, east], stable_ids)
+	_expect(bool(rebuild.get("ok", false)), "plan profile fixture builds a real adjacent two-Patch Index")
+	if not bool(rebuild.get("ok", false)):
+		holder.queue_free()
+		await process_frame
+		return
+
+	var unprofiled_noop: Dictionary = profile_index.plan_delta([], [])
+	_expect(bool(unprofiled_noop.get("ok", false)) and not unprofiled_noop.has("plan_delta_profile_usec"), "Index plan profiling remains absent when disabled by default")
+
+	var replacement: Node3D = _new_patch(holder, "ProfileEastReplacement", Vector3(2.0, 0.0, 0.0))
+	await process_frame
+	var plan: Dictionary = profile_index.plan_delta(
+		["profile/east"],
+		[{"stable_id": "profile/east", "patch": replacement}],
+		true
+	)
+	_expect(bool(plan.get("ok", false)) and not bool(plan.get("noop", true)), "profiled Index plan builds a real adjacent replacement candidate")
+	var profile: Dictionary = plan.get("plan_delta_profile_usec", {})
+	var phase_keys: Array[String] = [
+		"candidate_copy_usec",
+		"removal_apply_usec",
+		"candidate_instance_set_usec",
+		"addition_validation_usec",
+		"neighbor_discovery_usec",
+		"changed_descriptor_build_usec",
+		"edge_diff_usec",
+		"local_descriptor_build_usec",
+		"corner_graph_delta_usec",
+		"closure_snapshot_usec",
+		"plan_storage_usec"
+	]
+	var measured_usec: int = 0
+	var all_phases_valid: bool = true
+	for key in phase_keys:
+		if not profile.has(key) or int(profile.get(key, -1)) < 0:
+			all_phases_valid = false
+			continue
+		measured_usec += int(profile.get(key, 0))
+	_expect(all_phases_valid, "Index reports every non-negative plan_delta subphase")
+	var total_usec: int = int(profile.get("total_usec", -1))
+	var unattributed_usec: int = int(profile.get("unattributed_usec", -1))
+	_expect(total_usec > 0, "Index plan profile reports a positive total duration")
+	_expect(measured_usec <= total_usec, "Index plan subphases do not overlap the measured total")
+	_expect(unattributed_usec == total_usec - measured_usec, "Index plan profile reports the exact unattributed remainder")
+	if bool(plan.get("ok", false)):
+		var summary: Dictionary = plan.get("summary", {})
+		_expect(bool(profile_index.abort_delta(str(summary.get("plan_id", ""))).get("ok", false)), "profiled Index plan can be aborted without publishing")
+	holder.queue_free()
+	await process_frame
 
 
 func _test_patch_size_cache_after_emptying_index() -> void:
