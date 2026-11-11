@@ -626,11 +626,50 @@ func _create_window_entity(cell_root: Node3D, cell: Vector2i, wall_direction: Ve
     glass_material.albedo_color = Color(0.008, 0.012, 0.014)
     glass_material.roughness = 0.2
     glass_material.metallic = 0.25
-    _add_entity_box(window_root, "DarkWindowPane", Vector3(0.0, 0.0, 0.0), Vector3(1.45, 1.45, 0.07), glass_material)
-    _add_entity_box(window_root, "FrameTop", Vector3(0.0, 0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
-    _add_entity_box(window_root, "FrameBottom", Vector3(0.0, -0.78, 0.0), Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH), frame_material)
-    _add_entity_box(window_root, "FrameLeft", Vector3(-0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
-    _add_entity_box(window_root, "FrameRight", Vector3(0.78, 0.0, 0.0), Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH), frame_material)
+    for spec in _window_entity_geometry_specs():
+        var part_material: StandardMaterial3D = frame_material
+        if str(spec.get("material", "")) == "glass":
+            part_material = glass_material
+        var box_position: Vector3 = spec.get("position", Vector3.ZERO)
+        var box_size: Vector3 = spec.get("size", Vector3.ONE)
+        _add_entity_box(window_root, str(spec.get("name", "WindowPart")), box_position, box_size, part_material)
+
+
+func _window_entity_geometry_specs() -> Array[Dictionary]:
+    # Keep the render geometry as data so headless tests can validate the exact
+    # dimensions and frame/pane relationship without creating renderer objects.
+    var specs: Array[Dictionary] = []
+    specs.append({
+        "name": "DarkWindowPane",
+        "position": Vector3.ZERO,
+        "size": Vector3(1.45, 1.45, 0.07),
+        "material": "glass"
+    })
+    specs.append({
+        "name": "FrameTop",
+        "position": Vector3(0.0, 0.78, 0.0),
+        "size": Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH),
+        "material": "frame"
+    })
+    specs.append({
+        "name": "FrameBottom",
+        "position": Vector3(0.0, -0.78, 0.0),
+        "size": Vector3(1.65, 0.12, WINDOW_FRAME_DEPTH),
+        "material": "frame"
+    })
+    specs.append({
+        "name": "FrameLeft",
+        "position": Vector3(-0.78, 0.0, 0.0),
+        "size": Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH),
+        "material": "frame"
+    })
+    specs.append({
+        "name": "FrameRight",
+        "position": Vector3(0.78, 0.0, 0.0),
+        "size": Vector3(0.12, 1.45, WINDOW_FRAME_DEPTH),
+        "material": "frame"
+    })
+    return specs
 
 func _create_smiler_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var smiler_root := Node3D.new()
