@@ -80,8 +80,10 @@ func _test_save_round_trip() -> void:
     var legacy_payload: Dictionary = saved.duplicate(true)
     legacy_payload.erase("rng_state")
     var legacy_restored = Director.new(2718, BOUNDS, 40.0)
+    var constructor_rng_state: String = str(legacy_restored.to_save_dict()["rng_state"])
     assert(legacy_restored.load_save_dict(legacy_payload))
     assert(legacy_restored.to_save_dict().has("rng_state"))
+    assert(legacy_restored.to_save_dict()["rng_state"] == constructor_rng_state)
 
 func _test_invalid_save_is_atomic() -> void:
     var director = Director.new(17, BOUNDS, 40.0)
@@ -95,11 +97,20 @@ func _test_invalid_save_is_atomic() -> void:
     bad["active_portal"]["position"] = [2000.0, 2000.0]
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+    var invalid_rng_states: Array[String] = [
+        "invalid",
+        "999999999999999999999999999999999999999999",
+        "-999999999999999999999999999999999999999999",
+        "+1",
+        "01",
+        "-0"
+    ]
+    for invalid_state in invalid_rng_states:
+        bad = before.duplicate(true)
+        bad["rng_state"] = invalid_state
+        assert(not director.load_save_dict(bad))
+        assert(director.to_save_dict() == before)
     bad = before.duplicate(true)
-    bad["rng_state"] = "invalid"
-    assert(not director.load_save_dict(bad))
-    assert(director.to_save_dict() == before)
-    bad = before.duplicate(true)
-    bad["rng_state"] = "999999999999999999999999999999999999999999"
+    bad["rng_state"] = 1
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
