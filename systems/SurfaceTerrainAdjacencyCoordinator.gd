@@ -69,9 +69,15 @@ func execute_delta(
 		return {"ok": false, "error": "coordinator_participants_unavailable"}
 
 	phase_started_usec = Time.get_ticks_usec() if profile_enabled else 0
-	var plan_result: Dictionary = _index.call("plan_delta", remove_stable_ids, additions)
+	var plan_result: Dictionary
+	if profile_enabled:
+		plan_result = _index.call("plan_delta", remove_stable_ids, additions, true)
+	else:
+		plan_result = _index.call("plan_delta", remove_stable_ids, additions)
 	if profile_enabled:
 		phase_profile["plan_delta_usec"] = Time.get_ticks_usec() - phase_started_usec
+		var plan_subphases: Dictionary = plan_result.get("plan_delta_profile_usec", {})
+		phase_profile["plan_delta_subphases_usec"] = plan_subphases.duplicate(true)
 	if not bool(plan_result.get("ok", false)):
 		return plan_result
 	if bool(plan_result.get("noop", false)):
