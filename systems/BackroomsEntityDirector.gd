@@ -5,13 +5,17 @@ class_name BackroomsEntityDirector
 const LEVEL_ENTITY_RULES := {
     "Level 0": [],
     "Level 1": ["window", "smiler"],
-    "Level 2": [],
-    "Level 3": []
+    "Level 2": ["hound", "skin_stealer"],
+    "Level 3": ["clump", "faceling"]
 }
 
 const ENTITY_CHANCES := {
     "window": 18,
-    "smiler": 7
+    "smiler": 7,
+    "hound": 8,
+    "skin_stealer": 5,
+    "clump": 6,
+    "faceling": 8
 }
 
 static func get_allowed_entities(level_name: String) -> Array[String]:
@@ -39,6 +43,14 @@ static func _entity_salt(entity_id: String) -> int:
             return 4103
         "smiler":
             return 9127
+        "hound":
+            return 15241
+        "skin_stealer":
+            return 20333
+        "clump":
+            return 27103
+        "faceling":
+            return 31847
     return 0
 
 static func _stable_hash(x: int, y: int, salt: int) -> int:
