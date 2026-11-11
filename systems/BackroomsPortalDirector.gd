@@ -80,7 +80,7 @@ func load_save_dict(data: Dictionary) -> bool:
     # those legacy payloads. New saves must restore a non-zero integer RNG state.
     var has_rng_state: bool = data.has("rng_state")
     var saved_rng_state: Variant = data.get("rng_state", null)
-    if has_rng_state and (not (saved_rng_state is int) or int(saved_rng_state) == 0):
+    if has_rng_state and not (saved_rng_state is int):
         return false
     var restored_portal: Dictionary = {}
     if not saved_portal.is_empty():
