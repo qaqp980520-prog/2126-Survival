@@ -98,7 +98,8 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 
 	var veins: Dictionary = {}
 	var crops: Dictionary = {}
-	if not _collect_mineral_nodes(chunk_root, str(chunk_root.name), veins):
+	var world_objects: Dictionary = {}
+	if not _collect_chunk_content_nodes(chunk_root, str(chunk_root.name), veins, crops, world_objects):
 		return false
 	var registered_mineral_ids: PackedStringArray = registry.call("get_registered_ids")
 	for local_path in veins.keys():
@@ -108,16 +109,11 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 			return false
 		if not vein.has_method("can_register") or not bool(vein.call("can_register")):
 			return false
-	if not _collect_crop_plots(chunk_root, str(chunk_root.name), crops):
-		return false
 	if not crops.is_empty() and crop_controller == null:
 		return false
 
 	var existing_crop_ids: Array[String] = []
 	var crop_snapshot: Dictionary = {}
-	var world_objects: Dictionary = {}
-	if not _collect_world_state_nodes(chunk_root, str(chunk_root.name), world_objects):
-		return false
 	if not world_objects.is_empty() and object_state_registry == null:
 		return false
 	for local_path in crops.keys():
@@ -1401,6 +1397,39 @@ func _finish_terrain_adjacency_profile(profile: Dictionary, total_started_usec: 
 	profile["transition_collider_count"] = int(result.get("transition_collider_count", result.get("active_count", 0)))
 	profile["corner_cap_count"] = int(result.get("corner_cap_count", 0))
 	_last_terrain_adjacency_profile = profile.duplicate(true)
+
+func _collect_chunk_content_nodes(
+	node: Node,
+	path_prefix: String,
+	veins: Dictionary,
+	crops: Dictionary,
+	world_objects: Dictionary
+) -> bool:
+	# One depth-first walk replaces three independent traversals of the same Chunk tree.
+	# Keep each category's path validation and duplicate check identical to its former collector.
+	if node is MiningNode:
+		if path_prefix.is_empty() or path_prefix != path_prefix.strip_edges() or path_prefix.contains("//"):
+			return false
+		if veins.has(path_prefix):
+			return false
+		veins[path_prefix] = node
+	if node is CropPlotScript:
+		if path_prefix.is_empty() or path_prefix != path_prefix.strip_edges() or path_prefix.contains("//"):
+			return false
+		if crops.has(path_prefix):
+			return false
+		crops[path_prefix] = node
+	if node.has_method("get_world_object_state") and node.has_method("apply_world_object_state"):
+		if path_prefix.is_empty() or path_prefix != path_prefix.strip_edges() or path_prefix.contains("//"):
+			return false
+		if world_objects.has(path_prefix):
+			return false
+		world_objects[path_prefix] = node
+	for child: Node in node.get_children():
+		var child_path: String = str(child.name) if path_prefix.is_empty() else path_prefix + "/" + str(child.name)
+		if not _collect_chunk_content_nodes(child, child_path, veins, crops, world_objects):
+			return false
+	return true
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:
 	if node is MiningNode:
