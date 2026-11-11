@@ -24,6 +24,8 @@ This version adds an opt-in phase profile to `SurfaceTerrainAdjacencyCoordinator
   - Emits the per-phase values into each JSONL record.
 - `.github/workflows/mineral-chunk-controller-batch-index-snapshot-validation.yml`
   - Adds source guards and includes the production benchmark in the focused workflow path filter.
+- `.github/workflows/surface-chunk-production-benchmark.yml`
+  - Adds source guards for the Coordinator profile payload before running the real-factory benchmark.
 
 ## Phase fields
 
