@@ -233,7 +233,7 @@ func _window_wall_placement_contract_is_valid(world: Node) -> bool:
                 saw_north = true
             elif direction == west and west_closed:
                 expected_position = Vector3(-4.0 + 0.19, 1.85, 0.0)
-                expected_yaw = -PI * 0.5
+                expected_yaw = PI * 0.5
                 saw_west = true
             else:
                 return false
