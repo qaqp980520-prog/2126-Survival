@@ -285,7 +285,7 @@ func _test_batch_reuses_original_index_patch_snapshot() -> void:
 		chunk.name = "SnapshotChunk_%d" % index
 		var patch: Node3D = TerrainPatch.new()
 		patch.name = "TerrainPatch"
-		patch.position.x = float(index) * 100.0
+		patch.position.x = float(index) * 2.0
 		chunk.add_child(patch)
 		assert(controller.load_chunk("earth/batch-snapshot-%d" % index, chunk, now))
 		assert(
