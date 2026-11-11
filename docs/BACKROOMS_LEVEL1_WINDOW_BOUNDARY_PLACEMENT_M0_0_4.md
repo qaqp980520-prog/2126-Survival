@@ -8,25 +8,25 @@ Fix a placement defect in the existing Level 1 Window prototype. Previously, the
 
 - Select deterministically from the cell-owned north and west boundary walls that are closed.
 - Return no placement when neither owned boundary is a wall; never attach a Window to an open passage.
-- Rotate the Window frame toward the selected wall: north uses 0 radians, west uses -90 degrees.
+- Rotate the Window frame toward the selected wall: north uses 0 radians, west uses +90 degrees.
 - Align the frame's wall-facing edge to the inner face of the 0.22 m wall using the 0.16 m frame depth. The local wall inset is 0.19 m from the cell boundary.
 - Reuse named wall/frame constants for both maze wall geometry and Window placement.
 - Preserve Level 1 whitelist and 18% per-cell candidate chance. This does not change other entity rosters, portal destinations, save schema, settings, or external dependencies.
 
 ## Files
 
-- \`prototypes/BackroomsPortalPlayground.gd\`
-- \`tests/backrooms_portal_playground_test.gd\`
-- \`tests/backrooms_entity_director_test.gd\` (candidate-rate label clarification)
-- \`docs/BACKROOMS_ENTITY_SPAWN_DISTRIBUTION_REGRESSION_M0_0_3.md\` (candidate-rate semantics)
-- \`docs/BACKROOMS_LEVEL1_WINDOW_BOUNDARY_PLACEMENT_M0_0_4.md\`
+- `prototypes/BackroomsPortalPlayground.gd`
+- `tests/backrooms_portal_playground_test.gd`
+- `tests/backrooms_entity_director_test.gd` (candidate-rate label clarification)
+- `docs/BACKROOMS_ENTITY_SPAWN_DISTRIBUTION_REGRESSION_M0_0_3.md` (candidate-rate semantics)
+- `docs/BACKROOMS_LEVEL1_WINDOW_BOUNDARY_PLACEMENT_M0_0_4.md`
 
 ## Dependencies and import
 
 - Godot 4.3.
-- Existing Backrooms maze edge ownership, \`BackroomsEntityDirector\`, and \`BackroomsPortalPlayground\`.
+- Existing Backrooms maze edge ownership, `BackroomsEntityDirector`, and `BackroomsPortalPlayground`.
 - No third-party packages, autoloads, Project Settings, or save-format changes.
-- Import from repository root: \`godot --headless --path . --import\`.
+- Import from repository root: `godot --headless --path . --import`.
 
 ## Regression coverage
 
@@ -40,7 +40,7 @@ The portal playground integration test samples an 81 × 81 cell grid spanning ne
 - The frame's wall-facing edge is flush with the inner wall face.
 - The source contract wires the chosen direction into the Window visual factory.
 
-The existing entity director distribution test now emits \`SPAWN_CANDIDATE_RATE\`. Its percentage describes deterministic cell-level candidate selection, not the final rendered-instance count; a geometry-specific placement may be skipped when no suitable boundary exists.
+The existing entity director distribution test now emits `SPAWN_CANDIDATE_RATE`. Its percentage describes deterministic cell-level candidate selection, not the final rendered-instance count; a geometry-specific placement may be skipped when no suitable boundary exists.
 
 ## Validation status
 
