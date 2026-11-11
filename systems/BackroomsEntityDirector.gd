@@ -42,7 +42,7 @@ static func _entity_salt(entity_id: String) -> int:
     return 0
 
 static func _stable_hash(x: int, y: int, salt: int) -> int:
-    var value: int = x * 73856093 ^ y * 19349663 ^ salt * 83492791
+    var value: int = posmod(x * 73856093 ^ y * 19349663 ^ salt * 83492791, 2147483647)
     value = value ^ (value >> 13)
     value = value * 1274126177
     value = value ^ (value >> 16)
