@@ -839,6 +839,42 @@ func _emit_metrics(
 		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_unattributed_usec == coordinator_total_usec - coordinator_measured_usec
 		coordinator_phase_profile_valid = coordinator_phase_profile_valid and coordinator_total_usec <= int(adjacency_profile.get("controller_rebind_total_usec", -1))
 		_expect(coordinator_phase_profile_valid, "radius %d %s records complete non-overlapping Coordinator phase timings" % [radius, phase])
+	var plan_delta_phase_keys: Array[String] = [
+		"candidate_copy_usec",
+		"removal_apply_usec",
+		"candidate_instance_set_usec",
+		"addition_validation_usec",
+		"neighbor_discovery_usec",
+		"changed_descriptor_build_usec",
+		"edge_diff_usec",
+		"local_descriptor_build_usec",
+		"corner_graph_delta_usec",
+		"closure_snapshot_usec",
+		"plan_storage_usec"
+	]
+	var plan_delta_phase_profile_usec: Dictionary = {}
+	var plan_delta_phase_profile_valid: bool = false
+	var plan_delta_phase_total_usec: int = 0
+	if bool(adjacency_profile.get("incremental", false)):
+		var raw_plan_delta_profile: Dictionary = adjacency_profile.get("coordinator_plan_delta_profile_usec", {})
+		plan_delta_phase_profile_valid = not raw_plan_delta_profile.is_empty()
+		var plan_delta_measured_usec: int = 0
+		for plan_delta_phase_key in plan_delta_phase_keys:
+			if not raw_plan_delta_profile.has(plan_delta_phase_key) or int(raw_plan_delta_profile.get(plan_delta_phase_key, -1)) < 0:
+				plan_delta_phase_profile_valid = false
+				continue
+			var plan_delta_phase_usec: int = int(raw_plan_delta_profile.get(plan_delta_phase_key, 0))
+			plan_delta_phase_profile_usec[plan_delta_phase_key] = plan_delta_phase_usec
+			plan_delta_measured_usec += plan_delta_phase_usec
+		plan_delta_phase_total_usec = int(raw_plan_delta_profile.get("total_usec", -1))
+		var plan_delta_unattributed_usec: int = int(raw_plan_delta_profile.get("unattributed_usec", -1))
+		plan_delta_phase_profile_valid = plan_delta_phase_profile_valid and plan_delta_phase_total_usec > 0
+		plan_delta_phase_profile_valid = plan_delta_phase_profile_valid and plan_delta_measured_usec <= plan_delta_phase_total_usec
+		plan_delta_phase_profile_valid = plan_delta_phase_profile_valid and plan_delta_unattributed_usec == plan_delta_phase_total_usec - plan_delta_measured_usec
+		plan_delta_phase_profile_valid = plan_delta_phase_profile_valid and plan_delta_phase_total_usec <= int(adjacency_profile.get("coordinator_plan_delta_usec", -1))
+		plan_delta_phase_profile_usec["total_usec"] = plan_delta_phase_total_usec
+		plan_delta_phase_profile_usec["unattributed_usec"] = plan_delta_unattributed_usec
+		_expect(plan_delta_phase_profile_valid, "radius %d %s records complete non-overlapping Index plan_delta subphases" % [radius, phase])
 	var record := {
 		"phase": phase,
 		"radius": radius,
@@ -866,6 +902,9 @@ func _emit_metrics(
 		"coordinator_phase_profile_valid": coordinator_phase_profile_valid,
 		"coordinator_phase_profile_usec": coordinator_phase_profile_usec,
 		"coordinator_phase_total_ms": float(adjacency_profile.get("coordinator_total_usec", 0)) / 1000.0,
+		"plan_delta_phase_profile_valid": plan_delta_phase_profile_valid,
+		"plan_delta_phase_profile_usec": plan_delta_phase_profile_usec,
+		"plan_delta_phase_total_ms": float(plan_delta_phase_total_usec) / 1000.0,
 		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
 		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
 		"staged_transition_edge_count": int(adjacency_profile.get("collider_staged_edge_count", 0)),

@@ -379,16 +379,6 @@ func _test_plan_delta_phase_profile() -> void:
 
 	var unprofiled_noop: Dictionary = profile_index.plan_delta([], [])
 	_expect(bool(unprofiled_noop.get("ok", false)) and not unprofiled_noop.has("plan_delta_profile_usec"), "Index plan profiling remains absent when disabled by default")
-
-	var replacement: Node3D = _new_patch(holder, "ProfileEastReplacement", Vector3(2.0, 0.0, 0.0))
-	await process_frame
-	var plan: Dictionary = profile_index.plan_delta(
-		["profile/east"],
-		[{"stable_id": "profile/east", "patch": replacement}],
-		true
-	)
-	_expect(bool(plan.get("ok", false)) and not bool(plan.get("noop", true)), "profiled Index plan builds a real adjacent replacement candidate")
-	var profile: Dictionary = plan.get("plan_delta_profile_usec", {})
 	var phase_keys: Array[String] = [
 		"candidate_copy_usec",
 		"removal_apply_usec",
@@ -402,6 +392,31 @@ func _test_plan_delta_phase_profile() -> void:
 		"closure_snapshot_usec",
 		"plan_storage_usec"
 	]
+	var profiled_noop: Dictionary = profile_index.plan_delta([], [], true)
+	var noop_profile: Dictionary = profiled_noop.get("plan_delta_profile_usec", {})
+	var noop_profile_valid: bool = bool(profiled_noop.get("ok", false)) and bool(profiled_noop.get("noop", false))
+	var noop_measured_usec: int = 0
+	for phase_key in phase_keys:
+		if not noop_profile.has(phase_key) or int(noop_profile.get(phase_key, -1)) < 0:
+			noop_profile_valid = false
+		else:
+			noop_measured_usec += int(noop_profile.get(phase_key, 0))
+	var noop_total_usec: int = int(noop_profile.get("total_usec", -1))
+	var noop_unattributed_usec: int = int(noop_profile.get("unattributed_usec", -1))
+	noop_profile_valid = noop_profile_valid and noop_total_usec >= 0
+	noop_profile_valid = noop_profile_valid and noop_measured_usec <= noop_total_usec
+	noop_profile_valid = noop_profile_valid and noop_unattributed_usec == noop_total_usec - noop_measured_usec
+	_expect(noop_profile_valid, "profile-enabled no-op returns a complete non-overlapping Index phase profile")
+
+	var replacement: Node3D = _new_patch(holder, "ProfileEastReplacement", Vector3(2.0, 0.0, 0.0))
+	await process_frame
+	var plan: Dictionary = profile_index.plan_delta(
+		["profile/east"],
+		[{"stable_id": "profile/east", "patch": replacement}],
+		true
+	)
+	_expect(bool(plan.get("ok", false)) and not bool(plan.get("noop", true)), "profiled Index plan builds a real adjacent replacement candidate")
+	var profile: Dictionary = plan.get("plan_delta_profile_usec", {})
 	var measured_usec: int = 0
 	var all_phases_valid: bool = true
 	for key in phase_keys:
