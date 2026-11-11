@@ -598,7 +598,7 @@ func _window_entity_transform_for_wall(direction: Vector2i) -> Transform3D:
         position = Vector3(0.0, WINDOW_CENTER_HEIGHT, -CELL_SIZE * 0.5 + wall_inset)
     elif direction == Vector2i(-1, 0):
         position = Vector3(-CELL_SIZE * 0.5 + wall_inset, WINDOW_CENTER_HEIGHT, 0.0)
-        yaw = -PI * 0.5
+        yaw = PI * 0.5
     else:
         return Transform3D.IDENTITY
     return Transform3D(Basis(Vector3.UP, yaw), position)
