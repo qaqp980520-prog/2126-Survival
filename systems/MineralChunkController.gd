@@ -199,11 +199,18 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 					plot_node.call("refresh")
 		return false
 
-	var existing_terrain_patches: Array[Node3D] = _collect_loaded_terrain_patches()
-	var candidate_terrain_patches: Array[Node3D] = _collect_terrain_patches(world_objects)
-	var all_terrain_patches: Array[Node3D] = existing_terrain_patches.duplicate()
-	all_terrain_patches.append_array(candidate_terrain_patches)
-	var adjacency_result: Dictionary = _request_terrain_adjacency_rebind(all_terrain_patches, chunk_id, world_objects)
+	var adjacency_result: Dictionary
+	if _terrain_adjacency_batch_depth > 0:
+		# The batch finalizer enumerates the complete committed set once after all
+		# additions/removals have been recorded. Avoid building and discarding an
+		# O(loaded_chunks) patch snapshot for every staged Chunk in the same batch.
+		adjacency_result = _request_terrain_adjacency_rebind([], chunk_id, {})
+	else:
+		var existing_terrain_patches: Array[Node3D] = _collect_loaded_terrain_patches()
+		var candidate_terrain_patches: Array[Node3D] = _collect_terrain_patches(world_objects)
+		var all_terrain_patches: Array[Node3D] = existing_terrain_patches.duplicate()
+		all_terrain_patches.append_array(candidate_terrain_patches)
+		adjacency_result = _request_terrain_adjacency_rebind(all_terrain_patches, chunk_id, world_objects)
 	if not bool(adjacency_result.get("ok", false)):
 		# The rebind path restores the previous live adjacency and collider state on
 		# failure. Undo mineral registration while the candidate root is still alive.
