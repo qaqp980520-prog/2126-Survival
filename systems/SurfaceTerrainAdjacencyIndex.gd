@@ -127,9 +127,20 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		removed_ids.append(stable_id)
 		changed_ids[stable_id] = true
 
-	var candidate_patch_size: float = _first_patch_size(candidate_entries)
+	# The committed patch size is an Index invariant maintained by rebuild/publish/rollback.
+	# Reuse it instead of allocating Dictionary.values() just to read the first record.
+	var candidate_patch_size: float = -1.0
+	var candidate_instance_ids: Dictionary = {}
+	if not candidate_entries.is_empty():
+		candidate_patch_size = _patch_size
+		if not is_finite(candidate_patch_size) or candidate_patch_size <= 0.0:
+			return {"ok": false, "error": "committed_patch_size_invalid"}
+		# Build the post-removal instance set once. Additions then use O(1) membership
+		# checks instead of rescanning every candidate record for every incoming Chunk.
+	for stable_id_value in candidate_entries:
+		var candidate_record: Dictionary = candidate_entries[stable_id_value]
+		candidate_instance_ids[int(candidate_record.get("instance_id", -1))] = true
 	var added_seen: Dictionary = {}
-	var added_instances: Dictionary = {}
 
 	for addition_value in additions:
 		if not (addition_value is Dictionary):
@@ -145,9 +156,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array) -> Dictionary:
 		if not is_instance_valid(patch):
 			return {"ok": false, "error": "invalid_patch"}
 		var instance_id: int = patch.get_instance_id()
-		if added_instances.has(instance_id) or _contains_instance(candidate_entries, instance_id):
+		if candidate_instance_ids.has(instance_id):
 			return {"ok": false, "error": "duplicate_instance"}
-		added_instances[instance_id] = true
+		candidate_instance_ids[instance_id] = true
 
 		var record_result: Dictionary = _make_record(patch, stable_id)
 		if not bool(record_result.get("ok", false)):
@@ -1048,14 +1059,6 @@ func _has_duplicate_position(record: Dictionary, buckets: Dictionary, entries: D
 					var candidate_position: Vector3 = entries[candidate_id]["position"]
 					if candidate_position.distance_to(position) <= POSITION_TOLERANCE:
 						return true
-	return false
-
-
-func _contains_instance(entries: Dictionary, instance_id: int) -> bool:
-	for record_value in entries.values():
-		var record: Dictionary = record_value
-		if int(record.get("instance_id", -1)) == instance_id:
-			return true
 	return false
 
 
