@@ -58,8 +58,12 @@ func _test_save_round_trip() -> void:
     assert(spawned["event"] == "spawned")
     var saved: Dictionary = director.to_save_dict()
     assert(saved.has("rng_state"))
+    assert(saved["rng_state"] is String)
+    var serialized := JSON.stringify(saved)
+    var parsed: Variant = JSON.parse_string(serialized)
+    assert(parsed is Dictionary)
     var restored = Director.new(2718, BOUNDS, 40.0)
-    assert(restored.load_save_dict(saved))
+    assert(restored.load_save_dict(parsed))
     assert(restored.to_save_dict() == saved)
 
     var portal_id: int = int(spawned["portal"]["id"])
