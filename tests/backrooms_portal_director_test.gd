@@ -52,12 +52,32 @@ func _test_portal_consumption_is_single_use() -> void:
     assert(director.next_spawn_in <= Director.MAX_SPAWN_INTERVAL)
 
 func _test_save_round_trip() -> void:
+    var player_position := Vector2(500.0, 500.0)
     var director = Director.new(314, BOUNDS, 40.0)
-    director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+    var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, player_position)
+    assert(spawned["event"] == "spawned")
     var saved: Dictionary = director.to_save_dict()
+    assert(saved.has("rng_state"))
     var restored = Director.new(2718, BOUNDS, 40.0)
     assert(restored.load_save_dict(saved))
     assert(restored.to_save_dict() == saved)
+
+    var portal_id: int = int(spawned["portal"]["id"])
+    var original_entered: Dictionary = director.consume_portal(portal_id)
+    var restored_entered: Dictionary = restored.consume_portal(portal_id)
+    assert(original_entered == restored_entered)
+    assert(restored.to_save_dict() == director.to_save_dict())
+
+    var original_next: Dictionary = director.tick(director.next_spawn_in + 0.1, player_position)
+    var restored_next: Dictionary = restored.tick(restored.next_spawn_in + 0.1, player_position)
+    assert(original_next == restored_next)
+    assert(restored.to_save_dict() == director.to_save_dict())
+
+    var legacy_payload: Dictionary = saved.duplicate(true)
+    legacy_payload.erase("rng_state")
+    var legacy_restored = Director.new(2718, BOUNDS, 40.0)
+    assert(legacy_restored.load_save_dict(legacy_payload))
+    assert(legacy_restored.to_save_dict().has("rng_state"))
 
 func _test_invalid_save_is_atomic() -> void:
     var director = Director.new(17, BOUNDS, 40.0)
@@ -69,5 +89,13 @@ func _test_invalid_save_is_atomic() -> void:
     assert(director.to_save_dict() == before)
     bad = before.duplicate(true)
     bad["active_portal"]["position"] = [2000.0, 2000.0]
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["rng_state"] = 0
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["rng_state"] = "invalid"
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
