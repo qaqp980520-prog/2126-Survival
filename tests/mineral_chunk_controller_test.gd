@@ -16,6 +16,13 @@ class FakeCornerManager extends Node3D:
 	func get_blocked_corner_reports() -> Array[Dictionary]:
 		return reports.duplicate(true)
 
+class CountingController extends "res://systems/MineralChunkController.gd":
+	var loaded_patch_collection_calls: int = 0
+
+	func _collect_loaded_terrain_patches(excluded_chunk_id: String = "") -> Array[Node3D]:
+		loaded_patch_collection_calls += 1
+		return super._collect_loaded_terrain_patches(excluded_chunk_id)
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -23,6 +30,8 @@ func _run_tests() -> void:
 	await _test_single_pass_chunk_content_collection()
 	await process_frame
 	await _test_single_pass_invalid_category_paths()
+	await process_frame
+	await _test_batch_load_skips_redundant_patch_collection()
 	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
@@ -156,6 +165,46 @@ func _test_single_pass_invalid_category_paths() -> void:
 	)), "Single-pass collection preserves invalid world-object-path rejection")
 	object_root.free()
 	controller.free()
+
+
+func _test_batch_load_skips_redundant_patch_collection() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var controller: CountingController = CountingController.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	assert(controller.begin_terrain_adjacency_batch())
+
+	for index in range(2):
+		var chunk := Node3D.new()
+		chunk.name = "BatchChunk_%d" % index
+		assert(controller.load_chunk("earth/batch-scan-%d" % index, chunk, now))
+		assert(
+			controller.loaded_patch_collection_calls == 0,
+			"Chunk registration inside an adjacency batch must not scan all existing patch maps"
+		)
+
+	var batch_result: Dictionary = controller.end_terrain_adjacency_batch()
+	assert(bool(batch_result.get("ok", false)), "Batch finalization succeeds after deferring per-Chunk patch collection")
+	assert(
+		controller.loaded_patch_collection_calls == 1,
+		"Batch finalization collects the complete loaded patch set exactly once"
+	)
+
+	var direct_chunk := Node3D.new()
+	direct_chunk.name = "DirectChunk"
+	assert(controller.load_chunk("earth/direct-scan", direct_chunk, now))
+	assert(
+		controller.loaded_patch_collection_calls == 2,
+		"Non-batched Chunk registration retains its single existing-patch collection"
+	)
+
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
 	var base_time: int = int(Time.get_unix_time_from_system()) - 5
