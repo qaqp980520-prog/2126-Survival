@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close a combined failure-path gap in the production SurfaceWorld restore transaction. Existing coverage separately tested (a) underground world-seed changes followed by Stamina/Quick Use adapter failure and (b) underground restore followed by a one-shot surface chunk-factory failure. It did not combine the seed-change mine-window rebuild with a subsequent failure while rebuilding the target surface return window.
+Close a combined failure-path gap in the production SurfaceWorld restore transaction. The combined seed-change + surface-stream failure test exposed a real crop rollback defect: the base restore reapplied the crop snapshot before the final stream sync, but loading the restored surface window could advance crop records again. The transaction now reapplies the exact pre-attempt crop snapshot after streaming and reports that subsystem separately.
 
 ## GitHub delivery
 
@@ -10,7 +10,7 @@ Close a combined failure-path gap in the production SurfaceWorld restore transac
 - Parent exact HEAD: `7ecf410a42b66c17203b34ba454e2c365a4627ab`.
 - Child branch: `test/backrooms-underground-seed-change-stream-rollback-2026-11-12`.
 - PR: #341 (opened after the test and version record are committed).
-- Expected runtime scope: test-only; no gameplay runtime or save-schema changes.
+- Runtime scope: rollback correctness fix plus regression coverage; no save-schema, scene, Project Settings, autoload, or input-mapping changes.
 
 ## Regression scenario
 
@@ -25,7 +25,8 @@ The failure callback records the world seed at the instant the chunk factory rej
 
 ## Files
 
-- `tests/production_surface_world_test.gd` — strengthen `_test_underground_base_stream_failure_rollback()` with a valid candidate-seed portal envelope, failure-phase seed capture, and exact portal/director/origin-chunk assertions.
+- `world/SurfaceWorld.gd` — reapply the previous crop registry snapshot after the final base stream restore and include `crops_restored` in `rollback_complete` and diagnostic details.
+- `tests/production_surface_world_test.gd` — combine seed change with surface factory failure, assert exact crop snapshot restoration, and compare the mine-origin loaded state to the baseline rather than assuming the origin must always be loaded.
 - `docs/BACKROOMS_UNDERGROUND_SEED_CHANGE_STREAM_FAILURE_ROLLBACK_M0_1_11.md` — this version record.
 
 ## Dependencies and import
@@ -39,14 +40,15 @@ The failure callback records the world seed at the instant the chunk factory rej
 
 ## Validation status
 
-- Test and documentation changes are committed to a child branch of the exact PR #340 HEAD.
+- Runtime, test, and documentation changes are committed to a child branch of the exact PR #340 HEAD.
 - Parent PR #340 exact-head Godot 4.3 Full Compatibility Gate [Run #43230726708](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43230726708) completed successfully: 555/555 steps, 0 failures, 0 skipped. Production SurfaceWorld integration Step #207 and underground save/restore/rollback assertions passed.
-- The new combined seed-change + surface-stream-failure regression has not yet run on its own exact HEAD; no pass is claimed until the child PR's CI completes.
+- Initial child exact-head Run [#43233852389](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43233852389) reached the production SurfaceWorld integration test at Step #207 and failed two assertions: crop registry state differed after rollback, and the test incorrectly assumed `underground/mine_0_0` must always be loaded. The first was a real runtime rollback gap; the second was an invalid test assumption because the baseline mine window can be elsewhere.
+- The runtime fix now reapplies the exact previous crop snapshot after the final surface stream sync and exposes `crops_restored`; the test compares the mine origin's loaded state to its captured baseline. A new exact-head run is required; no pass is claimed for the corrected head.
 - Local Godot executable is unavailable; no local engine pass is claimed.
 - Graphical rendering, GPU, portal visuals/Z-fighting, and iPhone touch/performance remain unverified.
 
 ## Limitations and next step
 
-- This version only strengthens production rollback regression coverage; it does not implement or activate the playable Backrooms maze runtime.
+- This version hardens rollback correctness and adds regression coverage; it does not implement or activate the playable Backrooms maze runtime.
 - Wait for the focused production SurfaceWorld test and the exact-head Full Compatibility Gate. If the combined path fails, fix the runtime rollback before merging.
 - After validation, continue with staged Backrooms destination activation and failure-atomic world-layer switching.
