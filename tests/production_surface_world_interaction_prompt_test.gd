@@ -62,6 +62,15 @@ func _run() -> void:
 	if portal_button != null:
 		portal_button.emit_signal("pressed")
 	_expect(portal_entered_count == 2, "mobile interaction button uses the same portal activation dispatcher")
+	var non_player := Node3D.new()
+	world.add_child(non_player)
+	non_player.global_position = world.player.global_position
+	_expect(not bool(portal.call("interact", non_player)), "portal rejects an in-tree body outside the shared player group")
+	non_player.queue_free()
+	var valid_portal_id: int = int(portal.get("portal_id"))
+	portal.set("portal_id", 0)
+	_expect(not bool(portal.call("interact", world.player)), "portal rejects activation until a valid director ID is configured")
+	portal.set("portal_id", valid_portal_id)
 	world.player.global_position = portal.global_position + Vector3(0.0, 0.0, 5.0)
 	world.player.velocity = Vector3.ZERO
 	_expect(not bool(portal.call("interact", world.player)), "portal rejects activation outside its declared interaction range")
