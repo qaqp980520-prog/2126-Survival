@@ -75,7 +75,7 @@ func plan_window_for_position(world_position: Vector3) -> Dictionary:
 func plan_window_at_cell(requested_center: Vector2i) -> Dictionary:
 	if not configured:
 		return {"ok": false, "reason": "not_configured"}
-	if requested_center.x < -MAX_ABS_CELL_COORD or requested_center.x > MAX_ABS_CELL_COORD or requested_center.y < -MAX_ABS_CELL_COORD or requested_center.y > MAX_ABS_CELL_COORD:
+	if requested_center.x - stream_radius < -MAX_ABS_CELL_COORD or requested_center.x + stream_radius > MAX_ABS_CELL_COORD or requested_center.y - stream_radius < -MAX_ABS_CELL_COORD or requested_center.y + stream_radius > MAX_ABS_CELL_COORD:
 		return {"ok": false, "reason": "cell_out_of_range"}
 
 	var desired_keys: Array[String] = []
@@ -246,12 +246,14 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var z_result: Dictionary = _read_integer(center_value[1], -MAX_ABS_CELL_COORD, MAX_ABS_CELL_COORD)
 	if not bool(x_result.get("ok", false)) or not bool(z_result.get("ok", false)):
 		return _reject_load("invalid_center_cell")
+	var candidate_center := Vector2i(int(x_result["value"]), int(z_result["value"]))
+	var candidate_radius: int = int(radius_result["value"])
+	if candidate_center.x - candidate_radius < -MAX_ABS_CELL_COORD or candidate_center.x + candidate_radius > MAX_ABS_CELL_COORD or candidate_center.y - candidate_radius < -MAX_ABS_CELL_COORD or candidate_center.y + candidate_radius > MAX_ABS_CELL_COORD:
+		return _reject_load("center_window_out_of_range")
 
 	var candidate_level: String = str(level_value)
 	var candidate_seed: int = int(seed_result["value"])
-	var candidate_radius: int = int(radius_result["value"])
 	var candidate_cell_size: float = float(cell_size_result["value"])
-	var candidate_center := Vector2i(int(x_result["value"]), int(z_result["value"]))
 
 	level_id = candidate_level
 	world_seed = candidate_seed
