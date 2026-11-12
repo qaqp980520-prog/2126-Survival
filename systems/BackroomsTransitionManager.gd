@@ -181,7 +181,10 @@ func _restore_director_snapshot(director: RefCounted, snapshot: Dictionary) -> b
 	if director == null or not is_instance_valid(director) or not director.has_method("load_save_dict"):
 		return false
 	var restored: Variant = director.call("load_save_dict", snapshot.duplicate(true))
-	return restored is bool and bool(restored)
+	if not (restored is bool) or not bool(restored):
+		return false
+	var verified_snapshot: Variant = director.call("to_save_dict")
+	return verified_snapshot is Dictionary and verified_snapshot == snapshot
 
 func _preview_matches(candidate: Dictionary) -> bool:
 	if not bool(candidate.get("ok", false)) or str(candidate.get("event", "")) != "prepared":
