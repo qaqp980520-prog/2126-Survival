@@ -168,6 +168,8 @@ func load_save_dict(payload: Dictionary) -> bool:
 			return false
 		if next_portal_id < 1:
 			return false
+		if next_backrooms_seed != _derive_backrooms_seed(next_source_seed, next_portal_id):
+			return false
 	else:
 		if next_level != "" or next_portal_id != 0:
 			return false
@@ -201,7 +203,7 @@ func _derive_backrooms_seed(source_seed: int, portal_id: int) -> int:
 func _is_finite_vector3(value: Vector3) -> bool:
 	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
 
-func _vector_to_array(value: Vector3) -> Array[float]:
+func _vector_to_array(value: Vector3) -> Array:
 	return [value.x, value.y, value.z]
 
 func _parse_vector3(value: Variant) -> Dictionary:
