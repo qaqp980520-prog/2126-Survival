@@ -3,6 +3,26 @@ extends SceneTree
 const DirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const ManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 
+class RejectingCommitSession extends RefCounted:
+	func is_active() -> bool:
+		return false
+
+	func can_begin_from_portal_result(
+		_portal_result: Dictionary,
+		_return_position: Vector3,
+		_source_world_seed: int,
+		_entry_position: Vector3 = Vector3.ZERO
+	) -> bool:
+		return true
+
+	func begin_from_portal_result(
+		_portal_result: Dictionary,
+		_return_position: Vector3,
+		_source_world_seed: int,
+		_entry_position: Vector3 = Vector3.ZERO
+	) -> bool:
+		return false
+
 var _restore_result: bool = false
 var _restore_calls: int = 0
 
@@ -11,6 +31,7 @@ func _initialize() -> void:
 	_test_context_mismatch_and_cancel_preserve_portal()
 	_test_external_session_change_prevents_portal_consumption()
 	_test_stale_portal_is_not_consumed_by_manager()
+	_test_session_commit_rejection_restores_consumed_portal()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
 
@@ -109,6 +130,27 @@ func _test_stale_portal_is_not_consumed_by_manager() -> void:
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(director.to_save_dict() == after_external_consume, "Stale manager commit must not mutate director state.")
+
+func _test_session_commit_rejection_restores_consumed_portal() -> void:
+	var director = DirectorScript.new(123, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
+	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+	assert(str(spawned.get("event", "")) == "spawned")
+	var portal_id: int = int(spawned["portal"]["id"])
+	var manager = ManagerScript.new(RejectingCommitSession.new())
+	var return_position := Vector3(9.0, 2.0, -4.0)
+	var director_before: Dictionary = director.to_save_dict()
+
+	var prepared: Dictionary = manager.prepare_portal_entry(director, portal_id, return_position, 123)
+	assert(bool(prepared.get("ok", false)))
+	var rejected: Dictionary = manager.commit_portal_entry(director, portal_id, return_position, 123)
+
+	assert(not bool(rejected.get("ok", false)))
+	assert(str(rejected.get("reason", "")) == "session_commit_rejected_after_portal_consumption")
+	assert(bool(rejected.get("director_state_restored", false)), "The consumed portal must be restored when the session rejects commit.")
+	assert(director.to_save_dict() == director_before, "Rollback must restore the exact RNG, spawn timer, serial and active portal.")
+	assert(not director.active_portal.is_empty(), "The one-use portal must remain available after failed session commit.")
+	assert(manager.get_state_name() == "IDLE")
+	assert(not bool(manager.get_session().call("is_active")))
 
 func _restore_surface(context: Dictionary) -> bool:
 	_restore_calls += 1
