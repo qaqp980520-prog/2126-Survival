@@ -21,6 +21,7 @@ const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
 const LEGACY_WORLD_SEED: int = 0
 const MAX_WORLD_SEED: int = 2147483647
+const BACKROOMS_PORTAL_SAVE_SCHEMA_VERSION: int = 1
 @export_range(0, MAX_WORLD_SEED, 1) var world_seed: int = LEGACY_WORLD_SEED
 @export_range(0.0, 100.0, 0.5) var backrooms_portal_safe_distance: float = 8.0
 @export_range(0.0, 16.0, 0.5) var backrooms_portal_spawn_padding: float = 4.0
@@ -45,6 +46,8 @@ var _world_object_action_message: String = "F / CRATE: recover nearby salvage."
 var _is_underground: bool = false
 var _mine_chunk_ready: bool = false
 var mine_director: Node
+var backrooms_portal_director: RefCounted
+var _backrooms_portal_world_seed: int = -1
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
 var _mine_layer_index: int = 0
 var _last_mine_layer_index: int = 0
@@ -75,6 +78,11 @@ func _ready() -> void:
 	if not _build_underground_mine():
 		push_error("Surface world could not register its underground mine chunk.")
 	_build_mine_entrance_visual()
+	backrooms_portal_director = create_backrooms_portal_director()
+	if backrooms_portal_director == null:
+		push_error("Surface world could not initialize its Backrooms portal director.")
+	else:
+		_backrooms_portal_world_seed = world_seed
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -638,7 +646,15 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
 func get_loaded_surface_window_bounds() -> Rect2:
-	if player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+	if player == null:
+		return Rect2()
+	return _get_loaded_surface_window_bounds_at(player.global_position)
+
+
+func _get_loaded_surface_window_bounds_at(position: Vector3) -> Rect2:
+	if director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+		return Rect2()
+	if not is_finite(position.x) or not is_finite(position.y) or not is_finite(position.z):
 		return Rect2()
 	var chunk_size_x_value: Variant = director.get("chunk_size_x")
 	var chunk_size_z_value: Variant = director.get("chunk_size_z")
@@ -651,7 +667,7 @@ func get_loaded_surface_window_bounds() -> Rect2:
 	var chunk_size_z: float = float(chunk_size_z_value)
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
 		return Rect2()
-	var grid_value: Variant = director.call("get_grid_coordinate", player.global_position)
+	var grid_value: Variant = director.call("get_grid_coordinate", position)
 	if not (grid_value is Vector2i):
 		return Rect2()
 	var grid: Vector2i = grid_value
@@ -662,11 +678,15 @@ func get_loaded_surface_window_bounds() -> Rect2:
 
 
 func configure_backrooms_portal_director(candidate: RefCounted) -> bool:
-	if _is_underground or _surface_stream_pending or player == null or director == null:
+	if _is_underground or _surface_stream_pending or player == null:
 		return false
+	return _configure_backrooms_portal_director_at(candidate, player.global_position)
+
+
+func _configure_backrooms_portal_director_at(candidate: RefCounted, position: Vector3) -> bool:
 	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("set_spawn_window"):
 		return false
-	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds()
+	var loaded_bounds: Rect2 = _get_loaded_surface_window_bounds_at(position)
 	if loaded_bounds.size.x <= 0.0 or loaded_bounds.size.y <= 0.0:
 		return false
 	return bool(candidate.call(
@@ -681,6 +701,43 @@ func create_backrooms_portal_director() -> RefCounted:
 	var candidate: RefCounted = BackroomsPortalDirectorScript.new(world_seed)
 	if not configure_backrooms_portal_director(candidate):
 		return null
+	return candidate
+
+
+func _create_backrooms_portal_director_for_restore(seed_value: int, target_position: Vector3, payload: Dictionary) -> RefCounted:
+	if _surface_stream_pending:
+		return null
+	var candidate: RefCounted = BackroomsPortalDirectorScript.new(seed_value)
+	if not _configure_backrooms_portal_director_at(candidate, target_position):
+		return null
+	if not payload.has("backrooms_portal"):
+		return candidate
+	var wrapper_value: Variant = payload.get("backrooms_portal", null)
+	if not (wrapper_value is Dictionary):
+		return null
+	var schema_value: Variant = wrapper_value.get("schema_version", null)
+	var seed_value_in_save: Variant = wrapper_value.get("world_seed", null)
+	var director_value: Variant = wrapper_value.get("director", null)
+	if not (schema_value is int or schema_value is float):
+		return null
+	var schema_number: float = float(schema_value)
+	if not is_finite(schema_number) or not is_equal_approx(schema_number, 1.0):
+		return null
+	if not (seed_value_in_save is int or seed_value_in_save is float):
+		return null
+	var saved_seed_number: float = float(seed_value_in_save)
+	if not is_finite(saved_seed_number) or saved_seed_number < 0.0 or saved_seed_number > float(MAX_WORLD_SEED) or not is_equal_approx(saved_seed_number, roundf(saved_seed_number)):
+		return null
+	if int(roundf(saved_seed_number)) != seed_value:
+		return null
+	if not (director_value is Dictionary) or director_value.is_empty() or not bool(candidate.call("load_save_dict", director_value)):
+		return null
+	var active_portal_value: Variant = candidate.get("active_portal")
+	if active_portal_value is Dictionary and not active_portal_value.is_empty():
+		var active_position: Variant = active_portal_value.get("position", null)
+		var target_bounds: Rect2 = _get_loaded_surface_window_bounds_at(target_position)
+		if not (active_position is Vector2) or not target_bounds.has_point(active_position):
+			return null
 	return candidate
 
 
@@ -894,9 +951,24 @@ func serialize_stream_state() -> Dictionary:
 	var payload: Dictionary = super.serialize_stream_state()
 	if payload.is_empty():
 		return {}
+	if (
+		backrooms_portal_director == null
+		or not is_instance_valid(backrooms_portal_director)
+		or not backrooms_portal_director.has_method("to_save_dict")
+		or _backrooms_portal_world_seed != world_seed
+	):
+		return {}
+	var portal_director_payload: Variant = backrooms_portal_director.call("to_save_dict")
+	if not (portal_director_payload is Dictionary) or portal_director_payload.is_empty():
+		return {}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
 	payload["mine_depth"] = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
 	payload["world_seed"] = world_seed
+	payload["backrooms_portal"] = {
+		"schema_version": BACKROOMS_PORTAL_SAVE_SCHEMA_VERSION,
+		"world_seed": world_seed,
+		"director": portal_director_payload.duplicate(true)
+	}
 	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
 	payload["quick_use"] = quick_use.call("to_save_dict") if quick_use != null else {"schema_version": 1, "slots": ["berries", "herbs", "meat", "food"], "selected_slot": 0}
 	payload["surface_return_position"] = [
@@ -936,6 +1008,10 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	var target_underground: bool = str(layer_value) == "underground"
+	var portal_director_candidate: RefCounted = _create_backrooms_portal_director_for_restore(next_world_seed, target_position, payload)
+	if portal_director_candidate == null:
+		_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal director save is invalid for the target world seed or loaded window; no world state was changed.", true)
+		return false
 	var target_depth: int = 0
 	if target_underground:
 		if payload.has("mine_depth"):
@@ -1041,6 +1117,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_last_mine_grid = mine_director.get_grid_coordinate(player.global_position if target_underground else MINE_ENTRY_UNDERGROUND)
 	_last_mine_layer_index = target_depth
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID)
+	backrooms_portal_director = portal_director_candidate
+	_backrooms_portal_world_seed = next_world_seed
 	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
