@@ -104,6 +104,17 @@ func _run() -> void:
 		_expect(not diagnostics_panel.visible, "streaming diagnostics panel closes through its toggle API")
 	var loaded_window: Rect2 = world.call("get_loaded_surface_window_bounds")
 	_expect(loaded_window == Rect2(-10.0, -10.0, 30.0, 30.0), "portal spawn bounds exactly match the loaded 3x3 surface chunk window")
+	var missing_window_chunk_id: String = "surface/chunk_1_1"
+	var missing_window_chunk: Node3D = world.chunk_controller.get_chunk_root(missing_window_chunk_id)
+	_expect(missing_window_chunk != null, "loaded-window completeness test finds its target surface chunk")
+	if missing_window_chunk != null:
+		var window_test_now: int = int(Time.get_unix_time_from_system())
+		var window_chunk_unloaded: bool = world.chunk_controller.unload_chunk(missing_window_chunk_id, window_test_now)
+		_expect(window_chunk_unloaded, "loaded-window completeness test can unload one managed surface chunk")
+		if window_chunk_unloaded:
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "portal spawn bounds fail closed when any required surface chunk is absent")
+			_expect(bool(world.call("_sync_streaming", window_test_now)), "surface streaming director reloads the missing managed chunk")
+			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "portal spawn bounds recover only after the complete 3x3 window is loaded again")
 	var owned_backrooms_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
 	_expect(owned_backrooms_director != null, "SurfaceWorld owns a world-seeded Backrooms portal director")
 	if owned_backrooms_director != null:
