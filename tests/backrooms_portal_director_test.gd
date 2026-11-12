@@ -136,6 +136,14 @@ func _test_invalid_save_is_atomic() -> void:
     bad["active_portal"]["spawn_bounds"] = [0.0, 0.0, 1000.0]
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["active_portal"]["spawn_bounds"] = [5000.0, 5000.0, 100.0, 100.0]
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["active_portal"]["spawn_bounds"] = [1000000000000.0, 0.0, 1.0, 1000.0]
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
     var invalid_rng_states: Array[String] = [
         "invalid",
         "999999999999999999999999999999999999999999",
