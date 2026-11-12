@@ -16,6 +16,9 @@ func _run() -> void:
 		return
 	root.add_child(world)
 	await process_frame
+	_expect(world.player != null, "surface world creates its production player")
+	if world.player != null:
+		_expect(world.player.is_in_group("player"), "production player joins the shared player group used by world-transition triggers")
 	_expect(bool(world.call("initialize_world_session")), "surface world initializes shared session")
 	var diagnostics_panel: Control = world.find_child("StreamingDiagnosticsPanel", true, false) as Control
 	_expect(diagnostics_panel != null, "surface world embeds the streaming diagnostics panel")
