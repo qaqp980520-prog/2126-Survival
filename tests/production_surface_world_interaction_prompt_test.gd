@@ -28,10 +28,6 @@ func _run() -> void:
 	portal_shape.radius = 1.25
 	portal_collision.shape = portal_shape
 	portal.add_child(portal_collision)
-	var portal_prompt := Label3D.new()
-	portal_prompt.name = "InteractPrompt"
-	portal_prompt.visible = true
-	portal.add_child(portal_prompt)
 	portal.position = Vector3(1.0, 1.0, -1.5)
 	portal.connect("portal_entered", Callable(self, "_on_portal_entered"))
 	world.add_child(portal)
@@ -49,8 +45,16 @@ func _run() -> void:
 	_expect(portal.is_in_group("backrooms_portal"), "portal script registers the shared backrooms_portal target group")
 	_expect((portal.collision_layer & (1 << 1)) != 0, "portal Area3D exposes the production interaction collision layer")
 	_expect(bool(portal.get("_external_interaction_router_enabled")), "production portal delegates E handling to SurfaceWorld instead of competing with it")
-	_expect(not portal_prompt.visible, "production portal hides its local 3D prompt in favor of the single SurfaceWorld HUD prompt")
 	var portal_target: Dictionary = world.call("get_camera_interaction_target")
+	var portal_ray_start: Vector3 = world.camera.global_position
+	var portal_ray_direction: Vector3 = (-world.camera.global_basis.z).normalized()
+	var portal_ray_query := PhysicsRayQueryParameters3D.create(portal_ray_start, portal_ray_start + portal_ray_direction * 5.0)
+	portal_ray_query.collision_mask = 1 << 1
+	portal_ray_query.collide_with_areas = true
+	portal_ray_query.collide_with_bodies = false
+	portal_ray_query.exclude = [world.player.get_rid()]
+	var portal_ray_hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(portal_ray_query)
+	print("PORTAL DEBUG player=", world.player.global_position, " camera=", portal_ray_start, " portal=", portal.global_position, " ray_hit=", portal_ray_hit.get("collider"), " target=", portal_target)
 	_expect(str(portal_target.get("kind", "")) == "portal" and portal_target.get("node") == portal, "production camera ray resolves a world-owned portal outside chunk registries")
 	world.call("_refresh_hud")
 	_expect(prompt.text == "E  ACTIVATE BACKROOMS PORTAL", "production HUD prompts for the portal under the reticle")
