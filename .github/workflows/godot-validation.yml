@@ -170,6 +170,8 @@ jobs:
           test -f tests/inventory_save_validation.gd
           test -f tests/inventory_save_adapter.gd
           test -f tests/backrooms_portal_director_test.gd
+          test -f systems/BackroomsLocationSession.gd
+          test -f tests/backrooms_location_session_test.gd
           test -f tests/backrooms_portal_scene_test.gd
           test -f tests/backrooms_portal_playground_test.gd
           test -f tests/world_bridge_save_adapter_integration.gd
@@ -264,6 +266,17 @@ jobs:
           echo "$output" | grep -q "Backrooms entity director tests passed."
       - name: Run Backrooms portal director tests
         run: godot --headless --path . --script res://tests/backrooms_portal_director_test.gd
+      - name: Run Backrooms location session contract tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/backrooms_location_session_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms location session tests."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms location session tests passed.'
       - name: Run Backrooms portal visual scene smoke test
         shell: bash
         run: |
