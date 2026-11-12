@@ -52,6 +52,9 @@ var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
 
+func _enter_tree() -> void:
+	add_to_group("production_surface_world")
+
 func _ready() -> void:
 	if not initialize_world_session():
 		return
@@ -87,7 +90,6 @@ func _build_environment() -> void:
 func _build_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "Player"
-	player.add_to_group("player")
 	player.position = Vector3(1.0, 2.0, 1.0)
 	add_child(player)
 	player.add_to_group("player")
@@ -226,7 +228,7 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_consume_quick_slot.bind(slot_index))
 
 func _on_touch_crop_pressed() -> void:
-	_interact_nearest_crop_plot()
+	_interact_current_target()
 
 func _on_touch_crate_pressed() -> void:
 	_interact_nearest_world_prop()
@@ -486,7 +488,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 				get_tree().change_scene_to_file("res://prototypes/SurvivalTestHub.tscn")
 			elif key_event.keycode == KEY_E:
-				_interact_nearest_crop_plot()
+				_interact_current_target()
+				get_viewport().set_input_as_handled()
 			elif key_event.keycode == KEY_F:
 				_interact_nearest_world_prop()
 			elif key_event.keycode == KEY_T:
@@ -509,6 +512,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
 		player.rotation.y = _yaw
 		camera.rotation.x = _pitch
+
+func _interact_current_target() -> Dictionary:
+	var target: Dictionary = get_camera_interaction_target()
+	if str(target.get("kind", "")) == "portal":
+		var portal: Node3D = target.get("node") as Node3D
+		if portal == null or not is_instance_valid(portal) or not portal.has_method("interact"):
+			_world_object_action_message = "Backrooms portal is no longer available."
+			_refresh_hud()
+			return {"ok": false, "action": "portal_unavailable"}
+		var activated: bool = bool(portal.call("interact", player))
+		_world_object_action_message = "Backrooms portal activation requested." if activated else "Backrooms portal is outside interaction range."
+		_refresh_hud()
+		return {
+			"ok": activated,
+			"action": "portal_entered" if activated else "portal_unavailable",
+			"portal_id": int(portal.get("portal_id"))
+		}
+	return _interact_nearest_crop_plot()
 
 func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
@@ -1012,7 +1033,11 @@ func _is_camera_interaction_target_current(target: Dictionary) -> bool:
 		if not proxy_ancestor.is_inside_tree() or proxy_ancestor.is_queued_for_deletion():
 			return false
 		proxy_ancestor = proxy_ancestor.get_parent()
-	if proxy_ancestor != target_node or chunk_controller == null:
+	if proxy_ancestor != target_node:
+		return false
+	if str(target.get("kind", "")) == "portal":
+		return target_node.is_in_group("backrooms_portal") and target_node.has_method("interact") and target_node.has_method("get_interaction_range")
+	if chunk_controller == null:
 		return false
 	match str(target.get("kind", "")):
 		"crop":
@@ -1094,6 +1119,8 @@ func _cast_camera_interaction_target() -> Dictionary:
 			max_range = MINE_INTERACTION_RANGE
 		"lift":
 			max_range = MINE_ACCESS_RANGE
+	if target_node.has_method("get_interaction_range"):
+		max_range = clampf(float(target_node.call("get_interaction_range")), 0.1, INTERACTION_RAY_DISTANCE)
 	var player_distance: float = player.global_position.distance_to(target_node.global_position)
 	if player_distance > max_range:
 		return {}
@@ -1103,6 +1130,10 @@ func _cast_camera_interaction_target() -> Dictionary:
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
+		if candidate.is_in_group("backrooms_portal") and candidate.has_method("interact"):
+			if candidate.has_method("set_external_interaction_router_enabled"):
+				candidate.call("set_external_interaction_router_enabled", true)
+			return {"kind": "portal", "node": candidate}
 		# Lift anchors are stateful world objects too, but their G/V actions must
 		# retain the dedicated lift interaction kind rather than generic prop routing.
 		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
@@ -1129,6 +1160,8 @@ func get_interaction_prompt_text() -> String:
 		return "NO INTERACTION IN SIGHT"
 	var target_node: Node3D = target.get("node") as Node3D
 	match str(target.get("kind", "")):
+		"portal":
+			return "E  ACTIVATE BACKROOMS PORTAL"
 		"crop":
 			return "E  MANAGE CROP PLOT"
 		"vein":
@@ -1183,7 +1216,10 @@ func _refresh_hud() -> void:
 	if touch_buttons.has("deeper"):
 		(touch_buttons["deeper"] as Button).disabled = not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
 	if touch_buttons.has("crop"):
-		(touch_buttons["crop"] as Button).disabled = _is_underground
+		var interaction_button: Button = touch_buttons["crop"] as Button
+		interaction_button.disabled = _is_underground
+		var current_target: Dictionary = get_camera_interaction_target()
+		interaction_button.text = "PORTAL" if str(current_target.get("kind", "")) == "portal" else "CROP"
 	if touch_buttons.has("terrain"):
 		(touch_buttons["terrain"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):
