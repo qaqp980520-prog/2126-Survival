@@ -25,9 +25,10 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 ## State contract
 
 - prepare_portal_entry() calls the non-mutating portal preview and session preflight; it must not consume the portal or advance RNG.
-- commit_portal_entry() requires the exact same Director instance, Portal ID, return position, source seed, and entry position; it rechecks the preview before consuming.
-- The Director's own preview/consume parity remains the final destination guard.
-- A failed or stale commit clears the prepared state without mutating the Director.
+- commit_portal_entry() requires the exact same Director instance, Portal ID, return position, source seed, and entry position; it rechecks the preview and session preflight immediately before consumption.
+- Before the mutating consume call, the manager snapshots the complete PortalDirector save payload. The director must expose to_save_dict() and load_save_dict() or the manager rejects the commit before consuming.
+- If consume_portal() rejects or the session rejects begin_from_portal_result() after consumption, the manager restores the exact director snapshot, including RNG state, active one-use portal, serial, and spawn countdown. The result reports whether director restoration completed.
+- A failed or stale pre-consumption commit clears the prepared state without mutating the Director.
 - Commit revalidates that the session is still inactive and the original preview remains acceptable before consuming the portal; external session mutation cannot silently consume the one-use portal.
 - Return rechecks that the same return context remains active after the restore callback before clearing it.
 - cancel_prepared_entry() only clears manager state; it does not consume or alter the portal.
@@ -35,7 +36,10 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 
 ## Validation
 
-Pending exact-head Godot 4.3 focused and Full Compatibility Gate. No pass is claimed until CI completes.
+- Added a failure-injection session whose preflight succeeds but whose commit deliberately rejects after the Director has consumed the portal.
+- The regression requires the Director save payload to match the exact pre-commit snapshot after rollback, including RNG, spawn timer, serial, and active portal.
+- Exact-head Godot 4.3 focused and Full Compatibility Gate for the updated commit are pending. No pass is claimed until CI completes.
+- The preceding pre-hardening HEAD had its focused transition-manager test pass in Full Gate run 43173784724; that run does not validate the new rollback commit.
 
 ## Deliberate limitations
 
