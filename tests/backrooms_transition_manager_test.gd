@@ -4,8 +4,14 @@ const DirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const ManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 
 class RejectingCommitSession extends RefCounted:
+	var active: bool = false
+	var level_id: String = ""
+	var entry_portal_id: int = 0
+	var surface_return_position: Vector3 = Vector3.ZERO
+	var mutation_marker: String = "original"
+
 	func is_active() -> bool:
-		return false
+		return active
 
 	func can_begin_from_portal_result(
 		_portal_result: Dictionary,
@@ -16,12 +22,62 @@ class RejectingCommitSession extends RefCounted:
 		return true
 
 	func begin_from_portal_result(
+		portal_result: Dictionary,
+		return_position: Vector3,
+		_source_world_seed: int,
+		_entry_position: Vector3 = Vector3.ZERO
+	) -> bool:
+		# Simulate a future Session implementation that mutates several fields
+		# before discovering a late commit failure.
+		active = true
+		level_id = str(portal_result.get("destination_level", ""))
+		entry_portal_id = int(portal_result.get("portal_id", 0))
+		surface_return_position = return_position
+		mutation_marker = "mutated_then_rejected"
+		return false
+
+	func to_save_dict() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"active": active,
+			"level_id": level_id,
+			"entry_portal_id": entry_portal_id,
+			"surface_return_position": [
+				surface_return_position.x,
+				surface_return_position.y,
+				surface_return_position.z
+			],
+			"mutation_marker": mutation_marker
+		}
+
+	func load_save_dict(payload: Dictionary) -> bool:
+		if int(payload.get("schema_version", 0)) != 1:
+			return false
+		var position_value: Variant = payload.get("surface_return_position", null)
+		if not (position_value is Array) or position_value.size() != 3:
+			return false
+		active = bool(payload.get("active", false))
+		level_id = str(payload.get("level_id", ""))
+		entry_portal_id = int(payload.get("entry_portal_id", 0))
+		surface_return_position = Vector3(
+			float(position_value[0]),
+			float(position_value[1]),
+			float(position_value[2])
+		)
+		mutation_marker = str(payload.get("mutation_marker", ""))
+		return true
+
+class NonRollbackSession extends RefCounted:
+	func is_active() -> bool:
+		return false
+
+	func can_begin_from_portal_result(
 		_portal_result: Dictionary,
 		_return_position: Vector3,
 		_source_world_seed: int,
 		_entry_position: Vector3 = Vector3.ZERO
 	) -> bool:
-		return false
+		return true
 
 class MutatingRejectingDirector extends RefCounted:
 	var state: Dictionary = {
@@ -65,6 +121,7 @@ func _initialize() -> void:
 	_test_external_session_change_prevents_portal_consumption()
 	_test_stale_portal_is_not_consumed_by_manager()
 	_test_rejected_consume_restores_director_snapshot()
+	_test_session_rollback_contract_is_required_before_consumption()
 	_test_session_commit_rejection_restores_consumed_portal()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
@@ -183,12 +240,30 @@ func _test_rejected_consume_restores_director_snapshot() -> void:
 	assert(manager.get_state_name() == "IDLE")
 
 
+func _test_session_rollback_contract_is_required_before_consumption() -> void:
+	var director = DirectorScript.new(122, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
+	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+	assert(str(spawned.get("event", "")) == "spawned")
+	var portal_id: int = int(spawned["portal"]["id"])
+	var manager = ManagerScript.new(NonRollbackSession.new())
+	var before: Dictionary = director.to_save_dict()
+	assert(bool(manager.prepare_portal_entry(director, portal_id, Vector3(8.0, 2.0, -3.0), 122).get("ok", false)))
+	var rejected: Dictionary = manager.commit_portal_entry(director, portal_id, Vector3(8.0, 2.0, -3.0), 122)
+	assert(not bool(rejected.get("ok", false)))
+	assert(str(rejected.get("reason", "")) == "session_rollback_contract_unavailable")
+	assert(director.to_save_dict() == before, "A session without snapshot support must be rejected before portal consumption.")
+	assert(not director.active_portal.is_empty())
+	assert(manager.get_state_name() == "IDLE")
+
+
 func _test_session_commit_rejection_restores_consumed_portal() -> void:
 	var director = DirectorScript.new(123, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
 	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
 	assert(str(spawned.get("event", "")) == "spawned")
 	var portal_id: int = int(spawned["portal"]["id"])
-	var manager = ManagerScript.new(RejectingCommitSession.new())
+	var rejecting_session = RejectingCommitSession.new()
+	var session_before: Dictionary = rejecting_session.to_save_dict()
+	var manager = ManagerScript.new(rejecting_session)
 	var return_position := Vector3(9.0, 2.0, -4.0)
 	var director_before: Dictionary = director.to_save_dict()
 
@@ -199,8 +274,11 @@ func _test_session_commit_rejection_restores_consumed_portal() -> void:
 	assert(not bool(rejected.get("ok", false)))
 	assert(str(rejected.get("reason", "")) == "session_commit_rejected_after_portal_consumption")
 	assert(bool(rejected.get("director_state_restored", false)), "The consumed portal must be restored when the session rejects commit.")
+	assert(bool(rejected.get("session_state_restored", false)), "The partially mutated session must be restored.")
+	assert(bool(rejected.get("rollback_complete", false)), "Both transaction participants must be restored and verified.")
 	assert(director.to_save_dict() == director_before, "Rollback must restore the exact RNG, spawn timer, serial and active portal.")
 	assert(not director.active_portal.is_empty(), "The one-use portal must remain available after failed session commit.")
+	assert(manager.get_session().call("to_save_dict") == session_before, "Rollback must restore every Session field to the pre-commit snapshot.")
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 
