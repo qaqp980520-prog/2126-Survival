@@ -20,11 +20,15 @@ func _ready() -> void:
             _external_interaction_router_enabled = true
             break
         ancestor = ancestor.get_parent()
+    if _external_interaction_router_enabled and _prompt != null:
+        _prompt.visible = false
     body_entered.connect(_on_body_entered)
     body_exited.connect(_on_body_exited)
 
 func set_external_interaction_router_enabled(enabled: bool) -> void:
     _external_interaction_router_enabled = enabled
+    if enabled and _prompt != null:
+        _prompt.visible = false
 
 func get_interaction_range() -> float:
     return INTERACTION_RANGE
@@ -61,7 +65,7 @@ func configure_from_director(portal_data: Dictionary, ground_y: float = 0.0) -> 
 func _on_body_entered(body: Node3D) -> void:
     if body.is_in_group("player"):
         _player_in_range = body
-        if _prompt != null:
+        if _prompt != null and not _external_interaction_router_enabled:
             _prompt.visible = true
 
 func _on_body_exited(body: Node3D) -> void:
