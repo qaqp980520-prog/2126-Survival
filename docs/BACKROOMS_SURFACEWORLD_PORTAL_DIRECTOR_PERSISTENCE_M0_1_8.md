@@ -21,7 +21,8 @@ Make the production SurfaceWorld the owner of one world-seeded BackroomsPortalDi
   - envelope schema version;
   - the exact SurfaceWorld `world_seed`;
   - the complete PortalDirector `to_save_dict()` payload (RNG state, spawn countdown, serial, active portal and its original spawn bounds).
-- Serialization fails closed if the owned director is missing, cannot provide a non-empty save dictionary, or was created for a different world seed.
+- Serialization fails closed while surface streaming is pending, if the complete current 3×3 surface chunk window is not actually loaded, if the owned director is missing/invalid, or if its world-seed identity differs from the SurfaceWorld seed.
+- An active portal outside the actual current loaded window cannot be serialized; this prevents saving an unreachable portal after its owning chunk leaves the loaded window.
 - Restore builds and validates a detached candidate director using the target player position's loaded-window bounds before mutating the current world.
 - The envelope seed must match the target world seed. An active saved portal must remain inside the target loaded surface window.
 - The candidate director is committed only after the existing SurfaceWorld, underground mine, inventory, stamina and quick-use restore stages all succeed. Any earlier failure leaves the live director instance and payload untouched.
@@ -43,6 +44,7 @@ Make the production SurfaceWorld the owner of one world-seeded BackroomsPortalDi
 - Saved envelope binds the director payload to the same world seed.
 - Active portal, RNG state, countdown, serial and original spawn bounds survive a world save/restore round trip.
 - A mismatched envelope seed is rejected before world seed, player position or live director state changes.
+- Serialization is rejected while streaming is pending and while an active portal lies outside the actual loaded window.
 - Legacy schema-1 saves without the optional envelope remain loadable and do not inherit stale active portals.
 - Existing stamina/quick-use failure injection confirms the detached candidate is never committed and the exact live portal director payload remains unchanged after rollback.
 
