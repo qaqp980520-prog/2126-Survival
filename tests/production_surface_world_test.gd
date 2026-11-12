@@ -228,6 +228,8 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	_expect(not stamina_result, "SurfaceWorld rejects an auxiliary stamina apply that fails after base world restore")
 	_expect(failing_stamina.to_save_dict() == baseline_stamina, "stamina state partially applied before failure is restored from its snapshot")
 	_expect(str(stamina_report.get("phase", "")) == "stamina_restore" and bool(stamina_report.get("rollback_complete", false)), "stamina failure reports a complete cross-system rollback")
+	var stamina_rollback_details: Dictionary = stamina_report.get("details", {})
+	_expect(bool(stamina_rollback_details.get("minerals_restored", false)) and bool(stamina_rollback_details.get("world_objects_restored", false)), "stamina failure restores exact mineral and world-object snapshots after streaming")
 	world.stamina = original_stamina
 	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "stamina failure")
 
@@ -243,6 +245,8 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	_expect(not quick_use_result, "SurfaceWorld rejects an auxiliary quick-use apply that fails after stamina and base restore")
 	_expect(failing_quick_use.to_save_dict() == baseline_quick_use, "quick-use state partially applied before failure is restored from its snapshot")
 	_expect(str(quick_use_report.get("phase", "")) == "quick_use_restore" and bool(quick_use_report.get("rollback_complete", false)), "quick-use failure reports a complete cross-system rollback")
+	var quick_use_rollback_details: Dictionary = quick_use_report.get("details", {})
+	_expect(bool(quick_use_rollback_details.get("minerals_restored", false)) and bool(quick_use_rollback_details.get("world_objects_restored", false)), "quick-use failure restores exact mineral and world-object snapshots after streaming")
 	world.quick_use = original_quick_use
 	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "quick-use failure")
 
