@@ -37,7 +37,8 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 ## Validation
 
 - Added a failure-injection session whose preflight succeeds but whose commit deliberately rejects after the Director has consumed the portal.
-- The regression requires the Director save payload to match the exact pre-commit snapshot after rollback, including RNG, spawn timer, serial, and active portal.
+- Added a mutating Director double whose consume operation changes RNG, serial, countdown and active-portal state before returning failure; the manager must restore and verify the exact original save payload.
+- Both regressions require the Director save payload to match the exact pre-commit snapshot after rollback, including RNG, spawn timer, serial, and active portal.
 - Exact-head Godot 4.3 focused and Full Compatibility Gate for the updated commit are pending. No pass is claimed until CI completes.
 - The preceding pre-hardening HEAD had its focused transition-manager test pass in Full Gate run 43173784724; that run does not validate the new rollback commit.
 
