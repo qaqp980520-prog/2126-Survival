@@ -10,6 +10,7 @@ const SAVE_SCHEMA_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const MAX_STREAM_RADIUS: int = 8
 const MAX_ABS_CELL_COORD: int = 1000000
+const MAX_CELL_SIZE: float = 1024.0
 const VALID_LEVEL_IDS: Array[String] = [
 	"Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"
 ]
@@ -36,15 +37,12 @@ func configure(
 		return false
 	if seed_value < 0 or seed_value > MAX_WORLD_SEED:
 		return false
-	if not Layout.is_valid_cell_size(requested_cell_size):
+	if not Layout.is_valid_cell_size(requested_cell_size) or requested_cell_size > MAX_CELL_SIZE:
 		return false
 	if requested_stream_radius < 0 or requested_stream_radius > MAX_STREAM_RADIUS:
 		return false
-	if configured \
-	and level_id == destination_level \
-	and world_seed == seed_value \
-	and is_equal_approx(cell_size, requested_cell_size) \
-	and stream_radius == requested_stream_radius:
+	if configured and level_id == destination_level and world_seed == seed_value and is_equal_approx(cell_size, requested_cell_size) and stream_radius == requested_stream_radius:
+		last_load_error = ""
 		return true
 
 	level_id = destination_level
@@ -62,18 +60,22 @@ func configure(
 func plan_window_for_position(world_position: Vector3) -> Dictionary:
 	if not configured:
 		return {"ok": false, "reason": "not_configured"}
+	var max_world_coordinate: float = (float(MAX_ABS_CELL_COORD) + 0.5) * cell_size
+	if world_position.x <= -max_world_coordinate or world_position.x >= max_world_coordinate or world_position.z <= -max_world_coordinate or world_position.z >= max_world_coordinate:
+		return {"ok": false, "reason": "world_position_out_of_range"}
 	var mapping: Dictionary = Layout.try_cell_for_position(world_position, cell_size)
 	if not bool(mapping.get("ok", false)):
 		return {"ok": false, "reason": str(mapping.get("reason", "invalid_world_position"))}
 	var mapped_cell: Variant = mapping.get("cell", null)
 	if not (mapped_cell is Vector2i):
 		return {"ok": false, "reason": "invalid_cell_mapping"}
-	return plan_window_at_cell(mapped_cell)
+	var center: Vector2i = mapped_cell
+	return plan_window_at_cell(center)
 
 func plan_window_at_cell(requested_center: Vector2i) -> Dictionary:
 	if not configured:
 		return {"ok": false, "reason": "not_configured"}
-	if absi(requested_center.x) > MAX_ABS_CELL_COORD or absi(requested_center.y) > MAX_ABS_CELL_COORD:
+	if requested_center.x < -MAX_ABS_CELL_COORD or requested_center.x > MAX_ABS_CELL_COORD or requested_center.y < -MAX_ABS_CELL_COORD or requested_center.y > MAX_ABS_CELL_COORD:
 		return {"ok": false, "reason": "cell_out_of_range"}
 
 	var desired_keys: Array[String] = []
@@ -127,7 +129,8 @@ func commit_window(plan: Dictionary, staged_cell_keys: Array) -> bool:
 	if not (center_value is Vector2i):
 		return false
 
-	var expected: Dictionary = plan_window_at_cell(center_value)
+	var requested_center: Vector2i = center_value
+	var expected: Dictionary = plan_window_at_cell(requested_center)
 	if not bool(expected.get("ok", false)):
 		return false
 	for field in [
@@ -163,7 +166,7 @@ func commit_window(plan: Dictionary, staged_cell_keys: Array) -> bool:
 		next_loaded[key] = descriptor.duplicate(true)
 
 	_loaded_cells = next_loaded
-	center_cell = center_value
+	center_cell = requested_center
 	_generation += 1
 	return true
 
@@ -233,7 +236,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	if not bool(radius_result.get("ok", false)):
 		return _reject_load("invalid_stream_radius")
 	var cell_size_result: Dictionary = _read_positive_finite_number(payload.get("cell_size", null))
-	if not bool(cell_size_result.get("ok", false)):
+	if not bool(cell_size_result.get("ok", false)) or float(cell_size_result.get("value", 0.0)) > MAX_CELL_SIZE:
 		return _reject_load("invalid_cell_size")
 
 	var center_value: Variant = payload.get("center_cell", null)
@@ -244,7 +247,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	if not bool(x_result.get("ok", false)) or not bool(z_result.get("ok", false)):
 		return _reject_load("invalid_center_cell")
 
-	var candidate_level: String = level_value
+	var candidate_level: String = str(level_value)
 	var candidate_seed: int = int(seed_result["value"])
 	var candidate_radius: int = int(radius_result["value"])
 	var candidate_cell_size: float = float(cell_size_result["value"])
