@@ -101,6 +101,8 @@ func _test_active_portal_survives_spawn_bounds_change() -> void:
     # Simulate a player-relative candidate window moving after the portal exists.
     # The already-active portal must remain loadable at its original world position.
     director.world_bounds = moved_bounds
+    assert(director.active_portal["spawn_bounds"] == BOUNDS)
+    assert(director.to_save_dict() == saved)
     var restored = Director.new(2718, moved_bounds, 40.0)
     assert(restored.load_save_dict(saved))
     assert(restored.active_portal["id"] == portal_id)
