@@ -2,6 +2,7 @@ extends Node3D
 
 const Director = preload("res://systems/BackroomsPortalDirector.gd")
 const EntityDirector = preload("res://systems/BackroomsEntityDirector.gd")
+const MazeLayout = preload("res://systems/BackroomsMazeLayout.gd")
 const PortalScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BridgeScript = preload("res://systems/SurvivalWorldBridge.gd")
 const SaveAdapter = preload("res://systems/SurvivalInventorySaveAdapter.gd")
@@ -470,12 +471,7 @@ func _stream_maze_cells(force: bool = false) -> void:
             _loaded_cells.erase(key)
 
 func _maze_cell_for_position(world_position: Vector3) -> Vector2i:
-    # Cells are centered on multiples of CELL_SIZE, so their boundaries are
-    # at half-cell offsets. Plain floor(position / CELL_SIZE) switches late.
-    return Vector2i(
-        floori((world_position.x + CELL_SIZE * 0.5) / CELL_SIZE),
-        floori((world_position.z + CELL_SIZE * 0.5) / CELL_SIZE)
-    )
+    return MazeLayout.cell_for_position(world_position, CELL_SIZE)
 
 func _create_maze_cell(cell: Vector2i) -> void:
     var root := Node3D.new()
@@ -830,29 +826,13 @@ func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3,
     parent.add_child(mesh_instance)
 
 func _edge_is_open(cell: Vector2i, direction: Vector2i) -> bool:
-    var neighbor := cell + direction
-    var ax := mini(cell.x, neighbor.x)
-    var az := mini(cell.y, neighbor.y)
-    var bx := maxi(cell.x, neighbor.x)
-    var bz := maxi(cell.y, neighbor.y)
-    # Random extra passages make the maze twisty; a deterministic spanning
-    # tree edge guarantees every generated cell can ultimately reach the origin.
-    if _parent_toward_origin(cell) == direction:
-        return true
-    if _parent_toward_origin(neighbor) == -direction:
-        return true
-    return _hash_value(ax * 31 + bx, az * 31 + bz, 13) % 100 < 34
+    return MazeLayout.edge_is_open(cell, direction, WORLD_SEED)
 
 func _parent_toward_origin(cell: Vector2i) -> Vector2i:
-    if cell == Vector2i.ZERO:
-        return Vector2i.ZERO
-    if absi(cell.x) >= absi(cell.y) and cell.x != 0:
-        return Vector2i(-1 if cell.x > 0 else 1, 0)
-    return Vector2i(0, -1 if cell.y > 0 else 1)
+    return MazeLayout.parent_toward_origin(cell)
 
 func _hash_value(x: int, z: int, salt: int) -> int:
-    var value: int = abs((x * 73856093) ^ (z * 19349663) ^ (salt * 83492791) ^ WORLD_SEED)
-    return value
+    return MazeLayout.hash_value(x, z, salt, WORLD_SEED)
 
 func _should_enable_light_shadows(cell: Vector2i) -> bool:
     # Dynamic shadows are independent from procedural geometry quality.
