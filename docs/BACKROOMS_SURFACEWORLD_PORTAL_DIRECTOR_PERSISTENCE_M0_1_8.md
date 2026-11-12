@@ -6,7 +6,7 @@ Make the production SurfaceWorld the owner of one world-seeded BackroomsPortalDi
 
 ## GitHub delivery
 
-- PR: pending creation from branch `feat/backrooms-surfaceworld-portal-persistence-2026-11-12`.
+- PR: [#338](https://github.com/qaqp980520-prog/2126-Survival/pull/338), Open / Draft / Unmerged.
 - Base: PR #337, SurfaceWorld loaded-window director factory.
 - Base HEAD: `736a77d2a4243bf9d874922fdbe1eabd59946b44`.
 - Files:
