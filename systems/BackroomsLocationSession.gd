@@ -62,6 +62,8 @@ func can_begin_from_portal_result(
 ) -> bool:
 	if not bool(portal_result.get("ok", false)):
 		return false
+	if not ["prepared", "entered"].has(str(portal_result.get("event", ""))):
+		return false
 	var destination_value: Variant = portal_result.get("destination_level", null)
 	var portal_id_value: Variant = portal_result.get("portal_id", null)
 	if not (destination_value is String) or not (portal_id_value is int):
@@ -80,6 +82,8 @@ func begin_from_portal_result(
 	source_world_seed: int,
 	entry_position: Vector3 = Vector3.ZERO
 ) -> bool:
+	if str(portal_result.get("event", "")) != "entered":
+		return false
 	if not can_begin_from_portal_result(portal_result, return_position, source_world_seed, entry_position):
 		return false
 	return begin_transition(
