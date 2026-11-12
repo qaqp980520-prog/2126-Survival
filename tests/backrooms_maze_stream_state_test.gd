@@ -25,7 +25,7 @@ func _test_configuration_and_initial_window() -> void:
 	assert(not bool(invalid_position.get("ok", false)))
 	assert(state.get_loaded_cell_count() == 0)
 	assert(not bool(state.plan_window_at_cell(Vector2i(1000001, 0)).get("ok", false)))
-	assert(not bool(state.plan_window_for_position(Vector3(8000000.0, 0.0, 0.0)).get("ok", false)))
+	assert(not bool(state.plan_window_for_position(Vector3(8000008.0, 0.0, 0.0)).get("ok", false)))
 
 	var plan: Dictionary = state.plan_window_for_position(Vector3.ZERO)
 	assert(bool(plan.get("ok", false)))
