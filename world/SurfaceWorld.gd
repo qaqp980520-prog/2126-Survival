@@ -514,6 +514,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = _pitch
 
 func _interact_current_target() -> Dictionary:
+	if player == null:
+		return {"ok": false, "action": "unavailable"}
 	var target: Dictionary = get_camera_interaction_target()
 	if str(target.get("kind", "")) == "portal":
 		var portal: Node3D = target.get("node") as Node3D
