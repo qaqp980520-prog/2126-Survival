@@ -37,7 +37,7 @@ func tick(delta: float, player_position: Vector2) -> Dictionary:
         next_spawn_in = RETRY_INTERVAL
         return {"event": "retry", "retry_in": next_spawn_in}
     portal_serial += 1
-    active_portal = {"id": portal_serial, "position": candidate["position"]}
+    active_portal = {"id": portal_serial, "position": candidate["position"], "spawn_bounds": world_bounds}
     return {"event": "spawned", "portal": active_portal.duplicate(true)}
 
 func consume_portal(portal_id: int) -> Dictionary:
@@ -53,12 +53,26 @@ func to_save_dict() -> Dictionary:
     var portal_payload: Dictionary = {}
     if not active_portal.is_empty():
         var position: Vector2 = active_portal["position"]
-        portal_payload = {"id": int(active_portal["id"]), "position": [position.x, position.y]}
+        var spawn_bounds: Rect2 = world_bounds
+        var saved_bounds: Variant = active_portal.get("spawn_bounds", null)
+        if saved_bounds is Rect2:
+            spawn_bounds = saved_bounds
+        portal_payload = {
+            "id": int(active_portal["id"]),
+            "position": [position.x, position.y],
+            "spawn_bounds": [
+                spawn_bounds.position.x,
+                spawn_bounds.position.y,
+                spawn_bounds.size.x,
+                spawn_bounds.size.y
+            ]
+        }
     return {
         "schema_version": SAVE_SCHEMA_VERSION,
         "next_spawn_in": next_spawn_in,
         "portal_serial": portal_serial,
-        "active_portal": portal_payload
+        "active_portal": portal_payload,
+        "rng_state": str(_rng.state)
     }
 
 func load_save_dict(data: Dictionary) -> bool:
@@ -75,6 +89,17 @@ func load_save_dict(data: Dictionary) -> bool:
     var saved_portal: Variant = data.get("active_portal", null)
     if not (saved_portal is Dictionary):
         return false
+    # Older schema-1 saves may omit rng_state; preserve the constructor state for
+    # those legacy payloads. New saves restore a canonical decimal integer RNG state.
+    var has_rng_state: bool = data.has("rng_state")
+    var saved_rng_state: Variant = data.get("rng_state", null)
+    var restored_rng_state: int = 0
+    if has_rng_state:
+        if not (saved_rng_state is String) or not str(saved_rng_state).is_valid_int():
+            return false
+        restored_rng_state = int(str(saved_rng_state))
+        if str(restored_rng_state) != str(saved_rng_state):
+            return false
     var restored_portal: Dictionary = {}
     if not saved_portal.is_empty():
         var saved_id: Variant = saved_portal.get("id", null)
@@ -86,9 +111,36 @@ func load_save_dict(data: Dictionary) -> bool:
         if not _is_finite_number_in_range(saved_position[0], -1.0e12, 1.0e12) or not _is_finite_number_in_range(saved_position[1], -1.0e12, 1.0e12):
             return false
         var point := Vector2(float(saved_position[0]), float(saved_position[1]))
-        if not world_bounds.has_point(point):
+        # An active portal remains valid in the bounds where it was created,
+        # even if the director's candidate-spawn window has since moved.
+        # Legacy schema-1 saves without a snapshot use the current world_bounds.
+        var restored_bounds: Rect2 = world_bounds
+        if saved_portal.has("spawn_bounds"):
+            var saved_bounds_value: Variant = saved_portal.get("spawn_bounds", null)
+            if not (saved_bounds_value is Array) or saved_bounds_value.size() != 4:
+                return false
+            for component in saved_bounds_value:
+                if not _is_finite_number_in_range(component, -1.0e12, 1.0e12):
+                    return false
+            var bounds_origin := Vector2(float(saved_bounds_value[0]), float(saved_bounds_value[1]))
+            var bounds_size := Vector2(float(saved_bounds_value[2]), float(saved_bounds_value[3]))
+            if bounds_size.x <= 0.0 or bounds_size.y <= 0.0:
+                return false
+            var bounds_end := bounds_origin + bounds_size
+            if not _is_finite_number_in_range(bounds_end.x, -1.0e12, 1.0e12):
+                return false
+            if not _is_finite_number_in_range(bounds_end.y, -1.0e12, 1.0e12):
+                return false
+            restored_bounds = Rect2(bounds_origin, bounds_size)
+        if not restored_bounds.has_point(point):
             return false
-        restored_portal = {"id": int(saved_id), "position": point}
+        restored_portal = {
+            "id": int(saved_id),
+            "position": point,
+            "spawn_bounds": restored_bounds
+        }
+    if has_rng_state:
+        _rng.state = restored_rng_state
     next_spawn_in = float(countdown)
     portal_serial = int(saved_serial)
     active_portal = restored_portal
