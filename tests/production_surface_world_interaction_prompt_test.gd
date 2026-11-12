@@ -18,16 +18,6 @@ func _run() -> void:
 	if world == null:
 		quit(1)
 		return
-	root.add_child(world)
-	await process_frame
-	await physics_frame
-	var prompt: Label = world.get("interaction_prompt") as Label
-	_expect(prompt != null, "production HUD creates a dedicated interaction prompt")
-	if prompt == null:
-		_finish(1)
-		return
-
-	_expect(world.is_in_group("production_surface_world"), "production SurfaceWorld registers its interaction-router ownership before child portals enter")
 	var portal := Area3D.new()
 	portal.set_script(PortalVisualScript)
 	portal.set("portal_id", 77)
@@ -41,7 +31,16 @@ func _run() -> void:
 	portal.position = Vector3(1.0, 1.0, -1.5)
 	portal.connect("portal_entered", Callable(self, "_on_portal_entered"))
 	world.add_child(portal)
+	root.add_child(world)
 	await process_frame
+	await physics_frame
+	var prompt: Label = world.get("interaction_prompt") as Label
+	_expect(prompt != null, "production HUD creates a dedicated interaction prompt")
+	if prompt == null:
+		_finish(1)
+		return
+
+	_expect(world.is_in_group("production_surface_world"), "production SurfaceWorld registers its interaction-router ownership before child portals enter")
 	await _aim_at(portal)
 	_expect(portal.is_in_group("backrooms_portal"), "portal script registers the shared backrooms_portal target group")
 	_expect((portal.collision_layer & (1 << 1)) != 0, "portal Area3D exposes the production interaction collision layer")
