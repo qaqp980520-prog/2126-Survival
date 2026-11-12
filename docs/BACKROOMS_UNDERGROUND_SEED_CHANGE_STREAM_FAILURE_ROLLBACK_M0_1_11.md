@@ -26,7 +26,7 @@ The failure callback records the world seed at the instant the chunk factory rej
 ## Files
 
 - `world/SurfaceWorld.gd` — reapply the previous crop registry snapshot after the final base stream restore and include `crops_restored` in `rollback_complete` and diagnostic details.
-- `tests/production_surface_world_test.gd` — combine seed change with surface factory failure, assert exact crop snapshot restoration, and compare the mine-origin loaded state to the baseline rather than assuming the origin must always be loaded.
+- `tests/production_surface_world_test.gd` — require a non-empty planted-crop baseline, combine seed change with surface factory failure, assert exact crop snapshot restoration, and compare the mine-origin loaded state to the baseline rather than assuming the origin must always be loaded.
 - `docs/BACKROOMS_UNDERGROUND_SEED_CHANGE_STREAM_FAILURE_ROLLBACK_M0_1_11.md` — this version record.
 
 ## Dependencies and import
