@@ -25,6 +25,8 @@ func _test_configuration_and_initial_window() -> void:
 	assert(not bool(invalid_position.get("ok", false)))
 	assert(state.get_loaded_cell_count() == 0)
 	assert(not bool(state.plan_window_at_cell(Vector2i(1000001, 0)).get("ok", false)))
+	assert(not bool(state.plan_window_at_cell(Vector2i(1000000, 0)).get("ok", false)))
+	assert(bool(state.plan_window_at_cell(Vector2i(999999, 0)).get("ok", false)))
 	assert(not bool(state.plan_window_for_position(Vector3(8000008.0, 0.0, 0.0)).get("ok", false)))
 
 	var plan: Dictionary = state.plan_window_for_position(Vector3.ZERO)
@@ -104,6 +106,10 @@ func _test_unload_reload_determinism_and_stale_plans() -> void:
 	assert(no_op["keep_cell_keys"].size() == 9)
 	assert(no_op["unload_cell_keys"].is_empty())
 	assert(state.commit_window(no_op, []))
+	var configuration_stale: Dictionary = state.plan_window_at_cell(Vector2i(4, 0))
+	assert(state.configure("Level 4", 778, 8.0, 1))
+	assert(not state.commit_window(configuration_stale, configuration_stale["load_cell_keys"]))
+	assert(state.get_loaded_cell_count() == 0)
 
 func _test_save_restore_and_layout_version_guard() -> void:
 	var source = StreamState.new()
@@ -134,6 +140,13 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	var malformed: Dictionary = saved.duplicate(true)
 	malformed["center_cell"] = [-3, 7.5]
 	assert(not restored.load_save_dict(malformed))
+	assert(restored.to_save_dict() == before_invalid_load)
+	assert(restored.get_loaded_cell_count() == 25)
+
+	var edge_overflow: Dictionary = saved.duplicate(true)
+	edge_overflow["center_cell"] = [1000000, 0]
+	assert(not restored.load_save_dict(edge_overflow))
+	assert(restored.last_load_error == "center_window_out_of_range")
 	assert(restored.to_save_dict() == before_invalid_load)
 	assert(restored.get_loaded_cell_count() == 25)
 
