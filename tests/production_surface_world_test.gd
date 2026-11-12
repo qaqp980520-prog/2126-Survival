@@ -246,7 +246,8 @@ func _run() -> void:
 		var portal_envelope: Dictionary = portal_save_payload.get("backrooms_portal_director", {})
 		var portal_saved_state: Dictionary = portal_envelope.get("state", {})
 		_expect(int(portal_envelope.get("world_seed", -1)) == int(portal_save_payload.get("world_seed", -2)), "portal RNG save envelope is bound to the exact SurfaceWorld seed")
-		_expect(not portal_saved_state.is_empty() and not portal_saved_state.get("active_portal", {}).is_empty(), "world save captures the active one-use portal and RNG state")
+		var saved_active_portal: Dictionary = portal_saved_state.get("active_portal", {})
+		_expect(not portal_saved_state.is_empty() and not saved_active_portal.is_empty(), "world save captures the active one-use portal and RNG state")
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
 		var live_player_position: Vector3 = world.player.global_position
 		var wrong_seed_payload: Dictionary = portal_save_payload.duplicate(true)
@@ -261,18 +262,21 @@ func _run() -> void:
 		_expect(world.get("backrooms_portal_visual") == null, "retiring a portal removes its production visual anchor")
 		_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 8)), "world restore reconstructs the saved Backrooms portal director state")
 		var restored_portal_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
-		_expect(restored_portal_director != null and restored_portal_director.call("to_save_dict") == portal_saved_state, "restored director exactly preserves RNG, serial, timer and active portal")
-		var restored_portal_visual: Area3D = world.get("backrooms_portal_visual") as Area3D
-		_expect(restored_portal_visual != null and int(restored_portal_visual.get("portal_id")) == int(portal_saved_state["active_portal"]["id"]), "restored active portal recreates its visual/interaction anchor")
-		var original_portal_chunk_id: String = str(world.get("_backrooms_portal_chunk_id"))
-		_expect(not original_portal_chunk_id.is_empty() and world.chunk_controller.is_chunk_loaded(original_portal_chunk_id), "active portal's owning surface chunk is currently loaded")
-		var restored_portal_serial: int = int(restored_portal_director.get("portal_serial"))
-		_expect(bool(world.call("debug_move_player_to", Vector3(100.0, 2.0, 100.0), now + 9)), "moving the player streams to a distant surface window")
-		_expect(not world.chunk_controller.is_chunk_loaded(original_portal_chunk_id), "distant streaming unloads the portal's original owning chunk")
-		_expect(restored_portal_director.get("active_portal").is_empty(), "portal is retired when its owning chunk leaves the loaded window")
-		_expect(world.get("backrooms_portal_visual") == null, "retired portal visual is removed after chunk unload")
-		_expect(int(restored_portal_director.get("portal_serial")) == restored_portal_serial, "retirement preserves the portal serial for deterministic history")
-		_expect(float(restored_portal_director.get("next_spawn_in")) >= BackroomsPortalDirectorScript.MIN_SPAWN_INTERVAL and float(restored_portal_director.get("next_spawn_in")) <= BackroomsPortalDirectorScript.MAX_SPAWN_INTERVAL, "retirement schedules a normal future spawn interval")
+		_expect(restored_portal_director != null, "successful restore installs a new portal director instance")
+		if restored_portal_director != null:
+			_expect(restored_portal_director.call("to_save_dict") == portal_saved_state, "restored director exactly preserves RNG, serial, timer and active portal")
+			var restored_portal_visual: Area3D = world.get("backrooms_portal_visual") as Area3D
+			_expect(restored_portal_visual != null and int(restored_portal_visual.get("portal_id")) == int(saved_active_portal.get("id", -1)), "restored active portal recreates its visual/interaction anchor")
+			var original_portal_chunk_id: String = str(world.get("_backrooms_portal_chunk_id"))
+			_expect(not original_portal_chunk_id.is_empty() and world.chunk_controller.is_chunk_loaded(original_portal_chunk_id), "active portal's owning surface chunk is currently loaded")
+			var restored_portal_serial: int = int(restored_portal_director.get("portal_serial"))
+			_expect(bool(world.call("debug_move_player_to", Vector3(100.0, 2.0, 100.0), now + 9)), "moving the player streams to a distant surface window")
+			_expect(not world.chunk_controller.is_chunk_loaded(original_portal_chunk_id), "distant streaming unloads the portal's original owning chunk")
+			var retired_active_portal: Dictionary = restored_portal_director.get("active_portal")
+			_expect(retired_active_portal.is_empty(), "portal is retired when its owning chunk leaves the loaded window")
+			_expect(world.get("backrooms_portal_visual") == null, "retired portal visual is removed after chunk unload")
+			_expect(int(restored_portal_director.get("portal_serial")) == restored_portal_serial, "retirement preserves the portal serial for deterministic history")
+			_expect(float(restored_portal_director.get("next_spawn_in")) >= BackroomsPortalDirectorScript.MIN_SPAWN_INTERVAL and float(restored_portal_director.get("next_spawn_in")) <= BackroomsPortalDirectorScript.MAX_SPAWN_INTERVAL, "retirement schedules a normal future spawn interval")
 	_finish(0 if failures.is_empty() else 1)
 
 func _test_auxiliary_restore_rollback(now: int) -> void:
@@ -369,7 +373,7 @@ func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: Strin
 
 
 func _make_backrooms_portal_director_envelope(seed_value: int) -> Dictionary:
-	var candidate: RefCounted = BackroomsPortalDirectorScript.new(seed_value, Rect2(-15.0, -15.0, 30.0, 30.0), 8.0)
+	var candidate: RefCounted = BackroomsPortalDirectorScript.new(seed_value, Rect2(-500.0, -500.0, 1000.0, 1000.0), 8.0)
 	assert(bool(candidate.call("set_spawn_window", Rect2(-10.0, -10.0, 30.0, 30.0), 8.0, 4.0)))
 	return {
 		"world_seed": seed_value,
