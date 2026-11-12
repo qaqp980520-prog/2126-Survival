@@ -110,7 +110,7 @@ func _test_active_portal_survives_spawn_bounds_change() -> void:
 
     var entered: Dictionary = restored.consume_portal(portal_id)
     assert(entered["ok"])
-    var next_spawn: Dictionary = restored.tick(restored.next_spawn_in + 0.1, Vector2(2500.0, 2500.0))
+    var next_spawn: Dictionary = restored.tick(restored.next_spawn_in + 0.1, Vector2(1500.0, 1500.0))
     assert(next_spawn["event"] == "spawned")
     assert(moved_bounds.has_point(next_spawn["portal"]["position"]))
     assert(restored.active_portal["spawn_bounds"] == moved_bounds)
