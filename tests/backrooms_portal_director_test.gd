@@ -49,6 +49,8 @@ func _test_portal_consumption_is_single_use() -> void:
     assert(bool(preview.get("ok", false)))
     assert(preview["event"] == "prepared")
     assert(Director.TARGET_LEVELS.has(preview["destination_level"]))
+    var repeated_preview: Dictionary = director.preview_portal_entry(portal_id)
+    assert(repeated_preview == preview, "Repeated previews must remain deterministic until consumption.")
     assert(director.to_save_dict() == before_preview, "Preview must not mutate portal, timer or RNG state.")
     assert(not director.consume_portal(portal_id + 1)["ok"])
     assert(not director.active_portal.is_empty())
