@@ -679,7 +679,8 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 func get_loaded_surface_window_bounds() -> Rect2:
 	if player == null:
 		return Rect2()
-	return get_loaded_surface_window_bounds_at(player.global_position)
+	var reference_position: Vector3 = _surface_return_position if _is_underground else player.global_position
+	return get_loaded_surface_window_bounds_at(reference_position)
 
 
 func get_loaded_surface_window_bounds_at(reference_position: Vector3) -> Rect2:
