@@ -274,6 +274,9 @@ func _run() -> void:
 			world.set("_surface_return_position", surface_return_position)
 			world.set("_is_underground", true)
 			world.set("_mine_layer_index", 0)
+			world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", explored_mine_position))
+			world.set("_last_mine_layer_index", 0)
+			world.set("_mine_chunk_ready", world.chunk_controller.is_chunk_loaded("underground/mine_0_0"))
 			world.player.global_position = explored_mine_position
 			var underground_save_payload: Dictionary = world.call("serialize_stream_state")
 			_expect(not underground_save_payload.is_empty(), "underground save validates the loaded surface window at the saved return position, not the distant mine player position")
@@ -283,6 +286,9 @@ func _run() -> void:
 			var moved_to_other_mine_window: bool = bool(mine_director.call("sync_to_world_position", other_mine_position, now + 11))
 			_expect(moved_to_other_mine_window, "underground restore regression moves the current mine window away from the saved mine window")
 			if moved_to_other_mine_window:
+				world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", other_mine_position))
+				world.set("_last_mine_layer_index", 0)
+				world.set("_mine_chunk_ready", world.chunk_controller.is_chunk_loaded("underground/mine_0_0"))
 				world.player.global_position = other_mine_position
 				var underground_restore_success: bool = bool(world.call("restore_stream_state", underground_save_payload, now + 12))
 				_expect(underground_restore_success, "underground save restores with the surface stream anchored to the saved return position")
