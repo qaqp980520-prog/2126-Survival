@@ -810,9 +810,6 @@ func _refresh_backrooms_portal_runtime_after_streaming() -> bool:
 	if chunk_controller == null or not chunk_controller.is_chunk_loaded(chunk_id):
 		return _retire_backrooms_portal("owning_chunk_unloaded")
 	_backrooms_portal_chunk_id = chunk_id
-	if _is_underground:
-		_remove_backrooms_portal_visual()
-		return true
 	var expected_id: int = int(active_value.get("id", 0))
 	if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and not backrooms_portal_visual.is_queued_for_deletion():
 		if int(backrooms_portal_visual.get("portal_id")) == expected_id:
@@ -1057,7 +1054,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var next_world_seed: int = int(roundf(float(world_seed_value)))
 	var portal_director_candidate: RefCounted = BackroomsPortalDirectorScript.new(
 		next_world_seed,
-		Rect2(-15.0, -15.0, 30.0, 30.0),
+		Rect2(-500.0, -500.0, 1000.0, 1000.0),
 		backrooms_portal_safe_distance
 	)
 	if payload.has("backrooms_portal_director"):
