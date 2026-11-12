@@ -63,6 +63,11 @@ func _test_portal_director_handoff() -> void:
 	assert(session.surface_return_position == surface_position)
 	var second_session = Session.new()
 	assert(second_session.begin_from_portal_result(consumed, surface_position, 314159))
+	var invalid_result: Dictionary = consumed.duplicate(true)
+	invalid_result["portal_id"] = float(portal_id)
+	var rejected_session = Session.new()
+	assert(not rejected_session.begin_from_portal_result(invalid_result, surface_position, 314159))
+	assert(rejected_session.to_save_dict() == Session.new().to_save_dict())
 	assert(second_session.backrooms_seed == session.backrooms_seed, "The same source seed and portal ID must produce the same Backrooms layout seed.")
 
 func _test_invalid_transition_is_atomic() -> void:
@@ -134,6 +139,9 @@ func _test_invalid_save_is_atomic() -> void:
 	invalid_payloads.append(bad)
 	bad = baseline.duplicate(true)
 	bad["backrooms_seed"] = "42"
+	invalid_payloads.append(bad)
+	bad = baseline.duplicate(true)
+	bad["backrooms_seed"] = posmod(int(baseline["backrooms_seed"]) + 1, Session.MAX_WORLD_SEED + 1)
 	invalid_payloads.append(bad)
 	bad = baseline.duplicate(true)
 	bad["active"] = false
