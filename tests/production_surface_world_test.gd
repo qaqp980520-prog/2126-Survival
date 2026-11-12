@@ -263,6 +263,36 @@ func _run() -> void:
 		_expect(int(portal_envelope.get("world_seed", -1)) == int(portal_save_payload.get("world_seed", -2)), "portal RNG save envelope is bound to the exact SurfaceWorld seed")
 		var saved_active_portal: Dictionary = portal_saved_state.get("active_portal", {})
 		_expect(not portal_saved_state.is_empty() and not saved_active_portal.is_empty(), "world save captures the active one-use portal and RNG state")
+		var surface_return_position: Vector3 = world.player.global_position
+		var surface_window_before_mine: Rect2 = world.call("get_loaded_surface_window_bounds")
+		var mine_director: Node = world.get("mine_director") as Node
+		var mine_floor_y: float = float(mine_director.call("get_layer_floor_y", 0)) if mine_director != null else -18.0
+		var explored_mine_position := Vector3(41.0, mine_floor_y, 41.0)
+		var moved_into_mine_window: bool = mine_director != null and bool(mine_director.call("sync_to_world_position", explored_mine_position, now + 10))
+		_expect(moved_into_mine_window, "underground save regression prepares a mine window outside the loaded surface window")
+		if moved_into_mine_window:
+			world.set("_surface_return_position", surface_return_position)
+			world.set("_is_underground", true)
+			world.set("_mine_layer_index", 0)
+			world.player.global_position = explored_mine_position
+			var underground_save_payload: Dictionary = world.call("serialize_stream_state")
+			_expect(not underground_save_payload.is_empty(), "underground save validates the loaded surface window at the saved return position, not the distant mine player position")
+			_expect(str(underground_save_payload.get("location_layer", "")) == "underground", "underground save preserves the current location layer")
+			_expect(underground_save_payload.get("surface_return_position", []) == [surface_return_position.x, surface_return_position.y, surface_return_position.z], "underground save preserves the exact surface return position")
+			var other_mine_position := Vector3(57.0, mine_floor_y, 57.0)
+			var moved_to_other_mine_window: bool = bool(mine_director.call("sync_to_world_position", other_mine_position, now + 11))
+			_expect(moved_to_other_mine_window, "underground restore regression moves the current mine window away from the saved mine window")
+			if moved_to_other_mine_window:
+				world.player.global_position = other_mine_position
+				_expect(bool(world.call("restore_stream_state", underground_save_payload, now + 12)), "underground save restores with the surface stream anchored to the saved return position")
+				_expect(world.player.global_position.is_equal_approx(explored_mine_position), "underground restore returns the player to the saved mine coordinates")
+				_expect(bool(world.get("_is_underground")), "underground restore preserves the underground layer flag")
+				var restored_return_position: Vector3 = world.get("_surface_return_position")
+				_expect(restored_return_position.is_equal_approx(surface_return_position), "underground restore preserves the exact surface return position")
+				_expect(world.call("get_loaded_surface_window_bounds_at", surface_return_position) == surface_window_before_mine, "underground restore keeps the real surface chunk window around the return position")
+				_expect(world.get("backrooms_portal_visual") != null, "underground restore keeps the active portal anchor when its owning surface chunk remains loaded")
+			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
+			portal_director = world.get("backrooms_portal_director") as RefCounted
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
 		var live_player_position: Vector3 = world.player.global_position
 		var original_active_portal: Dictionary = portal_director.get("active_portal").duplicate(true)
