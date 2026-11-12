@@ -357,6 +357,7 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
 	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	baseline_mine_ids.sort()
+	var baseline_mine_origin_loaded: bool = baseline_mine_ids.has("underground/mine_0_0")
 	var baseline_surface_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 	baseline_surface_ids.sort()
 	var baseline_player_position: Array = baseline_payload.get("player_position", []).duplicate()
@@ -400,6 +401,8 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	_expect(int(failure_state.get("remaining", -1)) == 0, "base stream failure was actually injected before rollback")
 	_expect(int(failure_state.get("world_seed_at_failure", -1)) == candidate_world_seed, "surface stream failure occurs after the candidate world seed and mine window are applied")
 	_expect(str(restore_report.get("phase", "")) == "stream_sync" and bool(restore_report.get("rollback_complete", false)), "failed underground base stream reports a complete cross-layer rollback")
+	var rollback_details: Dictionary = restore_report.get("details", {})
+	_expect(bool(rollback_details.get("crops_restored", false)), "failed underground base stream reports exact crop snapshot restoration after final streaming")
 	_expect_world_snapshot_restored(baseline_payload, baseline_player_position, baseline_surface_ids, "underground seed-change surface stream failure")
 	_expect_mine_window_restored(baseline_mine_ids, "underground seed-change surface stream failure")
 	_expect(world.player.global_position.is_equal_approx(baseline_position), "failed underground base stream restores the exact mine player position")
@@ -415,7 +418,7 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	_expect(world.backrooms_portal_director == baseline_director, "failed underground base stream preserves the original portal director instance")
 	_expect(world.backrooms_portal_director.call("to_save_dict") == baseline_portal_state, "failed underground base stream preserves the exact portal director state")
 	_expect(world.chunk_controller.is_chunk_loaded(ORIGIN_CHUNK_ID), "failed underground base stream restores the origin surface chunk")
-	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "failed underground base stream restores the persistent mine origin chunk")
+	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0") == baseline_mine_origin_loaded, "failed underground base stream restores the mine origin chunk's exact baseline loaded state")
 	var restored_portal_visual: Area3D = world.get("backrooms_portal_visual") as Area3D
 	_expect(restored_portal_visual != null and int(restored_portal_visual.get("portal_id")) == baseline_portal_id, "failed underground base stream recreates the same active portal ID")
 	if restored_portal_visual != null:
