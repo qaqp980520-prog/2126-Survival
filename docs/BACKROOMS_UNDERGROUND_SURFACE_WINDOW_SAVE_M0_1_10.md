@@ -23,7 +23,7 @@ Fix a production save/load defect when the player explores horizontally away fro
 ## Files
 
 - `world/SurfaceWorld.gd` — surface-window reference helper, underground save anchor, underground restore and rollback anchoring.
-- `tests/production_surface_world_test.gd` — move the mine window beyond the surface window, save while underground, restore from a different mine window, verify the surface return window and active portal anchor, then restore the surface fixture.
+- `tests/production_surface_world_test.gd` — move the mine window beyond the surface window, save while underground, restore from a different mine window, verify the surface return window and active portal anchor; inject Stamina and Quick Use failures during an underground world-seed change and require exact rollback of both streaming windows and the portal envelope; then restore the surface fixture.
 - `docs/BACKROOMS_UNDERGROUND_SURFACE_WINDOW_SAVE_M0_1_10.md` — this version record.
 
 ## Dependencies and import
@@ -35,8 +35,8 @@ Fix a production save/load defect when the player explores horizontally away fro
 
 ## Validation status
 
-- Code and regression test are committed to the child branch.
-- Exact-head Godot 4.3 Full Compatibility Gate is required after PR creation; no test pass is claimed before the workflow completes.
+- Code and regression tests are committed to the child branch.
+- Exact-head Godot 4.3 Full Compatibility Gate is required after the latest test commit; no test pass is claimed before the workflow completes.
 - Local Godot executable is unavailable in this environment; no local engine pass is claimed.
 - Graphical rendering, GPU, visual alignment/Z-fighting, and iPhone touch/performance remain unverified.
 
