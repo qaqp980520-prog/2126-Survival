@@ -105,6 +105,18 @@ func _run() -> void:
 		_expect(not diagnostics_panel.visible, "streaming diagnostics panel closes through its toggle API")
 	var loaded_window: Rect2 = world.call("get_loaded_surface_window_bounds")
 	_expect(loaded_window == Rect2(-10.0, -10.0, 30.0, 30.0), "portal spawn bounds exactly match the loaded 3x3 surface chunk window")
+	_expect(int(world.get("_backrooms_portal_world_seed")) == int(world.get("world_seed")), "owned portal director records the exact production world seed")
+	var missing_window_chunk_id: String = "surface/chunk_1_1"
+	var missing_window_chunk: Node3D = world.chunk_controller.get_chunk_root(missing_window_chunk_id)
+	_expect(missing_window_chunk != null, "loaded-window completeness test finds its target surface chunk")
+	if missing_window_chunk != null:
+		var window_test_now: int = int(Time.get_unix_time_from_system())
+		var window_chunk_unloaded: bool = world.chunk_controller.unload_chunk(missing_window_chunk_id, window_test_now)
+		_expect(window_chunk_unloaded, "loaded-window completeness test can unload one managed surface chunk")
+		if window_chunk_unloaded:
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "portal spawn bounds fail closed when any required surface chunk is absent")
+			_expect(bool(world.call("_sync_streaming", window_test_now)), "surface streaming director reloads the missing managed chunk")
+			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "portal spawn bounds recover only after the complete 3x3 window is loaded again")
 	var backrooms_director: RefCounted = world.call("create_backrooms_portal_director") as RefCounted
 	_expect(backrooms_director != null, "production SurfaceWorld creates a Backrooms portal director configured for its loaded window")
 	if backrooms_director != null:
@@ -126,6 +138,8 @@ func _run() -> void:
 		world.set("_surface_stream_pending", true)
 		_expect(not bool(world.call("configure_backrooms_portal_director", backrooms_director)), "portal spawn-window configuration is blocked while surface streaming is pending")
 		_expect(backrooms_director.get("world_bounds") == director_bounds_before_rejection, "a blocked stream-time reconfiguration leaves the director window unchanged")
+		world.set("_surface_stream_pending", true)
+		_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to serialize while asynchronous surface streaming is pending")
 		world.set("_surface_stream_pending", false)
 	var status: Dictionary = world.call("get_world_session_status")
 	_expect(bool(status.get("ready", false)), "surface world reports ready")
@@ -245,11 +259,23 @@ func _run() -> void:
 		var portal_save_payload: Dictionary = world.call("serialize_stream_state")
 		var portal_envelope: Dictionary = portal_save_payload.get("backrooms_portal_director", {})
 		var portal_saved_state: Dictionary = portal_envelope.get("state", {})
+		_expect(int(portal_envelope.get("schema_version", -1)) == 1, "portal RNG save envelope has an explicit schema version")
 		_expect(int(portal_envelope.get("world_seed", -1)) == int(portal_save_payload.get("world_seed", -2)), "portal RNG save envelope is bound to the exact SurfaceWorld seed")
 		var saved_active_portal: Dictionary = portal_saved_state.get("active_portal", {})
 		_expect(not portal_saved_state.is_empty() and not saved_active_portal.is_empty(), "world save captures the active one-use portal and RNG state")
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
 		var live_player_position: Vector3 = world.player.global_position
+		var original_active_portal: Dictionary = portal_director.get("active_portal").duplicate(true)
+		var stale_active_portal: Dictionary = original_active_portal.duplicate(true)
+		stale_active_portal["position"] = Vector2(1000.0, 1000.0)
+		stale_active_portal["spawn_bounds"] = Rect2(990.0, 990.0, 20.0, 20.0)
+		portal_director.set("active_portal", stale_active_portal)
+		_expect(world.call("serialize_stream_state") == {}, "world save fails closed when an active portal is outside the current loaded surface window")
+		portal_director.set("active_portal", original_active_portal)
+		var mismatched_world_seed: int = int(world.get("world_seed"))
+		world.set("world_seed", mismatched_world_seed + 1)
+		_expect(world.call("serialize_stream_state") == {}, "world save fails closed when the owned director seed identity differs from SurfaceWorld")
+		world.set("world_seed", mismatched_world_seed)
 		var wrong_seed_payload: Dictionary = portal_save_payload.duplicate(true)
 		wrong_seed_payload["backrooms_portal_director"]["world_seed"] = int(portal_save_payload.get("world_seed", 0)) + 1
 		_expect(not bool(world.call("restore_stream_state", wrong_seed_payload, now + 6)), "world restore rejects a portal RNG envelope from another world seed")
@@ -363,6 +389,7 @@ func _expect_world_snapshot_restored(
 	_expect(current_payload.get("location_layer", "") == baseline_payload.get("location_layer", ""), "%s rollback restores the exact location layer" % failure_phase)
 	_expect(current_payload.get("mine_depth", -1) == baseline_payload.get("mine_depth", -2), "%s rollback restores the exact mine depth" % failure_phase)
 	_expect(current_payload.get("surface_return_position", []) == baseline_payload.get("surface_return_position", []), "%s rollback restores the exact surface return position" % failure_phase)
+	_expect(current_payload.get("backrooms_portal_director", {}) == baseline_payload.get("backrooms_portal_director", {}), "%s rollback preserves the exact Backrooms portal envelope" % failure_phase)
 
 
 func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: String) -> void:
@@ -376,6 +403,7 @@ func _make_backrooms_portal_director_envelope(seed_value: int) -> Dictionary:
 	var candidate: RefCounted = BackroomsPortalDirectorScript.new(seed_value, Rect2(-500.0, -500.0, 1000.0, 1000.0), 8.0)
 	assert(bool(candidate.call("set_spawn_window", Rect2(-10.0, -10.0, 30.0, 30.0), 8.0, 4.0)))
 	return {
+		"schema_version": 1,
 		"world_seed": seed_value,
 		"state": candidate.call("to_save_dict")
 	}
