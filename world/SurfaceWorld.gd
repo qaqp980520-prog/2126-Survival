@@ -1224,13 +1224,19 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			next_return_position.z
 		]
 	if not super.restore_stream_state(base_restore_payload, now):
-		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
-		else:
-			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+		var failed_base_report: Dictionary = get_last_restore_report()
+		var base_stream_rollback: Dictionary = _rollback_auxiliary_restore_failure(
+			previous_base_payload, previous_position, previous_velocity, previous_underground,
+			previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
+			previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
+			seed_changed, now
+		)
+		var base_stream_rollback_details: Dictionary = base_stream_rollback.get("details", {}).duplicate(true)
+		base_stream_rollback_details["failed_target_stream_report"] = failed_base_report
+		var base_stream_rollback_complete: bool = bool(base_stream_rollback.get("rollback_complete", false))
+		_set_restore_report(false, "stream_sync", "Target SurfaceWorld stream restore failed; the complete prior world snapshot rollback is reported in details.", base_stream_rollback_complete, base_stream_rollback_details)
+		if not base_stream_rollback_complete:
+			push_warning("SurfaceWorld base stream restore rollback was incomplete; inspect get_last_restore_report().")
 		return false
 	if target_underground:
 		player.global_position = target_position
@@ -1351,6 +1357,7 @@ func _rollback_auxiliary_restore_failure(
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
 	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
 	return {
 		"rollback_complete": rollback_complete,
