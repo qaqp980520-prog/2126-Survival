@@ -11,6 +11,7 @@ func _initialize() -> void:
     _test_portal_consumption_is_single_use()
     _test_save_round_trip()
     _test_active_portal_survives_spawn_bounds_change()
+    _test_configurable_spawn_window_supports_loaded_surface_window()
     _test_invalid_save_is_atomic()
     print("BackroomsPortalDirector tests passed.")
     quit()
@@ -112,7 +113,7 @@ func _test_active_portal_survives_spawn_bounds_change() -> void:
 
     # Simulate a player-relative candidate window moving after the portal exists.
     # The already-active portal must remain loadable at its original world position.
-    director.world_bounds = moved_bounds
+    assert(director.set_spawn_window(moved_bounds, 40.0, Director.SPAWN_PADDING))
     assert(director.active_portal["spawn_bounds"] == BOUNDS)
     assert(director.to_save_dict() == saved)
     var restored = Director.new(2718, moved_bounds, 40.0)
@@ -128,6 +129,30 @@ func _test_active_portal_survives_spawn_bounds_change() -> void:
     assert(next_spawn["event"] == "spawned")
     assert(moved_bounds.has_point(next_spawn["portal"]["position"]))
     assert(restored.active_portal["spawn_bounds"] == moved_bounds)
+
+
+func _test_configurable_spawn_window_supports_loaded_surface_window() -> void:
+    var loaded_window := Rect2(-15.0, -15.0, 30.0, 30.0)
+    var legacy = Director.new(20261112, loaded_window, 8.0)
+    legacy.next_spawn_in = 0.01
+    var legacy_result: Dictionary = legacy.tick(0.02, Vector2.ZERO)
+    assert(legacy_result["event"] == "retry", "The legacy 16 m padding cannot fit a 30 m loaded window.")
+
+    var director = Director.new(20261112, BOUNDS, 8.0)
+    var before_bounds: Rect2 = director.world_bounds
+    var before_padding: float = director.spawn_padding
+    assert(not director.set_spawn_window(loaded_window, 8.0, 16.0), "An invalid candidate window must be rejected.")
+    assert(director.world_bounds == before_bounds)
+    assert(is_equal_approx(director.spawn_padding, before_padding))
+    assert(director.set_spawn_window(loaded_window, 8.0, 4.0), "A 30 m loaded window must accept a 4 m edge margin.")
+    director.next_spawn_in = 0.01
+    var spawned: Dictionary = director.tick(0.02, Vector2.ZERO)
+    assert(spawned["event"] == "spawned")
+    var point: Vector2 = spawned["portal"]["position"]
+    assert(loaded_window.has_point(point))
+    assert(point.x >= loaded_window.position.x + 4.0 and point.x <= loaded_window.end.x - 4.0)
+    assert(point.y >= loaded_window.position.y + 4.0 and point.y <= loaded_window.end.y - 4.0)
+    assert(point.distance_to(Vector2.ZERO) >= 8.0)
 
 
 func _test_invalid_save_is_atomic() -> void:
