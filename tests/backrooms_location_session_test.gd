@@ -69,7 +69,7 @@ func _test_portal_director_handoff() -> void:
 	var second_session = Session.new()
 	assert(second_session.begin_from_portal_result(consumed, surface_position, 314159))
 	var invalid_result: Dictionary = consumed.duplicate(true)
-	invalid_result["portal_id"] = float(portal_id)
+	invalid_result["portal_id"] = float(portal_id) + 0.5
 	var rejected_session = Session.new()
 	assert(not rejected_session.begin_from_portal_result(invalid_result, surface_position, 314159))
 	assert(rejected_session.to_save_dict() == Session.new().to_save_dict())
@@ -130,7 +130,7 @@ func _test_invalid_save_is_atomic() -> void:
 	bad["entry_portal_id"] = 0
 	invalid_payloads.append(bad)
 	bad = baseline.duplicate(true)
-	bad["entry_portal_id"] = 51.0
+	bad["entry_portal_id"] = 51.5
 	invalid_payloads.append(bad)
 	bad = baseline.duplicate(true)
 	bad["surface_return_position"] = [1.0, 2.0]
