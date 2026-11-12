@@ -301,6 +301,7 @@ func _run() -> void:
 					_expect(world.call("get_loaded_surface_window_bounds") == surface_window_before_mine, "public loaded-surface bounds resolve from the return position while underground")
 					_expect(world.get("backrooms_portal_visual") != null, "underground restore keeps the active portal anchor when its owning surface chunk remains loaded")
 					_test_auxiliary_restore_rollback(now + 12)
+					_test_underground_base_stream_failure_rollback(now + 12)
 			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
 			portal_director = world.get("backrooms_portal_director") as RefCounted
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
@@ -344,6 +345,55 @@ func _run() -> void:
 			_expect(int(restored_portal_director.get("portal_serial")) == restored_portal_serial, "retirement preserves the portal serial for deterministic history")
 			_expect(float(restored_portal_director.get("next_spawn_in")) >= BackroomsPortalDirectorScript.MIN_SPAWN_INTERVAL and float(restored_portal_director.get("next_spawn_in")) <= BackroomsPortalDirectorScript.MAX_SPAWN_INTERVAL, "retirement schedules a normal future spawn interval")
 	_finish(0 if failures.is_empty() else 1)
+
+func _test_underground_base_stream_failure_rollback(now: int) -> void:
+	var baseline_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not baseline_payload.is_empty(), "underground base-stream failure test captures a complete snapshot")
+	if baseline_payload.is_empty():
+		return
+	var baseline_position: Vector3 = world.player.global_position
+	var baseline_return_position: Vector3 = world.get("_surface_return_position")
+	var baseline_surface_bounds: Rect2 = world.call("get_loaded_surface_window_bounds")
+	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
+	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
+	baseline_mine_ids.sort()
+	var baseline_portal_state: Dictionary = world.backrooms_portal_director.call("to_save_dict")
+	var original_factory: Callable = world.director.chunk_factory
+	var failure_state: Dictionary = {"remaining": 1}
+	var failing_factory: Callable = func(coord: Vector2i) -> Node3D:
+		if int(failure_state.get("remaining", 0)) > 0:
+			failure_state["remaining"] = int(failure_state.get("remaining", 0)) - 1
+			return null
+		return original_factory.call(coord) as Node3D
+	var factory_bound: bool = bool(world.director.call("bind_chunk_factory", failing_factory))
+	_expect(factory_bound, "underground base-stream failure test installs a one-shot surface chunk factory")
+	if not factory_bound:
+		return
+	var candidate_payload: Dictionary = baseline_payload.duplicate(true)
+	var alternate_return_position := Vector3(61.0, 2.0, 61.0)
+	candidate_payload["surface_return_position"] = [
+		alternate_return_position.x,
+		alternate_return_position.y,
+		alternate_return_position.z
+	]
+	var restore_result: bool = bool(world.call("restore_stream_state", candidate_payload, now))
+	world.director.call("bind_chunk_factory", original_factory)
+	var restore_report: Dictionary = world.call("get_last_restore_report")
+	_expect(not restore_result, "underground restore rejects the injected surface chunk-factory failure")
+	_expect(int(failure_state.get("remaining", -1)) == 0, "base stream failure was actually injected before rollback")
+	_expect(str(restore_report.get("phase", "")) == "stream_sync" and bool(restore_report.get("rollback_complete", false)), "failed underground base stream reports a complete cross-layer rollback")
+	_expect(world.player.global_position.is_equal_approx(baseline_position), "failed underground base stream restores the exact mine player position")
+	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == 0, "failed underground base stream restores the exact mine layer")
+	var restored_return_position: Vector3 = world.get("_surface_return_position")
+	_expect(restored_return_position.is_equal_approx(baseline_return_position), "failed underground base stream restores the exact previous surface return position")
+	_expect(world.call("get_loaded_surface_window_bounds") == baseline_surface_bounds, "failed underground base stream restores the previous surface chunk window")
+	var restored_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
+	restored_mine_ids.sort()
+	_expect(restored_mine_ids == baseline_mine_ids, "failed underground base stream restores the exact mine director window")
+	_expect(int(world.get("world_seed")) == baseline_world_seed, "failed underground base stream restores the exact world seed")
+	_expect(world.backrooms_portal_director.call("to_save_dict") == baseline_portal_state, "failed underground base stream preserves the exact portal director state")
+	_expect(world.get("backrooms_portal_visual") != null, "failed underground base stream recreates the active portal anchor in the restored surface window")
+
 
 func _test_auxiliary_restore_rollback(now: int) -> void:
 	var baseline_payload: Dictionary = world.call("serialize_stream_state")
