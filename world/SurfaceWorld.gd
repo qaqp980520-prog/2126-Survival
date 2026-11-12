@@ -87,6 +87,7 @@ func _build_environment() -> void:
 func _build_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "Player"
+	player.add_to_group("player")
 	player.position = Vector3(1.0, 2.0, 1.0)
 	add_child(player)
 	var capsule_shape := CapsuleShape3D.new()
