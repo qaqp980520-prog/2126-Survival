@@ -211,6 +211,10 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	var baseline_position: Array = baseline_payload.get("player_position", [])
 	var baseline_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 	baseline_ids.sort()
+	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
+	_expect(baseline_world_seed >= 0 and baseline_world_seed < 2147483647, "auxiliary rollback baseline has a valid incrementable world seed")
+	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
+	baseline_mine_ids.sort()
 	var original_stamina: RefCounted = world.stamina
 	var original_quick_use: RefCounted = world.quick_use
 	var baseline_stamina: Dictionary = original_stamina.call("to_save_dict")
@@ -218,6 +222,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 
 	var stamina_candidate: Dictionary = baseline_payload.duplicate(true)
 	stamina_candidate["player_position"] = [21.0, 2.0, 1.0]
+	stamina_candidate["world_seed"] = baseline_world_seed + 1
 	var changed_stamina: Dictionary = baseline_stamina.duplicate(true)
 	changed_stamina["current"] = 25.0
 	stamina_candidate["stamina"] = changed_stamina
@@ -230,11 +235,14 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	_expect(str(stamina_report.get("phase", "")) == "stamina_restore" and bool(stamina_report.get("rollback_complete", false)), "stamina failure reports a complete cross-system rollback")
 	var stamina_rollback_details: Dictionary = stamina_report.get("details", {})
 	_expect(bool(stamina_rollback_details.get("minerals_restored", false)) and bool(stamina_rollback_details.get("world_objects_restored", false)), "stamina failure restores exact mineral and world-object snapshots after streaming")
+	_expect(bool(stamina_rollback_details.get("mine_window_restored", false)) and bool(stamina_rollback_details.get("layer_state_restored", false)) and bool(stamina_rollback_details.get("mine_chunk_ready_restored", false)), "stamina failure restores the previous mine window and world seed after a seed-changing candidate")
 	world.stamina = original_stamina
 	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "stamina failure")
+	_expect_mine_window_restored(baseline_mine_ids, "stamina failure")
 
 	var quick_use_candidate: Dictionary = baseline_payload.duplicate(true)
 	quick_use_candidate["player_position"] = [21.0, 2.0, 1.0]
+	quick_use_candidate["world_seed"] = baseline_world_seed + 1
 	var changed_quick_use: Dictionary = baseline_quick_use.duplicate(true)
 	changed_quick_use["selected_slot"] = 2
 	quick_use_candidate["quick_use"] = changed_quick_use
@@ -247,8 +255,10 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	_expect(str(quick_use_report.get("phase", "")) == "quick_use_restore" and bool(quick_use_report.get("rollback_complete", false)), "quick-use failure reports a complete cross-system rollback")
 	var quick_use_rollback_details: Dictionary = quick_use_report.get("details", {})
 	_expect(bool(quick_use_rollback_details.get("minerals_restored", false)) and bool(quick_use_rollback_details.get("world_objects_restored", false)), "quick-use failure restores exact mineral and world-object snapshots after streaming")
+	_expect(bool(quick_use_rollback_details.get("mine_window_restored", false)) and bool(quick_use_rollback_details.get("layer_state_restored", false)) and bool(quick_use_rollback_details.get("mine_chunk_ready_restored", false)), "quick-use failure restores the previous mine window and world seed after a seed-changing candidate")
 	world.quick_use = original_quick_use
 	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "quick-use failure")
+	_expect_mine_window_restored(baseline_mine_ids, "quick-use failure")
 
 
 func _expect_world_snapshot_restored(
@@ -268,6 +278,17 @@ func _expect_world_snapshot_restored(
 	_expect(current_payload.get("inventory", {}) == baseline_payload.get("inventory", {}), "%s rollback restores inventory bridge state" % failure_phase)
 	_expect(current_payload.get("stamina", {}) == baseline_payload.get("stamina", {}), "%s rollback restores stamina state" % failure_phase)
 	_expect(current_payload.get("quick_use", {}) == baseline_payload.get("quick_use", {}), "%s rollback restores quick-use state" % failure_phase)
+	_expect(current_payload.get("world_seed", -1) == baseline_payload.get("world_seed", -2), "%s rollback restores the exact world seed" % failure_phase)
+	_expect(current_payload.get("location_layer", "") == baseline_payload.get("location_layer", ""), "%s rollback restores the exact location layer" % failure_phase)
+	_expect(current_payload.get("mine_depth", -1) == baseline_payload.get("mine_depth", -2), "%s rollback restores the exact mine depth" % failure_phase)
+	_expect(current_payload.get("surface_return_position", []) == baseline_payload.get("surface_return_position", []), "%s rollback restores the exact surface return position" % failure_phase)
+
+
+func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: String) -> void:
+	var current_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
+	current_mine_ids.sort()
+	_expect(current_mine_ids == baseline_mine_ids, "%s rollback restores the exact UndergroundMineDirector managed window" % failure_phase)
+	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "%s rollback restores the persistent mine origin chunk" % failure_phase)
 
 
 func _inventory_count(item_id: String) -> int:
