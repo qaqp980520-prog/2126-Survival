@@ -1,9 +1,9 @@
 extends RefCounted
 class_name BackroomsLocationSession
 
-## Transactional state for a single SurfaceWorld -> Backrooms visit.
-## The session is deliberately separate from scene ownership: SurfaceWorld commits
-## the transition only after its Backrooms runtime has been created successfully.
+## Transactional state model for a single SurfaceWorld -> Backrooms visit.
+## It stores validated transition/return context but does not own scene nodes;
+## the production manager must build the destination runtime before committing this state.
 
 const PortalDirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const SAVE_SCHEMA_VERSION: int = 1
