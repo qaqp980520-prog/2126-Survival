@@ -94,6 +94,15 @@ func commit_portal_entry(
 	if not (director_snapshot_value is Dictionary) or director_snapshot_value.is_empty():
 		return _failure("portal_director_snapshot_unavailable", true)
 	var director_snapshot: Dictionary = director_snapshot_value.duplicate(true)
+	# The Session is part of the same transaction as the one-use Director.
+	# Require a complete save/restore contract before consuming the portal so a
+	# partially mutating Session implementation can also be rolled back exactly.
+	if session == null or not is_instance_valid(session) or not session.has_method("to_save_dict") or not session.has_method("load_save_dict"):
+		return _failure("session_rollback_contract_unavailable", true)
+	var session_snapshot_value: Variant = session.call("to_save_dict")
+	if not (session_snapshot_value is Dictionary) or session_snapshot_value.is_empty():
+		return _failure("session_snapshot_unavailable", true)
+	var session_snapshot: Dictionary = session_snapshot_value.duplicate(true)
 	var consumed: Variant = director.call("consume_portal", portal_id)
 	if not (consumed is Dictionary) or not bool(consumed.get("ok", false)) or str(consumed.get("event", "")) != "entered":
 		var consume_reason: String = str(consumed.get("reason", "portal_consumption_rejected")) if consumed is Dictionary else "portal_consumption_invalid"
@@ -107,14 +116,17 @@ func commit_portal_entry(
 			"director_state_restored": consume_rollback_complete
 		}
 	if not bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position)):
-		var session_commit_rollback_complete: bool = _restore_director_snapshot(director, director_snapshot)
+		var director_restored: bool = _restore_director_snapshot(director, director_snapshot)
+		var session_restored: bool = _restore_session_snapshot(session_snapshot)
 		_clear_pending()
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = "session_commit_rejected_after_portal_consumption"
 		return {
 			"ok": false,
 			"reason": last_error,
-			"director_state_restored": session_commit_rollback_complete
+			"director_state_restored": director_restored,
+			"session_state_restored": session_restored,
+			"rollback_complete": director_restored and session_restored
 		}
 	state = TransitionState.IN_BACKROOMS
 	_clear_pending()
@@ -184,6 +196,15 @@ func _restore_director_snapshot(director: RefCounted, snapshot: Dictionary) -> b
 	if not (restored is bool) or not bool(restored):
 		return false
 	var verified_snapshot: Variant = director.call("to_save_dict")
+	return verified_snapshot is Dictionary and verified_snapshot == snapshot
+
+func _restore_session_snapshot(snapshot: Dictionary) -> bool:
+	if session == null or not is_instance_valid(session) or not session.has_method("load_save_dict") or not session.has_method("to_save_dict"):
+		return false
+	var restored: Variant = session.call("load_save_dict", snapshot.duplicate(true))
+	if not (restored is bool) or not bool(restored):
+		return false
+	var verified_snapshot: Variant = session.call("to_save_dict")
 	return verified_snapshot is Dictionary and verified_snapshot == snapshot
 
 func _preview_matches(candidate: Dictionary) -> bool:

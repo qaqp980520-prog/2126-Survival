@@ -48,3 +48,14 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - SurfaceWorld must own scene construction and activation, and must call this coordinator only after its destination runtime is prepared.
 - The session is surface-origin only; underground-origin transitions require mine-depth/window context.
 - Graphics, GPU, and iPhone tests are not covered by headless CI.
+
+
+## M0.0.8.1 — Session rollback hardening
+
+- The entry transaction now snapshots both participants before consuming a one-use portal: the PortalDirector payload and the inactive BackroomsLocationSession payload.
+- A Session without non-empty `to_save_dict()` and `load_save_dict()` support is rejected before portal consumption; this is a fail-closed contract requirement.
+- If `begin_from_portal_result()` returns false after mutating Session fields, the manager restores both Director and Session snapshots and reads both back. The result exposes `director_state_restored`, `session_state_restored`, and `rollback_complete` separately.
+- Added a failure-injection Session that mutates active state, destination, portal ID, return position and a marker before returning false. The regression requires exact pre-commit Session and Director payload equality.
+- Added a fail-closed regression proving that a Session without snapshot/restore methods cannot consume the one-use portal.
+- Updated files: `systems/BackroomsTransitionManager.gd`, `tests/backrooms_transition_manager_test.gd`, and this version record.
+- Dependency remains PR #332 and its ancestors #331/#327. Godot 4.3 focused and Full Compatibility Gate are pending for the new child HEAD; no pass is claimed yet.
