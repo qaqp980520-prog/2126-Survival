@@ -67,7 +67,7 @@ func can_begin_from_portal_result(
 		return false
 	var destination_value: Variant = portal_result.get("destination_level", null)
 	var portal_id_value: Variant = portal_result.get("portal_id", null)
-	if not (destination_value is String) or not (portal_id_value is int):
+	if not (destination_value is String) or not _is_integer_in_range(portal_id_value, 1, PortalDirectorScript.MAX_PORTAL_SERIAL):
 		return false
 	return can_begin_transition(
 		str(destination_value),
@@ -231,6 +231,7 @@ func _parse_vector3(value: Variant) -> Dictionary:
 	}
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
-	if not (value is int):
+	if not (value is int or value is float):
 		return false
-	return int(value) >= minimum and int(value) <= maximum
+	var number: float = float(value)
+	return is_finite(number) and number >= float(minimum) and number <= float(maximum) and floorf(number) == number
