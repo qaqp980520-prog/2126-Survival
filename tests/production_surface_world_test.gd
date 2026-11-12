@@ -141,6 +141,7 @@ func _run() -> void:
 		world.set("_surface_stream_pending", true)
 		_expect(not bool(world.call("configure_backrooms_portal_director", backrooms_director)), "portal spawn-window configuration is blocked while surface streaming is pending")
 		_expect(backrooms_director.get("world_bounds") == director_bounds_before_rejection, "a blocked stream-time reconfiguration leaves the director window unchanged")
+		_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to serialize while asynchronous surface streaming is pending")
 		world.set("_surface_stream_pending", false)
 	var status: Dictionary = world.call("get_world_session_status")
 	_expect(bool(status.get("ready", false)), "surface world reports ready")
@@ -208,9 +209,10 @@ func _run() -> void:
 	_expect(owned_backrooms_director != null and saved_portal_director == owned_backrooms_director.call("to_save_dict"), "world save captures the complete owned portal director state")
 	var saved_active_portal: Dictionary = saved_portal_director.get("active_portal", {})
 	_expect(not saved_active_portal.is_empty(), "world save preserves the active one-use portal and its original spawn window")
-	_expect(bool(world.call("debug_move_player_to", Vector3(21.0, 2.0, 1.0), now + 1)), "moving away advances the chunk window")
+	_expect(bool(world.call("debug_move_player_to", Vector3(41.0, 2.0, 1.0), now + 1)), "moving away advances the chunk window")
 	await process_frame
 	_expect(not world.chunk_controller.is_chunk_loaded(ORIGIN_CHUNK_ID), "origin chunk unloads outside the radius")
+	_expect(world.call("serialize_stream_state") == {}, "world save fails closed when an active portal is outside the current loaded surface window")
 	_expect(bool(world.call("debug_move_player_to", near_crate, now + 2)), "returning to origin reloads the chunk")
 	await process_frame
 	world.camera.look_at(crate_position + Vector3(0.0, 0.55, 0.0), Vector3.UP)
