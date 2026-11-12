@@ -101,7 +101,9 @@ func _test_save_round_trip() -> void:
 	var parsed: Variant = JSON.parse_string(JSON.stringify(saved))
 	assert(parsed is Dictionary)
 	var restored = Session.new()
-	assert(restored.load_save_dict(parsed))
+	if not restored.load_save_dict(parsed):
+		print("Backrooms location session JSON round-trip rejected: ", restored.get_last_load_error(), " payload=", JSON.stringify(parsed))
+		assert(false, "Valid JSON round-trip must restore the session.")
 	assert(restored.to_save_dict() == saved)
 	assert(restored.get_return_context() == original.get_return_context())
 
