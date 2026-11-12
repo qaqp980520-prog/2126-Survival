@@ -10,6 +10,7 @@ func _initialize() -> void:
     _test_spawn_retry_when_no_safe_point_exists()
     _test_portal_consumption_is_single_use()
     _test_save_round_trip()
+    _test_active_portal_survives_spawn_bounds_change()
     _test_invalid_save_is_atomic()
     print("BackroomsPortalDirector tests passed.")
     quit()
@@ -79,11 +80,41 @@ func _test_save_round_trip() -> void:
 
     var legacy_payload: Dictionary = saved.duplicate(true)
     legacy_payload.erase("rng_state")
+    legacy_payload["active_portal"].erase("spawn_bounds")
     var legacy_restored = Director.new(2718, BOUNDS, 40.0)
     var constructor_rng_state: String = str(legacy_restored.to_save_dict()["rng_state"])
     assert(legacy_restored.load_save_dict(legacy_payload))
     assert(legacy_restored.to_save_dict().has("rng_state"))
     assert(legacy_restored.to_save_dict()["rng_state"] == constructor_rng_state)
+
+func _test_active_portal_survives_spawn_bounds_change() -> void:
+    var moved_bounds := Rect2(2000.0, 2000.0, 1000.0, 1000.0)
+    var director = Director.new(8181, BOUNDS, 40.0)
+    var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+    assert(spawned["event"] == "spawned")
+    var portal_id: int = int(spawned["portal"]["id"])
+    var portal_position: Vector2 = spawned["portal"]["position"]
+    var saved: Dictionary = director.to_save_dict()
+    assert(saved["active_portal"].has("spawn_bounds"))
+    assert(saved["active_portal"]["spawn_bounds"] == [0.0, 0.0, 1000.0, 1000.0])
+
+    # Simulate a player-relative candidate window moving after the portal exists.
+    # The already-active portal must remain loadable at its original world position.
+    director.world_bounds = moved_bounds
+    var restored = Director.new(2718, moved_bounds, 40.0)
+    assert(restored.load_save_dict(saved))
+    assert(restored.active_portal["id"] == portal_id)
+    assert(restored.active_portal["position"] == portal_position)
+    assert(restored.active_portal["spawn_bounds"] == BOUNDS)
+    assert(restored.to_save_dict() == saved)
+
+    var entered: Dictionary = restored.consume_portal(portal_id)
+    assert(entered["ok"])
+    var next_spawn: Dictionary = restored.tick(restored.next_spawn_in + 0.1, Vector2(2500.0, 2500.0))
+    assert(next_spawn["event"] == "spawned")
+    assert(moved_bounds.has_point(next_spawn["portal"]["position"]))
+    assert(restored.active_portal["spawn_bounds"] == moved_bounds)
+
 
 func _test_invalid_save_is_atomic() -> void:
     var director = Director.new(17, BOUNDS, 40.0)
@@ -95,6 +126,14 @@ func _test_invalid_save_is_atomic() -> void:
     assert(director.to_save_dict() == before)
     bad = before.duplicate(true)
     bad["active_portal"]["position"] = [2000.0, 2000.0]
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["active_portal"]["spawn_bounds"] = [0.0, 0.0, -1000.0, 1000.0]
+    assert(not director.load_save_dict(bad))
+    assert(director.to_save_dict() == before)
+    bad = before.duplicate(true)
+    bad["active_portal"]["spawn_bounds"] = [0.0, 0.0, 1000.0]
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
     var invalid_rng_states: Array[String] = [
