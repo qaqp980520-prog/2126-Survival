@@ -6,9 +6,9 @@ Establish the production player-group invariant required by world-transition Are
 
 ## Changes
 
-- `world/SurfaceWorld.gd`: `_build_player()` parents the single production CharacterBody3D to SurfaceWorld, then adds it to group `player` before creating the remaining player components.
+- `world/SurfaceWorld.gd`: the single production CharacterBody3D is parented to SurfaceWorld and then added to group `player` exactly once.
 - `tests/production_surface_world_test.gd`: asserts that the production player exists and belongs to group `player` in the actual `world/SurfaceWorld.tscn` scene.
-- No second player, bridge, session, portal, input binding, collision mask, scene transition, or save-schema behavior is introduced.
+- No second player, bridge, session, input binding, collision mask, scene transition, or save-schema behavior is introduced by M0.1.2.
 
 ## Dependencies and import
 
@@ -21,14 +21,14 @@ Establish the production player-group invariant required by world-transition Are
 
 - Branch: `feature/backrooms-production-player-group-contract-2026-11-12`.
 - Base: `main`.
-- Runtime, regression-test and version-document commits are pushed to this branch. The final runtime refinement explicitly adds the group after `add_child(player)`.
-- The focused test is already part of `.github/workflows/godot-validation.yml` Full Compatibility Gate.
-- Exact-head Godot 4.3 CI is pending. No test pass is claimed until the latest branch HEAD completes the workflow.
+- The original M0.1.2 HEAD `ee914d6b68e2689eedbe6463361608af556df7aa` completed exact-head Godot 4.3 Full Compatibility Gate [Run #43135100823](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43135100823): 553/553, 0 failures, 0 skipped.
+- M0.1.3 subsequently removed an earlier redundant pre-parent `add_to_group` call; the surviving registration is after `add_child(player)`.
+- The current PR HEAD has additional M0.1.3 changes and requires its own exact-head gate; the earlier pass does not certify the newer HEAD.
 
 ## Integration boundary
 
-This is the first production prerequisite only. It does not yet connect BackroomsPortalDirector or BackroomsPortalVisual to SurfaceWorld. The following remain separate work: portal camera-target routing, safe ground/stream ownership, player-relative candidate generation, transition lifecycle, and atomic Backrooms state integration in WorldSessionController save/restore.
+M0.1.2 only establishes the production player-group invariant. Portal camera targeting, portal interaction dispatch, safe ground/stream ownership, transition lifecycle, and atomic Backrooms state integration are separate milestones.
 
 ## Next step
 
-Run the exact-head Full Compatibility Gate, inspect the production SurfaceWorld group regression, and obtain independent review. Keep the PR unmerged until CI and review succeed.
+Complete the M0.1.3 exact-head Full Compatibility Gate and obtain independent review. Keep PR #328 unmerged until both succeed.
