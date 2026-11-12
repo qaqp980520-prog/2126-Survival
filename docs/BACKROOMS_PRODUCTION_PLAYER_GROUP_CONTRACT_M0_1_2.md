@@ -6,7 +6,7 @@ Establish the production player-group invariant required by world-transition Are
 
 ## Changes
 
-- `world/SurfaceWorld.gd`: `_build_player()` adds the single production CharacterBody3D to group `player` immediately after it is parented to SurfaceWorld.
+- `world/SurfaceWorld.gd`: `_build_player()` parents the single production CharacterBody3D to SurfaceWorld, then adds it to group `player` before creating the remaining player components.
 - `tests/production_surface_world_test.gd`: asserts that the production player exists and belongs to group `player` in the actual `world/SurfaceWorld.tscn` scene.
 - No second player, bridge, session, portal, input binding, collision mask, scene transition, or save-schema behavior is introduced.
 
@@ -21,7 +21,7 @@ Establish the production player-group invariant required by world-transition Are
 
 - Branch: `feature/backrooms-production-player-group-contract-2026-11-12`.
 - Base: `main`.
-- Code/test commits are pushed to this branch; this document is the final commit in the initial patch.
+- Runtime, regression-test and version-document commits are pushed to this branch. The final runtime refinement explicitly adds the group after `add_child(player)`.
 - The focused test is already part of `.github/workflows/godot-validation.yml` Full Compatibility Gate.
 - Exact-head Godot 4.3 CI is pending. No test pass is claimed until the latest branch HEAD completes the workflow.
 
