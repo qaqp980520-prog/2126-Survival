@@ -17,12 +17,15 @@ func _test_configuration_and_initial_window() -> void:
 	assert(not state.configure("Level 6", 20261113, 8.0, 1))
 	assert(not state.configure("Level 1", 20261113, 8.0, 9))
 	assert(not state.configure("Level 1", 20261113, NAN, 1))
+	assert(not state.configure("Level 1", 20261113, 1025.0, 1))
 	assert(state.get_loaded_cell_count() == 0)
 	assert(state.configure("Level 1", 20261113, 8.0, 1))
 
 	var invalid_position: Dictionary = state.plan_window_for_position(Vector3(NAN, 0.0, 0.0))
 	assert(not bool(invalid_position.get("ok", false)))
 	assert(state.get_loaded_cell_count() == 0)
+	assert(not bool(state.plan_window_at_cell(Vector2i(1000001, 0)).get("ok", false)))
+	assert(not bool(state.plan_window_for_position(Vector3(8000000.0, 0.0, 0.0)).get("ok", false)))
 
 	var plan: Dictionary = state.plan_window_for_position(Vector3.ZERO)
 	assert(bool(plan.get("ok", false)))
