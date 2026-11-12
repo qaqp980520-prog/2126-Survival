@@ -73,6 +73,16 @@ func consume_portal(portal_id: int) -> Dictionary:
     _schedule_next_spawn()
     return {"ok": true, "event": "entered", "portal_id": portal_id, "position": position, "destination_level": destination}
 
+## Retire an active portal when its owning streamed chunk is unloaded.
+## Retirement is not entry: it never previews or consumes a destination level.
+func retire_portal(portal_id: int) -> Dictionary:
+    if active_portal.is_empty() or portal_id <= 0 or int(active_portal.get("id", -1)) != portal_id:
+        return {"ok": false, "reason": "portal_not_active"}
+    var retired_portal: Dictionary = active_portal.duplicate(true)
+    active_portal.clear()
+    _schedule_next_spawn()
+    return {"ok": true, "event": "retired", "portal_id": portal_id, "portal": retired_portal}
+
 func to_save_dict() -> Dictionary:
     var portal_payload: Dictionary = {}
     if not active_portal.is_empty():
