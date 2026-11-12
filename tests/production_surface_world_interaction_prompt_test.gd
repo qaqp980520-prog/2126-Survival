@@ -28,7 +28,7 @@ func _run() -> void:
 	portal_shape.radius = 1.25
 	portal_collision.shape = portal_shape
 	portal.add_child(portal_collision)
-	portal.position = Vector3(1.0, 1.0, -1.5)
+	portal.position = Vector3(1.0, 2.0, -1.5)
 	portal.connect("portal_entered", Callable(self, "_on_portal_entered"))
 	world.add_child(portal)
 	root.add_child(world)
@@ -41,7 +41,8 @@ func _run() -> void:
 		return
 
 	_expect(world.is_in_group("production_surface_world"), "production SurfaceWorld registers its interaction-router ownership before child portals enter")
-	await _aim_at(portal)
+	var disabled_proxy_layers: Array[Dictionary] = _disable_other_interaction_proxies(world, portal)
+	await _aim_at(portal, Vector3(0.0, 0.0, 2.0))
 	_expect(portal.is_in_group("backrooms_portal"), "portal script registers the shared backrooms_portal target group")
 	_expect((portal.collision_layer & (1 << 1)) != 0, "portal Area3D exposes the production interaction collision layer")
 	_expect(bool(portal.get("_external_interaction_router_enabled")), "production portal delegates E handling to SurfaceWorld instead of competing with it")
@@ -54,7 +55,7 @@ func _run() -> void:
 	portal_ray_query.collide_with_bodies = false
 	portal_ray_query.exclude = [world.player.get_rid()]
 	var portal_ray_hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(portal_ray_query)
-	print("PORTAL DEBUG player=", world.player.global_position, " camera=", portal_ray_start, " portal=", portal.global_position, " ray_hit=", portal_ray_hit.get("collider"), " target=", portal_target)
+	_expect(portal_ray_hit.get("collider") == portal, "layer-2 production physics ray directly hits the portal Area3D")
 	_expect(str(portal_target.get("kind", "")) == "portal" and portal_target.get("node") == portal, "production camera ray resolves a world-owned portal outside chunk registries")
 	world.call("_refresh_hud")
 	_expect(prompt.text == "E  ACTIVATE BACKROOMS PORTAL", "production HUD prompts for the portal under the reticle")
@@ -90,6 +91,10 @@ func _run() -> void:
 	world.call("_refresh_hud")
 	_expect(prompt.text == "NO INTERACTION IN SIGHT", "HUD clears a portal target after its node is queued for deletion")
 	_expect(portal_button == null or portal_button.text == "CROP", "mobile interaction button returns to CROP after portal removal")
+	for proxy_entry in disabled_proxy_layers:
+		var restored_proxy: Area3D = proxy_entry.get("area") as Area3D
+		if restored_proxy != null and is_instance_valid(restored_proxy) and not restored_proxy.is_queued_for_deletion():
+			restored_proxy.collision_layer = int(proxy_entry.get("layer", 0))
 	_expect(_move_player_to(Vector3(1.0, 2.0, 1.0)), "test restores the production player to the surface origin after portal coverage")
 	await physics_frame
 	await physics_frame
@@ -226,6 +231,18 @@ func _move_player_to(position: Vector3) -> bool:
 	if moved:
 		world.player.velocity = Vector3.ZERO
 	return moved
+
+func _disable_other_interaction_proxies(root: Node, keep: Area3D) -> Array[Dictionary]:
+	var changed: Array[Dictionary] = []
+	for candidate in root.find_children("*", "Area3D", true, false):
+		var area: Area3D = candidate as Area3D
+		if area == null or area == keep:
+			continue
+		var previous_layer: int = area.collision_layer
+		if (previous_layer & (1 << 1)) != 0:
+			changed.append({"area": area, "layer": previous_layer})
+			area.collision_layer = previous_layer & ~(1 << 1)
+	return changed
 
 func _find_world_prop(node_name: String, chunk_name: String) -> Node3D:
 	var candidates: Array = world.chunk_controller.call("get_loaded_world_state_nodes")
