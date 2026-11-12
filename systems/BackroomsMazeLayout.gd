@@ -9,6 +9,7 @@ const EDGE_HASH_SALT: int = 13
 const HASH_X_MULTIPLIER: int = 73856093
 const HASH_Z_MULTIPLIER: int = 19349663
 const HASH_SALT_MULTIPLIER: int = 83492791
+const ALGORITHM_VERSION: int = 1
 
 static func is_valid_cell_size(cell_size: float) -> bool:
 	return is_finite(cell_size) and cell_size > 0.0
