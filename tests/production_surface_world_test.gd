@@ -351,6 +351,9 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	_expect(not baseline_payload.is_empty(), "underground base-stream failure test captures a complete snapshot")
 	if baseline_payload.is_empty():
 		return
+	var baseline_crops_value: Variant = baseline_payload.get("crops", {})
+	var baseline_crop_records: Dictionary = baseline_crops_value.get("crops", {}) if baseline_crops_value is Dictionary else {}
+	_expect(not baseline_crop_records.is_empty(), "underground seed-change rollback baseline includes planted crop records")
 	var baseline_position: Vector3 = world.player.global_position
 	var baseline_return_position: Vector3 = world.get("_surface_return_position")
 	var baseline_surface_bounds: Rect2 = world.call("get_loaded_surface_window_bounds")
