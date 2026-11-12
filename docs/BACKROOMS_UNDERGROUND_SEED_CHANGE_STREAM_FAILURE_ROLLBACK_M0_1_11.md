@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Close a combined failure-path gap in the production SurfaceWorld restore transaction. The combined seed-change + surface-stream failure test exposed a real crop rollback defect: the base restore reapplied the crop snapshot before the final stream sync, but loading the restored surface window could advance crop records again. The transaction now reapplies the exact pre-attempt crop snapshot after streaming and reports that subsystem separately.
+Close a combined failure-path gap in the production SurfaceWorld restore transaction. The combined seed-change + surface-stream failure test exposed a real crop rollback defect: the base restore reapplied the crop snapshot before the final stream sync, but loading the restored surface window could advance crop records again. The transaction now reapplies the exact pre-attempt crop snapshot after both mine-window recovery and the final surface-window rollback stream, then reports that subsystem separately.
 
 ## GitHub delivery
 
@@ -25,7 +25,7 @@ The failure callback records the world seed at the instant the chunk factory rej
 
 ## Files
 
-- `world/SurfaceWorld.gd` — reapply the previous crop registry snapshot after the final base stream restore and include `crops_restored` in `rollback_complete` and diagnostic details.
+- `world/SurfaceWorld.gd` — capture the previous crop payload with the other pre-restore snapshots; pass it through `_restore_mine_snapshots()` / `_recover_underground_window()` so seed-change mine-window recovery restores crops after chunk catch-up; also reapply it after the final base surface stream restore; include `crops_restored` in aggregate rollback diagnostics.
 - `tests/production_surface_world_test.gd` — require a non-empty planted-crop baseline, combine seed change with surface factory failure, assert exact crop snapshot restoration, and compare the mine-origin loaded state to the baseline rather than assuming the origin must always be loaded.
 - `docs/BACKROOMS_UNDERGROUND_SEED_CHANGE_STREAM_FAILURE_ROLLBACK_M0_1_11.md` — this version record.
 
@@ -40,7 +40,7 @@ The failure callback records the world seed at the instant the chunk factory rej
 
 ## Validation status
 
-- Runtime, test, and documentation changes are committed to a child branch of the exact PR #340 HEAD.
+- Runtime, test, and documentation changes are committed to a child branch of the exact PR #340 HEAD. Both early mine-window recovery and the outer surface-window rollback now restore the same exact crop snapshot after their respective stream operations.
 - Parent PR #340 exact-head Godot 4.3 Full Compatibility Gate [Run #43230726708](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43230726708) completed successfully: 555/555 steps, 0 failures, 0 skipped. Production SurfaceWorld integration Step #207 and underground save/restore/rollback assertions passed.
 - Initial child exact-head Run [#43233852389](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43233852389) reached the production SurfaceWorld integration test at Step #207 and failed two assertions: crop registry state differed after rollback, and the test incorrectly assumed `underground/mine_0_0` must always be loaded. The first was a real runtime rollback gap; the second was an invalid test assumption because the baseline mine window can be elsewhere.
 - The runtime fix now reapplies the exact previous crop snapshot after the final surface stream sync and exposes `crops_restored`; the test compares the mine origin's loaded state to its captured baseline. A new exact-head run is required; no pass is claimed for the corrected head.
