@@ -7,7 +7,7 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 ## Runtime change
 
 - Add the current Godot RandomNumberGenerator state to new portal save dictionaries as a decimal-string rng_state, preserving the full signed 64-bit value through JSON serialization.
-- Restore the saved non-zero integer state after validating the entire candidate payload and before applying the remaining scalar/portal fields.
+- Restore the saved canonical decimal integer state after validating the entire candidate payload and before applying the remaining scalar/portal fields.
 - Keep schema_version at 1 and accept legacy schema-1 payloads without rng_state or active-portal spawn_bounds; legacy active portals are validated against the receiving director's current world_bounds, and legacy payloads without rng_state retain the constructor RNG state.
 - Save the bounds snapshot used when an active portal was created. Loading validates that portal against its saved bounds rather than the director's current candidate-spawn window, so a future player-relative spawn window can move without invalidating an already-active portal.
 - Reject malformed and out-of-range rng_state strings and malformed spawn-bounds snapshots atomically; the parsed signed integer must stringify back to the exact canonical decimal text. The stored decimal string is expected to come from this director's own RandomNumberGenerator.state snapshot; Godot documents that arbitrary state values must not be supplied, so the loader cannot prove the internal PCG provenance of a manually edited integer string. The string representation also avoids losing precision when the signed 64-bit state passes through JSON.
