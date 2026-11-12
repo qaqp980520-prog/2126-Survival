@@ -23,7 +23,9 @@ The initial contract is intentionally surface-origin only because the existing B
 
 - Preflight methods do not mutate state.
 - A second entry cannot overwrite an active visit.
-- Portal result handoff validates the existing director result shape before accepting it.
+- PortalDirector exposes a non-mutating destination preview using a cloned RNG state. Production can preflight the destination/session before consuming the one-use portal.
+- Portal consumption advances the live RNG once and verifies it matches the preview; a mismatch restores the previous RNG state and preserves the active portal.
+- Session preflight accepts prepared or entered results, while begin_from_portal_result accepts only the committed entered result.
 - The return context remains available until complete_return() is called after the surface world has been restored successfully.
 - Save loading validates every field into local values before mutating any live state.
 - Inactive saves use a canonical empty representation; stale level/portal/position data is rejected.
@@ -38,7 +40,7 @@ The initial contract is intentionally surface-origin only because the existing B
 
 ## Validation
 
-The exact-head Godot 4.3 Full Compatibility Gate must execute the new focused session test. The test covers successful entry/return, portal-director handoff, deterministic layout seed derivation, preflight non-mutation, duplicate-entry rejection, JSON round-trip, canonical inactive state, and atomic rejection of malformed saves.
+The exact-head Godot 4.3 Full Compatibility Gate must execute both the PortalDirector preview/consume regression and the new focused session test. The test covers successful entry/return, portal-director handoff, deterministic layout seed derivation, preflight non-mutation, duplicate-entry rejection, JSON round-trip, canonical inactive state, and atomic rejection of malformed saves.
 
 Local Godot is unavailable in this environment; no local engine run is claimed until the exact-head GitHub Actions result completes.
 
