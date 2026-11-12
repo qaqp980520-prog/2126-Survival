@@ -40,10 +40,31 @@ func tick(delta: float, player_position: Vector2) -> Dictionary:
     active_portal = {"id": portal_serial, "position": candidate["position"], "spawn_bounds": world_bounds}
     return {"event": "spawned", "portal": active_portal.duplicate(true)}
 
-func consume_portal(portal_id: int) -> Dictionary:
+func preview_portal_entry(portal_id: int) -> Dictionary:
     if active_portal.is_empty() or portal_id <= 0 or int(active_portal.get("id", -1)) != portal_id:
         return {"ok": false, "reason": "portal_not_active"}
+    # Preview on a cloned RNG so production can validate the destination and
+    # prepare its location session before the single-use portal is consumed.
+    var preview_rng := RandomNumberGenerator.new()
+    preview_rng.state = _rng.state
+    var destination: String = TARGET_LEVELS[preview_rng.randi_range(0, TARGET_LEVELS.size() - 1)]
+    return {
+        "ok": true,
+        "event": "prepared",
+        "portal_id": portal_id,
+        "position": active_portal["position"],
+        "destination_level": destination
+    }
+
+func consume_portal(portal_id: int) -> Dictionary:
+    var preview: Dictionary = preview_portal_entry(portal_id)
+    if not bool(preview.get("ok", false)):
+        return preview
+    var previous_rng_state: int = _rng.state
     var destination: String = TARGET_LEVELS[_rng.randi_range(0, TARGET_LEVELS.size() - 1)]
+    if destination != str(preview.get("destination_level", "")):
+        _rng.state = previous_rng_state
+        return {"ok": false, "reason": "rng_preview_mismatch"}
     var position: Vector2 = active_portal["position"]
     active_portal.clear()
     _schedule_next_spawn()
