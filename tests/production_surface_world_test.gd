@@ -2,6 +2,80 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
+
+class FailOnceStamina extends RefCounted:
+	var current_stamina: float = 100.0
+	var _payload: Dictionary = {}
+	var _fail_next_load: bool = true
+
+	func _init(initial_payload: Dictionary) -> void:
+		_payload = initial_payload.duplicate(true)
+		current_stamina = float(_payload.get("current", 100.0))
+
+	func to_save_dict() -> Dictionary:
+		return _payload.duplicate(true)
+
+	func load_save_dict(data: Dictionary) -> bool:
+		_payload = data.duplicate(true)
+		current_stamina = float(_payload.get("current", 100.0))
+		if _fail_next_load:
+			_fail_next_load = false
+			return false
+		return true
+
+	func can_jump() -> bool:
+		return current_stamina >= 10.0
+
+	func can_sprint() -> bool:
+		return current_stamina >= 5.0
+
+	func get_movement_speed_multiplier(_sprinting: bool = false) -> float:
+		return 1.0 if current_stamina > 0.0 else 0.65
+
+	func get_max_stamina() -> float:
+		return 100.0
+
+
+class FailOnceQuickUse extends RefCounted:
+	var slots: Array[String] = []
+	var selected_slot: int = 0
+	var _fail_next_load: bool = true
+
+	func _init(initial_payload: Dictionary) -> void:
+		_apply_payload(initial_payload)
+
+	func _apply_payload(data: Dictionary) -> void:
+		slots.clear()
+		for item_id in data.get("slots", []):
+			slots.append(str(item_id))
+		selected_slot = int(data.get("selected_slot", 0))
+
+	func to_save_dict() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"slots": slots.duplicate(),
+			"selected_slot": selected_slot
+		}
+
+	func load_save_dict(data: Dictionary) -> bool:
+		_apply_payload(data)
+		if _fail_next_load:
+			_fail_next_load = false
+			return false
+		return true
+
+	func get_slot_item(slot_index: int) -> String:
+		if slot_index < 0 or slot_index >= slots.size():
+			return ""
+		return slots[slot_index]
+
+	func get_slot_count(slot_index: int, inventory_bridge: Node) -> int:
+		var item_id: String = get_slot_item(slot_index)
+		if item_id.is_empty() or inventory_bridge == null or not inventory_bridge.has_method("get_item_count"):
+			return 0
+		return int(inventory_bridge.call("get_item_count", item_id))
+
+
 var failures: Array[String] = []
 var world: Node3D
 
@@ -109,6 +183,7 @@ func _run() -> void:
 	var save_crate: Node = save_root.get_node_or_null("SalvageCrate") if save_root != null else null
 	_expect(save_crate != null and int(save_crate.get("loot_remaining")) == 1, "save restore reapplies crate state")
 	_expect(_inventory_count(item_id) == 1, "save restore rolls inventory back to the matching count")
+	_test_auxiliary_restore_rollback(now + 4)
 	var plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(not plots.is_empty(), "surface world exposes loaded crop plots")
 	if not plots.is_empty():
@@ -127,6 +202,73 @@ func _run() -> void:
 	buttons["forward"].emit_signal("button_up")
 	_expect(not directions.has("forward"), "touch release clears virtual input")
 	_finish(0 if failures.is_empty() else 1)
+
+func _test_auxiliary_restore_rollback(now: int) -> void:
+	var baseline_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not baseline_payload.is_empty(), "auxiliary rollback test captures a complete SurfaceWorld snapshot")
+	if baseline_payload.is_empty():
+		return
+	var baseline_position: Array = baseline_payload.get("player_position", [])
+	var baseline_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+	baseline_ids.sort()
+	var original_stamina: RefCounted = world.stamina
+	var original_quick_use: RefCounted = world.quick_use
+	var baseline_stamina: Dictionary = original_stamina.call("to_save_dict")
+	var baseline_quick_use: Dictionary = original_quick_use.call("to_save_dict")
+
+	var stamina_candidate: Dictionary = baseline_payload.duplicate(true)
+	stamina_candidate["player_position"] = [21.0, 2.0, 1.0]
+	var changed_stamina: Dictionary = baseline_stamina.duplicate(true)
+	changed_stamina["current"] = 25.0
+	stamina_candidate["stamina"] = changed_stamina
+	var failing_stamina := FailOnceStamina.new(baseline_stamina)
+	world.stamina = failing_stamina
+	var stamina_result: bool = bool(world.call("restore_stream_state", stamina_candidate, now))
+	var stamina_report: Dictionary = world.call("get_last_restore_report")
+	_expect(not stamina_result, "SurfaceWorld rejects an auxiliary stamina apply that fails after base world restore")
+	_expect(failing_stamina.to_save_dict() == baseline_stamina, "stamina state partially applied before failure is restored from its snapshot")
+	_expect(str(stamina_report.get("phase", "")) == "stamina_restore" and bool(stamina_report.get("rollback_complete", false)), "stamina failure reports a complete cross-system rollback")
+	var stamina_rollback_details: Dictionary = stamina_report.get("details", {})
+	_expect(bool(stamina_rollback_details.get("minerals_restored", false)) and bool(stamina_rollback_details.get("world_objects_restored", false)), "stamina failure restores exact mineral and world-object snapshots after streaming")
+	world.stamina = original_stamina
+	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "stamina failure")
+
+	var quick_use_candidate: Dictionary = baseline_payload.duplicate(true)
+	quick_use_candidate["player_position"] = [21.0, 2.0, 1.0]
+	var changed_quick_use: Dictionary = baseline_quick_use.duplicate(true)
+	changed_quick_use["selected_slot"] = 2
+	quick_use_candidate["quick_use"] = changed_quick_use
+	var failing_quick_use := FailOnceQuickUse.new(baseline_quick_use)
+	world.quick_use = failing_quick_use
+	var quick_use_result: bool = bool(world.call("restore_stream_state", quick_use_candidate, now))
+	var quick_use_report: Dictionary = world.call("get_last_restore_report")
+	_expect(not quick_use_result, "SurfaceWorld rejects an auxiliary quick-use apply that fails after stamina and base restore")
+	_expect(failing_quick_use.to_save_dict() == baseline_quick_use, "quick-use state partially applied before failure is restored from its snapshot")
+	_expect(str(quick_use_report.get("phase", "")) == "quick_use_restore" and bool(quick_use_report.get("rollback_complete", false)), "quick-use failure reports a complete cross-system rollback")
+	var quick_use_rollback_details: Dictionary = quick_use_report.get("details", {})
+	_expect(bool(quick_use_rollback_details.get("minerals_restored", false)) and bool(quick_use_rollback_details.get("world_objects_restored", false)), "quick-use failure restores exact mineral and world-object snapshots after streaming")
+	world.quick_use = original_quick_use
+	_expect_world_snapshot_restored(baseline_payload, baseline_position, baseline_ids, "quick-use failure")
+
+
+func _expect_world_snapshot_restored(
+	baseline_payload: Dictionary,
+	baseline_position: Array,
+	baseline_ids: Array,
+	failure_phase: String
+) -> void:
+	var current_payload: Dictionary = world.call("serialize_stream_state")
+	var current_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+	current_ids.sort()
+	_expect(current_payload.get("player_position", []) == baseline_position, "%s rollback restores the exact player position" % failure_phase)
+	_expect(current_ids == baseline_ids, "%s rollback restores the exact streamed chunk set" % failure_phase)
+	_expect(current_payload.get("minerals", {}) == baseline_payload.get("minerals", {}), "%s rollback restores mineral registry state" % failure_phase)
+	_expect(current_payload.get("crops", {}) == baseline_payload.get("crops", {}), "%s rollback restores crop registry state" % failure_phase)
+	_expect(current_payload.get("world_objects", {}) == baseline_payload.get("world_objects", {}), "%s rollback restores world-object registry state" % failure_phase)
+	_expect(current_payload.get("inventory", {}) == baseline_payload.get("inventory", {}), "%s rollback restores inventory bridge state" % failure_phase)
+	_expect(current_payload.get("stamina", {}) == baseline_payload.get("stamina", {}), "%s rollback restores stamina state" % failure_phase)
+	_expect(current_payload.get("quick_use", {}) == baseline_payload.get("quick_use", {}), "%s rollback restores quick-use state" % failure_phase)
+
 
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")
