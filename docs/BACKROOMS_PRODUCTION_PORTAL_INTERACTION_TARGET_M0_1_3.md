@@ -17,7 +17,7 @@ Route Backrooms portal selection and activation through the existing production 
   - Joins `backrooms_portal`.
   - Exposes `interact(body)` and `get_interaction_range()`.
   - Rejects non-player bodies, invalid portal IDs, out-of-tree nodes, and activation outside 3.25 m.
-  - Disables its own E handler when parented under a `production_surface_world`; the standalone playground retains its existing local E fallback.
+  - Disables its own E handler and hides the redundant local 3D prompt when parented under a `production_surface_world`; the standalone playground retains its existing local E fallback and 3D prompt.
 - `systems/BackroomsPortalVisual.tscn`
   - Places the root Area3D on collision layer 2 while retaining its player body collision mask.
 - `tests/production_surface_world_interaction_prompt_test.gd`
