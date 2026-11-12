@@ -90,6 +90,7 @@ func _build_player() -> void:
 	player.add_to_group("player")
 	player.position = Vector3(1.0, 2.0, 1.0)
 	add_child(player)
+	player.add_to_group("player")
 	var capsule_shape := CapsuleShape3D.new()
 	capsule_shape.radius = 0.35
 	capsule_shape.height = 1.8
