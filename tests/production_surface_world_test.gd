@@ -357,6 +357,9 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
 	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	baseline_mine_ids.sort()
+	var baseline_surface_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+	baseline_surface_ids.sort()
+	var baseline_player_position: Array = baseline_payload.get("player_position", []).duplicate()
 	var baseline_portal_state: Dictionary = world.backrooms_portal_director.call("to_save_dict")
 	var baseline_director: RefCounted = world.backrooms_portal_director as RefCounted
 	var baseline_director_seed: int = int(world.get("_backrooms_portal_world_seed"))
@@ -381,15 +384,7 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 		return
 	var candidate_payload: Dictionary = baseline_payload.duplicate(true)
 	var candidate_world_seed: int = baseline_world_seed + 1 if baseline_world_seed < 2147483647 else baseline_world_seed - 1
-	var candidate_director: RefCounted = BackroomsPortalDirectorScript.new(
-		candidate_world_seed,
-		Rect2(-500.0, -500.0, 1000.0, 1000.0),
-		float(world.get("backrooms_portal_safe_distance"))
-	)
-	var candidate_portal_envelope: Dictionary = candidate_payload.get("backrooms_portal_director", {}).duplicate(true)
-	candidate_portal_envelope["world_seed"] = candidate_world_seed
-	candidate_portal_envelope["state"] = candidate_director.call("to_save_dict")
-	candidate_payload["backrooms_portal_director"] = candidate_portal_envelope
+	candidate_payload["backrooms_portal_director"] = _make_backrooms_portal_director_envelope(candidate_world_seed)
 	candidate_payload["world_seed"] = candidate_world_seed
 	_expect(candidate_world_seed != baseline_world_seed, "underground stream-failure candidate changes the world seed")
 	var alternate_return_position := Vector3(61.0, 2.0, 61.0)
@@ -405,6 +400,8 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	_expect(int(failure_state.get("remaining", -1)) == 0, "base stream failure was actually injected before rollback")
 	_expect(int(failure_state.get("world_seed_at_failure", -1)) == candidate_world_seed, "surface stream failure occurs after the candidate world seed and mine window are applied")
 	_expect(str(restore_report.get("phase", "")) == "stream_sync" and bool(restore_report.get("rollback_complete", false)), "failed underground base stream reports a complete cross-layer rollback")
+	_expect_world_snapshot_restored(baseline_payload, baseline_player_position, baseline_surface_ids, "underground seed-change surface stream failure")
+	_expect_mine_window_restored(baseline_mine_ids, "underground seed-change surface stream failure")
 	_expect(world.player.global_position.is_equal_approx(baseline_position), "failed underground base stream restores the exact mine player position")
 	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == 0, "failed underground base stream restores the exact mine layer")
 	var restored_return_position: Vector3 = world.get("_surface_return_position")
