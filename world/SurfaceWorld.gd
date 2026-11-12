@@ -52,6 +52,9 @@ var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
 
+func _enter_tree() -> void:
+	add_to_group("production_surface_world")
+
 func _ready() -> void:
 	if not initialize_world_session():
 		return
@@ -89,6 +92,7 @@ func _build_player() -> void:
 	player.name = "Player"
 	player.position = Vector3(1.0, 2.0, 1.0)
 	add_child(player)
+	player.add_to_group("player")
 	var capsule_shape := CapsuleShape3D.new()
 	capsule_shape.radius = 0.35
 	capsule_shape.height = 1.8
@@ -224,7 +228,7 @@ func _add_touch_button(parent: GridContainer, key: String, label_text: String) -
 			button.pressed.connect(_consume_quick_slot.bind(slot_index))
 
 func _on_touch_crop_pressed() -> void:
-	_interact_nearest_crop_plot()
+	_interact_current_target()
 
 func _on_touch_crate_pressed() -> void:
 	_interact_nearest_world_prop()
@@ -484,7 +488,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 				get_tree().change_scene_to_file("res://prototypes/SurvivalTestHub.tscn")
 			elif key_event.keycode == KEY_E:
-				_interact_nearest_crop_plot()
+				_interact_current_target()
+				get_viewport().set_input_as_handled()
 			elif key_event.keycode == KEY_F:
 				_interact_nearest_world_prop()
 			elif key_event.keycode == KEY_T:
@@ -507,6 +512,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - motion.relative.y * 0.003, -1.05, 1.05)
 		player.rotation.y = _yaw
 		camera.rotation.x = _pitch
+
+func _interact_current_target() -> Dictionary:
+	if player == null:
+		return {"ok": false, "action": "unavailable"}
+	var target: Dictionary = get_camera_interaction_target()
+	if str(target.get("kind", "")) == "portal":
+		var portal: Node3D = target.get("node") as Node3D
+		if portal == null or not is_instance_valid(portal) or not portal.has_method("interact"):
+			_world_object_action_message = "Backrooms portal is no longer available."
+			_refresh_hud()
+			return {"ok": false, "action": "portal_unavailable"}
+		var activated: bool = bool(portal.call("interact", player))
+		_world_object_action_message = "Backrooms portal activation requested." if activated else "Backrooms portal is outside interaction range."
+		_refresh_hud()
+		return {
+			"ok": activated,
+			"action": "portal_entered" if activated else "portal_unavailable",
+			"portal_id": int(portal.get("portal_id"))
+		}
+	return _interact_nearest_crop_plot()
 
 func _interact_nearest_crop_plot(now_unix: int = -1) -> Dictionary:
 	if player == null or chunk_controller == null or crop_controller == null:
@@ -883,18 +908,34 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			if not (component is int or component is float) or not is_finite(float(component)):
 				return false
 		next_return_position = Vector3(float(return_value[0]), float(return_value[1]), float(return_value[2]))
-	if player == null or mine_director == null or chunk_controller == null or object_state_registry == null:
+	if player == null or mine_director == null or chunk_controller == null or object_state_registry == null or stamina == null or quick_use == null:
 		return false
 	if chunk_controller.has_method("capture_loaded_world_object_states") and not bool(chunk_controller.call("capture_loaded_world_object_states")):
 		return false
 	var previous_minerals: Dictionary = chunk_controller.call("to_save_dict")
 	var previous_world_objects: Dictionary = object_state_registry.call("to_save_dict") if object_state_registry != null else {}
+	var previous_base_payload: Dictionary = super.serialize_stream_state()
+	var previous_stamina_value: Variant = stamina.call("to_save_dict")
+	var previous_quick_use_value: Variant = quick_use.call("to_save_dict")
 	if not previous_minerals.has("schema_version") or not previous_minerals.has("veins") or not previous_world_objects.has("schema_version") or not previous_world_objects.has("objects"):
 		return false
+	if previous_base_payload.is_empty() or not previous_base_payload.has("player_position") or not previous_base_payload.has("minerals") or not previous_base_payload.has("crops") or not previous_base_payload.has("world_objects"):
+		return false
+	if not (previous_stamina_value is Dictionary) or not bool(StaminaScript.new().call("validate_save_dict", previous_stamina_value)):
+		return false
+	if not (previous_quick_use_value is Dictionary) or not bool(QuickUseScript.new().call("validate_save_dict", previous_quick_use_value)):
+		return false
+	var previous_stamina_payload: Dictionary = previous_stamina_value.duplicate(true)
+	var previous_quick_use_payload: Dictionary = previous_quick_use_value.duplicate(true)
 	var previous_position: Vector3 = player.global_position
+	var previous_velocity: Vector3 = player.velocity
 	var previous_underground: bool = _is_underground
 	var previous_world_seed: int = world_seed
 	var previous_mine_position: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
+	var previous_mine_depth: int = _mine_layer_index
+	var previous_surface_return_position: Vector3 = _surface_return_position
+	var previous_mine_chunk_ready: bool = _mine_chunk_ready
+	var seed_changed: bool = next_world_seed != previous_world_seed
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
 	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
@@ -922,13 +963,25 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
-			_set_restore_report(false, "stamina_restore", "Validated stamina payload could not be applied.", false)
+			var stamina_rollback: Dictionary = _rollback_auxiliary_restore_failure(
+				previous_base_payload, previous_position, previous_velocity, previous_underground,
+				previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
+				previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
+				seed_changed, now
+			)
+			_set_restore_report(false, "stamina_restore", "Validated stamina payload could not be applied; the complete world snapshot was rolled back.", bool(stamina_rollback.get("rollback_complete", false)), stamina_rollback.get("details", {}))
 			return false
 	else:
 		stamina.call("reset")
 	if has_quick_use:
 		if not bool(quick_use.call("load_save_dict", quick_use_value)):
-			_set_restore_report(false, "quick_use_restore", "Validated quick-use payload could not be applied.", false)
+			var quick_use_rollback: Dictionary = _rollback_auxiliary_restore_failure(
+				previous_base_payload, previous_position, previous_velocity, previous_underground,
+				previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
+				previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
+				seed_changed, now
+			)
+			_set_restore_report(false, "quick_use_restore", "Validated quick-use payload could not be applied; the complete world snapshot was rolled back.", bool(quick_use_rollback.get("rollback_complete", false)), quick_use_rollback.get("details", {}))
 			return false
 	else:
 		quick_use.call("reset")
@@ -941,6 +994,80 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
+
+func _rollback_auxiliary_restore_failure(
+	previous_base_payload: Dictionary,
+	previous_position: Vector3,
+	previous_velocity: Vector3,
+	previous_underground: bool,
+	previous_world_seed: int,
+	previous_mine_position: Vector3,
+	previous_mine_depth: int,
+	previous_mine_chunk_ready: bool,
+	previous_surface_return_position: Vector3,
+	previous_stamina_payload: Dictionary,
+	previous_quick_use_payload: Dictionary,
+	previous_minerals: Dictionary,
+	previous_world_objects: Dictionary,
+	seed_changed: bool,
+	now_unix: int
+) -> Dictionary:
+	world_seed = previous_world_seed
+	_is_underground = previous_underground
+	_mine_layer_index = previous_mine_depth
+	_surface_return_position = previous_surface_return_position
+	if player != null:
+		player.global_position = previous_position
+		player.velocity = previous_velocity
+	var mine_restored: bool = false
+	if mine_director != null:
+		if seed_changed:
+			mine_restored = _recover_underground_window(previous_world_seed, previous_mine_position, now_unix, previous_minerals, previous_world_objects)
+		else:
+			mine_restored = bool(mine_director.recover_to_world_position(previous_mine_position, now_unix))
+	var base_restored: bool = super.restore_stream_state(previous_base_payload, now_unix)
+	# Normal world-load restore preserves records for currently registered veins. A transaction
+	# rollback must be exact after the final stream window is restored, so use the registry's
+	# dedicated no-time-advance snapshot path here.
+	var minerals_restored: bool = registry != null and registry.has_method("restore_snapshot_exact") and bool(registry.call("restore_snapshot_exact", previous_minerals, now_unix))
+	# Reapply the object snapshot after streaming; newly loaded nodes may register defaults during
+	# the stream sync, so restoring only before sync is not an exact rollback.
+	var world_objects_restored: bool = chunk_controller != null and chunk_controller.has_method("restore_world_object_states") and bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
+	if chunk_controller != null and chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.call("refresh_crop_plots")
+	var stamina_restored: bool = stamina != null and bool(stamina.call("load_save_dict", previous_stamina_payload))
+	var quick_use_restored: bool = quick_use != null and bool(quick_use.call("load_save_dict", previous_quick_use_payload))
+	if player != null:
+		player.velocity = previous_velocity
+	_is_underground = previous_underground
+	_mine_layer_index = previous_mine_depth
+	_surface_return_position = previous_surface_return_position
+	_last_mine_grid = mine_director.get_grid_coordinate(previous_mine_position) if mine_director != null else Vector2i(999999, 999999)
+	_last_mine_layer_index = previous_mine_depth
+	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID) if chunk_controller != null else false
+	_camera_interaction_target_cache.clear()
+	var mine_chunk_ready_restored: bool = _mine_chunk_ready == previous_mine_chunk_ready
+	var position_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
+	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
+	var base_restore_report: Dictionary = get_last_restore_report()
+	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	_refresh_hud()
+	return {
+		"rollback_complete": rollback_complete,
+		"details": {
+			"mine_window_restored": mine_restored,
+			"base_world_restored": base_restored,
+			"minerals_restored": minerals_restored,
+			"world_objects_restored": world_objects_restored,
+			"stamina_restored": stamina_restored,
+			"quick_use_restored": quick_use_restored,
+			"position_restored": position_restored,
+			"layer_state_restored": layer_state_restored,
+			"mine_chunk_ready": _mine_chunk_ready,
+			"mine_chunk_ready_restored": mine_chunk_ready_restored,
+			"base_restore_report": base_restore_report
+		}
+	}
 
 func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or mine_director == null:
@@ -1010,7 +1137,11 @@ func _is_camera_interaction_target_current(target: Dictionary) -> bool:
 		if not proxy_ancestor.is_inside_tree() or proxy_ancestor.is_queued_for_deletion():
 			return false
 		proxy_ancestor = proxy_ancestor.get_parent()
-	if proxy_ancestor != target_node or chunk_controller == null:
+	if proxy_ancestor != target_node:
+		return false
+	if str(target.get("kind", "")) == "portal":
+		return target_node.is_in_group("backrooms_portal") and target_node.has_method("interact") and target_node.has_method("get_interaction_range")
+	if chunk_controller == null:
 		return false
 	match str(target.get("kind", "")):
 		"crop":
@@ -1092,6 +1223,8 @@ func _cast_camera_interaction_target() -> Dictionary:
 			max_range = MINE_INTERACTION_RANGE
 		"lift":
 			max_range = MINE_ACCESS_RANGE
+	if target_node.has_method("get_interaction_range"):
+		max_range = clampf(float(target_node.call("get_interaction_range")), 0.1, INTERACTION_RAY_DISTANCE)
 	var player_distance: float = player.global_position.distance_to(target_node.global_position)
 	if player_distance > max_range:
 		return {}
@@ -1101,6 +1234,10 @@ func _cast_camera_interaction_target() -> Dictionary:
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
+		if candidate.is_in_group("backrooms_portal") and candidate.has_method("interact"):
+			if candidate.has_method("set_external_interaction_router_enabled"):
+				candidate.call("set_external_interaction_router_enabled", true)
+			return {"kind": "portal", "node": candidate}
 		# Lift anchors are stateful world objects too, but their G/V actions must
 		# retain the dedicated lift interaction kind rather than generic prop routing.
 		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
@@ -1127,6 +1264,8 @@ func get_interaction_prompt_text() -> String:
 		return "NO INTERACTION IN SIGHT"
 	var target_node: Node3D = target.get("node") as Node3D
 	match str(target.get("kind", "")):
+		"portal":
+			return "E  ACTIVATE BACKROOMS PORTAL"
 		"crop":
 			return "E  MANAGE CROP PLOT"
 		"vein":
@@ -1181,7 +1320,10 @@ func _refresh_hud() -> void:
 	if touch_buttons.has("deeper"):
 		(touch_buttons["deeper"] as Button).disabled = not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
 	if touch_buttons.has("crop"):
-		(touch_buttons["crop"] as Button).disabled = _is_underground
+		var interaction_button: Button = touch_buttons["crop"] as Button
+		interaction_button.disabled = _is_underground
+		var current_target: Dictionary = get_camera_interaction_target()
+		interaction_button.text = "PORTAL" if str(current_target.get("kind", "")) == "portal" else "CROP"
 	if touch_buttons.has("terrain"):
 		(touch_buttons["terrain"] as Button).disabled = _is_underground
 	if touch_buttons.has("sprint"):

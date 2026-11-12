@@ -13,6 +13,9 @@ func _run_scene_test() -> void:
         assert(ResourceLoader.exists("res://systems/BackroomsPortalVisual.tscn"))
         assert(ResourceLoader.load("res://systems/BackroomsPortalVisual.tscn") is PackedScene)
         assert(ResourceLoader.load("res://systems/BackroomsPortalVisual.gd") is Script)
+        var scene_text: String = FileAccess.get_file_as_string("res://systems/BackroomsPortalVisual.tscn")
+        assert(scene_text.contains("collision_layer = 2"))
+        assert(scene_text.contains("collision_mask = 1"))
         print("Backrooms portal visual scene smoke test passed.")
         quit(0)
         return
@@ -20,6 +23,11 @@ func _run_scene_test() -> void:
     root.add_child(portal)
     await process_frame
     assert(portal is Area3D)
+    assert(portal.is_in_group("backrooms_portal"))
+    assert((portal.collision_layer & (1 << 1)) != 0)
+    assert(portal.has_method("interact"))
+    assert(is_equal_approx(float(portal.call("get_interaction_range")), 3.25))
+    assert(not bool(portal.get("_external_interaction_router_enabled")))
     assert(portal.get_node("PortalRing") is MeshInstance3D)
     assert((portal.get_node("PortalRing") as MeshInstance3D).mesh != null)
     assert(portal.get_node("PortalFieldFront") is MeshInstance3D)
