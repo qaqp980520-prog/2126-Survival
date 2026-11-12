@@ -25,9 +25,6 @@ The initial contract is intentionally surface-origin only because the existing B
 - consume_portal() advances the live RNG once, verifies that its destination matches the preview, and restores the RNG state without consuming the portal if parity ever fails.
 - Session preflight can validate a prepared preview before the one-use portal is consumed; begin_from_portal_result() accepts only the committed entered result.
 - A second entry cannot overwrite an active visit.
-- PortalDirector exposes a non-mutating destination preview using a cloned RNG state. Production can preflight the destination/session before consuming the one-use portal.
-- Portal consumption advances the live RNG once and verifies it matches the preview; a mismatch restores the previous RNG state and preserves the active portal.
-- Session preflight accepts prepared or entered results, while begin_from_portal_result accepts only the committed entered result.
 - The return context remains available until complete_return() is called after the surface world has been restored successfully.
 - Save loading validates every field into local values before mutating any live state.
 - Inactive saves use a canonical empty representation; stale level/portal/position data is rejected.
