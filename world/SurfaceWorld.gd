@@ -977,7 +977,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		if not bool(quick_use.call("load_save_dict", quick_use_value)):
 			var quick_use_rollback: Dictionary = _rollback_auxiliary_restore_failure(
 				previous_base_payload, previous_position, previous_velocity, previous_underground,
-				previous_world_seed, previous_mine_position, previous_mine_depth, previous_surface_return_position,
+				previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
 				previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
 				seed_changed, now
 			)
