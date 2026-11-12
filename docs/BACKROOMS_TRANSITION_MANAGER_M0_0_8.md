@@ -27,7 +27,7 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - prepare_portal_entry() calls the non-mutating portal preview and session preflight; it must not consume the portal or advance RNG.
 - commit_portal_entry() requires the exact same Director instance, Portal ID, return position, source seed, and entry position; it rechecks the preview and session preflight immediately before consumption.
 - Before the mutating consume call, the manager snapshots the complete PortalDirector save payload. The director must expose to_save_dict() and load_save_dict() or the manager rejects the commit before consuming.
-- If consume_portal() rejects or the session rejects begin_from_portal_result() after consumption, the manager restores the exact director snapshot, including RNG state, active one-use portal, serial, and spawn countdown. The result reports whether director restoration completed.
+- If consume_portal() rejects or the session rejects begin_from_portal_result() after consumption, the manager restores the exact director snapshot, including RNG state, active one-use portal, serial, and spawn countdown. It then reads the save payload back and requires exact Dictionary equality; a true load return alone is not treated as proof of rollback. The result reports whether exact director restoration completed.
 - A failed or stale pre-consumption commit clears the prepared state without mutating the Director.
 - Commit revalidates that the session is still inactive and the original preview remains acceptable before consuming the portal; external session mutation cannot silently consume the one-use portal.
 - Return rechecks that the same return context remains active after the restore callback before clearing it.
