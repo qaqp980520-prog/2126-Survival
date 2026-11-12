@@ -9,8 +9,8 @@ Integrate the Backrooms portal director into the production SurfaceWorld lifecyc
 - Branch: `feat/backrooms-surfaceworld-portal-runtime-persistence-2026-11-12`.
 - Parent foundation: PR #337 — SurfaceWorld loaded-window portal director factory.
 - This branch includes the SurfaceWorld portal lifecycle work from the sibling lifecycle branch plus this version's persistence hardening.
-- PR #339 will be opened from this branch after the final code/document commits.
-- Base main remains unchanged; no PR is merged by this version.
+- PR [#339](https://github.com/qaqp980520-prog/2126-Survival/pull/339) is Open / Draft / Unmerged, based on PR #337; exact-head Full Gate is pending.
+- No project code was merged to main; the pre-run main tree content has been restored after a temporary docs-only add/revert pair.
 
 ## Runtime lifecycle
 
