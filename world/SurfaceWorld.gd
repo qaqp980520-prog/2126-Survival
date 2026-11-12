@@ -1336,6 +1336,11 @@ func _rollback_auxiliary_restore_failure(
 	# rollback must be exact after the final stream window is restored, so use the registry's
 	# dedicated no-time-advance snapshot path here.
 	var minerals_restored: bool = registry != null and registry.has_method("restore_snapshot_exact") and bool(registry.call("restore_snapshot_exact", previous_minerals, now_unix))
+	# Base restore applies crops before streaming, but chunk registration can advance existing
+	# crop records during the final surface-window sync. Reapply the pre-transaction crop snapshot
+	# after streaming so a failed restore is an exact rollback rather than a time-advanced load.
+	var previous_crops_value: Variant = previous_base_payload.get("crops", null)
+	var crops_restored: bool = crop_registry != null and previous_crops_value is Dictionary and bool(crop_registry.call("restore_save_dict", previous_crops_value))
 	# Reapply the object snapshot after streaming; newly loaded nodes may register defaults during
 	# the stream sync, so restoring only before sync is not an exact rollback.
 	var world_objects_restored: bool = chunk_controller != null and chunk_controller.has_method("restore_world_object_states") and bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
@@ -1356,7 +1361,7 @@ func _rollback_auxiliary_restore_failure(
 	var position_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
-	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and crops_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
 	return {
@@ -1365,6 +1370,7 @@ func _rollback_auxiliary_restore_failure(
 			"mine_window_restored": mine_restored,
 			"base_world_restored": base_restored,
 			"minerals_restored": minerals_restored,
+			"crops_restored": crops_restored,
 			"world_objects_restored": world_objects_restored,
 			"stamina_restored": stamina_restored,
 			"quick_use_restored": quick_use_restored,
