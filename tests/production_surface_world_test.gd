@@ -290,6 +290,7 @@ func _run() -> void:
 				var restored_return_position: Vector3 = world.get("_surface_return_position")
 				_expect(restored_return_position.is_equal_approx(surface_return_position), "underground restore preserves the exact surface return position")
 				_expect(world.call("get_loaded_surface_window_bounds_at", surface_return_position) == surface_window_before_mine, "underground restore keeps the real surface chunk window around the return position")
+				_expect(world.call("get_loaded_surface_window_bounds") == surface_window_before_mine, "public loaded-surface bounds resolve from the return position while underground")
 				_expect(world.get("backrooms_portal_visual") != null, "underground restore keeps the active portal anchor when its owning surface chunk remains loaded")
 			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
 			portal_director = world.get("backrooms_portal_director") as RefCounted
