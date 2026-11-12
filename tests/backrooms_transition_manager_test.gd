@@ -9,6 +9,7 @@ var _restore_calls: int = 0
 func _initialize() -> void:
 	_test_prepare_is_pure_and_return_is_retryable()
 	_test_context_mismatch_and_cancel_preserve_portal()
+	_test_external_session_change_prevents_portal_consumption()
 	_test_stale_portal_is_not_consumed_by_manager()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
@@ -76,6 +77,22 @@ func _test_context_mismatch_and_cancel_preserve_portal() -> void:
 	assert(manager.cancel_prepared_entry())
 	assert(manager.get_state_name() == "IDLE")
 	assert(director.to_save_dict() == before, "Cancelling a prepared entry must not mutate the director.")
+
+func _test_external_session_change_prevents_portal_consumption() -> void:
+	var director = DirectorScript.new(99, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
+	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+	assert(str(spawned.get("event", "")) == "spawned")
+	var portal_id: int = int(spawned["portal"]["id"])
+	var manager = ManagerScript.new()
+	var return_position := Vector3(4.0, 2.0, 6.0)
+	assert(bool(manager.prepare_portal_entry(director, portal_id, return_position, 99).get("ok", false)))
+	assert(bool(manager.get_session().call("begin_transition", "Level 2", 91, Vector3(7.0, 1.0, 8.0), 99)))
+	var before_commit: Dictionary = director.to_save_dict()
+	var commit: Dictionary = manager.commit_portal_entry(director, portal_id, return_position, 99)
+	assert(not bool(commit.get("ok", false)))
+	assert(str(commit.get("reason", "")) == "session_changed_after_prepare")
+	assert(manager.get_state_name() == "IN_BACKROOMS")
+	assert(director.to_save_dict() == before_commit, "A session changed after prepare must prevent one-use portal consumption.")
 
 func _test_stale_portal_is_not_consumed_by_manager() -> void:
 	var director = DirectorScript.new(88, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
