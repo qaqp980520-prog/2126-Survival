@@ -138,7 +138,8 @@ func commit_window(plan: Dictionary, staged_cell_keys: Array) -> bool:
 		"desired_cell_keys",
 		"load_cell_keys",
 		"keep_cell_keys",
-		"unload_cell_keys"
+		"unload_cell_keys",
+		"cell_descriptors"
 	]:
 		if plan.get(field, null) != expected.get(field, null):
 			return false
