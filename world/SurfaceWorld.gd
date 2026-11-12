@@ -48,6 +48,7 @@ var _is_underground: bool = false
 var _mine_chunk_ready: bool = false
 var mine_director: Node
 var backrooms_portal_director: RefCounted
+var _backrooms_portal_world_seed: int = -1
 var backrooms_portal_visual: Area3D
 var _backrooms_portal_chunk_id: String = ""
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
@@ -83,6 +84,8 @@ func _ready() -> void:
 	backrooms_portal_director = create_backrooms_portal_director()
 	if backrooms_portal_director == null:
 		push_error("Surface world could not create its Backrooms portal director.")
+	else:
+		_backrooms_portal_world_seed = world_seed
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _surface_stream_pending:
@@ -676,6 +679,8 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 func get_loaded_surface_window_bounds() -> Rect2:
 	if player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
 		return Rect2()
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("is_chunk_loaded"):
+		return Rect2()
 	var chunk_size_x_value: Variant = director.get("chunk_size_x")
 	var chunk_size_z_value: Variant = director.get("chunk_size_z")
 	var load_radius_value: Variant = director.get("load_radius")
@@ -691,7 +696,13 @@ func get_loaded_surface_window_bounds() -> Rect2:
 	if not (grid_value is Vector2i):
 		return Rect2()
 	var grid: Vector2i = grid_value
-	var radius: float = float(int(load_radius_value))
+	var load_radius: int = int(load_radius_value)
+	for z in range(grid.y - load_radius, grid.y + load_radius + 1):
+		for x in range(grid.x - load_radius, grid.x + load_radius + 1):
+			var chunk_id: String = "surface/chunk_%d_%d" % [x, z]
+			if not bool(chunk_controller.call("is_chunk_loaded", chunk_id)):
+				return Rect2()
+	var radius: float = float(load_radius)
 	var center := Vector2((float(grid.x) + 0.5) * chunk_size_x, (float(grid.y) + 0.5) * chunk_size_z)
 	var half_extent := Vector2((radius + 0.5) * chunk_size_x, (radius + 0.5) * chunk_size_z)
 	return Rect2(center - half_extent, half_extent * 2.0)
@@ -1027,14 +1038,38 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
 func serialize_stream_state() -> Dictionary:
+	if (
+		_surface_stream_pending
+		or backrooms_portal_director == null
+		or not is_instance_valid(backrooms_portal_director)
+		or not backrooms_portal_director.has_method("to_save_dict")
+		or _backrooms_portal_world_seed != world_seed
+	):
+		return {}
+	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds()
+	if loaded_bounds.size.x <= 0.0 or loaded_bounds.size.y <= 0.0:
+		return {}
+	var active_portal_value: Variant = backrooms_portal_director.get("active_portal")
+	if active_portal_value is Dictionary:
+		var active_portal: Dictionary = active_portal_value
+		if not active_portal.is_empty():
+			var active_position: Variant = active_portal.get("position", null)
+			if not (active_position is Vector2) or not loaded_bounds.has_point(active_position):
+				return {}
+	var portal_state_value: Variant = backrooms_portal_director.call("to_save_dict")
+	if not (portal_state_value is Dictionary):
+		return {}
+	var portal_state: Dictionary = portal_state_value
+	if portal_state.is_empty():
+		return {}
 	var payload: Dictionary = super.serialize_stream_state()
 	if payload.is_empty():
 		return {}
-	if backrooms_portal_director != null and backrooms_portal_director.has_method("to_save_dict"):
-		payload["backrooms_portal_director"] = {
+	payload["backrooms_portal_director"] = {
+			"schema_version": 1,
 			"world_seed": world_seed,
-			"state": backrooms_portal_director.call("to_save_dict")
-		}
+			"state": portal_state.duplicate(true)
+	}
 	payload["location_layer"] = "underground" if _is_underground else "surface"
 	payload["mine_depth"] = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
 	payload["world_seed"] = world_seed
@@ -1061,6 +1096,10 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		var portal_envelope_value: Variant = payload.get("backrooms_portal_director", null)
 		if not (portal_envelope_value is Dictionary):
 			_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal save envelope must be a dictionary; no world state was changed.", true)
+			return false
+		var portal_schema_value: Variant = portal_envelope_value.get("schema_version", 1)
+		if not (portal_schema_value is int or portal_schema_value is float) or not is_finite(float(portal_schema_value)) or floorf(float(portal_schema_value)) != float(portal_schema_value) or int(portal_schema_value) != 1:
+			_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal save envelope schema is invalid; no world state was changed.", true)
 			return false
 		var portal_seed_value: Variant = portal_envelope_value.get("world_seed", null)
 		if not (portal_seed_value is int or portal_seed_value is float) or not is_finite(float(portal_seed_value)) or not is_equal_approx(float(portal_seed_value), roundf(float(portal_seed_value))) or int(roundf(float(portal_seed_value))) != next_world_seed:
@@ -1207,6 +1246,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		_set_restore_report(false, "backrooms_portal_restore", "Backrooms portal policy could not be configured for the restored surface window; the complete world snapshot was rolled back.", bool(portal_rollback.get("rollback_complete", false)), portal_rollback.get("details", {}))
 		return false
 	backrooms_portal_director = portal_director_candidate
+	_backrooms_portal_world_seed = next_world_seed
 	_is_underground = target_underground
 	_mine_layer_index = target_depth
 	_surface_return_position = next_return_position
