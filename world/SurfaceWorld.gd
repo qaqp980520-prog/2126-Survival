@@ -677,7 +677,21 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
 func get_loaded_surface_window_bounds() -> Rect2:
-	if player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+	if player == null:
+		return Rect2()
+	var reference_position: Vector3 = _surface_return_position if _is_underground else player.global_position
+	return get_loaded_surface_window_bounds_at(reference_position)
+
+
+func get_loaded_surface_window_bounds_at(reference_position: Vector3) -> Rect2:
+	if (
+		not is_finite(reference_position.x)
+		or not is_finite(reference_position.y)
+		or not is_finite(reference_position.z)
+		or director == null
+		or not is_instance_valid(director)
+		or not director.has_method("get_grid_coordinate")
+	):
 		return Rect2()
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("is_chunk_loaded"):
 		return Rect2()
@@ -692,7 +706,7 @@ func get_loaded_surface_window_bounds() -> Rect2:
 	var chunk_size_z: float = float(chunk_size_z_value)
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
 		return Rect2()
-	var grid_value: Variant = director.call("get_grid_coordinate", player.global_position)
+	var grid_value: Variant = director.call("get_grid_coordinate", reference_position)
 	if not (grid_value is Vector2i):
 		return Rect2()
 	var grid: Vector2i = grid_value
@@ -1046,7 +1060,8 @@ func serialize_stream_state() -> Dictionary:
 		or _backrooms_portal_world_seed != world_seed
 	):
 		return {}
-	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds()
+	var surface_reference_position: Vector3 = _surface_return_position if _is_underground else player.global_position
+	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds_at(surface_reference_position)
 	if loaded_bounds.size.x <= 0.0 or loaded_bounds.size.y <= 0.0:
 		return {}
 	var active_portal_value: Variant = backrooms_portal_director.get("active_portal")
@@ -1200,15 +1215,31 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			if not mine_director.recover_to_world_position(previous_mine_position, now):
 				push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
-	if not super.restore_stream_state(payload, now):
-		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
-		else:
-			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+	var base_restore_payload: Dictionary = payload
+	if target_underground:
+		base_restore_payload = payload.duplicate(true)
+		base_restore_payload["player_position"] = [
+			next_return_position.x,
+			next_return_position.y,
+			next_return_position.z
+		]
+	if not super.restore_stream_state(base_restore_payload, now):
+		var failed_base_report: Dictionary = get_last_restore_report()
+		var base_stream_rollback: Dictionary = _rollback_auxiliary_restore_failure(
+			previous_base_payload, previous_position, previous_velocity, previous_underground,
+			previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
+			previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
+			seed_changed, now
+		)
+		var base_stream_rollback_details: Dictionary = base_stream_rollback.get("details", {}).duplicate(true)
+		base_stream_rollback_details["failed_target_stream_report"] = failed_base_report
+		var base_stream_rollback_complete: bool = bool(base_stream_rollback.get("rollback_complete", false))
+		_set_restore_report(false, "stream_sync", "Target SurfaceWorld stream restore failed; the complete prior world snapshot rollback is reported in details.", base_stream_rollback_complete, base_stream_rollback_details)
+		if not base_stream_rollback_complete:
+			push_warning("SurfaceWorld base stream restore rollback was incomplete; inspect get_last_restore_report().")
 		return false
+	if target_underground:
+		player.global_position = target_position
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
 			var stamina_rollback: Dictionary = _rollback_auxiliary_restore_failure(
@@ -1233,7 +1264,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 	else:
 		quick_use.call("reset")
-	var restored_surface_bounds: Rect2 = get_loaded_surface_window_bounds()
+	var restored_surface_reference_position: Vector3 = next_return_position if target_underground else player.global_position
+	var restored_surface_bounds: Rect2 = get_loaded_surface_window_bounds_at(restored_surface_reference_position)
 	if restored_surface_bounds.size.x <= 0.0 or restored_surface_bounds.size.y <= 0.0 or not bool(portal_director_candidate.call(
 		"set_spawn_window", restored_surface_bounds, backrooms_portal_safe_distance, backrooms_portal_spawn_padding
 	)):
@@ -1288,7 +1320,18 @@ func _rollback_auxiliary_restore_failure(
 			mine_restored = _recover_underground_window(previous_world_seed, previous_mine_position, now_unix, previous_minerals, previous_world_objects)
 		else:
 			mine_restored = bool(mine_director.recover_to_world_position(previous_mine_position, now_unix))
-	var base_restored: bool = super.restore_stream_state(previous_base_payload, now_unix)
+	var base_rollback_payload: Dictionary = previous_base_payload
+	if previous_underground:
+		base_rollback_payload = previous_base_payload.duplicate(true)
+		base_rollback_payload["player_position"] = [
+			previous_surface_return_position.x,
+			previous_surface_return_position.y,
+			previous_surface_return_position.z
+		]
+	var base_restored: bool = super.restore_stream_state(base_rollback_payload, now_unix)
+	if player != null:
+		player.global_position = previous_position
+		player.velocity = previous_velocity
 	# Normal world-load restore preserves records for currently registered veins. A transaction
 	# rollback must be exact after the final stream window is restored, so use the registry's
 	# dedicated no-time-advance snapshot path here.
@@ -1314,6 +1357,7 @@ func _rollback_auxiliary_restore_failure(
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
 	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
 	return {
 		"rollback_complete": rollback_complete,
