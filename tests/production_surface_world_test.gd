@@ -284,14 +284,17 @@ func _run() -> void:
 			_expect(moved_to_other_mine_window, "underground restore regression moves the current mine window away from the saved mine window")
 			if moved_to_other_mine_window:
 				world.player.global_position = other_mine_position
-				_expect(bool(world.call("restore_stream_state", underground_save_payload, now + 12)), "underground save restores with the surface stream anchored to the saved return position")
-				_expect(world.player.global_position.is_equal_approx(explored_mine_position), "underground restore returns the player to the saved mine coordinates")
-				_expect(bool(world.get("_is_underground")), "underground restore preserves the underground layer flag")
-				var restored_return_position: Vector3 = world.get("_surface_return_position")
-				_expect(restored_return_position.is_equal_approx(surface_return_position), "underground restore preserves the exact surface return position")
-				_expect(world.call("get_loaded_surface_window_bounds_at", surface_return_position) == surface_window_before_mine, "underground restore keeps the real surface chunk window around the return position")
-				_expect(world.call("get_loaded_surface_window_bounds") == surface_window_before_mine, "public loaded-surface bounds resolve from the return position while underground")
-				_expect(world.get("backrooms_portal_visual") != null, "underground restore keeps the active portal anchor when its owning surface chunk remains loaded")
+				var underground_restore_success: bool = bool(world.call("restore_stream_state", underground_save_payload, now + 12))
+				_expect(underground_restore_success, "underground save restores with the surface stream anchored to the saved return position")
+				if underground_restore_success:
+					_expect(world.player.global_position.is_equal_approx(explored_mine_position), "underground restore returns the player to the saved mine coordinates")
+					_expect(bool(world.get("_is_underground")), "underground restore preserves the underground layer flag")
+					var restored_return_position: Vector3 = world.get("_surface_return_position")
+					_expect(restored_return_position.is_equal_approx(surface_return_position), "underground restore preserves the exact surface return position")
+					_expect(world.call("get_loaded_surface_window_bounds_at", surface_return_position) == surface_window_before_mine, "underground restore keeps the real surface chunk window around the return position")
+					_expect(world.call("get_loaded_surface_window_bounds") == surface_window_before_mine, "public loaded-surface bounds resolve from the return position while underground")
+					_expect(world.get("backrooms_portal_visual") != null, "underground restore keeps the active portal anchor when its owning surface chunk remains loaded")
+					_test_auxiliary_restore_rollback(now + 12)
 			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
 			portal_director = world.get("backrooms_portal_director") as RefCounted
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
@@ -346,6 +349,9 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	baseline_ids.sort()
 	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
 	_expect(baseline_world_seed >= 0 and baseline_world_seed < 2147483647, "auxiliary rollback baseline has a valid incrementable world seed")
+	var candidate_player_position := Vector3(21.0, 2.0, 1.0)
+	if str(baseline_payload.get("location_layer", "surface")) == "underground" and baseline_position.size() == 3:
+		candidate_player_position = Vector3(float(baseline_position[0]), float(baseline_position[1]), float(baseline_position[2])) + Vector3(16.0, 0.0, 16.0)
 	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	baseline_mine_ids.sort()
 	var original_stamina: RefCounted = world.stamina
@@ -355,7 +361,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	var baseline_portal_director: Dictionary = world.backrooms_portal_director.call("to_save_dict")
 
 	var stamina_candidate: Dictionary = baseline_payload.duplicate(true)
-	stamina_candidate["player_position"] = [21.0, 2.0, 1.0]
+	stamina_candidate["player_position"] = [candidate_player_position.x, candidate_player_position.y, candidate_player_position.z]
 	stamina_candidate["world_seed"] = baseline_world_seed + 1
 	stamina_candidate["backrooms_portal_director"] = _make_backrooms_portal_director_envelope(baseline_world_seed + 1)
 	var changed_stamina: Dictionary = baseline_stamina.duplicate(true)
@@ -377,7 +383,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	_expect(world.backrooms_portal_director.call("to_save_dict") == baseline_portal_director, "stamina failure leaves the live portal RNG, serial, timer and active portal unchanged")
 
 	var quick_use_candidate: Dictionary = baseline_payload.duplicate(true)
-	quick_use_candidate["player_position"] = [21.0, 2.0, 1.0]
+	quick_use_candidate["player_position"] = [candidate_player_position.x, candidate_player_position.y, candidate_player_position.z]
 	quick_use_candidate["world_seed"] = baseline_world_seed + 1
 	quick_use_candidate["backrooms_portal_director"] = _make_backrooms_portal_director_envelope(baseline_world_seed + 1)
 	var changed_quick_use: Dictionary = baseline_quick_use.duplicate(true)
@@ -427,7 +433,8 @@ func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: Strin
 	var current_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	current_mine_ids.sort()
 	_expect(current_mine_ids == baseline_mine_ids, "%s rollback restores the exact UndergroundMineDirector managed window" % failure_phase)
-	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "%s rollback restores the persistent mine origin chunk" % failure_phase)
+	var baseline_has_origin: bool = baseline_mine_ids.has("underground/mine_0_0")
+	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0") == baseline_has_origin, "%s rollback restores the origin mine chunk's exact loaded state" % failure_phase)
 
 
 func _make_backrooms_portal_director_envelope(seed_value: int) -> Dictionary:
