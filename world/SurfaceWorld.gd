@@ -1026,6 +1026,15 @@ func _rollback_auxiliary_restore_failure(
 		else:
 			mine_restored = bool(mine_director.recover_to_world_position(previous_mine_position, now_unix))
 	var base_restored: bool = super.restore_stream_state(previous_base_payload, now_unix)
+	# Normal world-load restore preserves records for currently registered veins. A transaction
+	# rollback must be exact after the final stream window is restored, so use the registry's
+	# dedicated no-time-advance snapshot path here.
+	var minerals_restored: bool = registry != null and registry.has_method("restore_snapshot_exact") and bool(registry.call("restore_snapshot_exact", previous_minerals, now_unix))
+	# Reapply the object snapshot after streaming; newly loaded nodes may register defaults during
+	# the stream sync, so restoring only before sync is not an exact rollback.
+	var world_objects_restored: bool = chunk_controller != null and chunk_controller.has_method("restore_world_object_states") and bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
+	if chunk_controller != null and chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.call("refresh_crop_plots")
 	var stamina_restored: bool = stamina != null and bool(stamina.call("load_save_dict", previous_stamina_payload))
 	var quick_use_restored: bool = quick_use != null and bool(quick_use.call("load_save_dict", previous_quick_use_payload))
 	if player != null:
@@ -1041,13 +1050,15 @@ func _rollback_auxiliary_restore_failure(
 	var position_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
-	var rollback_complete: bool = mine_restored and base_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_hud()
 	return {
 		"rollback_complete": rollback_complete,
 		"details": {
 			"mine_window_restored": mine_restored,
 			"base_world_restored": base_restored,
+			"minerals_restored": minerals_restored,
+			"world_objects_restored": world_objects_restored,
 			"stamina_restored": stamina_restored,
 			"quick_use_restored": quick_use_restored,
 			"position_restored": position_restored,
