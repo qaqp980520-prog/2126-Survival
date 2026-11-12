@@ -23,6 +23,39 @@ class RejectingCommitSession extends RefCounted:
 	) -> bool:
 		return false
 
+class MutatingRejectingDirector extends RefCounted:
+	var state: Dictionary = {
+		"rng_state": "before",
+		"portal_serial": 7,
+		"next_spawn_in": 52.5,
+		"active_portal": {"id": 7, "position": [12.0, 0.0]}
+	}
+
+	func preview_portal_entry(portal_id: int) -> Dictionary:
+		if int(state["active_portal"].get("id", -1)) != portal_id:
+			return {"ok": false, "reason": "portal_not_active"}
+		return {
+			"ok": true,
+			"event": "prepared",
+			"portal_id": portal_id,
+			"position": Vector2(12.0, 0.0),
+			"destination_level": "Level 2"
+		}
+
+	func consume_portal(_portal_id: int) -> Dictionary:
+		state["rng_state"] = "mutated"
+		state["portal_serial"] = 8
+		state["next_spawn_in"] = 5.0
+		state["active_portal"] = {}
+		return {"ok": false, "reason": "injected_consume_failure"}
+
+	func to_save_dict() -> Dictionary:
+		return state.duplicate(true)
+
+	func load_save_dict(payload: Dictionary) -> bool:
+		state = payload.duplicate(true)
+		return true
+
 var _restore_result: bool = false
 var _restore_calls: int = 0
 
@@ -31,6 +64,7 @@ func _initialize() -> void:
 	_test_context_mismatch_and_cancel_preserve_portal()
 	_test_external_session_change_prevents_portal_consumption()
 	_test_stale_portal_is_not_consumed_by_manager()
+	_test_rejected_consume_restores_director_snapshot()
 	_test_session_commit_rejection_restores_consumed_portal()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
@@ -130,6 +164,24 @@ func _test_stale_portal_is_not_consumed_by_manager() -> void:
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(director.to_save_dict() == after_external_consume, "Stale manager commit must not mutate director state.")
+
+func _test_rejected_consume_restores_director_snapshot() -> void:
+	var director = MutatingRejectingDirector.new()
+	var manager = ManagerScript.new()
+	var portal_id: int = 7
+	var return_position := Vector3(2.0, 1.0, 4.0)
+	var director_before: Dictionary = director.to_save_dict()
+
+	var prepared: Dictionary = manager.prepare_portal_entry(director, portal_id, return_position, 20261112)
+	assert(bool(prepared.get("ok", false)))
+	var rejected: Dictionary = manager.commit_portal_entry(director, portal_id, return_position, 20261112)
+
+	assert(not bool(rejected.get("ok", false)))
+	assert(str(rejected.get("reason", "")) == "injected_consume_failure")
+	assert(bool(rejected.get("director_state_restored", false)), "A rejected consume must restore the Director snapshot.")
+	assert(director.to_save_dict() == director_before, "A mutating rejected consume must restore RNG, serial, countdown and active portal.")
+	assert(manager.get_state_name() == "IDLE")
+
 
 func _test_session_commit_rejection_restores_consumed_portal() -> void:
 	var director = DirectorScript.new(123, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
