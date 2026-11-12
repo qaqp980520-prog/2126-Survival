@@ -965,7 +965,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
 			var stamina_rollback: Dictionary = _rollback_auxiliary_restore_failure(
 				previous_base_payload, previous_position, previous_velocity, previous_underground,
-				previous_world_seed, previous_mine_position, previous_mine_depth, previous_surface_return_position,
+				previous_world_seed, previous_mine_position, previous_mine_depth, previous_mine_chunk_ready, previous_surface_return_position,
 				previous_stamina_payload, previous_quick_use_payload, previous_minerals, previous_world_objects,
 				seed_changed, now
 			)
@@ -1003,6 +1003,7 @@ func _rollback_auxiliary_restore_failure(
 	previous_world_seed: int,
 	previous_mine_position: Vector3,
 	previous_mine_depth: int,
+	previous_mine_chunk_ready: bool,
 	previous_surface_return_position: Vector3,
 	previous_stamina_payload: Dictionary,
 	previous_quick_use_payload: Dictionary,
@@ -1036,10 +1037,11 @@ func _rollback_auxiliary_restore_failure(
 	_last_mine_layer_index = previous_mine_depth
 	_mine_chunk_ready = chunk_controller.is_chunk_loaded(MINE_CHUNK_ID) if chunk_controller != null else false
 	_camera_interaction_target_cache.clear()
+	var mine_chunk_ready_restored: bool = _mine_chunk_ready == previous_mine_chunk_ready
 	var position_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
-	var rollback_complete: bool = mine_restored and base_restored and stamina_restored and quick_use_restored and position_restored and layer_state_restored
+	var rollback_complete: bool = mine_restored and base_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_hud()
 	return {
 		"rollback_complete": rollback_complete,
@@ -1051,6 +1053,7 @@ func _rollback_auxiliary_restore_failure(
 			"position_restored": position_restored,
 			"layer_state_restored": layer_state_restored,
 			"mine_chunk_ready": _mine_chunk_ready,
+			"mine_chunk_ready_restored": mine_chunk_ready_restored,
 			"base_restore_report": base_restore_report
 		}
 	}
