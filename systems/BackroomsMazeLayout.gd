@@ -31,7 +31,8 @@ static func try_cell_for_position(world_position: Vector3, cell_size: float) -> 
 ## caller needs to distinguish invalid input from the real origin cell.
 static func cell_for_position(world_position: Vector3, cell_size: float) -> Vector2i:
 	var result: Dictionary = try_cell_for_position(world_position, cell_size)
-	return result.get("cell", Vector2i.ZERO) as Vector2i
+	var raw_cell: Variant = result.get("cell", Vector2i.ZERO)
+	return raw_cell if raw_cell is Vector2i else Vector2i.ZERO
 
 ## Select a deterministic spanning-tree parent. Every non-origin cell moves
 ## exactly one Manhattan step closer to (0, 0), guaranteeing connectivity.
