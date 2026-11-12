@@ -104,6 +104,11 @@ func _run() -> void:
 		_expect(not diagnostics_panel.visible, "streaming diagnostics panel closes through its toggle API")
 	var loaded_window: Rect2 = world.call("get_loaded_surface_window_bounds")
 	_expect(loaded_window == Rect2(-10.0, -10.0, 30.0, 30.0), "portal spawn bounds exactly match the loaded 3x3 surface chunk window")
+	var owned_backrooms_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
+	_expect(owned_backrooms_director != null, "SurfaceWorld owns a world-seeded Backrooms portal director")
+	if owned_backrooms_director != null:
+		_expect(owned_backrooms_director.get("world_bounds") == loaded_window, "owned portal director starts with the current loaded surface window")
+		_expect(int(world.get("_backrooms_portal_world_seed")) == int(world.get("world_seed")), "owned portal director seed identity matches the production world seed")
 	var backrooms_director: RefCounted = world.call("create_backrooms_portal_director") as RefCounted
 	_expect(backrooms_director != null, "production SurfaceWorld creates a Backrooms portal director configured for its loaded window")
 	if backrooms_director != null:
@@ -180,8 +185,17 @@ func _run() -> void:
 	var first: Dictionary = world.call("_interact_nearest_world_prop", now)
 	_expect(bool(first.get("ok", false)), "salvage interaction grants an item through the shared inventory bridge")
 	_expect(_inventory_count(item_id) == 1, "first interaction adds exactly one item")
+	if owned_backrooms_director != null:
+		owned_backrooms_director.set("next_spawn_in", 0.01)
+		var owned_portal_spawn: Dictionary = owned_backrooms_director.call("tick", 0.02, Vector2(world.player.global_position.x, world.player.global_position.z))
+		_expect(str(owned_portal_spawn.get("event", "")) == "spawned", "SurfaceWorld-owned portal director can produce a deterministic active portal")
 	var save_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not save_payload.is_empty() and save_payload.has("world_objects") and save_payload.has("inventory"), "save contains world objects and inventory")
+	var saved_portal_wrapper: Dictionary = save_payload.get("backrooms_portal", {})
+	var saved_portal_director: Dictionary = saved_portal_wrapper.get("director", {})
+	_expect(int(saved_portal_wrapper.get("schema_version", -1)) == 1 and int(saved_portal_wrapper.get("world_seed", -1)) == int(world.get("world_seed")), "world save binds Backrooms portal state to the same schema and world seed")
+	_expect(owned_backrooms_director != null and saved_portal_director == owned_backrooms_director.call("to_save_dict"), "world save captures the complete owned portal director state")
+	_expect(not saved_portal_director.get("active_portal", {}).is_empty(), "world save preserves the active one-use portal and its original spawn window")
 	_expect(bool(world.call("debug_move_player_to", Vector3(21.0, 2.0, 1.0), now + 1)), "moving away advances the chunk window")
 	await process_frame
 	_expect(not world.chunk_controller.is_chunk_loaded(ORIGIN_CHUNK_ID), "origin chunk unloads outside the radius")
@@ -202,12 +216,34 @@ func _run() -> void:
 	var second: Dictionary = world.call("_interact_nearest_world_prop", now + 3)
 	_expect(bool(second.get("ok", false)) and int(second.get("remaining", -1)) == 0, "reloaded crate grants its final unit")
 	_expect(_inventory_count(item_id) == 2, "second interaction increments inventory once")
+	if owned_backrooms_director != null and not saved_portal_director.get("active_portal", {}).is_empty():
+		var saved_portal_id: int = int(saved_portal_director["active_portal"]["id"])
+		var consumed_portal: Dictionary = owned_backrooms_director.call("consume_portal", saved_portal_id)
+		_expect(bool(consumed_portal.get("ok", false)), "test diverges the live portal director before restoring the saved snapshot")
 	_expect(bool(world.call("restore_stream_state", save_payload, now + 4)), "world restores the saved snapshot")
+	var restored_backrooms_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
+	_expect(restored_backrooms_director != null and restored_backrooms_director.call("to_save_dict") == saved_portal_director, "world restore reinstates the exact portal RNG, countdown, serial and active portal state")
 	var save_root: Node3D = world.chunk_controller.get_chunk_root(ORIGIN_CHUNK_ID)
 	var save_crate: Node = save_root.get_node_or_null("SalvageCrate") if save_root != null else null
 	_expect(save_crate != null and int(save_crate.get("loot_remaining")) == 1, "save restore reapplies crate state")
 	_expect(_inventory_count(item_id) == 1, "save restore rolls inventory back to the matching count")
-	_test_auxiliary_restore_rollback(now + 4)
+	var portal_state_before_invalid_restore: Dictionary = restored_backrooms_director.call("to_save_dict") if restored_backrooms_director != null else {}
+	var world_seed_before_invalid_restore: int = int(world.get("world_seed"))
+	var position_before_invalid_restore: Vector3 = world.player.global_position
+	var invalid_portal_save: Dictionary = save_payload.duplicate(true)
+	var invalid_portal_wrapper: Dictionary = invalid_portal_save.get("backrooms_portal", {}).duplicate(true)
+	invalid_portal_wrapper["world_seed"] = world_seed_before_invalid_restore + 1
+	invalid_portal_save["backrooms_portal"] = invalid_portal_wrapper
+	_expect(not bool(world.call("restore_stream_state", invalid_portal_save, now + 5)), "portal state bound to a different world seed is rejected before restore mutation")
+	_expect(int(world.get("world_seed")) == world_seed_before_invalid_restore and world.player.global_position == position_before_invalid_restore, "mismatched portal seed rejection preserves world seed and player position")
+	var director_after_invalid_restore: RefCounted = world.get("backrooms_portal_director") as RefCounted
+	_expect(director_after_invalid_restore != null and director_after_invalid_restore.call("to_save_dict") == portal_state_before_invalid_restore, "mismatched portal seed rejection preserves the live director payload")
+	var legacy_portal_save: Dictionary = save_payload.duplicate(true)
+	legacy_portal_save.erase("backrooms_portal")
+	_expect(bool(world.call("restore_stream_state", legacy_portal_save, now + 6)), "legacy schema-1 world saves without Backrooms portal state remain loadable")
+	var legacy_portal_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
+	_expect(legacy_portal_director != null and legacy_portal_director.call("to_save_dict").get("active_portal", {}).is_empty(), "legacy restore initializes a fresh portal director instead of inheriting stale active portals")
+	_test_auxiliary_restore_rollback(now + 6)
 	var plots: Array[Node3D] = world.chunk_controller.get_loaded_crop_plots()
 	_expect(not plots.is_empty(), "surface world exposes loaded crop plots")
 	if not plots.is_empty():
@@ -236,6 +272,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	var baseline_ids: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 	baseline_ids.sort()
 	var baseline_world_seed: int = int(baseline_payload.get("world_seed", -1))
+	var baseline_portal_director: Dictionary = baseline_payload.get("backrooms_portal", {}).get("director", {})
 	_expect(baseline_world_seed >= 0 and baseline_world_seed < 2147483647, "auxiliary rollback baseline has a valid incrementable world seed")
 	var baseline_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	baseline_mine_ids.sort()
@@ -247,6 +284,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	var stamina_candidate: Dictionary = baseline_payload.duplicate(true)
 	stamina_candidate["player_position"] = [21.0, 2.0, 1.0]
 	stamina_candidate["world_seed"] = baseline_world_seed + 1
+	stamina_candidate.erase("backrooms_portal")
 	var changed_stamina: Dictionary = baseline_stamina.duplicate(true)
 	changed_stamina["current"] = 25.0
 	stamina_candidate["stamina"] = changed_stamina
@@ -267,6 +305,7 @@ func _test_auxiliary_restore_rollback(now: int) -> void:
 	var quick_use_candidate: Dictionary = baseline_payload.duplicate(true)
 	quick_use_candidate["player_position"] = [21.0, 2.0, 1.0]
 	quick_use_candidate["world_seed"] = baseline_world_seed + 1
+	quick_use_candidate.erase("backrooms_portal")
 	var changed_quick_use: Dictionary = baseline_quick_use.duplicate(true)
 	changed_quick_use["selected_slot"] = 2
 	quick_use_candidate["quick_use"] = changed_quick_use
@@ -306,6 +345,7 @@ func _expect_world_snapshot_restored(
 	_expect(current_payload.get("location_layer", "") == baseline_payload.get("location_layer", ""), "%s rollback restores the exact location layer" % failure_phase)
 	_expect(current_payload.get("mine_depth", -1) == baseline_payload.get("mine_depth", -2), "%s rollback restores the exact mine depth" % failure_phase)
 	_expect(current_payload.get("surface_return_position", []) == baseline_payload.get("surface_return_position", []), "%s rollback restores the exact surface return position" % failure_phase)
+	_expect(current_payload.get("backrooms_portal", {}) == baseline_payload.get("backrooms_portal", {}), "%s rollback preserves the exact Backrooms portal director save state" % failure_phase)
 
 
 func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: String) -> void:
