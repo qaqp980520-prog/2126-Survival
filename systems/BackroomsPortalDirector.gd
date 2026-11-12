@@ -12,6 +12,9 @@ const SPAWN_PADDING: float = 16.0
 var _rng: RandomNumberGenerator
 var world_bounds: Rect2
 var min_player_distance: float
+## Runtime policy margin. The legacy/default value remains 16 m; production may
+## choose a smaller validated margin for a player-loaded chunk window.
+var spawn_padding: float = SPAWN_PADDING
 var next_spawn_in: float = 0.0
 var portal_serial: int = 0
 var active_portal: Dictionary = {}
@@ -170,13 +173,28 @@ func load_save_dict(data: Dictionary) -> bool:
 func _schedule_next_spawn() -> void:
     next_spawn_in = _rng.randf_range(MIN_SPAWN_INTERVAL, MAX_SPAWN_INTERVAL)
 
+func set_spawn_window(bounds: Rect2, safe_distance: float, padding: float) -> bool:
+    # Validate the complete candidate before changing any live spawn policy.
+    if not is_finite(bounds.position.x) or not is_finite(bounds.position.y):
+        return false
+    if not is_finite(bounds.size.x) or not is_finite(bounds.size.y) or not is_finite(bounds.end.x) or not is_finite(bounds.end.y):
+        return false
+    if bounds.size.x <= 0.0 or bounds.size.y <= 0.0 or not is_finite(safe_distance) or safe_distance < 0.0:
+        return false
+    if not is_finite(padding) or padding < 0.0 or bounds.size.x <= padding * 2.0 or bounds.size.y <= padding * 2.0:
+        return false
+    world_bounds = bounds
+    min_player_distance = safe_distance
+    spawn_padding = padding
+    return true
+
 func _find_spawn_position(player_position: Vector2) -> Dictionary:
-    if world_bounds.size.x <= SPAWN_PADDING * 2.0 or world_bounds.size.y <= SPAWN_PADDING * 2.0:
+    if world_bounds.size.x <= spawn_padding * 2.0 or world_bounds.size.y <= spawn_padding * 2.0:
         return {"ok": false}
-    var left: float = world_bounds.position.x + SPAWN_PADDING
-    var top: float = world_bounds.position.y + SPAWN_PADDING
-    var right: float = world_bounds.end.x - SPAWN_PADDING
-    var bottom: float = world_bounds.end.y - SPAWN_PADDING
+    var left: float = world_bounds.position.x + spawn_padding
+    var top: float = world_bounds.position.y + spawn_padding
+    var right: float = world_bounds.end.x - spawn_padding
+    var bottom: float = world_bounds.end.y - spawn_padding
     for attempt in range(64):
         var point := Vector2(_rng.randf_range(left, right), _rng.randf_range(top, bottom))
         if point.distance_to(player_position) >= min_player_distance:
