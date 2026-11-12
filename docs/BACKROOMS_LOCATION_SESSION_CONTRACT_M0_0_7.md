@@ -8,20 +8,22 @@ Add a deterministic, failure-atomic state model for one SurfaceWorld-to-Backroom
 
 - File: systems/BackroomsLocationSession.gd.
 - Class: BackroomsLocationSession, extending RefCounted.
-- Dependency: systems/BackroomsPortalDirector.gd from parent PR #327; its supported Level 0–5 destination roster and portal serial bound are the source of truth.
+- Dependency: systems/BackroomsPortalDirector.gd from parent PR #327; its supported Level 0–5 destination roster and portal serial bound are the source of truth. This PR adds a non-mutating preview/commit handshake to that director.
 - No third-party packages, autoloads, scene nodes, Project Settings, or input mappings.
 - Import: godot --headless --path . --import.
 - Focused test: godot --headless --path . --script res://tests/backrooms_location_session_test.gd.
 
 ## State contract
 
-The session stores whether a visit is active, the selected Backrooms level, the consumed entry portal ID, the exact SurfaceWorld return position and seed, the current Backrooms player position, and a deterministic Backrooms layout seed derived from the source world seed and portal ID.
+The session stores whether a visit is active, the selected Backrooms level, the consumed entry portal ID, the exact SurfaceWorld return position and seed, the current Backrooms player position, and a deterministic Backrooms layout seed derived from the source world seed and portal ID. The layout seed uses a bounded 32-bit result while its intermediate arithmetic remains within signed 64-bit range.
 
 The initial contract is intentionally surface-origin only because the existing BackroomsPortalDirector currently generates natural portals in the surface world. Underground-origin portals require a later schema extension that also records mine depth and underground window restoration state.
 
 ## Transaction rules
 
-- Preflight methods do not mutate state.
+- preview_portal_entry() clones the director RNG and does not mutate the active portal, countdown, or live RNG state.
+- consume_portal() advances the live RNG once, verifies that its destination matches the preview, and restores the RNG state without consuming the portal if parity ever fails.
+- Session preflight can validate a prepared preview before the one-use portal is consumed; begin_from_portal_result() accepts only the committed entered result.
 - A second entry cannot overwrite an active visit.
 - PortalDirector exposes a non-mutating destination preview using a cloned RNG state. Production can preflight the destination/session before consuming the one-use portal.
 - Portal consumption advances the live RNG once and verifies it matches the preview; a mismatch restores the previous RNG state and preserves the active portal.
@@ -35,8 +37,8 @@ The initial contract is intentionally surface-origin only because the existing B
 - systems/BackroomsLocationSession.gd
 - tests/backrooms_location_session_test.gd
 - .github/workflows/godot-validation.yml
-- systems/BackroomsPortalDirector.gd (parent dependency, unchanged by this PR)
-- tests/backrooms_portal_director_test.gd (parent regression contract, unchanged by this PR)
+- systems/BackroomsPortalDirector.gd (adds preview_portal_entry() and verifies preview/consume RNG parity)
+- tests/backrooms_portal_director_test.gd (covers preview purity, repeatability, and exact consume parity)
 
 ## Validation
 
