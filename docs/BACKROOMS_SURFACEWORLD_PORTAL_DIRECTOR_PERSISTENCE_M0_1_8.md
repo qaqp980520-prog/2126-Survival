@@ -39,6 +39,7 @@ Make the production SurfaceWorld the owner of one world-seeded BackroomsPortalDi
 ## Regression coverage
 
 - SurfaceWorld owns a director configured for the real loaded window and current world seed.
+- A managed surface chunk is explicitly unloaded; the public loaded-window bounds fail closed, then recover only after the streaming director reloads the missing chunk.
 - Saved envelope binds the director payload to the same world seed.
 - Active portal, RNG state, countdown, serial and original spawn bounds survive a world save/restore round trip.
 - A mismatched envelope seed is rejected before world seed, player position or live director state changes.
