@@ -21,7 +21,7 @@ Route Backrooms portal selection and activation through the existing production 
 - `systems/BackroomsPortalVisual.tscn`
   - Places the root Area3D on collision layer 2 while retaining its player body collision mask.
 - `tests/production_surface_world_interaction_prompt_test.gd`
-  - Uses a headless-safe script-backed Area3D fixture (no MeshInstance3D instantiation) to exercise portal target resolution outside chunk registries, prompt and touch-button state, keyboard and mobile dispatch, exactly-once signal emission, external-router suppression, range rejection, and queued-node invalidation.
+  - Attaches a headless-safe script-backed Area3D fixture (no MeshInstance3D instantiation) before the production SurfaceWorld enters the tree, proving its `_enter_tree()` ownership group is visible to the portal's `_ready()`. It then exercises target resolution outside chunk registries, prompt and touch-button state, keyboard/mobile dispatch, exactly-once signal emission, external-router suppression, range rejection, and queued-node invalidation.
 - `tests/backrooms_portal_scene_test.gd`
   - In headless mode, reads the PackedScene source to verify interaction collision layer 2 and player body mask 1 without instantiating the mesh scene in Godot 4.3's dummy renderer.
   - In graphical mode, also asserts the portal group, interaction range, and standalone playground's local-router fallback.
