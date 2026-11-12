@@ -1184,6 +1184,10 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	if previous_base_payload.is_empty() or not previous_base_payload.has("player_position") or not previous_base_payload.has("minerals") or not previous_base_payload.has("crops") or not previous_base_payload.has("world_objects"):
 		return false
+	var previous_crops_value: Variant = previous_base_payload.get("crops", null)
+	if not (previous_crops_value is Dictionary):
+		return false
+	var previous_crops_payload: Dictionary = previous_crops_value.duplicate(true)
 	if not (previous_stamina_value is Dictionary) or not bool(StaminaScript.new().call("validate_save_dict", previous_stamina_value)):
 		return false
 	if not (previous_quick_use_value is Dictionary) or not bool(QuickUseScript.new().call("validate_save_dict", previous_quick_use_value)):
@@ -1202,13 +1206,13 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
 	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
-		if not _restore_mine_snapshots(previous_minerals, previous_world_objects, now):
+		if not _restore_mine_snapshots(previous_minerals, previous_world_objects, previous_crops_payload, now):
 			push_error("Mine registry snapshot restoration failed after a seed-change unload rejection.")
 		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
 		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
+			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects, previous_crops_payload):
 				push_error("Underground mine window rollback failed after world-seed stream rejection.")
 		else:
 			world_seed = previous_world_seed
@@ -1317,7 +1321,14 @@ func _rollback_auxiliary_restore_failure(
 	var mine_restored: bool = false
 	if mine_director != null:
 		if seed_changed:
-			mine_restored = _recover_underground_window(previous_world_seed, previous_mine_position, now_unix, previous_minerals, previous_world_objects)
+			mine_restored = _recover_underground_window(
+				previous_world_seed,
+				previous_mine_position,
+				now_unix,
+				previous_minerals,
+				previous_world_objects,
+				previous_base_payload.get("crops", {})
+			)
 		else:
 			mine_restored = bool(mine_director.recover_to_world_position(previous_mine_position, now_unix))
 	var base_rollback_payload: Dictionary = previous_base_payload
@@ -1336,6 +1347,11 @@ func _rollback_auxiliary_restore_failure(
 	# rollback must be exact after the final stream window is restored, so use the registry's
 	# dedicated no-time-advance snapshot path here.
 	var minerals_restored: bool = registry != null and registry.has_method("restore_snapshot_exact") and bool(registry.call("restore_snapshot_exact", previous_minerals, now_unix))
+	# Base restore applies crops before streaming, but chunk registration can advance existing
+	# crop records during the final surface-window sync. Reapply the pre-transaction crop snapshot
+	# after streaming so a failed restore is an exact rollback rather than a time-advanced load.
+	var previous_crops_value: Variant = previous_base_payload.get("crops", null)
+	var crops_restored: bool = crop_registry != null and previous_crops_value is Dictionary and bool(crop_registry.call("restore_save_dict", previous_crops_value))
 	# Reapply the object snapshot after streaming; newly loaded nodes may register defaults during
 	# the stream sync, so restoring only before sync is not an exact rollback.
 	var world_objects_restored: bool = chunk_controller != null and chunk_controller.has_method("restore_world_object_states") and bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
@@ -1356,7 +1372,7 @@ func _rollback_auxiliary_restore_failure(
 	var position_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
 	var layer_state_restored: bool = _is_underground == previous_underground and _mine_layer_index == previous_mine_depth and world_seed == previous_world_seed and _surface_return_position.is_equal_approx(previous_surface_return_position)
 	var base_restore_report: Dictionary = get_last_restore_report()
-	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
+	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and crops_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
 	return {
@@ -1365,6 +1381,7 @@ func _rollback_auxiliary_restore_failure(
 			"mine_window_restored": mine_restored,
 			"base_world_restored": base_restored,
 			"minerals_restored": minerals_restored,
+			"crops_restored": crops_restored,
 			"world_objects_restored": world_objects_restored,
 			"stamina_restored": stamina_restored,
 			"quick_use_restored": quick_use_restored,
@@ -1392,18 +1409,28 @@ func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> boo
 			return false
 	return true
 
-func _restore_mine_snapshots(mineral_snapshot: Dictionary, object_snapshot: Dictionary, now_unix: int) -> bool:
-	if not bool(chunk_controller.call("restore_save_dict", mineral_snapshot, now_unix)):
-		return false
-	return bool(chunk_controller.call("restore_world_object_states", object_snapshot))
+func _restore_mine_snapshots(mineral_snapshot: Dictionary, object_snapshot: Dictionary, crop_snapshot: Dictionary, now_unix: int) -> bool:
+	var minerals_restored: bool = bool(chunk_controller.call("restore_save_dict", mineral_snapshot, now_unix))
+	var crops_restored: bool = crop_registry != null and bool(crop_registry.call("restore_save_dict", crop_snapshot))
+	var objects_restored: bool = bool(chunk_controller.call("restore_world_object_states", object_snapshot))
+	if chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.call("refresh_crop_plots")
+	return minerals_restored and crops_restored and objects_restored
 
-func _recover_underground_window(previous_seed: int, recovery_position: Vector3, now_unix: int, mineral_snapshot: Dictionary, object_snapshot: Dictionary) -> bool:
+func _recover_underground_window(
+	previous_seed: int,
+	recovery_position: Vector3,
+	now_unix: int,
+	mineral_snapshot: Dictionary,
+	object_snapshot: Dictionary,
+	crop_snapshot: Dictionary
+) -> bool:
 	world_seed = previous_seed
 	if not _clear_underground_window(recovery_position, now_unix):
 		return false
 	if not bool(mine_director.recover_to_world_position(recovery_position, now_unix)):
 		return false
-	return _restore_mine_snapshots(mineral_snapshot, object_snapshot, now_unix)
+	return _restore_mine_snapshots(mineral_snapshot, object_snapshot, crop_snapshot, now_unix)
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, _stream_clock_unix)
