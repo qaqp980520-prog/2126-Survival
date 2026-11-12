@@ -971,12 +971,23 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
 func serialize_stream_state() -> Dictionary:
 	if (
-		backrooms_portal_director == null
+		_surface_stream_pending
+		or backrooms_portal_director == null
 		or not is_instance_valid(backrooms_portal_director)
 		or not backrooms_portal_director.has_method("to_save_dict")
 		or _backrooms_portal_world_seed != world_seed
 	):
 		return {}
+	var current_loaded_bounds: Rect2 = get_loaded_surface_window_bounds()
+	if current_loaded_bounds.size.x <= 0.0 or current_loaded_bounds.size.y <= 0.0:
+		return {}
+	var active_portal_value: Variant = backrooms_portal_director.get("active_portal")
+	if active_portal_value is Dictionary:
+		var active_portal: Dictionary = active_portal_value
+		if not active_portal.is_empty():
+			var active_position: Variant = active_portal.get("position", null)
+			if not (active_position is Vector2) or not current_loaded_bounds.has_point(active_position):
+				return {}
 	var portal_director_value: Variant = backrooms_portal_director.call("to_save_dict")
 	if not (portal_director_value is Dictionary):
 		return {}
