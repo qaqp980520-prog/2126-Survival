@@ -76,11 +76,15 @@ func commit_portal_entry(
 		return _failure("entry_not_prepared")
 	if director == null or not is_instance_valid(director) or director.get_instance_id() != _pending_director_instance_id:
 		return _failure("portal_director_changed", true)
+	if bool(session.call("is_active")):
+		return _failure("session_changed_after_prepare", true)
 	if portal_id != _pending_portal_id or return_position != _pending_return_position or source_world_seed != _pending_world_seed or entry_position != _pending_entry_position:
 		return _failure("prepared_entry_context_mismatch", true)
 	var current_preview: Variant = director.call("preview_portal_entry", portal_id)
 	if not (current_preview is Dictionary) or not _preview_matches(current_preview):
 		return _failure("prepared_portal_is_stale", true)
+	if not bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position)):
+		return _failure("session_preflight_changed", true)
 	var consumed: Variant = director.call("consume_portal", portal_id)
 	if not (consumed is Dictionary) or not bool(consumed.get("ok", false)) or str(consumed.get("event", "")) != "entered":
 		return _failure(str(consumed.get("reason", "portal_consumption_rejected")) if consumed is Dictionary else "portal_consumption_invalid", true)
@@ -101,7 +105,7 @@ func cancel_prepared_entry() -> bool:
 	if state != TransitionState.ENTRY_PREPARED:
 		return false
 	_clear_pending()
-	state = TransitionState.IDLE
+	state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 	last_error = ""
 	return true
 
@@ -120,6 +124,10 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	if not (restored is bool) or not bool(restored):
 		last_error = "surface_restore_failed"
 		return {"ok": false, "reason": last_error, "session_retained": true}
+	if not bool(session.call("is_active")) or session.call("get_return_context") != return_context:
+		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		last_error = "session_changed_during_surface_restore"
+		return {"ok": false, "reason": last_error, "session_retained": bool(session.call("is_active"))}
 	var completed: Dictionary = session.call("complete_return")
 	if not bool(completed.get("ok", false)):
 		last_error = "session_return_commit_failed_after_surface_restore"
@@ -171,5 +179,5 @@ func _failure(reason: String, clear_pending: bool = false) -> Dictionary:
 	last_error = reason
 	if clear_pending:
 		_clear_pending()
-		state = TransitionState.IDLE
+		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 	return {"ok": false, "reason": reason}
