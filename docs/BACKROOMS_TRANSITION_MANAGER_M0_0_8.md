@@ -28,6 +28,8 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - commit_portal_entry() requires the exact same Director instance, Portal ID, return position, source seed, and entry position; it rechecks the preview before consuming.
 - The Director's own preview/consume parity remains the final destination guard.
 - A failed or stale commit clears the prepared state without mutating the Director.
+- Commit revalidates that the session is still inactive and the original preview remains acceptable before consuming the portal; external session mutation cannot silently consume the one-use portal.
+- Return rechecks that the same return context remains active after the restore callback before clearing it.
 - cancel_prepared_entry() only clears manager state; it does not consume or alter the portal.
 - return_to_surface() passes a copy of the saved return context to a callback. A false/non-boolean callback result retains the complete session for retry. Only a true result allows complete_return() to clear the session.
 
