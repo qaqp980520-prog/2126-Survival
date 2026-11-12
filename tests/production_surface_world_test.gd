@@ -426,6 +426,15 @@ func _expect_world_snapshot_restored(
 	_expect(current_payload.get("location_layer", "") == baseline_payload.get("location_layer", ""), "%s rollback restores the exact location layer" % failure_phase)
 	_expect(current_payload.get("mine_depth", -1) == baseline_payload.get("mine_depth", -2), "%s rollback restores the exact mine depth" % failure_phase)
 	_expect(current_payload.get("surface_return_position", []) == baseline_payload.get("surface_return_position", []), "%s rollback restores the exact surface return position" % failure_phase)
+	var expected_surface_reference := Vector3.ZERO
+	var saved_return_value: Variant = baseline_payload.get("surface_return_position", [])
+	if str(baseline_payload.get("location_layer", "surface")) == "underground" and saved_return_value is Array and saved_return_value.size() == 3:
+		expected_surface_reference = Vector3(float(saved_return_value[0]), float(saved_return_value[1]), float(saved_return_value[2]))
+	elif baseline_position.size() == 3:
+		expected_surface_reference = Vector3(float(baseline_position[0]), float(baseline_position[1]), float(baseline_position[2]))
+	var expected_surface_bounds: Rect2 = world.call("get_loaded_surface_window_bounds_at", expected_surface_reference)
+	_expect(expected_surface_bounds.size.x > 0.0 and expected_surface_bounds.size.y > 0.0, "%s rollback restores a valid loaded surface window at the correct surface reference position" % failure_phase)
+	_expect(world.call("get_loaded_surface_window_bounds") == expected_surface_bounds, "%s rollback restores the public loaded-surface window reference" % failure_phase)
 	_expect(current_payload.get("backrooms_portal_director", {}) == baseline_payload.get("backrooms_portal_director", {}), "%s rollback preserves the exact Backrooms portal envelope" % failure_phase)
 
 
