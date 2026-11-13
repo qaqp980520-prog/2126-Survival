@@ -20,7 +20,8 @@ This is a transaction integration milestone. It does not yet perform the actual 
   - Adds post-handoff activation, atomic runtime-window/Session updates, runtime restoration from a loaded Session, and runtime-aware return.
   - Verifies runtime and Session snapshots after rollback.
 - tests/backrooms_runtime_session_integration_test.gd
-  - Covers successful entry, delayed activation, stream movement persistence, JSON save/load, runtime reconstruction, failed return retry, staging failure, and stale runtime rejection.
+  - Covers successful entry, delayed activation, stream movement persistence, JSON save/load, legacy-v1 migration, nested payload rejection, position-drift rejection, runtime reconstruction, failed return retry, staging failure, and stale runtime rejection.
+  - Injects a Session that mutates its save state and rejects commit; exact PortalDirector, Session, and staged-runtime rollback/readback are required.
 - .github/workflows/godot-validation.yml
   - Adds the test file guard and dedicated Godot test step.
 - docs/BACKROOMS_RUNTIME_SESSION_TRANSACTION_M0_1_15.md
