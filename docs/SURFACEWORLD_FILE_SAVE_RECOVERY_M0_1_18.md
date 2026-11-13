@@ -137,7 +137,7 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 
 - `WorldEnvelopeFileStore.write_atomically()` now creates a missing parent directory recursively after validating the destination path and JSON payload, but before touching the primary, temporary, or backup files.
 - If directory creation fails, the operation reports `directory_create` and leaves existing save files untouched.
-- The production file-persistence test now exercises both the helper and the actual `SurfaceWorld.save_game()` / `load_game()` API with nested `user://` paths. It verifies directory creation, production world-envelope/player-position round-trip, first-write readback, second-save `.bak` rotation, normal primary restore, then corrupts the nested primary and verifies `.bak` fallback, corrupt-primary preservation, and verified primary repair.
+- The production file-persistence test exercises nested `user://` paths through both the helper and actual `SurfaceWorld.save_game()` / `load_game()` API. It verifies traversal-segment rejection before directory creation, directory creation, production world-envelope/player-position round-trip, first-write readback, second-save `.bak` rotation, normal primary restore, then corrupts the nested primary and verifies `.bak` fallback, corrupt-primary preservation, and verified primary repair.
 - Test cleanup removes the nested save files and empty test directories.
 - Import/use remains unchanged: `SurfaceWorld.save_game(path)` and `load_game(path)` accept the nested `user://` path; no Project Settings, autoload, or third-party dependency is required.
 - Validation: new exact-head Godot 4.3 Full Compatibility Gate required. Local Godot executable is unavailable; no local engine pass is claimed.
