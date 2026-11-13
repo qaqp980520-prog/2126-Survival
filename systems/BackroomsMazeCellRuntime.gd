@@ -98,8 +98,8 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		"center_cell": stream_state.get("center_cell"),
 		"loaded_cell_count": get_loaded_cell_count(),
 		"load_count": staged_roots.size(),
-		"keep_count": (plan.get("keep_cell_keys", []) as Array).size(),
-		"unload_count": (plan.get("unload_cell_keys", []) as Array).size()
+		"keep_count": plan.get("keep_cell_keys", []).size(),
+		"unload_count": plan.get("unload_cell_keys", []).size()
 	}
 
 func activate_destination() -> bool:
@@ -131,6 +131,8 @@ func to_save_dict() -> Dictionary:
 ## are replaced only after the entire candidate window has staged and committed.
 func load_save_dict(payload: Dictionary) -> bool:
 	last_error = ""
+	if active:
+		return _reject("runtime_active")
 	var candidate: RefCounted = StreamStateScript.new()
 	if not bool(candidate.call("load_save_dict", payload)):
 		return _reject(str(candidate.get("last_load_error")))
@@ -161,7 +163,9 @@ func get_loaded_cell_keys() -> Array:
 
 func get_cell_root(cell_key: String) -> Node3D:
 	var value: Variant = cell_roots.get(cell_key, null)
-	return value as Node3D if value is Node3D and is_instance_valid(value) else null
+	if value is Node3D and is_instance_valid(value):
+		return value as Node3D
+	return null
 
 func is_active() -> bool:
 	return active
