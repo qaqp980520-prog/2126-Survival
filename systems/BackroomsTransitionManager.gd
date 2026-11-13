@@ -185,7 +185,7 @@ func commit_portal_entry(
 			_clear_pending()
 			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		else:
-			state = TransitionState.ENTRY_PREPARED
+			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.ENTRY_PREPARED
 		last_error = consume_reason
 		return {
 			"ok": false,
@@ -207,7 +207,7 @@ func commit_portal_entry(
 			_clear_pending()
 			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		else:
-			state = TransitionState.ENTRY_PREPARED
+			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.ENTRY_PREPARED
 		last_error = "session_commit_rejected_after_portal_consumption"
 		return {
 			"ok": false,
@@ -227,7 +227,7 @@ func commit_portal_entry(
 				_clear_pending()
 				state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 			else:
-				state = TransitionState.ENTRY_PREPARED
+				state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.ENTRY_PREPARED
 			last_error = "session_runtime_payload_readback_mismatch"
 			return {
 				"ok": false,
@@ -441,6 +441,12 @@ func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) 
 ## A false result retains the complete Backrooms return context for retry.
 func return_to_surface(restore_surface: Callable) -> Dictionary:
 	last_error = ""
+	if _active_runtime != null and is_instance_valid(_active_runtime):
+		return _failure("runtime_aware_return_required")
+	if session != null and is_instance_valid(session) and session.has_method("get_maze_stream_state"):
+		var persisted_maze_state: Dictionary = session.call("get_maze_stream_state")
+		if not persisted_maze_state.is_empty():
+			return _failure("runtime_restore_required_before_return")
 	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
 		return _failure("backrooms_session_not_active")
 	if not restore_surface.is_valid():
