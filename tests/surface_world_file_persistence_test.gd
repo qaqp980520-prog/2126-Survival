@@ -25,16 +25,16 @@ var watchdog: Timer
 
 
 func _initialize() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
 	watchdog = Timer.new()
 	watchdog.one_shot = true
 	watchdog.wait_time = 120.0
 	root.add_child(watchdog)
 	watchdog.timeout.connect(_on_timeout)
 	watchdog.start()
-	call_deferred("_run")
-
-
-func _run() -> void:
 	_cleanup_save_paths()
 	source_world = WorldScene.instantiate() as Node3D
 	_expect(source_world != null, "production SurfaceWorld scene instantiates")
@@ -54,14 +54,20 @@ func _run() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(2.0, 2.0, 3.0), now)), "move the production player to the first save position")
 	_expect(bool(bridge.call("collect_world_item", "berries", 2)), "collect the first inventory snapshot")
-	_expect(bool(source_world.call("save_game", SAVE_PATH)), "production SurfaceWorld writes its combined envelope to a real user:// file")
+	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
+	if not first_save_ok:
+		print("DEBUG: first save report = ", source_world.call("get_last_world_file_report"))
+	_expect(first_save_ok, "production SurfaceWorld writes its combined envelope to a real user:// file")
 	var first_primary: Dictionary = _read_dictionary(SAVE_PATH)
 	_expect(str(first_primary.get("active_location", "")) == "surface", "file contains the canonical surface location")
 	_expect(not FileAccess.file_exists(SAVE_PATH + ".bak"), "first save does not invent a backup before a previous primary exists")
 
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(12.0, 2.0, 13.0), now + 1)), "move the player before the second save")
 	_expect(bool(bridge.call("collect_world_item", "berries", 3)), "mutate inventory before the second save")
-	_expect(bool(source_world.call("save_game", SAVE_PATH)), "second save replaces the primary atomically")
+	var second_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
+	if not second_save_ok:
+		print("DEBUG: second save report = ", source_world.call("get_last_world_file_report"))
+	_expect(second_save_ok, "second save replaces the primary atomically")
 	var second_primary: Dictionary = _read_dictionary(SAVE_PATH)
 	var first_backup: Dictionary = _read_dictionary(SAVE_PATH + ".bak")
 	_expect(first_backup == first_primary, "second save retains the exact previous primary as .bak")
@@ -72,7 +78,10 @@ func _run() -> void:
 	_expect(_write_text(SAVE_PATH, corrupt_bytes), "write a malformed primary fixture")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(22.0, 2.0, 23.0), now + 2)), "mutate player position before corrupt-primary recovery")
 	_expect(bool(bridge.call("collect_world_item", "berries", 4)), "mutate inventory before corrupt-primary recovery")
-	_expect(bool(source_world.call("load_game", SAVE_PATH)), "load_game falls back to the valid backup after malformed primary JSON")
+	var corrupt_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	if not corrupt_fallback_ok:
+		print("DEBUG: malformed-primary load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(corrupt_fallback_ok, "load_game falls back to the valid backup after malformed primary JSON")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "corrupt-primary fallback restores the backup player position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "corrupt-primary fallback restores the backup inventory")
 	_expect(FileAccess.file_exists(SAVE_PATH + ".corrupt"), "malformed primary is preserved under a diagnostic suffix")
@@ -89,7 +98,10 @@ func _run() -> void:
 	var semantic_invalid_text: String = JSON.stringify(semantic_invalid, "", true, true)
 	_expect(_write_text(SAVE_PATH, semantic_invalid_text), "write a valid JSON dictionary with an unsupported envelope schema")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(42.0, 2.0, 43.0), now + 4)), "mutate player position before semantic-invalid fallback")
-	_expect(bool(source_world.call("load_game", SAVE_PATH)), "load_game falls back when primary JSON is valid but envelope validation fails")
+	var semantic_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	if not semantic_fallback_ok:
+		print("DEBUG: semantic-invalid load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(semantic_fallback_ok, "load_game falls back when primary JSON is valid but envelope validation fails")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "semantic-invalid fallback restores the previous good position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "semantic-invalid fallback restores the previous good inventory")
 	_expect(FileAccess.file_exists(SAVE_PATH + ".corrupt.1"), "second invalid primary is preserved without overwriting the first diagnostic")
@@ -165,7 +177,10 @@ func _run() -> void:
 		_finish(1)
 		return
 	player.global_position += Vector3(8.0, 0.0, 0.0)
-	_expect(bool(source_world.call("save_game", BACKROOMS_SAVE_PATH)), "F5-equivalent production API writes an active Backrooms envelope to disk")
+	var backrooms_save_ok: bool = bool(source_world.call("save_game", BACKROOMS_SAVE_PATH))
+	if not backrooms_save_ok:
+		print("DEBUG: Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(backrooms_save_ok, "F5-equivalent production API writes an active Backrooms envelope to disk")
 	var backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
 	_expect(str(backrooms_payload.get("active_location", "")) == "backrooms", "Backrooms file records the active Backrooms location")
 	_expect(not backrooms_payload.get("backrooms_runtime", {}).is_empty(), "Backrooms file contains the live maze runtime stream payload")
