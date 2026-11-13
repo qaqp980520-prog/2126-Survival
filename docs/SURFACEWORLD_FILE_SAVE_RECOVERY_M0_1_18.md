@@ -41,6 +41,8 @@ A failed temporary write or rename must not overwrite the previous primary. Temp
   - Exercises surface file round-trip, previous-primary backup, malformed JSON fallback, semantic-invalid fallback, missing-primary recovery, fail-closed backup blocking after incomplete rollback, temporary-path obstruction, and active Backrooms save/load/return.
 - `.github/workflows/godot-validation.yml`
   - Adds the production file-persistence test to the Godot 4.3 Full Compatibility Gate.
+- `.github/workflows/world-file-persistence-validation.yml`
+  - Focused Godot 4.3 root-import plus production file-persistence integration gate, triggered when the file store, production SurfaceWorld save path, or its restore dependencies/tests change.
 
 ## Dependencies and import
 
@@ -140,3 +142,10 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - Import/use remains unchanged: `SurfaceWorld.save_game(path)` and `load_game(path)` accept the nested `user://` path; no Project Settings, autoload, or third-party dependency is required.
 - Validation: new exact-head Godot 4.3 Full Compatibility Gate required. Local Godot executable is unavailable; no local engine pass is claimed.
 - Limitation: paths remain restricted to non-empty `user://` paths without traversal segments. This change does not add save-slot UI or cloud synchronization.
+
+
+## Focused production file-persistence CI
+
+- Added `.github/workflows/world-file-persistence-validation.yml` so changes to the file store, production SurfaceWorld save/load boundary, its Session/Runtime/JSON validators, or the persistence test run a focused Godot 4.3 job.
+- The job performs a root-project editor import with explicit `--import`, checks Backrooms SVG import metadata, then runs `tests/surface_world_file_persistence_test.gd` with a 150-second external timeout and requires the explicit success marker.
+- The repository-wide Full Compatibility Gate remains required; this focused workflow is an earlier, narrower signal and does not replace the full exact-head gate.
