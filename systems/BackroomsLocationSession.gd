@@ -208,8 +208,13 @@ func load_save_dict(payload: Dictionary) -> bool:
 			return _reject_load("active_portal_id_not_positive")
 		if next_backrooms_seed != _derive_backrooms_seed(next_source_seed, next_portal_id):
 			return _reject_load("backrooms_seed_derivation_mismatch")
-		if not next_maze_stream_state.is_empty() and not _validate_maze_stream_payload(next_level, next_backrooms_seed, next_player_position, next_maze_stream_state):
-			return _reject_load("maze_stream_state_mismatch")
+		if not next_maze_stream_state.is_empty():
+			if not _validate_maze_stream_payload(next_level, next_backrooms_seed, next_player_position, next_maze_stream_state):
+				return _reject_load("maze_stream_state_mismatch")
+			var canonical_stream_state: RefCounted = MazeStreamStateScript.new()
+			if not bool(canonical_stream_state.call("load_save_dict", next_maze_stream_state)):
+				return _reject_load("maze_stream_state_canonicalization_failed")
+			next_maze_stream_state = canonical_stream_state.call("to_save_dict")
 	else:
 		if next_level != "" or next_portal_id != 0:
 			return _reject_load("inactive_identity_not_canonical")
