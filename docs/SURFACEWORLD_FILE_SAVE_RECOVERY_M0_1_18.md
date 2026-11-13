@@ -71,3 +71,8 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - Godot 4.3 JSON decoding can represent integral JSON numbers as either integer or float Variants. Save validators for `SurvivalStamina` and `SurvivalQuickUse` now accept finite whole-valued numeric schema/slot fields and still reject fractional or out-of-range values.
 - The file-persistence regression suite includes JSON round-trip fixtures for integral-float schema versions and hotbar slot indices, plus fractional-value rejection.
 - The production restore boundary also accepts finite integral JSON numbers for the base WorldSession schema and SurfaceWorld mine-depth field. The file integration test writes an explicit integral-float envelope fixture across top-level schema, base schema, mine depth, stamina schema, and quick-use schema/slot fields.
+## CI import-order hardening
+
+- The latest exact-head run exposed a pre-existing standalone Backrooms Playground test dependency: `BackroomsPortalPlayground.gd` preloads SVG textures, but the workflow's root editor invocation did not explicitly force resource import before script-mode tests.
+- The root import command now includes `--import`, followed by an explicit check for the generated wallpaper/carpet `.svg.import` metadata and `.godot/imported` directory before any headless scene tests run.
+- This prevents a missing-import cache from being misreported as a production save/load regression. The new exact-head Full Gate must validate the updated workflow.
