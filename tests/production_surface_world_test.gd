@@ -415,6 +415,14 @@ func _run() -> void:
 					hidden_surface_root = world.chunk_controller.get_chunk_root(chunk_id)
 					break
 			_expect(hidden_surface_root != null and not hidden_surface_root.visible, "loaded surface chunk visuals are hidden during the Backrooms handoff")
+			var backrooms_position_before_failed_return: Vector3 = world.player.global_position
+			var source_world_seed: int = int(world.get("world_seed"))
+			world.set("world_seed", source_world_seed + 1)
+			var rejected_return: Dictionary = world.call("return_from_backrooms")
+			_expect(not bool(rejected_return.get("ok", false)), "return rejects a source-world seed mismatch before clearing the Backrooms Session")
+			_expect(bool(world.get("_is_in_backrooms")) and bool(world.backrooms_maze_runtime.call("is_active")), "failed return restores the active Backrooms runtime and retains the Session")
+			_expect(world.player.global_position.is_equal_approx(backrooms_position_before_failed_return), "failed return restores the exact Backrooms player position")
+			world.set("world_seed", source_world_seed)
 			var return_result: Dictionary = world.call("return_from_backrooms")
 			_expect(bool(return_result.get("ok", false)), "SurfaceWorld restores the original surface position before retiring the Backrooms runtime")
 			_expect(not bool(world.get("_is_in_backrooms")), "successful return restores SurfaceWorld movement and streaming mode")
