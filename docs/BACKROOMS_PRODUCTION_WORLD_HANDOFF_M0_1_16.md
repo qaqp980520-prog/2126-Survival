@@ -50,3 +50,11 @@ All scripts use existing project paths and are preloaded by SurfaceWorld.gd or t
 2. Add a combined SurfaceWorld + Backrooms Session/runtime save envelope and transactional restore.
 3. Add return-failure and post-commit activation-failure injection at the production SurfaceWorld boundary.
 4. Validate graphical maze materials/collision and mobile controls.
+
+## Production-boundary post-commit activation failure regression — 2026-11-13
+
+- Added `FailAfterCommitActivationTransitionManager` in `tests/production_surface_world_test.gd`. It delegates the real prepare and commit calls, then injects a deterministic failure at the activation boundary by deactivating the already-committed maze runtime immediately before delegating to the real `activate_prepared_runtime_after_handoff()`.
+- The real `BackroomsTransitionManager.abort_committed_entry()` then executes. The production SurfaceWorld test requires exact rollback of the PortalDirector save dictionary (including RNG, serial, timer and active portal), inactive LocationSession save dictionary, empty/inactive runtime, runtime anchor, player position and velocity, SurfaceWorld mode, loaded surface chunk visibility, and the visibility snapshot.
+- The same production portal visual must remain interactable, and the test retries entry through the unwrapped real manager to prove the restored portal can still complete a normal handoff.
+- This is a deterministic headless failure-injection test; it does not claim rendered activation, GPU or device behavior.
+- Code is on the current PR #346 branch; the new exact-head Godot 4.3 Full Compatibility Gate must validate the resulting commit. The previous HEAD's green result does not validate this added test.
