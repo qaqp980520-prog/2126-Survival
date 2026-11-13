@@ -112,3 +112,12 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - The exact-head Gate [#43395535775](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43395535775) reached the production file-persistence test and exposed a test-harness error after the active Backrooms Session had been saved and detached-validated: the test called `free()` on `BackroomsLocationSession`, which extends `RefCounted`. Godot correctly emitted `Can't free a RefCounted object` and stopped before the fresh-world load assertion.
 - Removed the explicit `session_probe.free()`; the local RefCounted probe is released by reference counting when its scope ends. No production ownership or runtime behavior is changed by this correction.
 - New exact-head Full Gate required. The active fresh-world Backrooms load assertion remains unverified until the corrected test proceeds beyond the former abort point.
+
+
+## Exact-head test assertion correction — canonical Backrooms payloads
+
+- Review of the previous exact-head log showed the detached `BackroomsLocationSession.load_save_dict()` intentionally normalizes integral JSON Variants and canonicalizes its nested maze-stream state. The test already logged that its canonical Session readback differed from the raw JSON dictionary, but a later assertion still compared the restored Session directly with that raw dictionary.
+- Updated the production file-persistence fixture to retain the detached canonical Session dictionary, independently validate/canonicalize the saved `backrooms_runtime` with `BackroomsMazeStreamState`, and assert that the Session's nested stream snapshot agrees with the standalone runtime snapshot after canonicalization.
+- Fresh-world load assertions now compare the restored live Session and Runtime against those canonical expected dictionaries, not the raw JSON-decoded numeric representation. This preserves exact state verification while respecting the documented JSON normalization boundary.
+- The earlier RefCounted cleanup fix remains: no explicit `free()` is called on RefCounted probes.
+- New exact-head Godot 4.3 Full Gate required; the prior run on HEAD `fb73c7b1...` is superseded and cannot validate these updated assertions.
