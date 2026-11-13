@@ -1426,10 +1426,16 @@ func serialize_world_envelope() -> Dictionary:
 	if _is_in_backrooms:
 		var save_sync_value: Variant = backrooms_transition_manager.call("sync_backrooms_runtime", backrooms_maze_runtime, player.global_position)
 		if not (save_sync_value is Dictionary) or not bool(save_sync_value.get("ok", false)):
+			if save_sync_value is Dictionary and not bool(save_sync_value.get("rollback_complete", true)):
+				_surface_stream_pending = true
+				if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+					backrooms_portal_visual.call("set_activation_enabled", false)
 			return {}
 		_last_backrooms_sync_position = player.global_position
 	var session_payload: Dictionary = backrooms_transition_manager.call("get_session_save_dict")
 	var surface_ids: Array = _get_loaded_surface_chunk_ids()
+	if _is_in_backrooms and not _validate_surface_chunk_snapshot(surface_ids, _backrooms_surface_visibility_snapshot):
+		return {}
 	var visibility: Dictionary = _capture_surface_chunk_visibility(surface_ids)
 	if surface_ids.is_empty() or visibility.size() != surface_ids.size():
 		return {}
@@ -2356,27 +2362,33 @@ func _cast_camera_interaction_target() -> Dictionary:
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
-		if candidate.is_in_group("backrooms_portal") and candidate.has_method("interact"):
-			if candidate.has_method("set_external_interaction_router_enabled"):
-				candidate.call("set_external_interaction_router_enabled", true)
-			return {"kind": "portal", "node": candidate}
+		# Physics/query ancestors can include Window or other non-3D Nodes in
+		# headless and embedded viewports. Never pass them into Array[Node3D].
+		if not (candidate is Node3D):
+			candidate = candidate.get_parent()
+			continue
+		var candidate_3d: Node3D = candidate as Node3D
+		if candidate_3d.is_in_group("backrooms_portal") and candidate_3d.has_method("interact"):
+			if candidate_3d.has_method("set_external_interaction_router_enabled"):
+				candidate_3d.call("set_external_interaction_router_enabled", true)
+			return {"kind": "portal", "node": candidate_3d}
 		# Lift anchors are stateful world objects too, but their G/V actions must
 		# retain the dedicated lift interaction kind rather than generic prop routing.
-		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
-			return {"kind": "lift", "node": candidate}
+		if candidate_3d.name == "KrollMineShaftEntrance" or candidate_3d.name == "MineLiftAnchor":
+			return {"kind": "lift", "node": candidate_3d}
 		if chunk_controller != null:
 			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
-			if crop_plots.has(candidate):
-				return {"kind": "crop", "node": candidate}
+			if crop_plots.has(candidate_3d):
+				return {"kind": "crop", "node": candidate_3d}
 			var world_props: Array = chunk_controller.call("get_loaded_world_state_nodes")
-			if candidate.has_method("cycle_terrain_edit") and world_props.has(candidate):
-				return {"kind": "terrain", "node": candidate}
-			if world_props.has(candidate):
-				return {"kind": "prop", "node": candidate}
+			if candidate_3d.has_method("cycle_terrain_edit") and world_props.has(candidate_3d):
+				return {"kind": "terrain", "node": candidate_3d}
+			if world_props.has(candidate_3d):
+				return {"kind": "prop", "node": candidate_3d}
 			if chunk_controller.has_method("get_loaded_mineral_nodes"):
 				var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
-				if mineral_nodes.has(candidate) and bool(candidate.get("visible")) and int(candidate.get("remaining_units")) > 0:
-					return {"kind": "vein", "node": candidate}
+				if mineral_nodes.has(candidate_3d) and bool(candidate_3d.get("visible")) and int(candidate_3d.get("remaining_units")) > 0:
+					return {"kind": "vein", "node": candidate_3d}
 		candidate = candidate.get_parent()
 	return {}
 
