@@ -156,3 +156,6 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - The first focused workflow run [#43415353968](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43415353968) failed in the Godot-version preflight before import or test execution. Its default container shell was `sh`, which does not support `set -o pipefail`.
 - Added explicit `shell: bash` to the preflight step. The failure is a workflow-shell configuration error, not a Godot or save-system test result.
 - A new exact-head focused workflow and full compatibility gate are required; no production test pass is claimed from the failed run.
+
+
+- Focused run #43415527398 reached the new nested tests and found six assertion mismatches in the test fixture comparisons: JSON-decoded integral schema numbers are floats, while the expected Dictionaries used integer `1`. The production save/load path and directory creation assertions passed; the six failures were direct helper readback/backup comparisons. The fixture now uses `1.0` for both schema versions so comparisons use the canonical JSON-decoded type. A fresh exact-head run is required.
