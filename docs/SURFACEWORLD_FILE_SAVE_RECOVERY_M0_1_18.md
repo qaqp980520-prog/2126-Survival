@@ -70,3 +70,4 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 
 - Godot 4.3 JSON decoding can represent integral JSON numbers as either integer or float Variants. Save validators for `SurvivalStamina` and `SurvivalQuickUse` now accept finite whole-valued numeric schema/slot fields and still reject fractional or out-of-range values.
 - The file-persistence regression suite includes JSON round-trip fixtures for integral-float schema versions and hotbar slot indices, plus fractional-value rejection.
+- The production restore boundary also accepts finite integral JSON numbers for the base WorldSession schema and SurfaceWorld mine-depth field. The file integration test writes an explicit integral-float envelope fixture across top-level schema, base schema, mine depth, stamina schema, and quick-use schema/slot fields.
