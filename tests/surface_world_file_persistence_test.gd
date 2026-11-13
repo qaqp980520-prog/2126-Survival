@@ -15,6 +15,7 @@ const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
 const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
 const NESTED_SAVE_PATH: String = "user://run244_nested_saves/slot_a/world.json"
+const PRODUCTION_NESTED_SAVE_PATH: String = "user://run244_production_nested/slot_b/world.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -78,6 +79,32 @@ func _run() -> void:
 		return
 
 	var now: int = int(Time.get_unix_time_from_system())
+	var nested_production_position := Vector3(4.0, 2.0, 5.0)
+	_expect(
+		bool(source_world.call("debug_move_player_to", nested_production_position, now)),
+		"move the production player before testing a nested production save path"
+	)
+	var nested_production_saved: bool = bool(source_world.call("save_game", PRODUCTION_NESTED_SAVE_PATH))
+	if not nested_production_saved:
+		print("DEBUG: nested production save report = ", source_world.call("get_last_world_file_report"))
+	_expect(nested_production_saved, "production SurfaceWorld.save_game creates and writes a nested user:// save path")
+	_expect(
+		_read_dictionary(PRODUCTION_NESTED_SAVE_PATH).get("active_location", "") == "surface",
+		"production nested save contains the combined surface envelope"
+	)
+	_expect(
+		bool(source_world.call("debug_move_player_to", Vector3(24.0, 2.0, 25.0), now + 1)),
+		"move the production player away from the nested save position"
+	)
+	var nested_production_loaded: bool = bool(source_world.call("load_game", PRODUCTION_NESTED_SAVE_PATH))
+	if not nested_production_loaded:
+		print("DEBUG: nested production load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(nested_production_loaded, "production SurfaceWorld.load_game restores a nested user:// save path")
+	_expect(
+		player.global_position.is_equal_approx(nested_production_position),
+		"production nested save/load restores the exact saved player position"
+	)
+
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(2.0, 2.0, 3.0), now)), "move the production player to the first save position")
 	_expect(bool(bridge.call("collect_world_item", "berries", 2)), "collect the first inventory snapshot")
 	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
@@ -532,7 +559,7 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH, NESTED_SAVE_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH, NESTED_SAVE_PATH, PRODUCTION_NESTED_SAVE_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
@@ -541,10 +568,16 @@ func _cleanup_save_paths() -> void:
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	var nested_slot_directory: String = ProjectSettings.globalize_path(NESTED_SAVE_PATH.get_base_dir())
 	var nested_root_directory: String = ProjectSettings.globalize_path("user://run244_nested_saves")
+	var production_nested_slot_directory: String = ProjectSettings.globalize_path(PRODUCTION_NESTED_SAVE_PATH.get_base_dir())
+	var production_nested_root_directory: String = ProjectSettings.globalize_path("user://run244_production_nested")
 	if DirAccess.dir_exists_absolute(nested_slot_directory):
 		DirAccess.remove_absolute(nested_slot_directory)
 	if DirAccess.dir_exists_absolute(nested_root_directory):
 		DirAccess.remove_absolute(nested_root_directory)
+	if DirAccess.dir_exists_absolute(production_nested_slot_directory):
+		DirAccess.remove_absolute(production_nested_slot_directory)
+	if DirAccess.dir_exists_absolute(production_nested_root_directory):
+		DirAccess.remove_absolute(production_nested_root_directory)
 
 
 func _expect(condition: bool, message: String) -> void:
