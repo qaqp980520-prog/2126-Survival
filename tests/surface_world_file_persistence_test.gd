@@ -30,6 +30,7 @@ func _initialize() -> void:
 	watchdog.wait_time = 120.0
 	root.add_child(watchdog)
 	watchdog.timeout.connect(_on_timeout)
+	watchdog.start()
 	call_deferred("_run")
 
 
