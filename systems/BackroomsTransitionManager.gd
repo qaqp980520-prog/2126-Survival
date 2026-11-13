@@ -612,4 +612,5 @@ func _failure(reason: String, clear_pending: bool = false) -> Dictionary:
 			return {"ok": false, "reason": last_error, "rollback_complete": false}
 		_clear_pending()
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		return {"ok": false, "reason": last_error, "rollback_complete": true}
 	return {"ok": false, "reason": last_error}
