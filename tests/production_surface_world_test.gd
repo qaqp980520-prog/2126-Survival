@@ -370,6 +370,10 @@ func _run() -> void:
 			var handoff_approach: Vector3 = Vector3(handoff_position.x, 2.0, handoff_position.y + 2.0)
 			_expect(bool(world.call("debug_move_player_to", handoff_approach, int(Time.get_unix_time_from_system()) + 20)), "test approach streams the production surface window around the portal before entry")
 			handoff_portal = world.get("backrooms_portal_visual") as Area3D
+			if handoff_portal == null:
+				_expect(false, "active portal visual remains attached after the player streams to its owning chunk")
+				_finish(1)
+				return
 			var surface_position_before_handoff: Vector3 = world.player.global_position
 			var surface_ids_before_handoff: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 			surface_ids_before_handoff.sort()
@@ -384,6 +388,13 @@ func _run() -> void:
 			surface_ids_during_backrooms.sort()
 			_expect(surface_ids_during_backrooms == surface_ids_before_handoff, "SurfaceWorld chunk streaming remains frozen while the player is in Backrooms")
 			_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to write a surface-only save while Backrooms is active")
+			var backrooms_position_before_restore: Vector3 = world.player.global_position
+			var portal_timer_before_backrooms_tick: float = float(handoff_director.get("next_spawn_in"))
+			world.call("_process", 10.0)
+			_expect(is_equal_approx(float(handoff_director.get("next_spawn_in")), portal_timer_before_backrooms_tick), "portal spawn timer pauses while the player is in Backrooms")
+			_expect(not bool(world.call("debug_move_player_to", Vector3.ZERO, int(Time.get_unix_time_from_system()) + 21)), "surface streaming debug moves are rejected while Backrooms is active")
+			_expect(not bool(world.call("restore_stream_state", portal_save_payload, int(Time.get_unix_time_from_system()) + 22)), "surface-only restore is rejected while Backrooms is active")
+			_expect(world.player.global_position.is_equal_approx(backrooms_position_before_restore) and bool(world.backrooms_maze_runtime.call("is_active")), "rejected surface restore leaves the live Backrooms player and runtime unchanged")
 			var hidden_surface_root: Node3D = null
 			for chunk_id_value in surface_ids_during_backrooms:
 				var chunk_id: String = str(chunk_id_value)
