@@ -7,6 +7,7 @@ const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const MineLiftScript = preload("res://systems/UndergroundMineLift.gd")
+const BackroomsSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
@@ -275,6 +276,15 @@ func _run() -> void:
 		print("DEBUG: Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(backrooms_save_ok, "F5-equivalent production API writes an active Backrooms envelope to disk")
 	var backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
+	var saved_session_value: Variant = backrooms_payload.get("backrooms_session", {})
+	var session_probe: RefCounted = BackroomsSessionScript.new()
+	var session_probe_ok: bool = saved_session_value is Dictionary and bool(session_probe.call("load_save_dict", saved_session_value))
+	if not session_probe_ok:
+		print("DEBUG: detached Backrooms Session probe error = ", session_probe.call("get_last_load_error"))
+	elif session_probe.call("to_save_dict") != saved_session_value:
+		print("DEBUG: detached Backrooms Session canonical readback differs from JSON payload")
+	_expect(session_probe_ok, "JSON-decoded active Backrooms Session passes detached validation")
+	session_probe.free()
 	_expect(str(backrooms_payload.get("active_location", "")) == "backrooms", "Backrooms file records the active Backrooms location")
 	_expect(not backrooms_payload.get("backrooms_runtime", {}).is_empty(), "Backrooms file contains the live maze runtime stream payload")
 
