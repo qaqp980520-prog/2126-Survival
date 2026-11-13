@@ -284,7 +284,6 @@ func _run() -> void:
 	elif session_probe.call("to_save_dict") != saved_session_value:
 		print("DEBUG: detached Backrooms Session canonical readback differs from JSON payload")
 	_expect(session_probe_ok, "JSON-decoded active Backrooms Session passes detached validation")
-	session_probe.free()
 	_expect(str(backrooms_payload.get("active_location", "")) == "backrooms", "Backrooms file records the active Backrooms location")
 	_expect(not backrooms_payload.get("backrooms_runtime", {}).is_empty(), "Backrooms file contains the live maze runtime stream payload")
 
