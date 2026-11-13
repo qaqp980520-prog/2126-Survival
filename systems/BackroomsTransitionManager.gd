@@ -133,6 +133,15 @@ func commit_portal_entry(
 	last_error = ""
 	if state != TransitionState.ENTRY_PREPARED:
 		return _failure("entry_not_prepared")
+	if _pending_runtime != null:
+		if not _commit_runtime_authorized or not is_instance_valid(_pending_runtime) or _pending_runtime.get_instance_id() != _pending_runtime_instance_id:
+			return _failure("runtime_commit_requires_explicit_handoff", true)
+		var live_runtime_payload: Variant = _pending_runtime.call("to_save_dict")
+		if not bool(_pending_runtime.call("is_prepared")) or bool(_pending_runtime.call("is_active")) or not (live_runtime_payload is Dictionary) or live_runtime_payload != _pending_runtime_payload:
+			return _failure("prepared_runtime_state_changed", true)
+	elif _commit_runtime_authorized:
+		return _failure("unexpected_runtime_commit_authorization", true)
+	var runtime_payload: Dictionary = _pending_runtime_payload.duplicate(true)
 	if director == null or not is_instance_valid(director) or director.get_instance_id() != _pending_director_instance_id:
 		return _failure("portal_director_changed", true)
 	if bool(session.call("is_active")):
@@ -142,7 +151,7 @@ func commit_portal_entry(
 	var current_preview: Variant = director.call("preview_portal_entry", portal_id)
 	if not (current_preview is Dictionary) or not _preview_matches(current_preview):
 		return _failure("prepared_portal_is_stale", true)
-	if not bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position)):
+	if not bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position, runtime_payload)):
 		return _failure("session_preflight_changed", true)
 	# Snapshot the complete director contract before the only mutating operation.
 	# If the session rejects the committed result, restore RNG, active portal,
@@ -165,18 +174,22 @@ func commit_portal_entry(
 	var consumed: Variant = director.call("consume_portal", portal_id)
 	if not (consumed is Dictionary) or not bool(consumed.get("ok", false)) or str(consumed.get("event", "")) != "entered":
 		var consume_reason: String = str(consumed.get("reason", "portal_consumption_rejected")) if consumed is Dictionary else "portal_consumption_invalid"
-		var consume_rollback_complete: bool = _restore_director_snapshot(director, director_snapshot)
+		var consume_director_restored: bool = _restore_director_snapshot(director, director_snapshot)
+		var consume_runtime_restored: bool = _discard_pending_runtime()
 		_clear_pending()
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = consume_reason
 		return {
 			"ok": false,
 			"reason": last_error,
-			"director_state_restored": consume_rollback_complete
+			"director_state_restored": consume_director_restored,
+			"runtime_state_restored": consume_runtime_restored,
+			"rollback_complete": consume_director_restored and consume_runtime_restored
 		}
-	if not bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position)):
+	if not bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position, runtime_payload)):
 		var director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 		var session_restored: bool = _restore_session_snapshot(session_snapshot)
+		var runtime_restored: bool = _discard_pending_runtime()
 		_clear_pending()
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = "session_commit_rejected_after_portal_consumption"
@@ -185,16 +198,38 @@ func commit_portal_entry(
 			"reason": last_error,
 			"director_state_restored": director_restored,
 			"session_state_restored": session_restored,
-			"rollback_complete": director_restored and session_restored
+			"runtime_state_restored": runtime_restored,
+			"rollback_complete": director_restored and session_restored and runtime_restored
 		}
+	if _pending_runtime != null:
+		_active_runtime = _pending_runtime
+		_active_runtime_instance_id = _pending_runtime_instance_id
 	state = TransitionState.IN_BACKROOMS
 	_clear_pending()
 	var result: Dictionary = consumed.duplicate(true)
 	result["session"] = session.call("to_save_dict")
 	return result
 
+func commit_portal_entry_with_runtime(
+	director: RefCounted,
+	runtime: Object,
+	portal_id: int,
+	return_position: Vector3,
+	source_world_seed: int,
+	entry_position: Vector3 = Vector3.ZERO
+) -> Dictionary:
+	if runtime == null or runtime != _pending_runtime or not is_instance_valid(runtime) or runtime.get_instance_id() != _pending_runtime_instance_id:
+		return _failure("prepared_runtime_changed", true)
+	_commit_runtime_authorized = true
+	var result: Dictionary = commit_portal_entry(director, portal_id, return_position, source_world_seed, entry_position)
+	_commit_runtime_authorized = false
+	return result
+
 func cancel_prepared_entry() -> bool:
 	if state != TransitionState.ENTRY_PREPARED:
+		return false
+	if not _discard_pending_runtime():
+		last_error = "pending_runtime_cleanup_failed"
 		return false
 	_clear_pending()
 	state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
