@@ -859,7 +859,7 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 	if not (portal_position_value is Vector2):
 		return {"ok": false, "reason": "portal_position_invalid"}
 	var portal_world_position := Vector3(portal_position_value.x, 1.0, portal_position_value.y)
-	if player.global_position.distance_to(portal_world_position) > 3.25:
+	if player.global_position.distance_to(portal_world_position) > BackroomsPortalVisualScript.INTERACTION_RANGE:
 		return {"ok": false, "reason": "portal_out_of_range"}
 	var surface_position: Vector3 = player.global_position
 	var surface_velocity: Vector3 = player.velocity
