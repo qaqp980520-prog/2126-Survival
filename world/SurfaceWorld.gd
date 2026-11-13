@@ -1423,6 +1423,11 @@ func serialize_world_envelope() -> Dictionary:
 		or not is_instance_valid(backrooms_maze_runtime)
 	):
 		return {}
+	if _is_in_backrooms:
+		var save_sync_value: Variant = backrooms_transition_manager.call("sync_backrooms_runtime", backrooms_maze_runtime, player.global_position)
+		if not (save_sync_value is Dictionary) or not bool(save_sync_value.get("ok", false)):
+			return {}
+		_last_backrooms_sync_position = player.global_position
 	var session_payload: Dictionary = backrooms_transition_manager.call("get_session_save_dict")
 	var surface_ids: Array = _get_loaded_surface_chunk_ids()
 	var visibility: Dictionary = _capture_surface_chunk_visibility(surface_ids)
@@ -1861,6 +1866,10 @@ func _is_world_save_integer(value: Variant, expected: int) -> bool:
 
 func _is_world_save_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
 	return (value is int or value is float) and is_finite(float(value)) and floorf(float(value)) == float(value) and float(value) >= float(minimum) and float(value) <= float(maximum)
+
+
+func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
 
 
 func _set_world_envelope_restore_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
