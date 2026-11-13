@@ -582,7 +582,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera.rotation.x = _pitch
 
 func _interact_current_target() -> Dictionary:
-	if player == null:
+	if player == null or _is_in_backrooms or _surface_stream_pending:
 		return {"ok": false, "action": "unavailable"}
 	var target: Dictionary = get_camera_interaction_target()
 	if str(target.get("kind", "")) == "portal":
@@ -918,6 +918,8 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 				player.global_position = surface_position
 				player.velocity = surface_velocity
 				_surface_stream_pending = true
+			if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+				backrooms_portal_visual.call("set_activation_enabled", false)
 			_world_object_action_message = "Backrooms activation failed and rollback is incomplete; world interaction is locked."
 		_refresh_hud()
 		return {"ok": false, "reason": "maze_runtime_activation_failed", "rollback_complete": bool(aborted.get("rollback_complete", false))}
@@ -1112,7 +1114,15 @@ func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
 	if portal.has_method("set_external_interaction_router_enabled"):
 		portal.call("set_external_interaction_router_enabled", true)
 	if portal.has_method("set_activation_enabled"):
-		portal.call("set_activation_enabled", backrooms_transition_manager != null and backrooms_maze_runtime != null)
+		var transition_ready: bool = (
+			backrooms_transition_manager != null
+			and backrooms_maze_runtime != null
+			and is_instance_valid(backrooms_maze_runtime)
+			and str(backrooms_transition_manager.call("get_state_name")) == "IDLE"
+			and not bool(backrooms_maze_runtime.call("is_prepared"))
+			and not bool(backrooms_maze_runtime.call("is_active"))
+		)
+		portal.call("set_activation_enabled", transition_ready)
 	backrooms_portal_visual = portal
 	_backrooms_portal_chunk_id = chunk_id
 	_camera_interaction_target_cache.clear()
