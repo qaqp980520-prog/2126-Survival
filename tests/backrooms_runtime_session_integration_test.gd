@@ -156,7 +156,12 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(parsed is Dictionary)
 	var restored_session = SessionScript.new()
 	assert(bool(restored_session.call("load_save_dict", parsed)))
-	assert(restored_session.call("to_save_dict") == saved_session)
+	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
+	if restored_save_dict != saved_session:
+		for key in saved_session.keys():
+			if restored_save_dict.get(key) != saved_session.get(key):
+				print("DEBUG session JSON round-trip mismatch: key=", key, " saved=", saved_session.get(key), " restored=", restored_save_dict.get(key))
+	assert(restored_save_dict == saved_session, "Session JSON round-trip must preserve the canonical save dictionary.")
 
 	var legacy_payload: Dictionary = saved_session.duplicate(true)
 	legacy_payload.erase("maze_stream_state")
