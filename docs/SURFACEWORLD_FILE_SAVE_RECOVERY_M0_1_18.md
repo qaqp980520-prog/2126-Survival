@@ -135,7 +135,7 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 
 - `WorldEnvelopeFileStore.write_atomically()` now creates a missing parent directory recursively after validating the destination path and JSON payload, but before touching the primary, temporary, or backup files.
 - If directory creation fails, the operation reports `directory_create` and leaves existing save files untouched.
-- The production file-persistence test now writes to `user://run244_nested_saves/slot_a/world.json`, verifies first-save readback, performs a second atomic save, checks that the previous primary becomes the exact `.bak`, and restores the latest primary through `load_with_backup()`.
+- The production file-persistence test now writes to `user://run244_nested_saves/slot_a/world.json`, verifies first-save readback, performs a second atomic save, checks that the previous primary becomes the exact `.bak`, restores the latest primary, then corrupts it and verifies nested `.bak` fallback, corrupt-primary preservation, and verified primary repair.
 - Test cleanup removes the nested save files and empty test directories.
 - Import/use remains unchanged: `SurfaceWorld.save_game(path)` and `load_game(path)` accept the nested `user://` path; no Project Settings, autoload, or third-party dependency is required.
 - Validation: new exact-head Godot 4.3 Full Compatibility Gate required. Local Godot executable is unavailable; no local engine pass is claimed.
