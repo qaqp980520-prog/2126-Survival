@@ -59,14 +59,9 @@ func _run() -> void:
 	var source_runtime: Node3D = source_world.get("backrooms_maze_runtime") as Node3D
 	var source_session: RefCounted = source_manager.call("get_session") as RefCounted
 	var shifted_position: Vector3 = source_player.global_position + Vector3(8.0, 0.0, 0.0)
-	var shifted: Dictionary = source_manager.call("sync_backrooms_runtime", source_runtime, shifted_position)
-	_expect(bool(shifted.get("ok", false)), "source Backrooms runtime and Session synchronize one streamed cell shift")
-	if not bool(shifted.get("ok", false)):
-		_finish(1)
-		return
 	source_player.global_position = shifted_position
-	source_world.set("_last_backrooms_sync_position", shifted_position)
 	var envelope: Dictionary = source_world.call("serialize_world_envelope")
+	_expect(envelope.get("backrooms_session", {}).get("backrooms_position", []) == [shifted_position.x, shifted_position.y, shifted_position.z], "save finalizes the latest player transform into the runtime and Session before snapshotting")
 	_expect(not envelope.is_empty(), "active Backrooms state serializes through the combined world envelope")
 	_expect(str(envelope.get("active_location", "")) == "backrooms", "combined envelope records Backrooms as the active location")
 	_expect(envelope.get("backrooms_session", {}) == source_session.call("to_save_dict"), "combined envelope stores the complete active LocationSession")
