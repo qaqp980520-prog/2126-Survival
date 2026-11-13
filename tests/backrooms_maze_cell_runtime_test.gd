@@ -13,6 +13,8 @@ func _run() -> void:
 	root.add_child(runtime)
 	_expect(not bool(runtime.call("is_prepared")), "runtime starts without a prepared destination")
 	_expect(not bool(runtime.call("is_active")) and not runtime.visible, "runtime starts hidden and inactive")
+	var invalid_prepare: Dictionary = runtime.call("prepare_destination", "Level 1", 20261113, Vector3(0.0, NAN, 0.0), 8.0, 1)
+	_expect(not bool(invalid_prepare.get("ok", false)), "runtime rejects a non-finite entry position before staging")
 
 	var prepared: Dictionary = runtime.call("prepare_destination", "Level 1", 20261113, Vector3.ZERO, 8.0, 1)
 	_expect(bool(prepared.get("ok", false)), "runtime prepares a deterministic Level 1 destination")
@@ -28,6 +30,9 @@ func _run() -> void:
 
 	var original_keys: Array = runtime.call("get_loaded_cell_keys")
 	var original_origin_id: int = origin_root.get_instance_id() if origin_root != null else 0
+	var invalid_shift: Dictionary = runtime.call("sync_to_world_position", Vector3(0.0, NAN, 0.0))
+	_expect(not bool(invalid_shift.get("ok", false)), "runtime rejects non-finite movement positions")
+	_expect(runtime.call("get_loaded_cell_keys") == original_keys, "invalid movement leaves the committed window unchanged")
 	runtime.call("set_cell_builder_for_testing", Callable(self, "_fail_cell_builder"))
 	var failed_shift: Dictionary = runtime.call("sync_to_world_position", Vector3(16.0, 0.0, 0.0))
 	_expect(not bool(failed_shift.get("ok", false)), "injected cell-builder failure rejects the entire window shift")
