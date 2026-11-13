@@ -22,7 +22,14 @@ func validate_world_object_state(state: Dictionary) -> bool:
 	if state.size() != 1 or not state.has("layer_index"):
 		return false
 	var raw_layer: Variant = state.get("layer_index", null)
-	return raw_layer is int and int(raw_layer) >= 0 and int(raw_layer) <= MAX_LAYER_INDEX and int(raw_layer) == layer_index
+	return _is_integer_in_range(raw_layer, 0, MAX_LAYER_INDEX) and int(raw_layer) == layer_index
+
+
+func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number: float = float(value)
+	return is_finite(number) and floorf(number) == number and number >= float(minimum) and number <= float(maximum)
 
 func apply_world_object_state(state: Dictionary) -> bool:
 	if not validate_world_object_state(state):
