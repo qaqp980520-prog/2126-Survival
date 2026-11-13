@@ -62,6 +62,7 @@ func _run() -> void:
 	_cleanup_save_paths()
 	_test_nested_save_directory()
 	_test_symlink_save_paths()
+	_test_file_symlink_save_paths()
 	_test_json_numeric_save_validation()
 	_test_world_object_json_numeric_validation()
 	source_world = WorldScene.instantiate() as Node3D
@@ -556,6 +557,97 @@ func _test_symlink_save_paths() -> void:
 	_expect(probe.restore_calls.is_empty(), "symbolic-link load rejection never invokes the restore callback")
 	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "symbolic-link rejection preserves the target save bytes")
 
+func _test_file_symlink_save_paths() -> void:
+	var target_file_path: String = "user://run247_symlink_file_target.json"
+	var target_file_absolute: String = ProjectSettings.globalize_path(target_file_path)
+	var target_text: String = JSON.stringify(
+		{"schema_version": 1.0, "marker": "direct-file-symlink-target"},
+		"",
+		true,
+		true
+	)
+	_expect(_write_text(target_file_path, target_text), "write a valid payload for direct file-symlink fixtures")
+	if not FileAccess.file_exists(target_file_path):
+		return
+
+	var user_directory := DirAccess.open("user://")
+	_expect(user_directory != null, "open the user data root for direct file-symlink fixtures")
+	if user_directory == null:
+		return
+
+	var link_names: Array[String] = [
+		"run247_symlink_primary.json",
+		"run247_symlink_tmp.json.tmp",
+		"run247_symlink_backup_write.json.bak",
+		"run247_symlink_backup_read.json.bak"
+	]
+	for link_name in link_names:
+		var link_error: Error = user_directory.create_link(target_file_absolute, link_name)
+		if link_error != OK and OS.get_name() == "Windows":
+			print("SKIP: direct file-symlink regression fixtures require Windows Developer Mode or elevated privileges.")
+			return
+		_expect(link_error == OK, "create direct file symlink: " + link_name)
+		if link_error != OK:
+			return
+		_expect(user_directory.is_link(link_name), "Godot identifies direct file symlink: " + link_name)
+
+	var file_store: RefCounted = FileStoreScript.new()
+	var payload: Dictionary = {"schema_version": 1.0, "marker": "must-not-write-through-file-link"}
+
+	var primary_link_path: String = "user://run247_symlink_primary.json"
+	var primary_write_ok: bool = bool(file_store.call("write_atomically", primary_link_path, payload))
+	var primary_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not primary_write_ok, "atomic writer rejects a direct symlink at the primary save path")
+	_expect(str(primary_write_report.get("phase", "")) == "path_symlink", "direct primary symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct primary symlink write leaves target bytes unchanged")
+
+	var primary_probe := IncompleteRollbackProbe.new()
+	var primary_load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		primary_link_path,
+		Callable(primary_probe, "restore"),
+		Callable(primary_probe, "get_last_report")
+	))
+	var primary_load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not primary_load_ok, "loader rejects a direct symlink at the primary save path")
+	_expect(str(primary_load_report.get("phase", "")) == "path_symlink", "direct primary symlink load reports path_symlink")
+	_expect(primary_probe.restore_calls.is_empty(), "direct primary symlink load never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct primary symlink load leaves target bytes unchanged")
+
+	var temporary_write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run247_symlink_tmp.json",
+		payload
+	))
+	var temporary_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not temporary_write_ok, "atomic writer rejects a direct symlink at the temporary path")
+	_expect(str(temporary_write_report.get("phase", "")) == "path_symlink", "direct temporary symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct temporary symlink write leaves target bytes unchanged")
+
+	var backup_write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run247_symlink_backup_write.json",
+		payload
+	))
+	var backup_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not backup_write_ok, "atomic writer rejects a direct symlink at the backup path")
+	_expect(str(backup_write_report.get("phase", "")) == "path_symlink", "direct backup symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct backup symlink write leaves target bytes unchanged")
+
+	var backup_probe := IncompleteRollbackProbe.new()
+	var backup_load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		"user://run247_symlink_backup_read.json",
+		Callable(backup_probe, "restore"),
+		Callable(backup_probe, "get_last_report")
+	))
+	var backup_load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not backup_load_ok, "loader rejects a direct symlink at the backup path")
+	_expect(str(backup_load_report.get("phase", "")) == "path_symlink", "direct backup symlink load reports path_symlink")
+	_expect(backup_probe.restore_calls.is_empty(), "direct backup symlink load never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct backup symlink load leaves target bytes unchanged")
+
+
 func _test_json_numeric_save_validation() -> void:
 	var stamina_model: RefCounted = StaminaScript.new()
 	var stamina_parser := JSON.new()
@@ -655,8 +747,19 @@ func _write_text(path: String, content: String) -> bool:
 
 func _cleanup_save_paths() -> void:
 	var user_root_access := DirAccess.open("user://")
-	if user_root_access != null and user_root_access.is_link("run246_symlink_link"):
-		user_root_access.remove("run246_symlink_link")
+	if user_root_access != null:
+		for link_name in [
+			"run246_symlink_link",
+			"run247_symlink_primary.json",
+			"run247_symlink_tmp.json.tmp",
+			"run247_symlink_backup_write.json.bak",
+			"run247_symlink_backup_read.json.bak"
+		]:
+			if user_root_access.is_link(link_name):
+				user_root_access.remove(link_name)
+	var direct_symlink_target_file: String = "user://run247_symlink_file_target.json"
+	if FileAccess.file_exists(direct_symlink_target_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(direct_symlink_target_file))
 	var symlink_target_file: String = "user://run246_symlink_target/existing.json"
 	if FileAccess.file_exists(symlink_target_file):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(symlink_target_file))
