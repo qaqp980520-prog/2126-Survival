@@ -5,6 +5,86 @@ const ManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 
+class MutatingRejectRuntimeSession extends RefCounted:
+	var active: bool = false
+	var level_id: String = ""
+	var entry_portal_id: int = 0
+	var surface_return_position: Vector3 = Vector3.ZERO
+	var backrooms_position: Vector3 = Vector3.ZERO
+	var surface_world_seed: int = 0
+	var backrooms_seed: int = 0
+	var maze_stream_state: Dictionary = {}
+	var mutation_marker: String = "original"
+
+	func is_active() -> bool:
+		return active
+
+	func derive_backrooms_seed(source_seed: int, portal_id: int) -> int:
+		var mixed: int = source_seed * 1103515245 + portal_id * 12345 + 1013904223
+		return posmod(mixed, 2147483648)
+
+	func can_begin_from_portal_result(
+		_portal_result: Dictionary,
+		_return_position: Vector3,
+		_source_world_seed: int,
+		_entry_position: Vector3 = Vector3.ZERO,
+		_maze_stream_payload: Dictionary = {}
+	) -> bool:
+		return not active
+
+	func begin_from_portal_result(
+		portal_result: Dictionary,
+		return_position: Vector3,
+		source_world_seed: int,
+		entry_position: Vector3 = Vector3.ZERO,
+		maze_stream_payload: Dictionary = {}
+	) -> bool:
+		active = true
+		level_id = str(portal_result.get("destination_level", ""))
+		entry_portal_id = int(portal_result.get("portal_id", 0))
+		surface_return_position = return_position
+		backrooms_position = entry_position
+		surface_world_seed = source_world_seed
+		backrooms_seed = derive_backrooms_seed(source_world_seed, entry_portal_id)
+		maze_stream_state = maze_stream_payload.duplicate(true)
+		mutation_marker = "mutated_then_rejected"
+		return false
+
+	func to_save_dict() -> Dictionary:
+		return {
+			"schema_version": 1,
+			"active": active,
+			"level_id": level_id,
+			"entry_portal_id": entry_portal_id,
+			"surface_return_position": [surface_return_position.x, surface_return_position.y, surface_return_position.z],
+			"backrooms_position": [backrooms_position.x, backrooms_position.y, backrooms_position.z],
+			"surface_world_seed": surface_world_seed,
+			"backrooms_seed": backrooms_seed,
+			"maze_stream_state": maze_stream_state.duplicate(true),
+			"mutation_marker": mutation_marker
+		}
+
+	func load_save_dict(payload: Dictionary) -> bool:
+		if int(payload.get("schema_version", 0)) != 1:
+			return false
+		var surface_value: Variant = payload.get("surface_return_position", null)
+		var backrooms_value: Variant = payload.get("backrooms_position", null)
+		var maze_value: Variant = payload.get("maze_stream_state", {})
+		if not (surface_value is Array) or surface_value.size() != 3:
+			return false
+		if not (backrooms_value is Array) or backrooms_value.size() != 3 or not (maze_value is Dictionary):
+			return false
+		active = bool(payload.get("active", false))
+		level_id = str(payload.get("level_id", ""))
+		entry_portal_id = int(payload.get("entry_portal_id", 0))
+		surface_return_position = Vector3(float(surface_value[0]), float(surface_value[1]), float(surface_value[2]))
+		backrooms_position = Vector3(float(backrooms_value[0]), float(backrooms_value[1]), float(backrooms_value[2]))
+		surface_world_seed = int(payload.get("surface_world_seed", 0))
+		backrooms_seed = int(payload.get("backrooms_seed", 0))
+		maze_stream_state = maze_value.duplicate(true)
+		mutation_marker = str(payload.get("mutation_marker", ""))
+		return true
+
 var restore_result: bool = false
 var restore_calls: int = 0
 
@@ -14,6 +94,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_runtime_entry_sync_save_and_return()
 	_test_runtime_staging_failure_preserves_portal()
+	_test_session_mutation_failure_restores_director_session_and_runtime()
 	_test_stale_runtime_snapshot_cannot_consume_portal()
 	if root.get_child_count() > 0:
 		for child in root.get_children():
@@ -150,6 +231,38 @@ func _test_runtime_staging_failure_preserves_portal() -> void:
 	assert(manager.get_state_name() == "IDLE")
 	assert(director.to_save_dict() == director_before, "Failed runtime staging must not consume the one-use portal.")
 	assert(not bool(manager.get_session().call("is_active")))
+	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
+
+func _test_session_mutation_failure_restores_director_session_and_runtime() -> void:
+	var director = DirectorScript.new(71, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
+	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+	assert(str(spawned.get("event", "")) == "spawned")
+	var portal_id: int = int(spawned["portal"]["id"])
+	var director_before: Dictionary = director.to_save_dict()
+	var session = MutatingRejectRuntimeSession.new()
+	var session_before: Dictionary = session.to_save_dict()
+	var manager = ManagerScript.new(session)
+	var runtime = RuntimeScript.new()
+	runtime.force_metadata_only = true
+	root.add_child(runtime)
+	var prepared: Dictionary = manager.prepare_portal_entry_with_runtime(
+		director, runtime, portal_id, Vector3(9.0, 2.0, -4.0), 71, Vector3.ZERO, 8.0, 1
+	)
+	assert(bool(prepared.get("ok", false)))
+	assert(bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")))
+	var rejected: Dictionary = manager.commit_portal_entry_with_runtime(
+		director, runtime, portal_id, Vector3(9.0, 2.0, -4.0), 71, Vector3.ZERO
+	)
+	assert(not bool(rejected.get("ok", false)))
+	assert(str(rejected.get("reason", "")) == "session_commit_rejected_after_portal_consumption")
+	assert(bool(rejected.get("director_state_restored", false)))
+	assert(bool(rejected.get("session_state_restored", false)))
+	assert(bool(rejected.get("runtime_state_restored", false)))
+	assert(bool(rejected.get("rollback_complete", false)))
+	assert(director.to_save_dict() == director_before)
+	assert(session.to_save_dict() == session_before)
+	assert(not session.is_active())
+	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
 
 func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
