@@ -21,6 +21,12 @@ var _pending_preview: Dictionary = {}
 var _pending_return_position: Vector3 = Vector3.ZERO
 var _pending_entry_position: Vector3 = Vector3.ZERO
 var _pending_world_seed: int = -1
+var _pending_runtime: Object = null
+var _pending_runtime_instance_id: int = 0
+var _pending_runtime_payload: Dictionary = {}
+var _active_runtime: Object = null
+var _active_runtime_instance_id: int = 0
+var _commit_runtime_authorized: bool = false
 
 func _init(session_instance: RefCounted = null) -> void:
 	session = session_instance if session_instance != null else SessionScript.new()
@@ -60,6 +66,59 @@ func prepare_portal_entry(
 		"destination_level": str(preview["destination_level"]),
 		"position": preview["position"]
 	}
+
+## Prepare the hidden maze runtime before consuming the one-use portal.
+## Existing prepared runtimes are rejected rather than silently overwritten.
+func prepare_portal_entry_with_runtime(
+	director: RefCounted,
+	runtime: Object,
+	portal_id: int,
+	return_position: Vector3,
+	source_world_seed: int,
+	entry_position: Vector3 = Vector3.ZERO,
+	cell_size: float = 8.0,
+	stream_radius: int = 1
+) -> Dictionary:
+	var prepared: Dictionary = prepare_portal_entry(director, portal_id, return_position, source_world_seed, entry_position)
+	if not bool(prepared.get("ok", false)):
+		return prepared
+	if runtime == null or not is_instance_valid(runtime):
+		cancel_prepared_entry()
+		return _failure("maze_runtime_unavailable")
+	for method_name in ["prepare_destination", "to_save_dict", "is_prepared", "is_active", "deactivate_destination", "get_loaded_cell_count"]:
+		if not runtime.has_method(method_name):
+			cancel_prepared_entry()
+			return _failure("maze_runtime_contract_unavailable")
+	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
+		cancel_prepared_entry()
+		return _failure("maze_runtime_not_empty")
+	var derived_seed: int = int(session.call("derive_backrooms_seed", source_world_seed, portal_id))
+	if derived_seed < 0:
+		cancel_prepared_entry()
+		return _failure("maze_runtime_seed_invalid")
+	var build_value: Variant = runtime.call("prepare_destination", str(prepared["destination_level"]), derived_seed, entry_position, cell_size, stream_radius)
+	if not (build_value is Dictionary) or not bool(build_value.get("ok", false)):
+		if bool(runtime.call("is_prepared")):
+			runtime.call("deactivate_destination")
+		cancel_prepared_entry()
+		return _failure(str(build_value.get("reason", "maze_runtime_prepare_failed")) if build_value is Dictionary else "maze_runtime_prepare_invalid")
+	var payload_value: Variant = runtime.call("to_save_dict")
+	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")) or not (payload_value is Dictionary) or payload_value.is_empty():
+		runtime.call("deactivate_destination")
+		cancel_prepared_entry()
+		return _failure("maze_runtime_prepare_incomplete")
+	var payload: Dictionary = payload_value.duplicate(true)
+	if not bool(session.call("can_begin_from_portal_result", _pending_preview, return_position, source_world_seed, entry_position, payload)):
+		runtime.call("deactivate_destination")
+		cancel_prepared_entry()
+		return _failure("maze_runtime_session_preflight_rejected")
+	_pending_runtime = runtime
+	_pending_runtime_instance_id = runtime.get_instance_id()
+	_pending_runtime_payload = payload
+	var result: Dictionary = prepared.duplicate(true)
+	result["runtime_prepared"] = true
+	result["loaded_cell_count"] = int(build_value.get("loaded_cell_count", 0))
+	return result
 
 ## Commit only the exact prepared context. A stale/replaced portal is rejected
 ## before consumption. The director's own preview/consume parity remains the
