@@ -34,8 +34,8 @@ All scripts use existing project paths and are preloaded by SurfaceWorld.gd or t
 
 ## Test status
 
-- Exact-head Godot 4.3 Full Compatibility Gate: pending for this branch.
-- New regression coverage is added to the existing Backrooms runtime/session integration test and production SurfaceWorld integration test.
+- Prior code HEAD `c4c98869a53fff9970cb0fc18dce95a590c770d6` completed exact-head Godot 4.3 Full Compatibility Gate [Run #43361096420](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43361096420): 559/559 success, 0 failures, 0 skipped. This later commit adds the production return rejection/retry regression; its exact-head gate is pending.
+- New regression coverage is added to the existing Backrooms runtime/session integration test and production SurfaceWorld integration test, including a source-world seed mismatch that rejects return, verifies the active Backrooms runtime/Session/player position are restored, and then retries successfully after the seed is corrected.
 - Local Godot executable is unavailable in the current environment; no local engine pass is claimed.
 
 ## Limitations
@@ -46,7 +46,7 @@ All scripts use existing project paths and are preloaded by SurfaceWorld.gd or t
 
 ## Next steps
 
-1. Complete exact-head Godot 4.3 validation and review.
+1. Complete exact-head Godot 4.3 validation for the new return rejection/retry test commit and obtain review.
 2. Add a combined SurfaceWorld + Backrooms Session/runtime save envelope and transactional restore.
 3. Add return-failure and post-commit activation-failure injection at the production SurfaceWorld boundary.
 4. Validate graphical maze materials/collision and mobile controls.
