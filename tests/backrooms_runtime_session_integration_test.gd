@@ -339,7 +339,6 @@ func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
 	assert(bool(manager.call("cancel_prepared_entry")))
 	assert(director.to_save_dict() == director_before)
 	assert(int(runtime.call("get_loaded_cell_count")) == 0)
-	await process_frame
 	if runtime.get_parent() == root:
 		root.remove_child(runtime)
 	runtime.free()
