@@ -1939,7 +1939,10 @@ func _refresh_hud() -> void:
 	if interaction_prompt != null:
 		interaction_prompt.text = get_interaction_prompt_text()
 	var status: Dictionary = get_world_session_status()
-	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
+	var active_count: int = int(backrooms_maze_runtime.call("get_loaded_cell_count")) if _is_in_backrooms and backrooms_maze_runtime != null else (chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0)
+	var displayed_vein_count: int = 0 if _is_in_backrooms else int(status.get("saved_vein_count", 0))
+	var displayed_crop_count: int = 0 if _is_in_backrooms else int(status.get("saved_crop_count", 0))
+	var displayed_object_count: int = 0 if _is_in_backrooms else int(status.get("saved_world_object_count", 0))
 	var grid_text: String = "n/a"
 	if _is_in_backrooms and player != null:
 		grid_text = str(Vector2i(floori(player.global_position.x / BACKROOMS_CELL_SIZE), floori(player.global_position.z / BACKROOMS_CELL_SIZE)))
@@ -1999,7 +2002,7 @@ func _refresh_hud() -> void:
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
 	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
-		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
-		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
+		layer_name, action_help, grid_text, active_count, displayed_vein_count,
+		displayed_crop_count, displayed_object_count,
 		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
