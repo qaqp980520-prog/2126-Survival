@@ -415,6 +415,24 @@ func _test_nested_save_directory() -> void:
 	_expect(nested_loaded, "nested save path can be restored through the normal file-store API")
 	_expect(probe.restored_payload == second_payload, "nested file restore receives the latest primary payload")
 
+	_expect(_write_text(NESTED_SAVE_PATH, "{broken-nested-primary"), "corrupt the nested primary to exercise nested backup recovery")
+	var nested_backup_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		NESTED_SAVE_PATH,
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	var nested_recovery_report: Dictionary = file_store.call("get_last_report")
+	_expect(nested_backup_loaded, "nested save path restores from its retained backup after primary corruption")
+	_expect(probe.restored_payload == first_payload, "nested backup recovery restores the previous known-good payload")
+	_expect(
+		bool(nested_recovery_report.get("details", {}).get("primary_repaired", false)),
+		"nested backup recovery repairs and verifies the primary"
+	)
+	_expect(_read_dictionary(NESTED_SAVE_PATH) == first_payload, "nested backup recovery installs the previous primary as the repaired save")
+	_expect(FileAccess.file_exists(NESTED_SAVE_PATH + ".corrupt"), "nested backup recovery preserves the corrupt primary under a diagnostic suffix")
+	_expect(_read_dictionary(NESTED_SAVE_PATH + ".bak") == first_payload, "nested backup remains available after primary repair")
+
 
 func _test_json_numeric_save_validation() -> void:
 	var stamina_model: RefCounted = StaminaScript.new()
