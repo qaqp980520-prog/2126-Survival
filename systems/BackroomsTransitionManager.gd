@@ -236,6 +236,172 @@ func cancel_prepared_entry() -> bool:
 	last_error = ""
 	return true
 
+## Activate only after the caller has completed player/world handoff.
+func activate_prepared_runtime_after_handoff(runtime: Object) -> bool:
+	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
+		return false
+	if runtime == null or runtime != _active_runtime or not is_instance_valid(runtime) or runtime.get_instance_id() != _active_runtime_instance_id:
+		return false
+	if not runtime.has_method("is_prepared") or not runtime.has_method("is_active") or not runtime.has_method("to_save_dict") or not runtime.has_method("activate_destination"):
+		return false
+	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
+		return false
+	if runtime.call("to_save_dict") != session.call("get_maze_stream_state"):
+		return false
+	return bool(runtime.call("activate_destination"))
+
+## Save the new maze window and player position in one validated Session mutation.
+## A rejected Session update rebuilds the exact prior runtime snapshot.
+func sync_backrooms_runtime(runtime: Object, world_position: Vector3) -> Dictionary:
+	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
+		return _failure("backrooms_session_not_active")
+	if runtime == null or runtime != _active_runtime or not is_instance_valid(runtime) or runtime.get_instance_id() != _active_runtime_instance_id:
+		return _failure("active_runtime_changed")
+	for method_name in ["is_active", "is_prepared", "to_save_dict", "sync_to_world_position"]:
+		if not runtime.has_method(method_name):
+			return _failure("maze_runtime_contract_unavailable")
+	if not bool(runtime.call("is_active")) or not bool(runtime.call("is_prepared")):
+		return _failure("maze_runtime_not_active")
+	var runtime_before_value: Variant = runtime.call("to_save_dict")
+	var session_before: Dictionary = session.call("to_save_dict")
+	if not (runtime_before_value is Dictionary) or runtime_before_value.is_empty():
+		return _failure("maze_runtime_snapshot_unavailable")
+	var runtime_before: Dictionary = runtime_before_value.duplicate(true)
+	var sync_value: Variant = runtime.call("sync_to_world_position", world_position)
+	if not (sync_value is Dictionary) or not bool(sync_value.get("ok", false)):
+		return sync_value if sync_value is Dictionary else _failure("maze_runtime_sync_invalid")
+	var runtime_after: Variant = runtime.call("to_save_dict")
+	if not (runtime_after is Dictionary) or not bool(session.call("update_backrooms_runtime_state", world_position, runtime_after)):
+		var runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_before, true)
+		var session_restored: bool = _restore_session_snapshot(session_before)
+		return {
+			"ok": false,
+			"reason": "session_runtime_state_commit_rejected",
+			"runtime_state_restored": runtime_restored,
+			"session_state_restored": session_restored,
+			"rollback_complete": runtime_restored and session_restored
+		}
+	var saved_session: Dictionary = session.call("to_save_dict")
+	var expected_position: Array = [world_position.x, world_position.y, world_position.z]
+	if saved_session.get("maze_stream_state", {}) != runtime_after or saved_session.get("backrooms_position", []) != expected_position:
+		var runtime_verified_restore: bool = _restore_runtime_snapshot(runtime, runtime_before, true)
+		var session_verified_restore: bool = _restore_session_snapshot(session_before)
+		return {
+			"ok": false,
+			"reason": "session_runtime_state_readback_mismatch",
+			"runtime_state_restored": runtime_verified_restore,
+			"session_state_restored": session_verified_restore,
+			"rollback_complete": runtime_verified_restore and session_verified_restore
+		}
+	return {"ok": true, "event": "runtime_window_saved", "runtime": sync_value, "session": saved_session}
+
+## Rebuild a hidden runtime from a persisted active Session after loading a save.
+func restore_runtime_from_session(runtime: Object) -> bool:
+	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
+		return false
+	if runtime == null or not is_instance_valid(runtime):
+		return false
+	for method_name in ["is_prepared", "is_active", "load_save_dict", "to_save_dict", "deactivate_destination"]:
+		if not runtime.has_method(method_name):
+			return false
+	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
+		return false
+	var payload: Dictionary = session.call("get_maze_stream_state")
+	if payload.is_empty():
+		return false
+	if not bool(runtime.call("load_save_dict", payload.duplicate(true))):
+		return false
+	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")) or runtime.call("to_save_dict") != payload:
+		runtime.call("deactivate_destination")
+		return false
+	_active_runtime = runtime
+	_active_runtime_instance_id = runtime.get_instance_id()
+	return true
+
+## Restore SurfaceWorld first, then retire the maze and clear Session.
+## Any failure restores the exact active Session and runtime snapshot.
+func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) -> Dictionary:
+	last_error = ""
+	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
+		return _failure("backrooms_session_not_active")
+	if runtime == null or runtime != _active_runtime or not is_instance_valid(runtime) or runtime.get_instance_id() != _active_runtime_instance_id:
+		return _failure("active_runtime_changed")
+	if not restore_surface.is_valid():
+		return _failure("surface_restore_callback_invalid")
+	for method_name in ["is_active", "is_prepared", "to_save_dict", "deactivate_destination", "load_save_dict", "activate_destination"]:
+		if not runtime.has_method(method_name):
+			return _failure("maze_runtime_contract_unavailable")
+	if not bool(runtime.call("is_prepared")) or not bool(runtime.call("is_active")):
+		return _failure("maze_runtime_not_active")
+	var session_snapshot: Dictionary = session.call("to_save_dict")
+	var runtime_snapshot_value: Variant = runtime.call("to_save_dict")
+	if session_snapshot.is_empty() or not (runtime_snapshot_value is Dictionary) or runtime_snapshot_value.is_empty():
+		return _failure("return_snapshot_unavailable")
+	var runtime_snapshot: Dictionary = runtime_snapshot_value.duplicate(true)
+	var return_context: Dictionary = session.call("get_return_context")
+	if return_context.is_empty() or session_snapshot.get("maze_stream_state", {}) != runtime_snapshot:
+		return _failure("return_runtime_session_mismatch")
+	var surface_value: Variant = restore_surface.call(return_context.duplicate(true))
+	if not (surface_value is bool) or not bool(surface_value):
+		var failed_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		var failed_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
+		state = TransitionState.IN_BACKROOMS
+		last_error = "surface_restore_failed"
+		return {
+			"ok": false,
+			"reason": last_error,
+			"session_retained": bool(session.call("is_active")),
+			"session_state_restored": failed_session_restored,
+			"runtime_state_restored": failed_runtime_restored,
+			"rollback_complete": failed_session_restored and failed_runtime_restored
+		}
+	if not bool(session.call("is_active")) or session.call("get_return_context") != return_context:
+		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		var changed_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
+		state = TransitionState.IN_BACKROOMS
+		last_error = "session_changed_during_surface_restore"
+		return {
+			"ok": false,
+			"reason": last_error,
+			"surface_restored": true,
+			"session_state_restored": changed_session_restored,
+			"runtime_state_restored": changed_runtime_restored,
+			"rollback_complete": changed_session_restored and changed_runtime_restored
+		}
+	if not bool(runtime.call("deactivate_destination")):
+		var deactivate_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		var deactivate_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
+		state = TransitionState.IN_BACKROOMS
+		last_error = "maze_runtime_deactivation_failed"
+		return {
+			"ok": false,
+			"reason": last_error,
+			"surface_restored": true,
+			"session_state_restored": deactivate_session_restored,
+			"runtime_state_restored": deactivate_runtime_restored,
+			"rollback_complete": deactivate_session_restored and deactivate_runtime_restored
+		}
+	var completed_value: Variant = session.call("complete_return")
+	var completed: Dictionary = completed_value if completed_value is Dictionary else {}
+	var expected_inactive: Dictionary = SessionScript.new().to_save_dict()
+	if not bool(completed.get("ok", false)) or session.call("to_save_dict") != expected_inactive:
+		var complete_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		var complete_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
+		state = TransitionState.IN_BACKROOMS
+		last_error = "session_return_commit_failed_after_runtime_deactivation"
+		return {
+			"ok": false,
+			"reason": last_error,
+			"surface_restored": true,
+			"session_state_restored": complete_session_restored,
+			"runtime_state_restored": complete_runtime_restored,
+			"rollback_complete": complete_session_restored and complete_runtime_restored
+		}
+	state = TransitionState.IDLE
+	_active_runtime = null
+	_active_runtime_instance_id = 0
+	return {"ok": true, "event": "returned", "context": completed, "runtime_deactivated": true}
+
 ## The callback must restore the actual SurfaceWorld and return a bool.
 ## A false result retains the complete Backrooms return context for retry.
 func return_to_surface(restore_surface: Callable) -> Dictionary:
