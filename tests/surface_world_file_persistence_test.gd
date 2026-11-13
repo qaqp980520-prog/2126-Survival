@@ -423,7 +423,8 @@ func _test_nested_save_directory() -> void:
 	_expect(str(traversal_report.get("phase", "")) == "validation", "path traversal is rejected before directory creation")
 	_expect(not DirAccess.dir_exists_absolute(traversal_guard_directory), "rejected traversal path creates no parent directory")
 
-	var first_payload: Dictionary = {"schema_version": 1, "marker": "nested-first"}
+	# JSON parsing canonicalizes numeric schema values to floats in this test path.
+	var first_payload: Dictionary = {"schema_version": 1.0, "marker": "nested-first"}
 	var first_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, first_payload))
 	_expect(first_saved, "atomic writer creates missing nested user:// save directories")
 	if not first_saved:
@@ -435,7 +436,7 @@ func _test_nested_save_directory() -> void:
 	)
 	_expect(_read_dictionary(NESTED_SAVE_PATH) == first_payload, "nested save path contains the exact first payload")
 
-	var second_payload: Dictionary = {"schema_version": 1, "marker": "nested-second"}
+	var second_payload: Dictionary = {"schema_version": 1.0, "marker": "nested-second"}
 	var second_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, second_payload))
 	_expect(second_saved, "a second nested save atomically replaces the primary")
 	if not second_saved:
