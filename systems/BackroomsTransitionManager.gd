@@ -335,6 +335,43 @@ func _restore_director_snapshot(director: RefCounted, snapshot: Dictionary) -> b
 	var verified_snapshot: Variant = director.call("to_save_dict")
 	return verified_snapshot is Dictionary and verified_snapshot == snapshot
 
+func _restore_runtime_snapshot(runtime: Object, snapshot: Dictionary, was_active: bool) -> bool:
+	if runtime == null or not is_instance_valid(runtime):
+		return false
+	for method_name in ["is_active", "is_prepared", "deactivate_destination", "load_save_dict", "to_save_dict", "activate_destination"]:
+		if not runtime.has_method(method_name):
+			return false
+	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
+		if not bool(runtime.call("deactivate_destination")):
+			return false
+	if not bool(runtime.call("load_save_dict", snapshot.duplicate(true))):
+		return false
+	if was_active and not bool(runtime.call("activate_destination")):
+		return false
+	var verified: Variant = runtime.call("to_save_dict")
+	return verified is Dictionary and verified == snapshot and bool(runtime.call("is_active")) == was_active
+
+func _discard_pending_runtime() -> bool:
+	if _pending_runtime == null:
+		_pending_runtime_instance_id = 0
+		_pending_runtime_payload.clear()
+		return true
+	if not is_instance_valid(_pending_runtime):
+		return false
+	if bool(_pending_runtime.call("is_prepared")) or bool(_pending_runtime.call("is_active")):
+		if not bool(_pending_runtime.call("deactivate_destination")):
+			return false
+	var clean: bool = (
+		not bool(_pending_runtime.call("is_prepared"))
+		and not bool(_pending_runtime.call("is_active"))
+		and int(_pending_runtime.call("get_loaded_cell_count")) == 0
+	)
+	if clean:
+		_pending_runtime = null
+		_pending_runtime_instance_id = 0
+		_pending_runtime_payload.clear()
+	return clean
+
 func _restore_session_snapshot(snapshot: Dictionary) -> bool:
 	if session == null or not is_instance_valid(session) or not session.has_method("load_save_dict") or not session.has_method("to_save_dict"):
 		return false
@@ -362,10 +399,16 @@ func _clear_pending() -> void:
 	_pending_return_position = Vector3.ZERO
 	_pending_entry_position = Vector3.ZERO
 	_pending_world_seed = -1
+	_pending_runtime = null
+	_pending_runtime_instance_id = 0
+	_pending_runtime_payload.clear()
 
 func _failure(reason: String, clear_pending: bool = false) -> Dictionary:
 	last_error = reason
 	if clear_pending:
+		if not _discard_pending_runtime():
+			last_error = reason + "_pending_runtime_cleanup_failed"
+			return {"ok": false, "reason": last_error, "rollback_complete": false}
 		_clear_pending()
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
-	return {"ok": false, "reason": reason}
+	return {"ok": false, "reason": last_error}
