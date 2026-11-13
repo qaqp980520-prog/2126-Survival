@@ -169,3 +169,14 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - Import/use remains unchanged: the existing `SurfaceWorld.save_game(path)` / `load_game(path)` APIs and `WorldEnvelopeFileStore` are reused. No new dependencies or Project Settings are required.
 - Validation status: exact-head focused Godot 4.3 file-persistence workflow and repository-wide Full Compatibility Gate are required for the updated branch. No result is claimed until both complete on the new HEAD.
 - Limitation: this guard detects regular-file ancestors; it does not claim to provide a filesystem sandbox against hostile symlink manipulation. The public save API remains restricted to non-empty `user://` paths without traversal segments.
+
+
+## User-data symbolic-link path guard — 2026-11-13
+
+- `WorldEnvelopeFileStore` now rejects save and load paths that traverse a symbolic link, directory junction, or other reparse point below the trusted `user://` root.
+- The guard checks the primary, temporary, and backup write paths before creating directories or touching save files; load checks both primary and backup paths before reading or invoking restore callbacks.
+- Corrupt-primary diagnostic candidates that resolve through a link are skipped.
+- The Godot regression creates a directory link under `user://`, places a valid payload behind it, and verifies both write and load are rejected with `path_symlink`, no target file is created, the restore callback is not invoked, and target bytes remain unchanged.
+- This is a preflight defense against pre-existing links, not a race-free filesystem sandbox: concurrent replacement of a path component between validation and I/O is outside the guarantee. The `user://` root itself is treated as trusted.
+- API dependency: Godot 4.3 `DirAccess.open()`, instance `is_link()`, and `create_link()`; see [Godot 4.3 DirAccess](https://docs.godotengine.org/en/4.3/classes/class_diraccess.html).
+- Validation status: pending exact-head focused file-persistence workflow and repository-wide Full Compatibility Gate. Local Godot executable is unavailable; do not claim engine validation until GitHub Actions completes.
