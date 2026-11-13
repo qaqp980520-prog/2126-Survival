@@ -461,16 +461,45 @@ func restore_runtime_from_session(runtime: Object) -> bool:
 ## Restore an active LocationSession as part of a combined world-envelope load.
 ## The caller must reconstruct and activate the matching runtime only after this succeeds.
 func restore_session_for_world_load(payload: Dictionary) -> bool:
-	if state != TransitionState.IDLE or session == null or not is_instance_valid(session) or bool(session.call("is_active")):
+	last_error = ""
+	if state != TransitionState.IDLE:
+		last_error = "session_restore_transition_not_idle"
+		return false
+	if session == null or not is_instance_valid(session) or bool(session.call("is_active")):
+		last_error = "session_restore_session_unavailable_or_active"
 		return false
 	if _active_runtime != null or _pending_runtime != null or _committed_director != null:
+		last_error = "session_restore_runtime_or_entry_state_not_clear"
 		return false
 	if not session.has_method("to_save_dict") or not session.has_method("load_save_dict") or not session.has_method("is_active"):
+		last_error = "session_restore_contract_unavailable"
 		return false
+
+	# JSON may decode integer-valued numbers as floats. Validate and normalize
+	# through a detached canonical Session before touching the live Session;
+	# comparing the live canonical dictionary directly to raw JSON would reject
+	# a semantically identical payload solely because of Variant numeric types.
+	var candidate: RefCounted = SessionScript.new()
+	if not bool(candidate.call("load_save_dict", payload.duplicate(true))):
+		var candidate_error: String = str(candidate.call("get_last_load_error")) if candidate.has_method("get_last_load_error") else "unknown"
+		last_error = "session_payload_invalid:" + candidate_error
+		return false
+	var canonical_payload: Dictionary = candidate.call("to_save_dict")
+	if not bool(candidate.call("is_active")):
+		last_error = "session_payload_not_active"
+		return false
+
 	var previous_snapshot: Dictionary = session.call("to_save_dict")
-	if not bool(session.call("load_save_dict", payload)) or session.call("to_save_dict") != payload or not bool(session.call("is_active")):
-		var restored: bool = _restore_session_snapshot(previous_snapshot)
-		state = TransitionState.IDLE if restored else TransitionState.ENTRY_PREPARED
+	if not bool(session.call("load_save_dict", canonical_payload)):
+		var apply_error: String = str(session.call("get_last_load_error")) if session.has_method("get_last_load_error") else "unknown"
+		var apply_rollback: bool = _restore_session_snapshot(previous_snapshot)
+		state = TransitionState.IDLE if apply_rollback else TransitionState.ENTRY_PREPARED
+		last_error = "session_apply_failed:" + apply_error + ("" if apply_rollback else ":rollback_failed")
+		return false
+	if session.call("to_save_dict") != canonical_payload or not bool(session.call("is_active")):
+		var readback_rollback: bool = _restore_session_snapshot(previous_snapshot)
+		state = TransitionState.IDLE if readback_rollback else TransitionState.ENTRY_PREPARED
+		last_error = "session_canonical_readback_mismatch" if readback_rollback else "session_canonical_readback_mismatch:rollback_failed"
 		return false
 	state = TransitionState.IN_BACKROOMS
 	return true
