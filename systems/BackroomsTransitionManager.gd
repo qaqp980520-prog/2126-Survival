@@ -181,8 +181,11 @@ func commit_portal_entry(
 		var consume_reason: String = str(consumed.get("reason", "portal_consumption_rejected")) if consumed is Dictionary else "portal_consumption_invalid"
 		var consume_director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 		var consume_runtime_restored: bool = _discard_pending_runtime()
-		_clear_pending()
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		if consume_runtime_restored:
+			_clear_pending()
+			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		else:
+			state = TransitionState.ENTRY_PREPARED
 		last_error = consume_reason
 		return {
 			"ok": false,
@@ -200,8 +203,11 @@ func commit_portal_entry(
 		var director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 		var session_restored: bool = _restore_session_snapshot(session_snapshot)
 		var runtime_restored: bool = _discard_pending_runtime()
-		_clear_pending()
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		if runtime_restored:
+			_clear_pending()
+			state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		else:
+			state = TransitionState.ENTRY_PREPARED
 		last_error = "session_commit_rejected_after_portal_consumption"
 		return {
 			"ok": false,
@@ -212,6 +218,25 @@ func commit_portal_entry(
 			"rollback_complete": director_restored and session_restored and runtime_restored
 		}
 	if _pending_runtime != null:
+		var committed_maze_payload: Variant = session.call("get_maze_stream_state")
+		if not (committed_maze_payload is Dictionary) or committed_maze_payload != _pending_runtime_payload:
+			var readback_director_restored: bool = _restore_director_snapshot(director, director_snapshot)
+			var readback_session_restored: bool = _restore_session_snapshot(session_snapshot)
+			var readback_runtime_restored: bool = _discard_pending_runtime()
+			if readback_runtime_restored:
+				_clear_pending()
+				state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+			else:
+				state = TransitionState.ENTRY_PREPARED
+			last_error = "session_runtime_payload_readback_mismatch"
+			return {
+				"ok": false,
+				"reason": last_error,
+				"director_state_restored": readback_director_restored,
+				"session_state_restored": readback_session_restored,
+				"runtime_state_restored": readback_runtime_restored,
+				"rollback_complete": readback_director_restored and readback_session_restored and readback_runtime_restored
+			}
 		_active_runtime = _pending_runtime
 		_active_runtime_instance_id = _pending_runtime_instance_id
 	state = TransitionState.IN_BACKROOMS
