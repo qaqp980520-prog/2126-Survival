@@ -1,0 +1,52 @@
+# Backrooms Production World Handoff M0.1.16
+
+## Purpose
+
+Connect the existing BackroomsTransitionManager, BackroomsLocationSession, and BackroomsMazeCellRuntime to the production SurfaceWorld player without replacing the player node or rebuilding the surface world.
+
+## Runtime contract
+
+- SurfaceWorld remains the owner of the player, camera, surface streaming director, and Backrooms runtime.
+- The Backrooms runtime is vertically isolated at a fixed local Y offset while the surface chunk window remains loaded.
+- Portal entry validates the live one-use portal, stages the hidden runtime, commits Director + Session, moves the existing player, and only then activates the maze collision/visibility.
+- A failed post-commit activation calls abort_committed_entry() to restore the exact pre-entry Director and Session snapshots and retire the staged runtime.
+- While in Backrooms, SurfaceWorld does not tick the portal director or surface streaming. The active maze runtime is synchronized through the transition manager.
+- Surface chunk roots are hidden during Backrooms and their prior visibility values are restored on return.
+- Return restores the original surface position and validates the source world seed before deactivating the maze and clearing the Session.
+- Surface-only serialization is deliberately rejected while Backrooms is active. A full save adapter that serializes both SurfaceWorld and Backrooms Session/runtime is still required before saves can be made in Backrooms.
+
+## Files
+
+- systems/BackroomsTransitionManager.gd: committed-entry abort snapshots and exact rollback.
+- world/SurfaceWorld.gd: production portal entry, player handoff, Backrooms movement/streaming, and surface return.
+- tests/backrooms_runtime_session_integration_test.gd: committed-entry abort and portal restoration regression.
+- tests/production_surface_world_test.gd: real SurfaceWorld entry/return integration regression.
+
+## Dependencies
+
+- Parent PR #345: Backrooms runtime/session transaction integration.
+- Parent PR #344: SurfaceWorld-owned maze cell runtime.
+- Existing portal director and production player-group/interaction contracts.
+
+## Import / integration
+
+All scripts use existing project paths and are preloaded by SurfaceWorld.gd or the existing Godot validation tests. No manual import step is required; open the project with Godot 4.3 and allow the normal project scan/import.
+
+## Test status
+
+- Exact-head Godot 4.3 Full Compatibility Gate: pending for this branch.
+- New regression coverage is added to the existing Backrooms runtime/session integration test and production SurfaceWorld integration test.
+- Local Godot executable is unavailable in the current environment; no local engine pass is claimed.
+
+## Limitations
+
+- Backrooms active-state serialization is not yet integrated into SurfaceWorld.serialize_stream_state(); the method fails closed while Backrooms is active to avoid writing a surface-only payload with a Backrooms player position.
+- Visual acceptance, GPU rendering, lighting review, and iPhone testing remain outstanding.
+- The fixed vertical isolation offset is an interim same-scene strategy, not a separate-world/scene architecture.
+
+## Next steps
+
+1. Complete exact-head Godot 4.3 validation and review.
+2. Add a combined SurfaceWorld + Backrooms Session/runtime save envelope and transactional restore.
+3. Add return-failure and post-commit activation-failure injection at the production SurfaceWorld boundary.
+4. Validate graphical maze materials/collision and mobile controls.
