@@ -14,6 +14,7 @@ const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
 const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
+const NESTED_SAVE_PATH: String = "user://run244_nested_saves/slot_a/world.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -58,6 +59,7 @@ func _run() -> void:
 	watchdog.timeout.connect(_on_timeout)
 	watchdog.start()
 	_cleanup_save_paths()
+	_test_nested_save_directory()
 	_test_json_numeric_save_validation()
 	_test_world_object_json_numeric_validation()
 	source_world = WorldScene.instantiate() as Node3D
@@ -381,6 +383,39 @@ func _run() -> void:
 	_finish(0 if failures.is_empty() else 1)
 
 
+func _test_nested_save_directory() -> void:
+	var file_store: RefCounted = FileStoreScript.new()
+	var first_payload: Dictionary = {"schema_version": 1, "marker": "nested-first"}
+	var first_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, first_payload))
+	_expect(first_saved, "atomic writer creates missing nested user:// save directories")
+	if not first_saved:
+		print("DEBUG: nested save directory report = ", file_store.call("get_last_report"))
+		return
+	_expect(
+		DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(NESTED_SAVE_PATH.get_base_dir())),
+		"nested save parent directory exists after the first save"
+	)
+	_expect(_read_dictionary(NESTED_SAVE_PATH) == first_payload, "nested save path contains the exact first payload")
+
+	var second_payload: Dictionary = {"schema_version": 1, "marker": "nested-second"}
+	var second_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, second_payload))
+	_expect(second_saved, "a second nested save atomically replaces the primary")
+	if not second_saved:
+		print("DEBUG: second nested save report = ", file_store.call("get_last_report"))
+		return
+	_expect(_read_dictionary(NESTED_SAVE_PATH + ".bak") == first_payload, "nested save rotation retains the exact previous primary")
+
+	var probe := SuccessfulRestoreProbe.new()
+	var nested_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		NESTED_SAVE_PATH,
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	_expect(nested_loaded, "nested save path can be restored through the normal file-store API")
+	_expect(probe.restored_payload == second_payload, "nested file restore receives the latest primary payload")
+
+
 func _test_json_numeric_save_validation() -> void:
 	var stamina_model: RefCounted = StaminaScript.new()
 	var stamina_parser := JSON.new()
@@ -479,13 +514,19 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH, NESTED_SAVE_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 			elif DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(path)):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var nested_slot_directory: String = ProjectSettings.globalize_path(NESTED_SAVE_PATH.get_base_dir())
+	var nested_root_directory: String = ProjectSettings.globalize_path("user://run244_nested_saves")
+	if DirAccess.dir_exists_absolute(nested_slot_directory):
+		DirAccess.remove_absolute(nested_slot_directory)
+	if DirAccess.dir_exists_absolute(nested_root_directory):
+		DirAccess.remove_absolute(nested_root_directory)
 
 
 func _expect(condition: bool, message: String) -> void:
