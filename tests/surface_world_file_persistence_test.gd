@@ -61,6 +61,7 @@ func _run() -> void:
 	watchdog.start()
 	_cleanup_save_paths()
 	_test_nested_save_directory()
+	_test_symlink_save_paths()
 	_test_json_numeric_save_validation()
 	_test_world_object_json_numeric_validation()
 	source_world = WorldScene.instantiate() as Node3D
@@ -505,6 +506,56 @@ func _test_nested_save_directory() -> void:
 	_expect(_read_dictionary(NESTED_SAVE_PATH + ".bak") == first_payload, "nested backup remains available after primary repair")
 
 
+func _test_symlink_save_paths() -> void:
+	var target_directory: String = "user://run246_symlink_target"
+	var target_file_path: String = target_directory + "/existing.json"
+	var link_name: String = "run246_symlink_link"
+	var link_path: String = "user://" + link_name
+	var target_absolute: String = ProjectSettings.globalize_path(target_directory)
+	var target_payload: Dictionary = {"schema_version": 1.0, "marker": "symlink-target"}
+	var target_text: String = JSON.stringify(target_payload, "", true, true)
+	var directory_error: Error = DirAccess.make_dir_recursive_absolute(target_absolute)
+	_expect(directory_error == OK or DirAccess.dir_exists_absolute(target_absolute), "create the symlink guard target directory")
+	if not DirAccess.dir_exists_absolute(target_absolute):
+		return
+	_expect(_write_text(target_file_path, target_text), "write a valid save payload behind the symlink target")
+	var user_directory := DirAccess.open("user://")
+	_expect(user_directory != null, "open the user data root for symlink fixture creation")
+	if user_directory == null:
+		return
+	var link_error: Error = user_directory.create_link(target_absolute, link_name)
+	if link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
+		return
+	_expect(link_error == OK, "create a directory symlink inside user data")
+	if link_error != OK:
+		return
+	_expect(user_directory.is_link(link_name), "Godot identifies the user-data directory entry as a symbolic link")
+
+	var file_store: RefCounted = FileStoreScript.new()
+	var write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		link_path + "/new_save.json",
+		{"schema_version": 1.0, "marker": "must-not-write-through-link"}
+	))
+	var write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not write_ok, "atomic writer rejects a nested save path beneath a symbolic link")
+	_expect(str(write_report.get("phase", "")) == "path_symlink", "symbolic-link write rejection reports path_symlink")
+	_expect(not FileAccess.file_exists(target_directory + "/new_save.json"), "symbolic-link write rejection creates no file at the link target")
+
+	var probe := IncompleteRollbackProbe.new()
+	var load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		link_path + "/existing.json",
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	var load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not load_ok, "file loader rejects a save path beneath a symbolic link")
+	_expect(str(load_report.get("phase", "")) == "path_symlink", "symbolic-link load rejection reports path_symlink")
+	_expect(probe.restore_calls.is_empty(), "symbolic-link load rejection never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "symbolic-link rejection preserves the target save bytes")
+
 func _test_json_numeric_save_validation() -> void:
 	var stamina_model: RefCounted = StaminaScript.new()
 	var stamina_parser := JSON.new()
@@ -603,6 +654,15 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
+	var user_root_access := DirAccess.open("user://")
+	if user_root_access != null and user_root_access.is_link("run246_symlink_link"):
+		user_root_access.remove("run246_symlink_link")
+	var symlink_target_file: String = "user://run246_symlink_target/existing.json"
+	if FileAccess.file_exists(symlink_target_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(symlink_target_file))
+	var symlink_target_directory: String = ProjectSettings.globalize_path("user://run246_symlink_target")
+	if DirAccess.dir_exists_absolute(symlink_target_directory):
+		DirAccess.remove_absolute(symlink_target_directory)
 	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH, NESTED_SAVE_PATH, PRODUCTION_NESTED_SAVE_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
