@@ -80,4 +80,4 @@ Existing related tests remain required:
 
 ## Validation status
 
-Exact-head Godot 4.3 Full Compatibility Gate for HEAD 883e45b51f1aba13f69b5b3e765a595cd55359ac is queued as Run #43357422606. No pass/fail result is available yet; do not claim a pass until the run completes successfully.
+Exact-head Godot 4.3 Full Compatibility Gate is pending for the final HEAD of PR #345. The authoritative final commit SHA and corresponding run URL are maintained in the PR description; a run for an earlier HEAD does not validate later commits. Do not claim a pass until the latest exact-head run completes successfully.
