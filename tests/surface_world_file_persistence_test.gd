@@ -6,6 +6,7 @@ const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const MineLiftScript = preload("res://systems/UndergroundMineLift.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
@@ -83,6 +84,25 @@ func _run() -> void:
 	numeric_quick_use["schema_version"] = 1.0
 	numeric_quick_use["selected_slot"] = 0.0
 	numeric_surface["quick_use"] = numeric_quick_use
+	# The underground lift is a stateful world object in the production mine chunk.
+	# Force its saved layer index through JSON as an integral float as well.
+	var numeric_world_objects: Dictionary = numeric_surface.get("world_objects", {}).duplicate(true)
+	var numeric_object_records: Dictionary = numeric_world_objects.get("objects", {}).duplicate(true)
+	var lift_records_found: int = 0
+	for stable_id in numeric_object_records.keys():
+		var record_value: Variant = numeric_object_records[stable_id]
+		if not (record_value is Dictionary):
+			continue
+		var object_state: Variant = record_value.get("state", {})
+		if not (object_state is Dictionary) or not object_state.has("layer_index"):
+			continue
+		object_state["layer_index"] = float(object_state["layer_index"])
+		record_value["state"] = object_state
+		numeric_object_records[stable_id] = record_value
+		lift_records_found += 1
+	numeric_world_objects["objects"] = numeric_object_records
+	numeric_surface["world_objects"] = numeric_world_objects
+	_expect(lift_records_found == 1, "numeric fixture includes the production underground lift state")
 	numeric_fixture["surface_world"] = numeric_surface
 	_expect(_write_text(NUMERIC_PATH, JSON.stringify(numeric_fixture, "", true, true)), "write integral-float JSON envelope compatibility fixture")
 	var numeric_load_ok: bool = bool(source_world.call("load_game", NUMERIC_PATH))
@@ -312,6 +332,14 @@ func _test_world_object_json_numeric_validation() -> void:
 		"revision": 2.5
 	})), "terrain patch rejects fractional JSON revision")
 	patch.free()
+
+	var mine_lift = MineLiftScript.new()
+	_expect(bool(mine_lift.call("validate_world_object_state", {"layer_index": 0.0})), "underground lift accepts integral-float JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 0.5})), "underground lift rejects fractional JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 9.0})), "underground lift rejects out-of-range JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 1.0})), "underground lift rejects a valid but mismatched layer index")
+	_expect(bool(mine_lift.call("apply_world_object_state", {"layer_index": 0.0})), "underground lift applies an integral-float JSON layer index")
+	mine_lift.free()
 
 
 func _read_dictionary(path: String) -> Dictionary:
