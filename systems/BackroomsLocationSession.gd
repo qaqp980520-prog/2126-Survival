@@ -110,6 +110,8 @@ func begin_from_portal_result(
 func set_backrooms_position(position: Vector3) -> bool:
 	if not active or not _is_finite_vector3(position):
 		return false
+	if not maze_stream_state.is_empty() and not _validate_maze_stream_payload(level_id, backrooms_seed, position, maze_stream_state):
+		return false
 	backrooms_position = position
 	return true
 
