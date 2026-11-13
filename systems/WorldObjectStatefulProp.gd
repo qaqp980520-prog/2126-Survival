@@ -68,9 +68,7 @@ func validate_world_object_state(state: Dictionary) -> bool:
 		return false
 	var opened_value: Variant = state.get("opened", null)
 	var loot_value: Variant = state.get("loot_remaining", null)
-	if not (opened_value is bool) or not (loot_value is int):
-		return false
-	if int(loot_value) < 0 or int(loot_value) > MAX_LOOT:
+	if not (opened_value is bool) or not _is_integer_in_range(loot_value, 0, MAX_LOOT):
 		return false
 	# Older schema-1 records contain only opened/loot_remaining. Keep accepting them.
 	if state.has("loot_item_id"):
@@ -79,6 +77,13 @@ func validate_world_object_state(state: Dictionary) -> bool:
 			return false
 	# A closed crate must be full; any consumed loot requires the opened state.
 	return bool(opened_value) == (int(loot_value) < MAX_LOOT)
+
+
+func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number: float = float(value)
+	return is_finite(number) and floorf(number) == number and number >= float(minimum) and number <= float(maximum)
 
 
 func apply_world_object_state(state: Dictionary) -> bool:

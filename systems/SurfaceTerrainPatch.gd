@@ -44,13 +44,19 @@ func validate_world_object_state(state: Dictionary) -> bool:
 	var height_value: Variant = state.get("height_level",null)
 	var surface_value: Variant = state.get("surface_type",null)
 	var revision_value: Variant = state.get("revision",null)
-	if not (height_value is int) or not (surface_value is String) or not (revision_value is int):
+	if not (surface_value is String):
 		return false
-	if int(height_value) < 0 or int(height_value) > MAX_HEIGHT_LEVEL:
+	if not _is_integer_in_range(height_value, 0, MAX_HEIGHT_LEVEL):
 		return false
 	if not SURFACE_TYPES.has(str(surface_value)):
 		return false
-	return int(revision_value) >= 0 and int(revision_value) <= MAX_REVISION
+	return _is_integer_in_range(revision_value, 0, MAX_REVISION)
+
+func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number: float = float(value)
+	return is_finite(number) and floorf(number) == number and number >= float(minimum) and number <= float(maximum)
 
 func apply_world_object_state(state: Dictionary) -> bool:
 	if not validate_world_object_state(state):
