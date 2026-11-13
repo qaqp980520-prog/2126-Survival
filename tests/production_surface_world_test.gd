@@ -377,6 +377,7 @@ func _run() -> void:
 			var surface_position_before_handoff: Vector3 = world.player.global_position
 			var surface_ids_before_handoff: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 			surface_ids_before_handoff.sort()
+			var surface_bounds_before_handoff: Rect2 = world.call("get_loaded_surface_window_bounds")
 			_expect(bool(handoff_portal.call("interact", world.player)), "the real portal interaction range accepts the nearby production player")
 			var entry_result: Dictionary = world.call("enter_backrooms_from_portal", int(handoff_portal.get("portal_id")))
 			_expect(bool(entry_result.get("ok", false)), "SurfaceWorld completes the validated player handoff into the Backrooms runtime")
@@ -387,6 +388,7 @@ func _run() -> void:
 			var surface_ids_during_backrooms: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 			surface_ids_during_backrooms.sort()
 			_expect(surface_ids_during_backrooms == surface_ids_before_handoff, "SurfaceWorld chunk streaming remains frozen while the player is in Backrooms")
+			_expect(world.call("get_loaded_surface_window_bounds") == surface_bounds_before_handoff, "SurfaceWorld loaded-window bounds remain anchored to the saved return position while the Backrooms player moves")
 			_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to write a surface-only save while Backrooms is active")
 			var backrooms_position_before_restore: Vector3 = world.player.global_position
 			var portal_timer_before_backrooms_tick: float = float(handoff_director.get("next_spawn_in"))
