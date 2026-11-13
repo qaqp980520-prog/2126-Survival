@@ -264,8 +264,8 @@ func _run() -> void:
 		if portal_visual != null:
 			_expect(portal_visual.is_in_group("backrooms_portal"), "production portal joins the camera interaction target group")
 			_expect(int(portal_visual.get("portal_id")) > 0, "production portal visual receives the director's active ID")
-			_expect(not bool(portal_visual.get("activation_enabled")), "portal activation remains locked until the maze runtime is available")
-			_expect(not bool(portal_visual.call("interact", world.player)), "locked production portal cannot emit an entry interaction")
+			_expect(bool(portal_visual.get("activation_enabled")), "production portal unlocks only when SurfaceWorld owns the transition manager and maze runtime")
+			_expect(not bool(portal_visual.call("interact", world.player)), "production portal still rejects an out-of-range player")
 			_expect((portal_visual.collision_layer & (1 << 1)) != 0 and portal_visual.collision_mask == 1, "portal anchor uses the production interaction layer and world mask")
 			if DisplayServer.get_name() == "headless":
 				_expect(portal_visual.get_node_or_null("PortalRing") == null, "headless portal anchor avoids renderer-only mesh nodes")
@@ -357,6 +357,51 @@ func _run() -> void:
 			_expect(world.get("backrooms_portal_visual") == null, "retired portal visual is removed after chunk unload")
 			_expect(int(restored_portal_director.get("portal_serial")) == restored_portal_serial, "retirement preserves the portal serial for deterministic history")
 			_expect(float(restored_portal_director.get("next_spawn_in")) >= BackroomsPortalDirectorScript.MIN_SPAWN_INTERVAL and float(restored_portal_director.get("next_spawn_in")) <= BackroomsPortalDirectorScript.MAX_SPAWN_INTERVAL, "retirement schedules a normal future spawn interval")
+	var handoff_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
+	_expect(handoff_director != null, "production world retains the portal director for the real handoff test")
+	if handoff_director != null:
+		handoff_director.set("next_spawn_in", 0.01)
+		world.call("_process", 0.02)
+		var handoff_portal: Area3D = world.get("backrooms_portal_visual") as Area3D
+		_expect(handoff_portal != null and bool(handoff_portal.get("activation_enabled")), "SurfaceWorld exposes an interactable portal after all transition dependencies are ready")
+		if handoff_portal != null:
+			var handoff_active: Dictionary = handoff_director.get("active_portal")
+			var handoff_position: Vector2 = handoff_active.get("position", Vector2.ZERO)
+			world.player.global_position = Vector3(handoff_position.x, 2.0, handoff_position.y + 2.0)
+			var surface_position_before_handoff: Vector3 = world.player.global_position
+			var surface_ids_before_handoff: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+			surface_ids_before_handoff.sort()
+			_expect(bool(handoff_portal.call("interact", world.player)), "the real portal interaction range accepts the nearby production player")
+			var entry_result: Dictionary = world.call("enter_backrooms_from_portal", int(handoff_portal.get("portal_id")))
+			_expect(bool(entry_result.get("ok", false)), "SurfaceWorld completes the validated player handoff into the Backrooms runtime")
+			_expect(bool(world.get("_is_in_backrooms")), "SurfaceWorld switches its movement and streaming mode to Backrooms")
+			_expect(world.player.global_position.y >= 1000.0, "the production player is moved into the isolated Backrooms runtime space")
+			_expect(bool(world.backrooms_maze_runtime.call("is_active")) and world.backrooms_maze_runtime.visible, "the committed maze runtime is active and visible after player handoff")
+			_expect(not handoff_director.get("active_portal").is_empty() == false, "the one-use portal is consumed only after the destination is prepared")
+			var surface_ids_during_backrooms: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+			surface_ids_during_backrooms.sort()
+			_expect(surface_ids_during_backrooms == surface_ids_before_handoff, "SurfaceWorld chunk streaming remains frozen while the player is in Backrooms")
+			_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to write a surface-only save while Backrooms is active")
+			var hidden_surface_root: Node3D = null
+			for chunk_id_value in surface_ids_during_backrooms:
+				var chunk_id: String = str(chunk_id_value)
+				if chunk_id.begins_with("surface/"):
+					hidden_surface_root = world.chunk_controller.get_chunk_root(chunk_id)
+					break
+			_expect(hidden_surface_root != null and not hidden_surface_root.visible, "loaded surface chunk visuals are hidden during the Backrooms handoff")
+			var return_result: Dictionary = world.call("return_from_backrooms")
+			_expect(bool(return_result.get("ok", false)), "SurfaceWorld restores the original surface position before retiring the Backrooms runtime")
+			_expect(not bool(world.get("_is_in_backrooms")), "successful return restores SurfaceWorld movement and streaming mode")
+			_expect(world.player.global_position.is_equal_approx(surface_position_before_handoff), "successful return restores the exact saved surface return position")
+			_expect(not bool(world.backrooms_maze_runtime.call("is_prepared")) and int(world.backrooms_maze_runtime.call("get_loaded_cell_count")) == 0, "successful return retires every Backrooms maze cell root")
+			_expect(not bool(handoff_director.get("active_portal").is_empty()), "consumed portal remains absent after a successful return")
+			var surface_ids_after_return: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
+			surface_ids_after_return.sort()
+			_expect(surface_ids_after_return == surface_ids_before_handoff, "return preserves the exact pre-entry SurfaceWorld chunk window")
+			var restored_surface_root: Node3D = world.chunk_controller.get_chunk_root(str(surface_ids_before_handoff[0]))
+			_expect(restored_surface_root != null and restored_surface_root.visible, "surface chunk visibility is restored after returning")
+			var transition_session: Variant = world.backrooms_transition_manager.call("get_session")
+			_expect(transition_session is Object and not bool(transition_session.call("is_active")), "successful return clears the Backrooms LocationSession only after SurfaceWorld restoration")
 	_finish(0 if failures.is_empty() else 1)
 
 func _test_underground_base_stream_failure_rollback(now: int) -> void:
