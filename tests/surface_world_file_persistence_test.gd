@@ -412,6 +412,17 @@ func _run() -> void:
 
 func _test_nested_save_directory() -> void:
 	var file_store: RefCounted = FileStoreScript.new()
+	var traversal_guard_directory: String = ProjectSettings.globalize_path("user://run244_traversal_guard")
+	var traversal_saved: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run244_traversal_guard/../escaped/world.json",
+		{"schema_version": 1, "marker": "must-not-write"}
+	))
+	var traversal_report: Dictionary = file_store.call("get_last_report")
+	_expect(not traversal_saved, "file store rejects a nested user:// path containing a traversal segment")
+	_expect(str(traversal_report.get("phase", "")) == "validation", "path traversal is rejected before directory creation")
+	_expect(not DirAccess.dir_exists_absolute(traversal_guard_directory), "rejected traversal path creates no parent directory")
+
 	var first_payload: Dictionary = {"schema_version": 1, "marker": "nested-first"}
 	var first_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, first_payload))
 	_expect(first_saved, "atomic writer creates missing nested user:// save directories")
