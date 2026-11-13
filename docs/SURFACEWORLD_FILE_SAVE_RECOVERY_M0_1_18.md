@@ -86,3 +86,13 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - The production file-persistence integration fixture now rewrites the actual saved mine-lift record's `layer_index` as an integral float before JSON serialization, so the failure is exercised through `load_game()`, not only through a direct validator test.
 - Direct regression coverage also verifies apply success for integral floats and rejection of fractional, out-of-range, and mismatched layers.
 - Validation: pending new exact-head Godot 4.3 Full Compatibility Gate; local Godot executable unavailable. Keep the child PR Draft until the file-persistence Step #214 and the complete gate pass.
+
+
+## Backup repair and integral JSON schema compatibility correction
+
+- Exact-head PR #349 run [#43393541270](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43393541270) passed the new mine-lift JSON tests and production integral-float `load_game()` fixture. It then exposed a separate file-store boundary: `WorldEnvelopeFileStore.write_atomically()` required the envelope schema Variant to be exactly int. A backup read from JSON may carry an integral float schema, so the world could be restored while the primary-file repair silently failed.
+- `WorldEnvelopeFileStore.write_atomically()` now accepts finite whole-valued int/float schema variants. Unsupported envelope schemas remain rejected by the production SurfaceWorld restore validator before application.
+- Added a focused backup-recovery regression using a malformed primary and a valid backup with `schema_version: 1.0`; it requires the backup to restore and the primary to be rewritten and verified.
+- Added explicit recovery-report assertions and failure-only diagnostics for corrupt-primary, semantic-invalid, missing-primary, and active Backrooms file loads.
+- The same exact-head run also showed the active Backrooms file-load path still fails after the mine-lift fix; its restore report is now printed on failure so the next exact-head run can identify the remaining phase. The four failing assertions on the superseded HEAD were: three primary-repair checks and the fresh-world Backrooms file load. No full-gate pass is claimed.
+- New exact-head validation is required; keep PR #349 Draft until the backup-repair regression, active Backrooms file-load test, and complete Full Compatibility Gate pass.
