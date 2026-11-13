@@ -42,7 +42,7 @@ The manager exposes restore_session_for_world_load() and rollback_session_for_wo
   - Adds serialize_world_envelope(), restore_world_envelope(), surface visibility snapshots, validation, and cross-system rollback.
   - Preserves the existing surface-only APIs and their Backrooms fail-closed behavior.
 - tests/backrooms_combined_world_save_test.gd
-  - Creates a real production portal entry, saves while in Backrooms, rejects a mismatched Session seed, injects maze-cell staging failure and verifies rollback, retries the valid restore, and returns to the exact surface position.
+  - Creates a real production portal entry, verifies normal surface-envelope round-trip, saves while in Backrooms, rejects a mismatched Session seed, injects maze-cell staging failure and verifies rollback, retries the valid restore, and returns to the exact surface position. It also checks non-3D Window collider ancestors are safely ignored by interaction routing.
 - .github/workflows/godot-validation.yml
   - Runs the new integration test in the Godot 4.3 Full Compatibility Gate.
 
@@ -84,3 +84,12 @@ Do not call restore_stream_state() to load an active Backrooms envelope.
 ## Next step
 
 Run the exact-head Godot 4.3 Full Compatibility Gate, fix any parser/runtime/regression failures, then obtain an independent review before merging the parent chain.
+
+
+## CI diagnostic and corrective changes — 2026-11-13
+
+- Exact-head run #43370508636 reached the new combined save integration test after root import and production SurfaceWorld Step #211 passed. The new test exposed a SurfaceWorld payload readback mismatch after rollback and a headless interaction-routing error where a Window ancestor was passed to typed Array[Node3D] membership checks.
+- Added a Node3D type guard in _resolve_camera_interaction_target() and a regression assertion using the SceneTree root Window. Added per-key rollback payload diagnostics so any remaining difference is explicit.
+- Added an ordinary surface-envelope round-trip before the Backrooms restore scenario, covering the non-Backrooms branch of schema 1.
+- Save serialization now marks SurfaceWorld streaming fail-closed if runtime synchronization reports an incomplete rollback, and refuses Backrooms saves if the original surface visibility snapshot is incomplete.
+- Corrective code/test commits: db6a8dc85a65e087025c7cfe02dadf780fef6748 and ef4fa219d22562a55a974ab0c10a9f601c664d90. The exact-head Full Gate for this new HEAD is pending; the previous run is diagnostic only and does not validate these corrections.
