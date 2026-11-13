@@ -2,6 +2,8 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const StaminaScript = preload("res://systems/SurvivalStamina.gd")
+const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
@@ -36,6 +38,7 @@ func _run() -> void:
 	watchdog.timeout.connect(_on_timeout)
 	watchdog.start()
 	_cleanup_save_paths()
+	_test_json_numeric_save_validation()
 	source_world = WorldScene.instantiate() as Node3D
 	_expect(source_world != null, "production SurfaceWorld scene instantiates")
 	if source_world == null:
@@ -220,6 +223,37 @@ func _run() -> void:
 		_expect(restored_player.global_position.is_equal_approx(expected_surface_position), "return after file load reaches the exact saved SurfaceWorld position")
 
 	_finish(0 if failures.is_empty() else 1)
+
+
+func _test_json_numeric_save_validation() -> void:
+	var stamina_model: RefCounted = StaminaScript.new()
+	var stamina_parser := JSON.new()
+	var stamina_json: String = JSON.stringify({"schema_version": 1.0, "current": 73.5}, "", true, true)
+	_expect(stamina_parser.parse(stamina_json) == OK, "parse an integral-float stamina schema JSON fixture")
+	var stamina_payload: Variant = stamina_parser.data
+	_expect(stamina_payload is Dictionary and bool(stamina_model.call("validate_save_dict", stamina_payload)), "stamina validator accepts finite integral JSON schema numbers")
+	_expect(not bool(stamina_model.call("validate_save_dict", {"schema_version": 1.5, "current": 73.5})), "stamina validator rejects fractional schema versions")
+
+	var quick_use_model: RefCounted = QuickUseScript.new()
+	var quick_use_parser := JSON.new()
+	var quick_use_json: String = JSON.stringify({
+		"schema_version": 1.0,
+		"slots": ["berries", "herbs", "meat", "food"],
+		"selected_slot": 2.0
+	}, "", true, true)
+	_expect(quick_use_parser.parse(quick_use_json) == OK, "parse integral-float quick-use schema JSON fixture")
+	var quick_use_payload: Variant = quick_use_parser.data
+	_expect(quick_use_payload is Dictionary and bool(quick_use_model.call("validate_save_dict", quick_use_payload)), "quick-use validator accepts integral JSON schema and slot numbers")
+	_expect(not bool(quick_use_model.call("validate_save_dict", {
+		"schema_version": 1,
+		"slots": ["berries", "herbs", "meat", "food"],
+		"selected_slot": 1.5
+	})), "quick-use validator rejects fractional selected slots")
+	_expect(not bool(quick_use_model.call("validate_save_dict", {
+		"schema_version": 1.5,
+		"slots": ["berries", "herbs", "meat", "food"],
+		"selected_slot": 1
+	})), "quick-use validator rejects fractional schema versions")
 
 
 func _read_dictionary(path: String) -> Dictionary:
