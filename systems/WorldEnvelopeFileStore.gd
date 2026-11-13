@@ -11,7 +11,7 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 	_set_report(false, "validation", "Save has not been written.", {})
 	if not _is_safe_user_path(destination_path):
 		return _fail("validation", "Save path must be a non-empty user:// path.", {})
-	if payload.is_empty() or not (payload.get("schema_version", null) is int):
+	if payload.is_empty() or not _is_integer_value(payload.get("schema_version", null)):
 		return _fail("validation", "World envelope is empty or has no integer schema version.", {})
 
 	var encoded: String = JSON.stringify(payload, "", true, true)
@@ -226,6 +226,13 @@ func _next_diagnostic_path(save_path: String) -> String:
 		if not FileAccess.file_exists(candidate) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)):
 			return candidate
 	return ""
+
+
+func _is_integer_value(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var number: float = float(value)
+	return is_finite(number) and floorf(number) == number
 
 
 func _is_safe_user_path(path: String) -> bool:

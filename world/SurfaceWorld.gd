@@ -1657,11 +1657,18 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	if is_backrooms_target:
 		if not bool(backrooms_transition_manager.call("restore_session_for_world_load", session_value)):
+			var transition_error: String = str(backrooms_transition_manager.call("get_last_error"))
 			var session_rollback: bool = _rollback_world_envelope_restore(
 				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
 				previous_surface_ids, previous_visibility, now
 			)
-			_set_world_envelope_restore_report(false, "session_restore", "Backrooms LocationSession restore failed.", session_rollback)
+			_set_world_envelope_restore_report(
+				false,
+				"session_restore",
+				"Backrooms LocationSession restore failed.",
+				session_rollback,
+				{"transition_error": transition_error}
+			)
 			return false
 		backrooms_maze_runtime.position = BACKROOMS_WORLD_OFFSET
 		if not bool(backrooms_transition_manager.call("restore_runtime_from_session", backrooms_maze_runtime)):

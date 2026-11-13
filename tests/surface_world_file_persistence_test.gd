@@ -6,10 +6,14 @@ const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const MineLiftScript = preload("res://systems/UndergroundMineLift.gd")
+const BackroomsSessionScript = preload("res://systems/BackroomsLocationSession.gd")
+const BackroomsStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
+const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -19,6 +23,19 @@ class IncompleteRollbackProbe extends RefCounted:
 		restore_calls.append(payload.duplicate(true))
 		last_report = {"phase": "surface_restore", "rollback_complete": false}
 		return false
+
+	func get_last_report() -> Dictionary:
+		return last_report.duplicate(true)
+
+
+class SuccessfulRestoreProbe extends RefCounted:
+	var restored_payload: Dictionary = {}
+	var last_report: Dictionary = {}
+
+	func restore(payload: Dictionary, _now_unix: int = -1) -> bool:
+		restored_payload = payload.duplicate(true)
+		last_report = {"success": true, "phase": "complete", "rollback_complete": true}
+		return true
 
 	func get_last_report() -> Dictionary:
 		return last_report.duplicate(true)
@@ -83,6 +100,25 @@ func _run() -> void:
 	numeric_quick_use["schema_version"] = 1.0
 	numeric_quick_use["selected_slot"] = 0.0
 	numeric_surface["quick_use"] = numeric_quick_use
+	# The underground lift is a stateful world object in the production mine chunk.
+	# Force its saved layer index through JSON as an integral float as well.
+	var numeric_world_objects: Dictionary = numeric_surface.get("world_objects", {}).duplicate(true)
+	var numeric_object_records: Dictionary = numeric_world_objects.get("objects", {}).duplicate(true)
+	var lift_records_found: int = 0
+	for stable_id in numeric_object_records.keys():
+		var record_value: Variant = numeric_object_records[stable_id]
+		if not (record_value is Dictionary):
+			continue
+		var object_state: Variant = record_value.get("state", {})
+		if not (object_state is Dictionary) or not object_state.has("layer_index"):
+			continue
+		object_state["layer_index"] = float(object_state["layer_index"])
+		record_value["state"] = object_state
+		numeric_object_records[stable_id] = record_value
+		lift_records_found += 1
+	numeric_world_objects["objects"] = numeric_object_records
+	numeric_surface["world_objects"] = numeric_world_objects
+	_expect(lift_records_found == 1, "numeric fixture includes the production underground lift state")
 	numeric_fixture["surface_world"] = numeric_surface
 	_expect(_write_text(NUMERIC_PATH, JSON.stringify(numeric_fixture, "", true, true)), "write integral-float JSON envelope compatibility fixture")
 	var numeric_load_ok: bool = bool(source_world.call("load_game", NUMERIC_PATH))
@@ -107,8 +143,12 @@ func _run() -> void:
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(22.0, 2.0, 23.0), now + 2)), "mutate player position before corrupt-primary recovery")
 	_expect(bool(bridge.call("collect_world_item", "berries", 4)), "mutate inventory before corrupt-primary recovery")
 	var corrupt_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var corrupt_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(corrupt_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: corrupt-primary recovery report = ", corrupt_recovery_report)
+	_expect(bool(corrupt_recovery_report.get("details", {}).get("primary_repaired", false)), "backup recovery rewrites and verifies the primary file")
 	if not corrupt_fallback_ok:
-		print("DEBUG: malformed-primary load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+		print("DEBUG: malformed-primary load report = ", corrupt_recovery_report, " restore = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(corrupt_fallback_ok, "load_game falls back to the valid backup after malformed primary JSON")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "corrupt-primary fallback restores the backup player position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "corrupt-primary fallback restores the backup inventory")
@@ -127,8 +167,12 @@ func _run() -> void:
 	_expect(_write_text(SAVE_PATH, semantic_invalid_text), "write a valid JSON dictionary with an unsupported envelope schema")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(42.0, 2.0, 43.0), now + 4)), "mutate player position before semantic-invalid fallback")
 	var semantic_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var semantic_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(semantic_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: semantic-invalid recovery report = ", semantic_recovery_report)
+	_expect(bool(semantic_recovery_report.get("details", {}).get("primary_repaired", false)), "semantic-invalid backup recovery rewrites and verifies the primary file")
 	if not semantic_fallback_ok:
-		print("DEBUG: semantic-invalid load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+		print("DEBUG: semantic-invalid load report = ", semantic_recovery_report, " restore = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(semantic_fallback_ok, "load_game falls back when primary JSON is valid but envelope validation fails")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "semantic-invalid fallback restores the previous good position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "semantic-invalid fallback restores the previous good inventory")
@@ -141,7 +185,12 @@ func _run() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	_expect(not FileAccess.file_exists(SAVE_PATH), "remove the primary to simulate an interrupted save")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(52.0, 2.0, 53.0), now + 5)), "mutate the world before missing-primary recovery")
-	_expect(bool(source_world.call("load_game", SAVE_PATH)), "load_game restores from a valid backup when the primary is missing")
+	var missing_recovery_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var missing_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(missing_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: missing-primary recovery report = ", missing_recovery_report)
+	_expect(bool(missing_recovery_report.get("details", {}).get("primary_repaired", false)), "missing-primary backup recovery rewrites and verifies the primary file")
+	_expect(missing_recovery_ok, "load_game restores from a valid backup when the primary is missing")
 	_expect(_read_dictionary(SAVE_PATH) == first_primary, "missing-primary recovery promotes the backup to a verified primary")
 	_expect(_read_dictionary(SAVE_PATH + ".bak") == first_primary, "missing-primary recovery retains the backup until a later successful save")
 
@@ -160,6 +209,24 @@ func _run() -> void:
 	_expect(not fail_closed_loaded, "file store rejects primary restore when rollback is incomplete")
 	_expect(incomplete_probe.restore_calls.size() == 1, "incomplete rollback blocks any attempt to apply the backup")
 	_expect(incomplete_probe.restore_calls.size() == 1 and str(incomplete_probe.restore_calls[0].get("marker", "")) == "primary", "only the primary payload reaches the failing restore callback")
+
+	# A valid backup may contain an integral JSON float for its schema version.
+	# Recovery must rewrite that backup as the primary instead of rejecting it.
+	_expect(_write_text(NUMERIC_SCHEMA_RECOVERY_PATH, "{broken-primary-json"), "write malformed primary for integral-float schema recovery")
+	var integral_schema_backup: Dictionary = {"schema_version": 1.0, "marker": "backup"}
+	_expect(_write_text(NUMERIC_SCHEMA_RECOVERY_PATH + ".bak", JSON.stringify(integral_schema_backup, "", true, true)), "write backup with an integral-float schema version")
+	var successful_probe := SuccessfulRestoreProbe.new()
+	var numeric_schema_recovery_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		NUMERIC_SCHEMA_RECOVERY_PATH,
+		Callable(successful_probe, "restore"),
+		Callable(successful_probe, "get_last_report"),
+		now + 6
+	))
+	var numeric_schema_recovery_report: Dictionary = file_store.call("get_last_report")
+	_expect(numeric_schema_recovery_ok, "file store restores a valid backup with an integral-float schema")
+	_expect(bool(numeric_schema_recovery_report.get("details", {}).get("primary_repaired", false)), "file store repairs primary from an integral-float schema backup")
+	_expect(_read_dictionary(NUMERIC_SCHEMA_RECOVERY_PATH) == integral_schema_backup, "integral-float backup is rewritten without changing its parsed payload")
 
 	# A temporary-path obstruction must never modify the current primary bytes.
 	var primary_before_obstruction: String = FileAccess.get_file_as_string(SAVE_PATH)
@@ -210,8 +277,32 @@ func _run() -> void:
 		print("DEBUG: Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(backrooms_save_ok, "F5-equivalent production API writes an active Backrooms envelope to disk")
 	var backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
+	var saved_session_value: Variant = backrooms_payload.get("backrooms_session", {})
+	var session_probe: RefCounted = BackroomsSessionScript.new()
+	var session_probe_ok: bool = saved_session_value is Dictionary and bool(session_probe.call("load_save_dict", saved_session_value))
+	var canonical_session_value: Dictionary = {}
+	if not session_probe_ok:
+		print("DEBUG: detached Backrooms Session probe error = ", session_probe.call("get_last_load_error"))
+	else:
+		canonical_session_value = session_probe.call("to_save_dict")
+		if canonical_session_value != saved_session_value:
+			print("DEBUG: detached Backrooms Session canonical readback differs from JSON payload")
+	_expect(session_probe_ok, "JSON-decoded active Backrooms Session passes detached validation")
+
+	var saved_runtime_value: Variant = backrooms_payload.get("backrooms_runtime", {})
+	var stream_probe: RefCounted = BackroomsStreamStateScript.new()
+	var stream_probe_ok: bool = saved_runtime_value is Dictionary and bool(stream_probe.call("load_save_dict", saved_runtime_value))
+	var canonical_runtime_value: Dictionary = {}
+	if stream_probe_ok:
+		canonical_runtime_value = stream_probe.call("to_save_dict")
+	_expect(stream_probe_ok, "JSON-decoded Backrooms runtime stream passes detached validation")
+	if session_probe_ok and stream_probe_ok:
+		_expect(
+			canonical_session_value.get("maze_stream_state", {}) == canonical_runtime_value,
+			"Session and Runtime stream snapshots agree after JSON numeric canonicalization"
+		)
 	_expect(str(backrooms_payload.get("active_location", "")) == "backrooms", "Backrooms file records the active Backrooms location")
-	_expect(not backrooms_payload.get("backrooms_runtime", {}).is_empty(), "Backrooms file contains the live maze runtime stream payload")
+	_expect(not saved_runtime_value.is_empty(), "Backrooms file contains the live maze runtime stream payload")
 
 	restored_world = WorldScene.instantiate() as Node3D
 	_expect(restored_world != null, "fresh production SurfaceWorld instance is available for file loading")
@@ -221,6 +312,8 @@ func _run() -> void:
 	root.add_child(restored_world)
 	await process_frame
 	var backrooms_file_loaded: bool = bool(restored_world.call("load_game", BACKROOMS_SAVE_PATH))
+	if not backrooms_file_loaded:
+		print("DEBUG: Backrooms file load report = ", restored_world.call("get_last_world_file_report"), " envelope = ", restored_world.call("get_last_world_envelope_restore_report"), " surface = ", restored_world.call("get_last_restore_report"))
 	_expect(backrooms_file_loaded, "F9-equivalent production API restores the active Backrooms file into a fresh world")
 	if not backrooms_file_loaded:
 		_finish(1)
@@ -237,8 +330,8 @@ func _run() -> void:
 	if saved_position.size() == 3 and restored_player != null:
 		var expected_backrooms_position := Vector3(float(saved_position[0]), float(saved_position[1]), float(saved_position[2]))
 		_expect(restored_player.global_position.is_equal_approx(expected_backrooms_position), "file round-trip restores the exact Backrooms player position")
-	_expect(restored_manager.call("get_session_save_dict") == backrooms_payload.get("backrooms_session", {}), "file round-trip restores the exact active LocationSession")
-	_expect(restored_runtime.call("to_save_dict") == backrooms_payload.get("backrooms_runtime", {}), "file round-trip restores the exact maze runtime stream state")
+	_expect(restored_manager.call("get_session_save_dict") == canonical_session_value, "file round-trip restores the canonical active LocationSession")
+	_expect(restored_runtime.call("to_save_dict") == canonical_runtime_value, "file round-trip restores the canonical maze runtime stream state")
 	var return_result: Dictionary = restored_world.call("return_from_backrooms")
 	_expect(bool(return_result.get("ok", false)), "file-restored Backrooms Session can return to SurfaceWorld")
 	var saved_session: Dictionary = backrooms_payload.get("backrooms_session", {})
@@ -313,6 +406,14 @@ func _test_world_object_json_numeric_validation() -> void:
 	})), "terrain patch rejects fractional JSON revision")
 	patch.free()
 
+	var mine_lift = MineLiftScript.new()
+	_expect(bool(mine_lift.call("validate_world_object_state", {"layer_index": 0.0})), "underground lift accepts integral-float JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 0.5})), "underground lift rejects fractional JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 9.0})), "underground lift rejects out-of-range JSON layer indices")
+	_expect(not bool(mine_lift.call("validate_world_object_state", {"layer_index": 1.0})), "underground lift rejects a valid but mismatched layer index")
+	_expect(bool(mine_lift.call("apply_world_object_state", {"layer_index": 0.0})), "underground lift applies an integral-float JSON layer index")
+	mine_lift.free()
+
 
 func _read_dictionary(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -340,7 +441,7 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
