@@ -2,6 +2,34 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 
+class FailAlwaysStamina extends RefCounted:
+	var current_stamina: float = 100.0
+	var _payload: Dictionary = {}
+
+	func _init(initial_payload: Dictionary) -> void:
+		_payload = initial_payload.duplicate(true)
+		current_stamina = float(_payload.get("current", 100.0))
+
+	func to_save_dict() -> Dictionary:
+		return _payload.duplicate(true)
+
+	func load_save_dict(data: Dictionary) -> bool:
+		_payload = data.duplicate(true)
+		current_stamina = float(_payload.get("current", 100.0))
+		return false
+
+	func can_jump() -> bool:
+		return current_stamina >= 10.0
+
+	func can_sprint() -> bool:
+		return current_stamina >= 5.0
+
+	func get_movement_speed_multiplier(_sprinting: bool = false) -> float:
+		return 1.0 if current_stamina > 0.0 else 0.65
+
+	func get_max_stamina() -> float:
+		return 100.0
+
 var failures: Array[String] = []
 var source_world: Node3D
 var restored_world: Node3D
@@ -74,6 +102,32 @@ func _run() -> void:
 	if envelope.is_empty():
 		_finish(1)
 		return
+
+	# Force the nested SurfaceWorld restore to fail after applying its base payload,
+	# then fail again while restoring the prior stamina snapshot. The combined
+	# envelope boundary must mark the world fail-closed rather than permit play
+	# with an incomplete cross-system rollback.
+	var fail_closed_world: Node3D = WorldScene.instantiate() as Node3D
+	_expect(fail_closed_world != null, "fail-closed restore target instantiates")
+	if fail_closed_world == null:
+		_finish(1)
+		return
+	root.add_child(fail_closed_world)
+	await process_frame
+	var original_fail_closed_stamina: RefCounted = fail_closed_world.get("stamina") as RefCounted
+	fail_closed_world.set("stamina", FailAlwaysStamina.new(original_fail_closed_stamina.call("to_save_dict")))
+	var incomplete_surface_restore: bool = bool(fail_closed_world.call("restore_world_envelope", envelope, now + 1))
+	var incomplete_surface_report: Dictionary = fail_closed_world.call("get_last_world_envelope_restore_report")
+	_expect(not incomplete_surface_restore and str(incomplete_surface_report.get("phase", "")) == "surface_restore", "combined restore rejects a surface payload whose auxiliary apply fails")
+	_expect(not bool(incomplete_surface_report.get("rollback_complete", true)), "combined restore exposes the incomplete nested SurfaceWorld rollback")
+	_expect(bool(fail_closed_world.get("_surface_stream_pending")), "incomplete nested SurfaceWorld rollback locks streaming fail-closed")
+	_expect(not bool(fail_closed_world.get("_is_in_backrooms")), "failed surface restore never activates the Backrooms world")
+	var fail_closed_manager: RefCounted = fail_closed_world.get("backrooms_transition_manager") as RefCounted
+	var fail_closed_runtime: Node3D = fail_closed_world.get("backrooms_maze_runtime") as Node3D
+	_expect(not bool(fail_closed_manager.call("get_session_save_dict").get("active", false)), "failed surface restore leaves the Backrooms Session inactive")
+	_expect(not bool(fail_closed_runtime.call("is_prepared")) and not bool(fail_closed_runtime.call("is_active")), "failed surface restore leaves the maze runtime unprepared and inactive")
+	fail_closed_world.queue_free()
+	await process_frame
 
 	restored_world = WorldScene.instantiate() as Node3D
 	_expect(restored_world != null, "fresh SurfaceWorld restore target instantiates")
