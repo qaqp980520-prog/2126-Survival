@@ -1851,19 +1851,62 @@ func _rollback_world_envelope_restore(
 	if player != null:
 		player.global_position = previous_position
 		player.velocity = previous_velocity
+
+	# The normal SurfaceWorld restore path advances regeneration timestamps while
+	# registering streamed chunks. A transaction rollback must not advance time:
+	# reapply the exact pre-transaction registry snapshots after the final stream.
+	var previous_minerals_value: Variant = previous_surface_payload.get("minerals", null)
+	var previous_crops_value: Variant = previous_surface_payload.get("crops", null)
+	var previous_world_objects_value: Variant = previous_surface_payload.get("world_objects", null)
+	var minerals_restored: bool = (
+		registry != null
+		and registry.has_method("restore_snapshot_exact")
+		and previous_minerals_value is Dictionary
+		and bool(registry.call("restore_snapshot_exact", previous_minerals_value, now_unix))
+	)
+	var crops_restored: bool = (
+		crop_registry != null
+		and previous_crops_value is Dictionary
+		and bool(crop_registry.call("restore_save_dict", previous_crops_value))
+	)
+	var world_objects_restored: bool = (
+		chunk_controller != null
+		and chunk_controller.has_method("restore_world_object_states")
+		and previous_world_objects_value is Dictionary
+		and bool(chunk_controller.call("restore_world_object_states", previous_world_objects_value))
+	)
+	if chunk_controller != null and chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.call("refresh_crop_plots")
+
 	var ids_restored: bool = _get_loaded_surface_chunk_ids() == previous_surface_ids
 	var visibility_restored: bool = _apply_surface_chunk_visibility(previous_visibility)
 	var session_readback: Dictionary = backrooms_transition_manager.call("get_session_save_dict") if backrooms_transition_manager != null else {}
 	var manager_idle: bool = backrooms_transition_manager != null and str(backrooms_transition_manager.call("get_state_name")) == "IDLE"
 	var runtime_empty: bool = backrooms_maze_runtime != null and not bool(backrooms_maze_runtime.call("is_prepared")) and not bool(backrooms_maze_runtime.call("is_active")) and int(backrooms_maze_runtime.call("get_loaded_cell_count")) == 0
 	var player_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
-	var rollback_complete: bool = runtime_clean and session_restored and surface_restored and ids_restored and visibility_restored and session_readback == previous_session_payload and manager_idle and runtime_empty and player_restored and not _is_in_backrooms
+	var surface_payload_readback: Dictionary = serialize_stream_state()
+	var surface_payload_restored: bool = surface_payload_readback == previous_surface_payload
+	var rollback_complete: bool = (
+		runtime_clean
+		and session_restored
+		and surface_restored
+		and minerals_restored
+		and crops_restored
+		and world_objects_restored
+		and surface_payload_restored
+		and ids_restored
+		and visibility_restored
+		and session_readback == previous_session_payload
+		and manager_idle
+		and runtime_empty
+		and player_restored
+		and not _is_in_backrooms
+	)
 	if not rollback_complete:
 		_surface_stream_pending = true
 		if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
 			backrooms_portal_visual.call("set_activation_enabled", false)
 	return rollback_complete
-
 
 func _parse_world_save_vector3(value: Variant) -> Dictionary:
 	if not (value is Array) or value.size() != 3:
