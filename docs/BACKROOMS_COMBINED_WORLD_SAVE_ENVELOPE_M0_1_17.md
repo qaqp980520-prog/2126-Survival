@@ -19,7 +19,7 @@ Top-level fields:
 - surface_chunk_ids: sorted loaded surface/* chunk IDs.
 - surface_chunk_visibility: original visibility for every saved surface chunk.
 
-For Backrooms saves, the surface payload's player_position is the Session's surface_return_position; the Backrooms player's transform is stored separately. The surface portal director payload represents the post-consumption state, so the one-use portal does not reappear after load.
+For Backrooms saves, serialization first synchronizes the live player position into the runtime and Session. The surface payload's player_position is the Session's surface_return_position; the Backrooms player's transform is stored separately. The surface portal director payload represents the post-consumption state, so the one-use portal does not reappear after load.
 
 ## Restore transaction
 
