@@ -11,6 +11,7 @@ const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
+const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -20,6 +21,19 @@ class IncompleteRollbackProbe extends RefCounted:
 		restore_calls.append(payload.duplicate(true))
 		last_report = {"phase": "surface_restore", "rollback_complete": false}
 		return false
+
+	func get_last_report() -> Dictionary:
+		return last_report.duplicate(true)
+
+
+class SuccessfulRestoreProbe extends RefCounted:
+	var restored_payload: Dictionary = {}
+	var last_report: Dictionary = {}
+
+	func restore(payload: Dictionary, _now_unix: int = -1) -> bool:
+		restored_payload = payload.duplicate(true)
+		last_report = {"success": true, "phase": "complete", "rollback_complete": true}
+		return true
 
 	func get_last_report() -> Dictionary:
 		return last_report.duplicate(true)
@@ -127,8 +141,12 @@ func _run() -> void:
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(22.0, 2.0, 23.0), now + 2)), "mutate player position before corrupt-primary recovery")
 	_expect(bool(bridge.call("collect_world_item", "berries", 4)), "mutate inventory before corrupt-primary recovery")
 	var corrupt_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var corrupt_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(corrupt_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: corrupt-primary recovery report = ", corrupt_recovery_report)
+	_expect(bool(corrupt_recovery_report.get("details", {}).get("primary_repaired", false)), "backup recovery rewrites and verifies the primary file")
 	if not corrupt_fallback_ok:
-		print("DEBUG: malformed-primary load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+		print("DEBUG: malformed-primary load report = ", corrupt_recovery_report, " restore = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(corrupt_fallback_ok, "load_game falls back to the valid backup after malformed primary JSON")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "corrupt-primary fallback restores the backup player position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "corrupt-primary fallback restores the backup inventory")
@@ -147,8 +165,12 @@ func _run() -> void:
 	_expect(_write_text(SAVE_PATH, semantic_invalid_text), "write a valid JSON dictionary with an unsupported envelope schema")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(42.0, 2.0, 43.0), now + 4)), "mutate player position before semantic-invalid fallback")
 	var semantic_fallback_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var semantic_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(semantic_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: semantic-invalid recovery report = ", semantic_recovery_report)
+	_expect(bool(semantic_recovery_report.get("details", {}).get("primary_repaired", false)), "semantic-invalid backup recovery rewrites and verifies the primary file")
 	if not semantic_fallback_ok:
-		print("DEBUG: semantic-invalid load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+		print("DEBUG: semantic-invalid load report = ", semantic_recovery_report, " restore = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(semantic_fallback_ok, "load_game falls back when primary JSON is valid but envelope validation fails")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 2.0, 3.0)), "semantic-invalid fallback restores the previous good position")
 	_expect(int(bridge.call("get_item_count", "berries")) == 2, "semantic-invalid fallback restores the previous good inventory")
@@ -161,7 +183,12 @@ func _run() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	_expect(not FileAccess.file_exists(SAVE_PATH), "remove the primary to simulate an interrupted save")
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(52.0, 2.0, 53.0), now + 5)), "mutate the world before missing-primary recovery")
-	_expect(bool(source_world.call("load_game", SAVE_PATH)), "load_game restores from a valid backup when the primary is missing")
+	var missing_recovery_ok: bool = bool(source_world.call("load_game", SAVE_PATH))
+	var missing_recovery_report: Dictionary = source_world.call("get_last_world_file_report")
+	if not bool(missing_recovery_report.get("details", {}).get("primary_repaired", false)):
+		print("DEBUG: missing-primary recovery report = ", missing_recovery_report)
+	_expect(bool(missing_recovery_report.get("details", {}).get("primary_repaired", false)), "missing-primary backup recovery rewrites and verifies the primary file")
+	_expect(missing_recovery_ok, "load_game restores from a valid backup when the primary is missing")
 	_expect(_read_dictionary(SAVE_PATH) == first_primary, "missing-primary recovery promotes the backup to a verified primary")
 	_expect(_read_dictionary(SAVE_PATH + ".bak") == first_primary, "missing-primary recovery retains the backup until a later successful save")
 
@@ -180,6 +207,24 @@ func _run() -> void:
 	_expect(not fail_closed_loaded, "file store rejects primary restore when rollback is incomplete")
 	_expect(incomplete_probe.restore_calls.size() == 1, "incomplete rollback blocks any attempt to apply the backup")
 	_expect(incomplete_probe.restore_calls.size() == 1 and str(incomplete_probe.restore_calls[0].get("marker", "")) == "primary", "only the primary payload reaches the failing restore callback")
+
+	# A valid backup may contain an integral JSON float for its schema version.
+	# Recovery must rewrite that backup as the primary instead of rejecting it.
+	_expect(_write_text(NUMERIC_SCHEMA_RECOVERY_PATH, "{broken-primary-json"), "write malformed primary for integral-float schema recovery")
+	var integral_schema_backup: Dictionary = {"schema_version": 1.0, "marker": "backup"}
+	_expect(_write_text(NUMERIC_SCHEMA_RECOVERY_PATH + ".bak", JSON.stringify(integral_schema_backup, "", true, true)), "write backup with an integral-float schema version")
+	var successful_probe := SuccessfulRestoreProbe.new()
+	var numeric_schema_recovery_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		NUMERIC_SCHEMA_RECOVERY_PATH,
+		Callable(successful_probe, "restore"),
+		Callable(successful_probe, "get_last_report"),
+		now + 6
+	))
+	var numeric_schema_recovery_report: Dictionary = file_store.call("get_last_report")
+	_expect(numeric_schema_recovery_ok, "file store restores a valid backup with an integral-float schema")
+	_expect(bool(numeric_schema_recovery_report.get("details", {}).get("primary_repaired", false)), "file store repairs primary from an integral-float schema backup")
+	_expect(_read_dictionary(NUMERIC_SCHEMA_RECOVERY_PATH) == integral_schema_backup, "integral-float backup is rewritten without changing its parsed payload")
 
 	# A temporary-path obstruction must never modify the current primary bytes.
 	var primary_before_obstruction: String = FileAccess.get_file_as_string(SAVE_PATH)
@@ -241,6 +286,8 @@ func _run() -> void:
 	root.add_child(restored_world)
 	await process_frame
 	var backrooms_file_loaded: bool = bool(restored_world.call("load_game", BACKROOMS_SAVE_PATH))
+	if not backrooms_file_loaded:
+		print("DEBUG: Backrooms file load report = ", restored_world.call("get_last_world_file_report"), " envelope = ", restored_world.call("get_last_world_envelope_restore_report"), " surface = ", restored_world.call("get_last_restore_report"))
 	_expect(backrooms_file_loaded, "F9-equivalent production API restores the active Backrooms file into a fresh world")
 	if not backrooms_file_loaded:
 		_finish(1)
@@ -368,7 +415,7 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
