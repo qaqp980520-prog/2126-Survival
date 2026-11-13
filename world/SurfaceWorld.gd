@@ -1616,8 +1616,23 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 	if previous_surface_payload.is_empty() or previous_surface_ids.is_empty() or previous_visibility.size() != previous_surface_ids.size():
 		_set_world_envelope_restore_report(false, "snapshot", "Could not capture a complete pre-restore SurfaceWorld snapshot.", true)
 		return false
+	# Reset the nested restore report so an early validation rejection cannot inherit
+	# a stale rollback result from an unrelated previous restore.
+	_set_restore_report(false, "world_envelope_surface_restore_pending", "Surface restore has not completed.", true)
 	if not restore_stream_state(surface_value, now):
-		_set_world_envelope_restore_report(false, "surface_restore", "SurfaceWorld rejected the saved surface payload.", bool(get_last_restore_report().get("rollback_complete", false)), {"surface_restore_report": get_last_restore_report()})
+		var surface_restore_report: Dictionary = get_last_restore_report()
+		var surface_rollback_complete: bool = bool(surface_restore_report.get("rollback_complete", false))
+		if not surface_rollback_complete:
+			_surface_stream_pending = true
+			if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+				backrooms_portal_visual.call("set_activation_enabled", false)
+		_set_world_envelope_restore_report(
+			false,
+			"surface_restore",
+			"SurfaceWorld rejected the saved surface payload.",
+			surface_rollback_complete,
+			{"surface_restore_report": surface_restore_report}
+		)
 		return false
 	var expected_surface_ids: Array = surface_ids_value.duplicate()
 	expected_surface_ids.sort()
