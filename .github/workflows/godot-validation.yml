@@ -218,12 +218,18 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          output="$(godot --headless --path . --editor --import --quit 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
             echo "Godot reported root-project import or parse errors."
             exit 1
           fi
+      - name: Verify Backrooms SVG import metadata
+        shell: bash
+        run: |
+          test -f assets/textures/backrooms_wallpaper.svg.import
+          test -f assets/textures/backrooms_carpet.svg.import
+          test -d .godot/imported
       - name: Run survival test hub smoke test
         shell: bash
         run: |
