@@ -282,9 +282,10 @@ func _has_symlink_ancestor(path: String) -> bool:
 		var parent: String = candidate.get_base_dir()
 		if parent == candidate:
 			return true
-		var parent_access := DirAccess.open(parent)
-		if parent_access != null and parent_access.is_link(candidate.get_file()):
-			return true
+		if DirAccess.dir_exists_absolute(parent):
+			var parent_access := DirAccess.open(parent)
+			if parent_access != null and parent_access.is_link(candidate.get_file()):
+				return true
 		candidate = parent
 	return false
 
