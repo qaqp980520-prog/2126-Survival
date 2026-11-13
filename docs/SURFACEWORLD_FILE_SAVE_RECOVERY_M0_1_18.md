@@ -159,3 +159,13 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 
 
 - Focused run #43415527398 reached the new nested tests and found six assertion mismatches in the test fixture comparisons: JSON-decoded integral schema numbers are floats, while the expected Dictionaries used integer `1`. The production save/load path and directory creation assertions passed; the six failures were direct helper readback/backup comparisons. The fixture now uses `1.0` for both schema versions so comparisons use the canonical JSON-decoded type. A fresh exact-head run is required.
+
+
+## Parent-directory obstruction hardening — 2026-11-13
+
+- `WorldEnvelopeFileStore.write_atomically()` now checks each existing ancestor of a missing parent directory before calling recursive directory creation. If a regular file occupies any required ancestor path, the writer reports `directory_create` without invoking the failing mkdir operation.
+- This avoids expected engine-level directory-creation errors for a deterministic obstruction case and preserves the blocking file.
+- `tests/surface_world_file_persistence_test.gd` creates a sentinel file where a parent directory is required, attempts a nested save beneath it, and verifies: the result is rejected with `directory_create`; sentinel bytes are unchanged; no primary, `.tmp`, or `.bak` file appears; no partial nested directory is created; and the fixture is removed.
+- Import/use remains unchanged: the existing `SurfaceWorld.save_game(path)` / `load_game(path)` APIs and `WorldEnvelopeFileStore` are reused. No new dependencies or Project Settings are required.
+- Validation status: exact-head focused Godot 4.3 file-persistence workflow and repository-wide Full Compatibility Gate are required for the updated branch. No result is claimed until both complete on the new HEAD.
+- Limitation: this guard detects regular-file ancestors; it does not claim to provide a filesystem sandbox against hostile symlink manipulation. The public save API remains restricted to non-empty `user://` paths without traversal segments.
