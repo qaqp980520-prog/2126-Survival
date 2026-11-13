@@ -96,3 +96,12 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - Added explicit recovery-report assertions and failure-only diagnostics for corrupt-primary, semantic-invalid, missing-primary, and active Backrooms file loads.
 - The same exact-head run also showed the active Backrooms file-load path still fails after the mine-lift fix; its restore report is now printed on failure so the next exact-head run can identify the remaining phase. The four failing assertions on the superseded HEAD were: three primary-repair checks and the fresh-world Backrooms file load. No full-gate pass is claimed.
 - New exact-head validation is required; keep PR #349 Draft until the backup-repair regression, active Backrooms file-load test, and complete Full Compatibility Gate pass.
+
+
+## Active Backrooms file-load Session canonicalization correction
+
+- The latest child exact-head run [#43394518703](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43394518703) passed the mine-lift integral-float restore, production JSON file load, backup-repair schema regression, and all three primary-repair checks. Only fresh-world active Backrooms file loading remained failing at `session_restore`.
+- The transition manager's `restore_session_for_world_load()` previously loaded the JSON-decoded payload directly into the live Session and then compared `session.to_save_dict() == raw_payload`. The Session loader canonicalizes integer fields and nested maze-stream state, so exact comparison to raw JSON can reject a semantically valid payload after numeric Variant normalization.
+- The method now validates the complete payload in a detached `BackroomsLocationSession`, obtains its canonical save dictionary, then applies and verifies that canonical dictionary against the live Session. It records explicit failure reasons for preconditions, validation, apply, and readback.
+- `SurfaceWorld.restore_world_envelope()` now includes the transition manager's failure reason in the restore report. The file-persistence test directly probes the JSON-decoded active Session before invoking the production fresh-world `load_game()` path.
+- New exact-head Godot 4.3 validation is required. No pass is claimed for the current child HEAD until Step #214 and the full gate succeed.
