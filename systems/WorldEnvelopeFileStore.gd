@@ -18,8 +18,11 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 	var encoded_parser := JSON.new()
 	if encoded.is_empty() or encoded_parser.parse(encoded) != OK:
 		return _fail("encode", "World envelope could not be encoded as JSON.", {})
-	if not (encoded_parser.data is Dictionary) or encoded_parser.data != payload:
-		return _fail("encode_verify", "JSON round-trip differs from the supplied world envelope.", {})
+	if not (encoded_parser.data is Dictionary):
+		return _fail("encode_verify", "Encoded world envelope did not parse back to a Dictionary.", {})
+	var round_trip_text: String = JSON.stringify(encoded_parser.data, "", true, true)
+	if round_trip_text != encoded:
+		return _fail("encode_verify", "Canonical JSON re-encoding differs from the supplied world envelope.", {})
 
 	var temporary_path: String = destination_path + ".tmp"
 	var backup_path: String = destination_path + ".bak"
@@ -49,7 +52,8 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 		return _fail("temporary_write", "Writing the temporary save failed.", {"error": write_error})
 
 	var temporary_payload: Dictionary = _read_dictionary(temporary_path)
-	if temporary_payload != payload:
+	var temporary_encoded: String = JSON.stringify(temporary_payload, "", true, true) if not temporary_payload.is_empty() else ""
+	if temporary_encoded != encoded:
 		if FileAccess.file_exists(temporary_path):
 			DirAccess.remove_absolute(temporary_absolute)
 		return _fail("temporary_verify", "The temporary save failed exact JSON readback.", {})
@@ -78,7 +82,8 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 		})
 
 	var final_payload: Dictionary = _read_dictionary(destination_path)
-	if final_payload != payload:
+	var final_encoded: String = JSON.stringify(final_payload, "", true, true) if not final_payload.is_empty() else ""
+	if final_encoded != encoded:
 		DirAccess.remove_absolute(destination_absolute)
 		var primary_restored_after_verify: bool = true
 		if moved_existing_save:
