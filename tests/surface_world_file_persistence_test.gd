@@ -423,6 +423,38 @@ func _test_nested_save_directory() -> void:
 	_expect(str(traversal_report.get("phase", "")) == "validation", "path traversal is rejected before directory creation")
 	_expect(not DirAccess.dir_exists_absolute(traversal_guard_directory), "rejected traversal path creates no parent directory")
 
+	# A regular file at an ancestor path must fail before recursive mkdir emits an
+	# engine error or creates any primary/temporary/backup save files.
+	var blocked_parent_path: String = "user://run245_parent_file_blocker"
+	var blocked_parent_absolute: String = ProjectSettings.globalize_path(blocked_parent_path)
+	var blocker_file := FileAccess.open(blocked_parent_path, FileAccess.WRITE)
+	_expect(blocker_file != null, "create a regular file at the nested-save parent path")
+	if blocker_file == null:
+		return
+	blocker_file.store_string("parent-file-sentinel")
+	blocker_file.flush()
+	blocker_file.close()
+	var blocker_before: String = FileAccess.get_file_as_string(blocked_parent_path)
+	var blocked_save_path: String = blocked_parent_path + "/slot_a/world.json"
+	var blocked_saved: bool = bool(file_store.call(
+		"write_atomically",
+		blocked_save_path,
+		{"schema_version": 1.0, "marker": "must-not-write"}
+	))
+	var blocked_report: Dictionary = file_store.call("get_last_report")
+	_expect(not blocked_saved, "atomic writer rejects a regular file blocking a required parent directory")
+	_expect(str(blocked_report.get("phase", "")) == "directory_create", "parent-file obstruction reports directory_create")
+	_expect(FileAccess.get_file_as_string(blocked_parent_path) == blocker_before, "parent-file obstruction preserves the blocking file bytes")
+	_expect(not FileAccess.file_exists(blocked_save_path), "parent-file obstruction creates no primary save")
+	_expect(not FileAccess.file_exists(blocked_save_path + ".tmp"), "parent-file obstruction creates no temporary save")
+	_expect(not FileAccess.file_exists(blocked_save_path + ".bak"), "parent-file obstruction creates no backup save")
+	_expect(
+		not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(blocked_parent_path + "/slot_a")),
+		"parent-file obstruction creates no partial nested directory"
+	)
+	var blocker_remove_error: Error = DirAccess.remove_absolute(blocked_parent_absolute)
+	_expect(blocker_remove_error == OK and not FileAccess.file_exists(blocked_parent_path), "remove the parent-file obstruction fixture")
+
 	# JSON parsing canonicalizes numeric schema values to floats in this test path.
 	var first_payload: Dictionary = {"schema_version": 1.0, "marker": "nested-first"}
 	var first_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, first_payload))
