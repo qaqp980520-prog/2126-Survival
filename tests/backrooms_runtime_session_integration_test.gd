@@ -185,10 +185,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(restored_manager.call("restore_runtime_from_session", restored_runtime)))
 	assert(bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")))
 	assert(restored_runtime.call("to_save_dict") == restored_session.call("get_maze_stream_state"))
-	print("DEBUG restored activation preflight: state=", restored_manager.get_state_name(), " session_active=", restored_session.is_active(), " prepared=", restored_runtime.is_prepared(), " active=", restored_runtime.is_active(), " loaded=", restored_runtime.get_loaded_cell_count(), " payload_equal=", restored_runtime.to_save_dict() == restored_session.get_maze_stream_state(), " bound=", restored_manager.get("_active_runtime") == restored_runtime)
-	var restored_activation_ok: bool = bool(restored_manager.call("activate_prepared_runtime_after_handoff", restored_runtime))
-	print("DEBUG restored activation result=", restored_activation_ok)
-	assert(restored_activation_ok, "Restored hidden runtime should activate after the world handoff.")
+	assert(bool(restored_manager.call("activate_prepared_runtime_after_handoff", restored_runtime)), "Restored hidden runtime should activate after the world handoff.")
 
 	restore_result = false
 	restore_calls = 0
