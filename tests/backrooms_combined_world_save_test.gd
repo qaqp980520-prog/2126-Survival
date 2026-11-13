@@ -147,7 +147,7 @@ func _run() -> void:
 		_expect(not bool(restored_session.call("is_active")) and not bool(restored_runtime.call("is_prepared")), "successful return clears Session and retires the restored maze runtime")
 		for chunk_id_value in envelope.get("surface_chunk_ids", []):
 			var chunk_id: String = str(chunk_id_value)
-			var surface_root: Node3D = restored_world.chunk_controller.call("get_chunk_root", chunk_id) as Node3D
+			var surface_root: Node3D = restored_controller.call("get_chunk_root", chunk_id) as Node3D
 			var expected_visible: bool = bool(envelope.get("surface_chunk_visibility", {}).get(chunk_id, true))
 			_expect(surface_root != null and surface_root.visible == expected_visible, "return restores original visibility for surface chunk %s" % chunk_id)
 
