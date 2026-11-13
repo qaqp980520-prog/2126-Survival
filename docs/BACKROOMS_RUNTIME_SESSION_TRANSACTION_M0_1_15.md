@@ -76,8 +76,8 @@ Existing related tests remain required:
 - This PR does not move the player, change the player's collision layer or visibility, suspend/resume SurfaceWorld chunk streaming, unlock the portal visual/input path, or complete a playable end-to-end transition.
 - The actual handoff remains an explicit caller responsibility between commit_portal_entry_with_runtime() and activate_prepared_runtime_after_handoff().
 - Graphical geometry, physics interaction, lighting, GPU performance, and iPhone behavior remain outside the headless gate.
-- The parent #344 branch is based on #343; the separate #328/#329/#330 production-interaction integration candidate #334 still requires explicit branch-stack reconciliation before final main integration.
+- Verified linear PR ancestry: #334 → #335 → #336 → #337 → #339 → #340 → #341 → #342 → #343 → #344 → #345. PR #334 combines the earlier production player/portal interaction stack with the transition/session stack; #335–#345 are sequential descendants. Integrate in order, rechecking each child's base/head and exact-head CI after every parent merge.
 
 ## Validation status
 
-Pending exact-head Godot 4.3 Full Compatibility Gate on this PR's final HEAD. Do not claim a pass until the run completes successfully.
+Exact-head Godot 4.3 Full Compatibility Gate for HEAD 883e45b51f1aba13f69b5b3e765a595cd55359ac is queued as Run #43357422606. No pass/fail result is available yet; do not claim a pass until the run completes successfully.
