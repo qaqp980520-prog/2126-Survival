@@ -28,6 +28,16 @@ var _active_runtime: Object = null
 var _active_runtime_instance_id: int = 0
 var _commit_runtime_authorized: bool = false
 
+# Retained only between a successful Session commit and successful world handoff.
+# This lets the production world abort a committed entry without losing the one-use portal.
+var _committed_director: RefCounted
+var _committed_director_instance_id: int = 0
+var _committed_director_snapshot: Dictionary = {}
+var _committed_session_snapshot: Dictionary = {}
+var _committed_runtime: Object = null
+var _committed_runtime_instance_id: int = 0
+var _committed_runtime_snapshot: Dictionary = {}
+
 func _init(session_instance: RefCounted = null) -> void:
 	session = session_instance if session_instance != null else SessionScript.new()
 	if bool(session.call("is_active")):
@@ -92,6 +102,10 @@ func prepare_portal_entry_with_runtime(
 	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		cancel_prepared_entry()
 		return _failure("maze_runtime_not_empty")
+	var initial_runtime_payload: Variant = runtime.call("to_save_dict")
+	if not (initial_runtime_payload is Dictionary) or not initial_runtime_payload.is_empty() or int(runtime.call("get_loaded_cell_count")) != 0:
+		cancel_prepared_entry()
+		return _failure("maze_runtime_initial_state_not_empty")
 	var derived_seed: int = int(session.call("derive_backrooms_seed", source_world_seed, portal_id))
 	if derived_seed < 0:
 		cancel_prepared_entry()
@@ -239,6 +253,13 @@ func commit_portal_entry(
 			}
 		_active_runtime = _pending_runtime
 		_active_runtime_instance_id = _pending_runtime_instance_id
+		_committed_director = director
+		_committed_director_instance_id = director.get_instance_id()
+		_committed_director_snapshot = director_snapshot.duplicate(true)
+		_committed_session_snapshot = session_snapshot.duplicate(true)
+		_committed_runtime = _pending_runtime
+		_committed_runtime_instance_id = _pending_runtime_instance_id
+		_committed_runtime_snapshot = runtime_payload.duplicate(true)
 	state = TransitionState.IN_BACKROOMS
 	_clear_pending()
 	var result: Dictionary = consumed.duplicate(true)
@@ -283,7 +304,91 @@ func activate_prepared_runtime_after_handoff(runtime: Object) -> bool:
 		return false
 	if runtime.call("to_save_dict") != session.call("get_maze_stream_state"):
 		return false
-	return bool(runtime.call("activate_destination"))
+	var activated: bool = bool(runtime.call("activate_destination"))
+	if activated:
+		_clear_committed_entry_snapshot()
+	return activated
+
+## Abort a committed entry only while the caller is still completing the world handoff.
+## Restores the consumed portal, inactive Session and empty runtime, with exact readback.
+func abort_committed_entry(director: RefCounted, runtime: Object) -> Dictionary:
+	last_error = ""
+	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
+		return _failure("committed_entry_not_active")
+	if director == null or director != _committed_director or not is_instance_valid(director) or director.get_instance_id() != _committed_director_instance_id:
+		return _failure("committed_entry_director_changed")
+	if runtime == null or runtime != _committed_runtime or not is_instance_valid(runtime) or runtime.get_instance_id() != _committed_runtime_instance_id:
+		return _failure("committed_entry_runtime_changed")
+	if _committed_director_snapshot.is_empty() or _committed_session_snapshot.is_empty() or _committed_runtime_snapshot.is_empty():
+		return _failure("committed_entry_snapshot_unavailable")
+	for method_name in ["is_prepared", "is_active", "to_save_dict", "deactivate_destination", "get_loaded_cell_count", "load_save_dict", "activate_destination"]:
+		if not runtime.has_method(method_name):
+			return _failure("maze_runtime_rollback_contract_unavailable")
+	if not director.has_method("to_save_dict") or not session.has_method("to_save_dict"):
+		return _failure("committed_entry_snapshot_contract_unavailable")
+	var committed_director_value: Variant = director.call("to_save_dict")
+	var committed_session_value: Variant = session.call("to_save_dict")
+	var committed_runtime_value: Variant = runtime.call("to_save_dict")
+	if not (committed_director_value is Dictionary) or not (committed_session_value is Dictionary) or not (committed_runtime_value is Dictionary):
+		return _failure("committed_entry_live_snapshot_invalid")
+	var committed_director_snapshot: Dictionary = committed_director_value.duplicate(true)
+	var committed_session_snapshot: Dictionary = committed_session_value.duplicate(true)
+	var committed_runtime_snapshot: Dictionary = committed_runtime_value.duplicate(true)
+	var committed_runtime_was_active: bool = bool(runtime.call("is_active"))
+	var runtime_clean: bool = (
+		not bool(runtime.call("is_prepared"))
+		and not committed_runtime_was_active
+		and int(runtime.call("get_loaded_cell_count")) == 0
+		and committed_runtime_snapshot.is_empty()
+	)
+	if not runtime_clean:
+		var deactivated: bool = bool(runtime.call("deactivate_destination"))
+		var empty_payload: Variant = runtime.call("to_save_dict")
+		runtime_clean = (
+			(deactivated or (not bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active"))))
+			and not bool(runtime.call("is_prepared"))
+			and not bool(runtime.call("is_active"))
+			and int(runtime.call("get_loaded_cell_count")) == 0
+			and empty_payload is Dictionary
+			and empty_payload.is_empty()
+		)
+	if not runtime_clean:
+		return {
+			"ok": false,
+			"reason": "committed_entry_runtime_cleanup_failed",
+			"committed_state_retained": true,
+			"rollback_complete": false
+		}
+	var director_restored: bool = _restore_director_snapshot(director, _committed_director_snapshot)
+	var session_restored: bool = _restore_session_snapshot(_committed_session_snapshot)
+	if director_restored and session_restored:
+		state = TransitionState.IDLE
+		_active_runtime = null
+		_active_runtime_instance_id = 0
+		_clear_committed_entry_snapshot()
+		return {
+			"ok": true,
+			"event": "entry_aborted",
+			"director_state_restored": true,
+			"session_state_restored": true,
+			"runtime_state_restored": true,
+			"rollback_complete": true
+		}
+	# If any pre-entry participant cannot be restored, put the committed state back
+	# so the caller can keep the player in the Backrooms instead of exposing a split world.
+	var committed_director_restored: bool = _restore_director_snapshot(director, committed_director_snapshot)
+	var committed_session_restored: bool = _restore_session_snapshot(committed_session_snapshot)
+	var committed_runtime_restored: bool = _restore_runtime_snapshot(runtime, committed_runtime_snapshot, committed_runtime_was_active)
+	state = TransitionState.IN_BACKROOMS
+	return {
+		"ok": false,
+		"reason": "committed_entry_abort_failed",
+		"director_state_restored": director_restored,
+		"session_state_restored": session_restored,
+		"runtime_state_restored": runtime_clean,
+		"committed_state_restored": committed_director_restored and committed_session_restored and committed_runtime_restored,
+		"rollback_complete": committed_director_restored and committed_session_restored and committed_runtime_restored
+	}
 
 ## Save the new maze window and player position in one validated Session mutation.
 ## A rejected Session update rebuilds the exact prior runtime snapshot.
@@ -435,6 +540,7 @@ func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) 
 	state = TransitionState.IDLE
 	_active_runtime = null
 	_active_runtime_instance_id = 0
+	_clear_committed_entry_snapshot()
 	return {"ok": true, "event": "returned", "context": completed, "runtime_deactivated": true}
 
 ## The callback must restore the actual SurfaceWorld and return a bool.
@@ -598,6 +704,15 @@ func _preview_matches(candidate: Dictionary) -> bool:
 	if not candidate.has("position") or not _pending_preview.has("position"):
 		return false
 	return candidate["position"] == _pending_preview["position"]
+
+func _clear_committed_entry_snapshot() -> void:
+	_committed_director = null
+	_committed_director_instance_id = 0
+	_committed_director_snapshot.clear()
+	_committed_session_snapshot.clear()
+	_committed_runtime = null
+	_committed_runtime_instance_id = 0
+	_committed_runtime_snapshot.clear()
 
 func _clear_pending() -> void:
 	_pending_director_instance_id = 0

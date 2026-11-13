@@ -96,6 +96,7 @@ func _run() -> void:
 	_test_runtime_staging_failure_preserves_portal()
 	_test_session_mutation_failure_restores_director_session_and_runtime()
 	_test_stale_runtime_snapshot_cannot_consume_portal()
+	_test_committed_entry_abort_restores_portal_session_and_runtime()
 	if root.get_child_count() > 0:
 		for child in root.get_children():
 			child.queue_free()
@@ -296,6 +297,51 @@ func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
+
+func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
+	var director = DirectorScript.new(81, Rect2(0.0, 0.0, 1000.0, 1000.0), 40.0)
+	var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+	assert(str(spawned.get("event", "")) == "spawned")
+	var portal_id: int = int(spawned["portal"]["id"])
+	var director_before: Dictionary = director.to_save_dict()
+	var manager = ManagerScript.new()
+	var runtime = RuntimeScript.new()
+	runtime.force_metadata_only = true
+	root.add_child(runtime)
+	var return_position := Vector3(18.0, 2.0, -7.0)
+	var entry_position := Vector3(0.0, 1002.0, 0.0)
+	var prepared: Dictionary = manager.prepare_portal_entry_with_runtime(
+		director, runtime, portal_id, return_position, 81, entry_position, 8.0, 1
+	)
+	assert(bool(prepared.get("ok", false)))
+	var committed: Dictionary = manager.commit_portal_entry_with_runtime(
+		director, runtime, portal_id, return_position, 81, entry_position
+	)
+	assert(bool(committed.get("ok", false)))
+	assert(manager.get_state_name() == "IN_BACKROOMS")
+	assert(bool(manager.get_session().call("is_active")))
+	assert(director.active_portal.is_empty())
+	assert(bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")))
+	var aborted: Dictionary = manager.call("abort_committed_entry", director, runtime)
+	assert(bool(aborted.get("ok", false)))
+	assert(bool(aborted.get("rollback_complete", false)))
+	assert(director.to_save_dict() == director_before, "Aborting a committed but unhanded entry restores the exact one-use portal and RNG state.")
+	assert(not bool(manager.get_session().call("is_active")))
+	assert(manager.get_session_save_dict() == SessionScript.new().to_save_dict())
+	assert(manager.get_state_name() == "IDLE")
+	assert(not bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")))
+	assert(int(runtime.call("get_loaded_cell_count")) == 0)
+	assert(runtime.call("to_save_dict").is_empty())
+	var retry: Dictionary = manager.prepare_portal_entry_with_runtime(
+		director, runtime, portal_id, return_position, 81, entry_position, 8.0, 1
+	)
+	assert(bool(retry.get("ok", false)), "The restored one-use portal can be prepared again after an aborted handoff.")
+	assert(bool(manager.call("cancel_prepared_entry")))
+	assert(director.to_save_dict() == director_before)
+	assert(int(runtime.call("get_loaded_cell_count")) == 0)
+	if runtime.get_parent() == root:
+		root.remove_child(runtime)
+	runtime.free()
 
 func _fail_cell_builder(_descriptor: Dictionary, _metadata_only: bool) -> Node3D:
 	return null
