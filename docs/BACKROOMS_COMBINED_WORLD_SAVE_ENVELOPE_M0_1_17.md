@@ -93,3 +93,11 @@ Run the exact-head Godot 4.3 Full Compatibility Gate, fix any parser/runtime/reg
 - Added an ordinary surface-envelope round-trip before the Backrooms restore scenario, covering the non-Backrooms branch of schema 1.
 - Save serialization now marks SurfaceWorld streaming fail-closed if runtime synchronization reports an incomplete rollback, and refuses Backrooms saves if the original surface visibility snapshot is incomplete.
 - Corrective code/test commits: db6a8dc85a65e087025c7cfe02dadf780fef6748 and ef4fa219d22562a55a974ab0c10a9f601c664d90. The exact-head Full Gate for this new HEAD is pending; the previous run is diagnostic only and does not validate these corrections.
+
+
+## Incomplete nested SurfaceWorld rollback guard — 2026-11-13
+
+- Combined-envelope restore now resets the nested restore report before invoking restore_stream_state(), preventing stale rollback status from a previous operation from being reused.
+- If the nested SurfaceWorld restore reports rollback_complete=false, restore_world_envelope() marks surface streaming pending and disables portal activation before returning failure.
+- Added a failure-injection case using a Stamina adapter that mutates its payload and rejects both the candidate apply and rollback apply. The test asserts the combined envelope remains outside Backrooms, leaves Session/runtime inactive, reports rollback incomplete, and locks SurfaceWorld streaming fail-closed.
+- The new code and test are committed on the existing PR #347 branch; exact-head Godot 4.3 Full Gate must validate the new HEAD.
