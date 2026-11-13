@@ -151,7 +151,12 @@ func commit_portal_entry(
 	var current_preview: Variant = director.call("preview_portal_entry", portal_id)
 	if not (current_preview is Dictionary) or not _preview_matches(current_preview):
 		return _failure("prepared_portal_is_stale", true)
-	if not bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position, runtime_payload)):
+	var session_preflight_ok: bool = false
+	if runtime_payload.is_empty():
+		session_preflight_ok = bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position))
+	else:
+		session_preflight_ok = bool(session.call("can_begin_from_portal_result", current_preview, return_position, source_world_seed, entry_position, runtime_payload))
+	if not session_preflight_ok:
 		return _failure("session_preflight_changed", true)
 	# Snapshot the complete director contract before the only mutating operation.
 	# If the session rejects the committed result, restore RNG, active portal,
@@ -186,7 +191,12 @@ func commit_portal_entry(
 			"runtime_state_restored": consume_runtime_restored,
 			"rollback_complete": consume_director_restored and consume_runtime_restored
 		}
-	if not bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position, runtime_payload)):
+	var session_commit_ok: bool = false
+	if runtime_payload.is_empty():
+		session_commit_ok = bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position))
+	else:
+		session_commit_ok = bool(session.call("begin_from_portal_result", consumed, return_position, source_world_seed, entry_position, runtime_payload))
+	if not session_commit_ok:
 		var director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 		var session_restored: bool = _restore_session_snapshot(session_snapshot)
 		var runtime_restored: bool = _discard_pending_runtime()
