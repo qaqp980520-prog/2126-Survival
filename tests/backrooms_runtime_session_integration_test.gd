@@ -73,7 +73,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var restored_manager = ManagerScript.new(restored_session)
 	var restored_runtime = RuntimeScript.new()
 	restored_runtime.force_metadata_only = true
-	get_root().add_child(restored_runtime)
+	root.add_child(restored_runtime)
 	assert(bool(restored_manager.call("restore_runtime_from_session", restored_runtime)))
 	assert(bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")))
 	assert(restored_runtime.call("to_save_dict") == restored_session.call("get_maze_stream_state"))
@@ -120,7 +120,7 @@ func _test_runtime_staging_failure_preserves_portal() -> void:
 	var runtime = RuntimeScript.new()
 	runtime.force_metadata_only = true
 	runtime.set_cell_builder_for_testing(Callable(self, "_fail_cell_builder"))
-	get_root().add_child(runtime)
+	root.add_child(runtime)
 	var prepared: Dictionary = manager.prepare_portal_entry_with_runtime(
 		director, runtime, portal_id, Vector3(1.0, 2.0, 3.0), 51, Vector3.ZERO, 8.0, 1
 	)
@@ -139,7 +139,7 @@ func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
 	var manager = ManagerScript.new()
 	var runtime = RuntimeScript.new()
 	runtime.force_metadata_only = true
-	get_root().add_child(runtime)
+	root.add_child(runtime)
 	var prepared: Dictionary = manager.prepare_portal_entry_with_runtime(
 		director, runtime, portal_id, Vector3(4.0, 2.0, 6.0), 61, Vector3.ZERO, 8.0, 1
 	)
@@ -150,7 +150,7 @@ func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
 		director, runtime, portal_id, Vector3(4.0, 2.0, 6.0), 61, Vector3.ZERO
 	)
 	assert(not bool(rejected.get("ok", false)))
-	assert(str(rejected.get("reason", "")) == "prepared_runtime_changed")
+	assert(str(rejected.get("reason", "")) == "prepared_runtime_state_changed")
 	assert(bool(rejected.get("rollback_complete", false)))
 	assert(director.to_save_dict() == director_before, "A stale runtime snapshot must be rejected before portal consumption.")
 	assert(manager.get_state_name() == "IDLE")
