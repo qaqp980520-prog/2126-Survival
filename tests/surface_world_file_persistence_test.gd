@@ -266,6 +266,12 @@ func _run() -> void:
 	if portal == null:
 		_finish(1)
 		return
+	var surface_chunk_ids_before_entry: Array = source_world.call("_get_loaded_surface_chunk_ids")
+	var original_surface_visibility: Dictionary = source_world.call("_capture_surface_chunk_visibility", surface_chunk_ids_before_entry)
+	_expect(
+		not surface_chunk_ids_before_entry.is_empty() and original_surface_visibility.size() == surface_chunk_ids_before_entry.size(),
+		"capture the complete original SurfaceWorld chunk visibility before Backrooms entry"
+	)
 	var entry: Dictionary = source_world.call("enter_backrooms_from_portal", int(portal.get("portal_id")))
 	_expect(bool(entry.get("ok", false)), "production SurfaceWorld completes a real Backrooms entry before saving")
 	if not bool(entry.get("ok", false)):
@@ -277,6 +283,11 @@ func _run() -> void:
 		print("DEBUG: Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(backrooms_save_ok, "F5-equivalent production API writes an active Backrooms envelope to disk")
 	var backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
+	var saved_visibility_value: Variant = backrooms_payload.get("surface_chunk_visibility", {})
+	_expect(
+		saved_visibility_value is Dictionary and saved_visibility_value == original_surface_visibility,
+		"Backrooms file stores the original SurfaceWorld visibility snapshot while surface chunks are hidden"
+	)
 	var saved_session_value: Variant = backrooms_payload.get("backrooms_session", {})
 	var session_probe: RefCounted = BackroomsSessionScript.new()
 	var session_probe_ok: bool = saved_session_value is Dictionary and bool(session_probe.call("load_save_dict", saved_session_value))
@@ -319,6 +330,24 @@ func _run() -> void:
 		_finish(1)
 		return
 	_expect(bool(restored_world.get("_is_in_backrooms")), "file load activates Backrooms only after the runtime is reconstructed")
+	var restored_visibility_snapshot: Variant = restored_world.get("_backrooms_surface_visibility_snapshot")
+	_expect(
+		restored_visibility_snapshot is Dictionary and restored_visibility_snapshot == original_surface_visibility,
+		"file restore retains the original SurfaceWorld visibility snapshot for the later return"
+	)
+	var restored_chunk_controller: Variant = restored_world.get("chunk_controller")
+	var surface_chunks_hidden: bool = restored_chunk_controller != null
+	for chunk_id_value in original_surface_visibility.keys():
+		var chunk_root_value: Variant = restored_chunk_controller.call("get_chunk_root", str(chunk_id_value)) if restored_chunk_controller != null else null
+		if not (chunk_root_value is Node3D) or (chunk_root_value as Node3D).visible:
+			surface_chunks_hidden = false
+	_expect(surface_chunks_hidden, "fresh-world Backrooms restore keeps all saved SurfaceWorld chunks hidden")
+	var restored_director: RefCounted = restored_world.get("backrooms_portal_director") as RefCounted
+	var restored_portal_value: Variant = restored_director.get("active_portal") if restored_director != null else null
+	_expect(
+		restored_portal_value is Dictionary and restored_portal_value.is_empty(),
+		"file restore preserves the consumed one-use portal state"
+	)
 	var restored_player: CharacterBody3D = restored_world.get("player") as CharacterBody3D
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
 	var restored_runtime: Node3D = restored_world.get("backrooms_maze_runtime") as Node3D
@@ -339,6 +368,15 @@ func _run() -> void:
 	if saved_return.size() == 3 and restored_player != null:
 		var expected_surface_position := Vector3(float(saved_return[0]), float(saved_return[1]), float(saved_return[2]))
 		_expect(restored_player.global_position.is_equal_approx(expected_surface_position), "return after file load reaches the exact saved SurfaceWorld position")
+	var surface_visibility_restored: bool = restored_chunk_controller != null
+	for chunk_id_value in original_surface_visibility.keys():
+		var chunk_root_value: Variant = restored_chunk_controller.call("get_chunk_root", str(chunk_id_value)) if restored_chunk_controller != null else null
+		if (
+			not (chunk_root_value is Node3D)
+			or (chunk_root_value as Node3D).visible != bool(original_surface_visibility[chunk_id_value])
+		):
+			surface_visibility_restored = false
+	_expect(surface_visibility_restored, "return after file load restores every original SurfaceWorld chunk visibility value")
 
 	_finish(0 if failures.is_empty() else 1)
 
