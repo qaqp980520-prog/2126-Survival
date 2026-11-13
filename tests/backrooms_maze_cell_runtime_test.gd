@@ -8,7 +8,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var runtime: Node3D = RuntimeScript.new()
+	var runtime: Variant = RuntimeScript.new()
 	runtime.force_metadata_only = true
 	root.add_child(runtime)
 	_expect(not bool(runtime.call("is_prepared")), "runtime starts without a prepared destination")
@@ -34,6 +34,10 @@ func _run() -> void:
 	_expect(runtime.call("get_loaded_cell_keys") == original_keys, "failed staging preserves the exact committed cell-key set")
 	var origin_after_failure: Node3D = runtime.call("get_cell_root", "0,0") as Node3D
 	_expect(origin_after_failure != null and origin_after_failure.get_instance_id() == original_origin_id, "failed staging preserves the existing origin root instance")
+	var failed_prepare: Dictionary = runtime.call("prepare_destination", "Level 2", 20261114, Vector3.ZERO, 8.0, 1)
+	_expect(not bool(failed_prepare.get("ok", false)), "failed candidate destination staging is rejected")
+	_expect(runtime.call("get_loaded_cell_keys") == original_keys, "failed destination preparation preserves the previous prepared window")
+	_expect(runtime.call("get_cell_root", "0,0").get_instance_id() == original_origin_id, "failed destination preparation preserves existing cell root instances")
 	runtime.call("clear_cell_builder_for_testing")
 
 	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(8.0, 0.0, 0.0))
@@ -46,7 +50,7 @@ func _run() -> void:
 
 	var saved: Dictionary = runtime.call("to_save_dict")
 	_expect(int(saved.get("layout_algorithm_version", -1)) == 1, "runtime save is bound to the explicit maze algorithm version")
-	var restored: Node3D = RuntimeScript.new()
+	var restored: Variant = RuntimeScript.new()
 	restored.force_metadata_only = true
 	root.add_child(restored)
 	_expect(bool(restored.call("load_save_dict", saved)), "runtime rebuilds a saved stream window from metadata")
@@ -63,6 +67,8 @@ func _run() -> void:
 
 	_expect(bool(restored.call("activate_destination")), "prepared runtime can be explicitly activated")
 	_expect(bool(restored.call("is_active")) and restored.visible, "activation enables the prepared destination")
+	_expect(not bool(restored.call("load_save_dict", saved)), "active runtime rejects an in-place restore")
+	_expect(bool(restored.call("is_active")) and restored.call("get_loaded_cell_keys") == before_bad_restore, "rejected active restore preserves the live destination")
 	_expect(bool(restored.call("deactivate_destination")), "active runtime can be deactivated")
 	_expect(not bool(restored.call("is_prepared")) and int(restored.call("get_loaded_cell_count")) == 0, "deactivation retires all cell roots and clears runtime state")
 
