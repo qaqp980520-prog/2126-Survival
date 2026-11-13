@@ -1508,7 +1508,7 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		or backrooms_transition_manager == null
 		or backrooms_maze_runtime == null
 		or str(backrooms_transition_manager.call("get_state_name")) != "IDLE"
-		or bool(backrooms_transition_manager.call("get_session").call("is_active"))
+		or bool(backrooms_transition_manager.call("get_session_save_dict").get("active", false))
 		or bool(backrooms_maze_runtime.call("is_prepared"))
 		or bool(backrooms_maze_runtime.call("is_active"))
 	):
