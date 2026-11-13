@@ -1,0 +1,78 @@
+name: SurfaceWorld File Persistence Validation
+
+on:
+  pull_request:
+    paths:
+      - 'systems/WorldEnvelopeFileStore.gd'
+      - 'world/SurfaceWorld.gd'
+      - 'scripts/world.gd'
+      - 'tests/surface_world_file_persistence_test.gd'
+      - 'systems/BackroomsTransitionManager.gd'
+      - 'systems/BackroomsLocationSession.gd'
+      - 'systems/BackroomsMazeCellRuntime.gd'
+      - 'systems/SurvivalStamina.gd'
+      - 'systems/SurvivalQuickUse.gd'
+      - 'systems/SurfaceTerrainPatch.gd'
+      - 'systems/UndergroundMineLift.gd'
+      - 'systems/WorldObjectStatefulProp.gd'
+      - '.github/workflows/world-file-persistence-validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: world-file-persistence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Production SurfaceWorld File Persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Godot 4.3
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/WorldEnvelopeFileStore.gd
+          test -f tests/surface_world_file_persistence_test.gd
+          test -f world/SurfaceWorld.tscn
+
+      - name: Import and parse root project
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(godot --headless --path . --editor --import --quit 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
+            echo "Root project import or parse failed."
+            exit 1
+          fi
+          test -f assets/textures/backrooms_wallpaper.svg.import
+          test -f assets/textures/backrooms_carpet.svg.import
+          test -d .godot/imported
+
+      - name: Run production file persistence integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 150s godot --headless --path . --script res://tests/surface_world_file_persistence_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Production SurfaceWorld file persistence regression failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "SurfaceWorld file persistence integration tests passed."
+
+      - name: Verify clean checkout
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          git status --short
+          test -z "$(git status --porcelain)"
