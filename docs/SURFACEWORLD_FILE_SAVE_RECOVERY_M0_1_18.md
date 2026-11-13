@@ -129,3 +129,14 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - It verifies the saved Backrooms envelope retains that original visibility snapshot even though the live SurfaceWorld chunks are hidden during the visit.
 - A fresh-world file load must keep those surface chunks hidden while Backrooms is active, preserve the consumed one-use portal state, and restore every original chunk visibility value after returning to the saved SurfaceWorld position.
 - This guards the two-world handoff boundary against invisible-surface returns and accidental reappearance of a consumed portal.
+
+
+## Nested user:// save-directory support — 2026-11-13
+
+- `WorldEnvelopeFileStore.write_atomically()` now creates a missing parent directory recursively after validating the destination path and JSON payload, but before touching the primary, temporary, or backup files.
+- If directory creation fails, the operation reports `directory_create` and leaves existing save files untouched.
+- The production file-persistence test now writes to `user://run244_nested_saves/slot_a/world.json`, verifies first-save readback, performs a second atomic save, checks that the previous primary becomes the exact `.bak`, and restores the latest primary through `load_with_backup()`.
+- Test cleanup removes the nested save files and empty test directories.
+- Import/use remains unchanged: `SurfaceWorld.save_game(path)` and `load_game(path)` accept the nested `user://` path; no Project Settings, autoload, or third-party dependency is required.
+- Validation: new exact-head Godot 4.3 Full Compatibility Gate required. Local Godot executable is unavailable; no local engine pass is claimed.
+- Limitation: paths remain restricted to non-empty `user://` paths without traversal segments. This change does not add save-slot UI or cloud synchronization.
