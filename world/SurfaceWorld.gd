@@ -14,6 +14,8 @@ const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellR
 const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
+const WorldEnvelopeFileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const DEFAULT_WORLD_SAVE_PATH: String = "user://2126_survival_world.json"
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
 const BACKROOMS_CELL_SIZE: float = 8.0
 const BACKROOMS_STREAM_RADIUS: int = 1
@@ -73,6 +75,7 @@ var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
 var _last_world_envelope_restore_report: Dictionary = {}
+var _world_envelope_file_store: RefCounted
 
 func _enter_tree() -> void:
 	add_to_group("production_surface_world")
@@ -103,6 +106,7 @@ func _ready() -> void:
 	if backrooms_maze_runtime == null:
 		push_error("Surface world could not create its Backrooms maze runtime owner.")
 	backrooms_transition_manager = BackroomsTransitionManagerScript.new()
+	_world_envelope_file_store = WorldEnvelopeFileStoreScript.new()
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _is_in_backrooms or _surface_stream_pending:
@@ -539,6 +543,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F5:
+				save_game()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_F9:
+				load_game()
+				get_viewport().set_input_as_handled()
+				return
 			if key_event.keycode == KEY_F3:
 				if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel):
 					streaming_diagnostics_panel.call("toggle_open")
@@ -1715,6 +1727,46 @@ func get_last_world_envelope_restore_report() -> Dictionary:
 	return _last_world_envelope_restore_report.duplicate(true)
 
 
+## Persist the canonical combined envelope, including active Backrooms state, to user://.
+func save_game(path: String = DEFAULT_WORLD_SAVE_PATH) -> bool:
+	if _world_envelope_file_store == null:
+		_world_envelope_file_store = WorldEnvelopeFileStoreScript.new()
+	var payload: Dictionary = serialize_world_envelope()
+	var saved: bool = bool(_world_envelope_file_store.call("write_atomically", path, payload))
+	var report: Dictionary = _world_envelope_file_store.call("get_last_report")
+	_world_object_action_message = "World saved to %s." % path if saved else "World save failed (%s)." % str(report.get("phase", "unavailable"))
+	_refresh_hud()
+	return saved
+
+
+## Restore into an idle SurfaceWorld. A valid .bak is used only after the primary
+## is unreadable or rejected with a verified rollback; incomplete rollback fails closed.
+func load_game(path: String = DEFAULT_WORLD_SAVE_PATH) -> bool:
+	if _world_envelope_file_store == null:
+		_world_envelope_file_store = WorldEnvelopeFileStoreScript.new()
+	var loaded: bool = bool(_world_envelope_file_store.call(
+		"load_with_backup",
+		path,
+		Callable(self, "restore_world_envelope"),
+		Callable(self, "get_last_world_envelope_restore_report"),
+		int(Time.get_unix_time_from_system())
+	))
+	var report: Dictionary = _world_envelope_file_store.call("get_last_report")
+	if loaded:
+		var source: String = str(report.get("details", {}).get("source", path))
+		_world_object_action_message = "World loaded from %s." % source
+	else:
+		_world_object_action_message = "World load failed (%s)." % str(report.get("phase", "unavailable"))
+	_refresh_hud()
+	return loaded
+
+
+func get_last_world_file_report() -> Dictionary:
+	if _world_envelope_file_store == null:
+		return {}
+	return _world_envelope_file_store.call("get_last_report")
+
+
 func _serialize_surface_world_payload(
 	saved_player_position: Vector3,
 	surface_reference_position: Vector3,
@@ -2554,6 +2606,7 @@ func _refresh_hud() -> void:
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
 	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")
+	action_help += " · F5 save · F9 load (surface only)"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, displayed_vein_count,
 		displayed_crop_count, displayed_object_count,
