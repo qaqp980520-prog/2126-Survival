@@ -388,6 +388,15 @@ func _run() -> void:
 			var surface_ids_during_backrooms: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 			surface_ids_during_backrooms.sort()
 			_expect(surface_ids_during_backrooms == surface_ids_before_handoff, "SurfaceWorld chunk streaming remains frozen while the player is in Backrooms")
+			var backrooms_shifted_position: Vector3 = world.player.global_position + Vector3(8.0, 0.0, 0.0)
+			var backrooms_shift_result: Dictionary = world.backrooms_transition_manager.call("sync_backrooms_runtime", world.backrooms_maze_runtime, backrooms_shifted_position)
+			_expect(bool(backrooms_shift_result.get("ok", false)), "moving one maze cell synchronizes the runtime window and LocationSession transaction")
+			world.player.global_position = backrooms_shifted_position
+			world.set("_last_backrooms_sync_position", backrooms_shifted_position)
+			var shifted_session_save: Dictionary = world.backrooms_transition_manager.call("get_session_save_dict")
+			_expect(shifted_session_save.get("backrooms_position", []) == [backrooms_shifted_position.x, backrooms_shifted_position.y, backrooms_shifted_position.z], "Backrooms Session records the shifted production player position")
+			_expect(shifted_session_save.get("maze_stream_state", {}) == world.backrooms_maze_runtime.call("to_save_dict"), "Backrooms Session and live maze runtime retain the exact same shifted window payload")
+			_expect(int(world.backrooms_maze_runtime.call("get_loaded_cell_count")) == 9, "one-cell Backrooms movement retains a complete 3x3 maze window")
 			_expect(world.call("get_loaded_surface_window_bounds") == surface_bounds_before_handoff, "SurfaceWorld loaded-window bounds remain anchored to the saved return position while the Backrooms player moves")
 			_expect(world.call("serialize_stream_state") == {}, "SurfaceWorld refuses to write a surface-only save while Backrooms is active")
 			var backrooms_position_before_restore: Vector3 = world.player.global_position
