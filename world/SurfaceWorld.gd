@@ -1435,7 +1435,7 @@ func serialize_world_envelope() -> Dictionary:
 	if _is_in_backrooms:
 		if (
 			str(backrooms_transition_manager.call("get_state_name")) != "IN_BACKROOMS"
-			or not bool(backrooms_transition_manager.call("get_session").call("is_active"))
+			or not bool(session_payload.get("active", false))
 			or not bool(backrooms_maze_runtime.call("is_prepared"))
 			or not bool(backrooms_maze_runtime.call("is_active"))
 			or _is_underground
@@ -1475,7 +1475,7 @@ func serialize_world_envelope() -> Dictionary:
 		}
 	if (
 		str(backrooms_transition_manager.call("get_state_name")) != "IDLE"
-		or bool(backrooms_transition_manager.call("get_session").call("is_active"))
+		or bool(session_payload.get("active", false))
 		or bool(backrooms_maze_runtime.call("is_prepared"))
 		or bool(backrooms_maze_runtime.call("is_active"))
 	):
@@ -1577,8 +1577,8 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		):
 			_set_world_envelope_restore_report(false, "session_validation", "Saved surface return position or Backrooms player position differs from the Session.", true)
 			return false
-		var runtime_probe := BackroomsMazeCellRuntimeScript.new() as Node3D
-		runtime_probe.force_metadata_only = true
+		var runtime_probe: Node3D = BackroomsMazeCellRuntimeScript.new() as Node3D
+		runtime_probe.set("force_metadata_only", true)
 		runtime_probe.position = BACKROOMS_WORLD_OFFSET
 		var runtime_valid: bool = bool(runtime_probe.call("load_save_dict", runtime_value))
 		var runtime_readback: Dictionary = runtime_probe.call("to_save_dict") if runtime_valid else {}
