@@ -95,6 +95,7 @@ func _run() -> void:
 	var baseline_position: Vector3 = restored_player.global_position
 	var baseline_surface_ids: Array = _loaded_surface_ids(restored_world)
 	var baseline_session: Dictionary = restored_session.call("to_save_dict")
+	var restored_controller: Node = restored_world.get("chunk_controller") as Node
 	_expect(not baseline_surface.is_empty() and baseline_surface_ids.size() == 9, "fresh restore target captures a complete baseline surface snapshot")
 	var invalid_envelope: Dictionary = envelope.duplicate(true)
 	invalid_envelope["backrooms_session"]["surface_world_seed"] = int(invalid_envelope["backrooms_session"].get("surface_world_seed", 0)) + 1
@@ -121,10 +122,11 @@ func _run() -> void:
 	_expect(restored, "combined envelope restores SurfaceWorld, LocationSession, maze runtime and player as one operation")
 	if restored:
 		var saved_session: Dictionary = envelope.get("backrooms_session", {})
-		var saved_backrooms_position: Vector3 = Vector3(
-			float(envelope.get("backrooms_player", {}).get("position", [0.0, 0.0, 0.0])[0]),
-			float(envelope.get("backrooms_player", {}).get("position", [0.0, 0.0, 0.0])[1]),
-			float(envelope.get("backrooms_player", {}).get("position", [0.0, 0.0, 0.0])[2])
+		var saved_backrooms_position_value: Array = envelope.get("backrooms_player", {}).get("position", [])
+		var saved_backrooms_position := Vector3(
+			float(saved_backrooms_position_value[0]),
+			float(saved_backrooms_position_value[1]),
+			float(saved_backrooms_position_value[2])
 		)
 		_expect(bool(restored_world.get("_is_in_backrooms")), "restored world switches into Backrooms mode only after runtime activation")
 		_expect(restored_player.global_position.is_equal_approx(saved_backrooms_position), "restored player returns to the exact saved Backrooms position")
@@ -134,7 +136,7 @@ func _run() -> void:
 		_expect(_loaded_surface_ids(restored_world) == envelope.get("surface_chunk_ids", []), "restored world retains the exact saved surface chunk window")
 		for chunk_id_value in envelope.get("surface_chunk_ids", []):
 			var chunk_id: String = str(chunk_id_value)
-			var surface_root: Node3D = restored_world.chunk_controller.call("get_chunk_root", chunk_id) as Node3D
+			var surface_root: Node3D = restored_controller.call("get_chunk_root", chunk_id) as Node3D
 			_expect(surface_root != null and not surface_root.visible, "surface chunk %s remains hidden while Backrooms is active" % chunk_id)
 		var returned: Dictionary = restored_world.call("return_from_backrooms")
 		_expect(bool(returned.get("ok", false)), "restored Backrooms Session can return to SurfaceWorld normally")
