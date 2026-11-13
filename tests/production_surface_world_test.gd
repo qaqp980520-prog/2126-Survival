@@ -378,6 +378,8 @@ func _run() -> void:
 			var surface_ids_before_handoff: Array = Array(world.chunk_controller.get_loaded_chunk_ids())
 			surface_ids_before_handoff.sort()
 			var surface_bounds_before_handoff: Rect2 = world.call("get_loaded_surface_window_bounds")
+			var handoff_surface_save_payload: Dictionary = world.call("serialize_stream_state")
+			_expect(not handoff_surface_save_payload.is_empty(), "surface state remains serializable immediately before Backrooms entry")
 			_expect(bool(handoff_portal.call("interact", world.player)), "the real portal interaction range accepts the nearby production player")
 			var entry_result: Dictionary = world.call("enter_backrooms_from_portal", int(handoff_portal.get("portal_id")))
 			_expect(bool(entry_result.get("ok", false)), "SurfaceWorld completes the validated player handoff into the Backrooms runtime")
@@ -404,7 +406,7 @@ func _run() -> void:
 			world.call("_process", 10.0)
 			_expect(is_equal_approx(float(handoff_director.get("next_spawn_in")), portal_timer_before_backrooms_tick), "portal spawn timer pauses while the player is in Backrooms")
 			_expect(not bool(world.call("debug_move_player_to", Vector3.ZERO, int(Time.get_unix_time_from_system()) + 21)), "surface streaming debug moves are rejected while Backrooms is active")
-			_expect(not bool(world.call("restore_stream_state", portal_save_payload, int(Time.get_unix_time_from_system()) + 22)), "surface-only restore is rejected while Backrooms is active")
+			_expect(not bool(world.call("restore_stream_state", handoff_surface_save_payload, int(Time.get_unix_time_from_system()) + 22)), "surface-only restore is rejected while Backrooms is active")
 			_expect(world.player.global_position.is_equal_approx(backrooms_position_before_restore) and bool(world.backrooms_maze_runtime.call("is_active")), "rejected surface restore leaves the live Backrooms player and runtime unchanged")
 			var hidden_surface_root: Node3D = null
 			for chunk_id_value in surface_ids_during_backrooms:
