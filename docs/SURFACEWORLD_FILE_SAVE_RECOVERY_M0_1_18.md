@@ -29,7 +29,7 @@ For a save path such as `user://2126_survival_world.json`:
 - `.bak`: previous primary retained as the last-known-good recovery point.
 - `.corrupt`, `.corrupt.1`, ...: malformed or semantically invalid primaries preserved after a valid backup has restored successfully.
 
-A failed temporary write or rename must not overwrite the previous primary. A failed primary restore may fall back only when the SurfaceWorld restore report confirms rollback completion. Incomplete rollback is fail-closed and blocks backup application.
+A failed temporary write or rename must not overwrite the previous primary. Temporary and installed files are read back and re-encoded with the same canonical JSON settings before they are accepted. A failed primary restore may fall back only when the SurfaceWorld restore report confirms rollback completion. Incomplete rollback is fail-closed and blocks backup application.
 
 ## Files
 
@@ -52,6 +52,7 @@ A failed temporary write or rename must not overwrite the previous primary. A fa
 ## Validation
 
 - Exact-head Godot 4.3 Full Compatibility Gate is required for this PR.
+- The file-persistence test watchdog is added to the SceneTree only after deferred test startup, avoiding a Timer start-before-tree error.
 - New command: `godot --headless --path . --script res://tests/surface_world_file_persistence_test.gd`.
 - Local Godot executable is unavailable in this environment; no local engine result is claimed.
 - Graphical/GPU and iPhone validation remain outstanding.
