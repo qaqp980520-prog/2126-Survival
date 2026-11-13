@@ -4,6 +4,8 @@ const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
@@ -40,6 +42,7 @@ func _run() -> void:
 	watchdog.start()
 	_cleanup_save_paths()
 	_test_json_numeric_save_validation()
+	_test_world_object_json_numeric_validation()
 	source_world = WorldScene.instantiate() as Node3D
 	_expect(source_world != null, "production SurfaceWorld scene instantiates")
 	if source_world == null:
@@ -276,6 +279,39 @@ func _test_json_numeric_save_validation() -> void:
 		"slots": ["berries", "herbs", "meat", "food"],
 		"selected_slot": 1
 	})), "quick-use validator rejects fractional schema versions")
+
+
+func _test_world_object_json_numeric_validation() -> void:
+	var prop = StatefulPropScript.new()
+	_expect(bool(prop.call("validate_world_object_state", {
+		"opened": false,
+		"loot_remaining": 2.0,
+		"loot_item_id": "iron_ore"
+	})), "salvage prop accepts integral-float JSON loot counts")
+	_expect(not bool(prop.call("validate_world_object_state", {
+		"opened": true,
+		"loot_remaining": 1.5,
+		"loot_item_id": "iron_ore"
+	})), "salvage prop rejects fractional JSON loot counts")
+	prop.free()
+
+	var patch = TerrainPatchScript.new()
+	_expect(bool(patch.call("validate_world_object_state", {
+		"height_level": 1.0,
+		"surface_type": "soil",
+		"revision": 2.0
+	})), "terrain patch accepts integral-float JSON height and revision")
+	_expect(not bool(patch.call("validate_world_object_state", {
+		"height_level": 1.5,
+		"surface_type": "soil",
+		"revision": 2.0
+	})), "terrain patch rejects fractional JSON height")
+	_expect(not bool(patch.call("validate_world_object_state", {
+		"height_level": 1.0,
+		"surface_type": "soil",
+		"revision": 2.5
+	})), "terrain patch rejects fractional JSON revision")
+	patch.free()
 
 
 func _read_dictionary(path: String) -> Dictionary:
