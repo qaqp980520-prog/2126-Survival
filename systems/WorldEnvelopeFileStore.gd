@@ -29,6 +29,11 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 	var destination_absolute: String = ProjectSettings.globalize_path(destination_path)
 	var temporary_absolute: String = ProjectSettings.globalize_path(temporary_path)
 	var backup_absolute: String = ProjectSettings.globalize_path(backup_path)
+	var parent_absolute: String = destination_absolute.get_base_dir()
+	if not DirAccess.dir_exists_absolute(parent_absolute):
+		var directory_error: Error = DirAccess.make_dir_recursive_absolute(parent_absolute)
+		if directory_error != OK and not DirAccess.dir_exists_absolute(parent_absolute):
+			return _fail("directory_create", "The save parent directory could not be created; existing save files were not touched.", {"error": directory_error})
 
 	if DirAccess.dir_exists_absolute(temporary_absolute):
 		return _fail("temporary_obstruction", "A directory occupies the temporary save path; the current save was not touched.", {})
