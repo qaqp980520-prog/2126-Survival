@@ -66,3 +66,7 @@ A failed temporary write or rename must not overwrite the previous primary. Temp
 ## Next step
 
 Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, correct any Godot parser/runtime or filesystem portability issue, then obtain independent review. Keep the parent-first dependency order: PR #347 before this PR.
+## JSON numeric compatibility correction
+
+- Godot 4.3 JSON decoding can represent integral JSON numbers as either integer or float Variants. Save validators for `SurvivalStamina` and `SurvivalQuickUse` now accept finite whole-valued numeric schema/slot fields and still reject fractional or out-of-range values.
+- The file-persistence regression suite includes JSON round-trip fixtures for integral-float schema versions and hotbar slot indices, plus fractional-value rejection.
