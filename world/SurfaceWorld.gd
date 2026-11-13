@@ -11,6 +11,10 @@ const BackroomsPortalDirectorScript = preload("res://systems/BackroomsPortalDire
 const BackroomsPortalVisualScript = preload("res://systems/BackroomsPortalVisual.gd")
 const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
+const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
+const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
+const BACKROOMS_CELL_SIZE: float = 8.0
+const BACKROOMS_STREAM_RADIUS: int = 1
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -52,6 +56,10 @@ var backrooms_portal_director: RefCounted
 var _backrooms_portal_world_seed: int = -1
 var backrooms_portal_visual: Area3D
 var backrooms_maze_runtime: Node3D
+var backrooms_transition_manager: RefCounted
+var _is_in_backrooms: bool = false
+var _backrooms_surface_visibility_snapshot: Dictionary = {}
+var _last_backrooms_sync_position: Vector3 = Vector3.ZERO
 var _backrooms_portal_chunk_id: String = ""
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
 var _mine_layer_index: int = 0
@@ -91,9 +99,10 @@ func _ready() -> void:
 	backrooms_maze_runtime = create_backrooms_maze_runtime()
 	if backrooms_maze_runtime == null:
 		push_error("Surface world could not create its Backrooms maze runtime owner.")
+	backrooms_transition_manager = BackroomsTransitionManagerScript.new()
 
 func _process(delta: float) -> void:
-	if backrooms_portal_director == null or player == null or _is_underground or _surface_stream_pending:
+	if backrooms_portal_director == null or player == null or _is_underground or _is_in_backrooms or _surface_stream_pending:
 		return
 	if not configure_backrooms_portal_director(backrooms_portal_director):
 		return
@@ -272,7 +281,10 @@ func _on_touch_terrain_pressed() -> void:
 	_interact_nearest_terrain_patch()
 
 func _on_touch_shaft_pressed() -> void:
-	_toggle_mine_access()
+	if _is_in_backrooms:
+		return_from_backrooms()
+	else:
+		_toggle_mine_access()
 
 func _on_touch_deeper_pressed() -> void:
 	_descend_mine_layer()
@@ -377,6 +389,9 @@ func _tick_stamina(delta: float, moving: bool, sprinting: bool = false) -> void:
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
 		return
+	if _is_in_backrooms:
+		_physics_process_backrooms(delta)
+		return
 	if _surface_stream_pending:
 		player.velocity = Vector3.ZERO
 		_camera_interaction_target_cache = {}
@@ -440,6 +455,8 @@ func _physics_process(delta: float) -> void:
 
 
 func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
+	if _is_in_backrooms:
+		return false
 	var success: bool = super.debug_move_player_to(position, now_unix)
 	if success:
 		_refresh_backrooms_portal_runtime_after_streaming()
@@ -447,6 +464,8 @@ func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
 
 
 func _sync_streaming(now_unix: int = -1) -> bool:
+	if _is_in_backrooms:
+		return false
 	var superseded_async: bool = _surface_stream_pending
 	if superseded_async:
 		if director != null and _surface_stream_request_id >= 0 and director.has_method("cancel_async_sync_request"):
@@ -464,6 +483,8 @@ func _sync_streaming(now_unix: int = -1) -> bool:
 
 
 func _request_surface_streaming(rollback_position: Vector3, target_position: Vector3, target_velocity: Vector3) -> bool:
+	if _is_in_backrooms:
+		return false
 	if player == null or director == null or not director.has_method("request_sync_to_world_position_async"):
 		if player != null:
 			player.global_position = rollback_position
@@ -538,8 +559,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif key_event.keycode == KEY_T:
 				_interact_nearest_terrain_patch()
 			elif key_event.keycode == KEY_G:
-				_toggle_mine_access()
-			elif key_event.keycode == KEY_V:
+				if _is_in_backrooms:
+					return_from_backrooms()
+				else:
+					_toggle_mine_access()
+				get_viewport().set_input_as_handled()
+			elif key_event.keycode == KEY_V and not _is_in_backrooms:
 				_descend_mine_layer()
 			elif key_event.keycode == KEY_ESCAPE:
 				_mouse_look_active = false
@@ -571,7 +596,12 @@ func _interact_current_target() -> Dictionary:
 			_refresh_hud()
 			return {"ok": false, "action": "portal_runtime_unavailable"}
 		var activated: bool = bool(portal.call("interact", player))
-		_world_object_action_message = "Backrooms portal activation requested." if activated else "Backrooms portal is outside interaction range."
+		if activated:
+			var transition_result: Dictionary = enter_backrooms_from_portal(int(portal.get("portal_id")))
+			activated = bool(transition_result.get("ok", false))
+			_world_object_action_message = "Backrooms entry completed." if activated else "Backrooms entry failed: %s." % str(transition_result.get("reason", "unknown"))
+		else:
+			_world_object_action_message = "Backrooms portal is outside interaction range."
 		_refresh_hud()
 		return {
 			"ok": activated,
@@ -728,7 +758,7 @@ func get_loaded_surface_window_bounds_at(reference_position: Vector3) -> Rect2:
 
 
 func configure_backrooms_portal_director(candidate: RefCounted) -> bool:
-	if _is_underground or _surface_stream_pending or player == null or director == null:
+	if _is_underground or _is_in_backrooms or _surface_stream_pending or player == null or director == null:
 		return false
 	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("set_spawn_window"):
 		return false
@@ -792,6 +822,227 @@ func deactivate_backrooms_destination() -> bool:
 	)
 
 
+## Complete the player handoff only after the hidden runtime and Session have committed.
+## The runtime is vertically isolated so the existing SurfaceWorld chunk window can remain loaded.
+func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
+	if _is_in_backrooms or _is_underground or _surface_stream_pending:
+		return {"ok": false, "reason": "surface_world_not_available"}
+	if player == null or director == null or backrooms_portal_director == null or backrooms_maze_runtime == null or backrooms_transition_manager == null:
+		return {"ok": false, "reason": "backrooms_transition_dependencies_unavailable"}
+	var preview: Variant = backrooms_portal_director.call("preview_portal_entry", portal_id)
+	if not (preview is Dictionary) or not bool(preview.get("ok", false)):
+		return {"ok": false, "reason": "portal_preview_rejected"}
+	var portal_position_value: Variant = preview.get("position", null)
+	if not (portal_position_value is Vector2):
+		return {"ok": false, "reason": "portal_position_invalid"}
+	var portal_world_position := Vector3(portal_position_value.x, 1.0, portal_position_value.y)
+	if player.global_position.distance_to(portal_world_position) > 3.25:
+		return {"ok": false, "reason": "portal_out_of_range"}
+	var surface_position: Vector3 = player.global_position
+	var surface_velocity: Vector3 = player.velocity
+	backrooms_maze_runtime.position = BACKROOMS_WORLD_OFFSET
+	var entry_position: Vector3 = backrooms_maze_runtime.to_global(Vector3(0.0, 2.0, 0.0))
+	var prepared: Dictionary = backrooms_transition_manager.call(
+		"prepare_portal_entry_with_runtime",
+		backrooms_portal_director,
+		backrooms_maze_runtime,
+		portal_id,
+		surface_position,
+		world_seed,
+		entry_position,
+		BACKROOMS_CELL_SIZE,
+		BACKROOMS_STREAM_RADIUS
+	)
+	if not bool(prepared.get("ok", false)):
+		backrooms_maze_runtime.position = Vector3.ZERO
+		_world_object_action_message = "Backrooms destination preparation failed: %s." % str(prepared.get("reason", "unknown"))
+		_refresh_hud()
+		return prepared
+	var committed: Dictionary = backrooms_transition_manager.call(
+		"commit_portal_entry_with_runtime",
+		backrooms_portal_director,
+		backrooms_maze_runtime,
+		portal_id,
+		surface_position,
+		world_seed,
+		entry_position
+	)
+	if not bool(committed.get("ok", false)):
+		backrooms_maze_runtime.position = Vector3.ZERO
+		_world_object_action_message = "Backrooms portal commit failed: %s." % str(committed.get("reason", "unknown"))
+		_refresh_hud()
+		return committed
+	player.global_position = entry_position
+	player.velocity = Vector3.ZERO
+	_jump_was_down = false
+	_touch_directions.clear()
+	_touch_jump = false
+	_touch_sprint = false
+	_camera_interaction_target_cache.clear()
+	var activated: bool = bool(backrooms_transition_manager.call("activate_prepared_runtime_after_handoff", backrooms_maze_runtime))
+	if not activated:
+		var aborted: Dictionary = backrooms_transition_manager.call("abort_committed_entry", backrooms_portal_director, backrooms_maze_runtime)
+		if bool(aborted.get("ok", false)):
+			player.global_position = surface_position
+			player.velocity = surface_velocity
+			backrooms_maze_runtime.position = Vector3.ZERO
+			_world_object_action_message = "Backrooms activation failed; the portal and SurfaceWorld were restored."
+		else:
+			_is_in_backrooms = bool(backrooms_maze_runtime.call("is_active"))
+			if _is_in_backrooms:
+				_set_surface_chunk_visibility(false)
+			else:
+				_surface_stream_pending = true
+			_world_object_action_message = "Backrooms activation failed and rollback is incomplete; world interaction is locked."
+		_refresh_hud()
+		return {"ok": false, "reason": "maze_runtime_activation_failed", "rollback_complete": bool(aborted.get("rollback_complete", false))}
+	_is_in_backrooms = true
+	_last_backrooms_sync_position = player.global_position
+	_set_surface_chunk_visibility(false)
+	_remove_backrooms_portal_visual()
+	_world_object_action_message = "Entered %s. Press G or RETURN to leave." % str(committed.get("destination_level", "Backrooms"))
+	_refresh_hud()
+	return {
+		"ok": true,
+		"event": "entered",
+		"destination_level": str(committed.get("destination_level", "")),
+		"portal_id": portal_id,
+		"player_position": player.global_position
+	}
+
+
+func return_from_backrooms() -> Dictionary:
+	if not _is_in_backrooms or player == null or backrooms_transition_manager == null or backrooms_maze_runtime == null:
+		return {"ok": false, "reason": "backrooms_world_not_active"}
+	var previous_backrooms_position: Vector3 = player.global_position
+	var previous_backrooms_velocity: Vector3 = player.velocity
+	var returned: Dictionary = backrooms_transition_manager.call(
+		"return_to_surface_with_runtime",
+		backrooms_maze_runtime,
+		Callable(self, "_restore_surface_from_backrooms")
+	)
+	if not bool(returned.get("ok", false)):
+		player.global_position = previous_backrooms_position
+		player.velocity = previous_backrooms_velocity
+		_is_in_backrooms = true
+		_world_object_action_message = "Surface restoration failed; Backrooms state was retained."
+		_refresh_hud()
+		return returned
+	_is_in_backrooms = false
+	player.velocity = Vector3.ZERO
+	backrooms_maze_runtime.position = Vector3.ZERO
+	_set_surface_chunk_visibility(true)
+	_last_grid = director.get_grid_coordinate(player.global_position)
+	_last_backrooms_sync_position = Vector3.ZERO
+	_jump_was_down = false
+	_touch_directions.clear()
+	_touch_jump = false
+	_touch_sprint = false
+	_camera_interaction_target_cache.clear()
+	_world_object_action_message = "Returned to SurfaceWorld."
+	_refresh_hud()
+	return returned
+
+
+func _restore_surface_from_backrooms(context: Dictionary) -> bool:
+	if player == null or director == null or chunk_controller == null:
+		return false
+	var return_position_value: Variant = context.get("surface_return_position", null)
+	var return_seed_value: Variant = context.get("surface_world_seed", null)
+	if not (return_position_value is Vector3) or not (return_seed_value is int or return_seed_value is float):
+		return false
+	if not is_finite(float(return_seed_value)) or int(return_seed_value) != world_seed:
+		return false
+	var return_position: Vector3 = return_position_value
+	if not is_finite(return_position.x) or not is_finite(return_position.y) or not is_finite(return_position.z):
+		return false
+	var previous_position: Vector3 = player.global_position
+	player.global_position = return_position
+	if not bool(director.call("sync_to_world_position", return_position, int(Time.get_unix_time_from_system()))):
+		player.global_position = previous_position
+		return false
+	_last_grid = director.get_grid_coordinate(return_position)
+	return true
+
+
+func _set_surface_chunk_visibility(visible: bool) -> void:
+	if chunk_controller == null:
+		return
+	if visible:
+		for chunk_id_value in _backrooms_surface_visibility_snapshot.keys():
+			var chunk_id: String = str(chunk_id_value)
+			var root_value: Variant = chunk_controller.call("get_chunk_root", chunk_id)
+			if root_value is Node3D and is_instance_valid(root_value):
+				(root_value as Node3D).visible = bool(_backrooms_surface_visibility_snapshot[chunk_id_value])
+		_backrooms_surface_visibility_snapshot.clear()
+		return
+	if not _backrooms_surface_visibility_snapshot.is_empty():
+		return
+	for chunk_id_value in chunk_controller.call("get_loaded_chunk_ids"):
+		var chunk_id: String = str(chunk_id_value)
+		if not chunk_id.begins_with("surface/"):
+			continue
+		var root_value: Variant = chunk_controller.call("get_chunk_root", chunk_id)
+		if root_value is Node3D and is_instance_valid(root_value):
+			_backrooms_surface_visibility_snapshot[chunk_id] = (root_value as Node3D).visible
+			(root_value as Node3D).visible = false
+
+
+func _physics_process_backrooms(delta: float) -> void:
+	if (
+		backrooms_transition_manager == null
+		or backrooms_maze_runtime == null
+		or not bool(backrooms_maze_runtime.call("is_active"))
+	):
+		player.velocity = Vector3.ZERO
+		return
+	var move_input := Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or _touch_directions.has("left"):
+		move_input.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or _touch_directions.has("right"):
+		move_input.x += 1.0
+	if Input.is_key_pressed(KEY_W) or _touch_directions.has("forward"):
+		move_input.y += 1.0
+	if Input.is_key_pressed(KEY_S) or _touch_directions.has("back"):
+		move_input.y -= 1.0
+	if move_input.length() > 1.0:
+		move_input = move_input.normalized()
+	var forward := -camera.global_basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var right := camera.global_basis.x
+	right.y = 0.0
+	right = right.normalized()
+	var movement := (right * move_input.x + forward * move_input.y).normalized()
+	var sprint_requested: bool = (Input.is_key_pressed(KEY_SHIFT) or _touch_sprint) and movement.length_squared() > 0.0001
+	var movement_profile: Dictionary = get_player_movement_profile(sprint_requested)
+	_sprint_active = bool(movement_profile.get("sprinting", false))
+	player.velocity.x = movement.x * float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
+	player.velocity.z = movement.z * float(movement_profile.get("move_speed", BASE_MOVE_SPEED))
+	if not player.is_on_floor():
+		player.velocity.y -= 20.0 * delta
+	elif player.velocity.y < 0.0:
+		player.velocity.y = 0.0
+	var jump_down: bool = Input.is_key_pressed(KEY_SPACE) or _touch_jump
+	if jump_down and not _jump_was_down:
+		_try_start_jump()
+	_jump_was_down = jump_down
+	_tick_stamina(delta, movement.length_squared() > 0.0001, _sprint_active)
+	var previous_position: Vector3 = player.global_position
+	player.move_and_slide()
+	if player.global_position.distance_squared_to(_last_backrooms_sync_position) >= 0.25:
+		var sync_result: Dictionary = backrooms_transition_manager.call(
+			"sync_backrooms_runtime", backrooms_maze_runtime, player.global_position
+		)
+		if not bool(sync_result.get("ok", false)):
+			player.global_position = previous_position
+			player.velocity = Vector3.ZERO
+			_world_object_action_message = "Backrooms stream sync failed; movement was rolled back."
+		else:
+			_last_backrooms_sync_position = player.global_position
+	_camera_interaction_target_cache = _cast_camera_interaction_target()
+	_refresh_hud()
+
 
 func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
 	if backrooms_portal_director == null or chunk_controller == null or portal_data.is_empty():
@@ -832,7 +1083,7 @@ func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
 	if portal.has_method("set_external_interaction_router_enabled"):
 		portal.call("set_external_interaction_router_enabled", true)
 	if portal.has_method("set_activation_enabled"):
-		portal.call("set_activation_enabled", false)
+		portal.call("set_activation_enabled", backrooms_transition_manager != null and backrooms_maze_runtime != null)
 	backrooms_portal_visual = portal
 	_backrooms_portal_chunk_id = chunk_id
 	_camera_interaction_target_cache.clear()
@@ -866,7 +1117,7 @@ func _retire_backrooms_portal(reason: String = "portal_retired") -> bool:
 
 
 func _refresh_backrooms_portal_runtime_after_streaming() -> bool:
-	if backrooms_portal_director == null or player == null or _surface_stream_pending:
+	if _is_in_backrooms or backrooms_portal_director == null or player == null or _surface_stream_pending:
 		return false
 	if not _is_underground and not configure_backrooms_portal_director(backrooms_portal_director):
 		return false
@@ -949,6 +1200,8 @@ func _build_mine_entrance_visual() -> void:
 	lamp.shadow_enabled = false
 	marker.add_child(lamp)
 func _toggle_mine_access() -> bool:
+	if _is_in_backrooms:
+		return false
 	if player == null or mine_director == null:
 		_world_object_action_message = "Mine shaft is unavailable."
 		_refresh_hud()
@@ -1033,7 +1286,7 @@ func _toggle_mine_access() -> bool:
 	return true
 
 func _descend_mine_layer() -> bool:
-	if not _is_underground or player == null or mine_director == null:
+	if _is_in_backrooms or not _is_underground or player == null or mine_director == null:
 		_world_object_action_message = "The deeper lift is only available underground."
 		_refresh_hud()
 		return false
@@ -1101,7 +1354,8 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
 func serialize_stream_state() -> Dictionary:
 	if (
-		_surface_stream_pending
+		_is_in_backrooms
+		or _surface_stream_pending
 		or backrooms_portal_director == null
 		or not is_instance_valid(backrooms_portal_director)
 		or not backrooms_portal_director.has_method("to_save_dict")
@@ -1146,6 +1400,9 @@ func serialize_stream_state() -> Dictionary:
 	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	if _is_in_backrooms:
+		_set_restore_report(false, "backrooms_active", "Surface restore is blocked while the Backrooms runtime is active.", true)
+		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
 	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
 		return false
@@ -1643,7 +1900,7 @@ func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 func get_interaction_prompt_text() -> String:
 	var target: Dictionary = get_camera_interaction_target()
 	if target.is_empty():
-		return "NO INTERACTION IN SIGHT"
+		return "G  RETURN TO SURFACE" if _is_in_backrooms else "NO INTERACTION IN SIGHT"
 	var target_node: Node3D = target.get("node") as Node3D
 	match str(target.get("kind", "")):
 		"portal":
@@ -1677,7 +1934,13 @@ func _refresh_hud() -> void:
 		interaction_prompt.text = get_interaction_prompt_text()
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0
-	var grid_text := str(mine_director.get_grid_coordinate(player.global_position)) if _is_underground and mine_director != null and player != null else (str(director.get_grid_coordinate(player.global_position)) if director != null and player != null else "n/a")
+	var grid_text: String = "n/a"
+	if _is_in_backrooms and player != null:
+		grid_text = str(Vector2i(floori(player.global_position.x / BACKROOMS_CELL_SIZE), floori(player.global_position.z / BACKROOMS_CELL_SIZE)))
+	elif _is_underground and mine_director != null and player != null:
+		grid_text = str(mine_director.get_grid_coordinate(player.global_position))
+	elif director != null and player != null:
+		grid_text = str(director.get_grid_coordinate(player.global_position))
 	var movement_profile: Dictionary = get_player_movement_profile(_sprint_active)
 	var weight := float(movement_profile.get("weight_kg", 0.0))
 	var limit := float(movement_profile.get("limit_kg", 65.0))
@@ -1694,23 +1957,24 @@ func _refresh_hud() -> void:
 	var stamina_value: float = float(movement_profile.get("stamina", 100.0))
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
 	_mine_layer_index = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
-	var layer_name: String = "UNDERGROUND MINE · LEVEL %02d" % (_mine_layer_index + 1) if _is_underground else "SURFACE WORLD"
+	var backrooms_level: String = str(backrooms_transition_manager.call("get_session").call("get_current_level")) if _is_in_backrooms and backrooms_transition_manager != null else "BACKROOMS"
+	var layer_name: String = "BACKROOMS · %s" % backrooms_level if _is_in_backrooms else ("UNDERGROUND MINE · LEVEL %02d" % (_mine_layer_index + 1) if _is_underground else "SURFACE WORLD")
 	if touch_buttons.has("crate"):
 		(touch_buttons["crate"] as Button).text = "CACHE" if _is_underground else "CRATE"
 	if touch_buttons.has("shaft"):
-		(touch_buttons["shaft"] as Button).text = ("UP ONE LEVEL" if _mine_layer_index > 0 else "SURFACE") if _is_underground else "DESCEND"
+		(touch_buttons["shaft"] as Button).text = "RETURN" if _is_in_backrooms else (("UP ONE LEVEL" if _mine_layer_index > 0 else "SURFACE") if _is_underground else "DESCEND")
 	if touch_buttons.has("deeper"):
-		(touch_buttons["deeper"] as Button).disabled = not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
+		(touch_buttons["deeper"] as Button).disabled = _is_in_backrooms or not _is_underground or _mine_layer_index >= UndergroundMineDirectorScript.MAX_LAYER_INDEX
 	if touch_buttons.has("crop"):
 		var interaction_button: Button = touch_buttons["crop"] as Button
 		var current_target: Dictionary = get_camera_interaction_target()
 		var current_target_node: Node3D = current_target.get("node") as Node3D
 		var current_target_is_portal: bool = str(current_target.get("kind", "")) == "portal"
 		var current_portal_enabled: bool = current_target_is_portal and current_target_node != null and bool(current_target_node.get("activation_enabled"))
-		interaction_button.disabled = _is_underground or (current_target_is_portal and not current_portal_enabled)
+		interaction_button.disabled = _is_in_backrooms or _is_underground or (current_target_is_portal and not current_portal_enabled)
 		interaction_button.text = ("PORTAL" if current_portal_enabled else "LOCKED") if current_target_is_portal else "CROP"
 	if touch_buttons.has("terrain"):
-		(touch_buttons["terrain"] as Button).disabled = _is_underground
+		(touch_buttons["terrain"] as Button).disabled = _is_in_backrooms or _is_underground
 	if touch_buttons.has("sprint"):
 		(touch_buttons["sprint"] as Button).text = "SPRINT ON" if _sprint_active else "SPRINT"
 	for slot_index in range(QuickUseScript.SLOT_COUNT):
@@ -1723,7 +1987,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
+	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
