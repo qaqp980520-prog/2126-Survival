@@ -7,6 +7,7 @@ const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
+const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -64,6 +65,27 @@ func _run() -> void:
 	var first_primary: Dictionary = _read_dictionary(SAVE_PATH)
 	_expect(str(first_primary.get("active_location", "")) == "surface", "file contains the canonical surface location")
 	_expect(not FileAccess.file_exists(SAVE_PATH + ".bak"), "first save does not invent a backup before a previous primary exists")
+
+	# JSON permits one numeric type. Exercise integral values decoded as floats
+	# across the envelope, base world schema, mine depth, stamina and quick-use.
+	var numeric_fixture: Dictionary = first_primary.duplicate(true)
+	numeric_fixture["schema_version"] = 1.0
+	var numeric_surface: Dictionary = numeric_fixture.get("surface_world", {}).duplicate(true)
+	numeric_surface["schema_version"] = 1.0
+	numeric_surface["mine_depth"] = 0.0
+	var numeric_stamina: Dictionary = numeric_surface.get("stamina", {}).duplicate(true)
+	numeric_stamina["schema_version"] = 1.0
+	numeric_surface["stamina"] = numeric_stamina
+	var numeric_quick_use: Dictionary = numeric_surface.get("quick_use", {}).duplicate(true)
+	numeric_quick_use["schema_version"] = 1.0
+	numeric_quick_use["selected_slot"] = 0.0
+	numeric_surface["quick_use"] = numeric_quick_use
+	numeric_fixture["surface_world"] = numeric_surface
+	_expect(_write_text(NUMERIC_PATH, JSON.stringify(numeric_fixture, "", true, true)), "write integral-float JSON envelope compatibility fixture")
+	var numeric_load_ok: bool = bool(source_world.call("load_game", NUMERIC_PATH))
+	if not numeric_load_ok:
+		print("DEBUG: integral-float JSON load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(numeric_load_ok, "production file loader accepts integral-float JSON envelope and mine-depth fields")
 
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(12.0, 2.0, 13.0), now + 1)), "move the player before the second save")
 	_expect(bool(bridge.call("collect_world_item", "berries", 3)), "mutate inventory before the second save")
@@ -282,7 +304,7 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
