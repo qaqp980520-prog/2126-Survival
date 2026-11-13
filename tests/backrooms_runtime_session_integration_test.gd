@@ -70,6 +70,19 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var restored_session = SessionScript.new()
 	assert(bool(restored_session.call("load_save_dict", parsed)))
 	assert(restored_session.call("to_save_dict") == saved_session)
+
+	var legacy_payload: Dictionary = saved_session.duplicate(true)
+	legacy_payload.erase("maze_stream_state")
+	var legacy_session = SessionScript.new()
+	assert(bool(legacy_session.call("load_save_dict", legacy_payload)), "Legacy schema-v1 active sessions without a maze payload remain loadable.")
+	assert(legacy_session.call("get_maze_stream_state").is_empty())
+
+	var tampered_payload: Dictionary = saved_session.duplicate(true)
+	tampered_payload["maze_stream_state"]["world_seed"] = int(tampered_payload["maze_stream_state"]["world_seed"]) + 1
+	var before_tampered_load: Dictionary = restored_session.call("to_save_dict")
+	assert(not bool(restored_session.call("load_save_dict", tampered_payload)), "A nested maze seed mismatch is rejected.")
+	assert(restored_session.call("to_save_dict") == before_tampered_load, "A rejected nested payload must leave the active Session unchanged.")
+
 	var restored_manager = ManagerScript.new(restored_session)
 	var restored_runtime = RuntimeScript.new()
 	restored_runtime.force_metadata_only = true
