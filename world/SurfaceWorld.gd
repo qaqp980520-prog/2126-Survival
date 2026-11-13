@@ -892,6 +892,8 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 			if _is_in_backrooms:
 				_set_surface_chunk_visibility(false)
 			else:
+				player.global_position = surface_position
+				player.velocity = surface_velocity
 				_surface_stream_pending = true
 			_world_object_action_message = "Backrooms activation failed and rollback is incomplete; world interaction is locked."
 		_refresh_hud()
