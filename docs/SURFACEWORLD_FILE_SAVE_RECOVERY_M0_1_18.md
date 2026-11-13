@@ -77,3 +77,12 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - The root import command now includes `--import`, followed by an explicit check for the generated wallpaper/carpet `.svg.import` metadata and `.godot/imported` directory before any headless scene tests run.
 - This prevents a missing-import cache from being misreported as a production save/load regression. The new exact-head Full Gate must validate the updated workflow.
 - World-object node validators now follow the same JSON numeric rule: `SurfaceTerrainPatch` height/revision and `WorldObjectStatefulProp` loot counts accept finite whole-valued int/float Variants while retaining bounds and fractional-value rejection. The file-persistence suite includes direct positive/negative node-state fixtures.
+
+
+## Underground lift JSON numeric compatibility correction
+
+- The production mine lift is included in the world-object registry as a stateful object. Its `layer_index` validator previously required an exact GDScript `int`, so a valid JSON round-trip that decoded the integral layer as a float caused the entire SurfaceWorld file restore to fail at `world_object_restore`.
+- `UndergroundMineLift.validate_world_object_state()` now accepts finite, whole-valued integer/float Variants within the existing layer bounds, while still requiring the saved layer to equal the lift's authored layer. Fractional, out-of-range, and mismatched values remain rejected.
+- The production file-persistence integration fixture now rewrites the actual saved mine-lift record's `layer_index` as an integral float before JSON serialization, so the failure is exercised through `load_game()`, not only through a direct validator test.
+- Direct regression coverage also verifies apply success for integral floats and rejection of fractional, out-of-range, and mismatched layers.
+- Validation: pending new exact-head Godot 4.3 Full Compatibility Gate; local Godot executable unavailable. Keep the child PR Draft until the file-persistence Step #214 and the complete gate pass.
