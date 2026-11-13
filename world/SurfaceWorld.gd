@@ -2057,14 +2057,14 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if target_underground:
 		if payload.has("mine_depth"):
 			var depth_value: Variant = payload.get("mine_depth")
-			if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+			if not _is_world_save_integer_in_range(depth_value, 0, UndergroundMineDirectorScript.MAX_LAYER_INDEX):
 				return false
 			target_depth = int(depth_value)
 		else:
 			target_depth = mine_director.get_layer_index(target_position) if mine_director != null else -1
 		if mine_director == null or target_depth < 0 or mine_director.get_layer_index(target_position) != target_depth:
 			return false
-	elif payload.has("mine_depth") and (not (payload.get("mine_depth") is int) or int(payload.get("mine_depth")) != 0):
+	elif payload.has("mine_depth") and not _is_world_save_integer(payload.get("mine_depth"), 0):
 		return false
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
