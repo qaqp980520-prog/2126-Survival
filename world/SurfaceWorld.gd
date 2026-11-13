@@ -2184,6 +2184,12 @@ func _rollback_auxiliary_restore_failure(
 	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and crops_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
+	if not rollback_complete:
+		# A partial auxiliary restore can leave a world that looks playable but is
+		# not transactionally trustworthy. Lock streaming and portal activation.
+		_surface_stream_pending = true
+		if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+			backrooms_portal_visual.call("set_activation_enabled", false)
 	return {
 		"rollback_complete": rollback_complete,
 		"details": {
