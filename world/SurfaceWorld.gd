@@ -10,6 +10,7 @@ const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStream
 const BackroomsPortalDirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const BackroomsPortalVisualScript = preload("res://systems/BackroomsPortalVisual.gd")
 const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.tscn")
+const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -50,6 +51,7 @@ var mine_director: Node
 var backrooms_portal_director: RefCounted
 var _backrooms_portal_world_seed: int = -1
 var backrooms_portal_visual: Area3D
+var backrooms_maze_runtime: Node3D
 var _backrooms_portal_chunk_id: String = ""
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
 var _mine_layer_index: int = 0
@@ -86,6 +88,9 @@ func _ready() -> void:
 		push_error("Surface world could not create its Backrooms portal director.")
 	else:
 		_backrooms_portal_world_seed = world_seed
+	backrooms_maze_runtime = create_backrooms_maze_runtime()
+	if backrooms_maze_runtime == null:
+		push_error("Surface world could not create its Backrooms maze runtime owner.")
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _surface_stream_pending:
@@ -743,6 +748,49 @@ func create_backrooms_portal_director() -> RefCounted:
 	if not configure_backrooms_portal_director(candidate):
 		return null
 	return candidate
+
+func create_backrooms_maze_runtime() -> Node3D:
+	if backrooms_maze_runtime != null and is_instance_valid(backrooms_maze_runtime):
+		return backrooms_maze_runtime
+	var runtime: Node3D = BackroomsMazeCellRuntimeScript.new() as Node3D
+	if runtime == null:
+		return null
+	runtime.name = "BackroomsMazeRuntime"
+	runtime.visible = false
+	add_child(runtime)
+	backrooms_maze_runtime = runtime
+	return runtime
+
+
+## Prepare a hidden maze destination before the transition coordinator consumes the portal.
+## This helper deliberately does not activate the runtime or unlock portal interaction.
+func prepare_backrooms_destination(
+	destination_level: String,
+	layout_seed: int,
+	entry_position: Vector3
+) -> Dictionary:
+	if backrooms_maze_runtime == null or not is_instance_valid(backrooms_maze_runtime):
+		backrooms_maze_runtime = create_backrooms_maze_runtime()
+	if backrooms_maze_runtime == null or not backrooms_maze_runtime.has_method("prepare_destination"):
+		return {"ok": false, "reason": "backrooms_maze_runtime_unavailable"}
+	return backrooms_maze_runtime.call("prepare_destination", destination_level, layout_seed, entry_position, 8.0, 1)
+
+
+func activate_backrooms_destination() -> bool:
+	return (
+		backrooms_maze_runtime != null
+		and is_instance_valid(backrooms_maze_runtime)
+		and bool(backrooms_maze_runtime.call("activate_destination"))
+	)
+
+
+func deactivate_backrooms_destination() -> bool:
+	return (
+		backrooms_maze_runtime != null
+		and is_instance_valid(backrooms_maze_runtime)
+		and bool(backrooms_maze_runtime.call("deactivate_destination"))
+	)
+
 
 
 func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
