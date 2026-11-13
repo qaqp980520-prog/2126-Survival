@@ -38,7 +38,7 @@ A failed temporary write or rename must not overwrite the previous primary. A fa
 - `world/SurfaceWorld.gd`
   - Adds the production save/load API, F5/F9 shortcuts, and HUD status feedback.
 - `tests/surface_world_file_persistence_test.gd`
-  - Exercises surface file round-trip, previous-primary backup, malformed JSON fallback, semantic-invalid fallback, missing-primary recovery, temporary-path obstruction, and active Backrooms save/load/return.
+  - Exercises surface file round-trip, previous-primary backup, malformed JSON fallback, semantic-invalid fallback, missing-primary recovery, fail-closed backup blocking after incomplete rollback, temporary-path obstruction, and active Backrooms save/load/return.
 - `.github/workflows/godot-validation.yml`
   - Adds the production file-persistence test to the Godot 4.3 Full Compatibility Gate.
 
