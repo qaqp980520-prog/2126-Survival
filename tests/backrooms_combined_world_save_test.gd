@@ -86,12 +86,17 @@ func _run() -> void:
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
 	var restored_runtime: Node3D = restored_world.get("backrooms_maze_runtime") as Node3D
 	var restored_session: RefCounted = restored_manager.call("get_session") as RefCounted
+	var restored_controller: Node = restored_world.get("chunk_controller") as Node
+	var surface_envelope: Dictionary = restored_world.call("serialize_world_envelope")
+	_expect(str(surface_envelope.get("active_location", "")) == "surface", "combined envelope also serializes the ordinary surface location")
+	_expect(bool(restored_world.call("restore_world_envelope", surface_envelope, now + 1)), "ordinary surface envelope round-trips through the combined restore API")
 	var baseline_surface: Dictionary = restored_world.call("serialize_stream_state")
 	var baseline_position: Vector3 = restored_player.global_position
 	var baseline_surface_ids: Array = _loaded_surface_ids(restored_world)
 	var baseline_session: Dictionary = restored_session.call("to_save_dict")
-	var restored_controller: Node = restored_world.get("chunk_controller") as Node
-	_expect(not baseline_surface.is_empty() and baseline_surface_ids.size() == 9, "fresh restore target captures a complete baseline surface snapshot")
+	_expect(not baseline_surface.is_empty() and baseline_surface_ids.size() == 9, "fresh restore target captures a complete baseline surface snapshot after surface round-trip")
+	var window_target: Dictionary = restored_world.call("_resolve_camera_interaction_target", root)
+	_expect(window_target.is_empty(), "non-3D Window candidates are ignored before typed Node3D membership checks")
 	var invalid_envelope: Dictionary = envelope.duplicate(true)
 	invalid_envelope["backrooms_session"]["surface_world_seed"] = int(invalid_envelope["backrooms_session"].get("surface_world_seed", 0)) + 1
 	_expect(not bool(restored_world.call("restore_world_envelope", invalid_envelope, now + 1)), "combined restore rejects a Session bound to a different surface seed")
@@ -106,7 +111,10 @@ func _run() -> void:
 	_expect(bool(failed_report.get("rollback_complete", false)), "runtime staging failure reports a complete combined-world rollback")
 	restored_runtime.call("clear_cell_builder_for_testing")
 	_expect(not bool(restored_world.get("_is_in_backrooms")), "failed combined restore leaves the target in SurfaceWorld mode")
-	_expect(restored_world.call("serialize_stream_state") == baseline_surface, "failed combined restore restores the exact pre-attempt SurfaceWorld save payload")
+	var after_failed_surface: Dictionary = restored_world.call("serialize_stream_state")
+	if after_failed_surface != baseline_surface:
+		_log_dictionary_differences(baseline_surface, after_failed_surface)
+	_expect(after_failed_surface == baseline_surface, "failed combined restore restores the exact pre-attempt SurfaceWorld save payload")
 	_expect(_loaded_surface_ids(restored_world) == baseline_surface_ids, "failed combined restore restores the exact pre-attempt surface chunk window")
 	_expect(restored_player.global_position.is_equal_approx(baseline_position), "failed combined restore restores the original player position")
 	_expect(restored_session.call("to_save_dict") == baseline_session and not bool(restored_session.call("is_active")), "failed combined restore returns LocationSession to its exact inactive snapshot")
@@ -166,6 +174,16 @@ func _loaded_surface_ids(candidate: Node3D) -> Array:
 			ids.append(chunk_id)
 	ids.sort()
 	return ids
+
+
+func _log_dictionary_differences(expected: Dictionary, actual: Dictionary) -> void:
+	for key_value in expected.keys():
+		var key: Variant = key_value
+		if expected.get(key) != actual.get(key):
+			print("ROLLBACK DIFF %s expected=%s actual=%s" % [str(key), str(expected.get(key)).substr(0, 500), str(actual.get(key)).substr(0, 500)])
+	for key_value in actual.keys():
+		if not expected.has(key_value):
+			print("ROLLBACK EXTRA %s actual=%s" % [str(key_value), str(actual.get(key_value)).substr(0, 500)])
 
 
 func _expect(condition: bool, message: String) -> void:
