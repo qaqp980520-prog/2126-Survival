@@ -121,3 +121,11 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - Fresh-world load assertions now compare the restored live Session and Runtime against those canonical expected dictionaries, not the raw JSON-decoded numeric representation. This preserves exact state verification while respecting the documented JSON normalization boundary.
 - The earlier RefCounted cleanup fix remains: no explicit `free()` is called on RefCounted probes.
 - New exact-head Godot 4.3 Full Gate required; the prior run on HEAD `fb73c7b1...` is superseded and cannot validate these updated assertions.
+
+
+## Backrooms file-load visibility and consumed-portal regression
+
+- The production file-persistence integration test captures the original loaded SurfaceWorld chunk visibility before entering Backrooms.
+- It verifies the saved Backrooms envelope retains that original visibility snapshot even though the live SurfaceWorld chunks are hidden during the visit.
+- A fresh-world file load must keep those surface chunks hidden while Backrooms is active, preserve the consumed one-use portal state, and restore every original chunk visibility value after returning to the saved SurfaceWorld position.
+- This guards the two-world handoff boundary against invisible-surface returns and accidental reappearance of a consumed portal.
