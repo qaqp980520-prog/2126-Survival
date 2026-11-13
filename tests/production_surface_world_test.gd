@@ -94,6 +94,19 @@ func _run() -> void:
 	_expect(world.player != null, "surface world creates its production player")
 	if world.player != null:
 		_expect(world.player.is_in_group("player"), "production player joins the shared player group used by world-transition triggers")
+	var maze_runtime: Node3D = world.get("backrooms_maze_runtime") as Node3D
+	_expect(maze_runtime != null and maze_runtime.get_parent() == world, "SurfaceWorld owns one Backrooms maze cell runtime")
+	if maze_runtime != null:
+		_expect(not maze_runtime.visible and not bool(maze_runtime.call("is_active")), "owned maze runtime starts hidden and inactive")
+		_expect(int(maze_runtime.call("get_loaded_cell_count")) == 0, "SurfaceWorld does not generate a Backrooms map before a transition is prepared")
+	var prepared_maze: Dictionary = world.call("prepare_backrooms_destination", "Level 1", 20261113, Vector3.ZERO)
+	_expect(bool(prepared_maze.get("ok", false)), "SurfaceWorld can prepare a hidden Backrooms destination from a validated level and seed")
+	_expect(maze_runtime != null and int(maze_runtime.call("get_loaded_cell_count")) == 9, "SurfaceWorld-owned runtime stages the initial nine-cell window")
+	_expect(maze_runtime != null and not bool(maze_runtime.call("is_active")) and not maze_runtime.visible, "destination preparation does not expose or collide with the hidden maze")
+	_expect(bool(world.call("activate_backrooms_destination")), "SurfaceWorld can explicitly activate a prepared maze destination")
+	_expect(maze_runtime != null and bool(maze_runtime.call("is_active")) and maze_runtime.visible, "explicit activation reveals the prepared destination")
+	_expect(bool(world.call("deactivate_backrooms_destination")), "SurfaceWorld can deactivate and retire the prepared maze destination")
+	_expect(maze_runtime != null and int(maze_runtime.call("get_loaded_cell_count")) == 0, "deactivation clears all SurfaceWorld-owned maze cell roots")
 	_expect(bool(world.call("initialize_world_session")), "surface world initializes shared session")
 	var diagnostics_panel: Control = world.find_child("StreamingDiagnosticsPanel", true, false) as Control
 	_expect(diagnostics_panel != null, "surface world embeds the streaming diagnostics panel")
