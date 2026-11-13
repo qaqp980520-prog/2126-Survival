@@ -101,3 +101,12 @@ Run the exact-head Godot 4.3 Full Compatibility Gate, fix any parser/runtime/reg
 - If the nested SurfaceWorld restore reports rollback_complete=false, restore_world_envelope() marks surface streaming pending and disables portal activation before returning failure.
 - Added a failure-injection case using a Stamina adapter that mutates its payload and rejects both the candidate apply and rollback apply. The test asserts the combined envelope remains outside Backrooms, leaves Session/runtime inactive, reports rollback incomplete, and locks SurfaceWorld streaming fail-closed.
 - The new code and test are committed on the existing PR #347 branch; exact-head Godot 4.3 Full Gate must validate the new HEAD.
+
+
+## Surface restore rollback fail-closed hardening — 2026-11-13
+
+- restore_world_envelope() now seeds a fresh nested restore report before calling restore_stream_state(), so an early validation rejection cannot accidentally reuse a stale report from an earlier operation.
+- If the nested restore reports rollback_complete=false, the combined envelope boundary marks _surface_stream_pending and disables portal activation.
+- _rollback_auxiliary_restore_failure() now applies the same fail-closed rule to direct SurfaceWorld restore callers when any cross-system snapshot cannot be restored.
+- The new integration regression uses FailAlwaysStamina: it mutates the candidate payload and rejects both the candidate apply and rollback apply. The combined restore must report surface_restore / rollback_complete=false, remain outside Backrooms, leave Session/runtime inactive, and lock streaming.
+- Exact-head Godot 4.3 Full Compatibility Gate for the final branch HEAD is pending; no pass is claimed until the new Step #212 and full gate complete.
