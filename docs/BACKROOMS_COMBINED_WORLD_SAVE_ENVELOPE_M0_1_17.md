@@ -110,3 +110,12 @@ Run the exact-head Godot 4.3 Full Compatibility Gate, fix any parser/runtime/reg
 - _rollback_auxiliary_restore_failure() now applies the same fail-closed rule to direct SurfaceWorld restore callers when any cross-system snapshot cannot be restored.
 - The new integration regression uses FailAlwaysStamina: it mutates the candidate payload and rejects both the candidate apply and rollback apply. The combined restore must report surface_restore / rollback_complete=false, remain outside Backrooms, leave Session/runtime inactive, and lock streaming.
 - Exact-head Godot 4.3 Full Compatibility Gate for the final branch HEAD is pending; no pass is claimed until the new Step #212 and full gate complete.
+
+
+## Exact SurfaceWorld snapshot rollback correction — 2026-11-13
+
+- The previous exact-head Full Gate [#43371432509](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43371432509) reached Step #212 and exposed one remaining exact-readback mismatch after an injected maze-cell staging failure.
+- The diagnostic showed mineral `last_regen_unix` values advanced by one second while the rollback rebuilt the SurfaceWorld stream. The chunk window, player transform, Session, runtime, and transition manager otherwise returned to their expected states.
+- `_rollback_world_envelope_restore()` now reapplies the pre-transaction mineral snapshot through `registry.restore_snapshot_exact()` after final streaming, then restores crop and world-object snapshots and requires `serialize_stream_state()` to match the exact original payload.
+- Any failed registry restore or final payload mismatch marks SurfaceWorld streaming pending and disables portal activation.
+- Corrective code commit: `ac00f87d4b4186242578284136288d1dd16959e3`. Exact-head Full Gate for the corrected HEAD is pending; the failed prior run is diagnostic only.
