@@ -12,6 +12,8 @@ const BackroomsPortalVisualScript = preload("res://systems/BackroomsPortalVisual
 const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
+const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
+const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
 const BACKROOMS_CELL_SIZE: float = 8.0
 const BACKROOMS_STREAM_RADIUS: int = 1
@@ -70,6 +72,7 @@ var _surface_stream_request_id: int = -1
 var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
+var _last_world_envelope_restore_report: Dictionary = {}
 
 func _enter_tree() -> void:
 	add_to_group("production_surface_world")
@@ -1395,6 +1398,7 @@ func serialize_stream_state() -> Dictionary:
 	if (
 		_is_in_backrooms
 		or _surface_stream_pending
+		or player == null
 		or backrooms_portal_director == null
 		or not is_instance_valid(backrooms_portal_director)
 		or not backrooms_portal_director.has_method("to_save_dict")
@@ -1402,6 +1406,331 @@ func serialize_stream_state() -> Dictionary:
 	):
 		return {}
 	var surface_reference_position: Vector3 = _surface_return_position if _is_underground else player.global_position
+	var mine_depth: int = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null else 0
+	return _serialize_surface_world_payload(player.global_position, surface_reference_position, "underground" if _is_underground else "surface", mine_depth)
+
+
+## Canonical combined envelope. Surface-only callers must keep using serialize_stream_state();
+## active Backrooms saves are available only through this versioned envelope.
+func serialize_world_envelope() -> Dictionary:
+	if (
+		player == null
+		or chunk_controller == null
+		or _surface_stream_pending
+		or backrooms_transition_manager == null
+		or not is_instance_valid(backrooms_transition_manager)
+		or backrooms_maze_runtime == null
+		or not is_instance_valid(backrooms_maze_runtime)
+	):
+		return {}
+	if _is_in_backrooms:
+		var save_sync_value: Variant = backrooms_transition_manager.call("sync_backrooms_runtime", backrooms_maze_runtime, player.global_position)
+		if not (save_sync_value is Dictionary) or not bool(save_sync_value.get("ok", false)):
+			if save_sync_value is Dictionary and not bool(save_sync_value.get("rollback_complete", true)):
+				_surface_stream_pending = true
+				if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+					backrooms_portal_visual.call("set_activation_enabled", false)
+			return {}
+		_last_backrooms_sync_position = player.global_position
+	var session_payload: Dictionary = backrooms_transition_manager.call("get_session_save_dict")
+	var surface_ids: Array = _get_loaded_surface_chunk_ids()
+	if _is_in_backrooms and not _validate_surface_chunk_snapshot(surface_ids, _backrooms_surface_visibility_snapshot):
+		return {}
+	var visibility: Dictionary = _capture_surface_chunk_visibility(surface_ids)
+	if surface_ids.is_empty() or visibility.size() != surface_ids.size():
+		return {}
+	var player_payload: Dictionary = {
+		"position": _vector3_to_world_save_array(player.global_position),
+		"velocity": _vector3_to_world_save_array(player.velocity)
+	}
+	if _is_in_backrooms:
+		if (
+			str(backrooms_transition_manager.call("get_state_name")) != "IN_BACKROOMS"
+			or not bool(session_payload.get("active", false))
+			or not bool(backrooms_maze_runtime.call("is_prepared"))
+			or not bool(backrooms_maze_runtime.call("is_active"))
+			or _is_underground
+		):
+			return {}
+		var return_parse: Dictionary = _parse_world_save_vector3(session_payload.get("surface_return_position", null))
+		var backrooms_parse: Dictionary = _parse_world_save_vector3(session_payload.get("backrooms_position", null))
+		if not bool(return_parse.get("ok", false)) or not bool(backrooms_parse.get("ok", false)):
+			return {}
+		var surface_return_position: Vector3 = return_parse["value"]
+		var saved_backrooms_position: Vector3 = backrooms_parse["value"]
+		var runtime_payload: Dictionary = backrooms_maze_runtime.call("to_save_dict")
+		if (
+			runtime_payload.is_empty()
+			or runtime_payload != session_payload.get("maze_stream_state", {})
+			or not player.global_position.is_equal_approx(saved_backrooms_position)
+			or int(session_payload.get("surface_world_seed", -1)) != world_seed
+		):
+			return {}
+		var surface_payload: Dictionary = _serialize_surface_world_payload(
+			surface_return_position,
+			surface_return_position,
+			"surface",
+			0
+		)
+		if surface_payload.is_empty():
+			return {}
+		return {
+			"schema_version": BACKROOMS_WORLD_SAVE_SCHEMA_VERSION,
+			"active_location": "backrooms",
+			"surface_world": surface_payload,
+			"backrooms_session": session_payload.duplicate(true),
+			"backrooms_runtime": runtime_payload.duplicate(true),
+			"backrooms_player": player_payload,
+			"surface_chunk_ids": surface_ids,
+			"surface_chunk_visibility": visibility
+		}
+	if (
+		str(backrooms_transition_manager.call("get_state_name")) != "IDLE"
+		or bool(session_payload.get("active", false))
+		or bool(backrooms_maze_runtime.call("is_prepared"))
+		or bool(backrooms_maze_runtime.call("is_active"))
+	):
+		return {}
+	var normal_surface_payload: Dictionary = serialize_stream_state()
+	if normal_surface_payload.is_empty():
+		return {}
+	return {
+		"schema_version": BACKROOMS_WORLD_SAVE_SCHEMA_VERSION,
+		"active_location": "underground" if _is_underground else "surface",
+		"surface_world": normal_surface_payload,
+		"backrooms_session": session_payload.duplicate(true),
+		"backrooms_runtime": {},
+		"backrooms_player": player_payload,
+		"surface_chunk_ids": surface_ids,
+		"surface_chunk_visibility": visibility
+	}
+
+
+## Restore is deliberately accepted only into an idle SurfaceWorld. A Backrooms target is
+## staged as a validated Session + hidden runtime, then activated after the player is moved.
+## Any failure after SurfaceWorld restore rolls the complete prior surface/session state back.
+func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
+	_set_world_envelope_restore_report(false, "validation", "Combined world envelope has not been accepted.", true)
+	if (
+		_is_in_backrooms
+		or _surface_stream_pending
+		or player == null
+		or chunk_controller == null
+		or backrooms_transition_manager == null
+		or backrooms_maze_runtime == null
+		or str(backrooms_transition_manager.call("get_state_name")) != "IDLE"
+		or bool(backrooms_transition_manager.call("get_session_save_dict").get("active", false))
+		or bool(backrooms_maze_runtime.call("is_prepared"))
+		or bool(backrooms_maze_runtime.call("is_active"))
+	):
+		_set_world_envelope_restore_report(false, "precondition", "Restore requires an idle SurfaceWorld with an inactive Session and empty maze runtime.", true)
+		return false
+	if not _is_world_save_integer(payload.get("schema_version", null), BACKROOMS_WORLD_SAVE_SCHEMA_VERSION):
+		_set_world_envelope_restore_report(false, "validation", "Combined world envelope schema is unsupported.", true)
+		return false
+	var location_value: Variant = payload.get("active_location", null)
+	var surface_value: Variant = payload.get("surface_world", null)
+	var session_value: Variant = payload.get("backrooms_session", null)
+	var runtime_value: Variant = payload.get("backrooms_runtime", null)
+	var player_value: Variant = payload.get("backrooms_player", null)
+	var surface_ids_value: Variant = payload.get("surface_chunk_ids", null)
+	var visibility_value: Variant = payload.get("surface_chunk_visibility", null)
+	if (
+		not (location_value is String)
+		or not ["surface", "underground", "backrooms"].has(str(location_value))
+		or not (surface_value is Dictionary)
+		or not (session_value is Dictionary)
+		or not (runtime_value is Dictionary)
+		or not (player_value is Dictionary)
+	):
+		_set_world_envelope_restore_report(false, "validation", "Combined world envelope is missing a required dictionary or location.", true)
+		return false
+	if not _validate_surface_chunk_snapshot(surface_ids_value, visibility_value):
+		_set_world_envelope_restore_report(false, "validation", "Saved surface chunk IDs or visibility snapshot are invalid.", true)
+		return false
+	var session_probe: RefCounted = BackroomsLocationSessionScript.new()
+	if not bool(session_probe.call("load_save_dict", session_value)):
+		_set_world_envelope_restore_report(false, "session_validation", str(session_probe.call("get_last_load_error")), true)
+		return false
+	var is_backrooms_target: bool = str(location_value) == "backrooms"
+	var saved_player_position: Dictionary = _parse_world_save_vector3(player_value.get("position", null))
+	var saved_player_velocity: Dictionary = _parse_world_save_vector3(player_value.get("velocity", null))
+	var surface_player_position: Dictionary = _parse_world_save_vector3(surface_value.get("player_position", null))
+	if (
+		not bool(saved_player_position.get("ok", false))
+		or not bool(saved_player_velocity.get("ok", false))
+		or not bool(surface_player_position.get("ok", false))
+	):
+		_set_world_envelope_restore_report(false, "validation", "Saved player position or velocity is invalid.", true)
+		return false
+	var surface_seed_value: Variant = surface_value.get("world_seed", null)
+	if not _is_world_save_integer_in_range(surface_seed_value, 0, MAX_WORLD_SEED):
+		_set_world_envelope_restore_report(false, "validation", "SurfaceWorld seed is invalid.", true)
+		return false
+	if is_backrooms_target:
+		if not bool(session_probe.call("is_active")) or runtime_value.is_empty():
+			_set_world_envelope_restore_report(false, "session_validation", "Backrooms envelope requires an active Session and non-empty maze runtime.", true)
+			return false
+		if (
+			str(surface_value.get("location_layer", "")) != "surface"
+			or not _is_world_save_integer(surface_value.get("mine_depth", null), 0)
+			or int(session_value.get("surface_world_seed", -1)) != int(surface_seed_value)
+		):
+			_set_world_envelope_restore_report(false, "session_validation", "Backrooms Session does not belong to the saved surface world.", true)
+			return false
+		var session_return_position: Dictionary = _parse_world_save_vector3(session_value.get("surface_return_position", null))
+		var session_backrooms_position: Dictionary = _parse_world_save_vector3(session_value.get("backrooms_position", null))
+		if (
+			not bool(session_return_position.get("ok", false))
+			or not bool(session_backrooms_position.get("ok", false))
+			or not surface_player_position["value"].is_equal_approx(session_return_position["value"])
+			or not saved_player_position["value"].is_equal_approx(session_backrooms_position["value"])
+		):
+			_set_world_envelope_restore_report(false, "session_validation", "Saved surface return position or Backrooms player position differs from the Session.", true)
+			return false
+		var runtime_probe: Node3D = BackroomsMazeCellRuntimeScript.new() as Node3D
+		runtime_probe.set("force_metadata_only", true)
+		runtime_probe.position = BACKROOMS_WORLD_OFFSET
+		var runtime_valid: bool = bool(runtime_probe.call("load_save_dict", runtime_value))
+		var runtime_readback: Dictionary = runtime_probe.call("to_save_dict") if runtime_valid else {}
+		runtime_probe.free()
+		if not runtime_valid or runtime_readback != session_probe.call("get_maze_stream_state"):
+			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true)
+			return false
+	else:
+		if (
+			bool(session_probe.call("is_active"))
+			or not runtime_value.is_empty()
+			or not surface_player_position["value"].is_equal_approx(saved_player_position["value"])
+			or str(surface_value.get("location_layer", "surface")) != str(location_value)
+		):
+			_set_world_envelope_restore_report(false, "validation", "Surface/underground envelope contains an unexpected Backrooms Session or mismatched player state.", true)
+			return false
+	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
+	var previous_surface_payload: Dictionary = serialize_stream_state()
+	var previous_session_payload: Dictionary = backrooms_transition_manager.call("get_session_save_dict")
+	var previous_position: Vector3 = player.global_position
+	var previous_velocity: Vector3 = player.velocity
+	var previous_surface_ids: Array = _get_loaded_surface_chunk_ids()
+	var previous_visibility: Dictionary = _capture_surface_chunk_visibility(previous_surface_ids)
+	if previous_surface_payload.is_empty() or previous_surface_ids.is_empty() or previous_visibility.size() != previous_surface_ids.size():
+		_set_world_envelope_restore_report(false, "snapshot", "Could not capture a complete pre-restore SurfaceWorld snapshot.", true)
+		return false
+	# Reset the nested restore report so an early validation rejection cannot inherit
+	# a stale rollback result from an unrelated previous restore.
+	_set_restore_report(false, "world_envelope_surface_restore_pending", "Surface restore has not completed.", true)
+	if not restore_stream_state(surface_value, now):
+		var surface_restore_report: Dictionary = get_last_restore_report()
+		var surface_rollback_complete: bool = bool(surface_restore_report.get("rollback_complete", false))
+		if not surface_rollback_complete:
+			_surface_stream_pending = true
+			if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+				backrooms_portal_visual.call("set_activation_enabled", false)
+		_set_world_envelope_restore_report(
+			false,
+			"surface_restore",
+			"SurfaceWorld rejected the saved surface payload.",
+			surface_rollback_complete,
+			{"surface_restore_report": surface_restore_report}
+		)
+		return false
+	var expected_surface_ids: Array = surface_ids_value.duplicate()
+	expected_surface_ids.sort()
+	if _get_loaded_surface_chunk_ids() != expected_surface_ids:
+		var chunk_rollback: bool = _rollback_world_envelope_restore(
+			previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+			previous_surface_ids, previous_visibility, now
+		)
+		_set_world_envelope_restore_report(false, "surface_window", "Restored surface chunk window differs from the saved window.", chunk_rollback)
+		return false
+	if is_backrooms_target:
+		if not bool(backrooms_transition_manager.call("restore_session_for_world_load", session_value)):
+			var session_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "session_restore", "Backrooms LocationSession restore failed.", session_rollback)
+			return false
+		backrooms_maze_runtime.position = BACKROOMS_WORLD_OFFSET
+		if not bool(backrooms_transition_manager.call("restore_runtime_from_session", backrooms_maze_runtime)):
+			var runtime_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "runtime_restore", "Backrooms maze runtime could not be reconstructed from the restored Session.", runtime_rollback)
+			return false
+		player.global_position = saved_player_position["value"]
+		player.velocity = saved_player_velocity["value"]
+		if not bool(backrooms_transition_manager.call("activate_prepared_runtime_after_handoff", backrooms_maze_runtime)):
+			var activation_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "runtime_activation", "Restored Backrooms runtime could not be activated after player handoff.", activation_rollback)
+			return false
+		_is_in_backrooms = true
+		_last_backrooms_sync_position = player.global_position
+		_backrooms_surface_visibility_snapshot = visibility_value.duplicate(true)
+		if not _apply_surface_chunk_visibility(visibility_value):
+			var visibility_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "visibility_restore", "Saved surface chunk visibility could not be restored.", visibility_rollback)
+			return false
+		for chunk_id_value in expected_surface_ids:
+			var surface_root: Node3D = chunk_controller.call("get_chunk_root", str(chunk_id_value)) as Node3D
+			if surface_root == null:
+				var missing_root_rollback: bool = _rollback_world_envelope_restore(
+					previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+					previous_surface_ids, previous_visibility, now
+				)
+				_set_world_envelope_restore_report(false, "visibility_restore", "A saved surface chunk root is missing after Backrooms restore.", missing_root_rollback)
+				return false
+			surface_root.visible = false
+		_jump_was_down = false
+		_touch_directions.clear()
+		_touch_jump = false
+		_touch_sprint = false
+		_camera_interaction_target_cache.clear()
+	else:
+		if not _apply_surface_chunk_visibility(visibility_value):
+			var surface_visibility_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "visibility_restore", "Saved surface chunk visibility could not be restored.", surface_visibility_rollback)
+			return false
+		_backrooms_surface_visibility_snapshot.clear()
+		player.velocity = saved_player_velocity["value"]
+	_set_world_envelope_restore_report(true, "complete", "", true, {
+		"active_location": str(location_value),
+		"surface_chunk_ids": expected_surface_ids,
+		"backrooms_runtime_active": bool(backrooms_maze_runtime.call("is_active"))
+	})
+	return true
+
+
+func get_last_world_envelope_restore_report() -> Dictionary:
+	return _last_world_envelope_restore_report.duplicate(true)
+
+
+func _serialize_surface_world_payload(
+	saved_player_position: Vector3,
+	surface_reference_position: Vector3,
+	location_layer: String,
+	mine_depth: int
+) -> Dictionary:
+	if (
+		_surface_stream_pending
+		or backrooms_portal_director == null
+		or not is_instance_valid(backrooms_portal_director)
+		or not backrooms_portal_director.has_method("to_save_dict")
+		or _backrooms_portal_world_seed != world_seed
+		or not _is_finite_vector3(saved_player_position)
+		or not _is_finite_vector3(surface_reference_position)
+	):
+		return {}
 	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds_at(surface_reference_position)
 	if loaded_bounds.size.x <= 0.0 or loaded_bounds.size.y <= 0.0:
 		return {}
@@ -1413,30 +1742,209 @@ func serialize_stream_state() -> Dictionary:
 			if not (active_position is Vector2) or not loaded_bounds.has_point(active_position):
 				return {}
 	var portal_state_value: Variant = backrooms_portal_director.call("to_save_dict")
-	if not (portal_state_value is Dictionary):
-		return {}
-	var portal_state: Dictionary = portal_state_value
-	if portal_state.is_empty():
+	if not (portal_state_value is Dictionary) or portal_state_value.is_empty():
 		return {}
 	var payload: Dictionary = super.serialize_stream_state()
 	if payload.is_empty():
 		return {}
+	payload["player_position"] = _vector3_to_world_save_array(saved_player_position)
 	payload["backrooms_portal_director"] = {
-			"schema_version": 1,
-			"world_seed": world_seed,
-			"state": portal_state.duplicate(true)
+		"schema_version": 1,
+		"world_seed": world_seed,
+		"state": portal_state_value.duplicate(true)
 	}
-	payload["location_layer"] = "underground" if _is_underground else "surface"
-	payload["mine_depth"] = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
+	payload["location_layer"] = location_layer
+	payload["mine_depth"] = mine_depth
 	payload["world_seed"] = world_seed
 	payload["stamina"] = stamina.call("to_save_dict") if stamina != null else {"schema_version": 1, "current": 100.0}
 	payload["quick_use"] = quick_use.call("to_save_dict") if quick_use != null else {"schema_version": 1, "slots": ["berries", "herbs", "meat", "food"], "selected_slot": 0}
-	payload["surface_return_position"] = [
-		_surface_return_position.x,
-		_surface_return_position.y,
-		_surface_return_position.z
-	]
+	payload["surface_return_position"] = _vector3_to_world_save_array(_surface_return_position)
 	return payload
+
+
+func _get_loaded_surface_chunk_ids() -> Array:
+	var ids: Array = []
+	if chunk_controller == null or not chunk_controller.has_method("get_loaded_chunk_ids"):
+		return ids
+	for id_value in chunk_controller.call("get_loaded_chunk_ids"):
+		var chunk_id: String = str(id_value)
+		if chunk_id.begins_with("surface/"):
+			ids.append(chunk_id)
+	ids.sort()
+	return ids
+
+
+func _capture_surface_chunk_visibility(surface_ids: Array) -> Dictionary:
+	var snapshot: Dictionary = {}
+	if chunk_controller == null:
+		return snapshot
+	for id_value in surface_ids:
+		var chunk_id: String = str(id_value)
+		var root_value: Variant = chunk_controller.call("get_chunk_root", chunk_id)
+		if not (root_value is Node3D) or not is_instance_valid(root_value):
+			return {}
+		var visible_value: bool = (root_value as Node3D).visible
+		if _is_in_backrooms and _backrooms_surface_visibility_snapshot.has(chunk_id):
+			visible_value = bool(_backrooms_surface_visibility_snapshot[chunk_id])
+		snapshot[chunk_id] = visible_value
+	return snapshot
+
+
+func _validate_surface_chunk_snapshot(ids_value: Variant, visibility_value: Variant) -> bool:
+	if not (ids_value is Array) or not (visibility_value is Dictionary):
+		return false
+	var ids: Array = ids_value
+	var visibility: Dictionary = visibility_value
+	if ids.is_empty() or visibility.size() != ids.size():
+		return false
+	var seen: Dictionary = {}
+	for id_value in ids:
+		if not (id_value is String) or str(id_value).is_empty() or not str(id_value).begins_with("surface/"):
+			return false
+		var chunk_id: String = str(id_value)
+		if seen.has(chunk_id) or not visibility.has(chunk_id) or not (visibility[chunk_id] is bool):
+			return false
+		seen[chunk_id] = true
+	return true
+
+
+func _apply_surface_chunk_visibility(snapshot_value: Variant) -> bool:
+	if not (snapshot_value is Dictionary) or chunk_controller == null:
+		return false
+	var snapshot: Dictionary = snapshot_value
+	var ids: Array = _get_loaded_surface_chunk_ids()
+	if ids.size() != snapshot.size():
+		return false
+	for id_value in ids:
+		var chunk_id: String = str(id_value)
+		if not snapshot.has(chunk_id) or not (snapshot[chunk_id] is bool):
+			return false
+		var root_value: Variant = chunk_controller.call("get_chunk_root", chunk_id)
+		if not (root_value is Node3D) or not is_instance_valid(root_value):
+			return false
+	for id_value in ids:
+		var chunk_id: String = str(id_value)
+		var root_value: Node3D = chunk_controller.call("get_chunk_root", chunk_id) as Node3D
+		root_value.visible = bool(snapshot[chunk_id])
+	return true
+
+
+func _rollback_world_envelope_restore(
+	previous_surface_payload: Dictionary,
+	previous_session_payload: Dictionary,
+	previous_position: Vector3,
+	previous_velocity: Vector3,
+	previous_surface_ids: Array,
+	previous_visibility: Dictionary,
+	now_unix: int
+) -> bool:
+	var runtime_clean: bool = true
+	if backrooms_maze_runtime != null and is_instance_valid(backrooms_maze_runtime):
+		if bool(backrooms_maze_runtime.call("is_prepared")) or bool(backrooms_maze_runtime.call("is_active")):
+			runtime_clean = bool(backrooms_maze_runtime.call("deactivate_destination"))
+	_is_in_backrooms = false
+	_backrooms_surface_visibility_snapshot.clear()
+	var session_restored: bool = backrooms_transition_manager != null and bool(backrooms_transition_manager.call("rollback_session_for_world_load", previous_session_payload))
+	if backrooms_maze_runtime != null and is_instance_valid(backrooms_maze_runtime):
+		backrooms_maze_runtime.position = Vector3.ZERO
+	var surface_restored: bool = restore_stream_state(previous_surface_payload, now_unix)
+	if player != null:
+		player.global_position = previous_position
+		player.velocity = previous_velocity
+
+	# The normal SurfaceWorld restore path advances regeneration timestamps while
+	# registering streamed chunks. A transaction rollback must not advance time:
+	# reapply the exact pre-transaction registry snapshots after the final stream.
+	var previous_minerals_value: Variant = previous_surface_payload.get("minerals", null)
+	var previous_crops_value: Variant = previous_surface_payload.get("crops", null)
+	var previous_world_objects_value: Variant = previous_surface_payload.get("world_objects", null)
+	var minerals_restored: bool = (
+		registry != null
+		and registry.has_method("restore_snapshot_exact")
+		and previous_minerals_value is Dictionary
+		and bool(registry.call("restore_snapshot_exact", previous_minerals_value, now_unix))
+	)
+	var crops_restored: bool = (
+		crop_registry != null
+		and previous_crops_value is Dictionary
+		and bool(crop_registry.call("restore_save_dict", previous_crops_value))
+	)
+	var world_objects_restored: bool = (
+		chunk_controller != null
+		and chunk_controller.has_method("restore_world_object_states")
+		and previous_world_objects_value is Dictionary
+		and bool(chunk_controller.call("restore_world_object_states", previous_world_objects_value))
+	)
+	if chunk_controller != null and chunk_controller.has_method("refresh_crop_plots"):
+		chunk_controller.call("refresh_crop_plots")
+
+	var ids_restored: bool = _get_loaded_surface_chunk_ids() == previous_surface_ids
+	var visibility_restored: bool = _apply_surface_chunk_visibility(previous_visibility)
+	var session_readback: Dictionary = backrooms_transition_manager.call("get_session_save_dict") if backrooms_transition_manager != null else {}
+	var manager_idle: bool = backrooms_transition_manager != null and str(backrooms_transition_manager.call("get_state_name")) == "IDLE"
+	var runtime_empty: bool = backrooms_maze_runtime != null and not bool(backrooms_maze_runtime.call("is_prepared")) and not bool(backrooms_maze_runtime.call("is_active")) and int(backrooms_maze_runtime.call("get_loaded_cell_count")) == 0
+	var player_restored: bool = player != null and player.global_position.is_equal_approx(previous_position) and player.velocity.is_equal_approx(previous_velocity)
+	var surface_payload_readback: Dictionary = serialize_stream_state()
+	var surface_payload_restored: bool = surface_payload_readback == previous_surface_payload
+	var rollback_complete: bool = (
+		runtime_clean
+		and session_restored
+		and surface_restored
+		and minerals_restored
+		and crops_restored
+		and world_objects_restored
+		and surface_payload_restored
+		and ids_restored
+		and visibility_restored
+		and session_readback == previous_session_payload
+		and manager_idle
+		and runtime_empty
+		and player_restored
+		and not _is_in_backrooms
+	)
+	if not rollback_complete:
+		_surface_stream_pending = true
+		if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+			backrooms_portal_visual.call("set_activation_enabled", false)
+	return rollback_complete
+
+func _parse_world_save_vector3(value: Variant) -> Dictionary:
+	if not (value is Array) or value.size() != 3:
+		return {"ok": false, "reason": "vector_shape_invalid"}
+	for component in value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return {"ok": false, "reason": "vector_component_invalid"}
+	return {
+		"ok": true,
+		"value": Vector3(float(value[0]), float(value[1]), float(value[2]))
+	}
+
+
+func _vector3_to_world_save_array(value: Vector3) -> Array:
+	return [value.x, value.y, value.z]
+
+
+func _is_world_save_integer(value: Variant, expected: int) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and floorf(float(value)) == float(value) and int(value) == expected
+
+
+func _is_world_save_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and floorf(float(value)) == float(value) and float(value) >= float(minimum) and float(value) <= float(maximum)
+
+
+func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+func _set_world_envelope_restore_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
+	_last_world_envelope_restore_report = {
+		"success": success,
+		"phase": phase,
+		"message": message,
+		"rollback_complete": rollback_complete,
+		"details": details.duplicate(true)
+	}
+
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if _is_in_backrooms:
@@ -1719,6 +2227,12 @@ func _rollback_auxiliary_restore_failure(
 	var rollback_complete: bool = mine_restored and base_restored and minerals_restored and crops_restored and world_objects_restored and stamina_restored and quick_use_restored and mine_chunk_ready_restored and position_restored and layer_state_restored
 	_refresh_backrooms_portal_runtime_after_streaming()
 	_refresh_hud()
+	if not rollback_complete:
+		# A partial auxiliary restore can leave a world that looks playable but is
+		# not transactionally trustworthy. Lock streaming and portal activation.
+		_surface_stream_pending = true
+		if backrooms_portal_visual != null and is_instance_valid(backrooms_portal_visual) and backrooms_portal_visual.has_method("set_activation_enabled"):
+			backrooms_portal_visual.call("set_activation_enabled", false)
 	return {
 		"rollback_complete": rollback_complete,
 		"details": {
@@ -1912,27 +2426,33 @@ func _cast_camera_interaction_target() -> Dictionary:
 func _resolve_camera_interaction_target(collider: Object) -> Dictionary:
 	var candidate: Node = collider as Node
 	while candidate != null and candidate != self:
-		if candidate.is_in_group("backrooms_portal") and candidate.has_method("interact"):
-			if candidate.has_method("set_external_interaction_router_enabled"):
-				candidate.call("set_external_interaction_router_enabled", true)
-			return {"kind": "portal", "node": candidate}
+		# Physics/query ancestors can include Window or other non-3D Nodes in
+		# headless and embedded viewports. Never pass them into Array[Node3D].
+		if not (candidate is Node3D):
+			candidate = candidate.get_parent()
+			continue
+		var candidate_3d: Node3D = candidate as Node3D
+		if candidate_3d.is_in_group("backrooms_portal") and candidate_3d.has_method("interact"):
+			if candidate_3d.has_method("set_external_interaction_router_enabled"):
+				candidate_3d.call("set_external_interaction_router_enabled", true)
+			return {"kind": "portal", "node": candidate_3d}
 		# Lift anchors are stateful world objects too, but their G/V actions must
 		# retain the dedicated lift interaction kind rather than generic prop routing.
-		if candidate.name == "KrollMineShaftEntrance" or candidate.name == "MineLiftAnchor":
-			return {"kind": "lift", "node": candidate}
+		if candidate_3d.name == "KrollMineShaftEntrance" or candidate_3d.name == "MineLiftAnchor":
+			return {"kind": "lift", "node": candidate_3d}
 		if chunk_controller != null:
 			var crop_plots: Array = chunk_controller.call("get_loaded_crop_plots")
-			if crop_plots.has(candidate):
-				return {"kind": "crop", "node": candidate}
+			if crop_plots.has(candidate_3d):
+				return {"kind": "crop", "node": candidate_3d}
 			var world_props: Array = chunk_controller.call("get_loaded_world_state_nodes")
-			if candidate.has_method("cycle_terrain_edit") and world_props.has(candidate):
-				return {"kind": "terrain", "node": candidate}
-			if world_props.has(candidate):
-				return {"kind": "prop", "node": candidate}
+			if candidate_3d.has_method("cycle_terrain_edit") and world_props.has(candidate_3d):
+				return {"kind": "terrain", "node": candidate_3d}
+			if world_props.has(candidate_3d):
+				return {"kind": "prop", "node": candidate_3d}
 			if chunk_controller.has_method("get_loaded_mineral_nodes"):
 				var mineral_nodes: Array = chunk_controller.call("get_loaded_mineral_nodes")
-				if mineral_nodes.has(candidate) and bool(candidate.get("visible")) and int(candidate.get("remaining_units")) > 0:
-					return {"kind": "vein", "node": candidate}
+				if mineral_nodes.has(candidate_3d) and bool(candidate_3d.get("visible")) and int(candidate_3d.get("remaining_units")) > 0:
+					return {"kind": "vein", "node": candidate_3d}
 		candidate = candidate.get_parent()
 	return {}
 

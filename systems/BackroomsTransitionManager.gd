@@ -458,6 +458,42 @@ func restore_runtime_from_session(runtime: Object) -> bool:
 	_active_runtime_instance_id = runtime.get_instance_id()
 	return true
 
+## Restore an active LocationSession as part of a combined world-envelope load.
+## The caller must reconstruct and activate the matching runtime only after this succeeds.
+func restore_session_for_world_load(payload: Dictionary) -> bool:
+	if state != TransitionState.IDLE or session == null or not is_instance_valid(session) or bool(session.call("is_active")):
+		return false
+	if _active_runtime != null or _pending_runtime != null or _committed_director != null:
+		return false
+	if not session.has_method("to_save_dict") or not session.has_method("load_save_dict") or not session.has_method("is_active"):
+		return false
+	var previous_snapshot: Dictionary = session.call("to_save_dict")
+	if not bool(session.call("load_save_dict", payload)) or session.call("to_save_dict") != payload or not bool(session.call("is_active")):
+		var restored: bool = _restore_session_snapshot(previous_snapshot)
+		state = TransitionState.IDLE if restored else TransitionState.ENTRY_PREPARED
+		return false
+	state = TransitionState.IN_BACKROOMS
+	return true
+
+
+## Roll back a combined world-envelope restore to the supplied Session snapshot.
+## An active runtime must be deactivated by the world owner before this method is called.
+func rollback_session_for_world_load(payload: Dictionary) -> bool:
+	if session == null or not is_instance_valid(session) or not session.has_method("load_save_dict") or not session.has_method("to_save_dict"):
+		return false
+	if _active_runtime != null and is_instance_valid(_active_runtime):
+		if _active_runtime.has_method("is_active") and bool(_active_runtime.call("is_active")):
+			return false
+	if not bool(session.call("load_save_dict", payload)) or session.call("to_save_dict") != payload:
+		return false
+	_active_runtime = null
+	_active_runtime_instance_id = 0
+	_clear_committed_entry_snapshot()
+	_clear_pending()
+	state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+	return true
+
+
 ## Restore SurfaceWorld first, then retire the maze and clear Session.
 ## Any failure restores the exact active Session and runtime snapshot.
 func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) -> Dictionary:
