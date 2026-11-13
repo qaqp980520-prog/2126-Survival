@@ -711,11 +711,23 @@ func _build_underground_mine() -> bool:
 func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
+func _get_surface_stream_reference_position() -> Vector3:
+	if _is_underground:
+		return _surface_return_position
+	if _is_in_backrooms and backrooms_transition_manager != null:
+		var active_session: Variant = backrooms_transition_manager.call("get_session")
+		if active_session is Object and active_session.has_method("get_return_context"):
+			var context: Dictionary = active_session.call("get_return_context")
+			var return_position: Variant = context.get("surface_return_position", null)
+			if return_position is Vector3:
+				return return_position
+	return player.global_position if player != null else Vector3.ZERO
+
+
 func get_loaded_surface_window_bounds() -> Rect2:
 	if player == null:
 		return Rect2()
-	var reference_position: Vector3 = _surface_return_position if _is_underground else player.global_position
-	return get_loaded_surface_window_bounds_at(reference_position)
+	return get_loaded_surface_window_bounds_at(_get_surface_stream_reference_position())
 
 
 func get_loaded_surface_window_bounds_at(reference_position: Vector3) -> Rect2:
@@ -827,8 +839,19 @@ func deactivate_backrooms_destination() -> bool:
 func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 	if _is_in_backrooms or _is_underground or _surface_stream_pending:
 		return {"ok": false, "reason": "surface_world_not_available"}
-	if player == null or director == null or backrooms_portal_director == null or backrooms_maze_runtime == null or backrooms_transition_manager == null:
+	if player == null or director == null or chunk_controller == null or backrooms_portal_director == null or backrooms_maze_runtime == null or backrooms_transition_manager == null:
 		return {"ok": false, "reason": "backrooms_transition_dependencies_unavailable"}
+	if (
+		_backrooms_portal_world_seed != world_seed
+		or backrooms_portal_visual == null
+		or not is_instance_valid(backrooms_portal_visual)
+		or backrooms_portal_visual.is_queued_for_deletion()
+		or int(backrooms_portal_visual.get("portal_id")) != portal_id
+		or not bool(backrooms_portal_visual.get("activation_enabled"))
+		or _backrooms_portal_chunk_id.is_empty()
+		or not chunk_controller.is_chunk_loaded(_backrooms_portal_chunk_id)
+	):
+		return {"ok": false, "reason": "production_portal_visual_or_chunk_unavailable"}
 	var preview: Variant = backrooms_portal_director.call("preview_portal_entry", portal_id)
 	if not (preview is Dictionary) or not bool(preview.get("ok", false)):
 		return {"ok": false, "reason": "portal_preview_rejected"}
