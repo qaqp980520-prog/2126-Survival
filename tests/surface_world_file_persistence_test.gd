@@ -1,8 +1,22 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
+const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
+
+class IncompleteRollbackProbe extends RefCounted:
+	var restore_calls: Array[Dictionary] = []
+	var last_report: Dictionary = {}
+
+	func restore(payload: Dictionary, _now_unix: int = -1) -> bool:
+		restore_calls.append(payload.duplicate(true))
+		last_report = {"phase": "surface_restore", "rollback_complete": false}
+		return false
+
+	func get_last_report() -> Dictionary:
+		return last_report.duplicate(true)
 
 var failures: Array[String] = []
 var source_world: Node3D
@@ -90,6 +104,22 @@ func _run() -> void:
 	_expect(_read_dictionary(SAVE_PATH) == first_primary, "missing-primary recovery promotes the backup to a verified primary")
 	_expect(_read_dictionary(SAVE_PATH + ".bak") == first_primary, "missing-primary recovery retains the backup until a later successful save")
 
+	# A failed restore with an incomplete rollback must not even attempt the backup.
+	_expect(_write_text(FAIL_CLOSED_PATH, JSON.stringify({"schema_version": 1, "marker": "primary"})), "write the primary fixture for fail-closed fallback")
+	_expect(_write_text(FAIL_CLOSED_PATH + ".bak", JSON.stringify({"schema_version": 1, "marker": "backup"})), "write a valid-looking backup fixture for fail-closed fallback")
+	var incomplete_probe := IncompleteRollbackProbe.new()
+	var file_store: RefCounted = FileStoreScript.new()
+	var fail_closed_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		FAIL_CLOSED_PATH,
+		Callable(incomplete_probe, "restore"),
+		Callable(incomplete_probe, "get_last_report"),
+		now + 6
+	))
+	_expect(not fail_closed_loaded, "file store rejects primary restore when rollback is incomplete")
+	_expect(incomplete_probe.restore_calls.size() == 1, "incomplete rollback blocks any attempt to apply the backup")
+	_expect(incomplete_probe.restore_calls.size() == 1 and str(incomplete_probe.restore_calls[0].get("marker", "")) == "primary", "only the primary payload reaches the failing restore callback")
+
 	# A temporary-path obstruction must never modify the current primary bytes.
 	var primary_before_obstruction: String = FileAccess.get_file_as_string(SAVE_PATH)
 	var temporary_path: String = SAVE_PATH + ".tmp"
@@ -146,11 +176,19 @@ func _run() -> void:
 		return
 	root.add_child(restored_world)
 	await process_frame
-	_expect(bool(restored_world.call("load_game", BACKROOMS_SAVE_PATH)), "F9-equivalent production API restores the active Backrooms file into a fresh world")
+	var backrooms_file_loaded: bool = bool(restored_world.call("load_game", BACKROOMS_SAVE_PATH))
+	_expect(backrooms_file_loaded, "F9-equivalent production API restores the active Backrooms file into a fresh world")
+	if not backrooms_file_loaded:
+		_finish(1)
+		return
 	_expect(bool(restored_world.get("_is_in_backrooms")), "file load activates Backrooms only after the runtime is reconstructed")
 	var restored_player: CharacterBody3D = restored_world.get("player") as CharacterBody3D
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
 	var restored_runtime: Node3D = restored_world.get("backrooms_maze_runtime") as Node3D
+	_expect(restored_player != null and restored_manager != null and restored_runtime != null, "restored world exposes its player, transition manager and maze runtime")
+	if restored_player == null or restored_manager == null or restored_runtime == null:
+		_finish(1)
+		return
 	var saved_position: Array = backrooms_payload.get("backrooms_player", {}).get("position", [])
 	if saved_position.size() == 3 and restored_player != null:
 		var expected_backrooms_position := Vector3(float(saved_position[0]), float(saved_position[1]), float(saved_position[2]))
@@ -194,7 +232,7 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH]:
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
