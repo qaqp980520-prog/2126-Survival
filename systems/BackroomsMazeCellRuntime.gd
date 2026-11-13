@@ -36,6 +36,8 @@ func prepare_destination(
 	last_error = ""
 	if active:
 		return _failure("runtime_already_active")
+	if not _is_finite_vector3(entry_position):
+		return _failure("entry_position_invalid")
 	var candidate: RefCounted = StreamStateScript.new()
 	if not bool(candidate.call("configure", destination_level, layout_seed, requested_cell_size, requested_stream_radius)):
 		return _failure("stream_configuration_rejected")
@@ -72,6 +74,8 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 	last_error = ""
 	if not prepared:
 		return _failure("destination_not_prepared")
+	if not _is_finite_vector3(world_position):
+		return _failure("world_position_invalid")
 	var plan_value: Variant = stream_state.call("plan_window_for_position", world_position)
 	if not (plan_value is Dictionary) or not bool(plan_value.get("ok", false)):
 		return _failure(str(plan_value.get("reason", "window_plan_rejected")) if plan_value is Dictionary else "window_plan_invalid")
@@ -311,6 +315,9 @@ func _get_wall_material() -> StandardMaterial3D:
 
 func _is_metadata_only() -> bool:
 	return force_metadata_only or DisplayServer.get_name() == "headless"
+
+func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
 
 func _set_collision_enabled(enabled: bool) -> void:
 	for root_value in cell_roots.values():
