@@ -951,7 +951,11 @@ func _restore_surface_from_backrooms(context: Dictionary) -> bool:
 	var return_seed_value: Variant = context.get("surface_world_seed", null)
 	if not (return_position_value is Vector3) or not (return_seed_value is int or return_seed_value is float):
 		return false
-	if not is_finite(float(return_seed_value)) or int(return_seed_value) != world_seed:
+	if (
+		not is_finite(float(return_seed_value))
+		or not is_equal_approx(float(return_seed_value), roundf(float(return_seed_value)))
+		or int(roundf(float(return_seed_value))) != world_seed
+	):
 		return false
 	var return_position: Vector3 = return_position_value
 	if not is_finite(return_position.x) or not is_finite(return_position.y) or not is_finite(return_position.z):
@@ -1957,7 +1961,11 @@ func _refresh_hud() -> void:
 	var stamina_value: float = float(movement_profile.get("stamina", 100.0))
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
 	_mine_layer_index = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
-	var backrooms_level: String = str(backrooms_transition_manager.call("get_session").call("get_current_level")) if _is_in_backrooms and backrooms_transition_manager != null else "BACKROOMS"
+	var backrooms_level: String = "BACKROOMS"
+	if _is_in_backrooms and backrooms_transition_manager != null:
+		var active_session: Variant = backrooms_transition_manager.call("get_session")
+		if active_session is Object and active_session.has_method("get_current_level"):
+			backrooms_level = str(active_session.call("get_current_level"))
 	var layer_name: String = "BACKROOMS · %s" % backrooms_level if _is_in_backrooms else ("UNDERGROUND MINE · LEVEL %02d" % (_mine_layer_index + 1) if _is_underground else "SURFACE WORLD")
 	if touch_buttons.has("crate"):
 		(touch_buttons["crate"] as Button).text = "CACHE" if _is_underground else "CRATE"
