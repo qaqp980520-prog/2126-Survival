@@ -12,11 +12,11 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	await _test_runtime_entry_sync_save_and_return()
+	_test_runtime_entry_sync_save_and_return()
 	_test_runtime_staging_failure_preserves_portal()
 	_test_stale_runtime_snapshot_cannot_consume_portal()
-	if get_root().get_child_count() > 0:
-		for child in get_root().get_children():
+	if root.get_child_count() > 0:
+		for child in root.get_children():
 			child.queue_free()
 	await process_frame
 	print("Backrooms runtime session integration tests passed.")
@@ -31,7 +31,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var manager = ManagerScript.new()
 	var runtime = RuntimeScript.new()
 	runtime.force_metadata_only = true
-	get_root().add_child(runtime)
+	root.add_child(runtime)
 	var return_position := Vector3(12.5, 2.0, -8.25)
 	var entry_position := Vector3.ZERO
 
