@@ -8,6 +8,7 @@ const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const MineLiftScript = preload("res://systems/UndergroundMineLift.gd")
 const BackroomsSessionScript = preload("res://systems/BackroomsLocationSession.gd")
+const BackroomsStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
@@ -279,13 +280,29 @@ func _run() -> void:
 	var saved_session_value: Variant = backrooms_payload.get("backrooms_session", {})
 	var session_probe: RefCounted = BackroomsSessionScript.new()
 	var session_probe_ok: bool = saved_session_value is Dictionary and bool(session_probe.call("load_save_dict", saved_session_value))
+	var canonical_session_value: Dictionary = {}
 	if not session_probe_ok:
 		print("DEBUG: detached Backrooms Session probe error = ", session_probe.call("get_last_load_error"))
-	elif session_probe.call("to_save_dict") != saved_session_value:
-		print("DEBUG: detached Backrooms Session canonical readback differs from JSON payload")
+	else:
+		canonical_session_value = session_probe.call("to_save_dict")
+		if canonical_session_value != saved_session_value:
+			print("DEBUG: detached Backrooms Session canonical readback differs from JSON payload")
 	_expect(session_probe_ok, "JSON-decoded active Backrooms Session passes detached validation")
+
+	var saved_runtime_value: Variant = backrooms_payload.get("backrooms_runtime", {})
+	var stream_probe: RefCounted = BackroomsStreamStateScript.new()
+	var stream_probe_ok: bool = saved_runtime_value is Dictionary and bool(stream_probe.call("load_save_dict", saved_runtime_value))
+	var canonical_runtime_value: Dictionary = {}
+	if stream_probe_ok:
+		canonical_runtime_value = stream_probe.call("to_save_dict")
+	_expect(stream_probe_ok, "JSON-decoded Backrooms runtime stream passes detached validation")
+	if session_probe_ok and stream_probe_ok:
+		_expect(
+			canonical_session_value.get("maze_stream_state", {}) == canonical_runtime_value,
+			"Session and Runtime stream snapshots agree after JSON numeric canonicalization"
+		)
 	_expect(str(backrooms_payload.get("active_location", "")) == "backrooms", "Backrooms file records the active Backrooms location")
-	_expect(not backrooms_payload.get("backrooms_runtime", {}).is_empty(), "Backrooms file contains the live maze runtime stream payload")
+	_expect(not saved_runtime_value.is_empty(), "Backrooms file contains the live maze runtime stream payload")
 
 	restored_world = WorldScene.instantiate() as Node3D
 	_expect(restored_world != null, "fresh production SurfaceWorld instance is available for file loading")
@@ -313,8 +330,8 @@ func _run() -> void:
 	if saved_position.size() == 3 and restored_player != null:
 		var expected_backrooms_position := Vector3(float(saved_position[0]), float(saved_position[1]), float(saved_position[2]))
 		_expect(restored_player.global_position.is_equal_approx(expected_backrooms_position), "file round-trip restores the exact Backrooms player position")
-	_expect(restored_manager.call("get_session_save_dict") == backrooms_payload.get("backrooms_session", {}), "file round-trip restores the exact active LocationSession")
-	_expect(restored_runtime.call("to_save_dict") == backrooms_payload.get("backrooms_runtime", {}), "file round-trip restores the exact maze runtime stream state")
+	_expect(restored_manager.call("get_session_save_dict") == canonical_session_value, "file round-trip restores the canonical active LocationSession")
+	_expect(restored_runtime.call("to_save_dict") == canonical_runtime_value, "file round-trip restores the canonical maze runtime stream state")
 	var return_result: Dictionary = restored_world.call("return_from_backrooms")
 	_expect(bool(return_result.get("ok", false)), "file-restored Backrooms Session can return to SurfaceWorld")
 	var saved_session: Dictionary = backrooms_payload.get("backrooms_session", {})
