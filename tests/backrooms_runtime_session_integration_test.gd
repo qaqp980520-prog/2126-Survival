@@ -54,8 +54,14 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(manager.get_session().call("is_active")))
 	assert(manager.get_session().call("get_maze_stream_state") == runtime.call("to_save_dict"))
 	assert(not bool(runtime.call("is_active")) and not runtime.visible, "Commit retains the runtime hidden until the world handoff completes.")
+	var position_drift_before: Dictionary = manager.get_session_save_dict()
+	assert(not bool(manager.get_session().call("set_backrooms_position", Vector3(8.0, 0.0, 0.0))), "Session cannot move into another cell without a matching runtime window update.")
+	assert(manager.get_session_save_dict() == position_drift_before)
 
 	assert(bool(manager.call("activate_prepared_runtime_after_handoff", runtime)))
+	var bypass_return: Dictionary = manager.call("return_to_surface", Callable(self, "_restore_surface"))
+	assert(not bool(bypass_return.get("ok", false)))
+	assert(str(bypass_return.get("reason", "")) == "runtime_aware_return_required")
 	assert(bool(runtime.call("is_active")) and runtime.visible)
 
 	var shifted: Dictionary = manager.call("sync_backrooms_runtime", runtime, Vector3(8.0, 0.0, 0.0))
@@ -87,6 +93,9 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var restored_runtime = RuntimeScript.new()
 	restored_runtime.force_metadata_only = true
 	root.add_child(restored_runtime)
+	var return_without_runtime: Dictionary = restored_manager.call("return_to_surface", Callable(self, "_restore_surface"))
+	assert(not bool(return_without_runtime.get("ok", false)))
+	assert(str(return_without_runtime.get("reason", "")) == "runtime_restore_required_before_return")
 	assert(bool(restored_manager.call("restore_runtime_from_session", restored_runtime)))
 	assert(bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")))
 	assert(restored_runtime.call("to_save_dict") == restored_session.call("get_maze_stream_state"))
