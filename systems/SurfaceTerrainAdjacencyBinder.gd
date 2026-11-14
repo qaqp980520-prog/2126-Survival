@@ -138,10 +138,12 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 
 	var adjacency_discovery_usec: int = Time.get_ticks_usec() - adjacency_started_usec if profile_enabled else 0
 	var edge_apply_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	var segmentation_batch_patches: Array[Node3D] = _begin_collision_segmentation_batches(patches)
 	for patch in patches:
 		for side in SIDES:
 			if not bool(patch.call("clear_neighbor_edge_state", side)):
 				_clear_all(patches)
+				_end_collision_segmentation_batches(segmentation_batch_patches)
 				return {"ok": false, "error": "clear_neighbor_failed"}
 
 	var descriptors: Dictionary = {}
@@ -153,9 +155,11 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		var second_side: String = str(pair["second_side"])
 		if not bool(first.call("bind_neighbor_patch", first_side, second)) or not bool(second.call("bind_neighbor_patch", second_side, first)):
 			_clear_all(patches)
+			_end_collision_segmentation_batches(segmentation_batch_patches)
 			return {"ok": false, "error": "neighbor_bind_failed"}
 		descriptors[str(descriptor["edge_key"])] = descriptor.duplicate(true)
 
+	_end_collision_segmentation_batches(segmentation_batch_patches)
 	var edge_apply_usec: int = Time.get_ticks_usec() - edge_apply_started_usec if profile_enabled else 0
 	var profile_usec: Dictionary = {}
 	if profile_enabled:
@@ -206,6 +210,41 @@ static func _side_between(first: Vector3, second: Vector3, patch_size: float) ->
 	if absf(delta.z + patch_size) <= POSITION_TOLERANCE and absf(delta.x) <= POSITION_TOLERANCE:
 		return "north"
 	return ""
+
+static func _begin_collision_segmentation_batches(patches: Array[Node3D]) -> Array[Node3D]:
+	var affected_patches: Array[Node3D] = []
+	var seen_instance_ids: Dictionary = {}
+	for patch in patches:
+		_append_unique_batch_patch(patch, affected_patches, seen_instance_ids)
+		if not is_instance_valid(patch) or not patch.has_method("get_bound_neighbor_patches"):
+			continue
+		var neighbors: Variant = patch.call("get_bound_neighbor_patches")
+		if not (neighbors is Array):
+			continue
+		for neighbor_value in neighbors:
+			_append_unique_batch_patch(neighbor_value, affected_patches, seen_instance_ids)
+
+	var started_patches: Array[Node3D] = []
+	for patch in affected_patches:
+		if patch.has_method("begin_collision_segmentation_batch") and patch.has_method("end_collision_segmentation_batch"):
+			patch.call("begin_collision_segmentation_batch")
+			started_patches.append(patch)
+	return started_patches
+
+static func _append_unique_batch_patch(candidate: Variant, patches: Array[Node3D], seen_instance_ids: Dictionary) -> void:
+	var patch: Node3D = candidate as Node3D
+	if not is_instance_valid(patch):
+		return
+	var instance_id: int = patch.get_instance_id()
+	if seen_instance_ids.has(instance_id):
+		return
+	seen_instance_ids[instance_id] = true
+	patches.append(patch)
+
+static func _end_collision_segmentation_batches(patches: Array[Node3D]) -> void:
+	for patch in patches:
+		if is_instance_valid(patch) and patch.has_method("end_collision_segmentation_batch"):
+			patch.call("end_collision_segmentation_batch")
 
 static func _clear_all(patches: Array[Node3D]) -> void:
 	for patch in patches:
