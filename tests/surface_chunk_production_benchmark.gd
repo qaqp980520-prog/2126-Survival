@@ -57,12 +57,15 @@ func _run() -> void:
 		director.set("load_radius", radius)
 		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
 		_reset_factory_metrics()
+		var expansion_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 		var expansion: Dictionary = await _run_async_request(director, target)
 		var expansion_diagnostic: Dictionary = expansion.get("diagnostic", {})
 		if not bool(expansion.get("ok", false)):
 			_expect(false, "radius %d production expansion completes: %s" % [radius, str(expansion.get("error", expansion_diagnostic.get("phase", "unknown")))])
 			break
 
+		var expansion_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - expansion_rebuilds_before
+		_expect(expansion_rebuild_delta == 1, "radius %d expansion commits one terrain adjacency rebuild instead of one per chunk" % radius)
 		var expected_count: int = (radius * 2 + 1) * (radius * 2 + 1)
 		var active_ids: PackedStringArray = _surface_ids(controller)
 		_expect(active_ids.size() == expected_count, "radius %d commits exactly %d production surface chunks" % [radius, expected_count])
@@ -78,18 +81,68 @@ func _run() -> void:
 		_expect(_all_refs_released(old_root_refs), "radius %d expansion releases all departed production roots" % radius)
 		_emit_metrics("expand_stage_commit", radius, expected_count, expansion_diagnostic, expansion.get("frame_samples_ms", []), controller)
 
-		var center: Vector2i = director.call("get_grid_coordinate", target)
+		# Measure the normal one-chunk eastward boundary crossing separately from
+		# the intentionally expensive full-window replacement stress case above.
+		var boundary_chunk_size_x: float = float(director.get("chunk_size_x"))
+		if not is_finite(boundary_chunk_size_x) or boundary_chunk_size_x <= 0.0:
+			_expect(false, "production director exposes a finite positive X chunk size")
+			break
+		var boundary_target: Vector3 = target + Vector3(boundary_chunk_size_x, 0.0, 0.0)
+		var boundary_center: Vector2i = director.call("get_grid_coordinate", boundary_target)
+		var expected_boundary_ids: PackedStringArray = _expected_surface_ids(boundary_center, radius)
+		var previous_boundary_ids: PackedStringArray = _surface_ids(controller)
+		var departing_ids: Array[String] = []
+		var retained_ids: Array[String] = []
+		for current_id in previous_boundary_ids:
+			if expected_boundary_ids.has(str(current_id)):
+				retained_ids.append(str(current_id))
+			else:
+				departing_ids.append(str(current_id))
+		var expected_boundary_delta: int = radius * 2 + 1
+		_expect(departing_ids.size() == expected_boundary_delta, "radius %d boundary shift identifies exactly %d departing roots" % [radius, expected_boundary_delta])
+		_expect(retained_ids.size() == expected_count - expected_boundary_delta, "radius %d boundary shift retains every overlapping root" % radius)
+		var departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, departing_ids)
+		var retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, retained_ids)
+		_reset_factory_metrics()
+		var boundary_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var boundary_result: Dictionary = await _run_async_request(director, boundary_target)
+		var boundary_diagnostic: Dictionary = boundary_result.get("diagnostic", {})
+		if not bool(boundary_result.get("ok", false)):
+			_expect(false, "radius %d one-chunk boundary crossing completes: %s" % [radius, str(boundary_result.get("error", boundary_diagnostic.get("phase", "unknown")))])
+			break
+		var boundary_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - boundary_rebuilds_before
+		_expect(boundary_rebuild_delta == 1, "radius %d boundary crossing commits one terrain adjacency rebuild instead of one per incoming chunk" % radius)
+		var boundary_ids: PackedStringArray = _surface_ids(controller)
+		_expect(boundary_ids == expected_boundary_ids, "radius %d boundary crossing commits the exact shifted window" % radius)
+		_expect(boundary_ids.size() == expected_count, "radius %d boundary crossing preserves the expected active count" % radius)
+		var boundary_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(boundary_managed_ids == boundary_ids, "radius %d boundary crossing keeps Director and Controller IDs aligned" % radius)
+		_expect(int(boundary_diagnostic.get("desired_count", -1)) == expected_count, "radius %d boundary crossing reports the expected desired count" % radius)
+		_expect(int(boundary_diagnostic.get("staged_count", -1)) == expected_boundary_delta, "radius %d boundary crossing stages exactly %d new roots" % [radius, expected_boundary_delta])
+		_expect(int(boundary_diagnostic.get("newly_loaded_count", -1)) == expected_boundary_delta, "radius %d boundary crossing commits exactly %d new roots" % [radius, expected_boundary_delta])
+		_expect(int(boundary_diagnostic.get("unloaded_stale_count", -1)) == expected_boundary_delta, "radius %d boundary crossing retires exactly %d stale roots" % [radius, expected_boundary_delta])
+		_expect(_factory_calls == expected_boundary_delta, "radius %d boundary crossing calls the real factory exactly %d times" % [radius, expected_boundary_delta])
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(departing_refs), "radius %d boundary crossing releases every departing root" % radius)
+		_expect(_all_refs_alive(retained_refs), "radius %d boundary crossing preserves every overlapping root" % radius)
+		_emit_metrics("boundary_cross_east", radius, expected_count, boundary_diagnostic, boundary_result.get("frame_samples_ms", []), controller)
+		target = boundary_target
+
+		var center: Vector2i = boundary_center
 		var center_id: String = "surface/chunk_%d_%d" % [center.x, center.y]
 		var departed_refs: Array[WeakRef] = _capture_surface_root_refs(controller, center_id)
 		_expect(departed_refs.size() == expected_count - 1, "radius %d contraction fixture captures every non-center root" % radius)
 		director.set("load_radius", 0)
 		_reset_factory_metrics()
+		var contraction_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
 		var contraction: Dictionary = await _run_async_request(director, target)
 		var contraction_diagnostic: Dictionary = contraction.get("diagnostic", {})
 		if not bool(contraction.get("ok", false)):
 			_expect(false, "radius %d production contraction completes: %s" % [radius, str(contraction.get("error", contraction_diagnostic.get("phase", "unknown")))])
 			break
 
+		var contraction_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - contraction_rebuilds_before
+		_expect(contraction_rebuild_delta == 1, "radius %d contraction commits one terrain adjacency rebuild instead of one per unloaded chunk" % radius)
 		var contracted_ids: PackedStringArray = _surface_ids(controller)
 		_expect(contracted_ids.size() == 1 and contracted_ids.has(center_id), "radius %d contracts to the retained center chunk" % radius)
 		var contraction_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
@@ -158,6 +211,29 @@ func _surface_ids(controller: Node) -> PackedStringArray:
 			result.append(str(chunk_id))
 	result.sort()
 	return result
+
+func _expected_surface_ids(center: Vector2i, radius: int) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for z in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			ids.append("surface/chunk_%d_%d" % [x, z])
+	ids.sort()
+	return ids
+
+func _capture_surface_root_refs_for_ids(controller: Node, chunk_ids: Array[String]) -> Array[WeakRef]:
+	var refs: Array[WeakRef] = []
+	for chunk_id in chunk_ids:
+		var chunk_root := controller.call("get_chunk_root", chunk_id) as Node3D
+		if is_instance_valid(chunk_root):
+			refs.append(weakref(chunk_root))
+	return refs
+
+func _all_refs_alive(refs: Array[WeakRef]) -> bool:
+	for root_ref in refs:
+		var candidate: Object = root_ref.get_ref()
+		if candidate == null or not is_instance_valid(candidate):
+			return false
+	return true
 
 func _capture_surface_root_refs(controller: Node, excluded_id: String = "") -> Array[WeakRef]:
 	var refs: Array[WeakRef] = []
