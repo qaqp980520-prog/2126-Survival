@@ -24,6 +24,7 @@ func _run() -> void:
 	_assert_window_wall_orientations()
 	_assert_invalid_specs_are_rejected_atomically()
 	_assert_production_headless_guard()
+	await process_frame
 
 	if failures.is_empty():
 		print("Backrooms entity visual factory tests passed.")
@@ -38,6 +39,7 @@ func _assert_entity_visuals(entity_id: String, expected_parts: int) -> void:
 	entity_root.set_meta("backrooms_entity_id", entity_id)
 	if entity_id == "window":
 		entity_root.set_meta("backrooms_wall_direction", Vector2i(0, -1))
+	root.add_child(entity_root)
 	var built: bool = FactoryScript.attach_visuals_for_testing(entity_root)
 	_expect(built, "%s visual factory builds a complete visual subtree" % entity_id)
 	var visuals: Node3D = entity_root.get_node_or_null("Visuals") as Node3D
@@ -58,16 +60,17 @@ func _assert_entity_visuals(entity_id: String, expected_parts: int) -> void:
 	_expect(entity_root.get_meta("backrooms_entity_visual_state", "") == "attached", "%s records an attached visual state" % entity_id)
 	_expect(not FactoryScript.attach_visuals_for_testing(entity_root), "%s rejects duplicate visual attachment" % entity_id)
 	_expect(entity_root.get_child_count() == 1, "%s keeps exactly one published visual subtree" % entity_id)
-	entity_root.free()
+	entity_root.queue_free()
 
 func _assert_window_wall_orientations() -> void:
 	var west_window := Node3D.new()
 	west_window.set_meta("backrooms_entity_id", "window")
 	west_window.set_meta("backrooms_wall_direction", Vector2i(-1, 0))
+	root.add_child(west_window)
 	var west_built: bool = FactoryScript.attach_visuals_for_testing(west_window)
 	_expect(west_built, "West-wall Window visual is built")
 	_expect(is_equal_approx(west_window.rotation.y, PI * 0.5), "West-wall Window is rotated ninety degrees")
-	west_window.free()
+	west_window.queue_free()
 
 func _assert_invalid_specs_are_rejected_atomically() -> void:
 	var invalid_specs: Array[Dictionary] = [
