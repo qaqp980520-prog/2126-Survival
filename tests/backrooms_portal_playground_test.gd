@@ -466,7 +466,6 @@ func _entity_geometry_specs_are_valid(world: Node) -> bool:
     ))
     var failure_is_atomic: bool = not builder_accepted and validation_parent.get_child_count() == 0
     validation_parent.free()
-    validation_material.free()
     if not failure_is_atomic:
         return false
 
