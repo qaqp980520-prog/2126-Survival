@@ -22,6 +22,8 @@ var _terrain_transition_collider_manager: Node3D
 var _terrain_adjacency_batch_depth: int = 0
 var _terrain_adjacency_batch_dirty: bool = false
 var _terrain_adjacency_rebuild_count: int = 0
+var _terrain_adjacency_profiling_enabled: bool = false
+var _last_terrain_adjacency_profile: Dictionary = {}
 
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
@@ -492,10 +494,29 @@ func end_terrain_adjacency_batch() -> Dictionary:
 	if not _terrain_adjacency_batch_dirty:
 		return {"ok": true, "rebuild_count": 0}
 	_terrain_adjacency_batch_dirty = false
-	return _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	var collect_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
+	var patches: Array[Node3D] = _collect_loaded_terrain_patches()
+	var collect_usec: int = Time.get_ticks_usec() - collect_started_usec if _terrain_adjacency_profiling_enabled else 0
+	var result: Dictionary = _rebind_terrain_patches(patches)
+	if _terrain_adjacency_profiling_enabled:
+		var profile: Dictionary = _last_terrain_adjacency_profile.duplicate(true)
+		profile["collect_loaded_patches_usec"] = collect_usec
+		profile["batch_total_usec"] = int(profile.get("controller_rebind_total_usec", 0)) + collect_usec
+		_last_terrain_adjacency_profile = profile
+		result["profile_usec"] = profile.duplicate(true)
+	return result
 
 func get_terrain_adjacency_rebuild_count() -> int:
 	return _terrain_adjacency_rebuild_count
+
+## Profiling is opt-in so normal gameplay does not pay for diagnostic clock reads.
+func set_terrain_adjacency_profiling_enabled(enabled: bool) -> void:
+	_terrain_adjacency_profiling_enabled = enabled
+	if not enabled:
+		_last_terrain_adjacency_profile.clear()
+
+func get_last_terrain_adjacency_profile() -> Dictionary:
+	return _last_terrain_adjacency_profile.duplicate(true)
 
 func _request_terrain_adjacency_rebind(
 	patches: Array[Node3D],
@@ -517,7 +538,10 @@ func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
 		push_error("Terrain transition descriptor rebuild failed after terrain edit: %s" % str(result.get("error", "unknown")))
 
 func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String = "", candidate_objects: Dictionary = {}) -> Dictionary:
+	var total_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	_terrain_adjacency_rebuild_count += 1
+	var profile: Dictionary = {}
+	var map_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	var stable_ids_by_instance: Dictionary = {}
 	var patches_by_stable_id: Dictionary = {}
 	for chunk_objects in _chunk_objects.values():
@@ -532,25 +556,61 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 			var candidate_stable_id: String = _make_world_object_stable_id(candidate_chunk_id, str(local_path))
 			stable_ids_by_instance[candidate.get_instance_id()] = candidate_stable_id
 			patches_by_stable_id[candidate_stable_id] = candidate
-	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance)
+	if _terrain_adjacency_profiling_enabled:
+		profile["stable_id_map_usec"] = Time.get_ticks_usec() - map_started_usec
+	var binder_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
+	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance, _terrain_adjacency_profiling_enabled)
+	if _terrain_adjacency_profiling_enabled:
+		profile["binder_total_usec"] = Time.get_ticks_usec() - binder_started_usec
+		var binder_profile: Dictionary = result.get("profile_usec", {})
+		profile["binder_validation_usec"] = int(binder_profile.get("validation_usec", 0))
+		profile["binder_adjacency_discovery_usec"] = int(binder_profile.get("adjacency_discovery_usec", 0))
+		profile["binder_edge_apply_usec"] = int(binder_profile.get("edge_apply_usec", 0))
 	if not bool(result.get("ok", false)):
 		if is_instance_valid(_terrain_transition_collider_manager):
 			_terrain_transition_collider_manager.call("clear_all")
 		_terrain_transition_descriptors.clear()
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), result)
 		return result
 	if not _ensure_transition_collider_manager():
-		return {"ok": false, "error": "transition_manager_unavailable"}
+		var manager_failure: Dictionary = {"ok": false, "error": "transition_manager_unavailable"}
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), manager_failure)
+		return manager_failure
+	var collider_started_usec: int = Time.get_ticks_usec() if _terrain_adjacency_profiling_enabled else 0
 	var transition_result: Dictionary = _terrain_transition_collider_manager.call(
 		"sync_transitions",
 		result.get("descriptors", {}),
-		patches_by_stable_id
+		patches_by_stable_id,
+		_terrain_adjacency_profiling_enabled
 	)
+	if _terrain_adjacency_profiling_enabled:
+		profile["collider_sync_total_usec"] = Time.get_ticks_usec() - collider_started_usec
+		var collider_profile: Dictionary = transition_result.get("profile_usec", {})
+		profile["collider_candidate_geometry_usec"] = int(collider_profile.get("candidate_geometry_usec", 0))
+		profile["collider_corner_resolution_usec"] = int(collider_profile.get("corner_resolution_usec", 0))
+		profile["collider_resource_staging_usec"] = int(collider_profile.get("resource_staging_usec", 0))
+		profile["collider_activation_commit_usec"] = int(collider_profile.get("activation_commit_usec", 0))
 	if not bool(transition_result.get("ok", false)):
-		return {"ok": false, "error": "transition_collider_sync_failed:" + str(transition_result.get("error", "unknown"))}
+		var collider_failure: Dictionary = {"ok": false, "error": "transition_collider_sync_failed:" + str(transition_result.get("error", "unknown"))}
+		_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), collider_failure)
+		return collider_failure
 	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
 	result["transition_collider_count"] = int(transition_result.get("active_count", 0))
 	result["blocked_transition_count"] = int(transition_result.get("blocked_count", 0))
+	_finish_terrain_adjacency_profile(profile, total_started_usec, patches.size(), result)
+	if _terrain_adjacency_profiling_enabled:
+		result["profile_usec"] = _last_terrain_adjacency_profile.duplicate(true)
 	return result
+
+func _finish_terrain_adjacency_profile(profile: Dictionary, total_started_usec: int, patch_count: int, result: Dictionary) -> void:
+	if not _terrain_adjacency_profiling_enabled:
+		return
+	profile["controller_rebind_total_usec"] = Time.get_ticks_usec() - total_started_usec
+	profile["patch_count"] = patch_count
+	var descriptors: Dictionary = result.get("descriptors", {})
+	profile["descriptor_count"] = descriptors.size()
+	profile["transition_collider_count"] = int(result.get("transition_collider_count", result.get("active_count", 0)))
+	_last_terrain_adjacency_profile = profile.duplicate(true)
 
 func _collect_mineral_nodes(node: Node, path_prefix: String, output: Dictionary) -> bool:
 	if node is MiningNode:

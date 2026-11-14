@@ -16,7 +16,9 @@ var _managed_edges: Dictionary = {}
 var _managed_corner_caps: Dictionary = {}
 var _last_blocked_corner_reports: Array[Dictionary] = []
 
-func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary) -> Dictionary:
+func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary, profile_enabled: bool = false) -> Dictionary:
+    var total_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+    var candidate_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var candidates: Dictionary = {}
     for edge_key_value in descriptors.keys():
         if not (edge_key_value is String) or str(edge_key_value).is_empty():
@@ -69,6 +71,8 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
             "geometry": geometry
         }
 
+    var candidate_geometry_usec: int = Time.get_ticks_usec() - candidate_started_usec if profile_enabled else 0
+    var corner_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var corner_resolution: Dictionary = CornerResolverScript.resolve(candidates)
     if not bool(corner_resolution.get("ok", false)):
         return {"ok": false, "error": str(corner_resolution.get("error", "corner_resolution_failed")), "active_count": _managed_edges.size()}
@@ -93,6 +97,8 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
             report["junction_key"] = str(policy.get("junction_key", ""))
             report["midpoint_height"] = float(policy.get("midpoint_height", 0.0))
 
+    var corner_resolution_usec: int = Time.get_ticks_usec() - corner_started_usec if profile_enabled else 0
+    var staging_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var staged_caps: Dictionary = {}
     for cap_spec_value in cap_specs:
         if not (cap_spec_value is Dictionary):
@@ -126,6 +132,8 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
             return {"ok": false, "error": "edge_staging_failed", "active_count": _managed_edges.size()}
         staged[str(edge_key)] = staged_edge
 
+    var resource_staging_usec: int = Time.get_ticks_usec() - staging_started_usec if profile_enabled else 0
+    var commit_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
     var newly_activated: Array[Dictionary] = []
     for edge_key in staged.keys():
         var edge: Dictionary = staged[edge_key]
@@ -174,13 +182,23 @@ func sync_transitions(descriptors: Dictionary, patches_by_stable_id: Dictionary)
     for report_value in blocked_corner_reports:
         if report_value is Dictionary:
             _last_blocked_corner_reports.append(report_value.duplicate(true))
+    var profile_usec: Dictionary = {}
+    if profile_enabled:
+        profile_usec = {
+            "candidate_geometry_usec": candidate_geometry_usec,
+            "corner_resolution_usec": corner_resolution_usec,
+            "resource_staging_usec": resource_staging_usec,
+            "activation_commit_usec": Time.get_ticks_usec() - commit_started_usec,
+            "total_usec": Time.get_ticks_usec() - total_started_usec
+        }
     return {
         "ok": true,
         "active_count": _managed_edges.size(),
         "blocked_count": blocked_edges.size(),
         "blocked_edge_keys": _sorted_keys(blocked_edges),
         "blocked_corner_reports": _last_blocked_corner_reports.duplicate(true),
-        "corner_cap_count": _managed_corner_caps.size()
+        "corner_cap_count": _managed_corner_caps.size(),
+        "profile_usec": profile_usec
     }
 
 func clear_all() -> void:
