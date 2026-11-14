@@ -14,6 +14,8 @@ const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
 const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
+const NESTED_SAVE_PATH: String = "user://run244_nested_saves/slot_a/world.json"
+const PRODUCTION_NESTED_SAVE_PATH: String = "user://run244_production_nested/slot_b/world.json"
 
 class IncompleteRollbackProbe extends RefCounted:
 	var restore_calls: Array[Dictionary] = []
@@ -58,6 +60,9 @@ func _run() -> void:
 	watchdog.timeout.connect(_on_timeout)
 	watchdog.start()
 	_cleanup_save_paths()
+	_test_nested_save_directory()
+	_test_symlink_save_paths()
+	_test_file_symlink_save_paths()
 	_test_json_numeric_save_validation()
 	_test_world_object_json_numeric_validation()
 	source_world = WorldScene.instantiate() as Node3D
@@ -76,6 +81,32 @@ func _run() -> void:
 		return
 
 	var now: int = int(Time.get_unix_time_from_system())
+	var nested_production_position := Vector3(4.0, 2.0, 5.0)
+	_expect(
+		bool(source_world.call("debug_move_player_to", nested_production_position, now)),
+		"move the production player before testing a nested production save path"
+	)
+	var nested_production_saved: bool = bool(source_world.call("save_game", PRODUCTION_NESTED_SAVE_PATH))
+	if not nested_production_saved:
+		print("DEBUG: nested production save report = ", source_world.call("get_last_world_file_report"))
+	_expect(nested_production_saved, "production SurfaceWorld.save_game creates and writes a nested user:// save path")
+	_expect(
+		_read_dictionary(PRODUCTION_NESTED_SAVE_PATH).get("active_location", "") == "surface",
+		"production nested save contains the combined surface envelope"
+	)
+	_expect(
+		bool(source_world.call("debug_move_player_to", Vector3(24.0, 2.0, 25.0), now + 1)),
+		"move the production player away from the nested save position"
+	)
+	var nested_production_loaded: bool = bool(source_world.call("load_game", PRODUCTION_NESTED_SAVE_PATH))
+	if not nested_production_loaded:
+		print("DEBUG: nested production load report = ", source_world.call("get_last_world_file_report"), " restore = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(nested_production_loaded, "production SurfaceWorld.load_game restores a nested user:// save path")
+	_expect(
+		player.global_position.is_equal_approx(nested_production_position),
+		"production nested save/load restores the exact saved player position"
+	)
+
 	_expect(bool(source_world.call("debug_move_player_to", Vector3(2.0, 2.0, 3.0), now)), "move the production player to the first save position")
 	_expect(bool(bridge.call("collect_world_item", "berries", 2)), "collect the first inventory snapshot")
 	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
@@ -381,6 +412,242 @@ func _run() -> void:
 	_finish(0 if failures.is_empty() else 1)
 
 
+func _test_nested_save_directory() -> void:
+	var file_store: RefCounted = FileStoreScript.new()
+	var traversal_guard_directory: String = ProjectSettings.globalize_path("user://run244_traversal_guard")
+	var traversal_saved: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run244_traversal_guard/../escaped/world.json",
+		{"schema_version": 1, "marker": "must-not-write"}
+	))
+	var traversal_report: Dictionary = file_store.call("get_last_report")
+	_expect(not traversal_saved, "file store rejects a nested user:// path containing a traversal segment")
+	_expect(str(traversal_report.get("phase", "")) == "validation", "path traversal is rejected before directory creation")
+	_expect(not DirAccess.dir_exists_absolute(traversal_guard_directory), "rejected traversal path creates no parent directory")
+
+	# A regular file at an ancestor path must fail before recursive mkdir emits an
+	# engine error or creates any primary/temporary/backup save files.
+	var blocked_parent_path: String = "user://run245_parent_file_blocker"
+	var blocked_parent_absolute: String = ProjectSettings.globalize_path(blocked_parent_path)
+	var blocker_file := FileAccess.open(blocked_parent_path, FileAccess.WRITE)
+	_expect(blocker_file != null, "create a regular file at the nested-save parent path")
+	if blocker_file == null:
+		return
+	blocker_file.store_string("parent-file-sentinel")
+	blocker_file.flush()
+	blocker_file.close()
+	var blocker_before: String = FileAccess.get_file_as_string(blocked_parent_path)
+	var blocked_save_path: String = blocked_parent_path + "/slot_a/world.json"
+	var blocked_saved: bool = bool(file_store.call(
+		"write_atomically",
+		blocked_save_path,
+		{"schema_version": 1.0, "marker": "must-not-write"}
+	))
+	var blocked_report: Dictionary = file_store.call("get_last_report")
+	_expect(not blocked_saved, "atomic writer rejects a regular file blocking a required parent directory")
+	_expect(str(blocked_report.get("phase", "")) == "directory_create", "parent-file obstruction reports directory_create")
+	_expect(FileAccess.get_file_as_string(blocked_parent_path) == blocker_before, "parent-file obstruction preserves the blocking file bytes")
+	_expect(not FileAccess.file_exists(blocked_save_path), "parent-file obstruction creates no primary save")
+	_expect(not FileAccess.file_exists(blocked_save_path + ".tmp"), "parent-file obstruction creates no temporary save")
+	_expect(not FileAccess.file_exists(blocked_save_path + ".bak"), "parent-file obstruction creates no backup save")
+	_expect(
+		not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(blocked_parent_path + "/slot_a")),
+		"parent-file obstruction creates no partial nested directory"
+	)
+	var blocker_remove_error: Error = DirAccess.remove_absolute(blocked_parent_absolute)
+	_expect(blocker_remove_error == OK and not FileAccess.file_exists(blocked_parent_path), "remove the parent-file obstruction fixture")
+
+	# JSON parsing canonicalizes numeric schema values to floats in this test path.
+	var first_payload: Dictionary = {"schema_version": 1.0, "marker": "nested-first"}
+	var first_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, first_payload))
+	_expect(first_saved, "atomic writer creates missing nested user:// save directories")
+	if not first_saved:
+		print("DEBUG: nested save directory report = ", file_store.call("get_last_report"))
+		return
+	_expect(
+		DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(NESTED_SAVE_PATH.get_base_dir())),
+		"nested save parent directory exists after the first save"
+	)
+	_expect(_read_dictionary(NESTED_SAVE_PATH) == first_payload, "nested save path contains the exact first payload")
+
+	var second_payload: Dictionary = {"schema_version": 1.0, "marker": "nested-second"}
+	var second_saved: bool = bool(file_store.call("write_atomically", NESTED_SAVE_PATH, second_payload))
+	_expect(second_saved, "a second nested save atomically replaces the primary")
+	if not second_saved:
+		print("DEBUG: second nested save report = ", file_store.call("get_last_report"))
+		return
+	_expect(_read_dictionary(NESTED_SAVE_PATH + ".bak") == first_payload, "nested save rotation retains the exact previous primary")
+
+	var probe := SuccessfulRestoreProbe.new()
+	var nested_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		NESTED_SAVE_PATH,
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	_expect(nested_loaded, "nested save path can be restored through the normal file-store API")
+	_expect(probe.restored_payload == second_payload, "nested file restore receives the latest primary payload")
+
+	_expect(_write_text(NESTED_SAVE_PATH, "{broken-nested-primary"), "corrupt the nested primary to exercise nested backup recovery")
+	var nested_backup_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		NESTED_SAVE_PATH,
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	var nested_recovery_report: Dictionary = file_store.call("get_last_report")
+	_expect(nested_backup_loaded, "nested save path restores from its retained backup after primary corruption")
+	_expect(probe.restored_payload == first_payload, "nested backup recovery restores the previous known-good payload")
+	_expect(
+		bool(nested_recovery_report.get("details", {}).get("primary_repaired", false)),
+		"nested backup recovery repairs and verifies the primary"
+	)
+	_expect(_read_dictionary(NESTED_SAVE_PATH) == first_payload, "nested backup recovery installs the previous primary as the repaired save")
+	_expect(FileAccess.file_exists(NESTED_SAVE_PATH + ".corrupt"), "nested backup recovery preserves the corrupt primary under a diagnostic suffix")
+	_expect(_read_dictionary(NESTED_SAVE_PATH + ".bak") == first_payload, "nested backup remains available after primary repair")
+
+
+func _test_symlink_save_paths() -> void:
+	var target_directory: String = "user://run246_symlink_target"
+	var target_file_path: String = target_directory + "/existing.json"
+	var link_name: String = "run246_symlink_link"
+	var link_path: String = "user://" + link_name
+	var target_absolute: String = ProjectSettings.globalize_path(target_directory)
+	var target_payload: Dictionary = {"schema_version": 1.0, "marker": "symlink-target"}
+	var target_text: String = JSON.stringify(target_payload, "", true, true)
+	var directory_error: Error = DirAccess.make_dir_recursive_absolute(target_absolute)
+	_expect(directory_error == OK or DirAccess.dir_exists_absolute(target_absolute), "create the symlink guard target directory")
+	if not DirAccess.dir_exists_absolute(target_absolute):
+		return
+	_expect(_write_text(target_file_path, target_text), "write a valid save payload behind the symlink target")
+	var user_directory := DirAccess.open("user://")
+	_expect(user_directory != null, "open the user data root for symlink fixture creation")
+	if user_directory == null:
+		return
+	var link_error: Error = user_directory.create_link(target_absolute, link_name)
+	if link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
+		return
+	_expect(link_error == OK, "create a directory symlink inside user data")
+	if link_error != OK:
+		return
+	_expect(user_directory.is_link(link_name), "Godot identifies the user-data directory entry as a symbolic link")
+
+	var file_store: RefCounted = FileStoreScript.new()
+	var write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		link_path + "/new_save.json",
+		{"schema_version": 1.0, "marker": "must-not-write-through-link"}
+	))
+	var write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not write_ok, "atomic writer rejects a nested save path beneath a symbolic link")
+	_expect(str(write_report.get("phase", "")) == "path_symlink", "symbolic-link write rejection reports path_symlink")
+	_expect(not FileAccess.file_exists(target_directory + "/new_save.json"), "symbolic-link write rejection creates no file at the link target")
+
+	var probe := IncompleteRollbackProbe.new()
+	var load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		link_path + "/existing.json",
+		Callable(probe, "restore"),
+		Callable(probe, "get_last_report")
+	))
+	var load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not load_ok, "file loader rejects a save path beneath a symbolic link")
+	_expect(str(load_report.get("phase", "")) == "path_symlink", "symbolic-link load rejection reports path_symlink")
+	_expect(probe.restore_calls.is_empty(), "symbolic-link load rejection never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "symbolic-link rejection preserves the target save bytes")
+
+func _test_file_symlink_save_paths() -> void:
+	var target_file_path: String = "user://run247_symlink_file_target.json"
+	var target_file_absolute: String = ProjectSettings.globalize_path(target_file_path)
+	var target_text: String = JSON.stringify(
+		{"schema_version": 1.0, "marker": "direct-file-symlink-target"},
+		"",
+		true,
+		true
+	)
+	_expect(_write_text(target_file_path, target_text), "write a valid payload for direct file-symlink fixtures")
+	if not FileAccess.file_exists(target_file_path):
+		return
+
+	var user_directory := DirAccess.open("user://")
+	_expect(user_directory != null, "open the user data root for direct file-symlink fixtures")
+	if user_directory == null:
+		return
+
+	var link_names: Array[String] = [
+		"run247_symlink_primary.json",
+		"run247_symlink_tmp.json.tmp",
+		"run247_symlink_backup_write.json.bak",
+		"run247_symlink_backup_read.json.bak"
+	]
+	for link_name in link_names:
+		var link_error: Error = user_directory.create_link(target_file_absolute, link_name)
+		if link_error != OK and OS.get_name() == "Windows":
+			print("SKIP: direct file-symlink regression fixtures require Windows Developer Mode or elevated privileges.")
+			return
+		_expect(link_error == OK, "create direct file symlink: " + link_name)
+		if link_error != OK:
+			return
+		_expect(user_directory.is_link(link_name), "Godot identifies direct file symlink: " + link_name)
+
+	var file_store: RefCounted = FileStoreScript.new()
+	var payload: Dictionary = {"schema_version": 1.0, "marker": "must-not-write-through-file-link"}
+
+	var primary_link_path: String = "user://run247_symlink_primary.json"
+	var primary_write_ok: bool = bool(file_store.call("write_atomically", primary_link_path, payload))
+	var primary_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not primary_write_ok, "atomic writer rejects a direct symlink at the primary save path")
+	_expect(str(primary_write_report.get("phase", "")) == "path_symlink", "direct primary symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct primary symlink write leaves target bytes unchanged")
+
+	var primary_probe := IncompleteRollbackProbe.new()
+	var primary_load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		primary_link_path,
+		Callable(primary_probe, "restore"),
+		Callable(primary_probe, "get_last_report")
+	))
+	var primary_load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not primary_load_ok, "loader rejects a direct symlink at the primary save path")
+	_expect(str(primary_load_report.get("phase", "")) == "path_symlink", "direct primary symlink load reports path_symlink")
+	_expect(primary_probe.restore_calls.is_empty(), "direct primary symlink load never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct primary symlink load leaves target bytes unchanged")
+
+	var temporary_write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run247_symlink_tmp.json",
+		payload
+	))
+	var temporary_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not temporary_write_ok, "atomic writer rejects a direct symlink at the temporary path")
+	_expect(str(temporary_write_report.get("phase", "")) == "path_symlink", "direct temporary symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct temporary symlink write leaves target bytes unchanged")
+
+	var backup_write_ok: bool = bool(file_store.call(
+		"write_atomically",
+		"user://run247_symlink_backup_write.json",
+		payload
+	))
+	var backup_write_report: Dictionary = file_store.call("get_last_report")
+	_expect(not backup_write_ok, "atomic writer rejects a direct symlink at the backup path")
+	_expect(str(backup_write_report.get("phase", "")) == "path_symlink", "direct backup symlink write reports path_symlink")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct backup symlink write leaves target bytes unchanged")
+
+	var backup_probe := IncompleteRollbackProbe.new()
+	var backup_load_ok: bool = bool(file_store.call(
+		"load_with_backup",
+		"user://run247_symlink_backup_read.json",
+		Callable(backup_probe, "restore"),
+		Callable(backup_probe, "get_last_report")
+	))
+	var backup_load_report: Dictionary = file_store.call("get_last_report")
+	_expect(not backup_load_ok, "loader rejects a direct symlink at the backup path")
+	_expect(str(backup_load_report.get("phase", "")) == "path_symlink", "direct backup symlink load reports path_symlink")
+	_expect(backup_probe.restore_calls.is_empty(), "direct backup symlink load never invokes the restore callback")
+	_expect(FileAccess.get_file_as_string(target_file_path) == target_text, "direct backup symlink load leaves target bytes unchanged")
+
+
 func _test_json_numeric_save_validation() -> void:
 	var stamina_model: RefCounted = StaminaScript.new()
 	var stamina_parser := JSON.new()
@@ -479,13 +746,45 @@ func _write_text(path: String, content: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH]:
+	var user_root_access := DirAccess.open("user://")
+	if user_root_access != null:
+		for link_name in [
+			"run246_symlink_link",
+			"run247_symlink_primary.json",
+			"run247_symlink_tmp.json.tmp",
+			"run247_symlink_backup_write.json.bak",
+			"run247_symlink_backup_read.json.bak"
+		]:
+			if user_root_access.is_link(link_name):
+				user_root_access.remove(link_name)
+	var direct_symlink_target_file: String = "user://run247_symlink_file_target.json"
+	if FileAccess.file_exists(direct_symlink_target_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(direct_symlink_target_file))
+	var symlink_target_file: String = "user://run246_symlink_target/existing.json"
+	if FileAccess.file_exists(symlink_target_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(symlink_target_file))
+	var symlink_target_directory: String = ProjectSettings.globalize_path("user://run246_symlink_target")
+	if DirAccess.dir_exists_absolute(symlink_target_directory):
+		DirAccess.remove_absolute(symlink_target_directory)
+	for base_path in [SAVE_PATH, BACKROOMS_SAVE_PATH, FAIL_CLOSED_PATH, NUMERIC_PATH, NUMERIC_SCHEMA_RECOVERY_PATH, NESTED_SAVE_PATH, PRODUCTION_NESTED_SAVE_PATH]:
 		for suffix in ["", ".tmp", ".bak", ".corrupt", ".corrupt.1", ".corrupt.2"]:
 			var path: String = base_path + suffix
 			if FileAccess.file_exists(path):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 			elif DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(path)):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var nested_slot_directory: String = ProjectSettings.globalize_path(NESTED_SAVE_PATH.get_base_dir())
+	var nested_root_directory: String = ProjectSettings.globalize_path("user://run244_nested_saves")
+	var production_nested_slot_directory: String = ProjectSettings.globalize_path(PRODUCTION_NESTED_SAVE_PATH.get_base_dir())
+	var production_nested_root_directory: String = ProjectSettings.globalize_path("user://run244_production_nested")
+	if DirAccess.dir_exists_absolute(nested_slot_directory):
+		DirAccess.remove_absolute(nested_slot_directory)
+	if DirAccess.dir_exists_absolute(nested_root_directory):
+		DirAccess.remove_absolute(nested_root_directory)
+	if DirAccess.dir_exists_absolute(production_nested_slot_directory):
+		DirAccess.remove_absolute(production_nested_slot_directory)
+	if DirAccess.dir_exists_absolute(production_nested_root_directory):
+		DirAccess.remove_absolute(production_nested_root_directory)
 
 
 func _expect(condition: bool, message: String) -> void:
