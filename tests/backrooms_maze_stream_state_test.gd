@@ -2,6 +2,7 @@ extends SceneTree
 
 const Layout = preload("res://systems/BackroomsMazeLayout.gd")
 const StreamState = preload("res://systems/BackroomsMazeStreamState.gd")
+const EntityDirector = preload("res://systems/BackroomsEntityDirector.gd")
 
 func _initialize() -> void:
 	_test_configuration_and_initial_window()
@@ -13,6 +14,15 @@ func _initialize() -> void:
 
 func _test_configuration_and_initial_window() -> void:
 	assert(Layout.ALGORITHM_VERSION == 1)
+	assert(EntityDirector.is_spawn_algorithm_version_supported(EntityDirector.SPAWN_ALGORITHM_VERSION))
+	assert(not EntityDirector.is_spawn_algorithm_version_supported(EntityDirector.SPAWN_ALGORITHM_VERSION + 1))
+	assert(EntityDirector.get_cell_spawn_descriptors(
+		"Level 1",
+		Vector2i.ZERO,
+		8.0,
+		{},
+		EntityDirector.SPAWN_ALGORITHM_VERSION + 1
+	).is_empty())
 	var state = StreamState.new()
 	assert(not state.configure("Level 6", 20261113, 8.0, 1))
 	assert(not state.configure("Level 1", 20261113, 8.0, 9))
@@ -117,7 +127,9 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	var plan: Dictionary = source.plan_window_at_cell(Vector2i(-3, 7))
 	assert(state_commit(source, plan))
 	var saved: Dictionary = source.to_save_dict()
+	assert(saved["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
 	assert(saved["layout_algorithm_version"] == Layout.ALGORITHM_VERSION)
+	assert(saved["entity_spawn_algorithm_version"] == EntityDirector.SPAWN_ALGORITHM_VERSION)
 	assert(saved["center_cell"] == [-3, 7])
 
 	var restored = StreamState.new()
@@ -129,11 +141,34 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	assert(restored.commit_window(rebuild, rebuild["load_cell_keys"]))
 	assert(restored.to_save_dict() == saved)
 
+	var legacy_payload: Dictionary = saved.duplicate(true)
+	legacy_payload["schema_version"] = 1
+	legacy_payload.erase("entity_spawn_algorithm_version")
+	var legacy_restored = StreamState.new()
+	assert(legacy_restored.load_save_dict(legacy_payload))
+	assert(legacy_restored.get_center_cell() == Vector2i(-3, 7))
+	assert(legacy_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
+	assert(legacy_restored.to_save_dict()["entity_spawn_algorithm_version"] == EntityDirector.SPAWN_ALGORITHM_VERSION)
+
 	var before_invalid_load: Dictionary = restored.to_save_dict()
 	var unsupported: Dictionary = saved.duplicate(true)
 	unsupported["layout_algorithm_version"] = Layout.ALGORITHM_VERSION + 1
 	assert(not restored.load_save_dict(unsupported))
 	assert(restored.last_load_error == "unsupported_layout_algorithm_version")
+	assert(restored.to_save_dict() == before_invalid_load)
+	assert(restored.get_loaded_cell_count() == 25)
+
+	var unsupported_spawn: Dictionary = saved.duplicate(true)
+	unsupported_spawn["entity_spawn_algorithm_version"] = EntityDirector.SPAWN_ALGORITHM_VERSION + 1
+	assert(not restored.load_save_dict(unsupported_spawn))
+	assert(restored.last_load_error == "unsupported_entity_spawn_algorithm_version")
+	assert(restored.to_save_dict() == before_invalid_load)
+	assert(restored.get_loaded_cell_count() == 25)
+
+	var missing_spawn_version: Dictionary = saved.duplicate(true)
+	missing_spawn_version.erase("entity_spawn_algorithm_version")
+	assert(not restored.load_save_dict(missing_spawn_version))
+	assert(restored.last_load_error == "unsupported_entity_spawn_algorithm_version")
 	assert(restored.to_save_dict() == before_invalid_load)
 	assert(restored.get_loaded_cell_count() == 25)
 

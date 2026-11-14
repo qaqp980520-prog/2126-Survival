@@ -209,7 +209,8 @@ func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
 			return {"ok": false, "reason": "cell_descriptor_missing"}
 		var root_value: Variant = _build_cell_root(
 			descriptors_by_key[key],
-			float(candidate.get("cell_size"))
+			float(candidate.get("cell_size")),
+			int(candidate.get("entity_spawn_algorithm_version"))
 		)
 		if not (root_value is Node3D) or root_value.get_parent() != null:
 			if root_value is Node3D and is_instance_valid(root_value):
@@ -219,7 +220,11 @@ func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
 		staged_roots[key] = root_value
 	return {"ok": true, "roots": staged_roots}
 
-func _build_cell_root(descriptor: Dictionary, cell_size: float) -> Node3D:
+func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_version: int) -> Node3D:
+	if not EntityDirectorScript.is_spawn_algorithm_version_supported(spawn_algorithm_version):
+		return null
+	if int(descriptor.get("entity_spawn_algorithm_version", 0)) != spawn_algorithm_version:
+		return null
 	if _cell_builder_override.is_valid():
 		var injected: Variant = _cell_builder_override.call(descriptor.duplicate(true), _is_metadata_only())
 		return injected as Node3D if injected is Node3D else null
@@ -237,6 +242,7 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float) -> Node3D:
 	root.set_meta("backrooms_level_id", str(descriptor.get("level_id", "")))
 	root.set_meta("backrooms_world_seed", int(descriptor.get("world_seed", 0)))
 	root.set_meta("backrooms_layout_algorithm_version", int(descriptor.get("layout_algorithm_version", 0)))
+	root.set_meta("backrooms_entity_spawn_algorithm_version", spawn_algorithm_version)
 	root.set_meta("backrooms_open_edges", edges_value.duplicate(true))
 	if not _build_cell_entity_roots(
 		root,
@@ -244,7 +250,8 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float) -> Node3D:
 		str(descriptor.get("level_id", "")),
 		int(descriptor.get("world_seed", 0)),
 		cell_size,
-		edges_value
+		edges_value,
+		spawn_algorithm_version
 	):
 		root.free()
 		return null
@@ -259,13 +266,15 @@ func _build_cell_entity_roots(
 	level_id: String,
 	world_seed: int,
 	cell_size: float,
-	open_edges: Dictionary
+	open_edges: Dictionary,
+	spawn_algorithm_version: int
 ) -> bool:
 	var descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(
 		level_id,
 		cell,
 		cell_size,
-		open_edges
+		open_edges,
+		spawn_algorithm_version
 	)
 	var allowed_entities: Array[String] = EntityDirectorScript.get_allowed_entities(level_id)
 	var seen: Dictionary = {}
@@ -276,6 +285,8 @@ func _build_cell_entity_roots(
 		var position_value: Variant = descriptor.get("local_position", null)
 		var wall_value: Variant = descriptor.get("wall_direction", null)
 		if entity_id.is_empty() or seen.has(entity_id) or not allowed_entities.has(entity_id):
+			return false
+		if int(descriptor.get("spawn_algorithm_version", 0)) != spawn_algorithm_version:
 			return false
 		if not (descriptor_cell is Vector2i) or descriptor_cell != cell:
 			return false
@@ -298,7 +309,7 @@ func _build_cell_entity_roots(
 		entity_root.set_meta("spawn_cell", cell)
 		entity_root.set_meta("spawn_world_seed", world_seed)
 		entity_root.set_meta("spawn_level_id", level_id)
-		entity_root.set_meta("spawn_algorithm_version", int(descriptor.get("spawn_algorithm_version", 0)))
+		entity_root.set_meta("spawn_algorithm_version", spawn_algorithm_version)
 		entity_root.set_meta("backrooms_wall_direction", wall_direction)
 		entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
 		cell_root.add_child(entity_root)
@@ -307,7 +318,7 @@ func _build_cell_entity_roots(
 	cell_root.set_meta("backrooms_entity_spawn_ids", spawn_ids.duplicate())
 	cell_root.set_meta(
 		"backrooms_entity_spawn_algorithm_version",
-		EntityDirectorScript.SPAWN_ALGORITHM_VERSION
+		spawn_algorithm_version
 	)
 	return true
 
