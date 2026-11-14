@@ -42,7 +42,9 @@ godot --headless --path . --script res://tests/backrooms_entity_visual_factory_t
 
 ## Validation
 
-- A fresh exact-HEAD Godot 4.3 Full Compatibility Gate is required for this child PR.
+- Initial PR #365 exact-head Full Gate [Run #43654591016](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43654591016) reached the new visual-factory test (step #25). All visual assertions printed PASS, but the workflow failed because Godot's dummy renderer emitted repeated `ERROR: Parameter "m" is null.` messages while MeshInstance3D resources were freed from test roots that had never entered the SceneTree.
+- Corrected the test in commit `98f0c952eadd69d5dc1243a34f326c5d99217039`: entity roots now enter the SceneTree before visual attachment, cleanup uses `queue_free()`, and the test awaits `process_frame` before exit so renderer resources are released through the normal lifecycle.
+- A fresh exact-head Godot 4.3 Full Compatibility Gate is required for the corrected child HEAD; no pass is claimed yet.
 - The focused test uses Godot's headless dummy renderer to exercise mesh-resource construction through an explicit test-only entry point. The production entry point refuses to create renderer nodes in headless mode.
 - Existing metadata-only maze-runtime tests must continue to see zero visual children.
 - No graphical-mode visual inspection is claimed in this version.
