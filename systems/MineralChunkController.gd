@@ -454,6 +454,17 @@ func get_terrain_transition_collider(edge_key: String) -> StaticBody3D:
 		return null
 	return _terrain_transition_collider_manager.call("get_transition_body", edge_key) as StaticBody3D
 
+## Read-only production accessors for manager-owned four-way corner-cap resources.
+func get_terrain_corner_cap_count() -> int:
+	if is_instance_valid(_terrain_transition_collider_manager) and _terrain_transition_collider_manager.has_method("get_corner_cap_count"):
+		return int(_terrain_transition_collider_manager.call("get_corner_cap_count"))
+	return 0
+
+func get_terrain_corner_cap_body(stable_id: String, corner: String) -> StaticBody3D:
+	if not is_instance_valid(_terrain_transition_collider_manager) or not _terrain_transition_collider_manager.has_method("get_corner_cap_body"):
+		return null
+	return _terrain_transition_collider_manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
+
 func get_blocked_terrain_corner_reports() -> Array[Dictionary]:
 	var reports: Array[Dictionary] = []
 	if not is_instance_valid(_terrain_transition_collider_manager):
