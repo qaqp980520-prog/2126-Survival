@@ -63,7 +63,10 @@ The existing `.github/workflows/godot-validation.yml` already runs the Backrooms
 ## Validation status and limitations
 
 - Parent PR #345 exact HEAD `c607c7d5cb3ee03ae366494678de0f9aa55aaf26` passed Godot 4.3 Full Compatibility Gate [Run #43358973711](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43358973711): 559/559 workflow steps, 0 failures, 0 skipped.
-- This new child HEAD requires its own exact-head focused tests and full compatibility gate; no pass is claimed until those runs complete.
+- Code/test HEAD `5362247db73941479303698398095ee48ab1b5c3` passed exact-head Godot 4.3 Full Compatibility Gate [Run #43651093933](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43651093933): 559/559 workflow steps, 0 failures, 0 skipped.
+- All ten Backrooms-specific steps #21–#30 passed. The production runtime test confirmed Level 0 remains empty and created roots for all eight configured entities (Window, Smiler, Hound, Skin-Stealer, Clump, Faceling, Duller and Deathmoth). It verified whitelist/descriptor parity, Window wall ownership, metadata, in-cell placement, save/restore reconstruction and repeated staging stability.
+- The first code/test attempt `bc9939283dcb178f658b16ffb9328dd62a8185ce` failed root import because the runtime test helper had scope/indentation errors. This was corrected in `5362247db73941479303698398095ee48ab1b5c3`; the failed run [#43650908645](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43650908645) is retained as failure evidence.
+- This documentation-only update creates a new exact HEAD and requires a fresh exact-head Godot 4.3 gate before the PR can return to Ready for Review.
 - Local Godot 4.3 is unavailable in this execution environment; engine validation is performed by GitHub Actions.
 - The new production roots are metadata-only placeholders with no rendered geometry, collision, navigation, AI, animation, perception or combat. The Duller/Deathmoth visual geometry contract on PR #326 remains in the separate prototype stack and is not yet reused by this production runtime.
 - The spawn algorithm version is recorded on each cell/entity root but is not yet a field in the persisted maze stream schema. Do not change spawn selection/placement semantics without adding an explicit save migration/version contract.
