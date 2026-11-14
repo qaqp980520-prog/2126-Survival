@@ -11,6 +11,39 @@
 ## 重要驗證規則
 本索引不代表所有原型都已上傳或測試。每個版本必須以實際提交紀錄與引擎測試結果為準。未在 Godot 4 執行的版本會明確標示「尚未在 Godot 4 實測」。
 
+## 2026-11-09 Run 175 — current mainline runtime baseline and integration status
+
+### Authoritative runtime entry point
+- Current main baseline: `fbf2b8a971cd5ff04946b0e0316da6576c685b5e`.
+- Root `project.godot` sets `run/main_scene="res://world/SurfaceWorld.tscn"`; the default project launch is the playable 3D SurfaceWorld, not `prototypes/SurvivalTestHub.tscn`.
+- `world/SurfaceWorld.tscn` mounts `world/SurfaceWorld.gd`. Runtime initialization creates the world session, environment, capsule CharacterBody3D player/camera, HUD/touch controls, surface streaming and the underground mine entry.
+- `systems/SurfaceChunkFactory.gd` builds 10 m chunks with ground collision/visual, seven SurfaceTerrainPatch nodes, one ore node below ground, one SalvageCrate and two CropPlot scenes.
+- `prototypes/SurvivalTestHub.tscn` is an optional Control-based development/test menu. F10 returns from SurfaceWorld to the hub. The existing hub smoke test asserts the root startup scene is SurfaceWorld and the hub exposes 50 launch buttons.
+- Existing `daily_games/` files and their hub references are frozen historical assets: do not add new standalone games or new launch entries; do not mass-delete existing files as part of this scope correction.
+
+### Current integration boundary
+- Main still builds the simple runtime capsule player visual. PR [#275](https://github.com/qaqp980520-prog/2126-Survival/pull/275) contains the unmerged player visual/locomotion/mobile-input work; do not describe it as already present in main.
+- Four-way production Corner-Cap lifecycle coverage remains tracked by Issue [#288](https://github.com/qaqp980520-prog/2126-Survival/issues/288); M0.4 runtime implementation is not yet present on main.
+- Main branch protection remains disabled; Issue [#236](https://github.com/qaqp980520-prog/2126-Survival/issues/236) remains open.
+
+### Run 175 exact-ref and validation reconciliation
+- Fresh main ref read: `fbf2b8a971cd5ff04946b0e0316da6576c685b5e`.
+- All 12 active PR base/head comparisons were freshly executed; each is 0 behind its actual base ref. Ahead counts: #275 56, #276 7, #277 13, #279 3, #280 4, #281 4, #283 7, #284 10, #285 9, #286 14, #287 21, #289 1. PR #280's stored base SHA is stale; the actual base branch comparison remains authoritative.
+- All 12 review-submission collections and all 12 inline-thread collections were freshly read: zero reviews and zero threads. No independent reviewer was requested because all active PRs are authored by the connected account and no verified independent reviewer identity was available.
+- Exact current-head workflow-run lists were re-read for all 12 PRs. Each full `Godot Full Compatibility Gate` job is completed/success with zero failed/skipped steps: #275 555/555; all other active PRs 552/552. These are existing exact-head CI results re-read, not new workflow dispatches.
+- No runtime source was changed in this documentation correction. The docs-only branch/PR must still pass its own exact-head CI before it is considered validated; no main merge is implied.
+- Local Godot execution, rendered/GPU QA and iPhone/target-device QA were not available in this run.
+
+### Source snapshot for the runtime correction
+- `project.godot`: `bcbe4cfddefa70571cb74d8649a25a4ae229908b`.
+- `world/SurfaceWorld.tscn`: `2baa949c5d4a31b4ab7c65757d43e828fba183ba`.
+- `world/SurfaceWorld.gd`: `bf665aa4500fab46ade416a29b438c765d82faaa`.
+- `systems/SurfaceChunkFactory.gd`: `499c83c3136497cb0e62ec513e91b6c53e86fe9f`.
+- Corrected boundary document: `docs/SURVIVAL_TEST_HUB_AND_PROTOTYPE_BOUNDARIES_2026-10-27.md`.
+
+The historical run entries below are retained unchanged. This current snapshot supersedes only their descriptions of the root startup scene and active daily-game development scope.
+
+
 ## 2026-10-31 Run 65 — KROLL Core Drill + stale camera-ray target lifecycle guard (feature merged / exact-head CI passed)
 
 ### New Godot 4 game
