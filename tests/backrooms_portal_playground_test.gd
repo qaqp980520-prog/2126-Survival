@@ -443,7 +443,7 @@ func _window_geometry_specs_are_valid(world: Node) -> bool:
 func _entity_geometry_specs_are_valid(world: Node) -> bool:
     var duller_specs: Array = world.call("_duller_entity_geometry_specs")
     var deathmoth_specs: Array = world.call("_deathmoth_entity_geometry_specs")
-    if duller_specs.size() != 6 or deathmoth_specs.size() != 16:
+    if duller_specs.size() != 6 or deathmoth_specs.size() != 17:
         return false
     if not _geometry_specs_are_well_formed(duller_specs, ["body"]):
         return false
@@ -453,7 +453,8 @@ func _entity_geometry_specs_are_valid(world: Node) -> bool:
     var duller := _geometry_specs_by_name(duller_specs)
     if not duller.has("Torso") or not duller.has("FeaturelessHead") or not duller.has("LongArmLeft") or not duller.has("LongArmRight") or not duller.has("LegLeft") or not duller.has("LegRight"):
         return false
-    if not (duller["Torso"]["size"] as Vector3).is_equal_approx(Vector3(0.42, 0.9, 0.24)):
+    var torso_size: Vector3 = duller["Torso"]["size"]
+    if not torso_size.is_equal_approx(Vector3(0.42, 0.9, 0.24)):
         return false
     if not is_equal_approx(float(duller["FeaturelessHead"]["radius"]), 0.19) or not is_equal_approx(float(duller["FeaturelessHead"]["height"]), 0.38):
         return false
@@ -463,9 +464,13 @@ func _entity_geometry_specs_are_valid(world: Node) -> bool:
     var right_leg: Vector3 = duller["LegRight"]["position"]
     if not is_equal_approx(left_arm.x, -right_arm.x) or not is_equal_approx(left_leg.x, -right_leg.x):
         return false
-    if not (duller["LongArmLeft"]["size"] as Vector3).is_equal_approx(duller["LongArmRight"]["size"]):
+    var left_arm_size: Vector3 = duller["LongArmLeft"]["size"]
+    var right_arm_size: Vector3 = duller["LongArmRight"]["size"]
+    if not left_arm_size.is_equal_approx(right_arm_size):
         return false
-    if not (duller["LegLeft"]["size"] as Vector3).is_equal_approx(duller["LegRight"]["size"]):
+    var left_leg_size: Vector3 = duller["LegLeft"]["size"]
+    var right_leg_size: Vector3 = duller["LegRight"]["size"]
+    if not left_leg_size.is_equal_approx(right_leg_size):
         return false
 
     var deathmoth := _geometry_specs_by_name(deathmoth_specs)
@@ -493,9 +498,11 @@ func _entity_geometry_specs_are_valid(world: Node) -> bool:
             return false
     if str(deathmoth["Wing_0"]["material"]) != "wing" or str(deathmoth["CompoundEye_0"]["material"]) != "eye":
         return false
-    if not (deathmoth["Wing_0"]["size"] as Vector3).is_equal_approx(Vector3(0.86, 0.045, 0.54)):
+    var front_wing_size: Vector3 = deathmoth["Wing_0"]["size"]
+    if not front_wing_size.is_equal_approx(Vector3(0.86, 0.045, 0.54)):
         return false
-    if not (deathmoth["RearWing_0"]["size"] as Vector3).is_equal_approx(Vector3(0.58, 0.04, 0.38)):
+    var rear_wing_size: Vector3 = deathmoth["RearWing_0"]["size"]
+    if not rear_wing_size.is_equal_approx(Vector3(0.58, 0.04, 0.38)):
         return false
     var left_wing_rotation: Vector3 = deathmoth["Wing_0"].get("rotation", Vector3.ZERO)
     var right_wing_rotation: Vector3 = deathmoth["Wing_1"].get("rotation", Vector3.ZERO)
