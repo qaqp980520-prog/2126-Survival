@@ -63,6 +63,7 @@ func _run_integration_test() -> void:
     _expect(_maze_streaming_cell_boundaries(world), "streaming cell selection changes at actual half-cell boundaries")
     _expect(_window_wall_placement_contract_is_valid(world), "Level 1 windows choose a closed owned wall and sit flush with its inner face")
     _expect(_window_geometry_specs_are_valid(world), "Level 1 Window render geometry matches the headless-testable pane and frame contract")
+    _expect(_entity_geometry_specs_are_valid(world), "Duller and Deathmoth render geometry matches headless-testable contracts")
     _expect(not bool(world.call("is_surface_collision_enabled")), "hidden surface collisions are disabled")
     _expect(bool(world.call("is_backrooms_collision_enabled")), "active Backrooms room collisions are enabled")
 
@@ -138,6 +139,11 @@ func _entity_visual_source_contract_is_present() -> bool:
     var required_tokens: Array[String] = [
         "func _create_duller_entity",
         "func _create_deathmoth_entity",
+        "func _duller_entity_geometry_specs",
+        "func _deathmoth_entity_geometry_specs",
+        "func _add_entity_geometry_specs",
+        "_add_entity_geometry_specs(root, _duller_entity_geometry_specs()",
+        "_add_entity_geometry_specs(root, _deathmoth_entity_geometry_specs()",
         "func _prepare_entity_root",
         "var wall_direction := _window_wall_direction_for_cell(cell)",
         "_create_window_entity(cell_root, cell, wall_direction)",
@@ -433,6 +439,109 @@ func _window_geometry_specs_are_valid(world: Node) -> bool:
     if pane_size.x >= top_size.x or pane_size.y >= (abs(top_position.y) + top_size.y * 0.5) * 2.0:
         return false
     return pane_size.z < top_size.z
+
+func _entity_geometry_specs_are_valid(world: Node) -> bool:
+    var duller_specs: Array = world.call("_duller_entity_geometry_specs")
+    var deathmoth_specs: Array = world.call("_deathmoth_entity_geometry_specs")
+    if duller_specs.size() != 6 or deathmoth_specs.size() != 16:
+        return false
+    if not _geometry_specs_are_well_formed(duller_specs, ["body"]):
+        return false
+    if not _geometry_specs_are_well_formed(deathmoth_specs, ["body", "wing", "eye"]):
+        return false
+
+    var duller := _geometry_specs_by_name(duller_specs)
+    if not duller.has("Torso") or not duller.has("FeaturelessHead") or not duller.has("LongArmLeft") or not duller.has("LongArmRight") or not duller.has("LegLeft") or not duller.has("LegRight"):
+        return false
+    if not (duller["Torso"]["size"] as Vector3).is_equal_approx(Vector3(0.42, 0.9, 0.24)):
+        return false
+    if not is_equal_approx(float(duller["FeaturelessHead"]["radius"]), 0.19) or not is_equal_approx(float(duller["FeaturelessHead"]["height"]), 0.38):
+        return false
+    var left_arm: Vector3 = duller["LongArmLeft"]["position"]
+    var right_arm: Vector3 = duller["LongArmRight"]["position"]
+    var left_leg: Vector3 = duller["LegLeft"]["position"]
+    var right_leg: Vector3 = duller["LegRight"]["position"]
+    if not is_equal_approx(left_arm.x, -right_arm.x) or not is_equal_approx(left_leg.x, -right_leg.x):
+        return false
+    if not (duller["LongArmLeft"]["size"] as Vector3).is_equal_approx(duller["LongArmRight"]["size"]):
+        return false
+    if not (duller["LegLeft"]["size"] as Vector3).is_equal_approx(duller["LegRight"]["size"]):
+        return false
+
+    var deathmoth := _geometry_specs_by_name(deathmoth_specs)
+    var required_names := ["Wing_0", "Wing_1", "RearWing_0", "RearWing_1", "Abdomen", "Thorax", "Head", "CompoundEye_0", "CompoundEye_1", "Antenna_0", "Antenna_1"]
+    for required_name in required_names:
+        if not deathmoth.has(required_name):
+            return false
+    var leg_count := 0
+    for spec_value in deathmoth_specs:
+        if str(spec_value.get("name", "")).begins_with("Leg_"):
+            leg_count += 1
+    if leg_count != 6:
+        return false
+
+    for pair_prefix in ["Wing", "RearWing", "CompoundEye", "Antenna"]:
+        var left_spec: Dictionary = deathmoth[pair_prefix + "_0"]
+        var right_spec: Dictionary = deathmoth[pair_prefix + "_1"]
+        var left_position: Vector3 = left_spec["position"]
+        var right_position: Vector3 = right_spec["position"]
+        if not is_equal_approx(left_position.x, -right_position.x):
+            return false
+        if not is_equal_approx(left_position.y, right_position.y) or not is_equal_approx(left_position.z, right_position.z):
+            return false
+        if str(left_spec["material"]) != str(right_spec["material"]):
+            return false
+    if str(deathmoth["Wing_0"]["material"]) != "wing" or str(deathmoth["CompoundEye_0"]["material"]) != "eye":
+        return false
+    if not (deathmoth["Wing_0"]["size"] as Vector3).is_equal_approx(Vector3(0.86, 0.045, 0.54)):
+        return false
+    if not (deathmoth["RearWing_0"]["size"] as Vector3).is_equal_approx(Vector3(0.58, 0.04, 0.38)):
+        return false
+    var left_wing_rotation: Vector3 = deathmoth["Wing_0"].get("rotation", Vector3.ZERO)
+    var right_wing_rotation: Vector3 = deathmoth["Wing_1"].get("rotation", Vector3.ZERO)
+    if not is_equal_approx(left_wing_rotation.z, -right_wing_rotation.z):
+        return false
+    return true
+
+
+func _geometry_specs_are_well_formed(specs: Array, allowed_materials: Array) -> bool:
+    var seen_names: Dictionary = {}
+    for spec_value in specs:
+        if not (spec_value is Dictionary):
+            return false
+        var spec: Dictionary = spec_value
+        var part_name: String = str(spec.get("name", ""))
+        if part_name.is_empty() or seen_names.has(part_name):
+            return false
+        seen_names[part_name] = true
+        if typeof(spec.get("position", null)) != TYPE_VECTOR3:
+            return false
+        if typeof(spec.get("rotation", Vector3.ZERO)) != TYPE_VECTOR3:
+            return false
+        if not allowed_materials.has(str(spec.get("material", ""))):
+            return false
+        match str(spec.get("kind", "")):
+            "box":
+                if typeof(spec.get("size", null)) != TYPE_VECTOR3:
+                    return false
+                var size: Vector3 = spec["size"]
+                if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+                    return false
+            "sphere":
+                if float(spec.get("radius", 0.0)) <= 0.0 or float(spec.get("height", 0.0)) <= 0.0:
+                    return false
+            _:
+                return false
+    return true
+
+
+func _geometry_specs_by_name(specs: Array) -> Dictionary:
+    var result: Dictionary = {}
+    for spec_value in specs:
+        if spec_value is Dictionary:
+            result[str(spec_value.get("name", ""))] = spec_value
+    return result
+
 
 func _maze_edges_are_symmetric(world: Node) -> bool:
     var directions: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]

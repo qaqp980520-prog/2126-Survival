@@ -813,6 +813,119 @@ func _create_faceling_entity(cell_root: Node3D, cell: Vector2i) -> void:
         _add_entity_box(root, "Arm", Vector3(x_offset, 1.02, 0.0), Vector3(0.14, 0.72, 0.18), material)
         _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.35, 0.0), Vector3(0.16, 0.68, 0.2), material)
 
+func _duller_entity_geometry_specs() -> Array[Dictionary]:
+    return [
+        {"name": "Torso", "kind": "box", "position": Vector3(0.0, 1.02, 0.0), "size": Vector3(0.42, 0.9, 0.24), "material": "body"},
+        {"name": "FeaturelessHead", "kind": "sphere", "position": Vector3(0.0, 1.68, 0.0), "radius": 0.19, "height": 0.38, "material": "body"},
+        {"name": "LongArmLeft", "kind": "box", "position": Vector3(-0.33, 1.05, 0.0), "size": Vector3(0.13, 0.92, 0.18), "material": "body"},
+        {"name": "LegLeft", "kind": "box", "position": Vector3(-0.1584, 0.34, 0.0), "size": Vector3(0.16, 0.68, 0.2), "material": "body"},
+        {"name": "LongArmRight", "kind": "box", "position": Vector3(0.33, 1.05, 0.0), "size": Vector3(0.13, 0.92, 0.18), "material": "body"},
+        {"name": "LegRight", "kind": "box", "position": Vector3(0.1584, 0.34, 0.0), "size": Vector3(0.16, 0.68, 0.2), "material": "body"}
+    ]
+
+
+func _deathmoth_entity_geometry_specs() -> Array[Dictionary]:
+    var specs: Array[Dictionary] = []
+    for wing_index in range(2):
+        var side: float = -1.0 if wing_index == 0 else 1.0
+        specs.append({
+            "name": "Wing_%d" % wing_index,
+            "kind": "box",
+            "position": Vector3(side * 0.48, 0.08, 0.0),
+            "rotation": Vector3(0.0, 0.0, side * 0.18),
+            "size": Vector3(0.86, 0.045, 0.54),
+            "material": "wing"
+        })
+        specs.append({
+            "name": "RearWing_%d" % wing_index,
+            "kind": "box",
+            "position": Vector3(side * 0.34, 0.02, -0.28),
+            "rotation": Vector3(0.0, 0.0, side * 0.12),
+            "size": Vector3(0.58, 0.04, 0.38),
+            "material": "wing"
+        })
+
+    specs.append({"name": "Abdomen", "kind": "box", "position": Vector3(0.0, 0.0, -0.22), "size": Vector3(0.32, 0.34, 0.55), "material": "body"})
+    specs.append({"name": "Thorax", "kind": "box", "position": Vector3(0.0, 0.02, 0.15), "size": Vector3(0.36, 0.38, 0.36), "material": "body"})
+    specs.append({"name": "Head", "kind": "box", "position": Vector3(0.0, 0.05, 0.42), "size": Vector3(0.24, 0.24, 0.22), "material": "body"})
+
+    for eye_index in range(2):
+        var side: float = -1.0 if eye_index == 0 else 1.0
+        specs.append({
+            "name": "CompoundEye_%d" % eye_index,
+            "kind": "sphere",
+            "position": Vector3(side * 0.1, 0.08, 0.53),
+            "radius": 0.055,
+            "height": 0.11,
+            "material": "eye"
+        })
+        specs.append({
+            "name": "Antenna_%d" % eye_index,
+            "kind": "box",
+            "position": Vector3(side * 0.09, 0.24, 0.57),
+            "size": Vector3(0.035, 0.28, 0.035),
+            "material": "body"
+        })
+        for leg_index in range(3):
+            var leg_z: float = 0.24 - float(leg_index) * 0.22
+            specs.append({
+                "name": "Leg_%d_%d" % [eye_index, leg_index],
+                "kind": "box",
+                "position": Vector3(side * 0.16, -0.2, leg_z),
+                "size": Vector3(0.045, 0.3, 0.045),
+                "material": "body"
+            })
+    return specs
+
+
+func _add_entity_geometry_specs(parent: Node3D, specs: Array[Dictionary], materials: Dictionary) -> bool:
+    # Validate the entire renderer-independent contract before adding any child,
+    # so a malformed specification cannot leave a partially built entity.
+    for spec in specs:
+        if typeof(spec.get("position", null)) != TYPE_VECTOR3:
+            return false
+        if typeof(spec.get("rotation", Vector3.ZERO)) != TYPE_VECTOR3:
+            return false
+        var material_value: Variant = materials.get(str(spec.get("material", "")), null)
+        if not (material_value is Material):
+            return false
+        match str(spec.get("kind", "")):
+            "box":
+                var size_value: Variant = spec.get("size", null)
+                if typeof(size_value) != TYPE_VECTOR3:
+                    return false
+                var size: Vector3 = size_value
+                if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+                    return false
+            "sphere":
+                var radius: float = float(spec.get("radius", 0.0))
+                var height: float = float(spec.get("height", 0.0))
+                if radius <= 0.0 or height <= 0.0:
+                    return false
+            _:
+                return false
+
+    for spec in specs:
+        var mesh_instance := MeshInstance3D.new()
+        mesh_instance.name = str(spec["name"])
+        var mesh_resource: PrimitiveMesh
+        if str(spec["kind"]) == "box":
+            var box := BoxMesh.new()
+            box.size = spec["size"]
+            mesh_resource = box
+        else:
+            var sphere := SphereMesh.new()
+            sphere.radius = float(spec["radius"])
+            sphere.height = float(spec["height"])
+            mesh_resource = sphere
+        mesh_instance.mesh = mesh_resource
+        mesh_instance.material_override = materials[str(spec["material"])] as Material
+        mesh_instance.position = spec["position"]
+        mesh_instance.rotation = spec.get("rotation", Vector3.ZERO)
+        parent.add_child(mesh_instance)
+    return true
+
+
 func _create_duller_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
     root.name = "Entity_Duller"
@@ -823,19 +936,10 @@ func _create_duller_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var material := StandardMaterial3D.new()
     material.albedo_color = Color(0.075, 0.085, 0.095)
     material.roughness = 1.0
-    _add_entity_box(root, "Torso", Vector3(0.0, 1.02, 0.0), Vector3(0.42, 0.9, 0.24), material)
-    var head := MeshInstance3D.new()
-    head.name = "FeaturelessHead"
-    var sphere := SphereMesh.new()
-    sphere.radius = 0.19
-    sphere.height = 0.38
-    head.mesh = sphere
-    head.material_override = material
-    head.position = Vector3(0.0, 1.68, 0.0)
-    root.add_child(head)
-    for x_offset in [-0.33, 0.33]:
-        _add_entity_box(root, "LongArm", Vector3(x_offset, 1.05, 0.0), Vector3(0.13, 0.92, 0.18), material)
-        _add_entity_box(root, "Leg", Vector3(x_offset * 0.48, 0.34, 0.0), Vector3(0.16, 0.68, 0.2), material)
+    if not _add_entity_geometry_specs(root, _duller_entity_geometry_specs(), {"body": material}):
+        push_error("Duller geometry specification is invalid.")
+        root.queue_free()
+
 
 func _create_deathmoth_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var root := Node3D.new()
@@ -852,53 +956,15 @@ func _create_deathmoth_entity(cell_root: Node3D, cell: Vector2i) -> void:
     wing_material.albedo_color = Color(0.38, 0.32, 0.25, 0.9)
     wing_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
     wing_material.roughness = 1.0
-
-    for wing_index in range(2):
-        var side: float = -1.0 if wing_index == 0 else 1.0
-        var wing := MeshInstance3D.new()
-        wing.name = "Wing_%d" % wing_index
-        var wing_mesh := BoxMesh.new()
-        wing_mesh.size = Vector3(0.86, 0.045, 0.54)
-        wing.mesh = wing_mesh
-        wing.material_override = wing_material
-        wing.position = Vector3(side * 0.48, 0.08, 0.0)
-        wing.rotation.z = side * 0.18
-        root.add_child(wing)
-
-        var rear_wing := MeshInstance3D.new()
-        rear_wing.name = "RearWing_%d" % wing_index
-        var rear_mesh := BoxMesh.new()
-        rear_mesh.size = Vector3(0.58, 0.04, 0.38)
-        rear_wing.mesh = rear_mesh
-        rear_wing.material_override = wing_material
-        rear_wing.position = Vector3(side * 0.34, 0.02, -0.28)
-        rear_wing.rotation.z = side * 0.12
-        root.add_child(rear_wing)
-
-    _add_entity_box(root, "Abdomen", Vector3(0.0, 0.0, -0.22), Vector3(0.32, 0.34, 0.55), body_material)
-    _add_entity_box(root, "Thorax", Vector3(0.0, 0.02, 0.15), Vector3(0.36, 0.38, 0.36), body_material)
-    _add_entity_box(root, "Head", Vector3(0.0, 0.05, 0.42), Vector3(0.24, 0.24, 0.22), body_material)
-
     var eye_material := StandardMaterial3D.new()
     eye_material.albedo_color = Color(0.72, 0.18, 0.08)
     eye_material.emission_enabled = true
     eye_material.emission = Color(0.45, 0.06, 0.015)
     eye_material.emission_energy_multiplier = 0.8
-    for eye_index in range(2):
-        var side: float = -1.0 if eye_index == 0 else 1.0
-        var eye := MeshInstance3D.new()
-        eye.name = "CompoundEye_%d" % eye_index
-        var eye_mesh := SphereMesh.new()
-        eye_mesh.radius = 0.055
-        eye_mesh.height = 0.11
-        eye.mesh = eye_mesh
-        eye.material_override = eye_material
-        eye.position = Vector3(side * 0.1, 0.08, 0.53)
-        root.add_child(eye)
-        _add_entity_box(root, "Antenna", Vector3(side * 0.09, 0.24, 0.57), Vector3(0.035, 0.28, 0.035), body_material)
-        for leg_index in range(3):
-            var leg_z: float = 0.24 - float(leg_index) * 0.22
-            _add_entity_box(root, "Leg", Vector3(side * 0.16, -0.2, leg_z), Vector3(0.045, 0.3, 0.045), body_material)
+    var materials := {"body": body_material, "wing": wing_material, "eye": eye_material}
+    if not _add_entity_geometry_specs(root, _deathmoth_entity_geometry_specs(), materials):
+        push_error("Deathmoth geometry specification is invalid.")
+        root.queue_free()
 
 
 func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3, box_size: Vector3, material: Material) -> void:
