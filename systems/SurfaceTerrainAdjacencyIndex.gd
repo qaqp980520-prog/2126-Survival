@@ -11,8 +11,9 @@ const PLAN_DELTA_PROFILE_KEYS: Array[String] = [
 	"addition_validation_usec",
 	"neighbor_discovery_usec",
 	"changed_descriptor_build_usec",
-	"edge_diff_usec",
 	"local_descriptor_build_usec",
+	"changed_descriptor_projection_usec",
+	"edge_diff_usec",
 	"corner_graph_delta_usec",
 	"closure_snapshot_usec",
 	"plan_storage_usec"
@@ -240,48 +241,6 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		plan_profile_usec["neighbor_discovery_usec"] = Time.get_ticks_usec() - phase_started_usec
 		phase_started_usec = Time.get_ticks_usec()
 
-	var old_descriptor_result: Dictionary = _build_descriptors_for_ids(
-		_entries_by_stable_id,
-		_bucket_to_stable_ids,
-		changed_ids,
-		_patch_size
-	)
-	if not bool(old_descriptor_result.get("ok", false)):
-		return old_descriptor_result
-	var new_descriptor_result: Dictionary = _build_descriptors_for_ids(
-		candidate_entries,
-		candidate_buckets,
-		changed_ids,
-		candidate_patch_size
-	)
-	if not bool(new_descriptor_result.get("ok", false)):
-		return new_descriptor_result
-	if profile_enabled:
-		plan_profile_usec["changed_descriptor_build_usec"] = Time.get_ticks_usec() - phase_started_usec
-		phase_started_usec = Time.get_ticks_usec()
-
-	var old_descriptors: Dictionary = old_descriptor_result.get("descriptors", {})
-	var new_descriptors: Dictionary = new_descriptor_result.get("descriptors", {})
-	var affected_edge_keys: Dictionary = {}
-	var added_edge_keys: Array[String] = []
-	var removed_edge_keys: Array[String] = []
-	var changed_edge_keys: Array[String] = []
-	for edge_key_value in old_descriptors.keys():
-		var edge_key: String = str(edge_key_value)
-		affected_edge_keys[edge_key] = true
-		if not new_descriptors.has(edge_key):
-			removed_edge_keys.append(edge_key)
-		elif old_descriptors[edge_key] != new_descriptors[edge_key]:
-			changed_edge_keys.append(edge_key)
-	for edge_key_value in new_descriptors.keys():
-		var edge_key: String = str(edge_key_value)
-		affected_edge_keys[edge_key] = true
-		if not old_descriptors.has(edge_key):
-			added_edge_keys.append(edge_key)
-	if profile_enabled:
-		plan_profile_usec["edge_diff_usec"] = Time.get_ticks_usec() - phase_started_usec
-		phase_started_usec = Time.get_ticks_usec()
-
 	var old_local_result: Dictionary = _build_descriptors_for_ids(
 		_entries_by_stable_id,
 		_bucket_to_stable_ids,
@@ -303,6 +262,49 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		phase_started_usec = Time.get_ticks_usec()
 	var old_local_descriptors: Dictionary = old_local_result.get("descriptors", {})
 	var new_local_descriptors: Dictionary = new_local_result.get("descriptors", {})
+	# Every edge incident to a changed Stable ID is also incident to a touched
+	# Stable ID. Project the changed subset from the already-built local maps
+	# instead of rebuilding the same descriptors in a second pass.
+	var old_projection_result: Dictionary = _select_descriptors_for_stable_ids(
+		old_local_descriptors,
+		changed_ids
+	)
+	if not bool(old_projection_result.get("ok", false)):
+		return old_projection_result
+	var new_projection_result: Dictionary = _select_descriptors_for_stable_ids(
+		new_local_descriptors,
+		changed_ids
+	)
+	if not bool(new_projection_result.get("ok", false)):
+		return new_projection_result
+	var old_descriptors: Dictionary = old_projection_result.get("descriptors", {})
+	var new_descriptors: Dictionary = new_projection_result.get("descriptors", {})
+	if profile_enabled:
+		# changed_descriptor_build_usec is retained as a zero-valued compatibility
+		# field: changed descriptors are now projected, not rebuilt.
+		plan_profile_usec["changed_descriptor_projection_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
+
+	var affected_edge_keys: Dictionary = {}
+	var added_edge_keys: Array[String] = []
+	var removed_edge_keys: Array[String] = []
+	var changed_edge_keys: Array[String] = []
+	for edge_key_value in old_descriptors.keys():
+		var edge_key: String = str(edge_key_value)
+		affected_edge_keys[edge_key] = true
+		if not new_descriptors.has(edge_key):
+			removed_edge_keys.append(edge_key)
+		elif old_descriptors[edge_key] != new_descriptors[edge_key]:
+			changed_edge_keys.append(edge_key)
+	for edge_key_value in new_descriptors.keys():
+		var edge_key: String = str(edge_key_value)
+		affected_edge_keys[edge_key] = true
+		if not old_descriptors.has(edge_key):
+			added_edge_keys.append(edge_key)
+	if profile_enabled:
+		plan_profile_usec["edge_diff_usec"] = Time.get_ticks_usec() - phase_started_usec
+		phase_started_usec = Time.get_ticks_usec()
+
 	var new_report_result: Dictionary = _build_corner_reports_by_stable_id(
 		new_local_descriptors,
 		candidate_entries,
@@ -380,6 +382,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		"old_closure_reports": old_closure_reports.duplicate(true),
 		"new_closure_reports": new_closure_reports.duplicate(true),
 		"recomputed_corner_report_count": _old_report_count_for_ids(_corner_reports_by_stable_id, touched_ids) + _old_report_count_for_ids(graph_delta.get("reports_by_stable_id", {}), touched_ids),
+		"local_descriptor_build_count": int(old_local_result.get("descriptor_build_count", 0)) + int(new_local_result.get("descriptor_build_count", 0)),
+		"changed_descriptor_build_count": 0,
+		"changed_descriptor_projection_count": old_descriptors.size() + new_descriptors.size(),
 		"candidate_corner_report_count": int(graph_delta.get("report_count", 0)),
 		"candidate_junction_count": graph_delta.get("junction_to_edges", {}).size(),
 		"patch_count_after": candidate_entries.size()
@@ -1244,6 +1249,29 @@ func _build_descriptors_for_ids(
 			if not descriptors.has(edge_key):
 				descriptors[edge_key] = descriptor.duplicate(true)
 	return {"ok": true, "descriptors": descriptors, "descriptor_build_count": descriptor_build_count}
+
+
+func _select_descriptors_for_stable_ids(
+	descriptors: Dictionary,
+	selected_ids: Dictionary
+) -> Dictionary:
+	var selected: Dictionary = {}
+	var edge_keys: Array[String] = []
+	for edge_key_value in descriptors.keys():
+		edge_keys.append(str(edge_key_value))
+	edge_keys.sort()
+	for edge_key in edge_keys:
+		var descriptor_value: Variant = descriptors.get(edge_key, null)
+		if not (descriptor_value is Dictionary):
+			return {"ok": false, "error": "descriptor_projection_invalid_record"}
+		var descriptor: Dictionary = descriptor_value
+		var first_id: String = str(descriptor.get("first_stable_id", ""))
+		var second_id: String = str(descriptor.get("second_stable_id", ""))
+		if first_id.is_empty() or second_id.is_empty():
+			return {"ok": false, "error": "descriptor_projection_missing_endpoint"}
+		if selected_ids.has(first_id) or selected_ids.has(second_id):
+			selected[edge_key] = descriptor.duplicate(true)
+	return {"ok": true, "descriptors": selected, "projection_count": selected.size()}
 
 
 func _sorted_strings(values: Array) -> Array[String]:

@@ -131,6 +131,7 @@ func _run() -> void:
 	_expect(bool(replacement_plan.get("ok", false)), "remove-and-readd of the same Stable ID is accepted")
 	if bool(replacement_plan.get("ok", false)):
 		var summary: Dictionary = replacement_plan.get("summary", {})
+		_assert_changed_descriptor_projection_parity(index, replacement_plan, ["terrain/center"], "same-Stable-ID replacement")
 		_expect(summary.get("removed_stable_ids", []) == ["terrain/center"], "replacement plan records the removed Stable ID")
 		_expect(summary.get("added_stable_ids", []) == ["terrain/center"], "replacement plan records the re-added Stable ID")
 		var replacement_edges: Array = summary.get("affected_edge_keys", [])
@@ -164,6 +165,7 @@ func _run() -> void:
 	_expect(bool(east_plan.get("ok", false)), "adding one adjacent patch creates a valid delta")
 	if bool(east_plan.get("ok", false)):
 		var east_summary: Dictionary = east_plan.get("summary", {})
+		_assert_changed_descriptor_projection_parity(index, east_plan, ["terrain/east"], "one-patch addition")
 		var east_added_edges: Array = east_summary.get("added_edge_keys", [])
 		var east_affected_edges: Array = east_summary.get("affected_edge_keys", [])
 		_expect(east_added_edges.size() == 1, "one-patch addition stages exactly one new cardinal edge")
@@ -179,6 +181,7 @@ func _run() -> void:
 	_expect(bool(remove_south_plan.get("ok", false)), "pure patch removal creates a valid delta")
 	if bool(remove_south_plan.get("ok", false)):
 		var remove_south_summary: Dictionary = remove_south_plan.get("summary", {})
+		_assert_changed_descriptor_projection_parity(index, remove_south_plan, ["terrain/south"], "pure patch removal")
 		var removed_edge_keys: Array = remove_south_summary.get("removed_edge_keys", [])
 		var removed_affected_keys: Array = remove_south_summary.get("affected_edge_keys", [])
 		_expect(removed_edge_keys.size() == 1 and removed_affected_keys.size() == 1, "pure removal stages only its one incident edge retirement")
@@ -412,8 +415,9 @@ func _test_plan_delta_phase_profile() -> void:
 		"addition_validation_usec",
 		"neighbor_discovery_usec",
 		"changed_descriptor_build_usec",
-		"edge_diff_usec",
 		"local_descriptor_build_usec",
+		"changed_descriptor_projection_usec",
+		"edge_diff_usec",
 		"corner_graph_delta_usec",
 		"closure_snapshot_usec",
 		"plan_storage_usec"
@@ -456,8 +460,11 @@ func _test_plan_delta_phase_profile() -> void:
 	_expect(total_usec > 0, "Index plan profile reports a positive total duration")
 	_expect(measured_usec <= total_usec, "Index plan subphases do not overlap the measured total")
 	_expect(unattributed_usec == total_usec - measured_usec, "Index plan profile reports the exact unattributed remainder")
+	_expect(int(profile.get("changed_descriptor_build_usec", -1)) == 0, "changed-edge descriptor build phase is zero after local-map reuse")
+	_expect(int(profile.get("changed_descriptor_projection_usec", -1)) >= 0, "changed-edge descriptor projection has its own measured phase")
 	if bool(plan.get("ok", false)):
 		var summary: Dictionary = plan.get("summary", {})
+		_assert_changed_descriptor_projection_parity(profile_index, plan, ["profile/east"], "profiled same-ID replacement")
 		_expect(profile_index.abort_delta(str(summary.get("plan_id", ""))), "profiled Index plan can be aborted without publishing")
 	holder.queue_free()
 	await process_frame
@@ -856,6 +863,56 @@ func _set_height_level(patch: Node3D, height_level: int) -> bool:
 	state["height_level"] = height_level
 	state["revision"] = int(state.get("revision", 0)) + 1
 	return bool(patch.call("apply_world_object_state", state))
+
+
+func _assert_changed_descriptor_projection_parity(index, plan: Dictionary, changed_id_values: Array, label: String) -> void:
+	var summary: Dictionary = plan.get("summary", {})
+	var plan_id: String = str(summary.get("plan_id", ""))
+	var pending_value: Variant = index._pending_plans.get(plan_id, null)
+	_expect(pending_value is Dictionary, label + ": pending candidate snapshot remains available for parity checks")
+	if not (pending_value is Dictionary):
+		return
+	var pending: Dictionary = pending_value
+	var changed_ids: Dictionary = {}
+	for stable_id_value in changed_id_values:
+		changed_ids[str(stable_id_value)] = true
+	var expected_old: Dictionary = index._build_descriptors_for_ids(
+		index._entries_by_stable_id,
+		index._bucket_to_stable_ids,
+		changed_ids,
+		float(index._patch_size)
+	)
+	var expected_new: Dictionary = index._build_descriptors_for_ids(
+		pending.get("candidate_entries", {}),
+		pending.get("candidate_buckets", {}),
+		changed_ids,
+		float(pending.get("candidate_patch_size", -1.0))
+	)
+	_expect(bool(expected_old.get("ok", false)) and bool(expected_new.get("ok", false)), label + ": direct changed-ID descriptor oracle builds successfully")
+	_expect(summary.get("old_descriptors", {}) == expected_old.get("descriptors", {}), label + ": projected old descriptors equal direct changed-ID build")
+	_expect(summary.get("new_descriptors", {}) == expected_new.get("descriptors", {}), label + ": projected new descriptors equal direct changed-ID build")
+	_expect(int(summary.get("changed_descriptor_build_count", -1)) == 0, label + ": changed descriptors are not rebuilt in a second pass")
+	var touched_ids: Dictionary = {}
+	for stable_id_value in summary.get("touched_stable_ids", []):
+		touched_ids[str(stable_id_value)] = true
+	var expected_old_local: Dictionary = index._build_descriptors_for_ids(
+		index._entries_by_stable_id,
+		index._bucket_to_stable_ids,
+		touched_ids,
+		float(index._patch_size)
+	)
+	var expected_new_local: Dictionary = index._build_descriptors_for_ids(
+		pending.get("candidate_entries", {}),
+		pending.get("candidate_buckets", {}),
+		touched_ids,
+		float(pending.get("candidate_patch_size", -1.0))
+	)
+	var expected_local_build_count: int = int(expected_old_local.get("descriptor_build_count", 0)) + int(expected_new_local.get("descriptor_build_count", 0))
+	_expect(int(summary.get("local_descriptor_build_count", -1)) == expected_local_build_count, label + ": summary reports the exact single-pass local descriptor build count")
+	_expect(
+		int(summary.get("changed_descriptor_projection_count", -1)) == expected_old.get("descriptors", {}).size() + expected_new.get("descriptors", {}).size(),
+		label + ": projection count matches the old/new changed-edge descriptor maps"
+	)
 
 
 func _assert_matches_full_rebuild_oracle(index, patches: Array[Node3D], stable_ids: Dictionary, label: String) -> void:

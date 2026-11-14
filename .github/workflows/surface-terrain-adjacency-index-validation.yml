@@ -14,6 +14,7 @@ on:
       - 'tests/surface_chunk_production_benchmark.gd'
       - 'docs/SURFACE_TERRAIN_INDEX_PLAN_DELTA_PHASE_BREAKDOWN_M0_2_13_13.md'
       - 'docs/SURFACE_TERRAIN_INDEX_SELECTED_EDGE_DESCRIPTOR_DEDUP_M0_2_13_14.md'
+      - 'docs/SURFACE_TERRAIN_INDEX_LOCAL_DESCRIPTOR_REUSE_M0_2_13_15.md'
       - 'project.godot'
       - '.github/workflows/surface-terrain-adjacency-index-validation.yml'
   workflow_dispatch:
@@ -52,6 +53,10 @@ jobs:
           grep -Fq 'candidate_copy_usec' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'selected_ids.has(neighbor_id) and stable_id > neighbor_id' systems/SurfaceTerrainAdjacencyIndex.gd
           grep -Fq 'descriptor_build_count' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq '_select_descriptors_for_stable_ids' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'changed_descriptor_projection_usec' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq 'changed_descriptor_build_count' systems/SurfaceTerrainAdjacencyIndex.gd
+          grep -Fq '_assert_changed_descriptor_projection_parity' tests/surface_terrain_adjacency_index_test.gd
           grep -Fq 'plan_delta_subphases_usec' systems/SurfaceTerrainAdjacencyCoordinator.gd
           grep -Fq 'coordinator_plan_delta_profile_usec' systems/MineralChunkController.gd
           grep -Fq 'plan_delta_phase_profile_valid' tests/surface_chunk_production_benchmark.gd
