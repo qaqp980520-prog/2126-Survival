@@ -450,6 +450,26 @@ func _entity_geometry_specs_are_valid(world: Node) -> bool:
     if not _geometry_specs_are_well_formed(deathmoth_specs, ["body", "wing", "eye"]):
         return false
 
+    # A malformed later part must be rejected before the valid first part can
+    # create a MeshInstance3D child. This is safe to exercise in headless mode.
+    var validation_parent := Node3D.new()
+    var validation_material := StandardMaterial3D.new()
+    var malformed_specs: Array[Dictionary] = [
+        {"name": "ValidFirst", "kind": "box", "position": Vector3.ZERO, "size": Vector3.ONE, "material": "body"},
+        {"name": "InvalidSecond", "kind": "box", "position": Vector3.ZERO, "size": Vector3(0.0, 1.0, 1.0), "material": "body"}
+    ]
+    var builder_accepted: bool = bool(world.call(
+        "_add_entity_geometry_specs",
+        validation_parent,
+        malformed_specs,
+        {"body": validation_material}
+    ))
+    var failure_is_atomic: bool = not builder_accepted and validation_parent.get_child_count() == 0
+    validation_parent.free()
+    validation_material.free()
+    if not failure_is_atomic:
+        return false
+
     var duller := _geometry_specs_by_name(duller_specs)
     if not duller.has("Torso") or not duller.has("FeaturelessHead") or not duller.has("LongArmLeft") or not duller.has("LongArmRight") or not duller.has("LegLeft") or not duller.has("LegRight"):
         return false
@@ -525,6 +545,12 @@ func _geometry_specs_are_well_formed(specs: Array, allowed_materials: Array) -> 
             return false
         if typeof(spec.get("rotation", Vector3.ZERO)) != TYPE_VECTOR3:
             return false
+        var position: Vector3 = spec["position"]
+        var rotation: Vector3 = spec.get("rotation", Vector3.ZERO)
+        if not is_finite(position.x) or not is_finite(position.y) or not is_finite(position.z):
+            return false
+        if not is_finite(rotation.x) or not is_finite(rotation.y) or not is_finite(rotation.z):
+            return false
         if not allowed_materials.has(str(spec.get("material", ""))):
             return false
         match str(spec.get("kind", "")):
@@ -532,10 +558,15 @@ func _geometry_specs_are_well_formed(specs: Array, allowed_materials: Array) -> 
                 if typeof(spec.get("size", null)) != TYPE_VECTOR3:
                     return false
                 var size: Vector3 = spec["size"]
-                if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+                if (
+                    not is_finite(size.x) or not is_finite(size.y) or not is_finite(size.z)
+                    or size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0
+                ):
                     return false
             "sphere":
-                if float(spec.get("radius", 0.0)) <= 0.0 or float(spec.get("height", 0.0)) <= 0.0:
+                var radius: float = float(spec.get("radius", 0.0))
+                var height: float = float(spec.get("height", 0.0))
+                if not is_finite(radius) or not is_finite(height) or radius <= 0.0 or height <= 0.0:
                     return false
             _:
                 return false

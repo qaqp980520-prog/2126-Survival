@@ -886,6 +886,12 @@ func _add_entity_geometry_specs(parent: Node3D, specs: Array[Dictionary], materi
             return false
         if typeof(spec.get("rotation", Vector3.ZERO)) != TYPE_VECTOR3:
             return false
+        var position: Vector3 = spec["position"]
+        var rotation: Vector3 = spec.get("rotation", Vector3.ZERO)
+        if not is_finite(position.x) or not is_finite(position.y) or not is_finite(position.z):
+            return false
+        if not is_finite(rotation.x) or not is_finite(rotation.y) or not is_finite(rotation.z):
+            return false
         var material_value: Variant = materials.get(str(spec.get("material", "")), null)
         if not (material_value is Material):
             return false
@@ -895,12 +901,15 @@ func _add_entity_geometry_specs(parent: Node3D, specs: Array[Dictionary], materi
                 if typeof(size_value) != TYPE_VECTOR3:
                     return false
                 var size: Vector3 = size_value
-                if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+                if (
+                    not is_finite(size.x) or not is_finite(size.y) or not is_finite(size.z)
+                    or size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0
+                ):
                     return false
             "sphere":
                 var radius: float = float(spec.get("radius", 0.0))
                 var height: float = float(spec.get("height", 0.0))
-                if radius <= 0.0 or height <= 0.0:
+                if not is_finite(radius) or not is_finite(height) or radius <= 0.0 or height <= 0.0:
                     return false
             _:
                 return false

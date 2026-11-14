@@ -48,3 +48,12 @@ The Backrooms playground integration test now checks:
 ## Next step
 
 Run the exact-head Full Compatibility Gate and inspect the focused Backrooms integration output. After CI passes, keep the stacked PR Draft until independent review and graphical-mode inspection are complete.
+
+
+## Run 263.1 — finite-value and failure-atomic builder guard
+
+- The geometry builder now rejects non-finite position, rotation, box-size, sphere-radius and sphere-height values, as well as zero/negative dimensions.
+- All specs are validated before the first MeshInstance3D is created.
+- The headless regression supplies a valid first part followed by an invalid zero-width box and asserts that the builder rejects the complete array with zero children added.
+- This specifically verifies failure atomicity without constructing renderer-only nodes.
+- New exact-head Godot 4.3 Full Compatibility Gate is required; no local Godot executable is available.
