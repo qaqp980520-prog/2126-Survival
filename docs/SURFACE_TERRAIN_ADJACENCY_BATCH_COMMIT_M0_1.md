@@ -64,3 +64,10 @@ Local Godot and target-device GPU/iPhone validation are not available in this en
 - Headless timings are not GPU frame time or target-device performance.
 - Local Godot executable is unavailable; use exact-head cloud Godot 4.3 CI.
 - Preserve the full rebuild path for terrain edits, recovery, explicit refresh, and fallback.
+
+
+## Additional batch lifecycle regression coverage
+
+- The real `MineralChunkController` integration test now verifies nested begin/end behavior: inner close defers, outer close performs exactly one rebuild, and an extra close is inactive without another rebuild.
+- The async registration fake-controller contract tests now track batch begin/end/depth/finalization across registration failure, rollback failure, unregistered-success cleanup, stale-root restoration failure, controller detach, superseded staging, queued-controller teardown, and factory loss before commit.
+- The fake controller only records the Director's transaction boundary; production adjacency correctness remains exercised by the real SurfaceWorld benchmark and real controller nested-scope test.
