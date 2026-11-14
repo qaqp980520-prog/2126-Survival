@@ -8,7 +8,7 @@ const TransitionDescriptorScript = preload("res://systems/SurfaceTerrainTransiti
 
 ## stable_ids_by_instance maps live Node instance IDs to persistent world-object Stable IDs.
 ## When omitted, node paths are accepted for isolated fixtures only; production callers pass registry IDs.
-static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}) -> Dictionary:
+static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Dictionary = {}, profile_enabled: bool = false) -> Dictionary:
 	var seen_instances: Dictionary = {}
 	var seen_stable_ids: Dictionary = {}
 	var positions: Array[Vector3] = []
@@ -20,6 +20,8 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 	var position_bucket_lookups: int = 0
 	var adjacency_candidate_checks: int = 0
 	var adjacency_bucket_lookups: int = 0
+	var total_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+	var validation_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
 
 	# Complete validation and descriptor construction before changing any live edge state.
 	for patch_index in range(patches.size()):
@@ -87,6 +89,9 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		}
 		snapshots_by_stable_id[stable_id] = snapshot
 
+	var validation_usec: int = Time.get_ticks_usec() - validation_started_usec if profile_enabled else 0
+	var adjacency_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
+
 	# Discover only the four cardinal neighbor positions for each patch. Candidate
 	# indices are sorted to retain deterministic pair order from the former all-pairs scan.
 	var pair_descriptors: Array[Dictionary] = []
@@ -131,6 +136,8 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 				"descriptor": descriptor
 			})
 
+	var adjacency_discovery_usec: int = Time.get_ticks_usec() - adjacency_started_usec if profile_enabled else 0
+	var edge_apply_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
 	for patch in patches:
 		for side in SIDES:
 			if not bool(patch.call("clear_neighbor_edge_state", side)):
@@ -149,6 +156,15 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 			return {"ok": false, "error": "neighbor_bind_failed"}
 		descriptors[str(descriptor["edge_key"])] = descriptor.duplicate(true)
 
+	var edge_apply_usec: int = Time.get_ticks_usec() - edge_apply_started_usec if profile_enabled else 0
+	var profile_usec: Dictionary = {}
+	if profile_enabled:
+		profile_usec = {
+			"validation_usec": validation_usec,
+			"adjacency_discovery_usec": adjacency_discovery_usec,
+			"edge_apply_usec": edge_apply_usec,
+			"total_usec": Time.get_ticks_usec() - total_started_usec
+		}
 	return {
 		"ok": true,
 		"patch_count": patches.size(),
@@ -158,6 +174,7 @@ static func bind_patches(patches: Array[Node3D], stable_ids_by_instance: Diction
 		"position_bucket_lookups": position_bucket_lookups,
 		"adjacency_candidate_checks": adjacency_candidate_checks,
 		"adjacency_bucket_lookups": adjacency_bucket_lookups,
+		"profile_usec": profile_usec,
 		"descriptors": descriptors
 	}
 
