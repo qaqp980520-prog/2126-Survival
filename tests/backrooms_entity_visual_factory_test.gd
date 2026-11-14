@@ -28,7 +28,7 @@ func _run() -> void:
 	_assert_production_headless_guard()
 
 	if failures.is_empty():
-		print("Backrooms entity visual factory tests passed.")
+		print("Backrooms entity visual factory contract tests passed.")
 		quit(0)
 	else:
 		for failure in failures:
