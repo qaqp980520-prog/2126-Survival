@@ -1,0 +1,65 @@
+name: Surface Terrain Adjacency Spatial Index Validation
+
+on:
+  pull_request:
+    paths:
+      - "systems/SurfaceTerrainAdjacencyBinder.gd"
+      - "systems/SurfaceTerrainTransitionDescriptor.gd"
+      - "systems/SurfaceTerrainPatch.gd"
+      - "systems/SurfaceTerrainTransitionColliderManager.gd"
+      - "systems/SurfaceTerrainCornerConflictResolver.gd"
+      - "tests/surface_terrain_adjacency_binder_test.gd"
+      - "tests/surface_terrain_transition_collider_manager_test.gd"
+      - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "systems/SurfaceTerrainAdjacencyBinder.gd"
+      - "systems/SurfaceTerrainTransitionDescriptor.gd"
+      - "systems/SurfaceTerrainPatch.gd"
+      - "systems/SurfaceTerrainTransitionColliderManager.gd"
+      - "systems/SurfaceTerrainCornerConflictResolver.gd"
+      - "tests/surface_terrain_adjacency_binder_test.gd"
+      - "tests/surface_terrain_transition_collider_manager_test.gd"
+      - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
+
+concurrency:
+  group: surface-terrain-adjacency-spatial-index-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adjacency-validation:
+    name: Godot 4.3 spatial-index regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/SurfaceTerrainAdjacencyBinder.gd
+          test -f systems/SurfaceTerrainTransitionDescriptor.gd
+          test -f tests/surface_terrain_adjacency_binder_test.gd
+          grep -Fq '_position_bucket' systems/SurfaceTerrainAdjacencyBinder.gd
+          grep -Fq 'adjacency_candidate_checks' systems/SurfaceTerrainAdjacencyBinder.gd
+          grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
+      - name: Import and parse root project
+        run: godot --headless --path . --editor --quit
+      - name: Run real-patch and spatial-index adjacency regressions
+        run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd
+      - name: Run transition collider compatibility regression
+        run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd
+      - name: Verify clean workspace
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          test -z "$(git status --porcelain)"

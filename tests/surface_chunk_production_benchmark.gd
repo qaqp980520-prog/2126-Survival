@@ -1,0 +1,754 @@
+extends SceneTree
+
+const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const RADII: Array[int] = [1, 2, 3, 4, 8]
+const CORNER_FIXTURE_CHUNK_COORD: Vector2i = Vector2i(1000, 2000)
+const CORNER_FIXTURE_CHUNK_ID: String = "surface/chunk_1000_2000"
+const CORNER_FIXTURE_ROOT_NAME: String = "Chunk_1000_2000"
+const MAX_REQUEST_FRAMES: int = 7200
+const RELEASE_WAIT_FRAMES: int = 2
+const SURFACE_PREFIX: String = "surface/"
+
+var failures: Array[String] = []
+var _delegate_factory: Callable
+var _factory_build_usec: int = 0
+var _factory_calls: int = 0
+var _corner_fixture_injected: bool = false
+var _corner_fixture_patch_nodes: Dictionary = {}
+var _corner_fixture_patch_ids: Dictionary = {}
+var _corner_fixture_cap_refs: Dictionary = {}
+var _corner_fixture_cap_instance_ids: Dictionary = {}
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _run() -> void:
+	var world := WorldScene.instantiate() as Node3D
+	if world == null:
+		_expect(false, "production SurfaceWorld scene instantiates")
+		await _finish(null)
+		return
+	root.add_child(world)
+	await process_frame
+	await physics_frame
+
+	var controller := world.get("chunk_controller") as Node
+	var director := world.get("director") as Node
+	_expect(controller != null and director != null, "production SurfaceWorld exposes its real chunk controller and streaming director")
+	if controller == null or director == null:
+		await _finish(world)
+		return
+	var profiling_api_available: bool = controller.has_method("set_terrain_adjacency_profiling_enabled") and controller.has_method("get_last_terrain_adjacency_profile")
+	_expect(profiling_api_available, "production controller exposes opt-in terrain adjacency phase profiling")
+	if profiling_api_available:
+		var initial_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+		_expect(initial_profile.is_empty(), "terrain adjacency profiling is disabled by default")
+		controller.call("set_terrain_adjacency_profiling_enabled", true)
+
+	var initial_ids: PackedStringArray = _surface_ids(controller)
+	_expect(initial_ids.size() == 9, "production SurfaceWorld starts with its real 3x3 surface window")
+	var initial_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+	_expect(initial_managed_ids.size() == 9, "production director owns the same initial nine surface chunks")
+
+	_delegate_factory = director.get("chunk_factory")
+	_expect(_delegate_factory.is_valid(), "production SurfaceWorld exposes its real SurfaceChunkFactory callable")
+	if not _delegate_factory.is_valid():
+		await _finish(world)
+		return
+	director.set("chunk_factory", Callable(self, "_profiled_chunk_factory"))
+	var installed_factory: Callable = director.get("chunk_factory")
+	_expect(installed_factory.is_valid() and str(installed_factory.get_method()) == "_profiled_chunk_factory", "benchmark wrapper is installed without replacing the production factory")
+
+	var previous_surface_count: int = initial_ids.size()
+	for radius in RADII:
+		var index: int = RADII.find(radius)
+		var target := Vector3(
+			10000.0 + float(index) * 10000.0 + 5.0,
+			0.0,
+			20000.0 + float(index) * 10000.0 + 5.0
+		)
+		var old_root_refs: Array[WeakRef] = _capture_surface_root_refs(controller)
+		director.set("load_radius", radius)
+		world.set("_stream_clock_unix", int(Time.get_unix_time_from_system()))
+		_reset_factory_metrics()
+		var expansion_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var expansion: Dictionary = await _run_async_request(director, target)
+		var expansion_diagnostic: Dictionary = expansion.get("diagnostic", {})
+		if not bool(expansion.get("ok", false)):
+			_expect(false, "radius %d production expansion completes: %s" % [radius, str(expansion.get("error", expansion_diagnostic.get("phase", "unknown")))])
+			break
+
+		var expansion_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - expansion_rebuilds_before
+		_expect(expansion_rebuild_delta == 1, "radius %d expansion commits one terrain adjacency rebuild instead of one per chunk" % radius)
+		var expected_count: int = (radius * 2 + 1) * (radius * 2 + 1)
+		var active_ids: PackedStringArray = _surface_ids(controller)
+		_expect(active_ids.size() == expected_count, "radius %d commits exactly %d production surface chunks" % [radius, expected_count])
+		var expansion_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(expansion_managed_ids == active_ids, "radius %d keeps Director and production Controller IDs aligned" % radius)
+		_expect(int(expansion_diagnostic.get("desired_count", -1)) == expected_count, "radius %d reports the expected desired window size" % radius)
+		_expect(int(expansion_diagnostic.get("staged_count", -1)) == expected_count, "radius %d stages every newly required production root" % radius)
+		_expect(int(expansion_diagnostic.get("newly_loaded_count", -1)) == expected_count, "radius %d commits every staged production root" % radius)
+		_expect(_factory_calls == expected_count, "radius %d invokes the real production factory once per new chunk" % radius)
+		_expect(int(expansion_diagnostic.get("unloaded_stale_count", -1)) == previous_surface_count, "radius %d retires the complete previous surface window" % radius)
+
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(old_root_refs), "radius %d expansion releases all departed production roots" % radius)
+		_emit_metrics("expand_stage_commit", radius, expected_count, expansion_diagnostic, expansion.get("frame_samples_ms", []), controller)
+
+		if radius == 1:
+			_reset_factory_metrics()
+			var reuse_fixture: Dictionary = _seed_production_transition_reuse_fixture(controller, director, target)
+			_expect(bool(reuse_fixture.get("ok", false)), "radius 1 production fixture creates and reuses a real factory transition seam: %s" % str(reuse_fixture.get("error", "")))
+			_expect(int(reuse_fixture.get("active_edge_count", 0)) > 0, "radius 1 production fixture has at least one active transition edge")
+			_expect(int(reuse_fixture.get("reused_edge_count", 0)) == int(reuse_fixture.get("active_edge_count", -1)), "radius 1 same-world sync reuses every production transition edge")
+			_expect(int(reuse_fixture.get("reactivated_edge_count", 0)) == int(reuse_fixture.get("reused_edge_count", -1)), "radius 1 same-world sync reactivates endpoint segmentation after binder clearing")
+			_expect(int(reuse_fixture.get("staged_edge_count", -1)) == 0 and bool(reuse_fixture.get("body_identity_preserved", false)), "radius 1 same-world sync stages no replacement and preserves the production collider body")
+			_emit_metrics("resource_reuse_same_world_sync", radius, expected_count, {"duration_usec": 0}, [], controller)
+			_expect(int(controller.call("get_terrain_corner_cap_count")) == 0, "radius 1 edge-only production fixture has zero corner caps")
+			var corner_cap_fixture: Dictionary = _seed_production_corner_cap_reuse_fixture(world, controller)
+			_expect(bool(corner_cap_fixture.get("ok", false)), "radius 1 real SurfaceWorld fixture seeds and reuses all four corner caps: %s" % str(corner_cap_fixture.get("error", "")))
+			_expect(int(corner_cap_fixture.get("active_corner_cap_count", 0)) == 4, "radius 1 real SurfaceWorld fixture creates exactly four active corner caps")
+			_expect(int(corner_cap_fixture.get("reused_corner_cap_count", 0)) == 4 and int(corner_cap_fixture.get("staged_corner_cap_count", -1)) == 0 and int(corner_cap_fixture.get("retired_corner_cap_count", -1)) == 0, "radius 1 same-world production rebind reuses all four caps without staging or retirement")
+			_expect(bool(corner_cap_fixture.get("body_identity_preserved", false)), "radius 1 same-world production rebind preserves all four corner-cap body identities")
+			_emit_metrics("corner_cap_reuse_same_world_sync", radius, expected_count, {"duration_usec": 0}, [], controller)
+
+		# Measure the normal one-chunk boundary crossing separately from
+		# the intentionally expensive full-window replacement stress case above.
+		var boundary_chunk_size_x: float = float(director.get("chunk_size_x"))
+		if not is_finite(boundary_chunk_size_x) or boundary_chunk_size_x <= 0.0:
+			_expect(false, "production director exposes a finite positive X chunk size")
+			break
+		var boundary_target: Vector3 = target + Vector3(boundary_chunk_size_x, 0.0, 0.0)
+		var boundary_center: Vector2i = director.call("get_grid_coordinate", boundary_target)
+		var expected_boundary_ids: PackedStringArray = _expected_surface_ids(boundary_center, radius)
+		var previous_boundary_ids: PackedStringArray = _surface_ids(controller)
+		var departing_ids: Array[String] = []
+		var retained_ids: Array[String] = []
+		for current_id in previous_boundary_ids:
+			if expected_boundary_ids.has(str(current_id)):
+				retained_ids.append(str(current_id))
+			else:
+				departing_ids.append(str(current_id))
+		var expected_boundary_delta: int = radius * 2 + 1
+		_expect(departing_ids.size() == expected_boundary_delta, "radius %d boundary shift identifies exactly %d departing roots" % [radius, expected_boundary_delta])
+		_expect(retained_ids.size() == expected_count - expected_boundary_delta, "radius %d boundary shift retains every overlapping root" % radius)
+		var departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, departing_ids)
+		var retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, retained_ids)
+		_reset_factory_metrics()
+		var boundary_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var boundary_result: Dictionary = await _run_async_request(director, boundary_target)
+		var boundary_diagnostic: Dictionary = boundary_result.get("diagnostic", {})
+		if not bool(boundary_result.get("ok", false)):
+			_expect(false, "radius %d one-chunk boundary crossing completes: %s" % [radius, str(boundary_result.get("error", boundary_diagnostic.get("phase", "unknown")))])
+			break
+		var boundary_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - boundary_rebuilds_before
+		_expect(boundary_rebuild_delta == 1, "radius %d boundary crossing commits one terrain adjacency rebuild instead of one per incoming chunk" % radius)
+		var boundary_ids: PackedStringArray = _surface_ids(controller)
+		_expect(boundary_ids == expected_boundary_ids, "radius %d boundary crossing commits the exact shifted window" % radius)
+		_expect(boundary_ids.size() == expected_count, "radius %d boundary crossing preserves the expected active count" % radius)
+		var boundary_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(boundary_managed_ids == boundary_ids, "radius %d boundary crossing keeps Director and Controller IDs aligned" % radius)
+		_expect(int(boundary_diagnostic.get("desired_count", -1)) == expected_count, "radius %d boundary crossing reports the expected desired count" % radius)
+		_expect(int(boundary_diagnostic.get("staged_count", -1)) == expected_boundary_delta, "radius %d boundary crossing stages exactly %d new roots" % [radius, expected_boundary_delta])
+		_expect(int(boundary_diagnostic.get("newly_loaded_count", -1)) == expected_boundary_delta, "radius %d boundary crossing commits exactly %d new roots" % [radius, expected_boundary_delta])
+		_expect(int(boundary_diagnostic.get("unloaded_stale_count", -1)) == expected_boundary_delta, "radius %d boundary crossing retires exactly %d stale roots" % [radius, expected_boundary_delta])
+		_expect(_factory_calls == expected_boundary_delta, "radius %d boundary crossing calls the real factory exactly %d times" % [radius, expected_boundary_delta])
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(departing_refs), "radius %d boundary crossing releases every departing root" % radius)
+		_expect(_all_refs_alive(retained_refs), "radius %d boundary crossing preserves every overlapping root" % radius)
+		_emit_metrics("boundary_cross_east", radius, expected_count, boundary_diagnostic, boundary_result.get("frame_samples_ms", []), controller)
+		if radius == 1:
+			var boundary_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+			_expect(int(boundary_profile.get("collider_reused_edge_count", 0)) > 0, "radius 1 production boundary shift preserves the seeded transition collider")
+			_expect(int(boundary_profile.get("collider_reactivated_edge_count", 0)) > 0, "radius 1 production boundary shift reactivates the preserved seam endpoints")
+			_expect(int(boundary_profile.get("corner_cap_count", 0)) == 4, "radius 1 boundary shift retains all four production corner caps")
+			_expect(int(boundary_profile.get("collider_reused_corner_cap_count", 0)) == 4, "radius 1 boundary shift reuses all four production corner-cap bodies")
+			_expect(int(boundary_profile.get("collider_staged_corner_cap_count", 0)) == 0 and int(boundary_profile.get("collider_retired_corner_cap_count", 0)) == 0, "radius 1 boundary shift stages and retires no corner caps")
+			_expect_resource_accounting(boundary_profile, "radius 1 boundary shift")
+			_expect_corner_cap_identities(controller, "radius 1 boundary shift")
+		target = boundary_target
+
+		# Collect four additional same-runner radius-8 boundary samples. Alternating
+		# west/east keeps each transaction to one chunk while exercising both edges
+		# of the same warmed production window before contraction.
+		if radius == 8:
+			var repeat_sequence_ok: bool = true
+			for repeat_index in range(4):
+				var repeat_direction: float = -1.0 if repeat_index % 2 == 0 else 1.0
+				var repeat_direction_name: String = "west" if repeat_direction < 0.0 else "east"
+				var repeat_target: Vector3 = target + Vector3(boundary_chunk_size_x * repeat_direction, 0.0, 0.0)
+				var repeat_center: Vector2i = director.call("get_grid_coordinate", repeat_target)
+				var expected_repeat_ids: PackedStringArray = _expected_surface_ids(repeat_center, radius)
+				var previous_repeat_ids: PackedStringArray = _surface_ids(controller)
+				var repeat_departing_ids: Array[String] = []
+				var repeat_retained_ids: Array[String] = []
+				for current_repeat_id in previous_repeat_ids:
+					if expected_repeat_ids.has(str(current_repeat_id)):
+						repeat_retained_ids.append(str(current_repeat_id))
+					else:
+						repeat_departing_ids.append(str(current_repeat_id))
+				var expected_repeat_delta: int = radius * 2 + 1
+				_expect(repeat_departing_ids.size() == expected_repeat_delta, "radius %d repeat %d %s identifies exactly %d departing roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(repeat_retained_ids.size() == expected_count - expected_repeat_delta, "radius %d repeat %d %s retains every overlapping root" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_departing_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_departing_ids)
+				var repeat_retained_refs: Array[WeakRef] = _capture_surface_root_refs_for_ids(controller, repeat_retained_ids)
+				_reset_factory_metrics()
+				var repeat_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+				var repeat_result: Dictionary = await _run_async_request(director, repeat_target)
+				var repeat_diagnostic: Dictionary = repeat_result.get("diagnostic", {})
+				if not bool(repeat_result.get("ok", false)):
+					_expect(false, "radius %d repeat %d %s boundary crossing completes: %s" % [radius, repeat_index + 1, repeat_direction_name, str(repeat_result.get("error", repeat_diagnostic.get("phase", "unknown")))])
+					repeat_sequence_ok = false
+					break
+				var repeat_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - repeat_rebuilds_before
+				_expect(repeat_rebuild_delta == 1, "radius %d repeat %d %s commits one terrain adjacency rebuild" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_ids: PackedStringArray = _surface_ids(controller)
+				_expect(repeat_ids == expected_repeat_ids, "radius %d repeat %d %s commits the exact shifted window" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(repeat_ids.size() == expected_count, "radius %d repeat %d %s preserves the active chunk count" % [radius, repeat_index + 1, repeat_direction_name])
+				var repeat_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+				_expect(repeat_managed_ids == repeat_ids, "radius %d repeat %d %s keeps Director and Controller IDs aligned" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(int(repeat_diagnostic.get("staged_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s stages exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(int(repeat_diagnostic.get("newly_loaded_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s commits exactly %d new roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(int(repeat_diagnostic.get("unloaded_stale_count", -1)) == expected_repeat_delta, "radius %d repeat %d %s retires exactly %d stale roots" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				_expect(_factory_calls == expected_repeat_delta, "radius %d repeat %d %s calls the production factory exactly %d times" % [radius, repeat_index + 1, repeat_direction_name, expected_repeat_delta])
+				await _wait_frames(RELEASE_WAIT_FRAMES)
+				_expect(_all_refs_released(repeat_departing_refs), "radius %d repeat %d %s releases all departing roots" % [radius, repeat_index + 1, repeat_direction_name])
+				_expect(_all_refs_alive(repeat_retained_refs), "radius %d repeat %d %s preserves all overlapping roots" % [radius, repeat_index + 1, repeat_direction_name])
+				_emit_metrics("boundary_cross_repeat_%d_%s" % [repeat_index + 1, repeat_direction_name], radius, expected_count, repeat_diagnostic, repeat_result.get("frame_samples_ms", []), controller)
+				target = repeat_target
+			if not repeat_sequence_ok:
+				break
+
+		var center: Vector2i = boundary_center
+		var center_id: String = "surface/chunk_%d_%d" % [center.x, center.y]
+		var departed_refs: Array[WeakRef] = _capture_surface_root_refs(controller, center_id)
+		_expect(departed_refs.size() == expected_count - 1, "radius %d contraction fixture captures every non-center root" % radius)
+		director.set("load_radius", 0)
+		_reset_factory_metrics()
+		var contraction_rebuilds_before: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+		var contraction: Dictionary = await _run_async_request(director, target)
+		var contraction_diagnostic: Dictionary = contraction.get("diagnostic", {})
+		if not bool(contraction.get("ok", false)):
+			_expect(false, "radius %d production contraction completes: %s" % [radius, str(contraction.get("error", contraction_diagnostic.get("phase", "unknown")))])
+			break
+
+		var contraction_rebuild_delta: int = int(controller.call("get_terrain_adjacency_rebuild_count")) - contraction_rebuilds_before
+		_expect(contraction_rebuild_delta == 1, "radius %d contraction commits one terrain adjacency rebuild instead of one per unloaded chunk" % radius)
+		var contracted_ids: PackedStringArray = _surface_ids(controller)
+		_expect(contracted_ids.size() == 1 and contracted_ids.has(center_id), "radius %d contracts to the retained center chunk" % radius)
+		var contraction_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+		_expect(contraction_managed_ids == contracted_ids, "radius %d keeps ownership maps aligned after contraction" % radius)
+		_expect(int(contraction_diagnostic.get("staged_count", -1)) == 0, "radius %d contraction creates no unnecessary roots" % radius)
+		_expect(int(contraction_diagnostic.get("newly_loaded_count", -1)) == 0, "radius %d contraction commits no new roots" % radius)
+		_expect(_factory_calls == 0, "radius %d contraction does not invoke the production factory" % radius)
+		_expect(int(contraction_diagnostic.get("unloaded_stale_count", -1)) == expected_count - 1, "radius %d unloads exactly %d departed roots" % [radius, expected_count - 1])
+		await _wait_frames(RELEASE_WAIT_FRAMES)
+		_expect(_all_refs_released(departed_refs), "radius %d contraction releases all non-center roots" % radius)
+		_expect(controller.call("get_chunk_root", center_id) != null, "radius %d preserves the retained center root" % radius)
+		_emit_metrics("contract_unload", radius, 1, contraction_diagnostic, contraction.get("frame_samples_ms", []), controller)
+		if radius == 1:
+			var contraction_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+			_expect(int(contraction_profile.get("collider_retired_edge_count", 0)) > 0, "radius 1 contraction retires the seeded production transition collider")
+			_expect(int(contraction_profile.get("corner_cap_count", -1)) == 0 and int(controller.call("get_terrain_corner_cap_count")) == 0, "radius 1 contraction leaves no active corner caps")
+			_expect(int(contraction_profile.get("collider_reused_corner_cap_count", -1)) == 0 and int(contraction_profile.get("collider_staged_corner_cap_count", -1)) == 0, "radius 1 contraction reuses and stages no corner caps")
+			_expect(int(contraction_profile.get("collider_retired_corner_cap_count", 0)) == 4, "radius 1 contraction retires exactly four fixture corner caps")
+			_expect_resource_accounting(contraction_profile, "radius 1 contraction")
+			_expect_corner_cap_refs_released()
+		previous_surface_count = 1
+
+	director.set("chunk_factory", _delegate_factory)
+	await _finish(world)
+
+func _seed_production_transition_reuse_fixture(controller: Node, director: Node, target: Vector3) -> Dictionary:
+	var center: Vector2i = director.call("get_grid_coordinate", target)
+	var center_id: String = "surface/chunk_%d_%d" % [center.x, center.y]
+	var center_root: Node3D = controller.call("get_chunk_root", center_id) as Node3D
+	if not is_instance_valid(center_root):
+		return {"ok": false, "error": "center_chunk_root_unavailable"}
+	var lower_patch: Node3D = center_root.get_node_or_null("TerrainPatch_AdjacentWest") as Node3D
+	var neighbor_patch: Node3D = center_root.get_node_or_null("TerrainPatch_AdjacentEast") as Node3D
+	if not is_instance_valid(lower_patch) or not is_instance_valid(neighbor_patch):
+		return {"ok": false, "error": "production_adjacent_patch_pair_unavailable"}
+	var lower_state: Dictionary = lower_patch.call("get_world_object_state")
+	var neighbor_state: Dictionary = neighbor_patch.call("get_world_object_state")
+	var lower_level: int = int(lower_state.get("height_level", -1))
+	var neighbor_level: int = int(neighbor_state.get("height_level", -1))
+	if lower_level < 0 or lower_level > 2 or neighbor_level < 0 or neighbor_level > 2:
+		return {"ok": false, "error": "production_patch_height_state_invalid"}
+	if lower_level == neighbor_level:
+		lower_state["height_level"] = 2 if neighbor_level == 0 else 0
+		lower_state["revision"] = int(lower_state.get("revision", 0)) + 1
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "production_transition_seed_batch_begin_failed"}
+	if not bool(lower_patch.call("apply_world_object_state", lower_state)):
+		controller.call("end_terrain_adjacency_batch")
+		return {"ok": false, "error": "production_patch_height_seed_rejected"}
+	var seed_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not bool(seed_result.get("ok", false)):
+		return {"ok": false, "error": "production_transition_seed_rebind_failed"}
+	var descriptors: Dictionary = controller.call("get_terrain_transition_descriptors")
+	if descriptors.is_empty():
+		return {"ok": false, "error": "production_transition_seed_created_no_descriptors"}
+	var edge_keys: Array = []
+	for edge_key_value in descriptors.keys():
+		var descriptor: Dictionary = descriptors[edge_key_value]
+		if bool(descriptor.get("transition_required", false)):
+			edge_keys.append(str(edge_key_value))
+	if edge_keys.is_empty():
+		return {"ok": false, "error": "production_transition_seed_created_no_unequal_height_descriptor"}
+	edge_keys.sort()
+	var edge_key: String = str(edge_keys[0])
+	var body_before: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+	if not is_instance_valid(body_before):
+		return {"ok": false, "error": "production_transition_seed_body_missing:active=%d:transition_descriptors=%d" % [int(controller.call("get_terrain_transition_collider_count")), edge_keys.size()]}
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "production_transition_reuse_batch_begin_failed"}
+	var unchanged_state: Dictionary = lower_patch.call("get_world_object_state")
+	if not bool(lower_patch.call("apply_world_object_state", unchanged_state)):
+		controller.call("end_terrain_adjacency_batch")
+		return {"ok": false, "error": "production_transition_reuse_signal_failed"}
+	var reuse_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not bool(reuse_result.get("ok", false)):
+		return {"ok": false, "error": "production_transition_reuse_rebind_failed"}
+	var profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+	var body_after: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+	var active_edge_count: int = int(profile.get("transition_collider_count", 0))
+	var reused_edge_count: int = int(profile.get("collider_reused_edge_count", 0))
+	var reactivated_edge_count: int = int(profile.get("collider_reactivated_edge_count", 0))
+	var staged_edge_count: int = int(profile.get("collider_staged_edge_count", 0))
+	var retired_edge_count: int = int(profile.get("collider_retired_edge_count", 0))
+	return {
+		"ok": active_edge_count > 0 and reused_edge_count == active_edge_count and reactivated_edge_count == reused_edge_count and staged_edge_count == 0 and retired_edge_count == 0 and body_after == body_before,
+		"active_edge_count": active_edge_count,
+		"reused_edge_count": reused_edge_count,
+		"reactivated_edge_count": reactivated_edge_count,
+		"staged_edge_count": staged_edge_count,
+		"retired_edge_count": retired_edge_count,
+		"body_identity_preserved": body_after == body_before,
+		"edge_key": edge_key,
+		"profile_usec": profile
+	}
+
+
+func _seed_production_corner_cap_reuse_fixture(world: Node, controller: Node) -> Dictionary:
+	if not _corner_fixture_injected or _corner_fixture_patch_nodes.size() != 4 or _corner_fixture_patch_ids.size() != 4:
+		return {"ok": false, "error": "real_factory_corner_fixture_not_injected"}
+	var registry: Node = world.get("object_state_registry") as Node
+	if not is_instance_valid(registry) or not registry.has_method("to_save_dict"):
+		return {"ok": false, "error": "world_object_registry_unavailable"}
+	var payload_value: Variant = registry.call("to_save_dict")
+	if not (payload_value is Dictionary):
+		return {"ok": false, "error": "world_object_registry_payload_invalid"}
+	var payload: Dictionary = payload_value.duplicate(true)
+	var original_objects_value: Variant = payload.get("objects", null)
+	if not (original_objects_value is Dictionary):
+		return {"ok": false, "error": "world_object_registry_records_invalid"}
+	var original_objects: Dictionary = original_objects_value
+	var updated_objects: Dictionary = original_objects.duplicate(true)
+	var seed_states: Dictionary = {
+		"NW": {"height_level": 2, "surface_type": "metal"},
+		"NE": {"height_level": 0, "surface_type": "soil"},
+		"SW": {"height_level": 0, "surface_type": "soil"},
+		"SE": {"height_level": 2, "surface_type": "metal"}
+	}
+	for suffix in ["NW", "NE", "SW", "SE"]:
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		if stable_id.is_empty() or not updated_objects.has(stable_id):
+			return {"ok": false, "error": "corner_fixture_stable_id_not_registered:" + suffix}
+		var record_value: Variant = updated_objects.get(stable_id, null)
+		if not (record_value is Dictionary):
+			return {"ok": false, "error": "corner_fixture_record_invalid:" + suffix}
+		var record: Dictionary = record_value
+		if str(record.get("chunk_id", "")) != CORNER_FIXTURE_CHUNK_ID:
+			return {"ok": false, "error": "corner_fixture_chunk_id_mismatch:" + suffix}
+		var state_value: Variant = record.get("state", null)
+		if not (state_value is Dictionary):
+			return {"ok": false, "error": "corner_fixture_state_invalid:" + suffix}
+		var state: Dictionary = state_value.duplicate(true)
+		var desired: Dictionary = seed_states[suffix]
+		state["height_level"] = int(desired["height_level"])
+		state["surface_type"] = str(desired["surface_type"])
+		state["revision"] = int(state.get("revision", 0)) + 1
+		record["state"] = state
+		updated_objects[stable_id] = record
+	if updated_objects.size() != original_objects.size():
+		return {"ok": false, "error": "corner_fixture_registry_record_count_changed"}
+	payload["objects"] = updated_objects
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "corner_fixture_batch_begin_failed"}
+	var restore_ok: bool = bool(controller.call("restore_world_object_states", payload))
+	var seed_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not restore_ok:
+		return {"ok": false, "error": "corner_fixture_full_registry_restore_failed"}
+	if not bool(seed_result.get("ok", false)):
+		return {"ok": false, "error": "corner_fixture_adjacency_commit_failed"}
+	var active_corner_cap_count: int = int(controller.call("get_terrain_corner_cap_count"))
+	if active_corner_cap_count != 4:
+		return {"ok": false, "error": "corner_fixture_expected_four_caps_got_%d" % active_corner_cap_count}
+	var cap_entries: Array[Dictionary] = [
+		{"suffix": "NW", "corner": "south_east"},
+		{"suffix": "NE", "corner": "south_west"},
+		{"suffix": "SW", "corner": "north_east"},
+		{"suffix": "SE", "corner": "north_west"}
+	]
+	_corner_fixture_cap_refs.clear()
+	_corner_fixture_cap_instance_ids.clear()
+	for entry in cap_entries:
+		var suffix: String = str(entry["suffix"])
+		var corner: String = str(entry["corner"])
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		var cap_key: String = stable_id + "|" + corner
+		var body: StaticBody3D = controller.call("get_terrain_corner_cap_body", stable_id, corner) as StaticBody3D
+		if not is_instance_valid(body) or body.collision_layer != 1:
+			return {"ok": false, "error": "corner_fixture_cap_body_missing_or_inactive:" + suffix}
+		_corner_fixture_cap_refs[cap_key] = weakref(body)
+		_corner_fixture_cap_instance_ids[cap_key] = body.get_instance_id()
+	var nw_patch: Node3D = _corner_fixture_patch_nodes.get("NW") as Node3D
+	if not is_instance_valid(nw_patch):
+		return {"ok": false, "error": "corner_fixture_nw_patch_unavailable"}
+	var unchanged_state: Dictionary = nw_patch.call("get_world_object_state")
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "corner_fixture_same_world_batch_begin_failed"}
+	var unchanged_applied: bool = bool(nw_patch.call("apply_world_object_state", unchanged_state))
+	var same_world_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not unchanged_applied:
+		return {"ok": false, "error": "corner_fixture_same_world_state_signal_failed"}
+	if not bool(same_world_result.get("ok", false)):
+		return {"ok": false, "error": "corner_fixture_same_world_rebind_failed"}
+	var profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+	var reused_corner_cap_count: int = int(profile.get("collider_reused_corner_cap_count", 0))
+	var staged_corner_cap_count: int = int(profile.get("collider_staged_corner_cap_count", 0))
+	var retired_corner_cap_count: int = int(profile.get("collider_retired_corner_cap_count", 0))
+	var body_identity_preserved: bool = _expect_corner_cap_identities(controller, "radius 1 same-world sync")
+	_expect_resource_accounting(profile, "radius 1 same-world sync")
+	return {
+		"ok": int(profile.get("corner_cap_count", 0)) == 4 and reused_corner_cap_count == 4 and staged_corner_cap_count == 0 and retired_corner_cap_count == 0 and body_identity_preserved,
+		"active_corner_cap_count": int(profile.get("corner_cap_count", 0)),
+		"reused_corner_cap_count": reused_corner_cap_count,
+		"staged_corner_cap_count": staged_corner_cap_count,
+		"retired_corner_cap_count": retired_corner_cap_count,
+		"body_identity_preserved": body_identity_preserved,
+		"profile_usec": profile
+	}
+
+func _expect_resource_accounting(profile: Dictionary, label: String) -> bool:
+	var active_edges: int = int(profile.get("transition_collider_count", -1))
+	var reused_edges: int = int(profile.get("collider_reused_edge_count", -1))
+	var staged_edges: int = int(profile.get("collider_staged_edge_count", -1))
+	var active_caps: int = int(profile.get("corner_cap_count", -1))
+	var reused_caps: int = int(profile.get("collider_reused_corner_cap_count", -1))
+	var staged_caps: int = int(profile.get("collider_staged_corner_cap_count", -1))
+	var edge_ok: bool = active_edges >= 0 and reused_edges >= 0 and staged_edges >= 0 and reused_edges + staged_edges == active_edges
+	var cap_ok: bool = active_caps >= 0 and reused_caps >= 0 and staged_caps >= 0 and reused_caps + staged_caps == active_caps
+	_expect(edge_ok, "%s edge reused + staged equals active" % label)
+	_expect(cap_ok, "%s corner-cap reused + staged equals active" % label)
+	return edge_ok and cap_ok
+
+func _expect_corner_cap_identities(controller: Node, label: String) -> bool:
+	var cap_entries: Array[Dictionary] = [
+		{"suffix": "NW", "corner": "south_east"},
+		{"suffix": "NE", "corner": "south_west"},
+		{"suffix": "SW", "corner": "north_east"},
+		{"suffix": "SE", "corner": "north_west"}
+	]
+	var all_match: bool = true
+	for entry in cap_entries:
+		var suffix: String = str(entry["suffix"])
+		var corner: String = str(entry["corner"])
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		var cap_key: String = stable_id + "|" + corner
+		var weak_value: Variant = _corner_fixture_cap_refs.get(cap_key, null)
+		var weak: WeakRef = weak_value as WeakRef
+		var current_body: StaticBody3D = controller.call("get_terrain_corner_cap_body", stable_id, corner) as StaticBody3D
+		var previous_body: Object = weak.get_ref() if weak != null else null
+		var same_identity: bool = is_instance_valid(current_body) and previous_body == current_body and current_body.get_instance_id() == int(_corner_fixture_cap_instance_ids.get(cap_key, -1))
+		_expect(same_identity, "%s preserves %s %s corner-cap body identity" % [label, suffix, corner])
+		all_match = all_match and same_identity
+	return all_match
+
+func _expect_corner_cap_refs_released() -> bool:
+	var all_released: bool = true
+	for cap_key in _corner_fixture_cap_refs.keys():
+		var weak_value: Variant = _corner_fixture_cap_refs[cap_key]
+		var weak: WeakRef = weak_value as WeakRef
+		var released: bool = weak != null and weak.get_ref() == null
+		_expect(released, "contracted SurfaceWorld releases corner-cap body %s" % str(cap_key))
+		all_released = all_released and released
+	return all_released
+
+func _inject_production_corner_cap_fixture(chunk_root: Node3D) -> bool:
+	if _corner_fixture_injected or not is_instance_valid(chunk_root) or chunk_root.name != CORNER_FIXTURE_ROOT_NAME:
+		return false
+	var crop_plot_zero: Node3D = chunk_root.get_node_or_null("CropPlot_0") as Node3D
+	var crop_plot_one: Node3D = chunk_root.get_node_or_null("CropPlot_1") as Node3D
+	var salvage_crate: Node3D = chunk_root.get_node_or_null("SalvageCrate") as Node3D
+	var ore: Node3D = chunk_root.get_node_or_null("Ore_1000_2000") as Node3D
+	if not is_instance_valid(crop_plot_zero) or not is_instance_valid(crop_plot_one) or not is_instance_valid(salvage_crate) or not is_instance_valid(ore):
+		return false
+	crop_plot_one.position.y = -10.0
+	salvage_crate.position.y = -10.0
+	_expect(is_equal_approx(crop_plot_one.position.y, -10.0), "corner fixture isolates only CropPlot_1 below the interaction volume")
+	_expect(is_equal_approx(salvage_crate.position.y, -10.0), "corner fixture isolates SalvageCrate below the interaction volume")
+	_expect(is_equal_approx(crop_plot_zero.position.y, 0.0), "corner fixture leaves CropPlot_0 at its factory position")
+	_expect(is_equal_approx(ore.position.y, -3.0), "corner fixture leaves ore at its factory position")
+	var patch_specs: Array[Dictionary] = [
+		{"suffix": "NW", "name": "TerrainPatch_BenchmarkCorner_NW", "position": Vector3(5.5, 0.0, 3.5)},
+		{"suffix": "NE", "name": "TerrainPatch_BenchmarkCorner_NE", "position": Vector3(7.5, 0.0, 3.5)},
+		{"suffix": "SW", "name": "TerrainPatch_BenchmarkCorner_SW", "position": Vector3(5.5, 0.0, 5.5)},
+		{"suffix": "SE", "name": "TerrainPatch_BenchmarkCorner_SE", "position": Vector3(7.5, 0.0, 5.5)}
+	]
+	for spec in patch_specs:
+		var suffix: String = str(spec["suffix"])
+		var patch: Node3D = TerrainPatchScript.new() as Node3D
+		if patch == null:
+			return false
+		patch.name = str(spec["name"])
+		patch.position = spec["position"]
+		chunk_root.add_child(patch)
+		var state: Dictionary = patch.call("get_world_object_state")
+		_expect(int(state.get("height_level", -1)) == 0 and str(state.get("surface_type", "")) == "soil" and int(state.get("revision", -1)) == 0, "corner fixture %s starts at default height 0 / soil / revision 0" % suffix)
+		_corner_fixture_patch_nodes[suffix] = patch
+		_corner_fixture_patch_ids[suffix] = CORNER_FIXTURE_CHUNK_ID + "/object/" + CORNER_FIXTURE_ROOT_NAME + "/" + str(patch.name)
+	_corner_fixture_injected = _corner_fixture_patch_nodes.size() == 4 and _corner_fixture_patch_ids.size() == 4
+	return _corner_fixture_injected
+
+func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
+	var started_usec: int = Time.get_ticks_usec()
+	var candidate: Variant = _delegate_factory.call(coord)
+	_factory_build_usec += Time.get_ticks_usec() - started_usec
+	_factory_calls += 1
+	var chunk_root: Node3D = candidate as Node3D
+	if coord == CORNER_FIXTURE_CHUNK_COORD:
+		_expect(_inject_production_corner_cap_fixture(chunk_root), "benchmark wrapper injects four real corner patches before Controller registration")
+	return chunk_root
+
+func _reset_factory_metrics() -> void:
+	_factory_build_usec = 0
+	_factory_calls = 0
+
+func _run_async_request(director: Node, target: Vector3) -> Dictionary:
+	var request_id: int = int(director.call(
+		"request_sync_to_world_position_async",
+		target,
+		int(Time.get_unix_time_from_system()),
+		1
+	))
+	if request_id < 0:
+		return {"ok": false, "error": "production async request was rejected", "diagnostic": {}, "frame_samples_ms": []}
+
+	var frame_samples_ms: Array[float] = []
+	var previous_usec: int = Time.get_ticks_usec()
+	for frame_index in range(MAX_REQUEST_FRAMES):
+		await process_frame
+		var now_usec: int = Time.get_ticks_usec()
+		frame_samples_ms.append(float(now_usec - previous_usec) / 1000.0)
+		previous_usec = now_usec
+		var diagnostic: Dictionary = director.call("get_async_request_diagnostics", request_id)
+		if bool(diagnostic.get("terminal", false)):
+			return {
+				"ok": bool(diagnostic.get("success", false)),
+				"diagnostic": diagnostic,
+				"frame_samples_ms": frame_samples_ms
+			}
+	director.call("cancel_async_sync_request", request_id)
+	return {
+		"ok": false,
+		"error": "request exceeded %d process frames" % MAX_REQUEST_FRAMES,
+		"diagnostic": director.call("get_async_request_diagnostics", request_id),
+		"frame_samples_ms": frame_samples_ms
+	}
+
+func _surface_ids(controller: Node) -> PackedStringArray:
+	var result := PackedStringArray()
+	var loaded_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
+	for chunk_id in loaded_ids:
+		if str(chunk_id).begins_with(SURFACE_PREFIX):
+			result.append(str(chunk_id))
+	result.sort()
+	return result
+
+func _expected_surface_ids(center: Vector2i, radius: int) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for z in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			ids.append("surface/chunk_%d_%d" % [x, z])
+	ids.sort()
+	return ids
+
+func _capture_surface_root_refs_for_ids(controller: Node, chunk_ids: Array[String]) -> Array[WeakRef]:
+	var refs: Array[WeakRef] = []
+	for chunk_id in chunk_ids:
+		var chunk_root := controller.call("get_chunk_root", chunk_id) as Node3D
+		if is_instance_valid(chunk_root):
+			refs.append(weakref(chunk_root))
+	return refs
+
+func _all_refs_alive(refs: Array[WeakRef]) -> bool:
+	for root_ref in refs:
+		var candidate: Object = root_ref.get_ref()
+		if candidate == null or not is_instance_valid(candidate):
+			return false
+	return true
+
+func _capture_surface_root_refs(controller: Node, excluded_id: String = "") -> Array[WeakRef]:
+	var refs: Array[WeakRef] = []
+	for chunk_id in _surface_ids(controller):
+		if str(chunk_id) == excluded_id:
+			continue
+		var chunk_root := controller.call("get_chunk_root", str(chunk_id)) as Node3D
+		if is_instance_valid(chunk_root):
+			refs.append(weakref(chunk_root))
+	return refs
+
+func _all_refs_released(refs: Array[WeakRef]) -> bool:
+	for root_ref in refs:
+		var candidate: Object = root_ref.get_ref()
+		if candidate != null and is_instance_valid(candidate):
+			return false
+	return true
+
+func _count_nodes(node: Node) -> int:
+	var count: int = 1
+	for child in node.get_children():
+		count += _count_nodes(child as Node)
+	return count
+
+func _count_surface_nodes(controller: Node) -> int:
+	var count: int = 0
+	for chunk_id in _surface_ids(controller):
+		var chunk_root := controller.call("get_chunk_root", str(chunk_id)) as Node3D
+		if is_instance_valid(chunk_root):
+			count += _count_nodes(chunk_root)
+	return count
+
+func _emit_metrics(
+	phase: String,
+	radius: int,
+	desired_count: int,
+	diagnostic: Dictionary,
+	frame_samples_ms: Array,
+	controller: Node
+) -> void:
+	var total_frame_ms: float = 0.0
+	var sorted_samples: Array = frame_samples_ms.duplicate()
+	for sample in sorted_samples:
+		total_frame_ms += float(sample)
+	sorted_samples.sort()
+	var average_frame_ms: float = total_frame_ms / float(sorted_samples.size()) if not sorted_samples.is_empty() else 0.0
+	var p95_frame_ms: float = 0.0
+	if not sorted_samples.is_empty():
+		var p95_index: int = clampi(int(ceil(float(sorted_samples.size() - 1) * 0.95)), 0, sorted_samples.size() - 1)
+		p95_frame_ms = float(sorted_samples[p95_index])
+	var max_frame_ms: float = float(sorted_samples[sorted_samples.size() - 1]) if not sorted_samples.is_empty() else 0.0
+	var active_ids: PackedStringArray = _surface_ids(controller)
+	var surface_node_count: int = _count_surface_nodes(controller)
+	var display_server: String = DisplayServer.get_name()
+	var render_objects: int = -1
+	var render_primitives: int = -1
+	var render_draw_calls: int = -1
+	if display_server != "headless":
+		render_objects = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+		render_primitives = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		render_draw_calls = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var async_total_ms: float = float(diagnostic.get("duration_usec", 0)) / 1000.0
+	var factory_build_ms: float = float(_factory_build_usec) / 1000.0
+	var adjacency_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile") if controller.has_method("get_last_terrain_adjacency_profile") else {}
+	var adjacency_batch_ms: float = float(adjacency_profile.get("batch_total_usec", 0)) / 1000.0
+	var async_other_ms: float = maxf(0.0, async_total_ms - factory_build_ms - adjacency_batch_ms)
+	var profile_keys: Array[String] = [
+		"collect_loaded_patches_usec",
+		"stable_id_map_usec",
+		"binder_total_usec",
+		"binder_validation_usec",
+		"binder_adjacency_discovery_usec",
+		"binder_edge_apply_usec",
+		"collider_sync_total_usec",
+		"collider_candidate_geometry_usec",
+		"collider_corner_resolution_usec",
+		"collider_resource_staging_usec",
+		"collider_activation_commit_usec",
+		"collider_reused_edge_count",
+		"collider_reactivated_edge_count",
+		"collider_staged_edge_count",
+		"collider_retired_edge_count",
+		"collider_reused_corner_cap_count",
+		"collider_staged_corner_cap_count",
+		"collider_retired_corner_cap_count",
+		"controller_rebind_total_usec",
+		"batch_total_usec"
+	]
+	var profile_valid: bool = not adjacency_profile.is_empty()
+	for profile_key in profile_keys:
+		if not adjacency_profile.has(profile_key) or int(adjacency_profile.get(profile_key, -1)) < 0:
+			profile_valid = false
+	var measured_rebind_usec: int = int(adjacency_profile.get("stable_id_map_usec", 0)) + int(adjacency_profile.get("binder_total_usec", 0)) + int(adjacency_profile.get("collider_sync_total_usec", 0))
+	profile_valid = profile_valid and int(adjacency_profile.get("controller_rebind_total_usec", 0)) >= measured_rebind_usec
+	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_edge_count", -1)) + int(adjacency_profile.get("collider_staged_edge_count", -1)) == int(adjacency_profile.get("transition_collider_count", -2))
+	profile_valid = profile_valid and int(adjacency_profile.get("collider_reactivated_edge_count", -1)) <= int(adjacency_profile.get("collider_reused_edge_count", -2))
+	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_corner_cap_count", -1)) + int(adjacency_profile.get("collider_staged_corner_cap_count", -1)) == int(adjacency_profile.get("corner_cap_count", -2))
+	profile_valid = profile_valid and int(adjacency_profile.get("batch_total_usec", 0)) >= int(adjacency_profile.get("collect_loaded_patches_usec", 0)) + int(adjacency_profile.get("controller_rebind_total_usec", 0))
+	_expect(profile_valid, "radius %d %s records valid non-negative phase timings with consistent totals" % [radius, phase])
+	var record := {
+		"phase": phase,
+		"radius": radius,
+		"desired_surface_chunks": desired_count,
+		"active_surface_chunks": active_ids.size(),
+		"surface_node_count": surface_node_count,
+		"average_nodes_per_surface_chunk": float(surface_node_count) / float(maxi(1, active_ids.size())),
+		"factory_calls": _factory_calls,
+		"factory_build_ms": factory_build_ms,
+		"async_total_ms": async_total_ms,
+		"async_non_factory_ms": maxf(0.0, async_total_ms - factory_build_ms),
+		"terrain_adjacency_batch_ms": adjacency_batch_ms,
+		"async_other_ms": async_other_ms,
+		"terrain_adjacency_profile_usec": adjacency_profile,
+		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
+		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
+		"staged_transition_edge_count": int(adjacency_profile.get("collider_staged_edge_count", 0)),
+		"retired_transition_edge_count": int(adjacency_profile.get("collider_retired_edge_count", 0)),
+		"reused_corner_cap_count": int(adjacency_profile.get("collider_reused_corner_cap_count", 0)),
+		"staged_corner_cap_count": int(adjacency_profile.get("collider_staged_corner_cap_count", 0)),
+		"retired_corner_cap_count": int(adjacency_profile.get("collider_retired_corner_cap_count", 0)),
+		"staged_count": int(diagnostic.get("staged_count", 0)),
+		"newly_loaded_count": int(diagnostic.get("newly_loaded_count", 0)),
+		"unloaded_stale_count": int(diagnostic.get("unloaded_stale_count", 0)),
+		"frame_sample_count": sorted_samples.size(),
+		"average_frame_interval_ms": average_frame_ms,
+		"p95_frame_interval_ms": p95_frame_ms,
+		"max_frame_interval_ms": max_frame_ms,
+		"process_static_memory_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC)),
+		"process_node_count": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+		"render_objects_last_frame": render_objects,
+		"render_primitives_last_frame": render_primitives,
+		"render_draw_calls_last_frame": render_draw_calls,
+		"display_server": display_server,
+		"os": OS.get_name(),
+		"processor": OS.get_processor_name(),
+		"processor_count": OS.get_processor_count()
+	}
+	print("SURFACE_CHUNK_BENCHMARK_JSON:" + JSON.stringify(record))
+
+func _wait_frames(frame_count: int) -> void:
+	for frame_index in range(frame_count):
+		await process_frame
+
+func _expect(condition: bool, description: String) -> void:
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures.append(description)
+		push_error("FAIL: " + description)
+
+func _finish(world: Node) -> void:
+	if world != null and is_instance_valid(world):
+		world.queue_free()
+		await process_frame
+		await process_frame
+	if failures.is_empty():
+		print("Surface chunk production benchmark completed.")
+		quit(0)
+	else:
+		for failure in failures:
+			push_error("BENCHMARK FAILURE: " + failure)
+		quit(1)
