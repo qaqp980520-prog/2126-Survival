@@ -42,10 +42,11 @@ godot --headless --path . --script res://tests/backrooms_entity_visual_factory_t
 
 ## Validation
 
-- Initial PR #365 exact-head Full Gate [Run #43654591016](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43654591016) reached the new visual-factory test (step #25). All visual assertions printed PASS, but the workflow failed because Godot's dummy renderer emitted repeated `ERROR: Parameter "m" is null.` messages while MeshInstance3D resources were freed from test roots that had never entered the SceneTree.
-- Corrected the test in commit `98f0c952eadd69d5dc1243a34f326c5d99217039`: entity roots now enter the SceneTree before visual attachment, cleanup uses `queue_free()`, and the test awaits `process_frame` before exit so renderer resources are released through the normal lifecycle.
-- A fresh exact-head Godot 4.3 Full Compatibility Gate is required for the corrected child HEAD; no pass is claimed yet.
-- The focused test uses Godot's headless dummy renderer to exercise mesh-resource construction through an explicit test-only entry point. The production entry point refuses to create renderer nodes in headless mode.
+- Initial PR #365 exact-head Full Gate [Run #43654591016](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43654591016) and the first cleanup retry [Run #43654764143](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43654764143) both failed at the visual-factory test (step #25). The assertions printed PASS, but Godot's headless dummy renderer emitted repeated `ERROR: Parameter "m" is null.` messages while MeshInstance3D resources were destroyed. Adding test roots to the SceneTree and awaiting a frame did not eliminate the dummy-renderer error; that attempted fix is not counted as successful.
+- The headless test contract is now deliberately renderer-independent: it validates all eight entities' geometry specs, finite transforms/dimensions, material-role construction, unique names, Window north/west orientation, invalid geometry rejection, duplicate-Visuals rejection, and the production headless guard. It no longer instantiates MeshInstance3D under the dummy renderer.
+- The production `attach_visuals()` entry point still refuses to build renderer nodes in headless mode. MeshInstance3D construction occurs only in graphical runtime mode and requires a separate graphical QA pass.
+- Current code changes: factory contract refactor `175890637c7b96571b6138998e099c0ba04281ac`; renderer-independent tests `5f297280ad18b29a9ffe4bfdc25c6375794120b2`.
+- A fresh exact-HEAD Godot 4.3 Full Compatibility Gate is required for the new branch HEAD; no pass is claimed yet.
 - Existing metadata-only maze-runtime tests must continue to see zero visual children.
 - No graphical-mode visual inspection is claimed in this version.
 
