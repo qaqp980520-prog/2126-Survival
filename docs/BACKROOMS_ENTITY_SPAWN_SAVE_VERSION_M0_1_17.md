@@ -67,7 +67,9 @@ The existing `.github/workflows/godot-validation.yml` already includes both test
 
 - Code is committed on child branch `fix/backrooms-spawn-algorithm-save-version-2026-11-15`.
 - Static source checks confirm schema-2 emission, schema-1 migration, version propagation into cell descriptors and roots, and regression assertions for unsupported/missing versions.
-- Exact-head Godot 4.3 focused and Full Compatibility Gates have not yet completed for this new branch. No engine pass is claimed.
+- First exact-head Godot 4.3 Full Gate [Run #43654126087](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43654126087) failed at root-project import. The Godot 4.3 log identified a two-argument `Object.get()` call at `BackroomsMazeCellRuntime.gd:213`; `candidate` is a RefCounted object, not a Dictionary.
+- Corrected by commit `29737821fc4927217a0fe65a856554683058513d` to use the one-argument Object.get signature. The failed run is retained as evidence and is not counted as a pass.
+- A fresh exact-head Godot 4.3 gate is required for the corrected commit. No engine pass is claimed yet.
 - Local Godot 4.3 is unavailable in this execution environment; GitHub Actions is the engine-validation environment.
 
 ## Limitations
