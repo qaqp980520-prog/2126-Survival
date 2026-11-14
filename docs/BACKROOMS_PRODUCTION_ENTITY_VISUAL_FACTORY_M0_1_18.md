@@ -17,7 +17,7 @@ Attach renderer-side geometry to the deterministic entity identity roots already
 
 - `systems/BackroomsEntityVisualFactory.gd` — production geometry specs, material construction, validation and visual attachment.
 - `systems/BackroomsMazeCellRuntime.gd` — invoke the visual factory during detached cell staging in graphical mode.
-- `tests/backrooms_entity_visual_factory_test.gd` — all eight entity part counts, mesh/material validity, unique names, Window wall orientation, invalid geometry rejection and headless guard.
+- `tests/backrooms_entity_visual_factory_test.gd` — all eight entity part counts, renderer-independent geometry/material-role validity, unique names, Window wall orientation, invalid geometry rejection, duplicate-Visuals rejection and headless guard.
 - `.github/workflows/godot-validation.yml` — add the focused visual-factory regression to the full compatibility workflow.
 
 ## Dependencies and import
