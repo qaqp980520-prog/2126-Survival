@@ -27,22 +27,30 @@ static func get_geometry_specs(entity_id: String) -> Array[Dictionary]:
 	return []
 
 static func attach_visuals(entity_root: Node3D) -> bool:
-	return _attach_visuals(entity_root, false)
-
-## Explicit test seam: exercises the same MeshInstance3D builder under the
-## headless dummy renderer. Production callers must use attach_visuals().
-static func attach_visuals_for_testing(entity_root: Node3D) -> bool:
-	return _attach_visuals(entity_root, true)
+	return _attach_visuals(entity_root)
 
 static func are_geometry_specs_valid_for_testing(entity_id: String, specs: Array[Dictionary]) -> bool:
 	return _are_geometry_specs_valid(specs, _material_keys_for_entity(entity_id))
 
-static func _attach_visuals(entity_root: Node3D, allow_headless: bool) -> bool:
+static func are_materials_valid_for_testing(entity_id: String) -> bool:
+	var material_keys: Array[String] = _material_keys_for_entity(entity_id)
+	if material_keys.is_empty():
+		return false
+	var materials: Dictionary = _create_materials(entity_id)
+	for key in material_keys:
+		if not (materials.get(key, null) is Material):
+			return false
+	return true
+
+static func get_window_yaw_for_testing(wall_direction: Vector2i) -> Dictionary:
+	return _window_yaw_for_direction(wall_direction)
+
+static func _attach_visuals(entity_root: Node3D) -> bool:
 	if entity_root == null or not is_instance_valid(entity_root):
 		return false
 	if not entity_root.has_meta("backrooms_entity_id") or entity_root.get_node_or_null("Visuals") != null:
 		return false
-	if DisplayServer.get_name() == "headless" and not allow_headless:
+	if DisplayServer.get_name() == "headless":
 		return false
 
 	var entity_id: String = str(entity_root.get_meta("backrooms_entity_id", ""))
@@ -57,12 +65,10 @@ static func _attach_visuals(entity_root: Node3D, allow_headless: bool) -> bool:
 		if not (wall_value is Vector2i):
 			return false
 		var wall_direction: Vector2i = wall_value
-		if wall_direction == Vector2i(0, -1):
-			window_yaw = 0.0
-		elif wall_direction == Vector2i(-1, 0):
-			window_yaw = PI * 0.5
-		else:
+		var orientation: Dictionary = _window_yaw_for_direction(wall_direction)
+		if not bool(orientation.get("ok", false)):
 			return false
+		window_yaw = float(orientation.get("yaw", 0.0))
 
 	var materials: Dictionary = _create_materials(entity_id)
 	for key in material_keys:
@@ -84,6 +90,13 @@ static func _attach_visuals(entity_root: Node3D, allow_headless: bool) -> bool:
 	entity_root.set_meta("backrooms_entity_visual_version", VISUAL_FACTORY_VERSION)
 	entity_root.set_meta("backrooms_entity_visual_state", "attached")
 	return true
+
+static func _window_yaw_for_direction(wall_direction: Vector2i) -> Dictionary:
+	if wall_direction == Vector2i(0, -1):
+		return {"ok": true, "yaw": 0.0}
+	if wall_direction == Vector2i(-1, 0):
+		return {"ok": true, "yaw": PI * 0.5}
+	return {"ok": false, "yaw": 0.0}
 
 static func _build_mesh_instance(spec: Dictionary, materials: Dictionary) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
