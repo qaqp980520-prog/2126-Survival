@@ -1,7 +1,11 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const RADII: Array[int] = [1, 2, 3, 4, 8]
+const CORNER_FIXTURE_CHUNK_COORD: Vector2i = Vector2i(1000, 2000)
+const CORNER_FIXTURE_CHUNK_ID: String = "surface/chunk_1000_2000"
+const CORNER_FIXTURE_ROOT_NAME: String = "Chunk_1000_2000"
 const MAX_REQUEST_FRAMES: int = 7200
 const RELEASE_WAIT_FRAMES: int = 2
 const SURFACE_PREFIX: String = "surface/"
@@ -10,6 +14,11 @@ var failures: Array[String] = []
 var _delegate_factory: Callable
 var _factory_build_usec: int = 0
 var _factory_calls: int = 0
+var _corner_fixture_injected: bool = false
+var _corner_fixture_patch_nodes: Dictionary = {}
+var _corner_fixture_patch_ids: Dictionary = {}
+var _corner_fixture_cap_refs: Dictionary = {}
+var _corner_fixture_cap_instance_ids: Dictionary = {}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -96,8 +105,15 @@ func _run() -> void:
 			_expect(int(reuse_fixture.get("reactivated_edge_count", 0)) == int(reuse_fixture.get("reused_edge_count", -1)), "radius 1 same-world sync reactivates endpoint segmentation after binder clearing")
 			_expect(int(reuse_fixture.get("staged_edge_count", -1)) == 0 and bool(reuse_fixture.get("body_identity_preserved", false)), "radius 1 same-world sync stages no replacement and preserves the production collider body")
 			_emit_metrics("resource_reuse_same_world_sync", radius, expected_count, {"duration_usec": 0}, [], controller)
+			_expect(int(controller.call("get_terrain_corner_cap_count")) == 0, "radius 1 edge-only production fixture has zero corner caps")
+			var corner_cap_fixture: Dictionary = _seed_production_corner_cap_reuse_fixture(world, controller)
+			_expect(bool(corner_cap_fixture.get("ok", false)), "radius 1 real SurfaceWorld fixture seeds and reuses all four corner caps: %s" % str(corner_cap_fixture.get("error", "")))
+			_expect(int(corner_cap_fixture.get("active_corner_cap_count", 0)) == 4, "radius 1 real SurfaceWorld fixture creates exactly four active corner caps")
+			_expect(int(corner_cap_fixture.get("reused_corner_cap_count", 0)) == 4 and int(corner_cap_fixture.get("staged_corner_cap_count", -1)) == 0 and int(corner_cap_fixture.get("retired_corner_cap_count", -1)) == 0, "radius 1 same-world production rebind reuses all four caps without staging or retirement")
+			_expect(bool(corner_cap_fixture.get("body_identity_preserved", false)), "radius 1 same-world production rebind preserves all four corner-cap body identities")
+			_emit_metrics("corner_cap_reuse_same_world_sync", radius, expected_count, {"duration_usec": 0}, [], controller)
 
-		# Measure the normal one-chunk eastward boundary crossing separately from
+		# Measure the normal one-chunk boundary crossing separately from
 		# the intentionally expensive full-window replacement stress case above.
 		var boundary_chunk_size_x: float = float(director.get("chunk_size_x"))
 		if not is_finite(boundary_chunk_size_x) or boundary_chunk_size_x <= 0.0:
@@ -146,6 +162,11 @@ func _run() -> void:
 			var boundary_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(boundary_profile.get("collider_reused_edge_count", 0)) > 0, "radius 1 production boundary shift preserves the seeded transition collider")
 			_expect(int(boundary_profile.get("collider_reactivated_edge_count", 0)) > 0, "radius 1 production boundary shift reactivates the preserved seam endpoints")
+			_expect(int(boundary_profile.get("corner_cap_count", 0)) == 4, "radius 1 boundary shift retains all four production corner caps")
+			_expect(int(boundary_profile.get("collider_reused_corner_cap_count", 0)) == 4, "radius 1 boundary shift reuses all four production corner-cap bodies")
+			_expect(int(boundary_profile.get("collider_staged_corner_cap_count", 0)) == 0 and int(boundary_profile.get("collider_retired_corner_cap_count", 0)) == 0, "radius 1 boundary shift stages and retires no corner caps")
+			_expect_resource_accounting(boundary_profile, "radius 1 boundary shift")
+			_expect_corner_cap_identities(controller, "radius 1 boundary shift")
 		target = boundary_target
 
 		# Collect four additional same-runner radius-8 boundary samples. Alternating
@@ -229,6 +250,11 @@ func _run() -> void:
 		if radius == 1:
 			var contraction_profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
 			_expect(int(contraction_profile.get("collider_retired_edge_count", 0)) > 0, "radius 1 contraction retires the seeded production transition collider")
+			_expect(int(contraction_profile.get("corner_cap_count", -1)) == 0 and int(controller.call("get_terrain_corner_cap_count")) == 0, "radius 1 contraction leaves no active corner caps")
+			_expect(int(contraction_profile.get("collider_reused_corner_cap_count", -1)) == 0 and int(contraction_profile.get("collider_staged_corner_cap_count", -1)) == 0, "radius 1 contraction reuses and stages no corner caps")
+			_expect(int(contraction_profile.get("collider_retired_corner_cap_count", 0)) == 4, "radius 1 contraction retires exactly four fixture corner caps")
+			_expect_resource_accounting(contraction_profile, "radius 1 contraction")
+			_expect_corner_cap_refs_released()
 		previous_surface_count = 1
 
 	director.set("chunk_factory", _delegate_factory)
@@ -304,12 +330,198 @@ func _seed_production_transition_reuse_fixture(controller: Node, director: Node,
 		"profile_usec": profile
 	}
 
+
+func _seed_production_corner_cap_reuse_fixture(world: Node, controller: Node) -> Dictionary:
+	if not _corner_fixture_injected or _corner_fixture_patch_nodes.size() != 4 or _corner_fixture_patch_ids.size() != 4:
+		return {"ok": false, "error": "real_factory_corner_fixture_not_injected"}
+	var registry: Node = world.get("object_state_registry") as Node
+	if not is_instance_valid(registry) or not registry.has_method("to_save_dict"):
+		return {"ok": false, "error": "world_object_registry_unavailable"}
+	var payload_value: Variant = registry.call("to_save_dict")
+	if not (payload_value is Dictionary):
+		return {"ok": false, "error": "world_object_registry_payload_invalid"}
+	var payload: Dictionary = payload_value.duplicate(true)
+	var original_objects_value: Variant = payload.get("objects", null)
+	if not (original_objects_value is Dictionary):
+		return {"ok": false, "error": "world_object_registry_records_invalid"}
+	var original_objects: Dictionary = original_objects_value
+	var updated_objects: Dictionary = original_objects.duplicate(true)
+	var seed_states: Dictionary = {
+		"NW": {"height_level": 2, "surface_type": "metal"},
+		"NE": {"height_level": 0, "surface_type": "soil"},
+		"SW": {"height_level": 0, "surface_type": "soil"},
+		"SE": {"height_level": 2, "surface_type": "metal"}
+	}
+	for suffix in ["NW", "NE", "SW", "SE"]:
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		if stable_id.is_empty() or not updated_objects.has(stable_id):
+			return {"ok": false, "error": "corner_fixture_stable_id_not_registered:" + suffix}
+		var record_value: Variant = updated_objects.get(stable_id, null)
+		if not (record_value is Dictionary):
+			return {"ok": false, "error": "corner_fixture_record_invalid:" + suffix}
+		var record: Dictionary = record_value
+		if str(record.get("chunk_id", "")) != CORNER_FIXTURE_CHUNK_ID:
+			return {"ok": false, "error": "corner_fixture_chunk_id_mismatch:" + suffix}
+		var state_value: Variant = record.get("state", null)
+		if not (state_value is Dictionary):
+			return {"ok": false, "error": "corner_fixture_state_invalid:" + suffix}
+		var state: Dictionary = state_value.duplicate(true)
+		var desired: Dictionary = seed_states[suffix]
+		state["height_level"] = int(desired["height_level"])
+		state["surface_type"] = str(desired["surface_type"])
+		state["revision"] = int(state.get("revision", 0)) + 1
+		record["state"] = state
+		updated_objects[stable_id] = record
+	if updated_objects.size() != original_objects.size():
+		return {"ok": false, "error": "corner_fixture_registry_record_count_changed"}
+	payload["objects"] = updated_objects
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "corner_fixture_batch_begin_failed"}
+	var restore_ok: bool = bool(controller.call("restore_world_object_states", payload))
+	var seed_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not restore_ok:
+		return {"ok": false, "error": "corner_fixture_full_registry_restore_failed"}
+	if not bool(seed_result.get("ok", false)):
+		return {"ok": false, "error": "corner_fixture_adjacency_commit_failed"}
+	var active_corner_cap_count: int = int(controller.call("get_terrain_corner_cap_count"))
+	if active_corner_cap_count != 4:
+		return {"ok": false, "error": "corner_fixture_expected_four_caps_got_%d" % active_corner_cap_count}
+	var cap_entries: Array[Dictionary] = [
+		{"suffix": "NW", "corner": "south_east"},
+		{"suffix": "NE", "corner": "south_west"},
+		{"suffix": "SW", "corner": "north_east"},
+		{"suffix": "SE", "corner": "north_west"}
+	]
+	_corner_fixture_cap_refs.clear()
+	_corner_fixture_cap_instance_ids.clear()
+	for entry in cap_entries:
+		var suffix: String = str(entry["suffix"])
+		var corner: String = str(entry["corner"])
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		var cap_key: String = stable_id + "|" + corner
+		var body: StaticBody3D = controller.call("get_terrain_corner_cap_body", stable_id, corner) as StaticBody3D
+		if not is_instance_valid(body) or body.collision_layer != 1:
+			return {"ok": false, "error": "corner_fixture_cap_body_missing_or_inactive:" + suffix}
+		_corner_fixture_cap_refs[cap_key] = weakref(body)
+		_corner_fixture_cap_instance_ids[cap_key] = body.get_instance_id()
+	var nw_patch: Node3D = _corner_fixture_patch_nodes.get("NW") as Node3D
+	if not is_instance_valid(nw_patch):
+		return {"ok": false, "error": "corner_fixture_nw_patch_unavailable"}
+	var unchanged_state: Dictionary = nw_patch.call("get_world_object_state")
+	if not bool(controller.call("begin_terrain_adjacency_batch")):
+		return {"ok": false, "error": "corner_fixture_same_world_batch_begin_failed"}
+	var unchanged_applied: bool = bool(nw_patch.call("apply_world_object_state", unchanged_state))
+	var same_world_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	if not unchanged_applied:
+		return {"ok": false, "error": "corner_fixture_same_world_state_signal_failed"}
+	if not bool(same_world_result.get("ok", false)):
+		return {"ok": false, "error": "corner_fixture_same_world_rebind_failed"}
+	var profile: Dictionary = controller.call("get_last_terrain_adjacency_profile")
+	var reused_corner_cap_count: int = int(profile.get("collider_reused_corner_cap_count", 0))
+	var staged_corner_cap_count: int = int(profile.get("collider_staged_corner_cap_count", 0))
+	var retired_corner_cap_count: int = int(profile.get("collider_retired_corner_cap_count", 0))
+	var body_identity_preserved: bool = _expect_corner_cap_identities(controller, "radius 1 same-world sync")
+	_expect_resource_accounting(profile, "radius 1 same-world sync")
+	return {
+		"ok": int(profile.get("corner_cap_count", 0)) == 4 and reused_corner_cap_count == 4 and staged_corner_cap_count == 0 and retired_corner_cap_count == 0 and body_identity_preserved,
+		"active_corner_cap_count": int(profile.get("corner_cap_count", 0)),
+		"reused_corner_cap_count": reused_corner_cap_count,
+		"staged_corner_cap_count": staged_corner_cap_count,
+		"retired_corner_cap_count": retired_corner_cap_count,
+		"body_identity_preserved": body_identity_preserved,
+		"profile_usec": profile
+	}
+
+func _expect_resource_accounting(profile: Dictionary, label: String) -> bool:
+	var active_edges: int = int(profile.get("transition_collider_count", -1))
+	var reused_edges: int = int(profile.get("collider_reused_edge_count", -1))
+	var staged_edges: int = int(profile.get("collider_staged_edge_count", -1))
+	var active_caps: int = int(profile.get("corner_cap_count", -1))
+	var reused_caps: int = int(profile.get("collider_reused_corner_cap_count", -1))
+	var staged_caps: int = int(profile.get("collider_staged_corner_cap_count", -1))
+	var edge_ok: bool = active_edges >= 0 and reused_edges >= 0 and staged_edges >= 0 and reused_edges + staged_edges == active_edges
+	var cap_ok: bool = active_caps >= 0 and reused_caps >= 0 and staged_caps >= 0 and reused_caps + staged_caps == active_caps
+	_expect(edge_ok, "%s edge reused + staged equals active" % label)
+	_expect(cap_ok, "%s corner-cap reused + staged equals active" % label)
+	return edge_ok and cap_ok
+
+func _expect_corner_cap_identities(controller: Node, label: String) -> bool:
+	var cap_entries: Array[Dictionary] = [
+		{"suffix": "NW", "corner": "south_east"},
+		{"suffix": "NE", "corner": "south_west"},
+		{"suffix": "SW", "corner": "north_east"},
+		{"suffix": "SE", "corner": "north_west"}
+	]
+	var all_match: bool = true
+	for entry in cap_entries:
+		var suffix: String = str(entry["suffix"])
+		var corner: String = str(entry["corner"])
+		var stable_id: String = str(_corner_fixture_patch_ids.get(suffix, ""))
+		var cap_key: String = stable_id + "|" + corner
+		var weak_value: Variant = _corner_fixture_cap_refs.get(cap_key, null)
+		var weak: WeakRef = weak_value as WeakRef
+		var current_body: StaticBody3D = controller.call("get_terrain_corner_cap_body", stable_id, corner) as StaticBody3D
+		var previous_body: Object = weak.get_ref() if weak != null else null
+		var same_identity: bool = is_instance_valid(current_body) and previous_body == current_body and current_body.get_instance_id() == int(_corner_fixture_cap_instance_ids.get(cap_key, -1))
+		_expect(same_identity, "%s preserves %s %s corner-cap body identity" % [label, suffix, corner])
+		all_match = all_match and same_identity
+	return all_match
+
+func _expect_corner_cap_refs_released() -> bool:
+	var all_released: bool = true
+	for cap_key in _corner_fixture_cap_refs.keys():
+		var weak_value: Variant = _corner_fixture_cap_refs[cap_key]
+		var weak: WeakRef = weak_value as WeakRef
+		var released: bool = weak != null and weak.get_ref() == null
+		_expect(released, "contracted SurfaceWorld releases corner-cap body %s" % str(cap_key))
+		all_released = all_released and released
+	return all_released
+
+func _inject_production_corner_cap_fixture(chunk_root: Node3D) -> bool:
+	if _corner_fixture_injected or not is_instance_valid(chunk_root) or chunk_root.name != CORNER_FIXTURE_ROOT_NAME:
+		return false
+	var crop_plot_zero: Node3D = chunk_root.get_node_or_null("CropPlot_0") as Node3D
+	var crop_plot_one: Node3D = chunk_root.get_node_or_null("CropPlot_1") as Node3D
+	var salvage_crate: Node3D = chunk_root.get_node_or_null("SalvageCrate") as Node3D
+	var ore: Node3D = chunk_root.get_node_or_null("Ore_1000_2000") as Node3D
+	if not is_instance_valid(crop_plot_zero) or not is_instance_valid(crop_plot_one) or not is_instance_valid(salvage_crate) or not is_instance_valid(ore):
+		return false
+	crop_plot_one.position.y = -10.0
+	salvage_crate.position.y = -10.0
+	_expect(is_equal_approx(crop_plot_one.position.y, -10.0), "corner fixture isolates only CropPlot_1 below the interaction volume")
+	_expect(is_equal_approx(salvage_crate.position.y, -10.0), "corner fixture isolates SalvageCrate below the interaction volume")
+	_expect(is_equal_approx(crop_plot_zero.position.y, 0.0), "corner fixture leaves CropPlot_0 at its factory position")
+	_expect(is_equal_approx(ore.position.y, -3.0), "corner fixture leaves ore at its factory position")
+	var patch_specs: Array[Dictionary] = [
+		{"suffix": "NW", "name": "TerrainPatch_BenchmarkCorner_NW", "position": Vector3(5.5, 0.0, 3.5)},
+		{"suffix": "NE", "name": "TerrainPatch_BenchmarkCorner_NE", "position": Vector3(7.5, 0.0, 3.5)},
+		{"suffix": "SW", "name": "TerrainPatch_BenchmarkCorner_SW", "position": Vector3(5.5, 0.0, 5.5)},
+		{"suffix": "SE", "name": "TerrainPatch_BenchmarkCorner_SE", "position": Vector3(7.5, 0.0, 5.5)}
+	]
+	for spec in patch_specs:
+		var suffix: String = str(spec["suffix"])
+		var patch: Node3D = TerrainPatchScript.new() as Node3D
+		if patch == null:
+			return false
+		patch.name = str(spec["name"])
+		patch.position = spec["position"]
+		chunk_root.add_child(patch)
+		var state: Dictionary = patch.call("get_world_object_state")
+		_expect(int(state.get("height_level", -1)) == 0 and str(state.get("surface_type", "")) == "soil" and int(state.get("revision", -1)) == 0, "corner fixture %s starts at default height 0 / soil / revision 0" % suffix)
+		_corner_fixture_patch_nodes[suffix] = patch
+		_corner_fixture_patch_ids[suffix] = CORNER_FIXTURE_CHUNK_ID + "/object/" + CORNER_FIXTURE_ROOT_NAME + "/" + str(patch.name)
+	_corner_fixture_injected = _corner_fixture_patch_nodes.size() == 4 and _corner_fixture_patch_ids.size() == 4
+	return _corner_fixture_injected
+
 func _profiled_chunk_factory(coord: Vector2i) -> Node3D:
 	var started_usec: int = Time.get_ticks_usec()
 	var candidate: Variant = _delegate_factory.call(coord)
 	_factory_build_usec += Time.get_ticks_usec() - started_usec
 	_factory_calls += 1
-	return candidate as Node3D
+	var chunk_root: Node3D = candidate as Node3D
+	if coord == CORNER_FIXTURE_CHUNK_COORD:
+		_expect(_inject_production_corner_cap_fixture(chunk_root), "benchmark wrapper injects four real corner patches before Controller registration")
+	return chunk_root
 
 func _reset_factory_metrics() -> void:
 	_factory_build_usec = 0

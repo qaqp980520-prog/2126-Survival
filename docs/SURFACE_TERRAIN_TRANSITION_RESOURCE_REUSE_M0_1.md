@@ -75,3 +75,15 @@ godot --headless --path . --script res://tests/surface_chunk_production_benchmar
 - This preserves unchanged collider resources but still evaluates candidate geometry for all descriptors.
 - No iPhone, GPU, rendered-frame or target-device performance claim is made.
 - Next: validate exact-head CI, inspect the resource-reuse counts in focused tests, then extend the real production benchmark to report reused/staged/retired edge and cap counts during boundary shifts. Preserve the full rebuild as the correctness oracle and rollback path.
+
+
+## Issue #288 — real SurfaceWorld four-way corner-cap reuse fixture
+
+- The benchmark wrapper calls the real `SurfaceChunkFactory.make_chunk()`, then injects four real `SurfaceTerrainPatch` nodes into only the designated `Chunk_1000_2000` root before Controller registration. The factory's seven original terrain patches remain untouched.
+- Exact fixture nodes/positions: NW `(5.5, 0, 3.5)`, NE `(7.5, 0, 3.5)`, SW `(5.5, 0, 5.5)`, SE `(7.5, 0, 5.5)`; stable IDs use the real Controller path rule.
+- Prop isolation is benchmark-only and moves only `CropPlot_1` and `SalvageCrate` to local y=-10. `CropPlot_0` and ore remain at factory positions; no node is deleted, renamed or state-mutated.
+- The complete world-object registry payload (schema plus every record) is copied; only the four fixture patch records are updated to the mainline checkerboard NW/SE height 2 + metal, NE/SW height 0 + soil, with each revision incremented.
+- The full payload is applied through `controller.restore_world_object_states()` inside one adjacency batch. Controller read-only forwarding getters expose corner-cap count and body identity without accessing the private Manager.
+- The benchmark verifies exactly four caps after seeding, same-world rebind reuse of all four, identity preservation through the one-chunk east shift while the original chunk remains loaded, and retirement/release of all four after contraction to radius 0 at the shifted center.
+- Resource accounting is asserted for edges and caps on same-world, boundary-shift and contraction phases. Exactly one additional JSONL record is emitted: `corner_cap_reuse_same_world_sync`; workflow record count is 21.
+- This remains production coverage, not a new incremental adjacency algorithm. Full-set validation and the Full Rebuild correctness oracle remain unchanged.
