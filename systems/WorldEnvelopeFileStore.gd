@@ -30,6 +30,12 @@ func write_atomically(destination_path: String, payload: Dictionary) -> bool:
 	var temporary_absolute: String = ProjectSettings.globalize_path(temporary_path)
 	var backup_absolute: String = ProjectSettings.globalize_path(backup_path)
 	var parent_absolute: String = destination_absolute.get_base_dir()
+	if (
+		_has_symlink_ancestor(destination_absolute)
+		or _has_symlink_ancestor(temporary_absolute)
+		or _has_symlink_ancestor(backup_absolute)
+	):
+		return _fail("path_symlink", "Save paths must not traverse symbolic links or reparse points.", {"path": destination_path})
 	if not DirAccess.dir_exists_absolute(parent_absolute):
 		if _has_file_ancestor(parent_absolute):
 			return _fail("directory_create", "A file occupies a required parent-directory path; existing save files were not touched.", {"blocked_parent": parent_absolute})
@@ -120,6 +126,11 @@ func load_with_backup(
 		return _fail("validation", "Load path must be a non-empty user:// path.", {})
 	if not restore_callable.is_valid() or not restore_report_callable.is_valid():
 		return _fail("restore_contract", "Restore and restore-report callbacks are required.", {})
+
+	var primary_absolute: String = ProjectSettings.globalize_path(save_path)
+	var backup_absolute: String = ProjectSettings.globalize_path(save_path + ".bak")
+	if _has_symlink_ancestor(primary_absolute) or _has_symlink_ancestor(backup_absolute):
+		return _fail("path_symlink", "Load paths must not traverse symbolic links or reparse points.", {"path": save_path})
 
 	var primary_exists: bool = FileAccess.file_exists(save_path)
 	var primary_payload: Dictionary = _read_dictionary(save_path)
@@ -226,11 +237,19 @@ func _read_dictionary(path: String) -> Dictionary:
 
 func _next_diagnostic_path(save_path: String) -> String:
 	var first: String = save_path + ".corrupt"
-	if not FileAccess.file_exists(first) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(first)):
+	if (
+		not FileAccess.file_exists(first)
+		and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(first))
+		and not _has_symlink_ancestor(ProjectSettings.globalize_path(first))
+	):
 		return first
 	for index in range(1, 1000):
 		var candidate: String = "%s.corrupt.%d" % [save_path, index]
-		if not FileAccess.file_exists(candidate) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)):
+		if (
+			not FileAccess.file_exists(candidate)
+			and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate))
+			and not _has_symlink_ancestor(ProjectSettings.globalize_path(candidate))
+		):
 			return candidate
 	return ""
 
@@ -252,6 +271,21 @@ func _has_file_ancestor(path: String) -> bool:
 		var parent: String = candidate.get_base_dir()
 		if parent == candidate:
 			break
+		candidate = parent
+	return false
+
+
+func _has_symlink_ancestor(path: String) -> bool:
+	var user_root: String = ProjectSettings.globalize_path("user://").simplify_path()
+	var candidate: String = path.simplify_path()
+	while candidate != user_root:
+		var parent: String = candidate.get_base_dir()
+		if parent == candidate:
+			return true
+		if DirAccess.dir_exists_absolute(parent):
+			var parent_access := DirAccess.open(parent)
+			if parent_access != null and parent_access.is_link(candidate.get_file()):
+				return true
 		candidate = parent
 	return false
 
