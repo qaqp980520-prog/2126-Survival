@@ -40,7 +40,7 @@ static func are_geometry_specs_valid_for_testing(entity_id: String, specs: Array
 static func _attach_visuals(entity_root: Node3D, allow_headless: bool) -> bool:
 	if entity_root == null or not is_instance_valid(entity_root):
 		return false
-	if not entity_root.has_meta("backrooms_entity_id") or entity_root.get_child_count() != 0:
+	if not entity_root.has_meta("backrooms_entity_id") or entity_root.get_node_or_null("Visuals") != null:
 		return false
 	if DisplayServer.get_name() == "headless" and not allow_headless:
 		return false
