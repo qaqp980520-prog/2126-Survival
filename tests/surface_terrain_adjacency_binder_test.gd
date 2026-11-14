@@ -14,6 +14,8 @@ class FixturePatch:
 	var batch_depth: int = 0
 	var batch_begin_count: int = 0
 	var batch_end_count: int = 0
+	var clear_call_count: int = 0
+	var reciprocal_clear_dedup_supported: bool = true
 
 	func bind_neighbor_patch(side: String, neighbor: Node3D) -> bool:
 		if fail_bind or not ["east", "west", "north", "south"].has(side) or neighbor == null:
@@ -24,8 +26,29 @@ class FixturePatch:
 	func clear_neighbor_edge_state(side: String) -> bool:
 		if fail_clear:
 			return false
+		clear_call_count += 1
+		var neighbor: Node3D = neighbors.get(side) as Node3D
 		neighbors.erase(side)
+		if is_instance_valid(neighbor) and neighbor.has_method("clear_neighbor_edge_state_local"):
+			neighbor.call("clear_neighbor_edge_state_local", _opposite_side(side))
 		return true
+
+	func clear_neighbor_edge_state_local(side: String) -> void:
+		neighbors.erase(side)
+
+	func get_bound_neighbor_patch(side: String) -> Node3D:
+		return neighbors.get(side) as Node3D
+
+	func supports_reciprocal_neighbor_clear_deduplication() -> bool:
+		return reciprocal_clear_dedup_supported
+
+	func _opposite_side(side: String) -> String:
+		match side:
+			"east": return "west"
+			"west": return "east"
+			"north": return "south"
+			"south": return "north"
+			_: return ""
 
 	func get_bound_neighbor_patches() -> Array[Node3D]:
 		var result: Array[Node3D] = []
@@ -109,7 +132,7 @@ func _run() -> void:
 	_expect(int(report.get("descriptor_count", -1)) == 2, "binder returns one deterministic descriptor for each adjacent pair")
 	for patch in [west, east, south, far]:
 		var refresh_delta: int = _segmentation_refresh_count(patch) - int(initial_refresh_counts[patch.get_instance_id()])
-		_expect(refresh_delta == 1, "%s refreshes collision segmentation exactly once during the full clear/rebind pass" % patch.name)
+		_expect(refresh_delta == 0, "%s empty-side clear does not refresh unchanged segmentation during initial bind" % patch.name)
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "west/east pair resolves to a flush join")
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "flush_join", "west/south pair resolves to a flush join")
 	_expect(not _ramp_enabled(west, "East") and not _ramp_enabled(east, "West"), "both sides of east/west shared edge disable their ground ramps")
@@ -166,12 +189,13 @@ func _run() -> void:
 	_expect(str(west.call("get_edge_policy", "south").get("mode", "")) == "local_higher", "remaining south neighbor stays bound with the correct local-higher policy")
 	for patch in [west, east, south, far]:
 		var refresh_delta: int = _segmentation_refresh_count(patch) - int(unload_refresh_counts_before[patch.get_instance_id()])
-		_expect(refresh_delta == 1, "%s receives one segmentation refresh when reciprocal neighbors are cleared during unload" % patch.name)
+		var expected_refresh_delta: int = 0 if patch == far else 1
+		_expect(refresh_delta == expected_refresh_delta, "%s refreshes only when an existing reciprocal edge changes during unload" % patch.name)
 
 	var nested_refresh_before: int = _segmentation_refresh_count(west)
 	west.call("begin_collision_segmentation_batch")
 	west.call("begin_collision_segmentation_batch")
-	west.call("clear_neighbor_edge_state", "north")
+	west.call("clear_neighbor_edge_state", "south")
 	west.call("clear_neighbor_edge_state", "west")
 	_expect(_segmentation_refresh_count(west) == nested_refresh_before, "nested segmentation batch defers refresh while scopes remain open")
 	_expect(bool(west.call("end_collision_segmentation_batch")), "inner segmentation batch closes successfully")
@@ -179,9 +203,16 @@ func _run() -> void:
 	_expect(bool(west.call("end_collision_segmentation_batch")), "outer segmentation batch closes successfully")
 	_expect(_segmentation_refresh_count(west) == nested_refresh_before + 1, "outer batch close performs exactly one deferred segmentation refresh")
 	_expect(not bool(west.call("end_collision_segmentation_batch")), "unmatched segmentation batch close is rejected")
-	var immediate_refresh_before: int = _segmentation_refresh_count(west)
+	var west_immediate_before: int = _segmentation_refresh_count(west)
+	var east_immediate_before: int = _segmentation_refresh_count(east)
+	_expect(bool(west.call("bind_neighbor_patch", "east", east)) and bool(east.call("bind_neighbor_patch", "west", west)), "public immediate-clear fixture establishes a reciprocal seam")
+	west.call("clear_neighbor_edge_state", "east")
+	_expect(_segmentation_refresh_count(west) == west_immediate_before + 1, "public single-side clear immediately refreshes a changed local patch outside a batch")
+	_expect(_segmentation_refresh_count(east) == east_immediate_before + 1, "public single-side clear immediately refreshes its changed reciprocal patch")
+	var no_op_refresh_before: int = _segmentation_refresh_count(west)
 	west.call("clear_neighbor_edge_state", "north")
-	_expect(_segmentation_refresh_count(west) == immediate_refresh_before + 1, "public single-side clear preserves immediate refresh behavior outside a batch")
+	_expect(_segmentation_refresh_count(west) == no_op_refresh_before, "clearing an already-empty side does not refresh unchanged collision segmentation")
+	_expect(bool(west.call("bind_neighbor_patch", "south", south)) and bool(south.call("bind_neighbor_patch", "north", west)), "restore the existing south seam before duplicate-position preflight")
 
 	var duplicate := PatchScript.new()
 	duplicate.name = "Duplicate"
@@ -197,6 +228,7 @@ func _run() -> void:
 	await _test_large_spatial_index_grid()
 	await _test_spatial_index_tolerance_boundaries()
 	await _test_batch_scope_cleanup_on_failures()
+	await _test_reciprocal_clear_deduplication()
 	if failures.is_empty():
 		print("Surface terrain adjacency binder tests passed.")
 		quit(0)
@@ -234,6 +266,14 @@ func _test_large_spatial_index_grid() -> void:
 	_expect(int(report.get("duplicate_position_candidate_checks", -1)) == 0, "well-spaced grid requires no duplicate-position candidate comparisons")
 	_expect(int(report.get("position_bucket_lookups", -1)) == patch_count * 27, "duplicate validation checks a fixed 27-bucket neighborhood per patch")
 	_expect(int(report.get("adjacency_bucket_lookups", -1)) == patch_count * 4 * 27, "adjacency discovery checks a fixed 27-bucket neighborhood per cardinal side")
+	for patch in patches:
+		(patch as FixturePatch).clear_call_count = 0
+	var rebuilt_report: Dictionary = BinderScript.bind_patches(patches, stable_ids)
+	var total_rebuild_clear_calls: int = 0
+	for patch in patches:
+		total_rebuild_clear_calls += (patch as FixturePatch).clear_call_count
+	_expect(bool(rebuilt_report.get("ok", false)) and int(rebuilt_report.get("pair_count", -1)) == expected_pairs, "20x20 rebind preserves all 760 reciprocal adjacency pairs")
+	_expect(total_rebuild_clear_calls == patch_count * 4 - expected_pairs, "20x20 rebind clears 840 endpoints instead of invoking 1600 side-slot clears")
 	var center_index: int = 10 * 20 + 10
 	var center: FixturePatch = patches[center_index] as FixturePatch
 	_expect(center.neighbors.size() == 4, "interior grid patch binds all four cardinal neighbors")
@@ -323,6 +363,55 @@ func _test_batch_scope_cleanup_on_failures() -> void:
 	bind_holder.queue_free()
 	await process_frame
 	await process_frame
+
+func _test_reciprocal_clear_deduplication() -> void:
+	var holder := Node3D.new()
+	holder.name = "TerrainAdjacencyReciprocalClearDedupFixture"
+	root.add_child(holder)
+	var west := FixturePatch.new()
+	west.name = "DedupWest"
+	var east := FixturePatch.new()
+	east.name = "DedupEast"
+	east.position = Vector3(PatchScript.PATCH_SIZE, 0.0, 0.0)
+	var south := FixturePatch.new()
+	south.name = "DedupSouth"
+	south.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE)
+	var external := FixturePatch.new()
+	external.name = "DedupExternalSouth"
+	external.position = Vector3(0.0, 0.0, PatchScript.PATCH_SIZE * 2.0)
+	for patch in [west, east, south, external]:
+		holder.add_child(patch)
+	await process_frame
+	var stable_ids: Dictionary = {
+		west.get_instance_id(): "dedup/chunk/west",
+		east.get_instance_id(): "dedup/chunk/east",
+		south.get_instance_id(): "dedup/chunk/south",
+		external.get_instance_id(): "dedup/chunk/external"
+	}
+	var initial: Dictionary = BinderScript.bind_patches([west, east, south, external], stable_ids)
+	_expect(bool(initial.get("ok", false)) and int(initial.get("pair_count", -1)) == 3, "dedup fixture creates two loaded seams and one outgoing external seam")
+	for patch in [west, east, south, external]:
+		patch.clear_call_count = 0
+	var partial: Dictionary = BinderScript.bind_patches([west, east, south], stable_ids)
+	_expect(bool(partial.get("ok", false)) and int(partial.get("pair_count", -1)) == 2, "deduplicated clear rebuilds the two retained loaded seams")
+	var clear_calls: int = west.clear_call_count + east.clear_call_count + south.clear_call_count
+	_expect(clear_calls == 10, "two loaded reciprocal seams require one public clear call each instead of two")
+	_expect(external.neighbors.is_empty(), "one-sided unload clear removes the outgoing external reciprocal neighbor")
+	_expect(west.neighbors.get("east") == east and east.neighbors.get("west") == west, "deduplicated clear preserves the rebuilt east/west reciprocal seam")
+	_expect(west.neighbors.get("south") == south and south.neighbors.get("north") == west, "deduplicated clear preserves the rebuilt north/south reciprocal seam")
+	west.reciprocal_clear_dedup_supported = false
+	for patch in [west, east, south]:
+		patch.clear_call_count = 0
+	var fallback: Dictionary = BinderScript.bind_patches([west, east, south], stable_ids)
+	_expect(bool(fallback.get("ok", false)) and int(fallback.get("pair_count", -1)) == 2, "custom patch without reciprocal-clear opt-in uses the compatible legacy path")
+	var fallback_clear_calls: int = west.clear_call_count + east.clear_call_count + south.clear_call_count
+	_expect(fallback_clear_calls == 12, "legacy fallback clears all twelve loaded side slots")
+	_expect(west.neighbors.get("east") == east and east.neighbors.get("west") == west, "legacy fallback preserves reciprocal east/west adjacency")
+	_expect(west.neighbors.get("south") == south and south.neighbors.get("north") == west, "legacy fallback preserves reciprocal north/south adjacency")
+	holder.queue_free()
+	await process_frame
+	await process_frame
+
 
 func _descriptor_for(report: Dictionary, first_id: String, second_id: String) -> Dictionary:
 	for descriptor_value in report.get("descriptors", {}).values():
