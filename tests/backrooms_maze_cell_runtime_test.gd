@@ -55,7 +55,9 @@ func _run() -> void:
 	_expect(runtime.call("get_cell_root", "2,0") != null, "newly required edge cells are attached after commit")
 
 	var saved: Dictionary = runtime.call("to_save_dict")
+	_expect(int(saved.get("schema_version", -1)) == 2, "runtime writes the versioned entity-spawn save schema")
 	_expect(int(saved.get("layout_algorithm_version", -1)) == 1, "runtime save is bound to the explicit maze algorithm version")
+	_expect(int(saved.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "runtime save persists the entity-spawn algorithm version")
 	var restored: Variant = RuntimeScript.new()
 	restored.force_metadata_only = true
 	root.add_child(restored)
@@ -64,12 +66,28 @@ func _run() -> void:
 	var restored_origin: Node3D = restored.call("get_cell_root", "0,0") as Node3D
 	_expect(restored_origin != null and restored_origin.get_meta("backrooms_open_edges") == origin_root.get_meta("backrooms_open_edges"), "restored origin reproduces the exact deterministic edge descriptor")
 	_expect(not bool(restored.call("is_active")) and not restored.visible, "restored destination remains hidden until explicitly activated")
+	_expect(int(restored_origin.get_meta("backrooms_entity_spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "restored cell root preserves the spawn algorithm version")
+
+	var legacy_payload: Dictionary = saved.duplicate(true)
+	legacy_payload["schema_version"] = 1
+	legacy_payload.erase("entity_spawn_algorithm_version")
+	var legacy_restored: Variant = RuntimeScript.new()
+	legacy_restored.force_metadata_only = true
+	root.add_child(legacy_restored)
+	_expect(bool(legacy_restored.call("load_save_dict", legacy_payload)), "legacy schema-one maze saves migrate using spawn algorithm version one")
+	var migrated_save: Dictionary = legacy_restored.call("to_save_dict")
+	_expect(int(migrated_save.get("schema_version", -1)) == 2 and int(migrated_save.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "legacy restore writes the explicit schema-two spawn version on the next save")
+	legacy_restored.queue_free()
 
 	var before_bad_restore: Array = restored.call("get_loaded_cell_keys")
 	var invalid_save: Dictionary = saved.duplicate(true)
 	invalid_save["layout_algorithm_version"] = 999
 	_expect(not bool(restored.call("load_save_dict", invalid_save)), "unsupported layout algorithm version is rejected")
 	_expect(restored.call("get_loaded_cell_keys") == before_bad_restore, "rejected restore leaves the existing runtime roots unchanged")
+	var unsupported_spawn_save: Dictionary = saved.duplicate(true)
+	unsupported_spawn_save["entity_spawn_algorithm_version"] = EntityDirectorScript.SPAWN_ALGORITHM_VERSION + 1
+	_expect(not bool(restored.call("load_save_dict", unsupported_spawn_save)), "unsupported entity-spawn algorithm versions are rejected")
+	_expect(restored.call("get_loaded_cell_keys") == before_bad_restore, "unsupported spawn version leaves the existing runtime roots unchanged")
 
 	_expect(bool(restored.call("activate_destination")), "prepared runtime can be explicitly activated")
 	_expect(bool(restored.call("is_active")) and restored.visible, "activation enables the prepared destination")
@@ -120,6 +138,7 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_expect(found_root.get_meta("spawn_world_seed") == world_seed, "%s root records its world seed" % entity_id)
 			_expect(found_root.get_meta("spawn_level_id") == level_id, "%s root records its level" % entity_id)
 			_expect(int(found_root.get_meta("spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s root records its spawn algorithm version" % entity_id)
+			_expect(int(found_cell_root.get_meta("backrooms_entity_spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s cell root records the spawn algorithm version" % entity_id)
 			_expect(found_root.position.x >= -4.0 and found_root.position.x <= 4.0 and found_root.position.z >= -4.0 and found_root.position.z <= 4.0, "%s root stays inside its owning cell" % entity_id)
 			_expect(found_root.get_children().is_empty(), "%s production root remains renderer-independent until visual factory integration" % entity_id)
 			if entity_id == "window":
@@ -187,6 +206,7 @@ func _assert_spawn_save_restore(
 		if restored_entity_root != null:
 			_expect(restored_entity_root.position.is_equal_approx(original_position), "%s position is deterministic across save restore" % entity_id)
 			_expect(restored_entity_root.get_meta("spawn_world_seed") == world_seed, "%s restored root keeps the same world seed" % entity_id)
+			_expect(int(restored_entity_root.get_meta("spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s restored root keeps the saved spawn algorithm version" % entity_id)
 	restored_runtime.queue_free()
 
 func _assert_spawn_repeat_staging(
