@@ -67,3 +67,24 @@
 - Expanded settings profile tests for defaults, valid shadow state, and out-of-range resolution index; expanded integration tests for saved resolution, restored dropdown selection, and independent shadow state.
 - Latest code commits in this follow-up: `333ed896` wallpaper, `06bd68f3` settings persistence, `f4452b90` display/labels, `406458f6` geometry default, `9db8726a` compatibility, `46ef882f` profile tests, `0daf395b` independent shadow/geometry flags, `625629ef` integration tests.
 - Validation boundary: the commits are present on main, but the updated Godot 4.3 headless workflow must finish before claiming these tests pass. Manual graphical checks (windowed/fullscreen resolution, wallpaper mipmapping, shadows on/off) and iPhone testing remain outstanding.
+
+
+## 2026-11-11 — 層級限定實體生成第一階段
+
+- 新增 `systems/BackroomsEntityDirector.gd`，以層級白名單決定可生成的實體；未知層級預設不生成任何實體。
+- Level 1 目前只允許 `window` 與 `smiler`，其他已知層級暫時維持空白名單，不會繼承 Level 1 的實體。
+- 生成結果以層級與格子座標做穩定雜湊，同一格卸載後重新載入仍會得到相同結果。
+- 後室場景新增窗戶外觀與笑魘剪影／眼睛的初版視覺物件。窗戶只會附著在封閉的北側牆面，避免浮在通道中央。
+- 本階段實體是靜態視覺生成原型，尚未加入追逐、巡邏、感知、傷害或逃脫 AI。
+- 新增 `tests/backrooms_entity_director_test.gd`，驗證 Level 1 白名單、其他層級隔離、未知層級 fail-closed 與生成穩定性；已加入 Godot headless CI。
+- 驗證狀態：程式與測試已提交，等待最新 main workflow；尚未完成圖形模式人工確認。
+
+
+## 2026-11-11 — Level 2／Level 3 實體擴充
+
+- Level 1 維持只生成 Window 與 Smiler；Level 0 維持空白名單。
+- Level 2 新增 Hound 與 Skin-Stealer；Level 3 新增 Clump 與 Faceling。各層級使用獨立白名單，不會跨層級混生。
+- 新增四種實體的程序化佔位外觀，並沿用以格子座標決定的穩定生成結果。
+- 目前仍是靜態原型外觀，尚未包含追逐、巡邏、感知、攻擊或互動 AI；生成機率是遊戲原型平衡值，不代表所有後室資料版本的固定設定。
+- 更新 director 測試，驗證 Level 2／3 名單與兩種實體皆可在測試格子範圍內出現。
+- 驗證狀態：程式與測試已提交，需等待最新 Godot headless CI；未完成圖形模式人工遊玩。
