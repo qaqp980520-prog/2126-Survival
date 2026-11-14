@@ -210,7 +210,7 @@ func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
 		var root_value: Variant = _build_cell_root(
 			descriptors_by_key[key],
 			float(candidate.get("cell_size")),
-			int(candidate.get("entity_spawn_algorithm_version", 0))
+			int(candidate.get("entity_spawn_algorithm_version"))
 		)
 		if not (root_value is Node3D) or root_value.get_parent() != null:
 			if root_value is Node3D and is_instance_valid(root_value):
