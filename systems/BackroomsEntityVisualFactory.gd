@@ -324,33 +324,33 @@ static func _duller_specs() -> Array[Dictionary]:
 static func _deathmoth_specs() -> Array[Dictionary]:
 	var specs: Array[Dictionary] = []
 	for wing_index in range(2):
-		var side: float = -1.0 if wing_index == 0 else 1.0
+		var wing_side: float = -1.0 if wing_index == 0 else 1.0
 		specs.append(_box_spec(
 			"Wing_%d" % wing_index,
-			Vector3(side * 0.48, 0.08, 0.0),
+			Vector3(wing_side * 0.48, 0.08, 0.0),
 			Vector3(0.86, 0.045, 0.54),
 			"wing",
-			Vector3(0.0, 0.0, side * 0.18)
+			Vector3(0.0, 0.0, wing_side * 0.18)
 		))
 		specs.append(_box_spec(
 			"RearWing_%d" % wing_index,
-			Vector3(side * 0.34, 0.02, -0.28),
+			Vector3(wing_side * 0.34, 0.02, -0.28),
 			Vector3(0.58, 0.04, 0.38),
 			"wing",
-			Vector3(0.0, 0.0, side * 0.12)
+			Vector3(0.0, 0.0, wing_side * 0.12)
 		))
 	specs.append(_box_spec("Abdomen", Vector3(0.0, 0.0, -0.22), Vector3(0.32, 0.34, 0.55), "body"))
 	specs.append(_box_spec("Thorax", Vector3(0.0, 0.02, 0.15), Vector3(0.36, 0.38, 0.36), "body"))
 	specs.append(_box_spec("Head", Vector3(0.0, 0.05, 0.42), Vector3(0.24, 0.24, 0.22), "body"))
 	for eye_index in range(2):
-		var side: float = -1.0 if eye_index == 0 else 1.0
-		specs.append(_sphere_spec("CompoundEye_%d" % eye_index, Vector3(side * 0.1, 0.08, 0.53), 0.055, "eye", 0.11))
-		specs.append(_box_spec("Antenna_%d" % eye_index, Vector3(side * 0.09, 0.24, 0.57), Vector3(0.035, 0.28, 0.035), "body"))
+		var eye_side: float = -1.0 if eye_index == 0 else 1.0
+		specs.append(_sphere_spec("CompoundEye_%d" % eye_index, Vector3(eye_side * 0.1, 0.08, 0.53), 0.055, "eye", 0.11))
+		specs.append(_box_spec("Antenna_%d" % eye_index, Vector3(eye_side * 0.09, 0.24, 0.57), Vector3(0.035, 0.28, 0.035), "body"))
 		for leg_index in range(3):
 			var leg_z: float = 0.24 - float(leg_index) * 0.22
 			specs.append(_box_spec(
 				"Leg_%d_%d" % [eye_index, leg_index],
-				Vector3(side * 0.16, -0.2, leg_z),
+				Vector3(eye_side * 0.16, -0.2, leg_z),
 				Vector3(0.045, 0.3, 0.045),
 				"body"
 			))
