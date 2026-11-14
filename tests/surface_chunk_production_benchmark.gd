@@ -846,8 +846,9 @@ func _emit_metrics(
 		"addition_validation_usec",
 		"neighbor_discovery_usec",
 		"changed_descriptor_build_usec",
-		"edge_diff_usec",
 		"local_descriptor_build_usec",
+		"changed_descriptor_projection_usec",
+		"edge_diff_usec",
 		"corner_graph_delta_usec",
 		"closure_snapshot_usec",
 		"plan_storage_usec"
