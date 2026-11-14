@@ -21,6 +21,7 @@ func _initialize() -> void:
 func _run() -> void:
 	for entity_id in EXPECTED_PART_COUNTS.keys():
 		_assert_entity_visual_contract(str(entity_id), int(EXPECTED_PART_COUNTS[entity_id]))
+	_assert_geometry_specs_are_isolated()
 	_assert_window_wall_orientations()
 	_assert_invalid_specs_are_rejected()
 	_assert_duplicate_visual_attachment_is_rejected()
@@ -47,6 +48,23 @@ func _assert_entity_visual_contract(entity_id: String, expected_parts: int) -> v
 		_expect(str(spec.get("kind", "")) in ["box", "sphere"], "%s uses a supported primitive geometry kind" % entity_id)
 		_expect(typeof(spec.get("position", null)) == TYPE_VECTOR3, "%s part has a Vector3 position" % entity_id)
 		_expect(typeof(spec.get("rotation", null)) == TYPE_VECTOR3, "%s part has a Vector3 rotation" % entity_id)
+
+func _assert_geometry_specs_are_isolated() -> void:
+	var caller_specs: Array[Dictionary] = FactoryScript.get_geometry_specs("duller")
+	var baseline_specs: Array[Dictionary] = FactoryScript.get_geometry_specs("duller")
+	_expect(not caller_specs.is_empty() and not baseline_specs.is_empty(), "Duller exposes a canonical geometry contract")
+	if caller_specs.is_empty() or baseline_specs.is_empty():
+		return
+	caller_specs[0]["size"] = Vector3.ZERO
+	var fresh_specs: Array[Dictionary] = FactoryScript.get_geometry_specs("duller")
+	_expect(
+		FactoryScript.are_geometry_specs_valid_for_testing("duller", fresh_specs),
+		"mutating a returned geometry spec does not corrupt the next factory result"
+	)
+	_expect(
+		fresh_specs[0].get("size") == baseline_specs[0].get("size"),
+		"geometry specs are rebuilt independently for each caller"
+	)
 
 func _assert_window_wall_orientations() -> void:
 	var north: Dictionary = FactoryScript.get_window_yaw_for_testing(Vector2i(0, -1))
