@@ -4,6 +4,7 @@ class_name BackroomsMazeCellRuntime
 ## SurfaceWorld-owned scene runtime for the renderer-independent Backrooms maze stream contract.
 ## New cell roots are built detached, the logical window is committed, then old roots are retired.
 const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
+const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -237,10 +238,78 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float) -> Node3D:
 	root.set_meta("backrooms_world_seed", int(descriptor.get("world_seed", 0)))
 	root.set_meta("backrooms_layout_algorithm_version", int(descriptor.get("layout_algorithm_version", 0)))
 	root.set_meta("backrooms_open_edges", edges_value.duplicate(true))
+	if not _build_cell_entity_roots(
+		root,
+		cell,
+		str(descriptor.get("level_id", "")),
+		int(descriptor.get("world_seed", 0)),
+		cell_size,
+		edges_value
+	):
+		root.free()
+		return null
 	if _is_metadata_only():
 		return root
 	_build_cell_geometry(root, edges_value, cell_size)
 	return root
+
+func _build_cell_entity_roots(
+	cell_root: Node3D,
+	cell: Vector2i,
+	level_id: String,
+	world_seed: int,
+	cell_size: float,
+	open_edges: Dictionary
+) -> bool:
+	var descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(
+		level_id,
+		cell,
+		cell_size,
+		open_edges
+	)
+	var allowed_entities: Array[String] = EntityDirectorScript.get_allowed_entities(level_id)
+	var seen: Dictionary = {}
+	var spawn_ids: Array[String] = []
+	for descriptor in descriptors:
+		var entity_id: String = str(descriptor.get("entity_id", ""))
+		var descriptor_cell: Variant = descriptor.get("cell", null)
+		var position_value: Variant = descriptor.get("local_position", null)
+		var wall_value: Variant = descriptor.get("wall_direction", null)
+		if entity_id.is_empty() or seen.has(entity_id) or not allowed_entities.has(entity_id):
+			return false
+		if not (descriptor_cell is Vector2i) or descriptor_cell != cell:
+			return false
+		if not (position_value is Vector3) or not (wall_value is Vector2i):
+			return false
+		var local_position: Vector3 = position_value
+		var wall_direction: Vector2i = wall_value
+		if not _is_finite_vector3(local_position):
+			return false
+		if absf(local_position.x) > cell_size * 0.5 or absf(local_position.z) > cell_size * 0.5:
+			return false
+		if entity_id == "window" and wall_direction == Vector2i.ZERO:
+			return false
+		if entity_id != "window" and wall_direction != Vector2i.ZERO:
+			return false
+		var entity_root := Node3D.new()
+		entity_root.name = "Entity_" + entity_id
+		entity_root.position = local_position
+		entity_root.set_meta("backrooms_entity_id", entity_id)
+		entity_root.set_meta("spawn_cell", cell)
+		entity_root.set_meta("spawn_world_seed", world_seed)
+		entity_root.set_meta("spawn_level_id", level_id)
+		entity_root.set_meta("spawn_algorithm_version", int(descriptor.get("spawn_algorithm_version", 0)))
+		entity_root.set_meta("backrooms_wall_direction", wall_direction)
+		entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
+		cell_root.add_child(entity_root)
+		seen[entity_id] = true
+		spawn_ids.append(entity_id)
+	cell_root.set_meta("backrooms_entity_spawn_ids", spawn_ids.duplicate())
+	cell_root.set_meta(
+		"backrooms_entity_spawn_algorithm_version",
+		EntityDirectorScript.SPAWN_ALGORITHM_VERSION
+	)
+	return true
 
 func _build_cell_geometry(root: Node3D, open_edges: Dictionary, cell_size: float) -> void:
 	var floor_mesh := MeshInstance3D.new()
