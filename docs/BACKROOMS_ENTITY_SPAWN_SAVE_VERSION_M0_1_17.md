@@ -21,7 +21,7 @@ Persist the deterministic entity-spawn algorithm version in the Backrooms maze s
   - Requires descriptor/version parity and a supported algorithm before building entity roots.
   - Records the same version on the cell root and every entity root.
   - Reconstructs legacy schema-1 saves using version 1, then writes schema 2 on the next save.
-- Tests cover direct version support/rejection, schema-1 migration, schema-2 persistence, missing/unsupported version rejection, unchanged live roots on rejected restore, and production root metadata parity.
+- Tests cover direct version support/rejection, schema-1 migration, schema-2 persistence, missing/unsupported version rejection, unchanged live roots on rejected restore, production root metadata parity, and migration through the active BackroomsLocationSession/TransitionManager restore path.
 
 ## Files
 
@@ -30,6 +30,7 @@ Persist the deterministic entity-spawn algorithm version in the Backrooms maze s
 - `systems/BackroomsMazeCellRuntime.gd`
 - `tests/backrooms_maze_stream_state_test.gd`
 - `tests/backrooms_maze_cell_runtime_test.gd`
+- `tests/backrooms_runtime_session_integration_test.gd`
 - `docs/BACKROOMS_ENTITY_SPAWN_SAVE_VERSION_M0_1_17.md`
 
 ## Dependencies and import
