@@ -34,6 +34,9 @@ const ENTITY_POSITION_SALTS := {
 	"deathmoth": [4188, 4189]
 }
 
+static func is_spawn_algorithm_version_supported(version: int) -> bool:
+	return version == SPAWN_ALGORITHM_VERSION
+
 static func get_allowed_entities(level_name: String) -> Array[String]:
 	var result: Array[String] = []
 	var configured: Variant = LEVEL_ENTITY_RULES.get(level_name, [])
@@ -59,9 +62,12 @@ static func get_cell_spawn_descriptors(
 	level_name: String,
 	cell: Vector2i,
 	cell_size: float,
-	open_edges: Dictionary
+	open_edges: Dictionary,
+	spawn_algorithm_version: int = SPAWN_ALGORITHM_VERSION
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	if not is_spawn_algorithm_version_supported(spawn_algorithm_version):
+		return result
 	if not is_finite(cell_size) or cell_size <= 0.0:
 		return result
 	var allowed := get_allowed_entities(level_name)
@@ -76,7 +82,7 @@ static func get_cell_spawn_descriptors(
 			"cell": cell,
 			"local_position": placement.get("local_position", Vector3.ZERO),
 			"wall_direction": placement.get("wall_direction", Vector2i.ZERO),
-			"spawn_algorithm_version": SPAWN_ALGORITHM_VERSION
+			"spawn_algorithm_version": spawn_algorithm_version
 		})
 	return result
 
