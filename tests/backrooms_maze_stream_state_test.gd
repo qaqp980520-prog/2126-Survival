@@ -14,6 +14,15 @@ func _initialize() -> void:
 
 func _test_configuration_and_initial_window() -> void:
 	assert(Layout.ALGORITHM_VERSION == 1)
+	assert(EntityDirector.is_spawn_algorithm_version_supported(EntityDirector.SPAWN_ALGORITHM_VERSION))
+	assert(not EntityDirector.is_spawn_algorithm_version_supported(EntityDirector.SPAWN_ALGORITHM_VERSION + 1))
+	assert(EntityDirector.get_cell_spawn_descriptors(
+		"Level 1",
+		Vector2i.ZERO,
+		8.0,
+		{},
+		EntityDirector.SPAWN_ALGORITHM_VERSION + 1
+	).is_empty())
 	var state = StreamState.new()
 	assert(not state.configure("Level 6", 20261113, 8.0, 1))
 	assert(not state.configure("Level 1", 20261113, 8.0, 9))
