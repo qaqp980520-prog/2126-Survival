@@ -5,6 +5,7 @@ class_name BackroomsMazeCellRuntime
 ## New cell roots are built detached, the logical window is committed, then old roots are retired.
 const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
+const EntityVisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -313,6 +314,8 @@ func _build_cell_entity_roots(
 		entity_root.set_meta("backrooms_wall_direction", wall_direction)
 		entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
 		cell_root.add_child(entity_root)
+		if not _is_metadata_only() and not bool(EntityVisualFactoryScript.attach_visuals(entity_root)):
+			return false
 		seen[entity_id] = true
 		spawn_ids.append(entity_id)
 	cell_root.set_meta("backrooms_entity_spawn_ids", spawn_ids.duplicate())
