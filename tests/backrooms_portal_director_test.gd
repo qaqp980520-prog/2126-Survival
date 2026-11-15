@@ -205,6 +205,17 @@ func _test_invalid_save_is_atomic() -> void:
     bad["active_portal"]["spawn_bounds"] = [1000000000000.0, 0.0, 1.0, 1000.0]
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+    var valid_rng_states: Array[String] = [
+        "9223372036854775807",
+        "-9223372036854775808"
+    ]
+    for valid_state in valid_rng_states:
+        bad = before.duplicate(true)
+        bad["rng_state"] = valid_state
+        assert(director.load_save_dict(bad), "A canonical signed 64-bit RNG boundary state must load.")
+        assert(director.to_save_dict()["rng_state"] == valid_state)
+        assert(director.load_save_dict(before), "The original save must be restorable after a boundary-state probe.")
+        assert(director.to_save_dict() == before)
     var invalid_rng_states: Array[String] = [
         "invalid",
         "999999999999999999999999999999999999999999",
