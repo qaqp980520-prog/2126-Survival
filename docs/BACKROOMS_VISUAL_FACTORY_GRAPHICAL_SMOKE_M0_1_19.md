@@ -32,7 +32,7 @@ It also prepares Level 0 and verifies that its spawn list remains empty. For eac
 - the production cell runtime can activate the staged cell;
 - the root viewport produces a non-empty rendered image with non-background pixel samples;
 - each of the eight entities is isolated from the other seven and rendered separately; every isolated frame must contain its own non-background samples, preventing one visible model from masking an off-screen or invisible model;
-- each production entity root is recentered using a world-space translation of the owning runtime (robust to intermediate cell/registry parent transforms); the camera turns to face the Window's actual north/west wall normal and zooms for isolated inspection;
+- the wall-mounted Window alone is recentered using a world-space translation of its owning runtime (robust to intermediate cell/registry parent transforms); the other seven entities retain their production spawn offsets, which already render correctly; the camera turns to face the Window's actual north/west wall normal and zooms for isolated inspection;
 - the eight isolated frames are downsampled into a 4-by-2 PNG montage artifact for direct visual review;
 - a PNG frame is saved to `/tmp/backrooms-visual-factory-render-smoke.png` and uploaded as a workflow artifact.
 
