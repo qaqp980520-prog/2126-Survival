@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Add a real graphical-mode validation path for the production Backrooms entity visual factory. The existing renderer-independent contract test intentionally runs with Godot's dummy/headless renderer and does not instantiate MeshInstance3D. This smoke test complements that contract test by running Godot 4.3 with an X11 display supplied by Xvfb and Mesa llvmpipe software OpenGL.
+Add a real graphical-mode validation path for the production Backrooms entity visual factory and its production maze-runtime integration. The existing renderer-independent contract test intentionally runs with Godot's dummy/headless renderer and does not instantiate MeshInstance3D. This smoke test complements that contract test by running Godot 4.3 with an X11 display supplied by Xvfb and Mesa llvmpipe software OpenGL.
 
 ## Files
 
@@ -13,24 +13,31 @@ Add a real graphical-mode validation path for the production Backrooms entity vi
 ## Dependencies
 
 - Parent PR #365: `feat/backrooms-production-entity-visual-factory-2026-11-15`
+- `systems/BackroomsMazeCellRuntime.gd`
+- `systems/BackroomsEntityDirector.gd`
 - `systems/BackroomsEntityVisualFactory.gd`
 - Godot 4.3 project configured for `gl_compatibility`
 - GitHub Actions runner with Xvfb and Mesa software rendering.
 
 ## Test behavior
 
-The test refuses to proceed when `DisplayServer.get_name()` is `headless`. It creates a lit 3D stage, attaches all eight production entity IDs through `BackroomsEntityVisualFactory.attach_visuals()`, and verifies:
+The test refuses to proceed when `DisplayServer.get_name()` is `headless`. It uses a fixed world seed and the production `BackroomsEntityDirector` to locate deterministic spawn cells, then calls the real `BackroomsMazeCellRuntime.prepare_destination()` and `activate_destination()` path for all eight production IDs across Levels 1–5.
 
-- every production entity publishes its `Visuals` subtree;
-- the expected number of MeshInstance3D children is present (58 total across eight entities);
-- every child has a non-null mesh, at least one renderable surface, a Material override, and non-zero local bounds;
-- the north-owned Window uses the expected orientation;
+It also prepares Level 0 and verifies that its spawn list remains empty. For each target entity, the test verifies:
+
+- the production runtime creates the deterministic entity root and preserves level, seed, spawn-algorithm and visual-factory metadata;
+- the runtime attaches the expected `Visuals` subtree through the production factory;
+- the expected number of MeshInstance3D children is present (58 target parts total across eight entities);
+- every target child has a non-null mesh, at least one renderable surface, a Material override, and non-zero local bounds;
+- the production cell runtime can activate the staged cell;
 - the root viewport produces a non-empty rendered image with non-background pixel samples;
 - a PNG frame is saved to `/tmp/backrooms-visual-factory-render-smoke.png` and uploaded as a workflow artifact.
 
+The test hides the production floor and wall meshes only in the smoke scene so the eight target entity silhouettes can be sampled without overlapping cell architecture. Production runtime and factory code are not modified by the test.
+
 ## Import and execution
 
-No project import or asset migration is required. The existing `godot-validation.yml` workflow checks out the PR candidate and includes a targeted graphical job. The job runs only for this graphical-smoke PR title (or manual workflow dispatch), installs Xvfb and Mesa packages in the Godot 4.3 CI container, and runs:
+No project import or asset migration is required. The existing `godot-validation.yml` workflow includes a title-gated graphical job for this PR. The job installs Xvfb and Mesa packages in the Godot 4.3 CI container, then runs:
 
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
@@ -39,23 +46,23 @@ godot --path . --rendering-method gl_compatibility \
 --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd
 ```
 
-The existing workflow's pull-request path filter includes the changed workflow file, so this PR triggers the established workflow. The graphical job is title-gated to avoid running for unrelated PRs and can also be run with workflow_dispatch.
+The existing workflow's pull-request path filter includes `.github/workflows/godot-validation.yml`, and the graphical job is title-gated to avoid running for unrelated PRs. The job can also be run with workflow_dispatch.
 
 ## Validation status
 
 - Source branch starts at PR #365 exact HEAD `50f878a1afc6371ec3bf0311dbbb04b4d5562111`.
-- The branch currently contains the graphical smoke script, the targeted job in the existing validation workflow, and this version record.
-- No graphical test result is claimed until the new PR's exact-head workflow completes successfully.
-- The existing PR #365 headless contract gate remains separate and continues to validate geometry/material semantics without creating MeshInstance3D under the dummy renderer.
+- The branch contains the production-runtime graphical smoke script, targeted workflow job, and this version record.
+- The exact-head graphical workflow has not completed; no graphical pass is claimed.
+- The parent PR #365 headless contract gate remains independently successful at 559/559.
 
 ## Limits
 
-This is a CI software-renderer smoke test, not a hardware GPU or mobile-device benchmark. It does not validate iPhone rendering, frame-time performance, transparency quality, Z-fighting across production scenes, collision, navigation, AI, animation, or gameplay readability. The captured image is evidence of a rendered frame, not a substitute for visual review.
+This is a CI software-renderer smoke test, not a hardware GPU or mobile-device benchmark. It does not validate iPhone rendering, frame-time performance, transparency quality, production-scene Z-fighting, collision response, navigation, AI, animation, or gameplay readability. The captured image is evidence of a rendered frame, not a substitute for human visual review.
 
 ## Next steps
 
-1. Complete the graphical smoke workflow on the exact PR head.
+1. Complete the graphical smoke job on the exact PR head.
 2. Inspect the uploaded PNG artifact and any renderer warnings.
-3. If successful, keep this workflow as a targeted regression gate for future visual-factory changes.
-4. Arrange graphical/device QA before integrating PR #365 through its parent-first chain (#345 → #363 → #364 → #365).
+3. If successful, retain this as a targeted regression gate for future production visual-factory changes.
+4. Arrange hardware/device QA before integrating PR #365 through its parent-first chain (#345 → #363 → #364 → #365).
 5. Keep main unchanged until independent review and required validation are complete.
