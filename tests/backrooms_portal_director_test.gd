@@ -14,6 +14,7 @@ func _initialize() -> void:
     _test_active_portal_survives_spawn_bounds_change()
     _test_configurable_spawn_window_supports_loaded_surface_window()
     _test_invalid_save_is_atomic()
+    _test_rng_state_signed_64bit_validation()
     print("BackroomsPortalDirector tests passed.")
     quit()
 
@@ -204,10 +205,23 @@ func _test_invalid_save_is_atomic() -> void:
     bad["active_portal"]["spawn_bounds"] = [1000000000000.0, 0.0, 1.0, 1000.0]
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+    var valid_rng_states: Array[String] = [
+        "9223372036854775807",
+        "-9223372036854775808"
+    ]
+    for valid_state in valid_rng_states:
+        bad = before.duplicate(true)
+        bad["rng_state"] = valid_state
+        assert(director.load_save_dict(bad), "A canonical signed 64-bit RNG boundary state must load.")
+        assert(director.to_save_dict()["rng_state"] == valid_state)
+        assert(director.load_save_dict(before), "The original save must be restorable after a boundary-state probe.")
+        assert(director.to_save_dict() == before)
     var invalid_rng_states: Array[String] = [
         "invalid",
         "999999999999999999999999999999999999999999",
         "-999999999999999999999999999999999999999999",
+        "9223372036854775808",
+        "-9223372036854775809",
         "+1",
         "01",
         "-0"
@@ -221,3 +235,20 @@ func _test_invalid_save_is_atomic() -> void:
     bad["rng_state"] = 1
     assert(not director.load_save_dict(bad))
     assert(director.to_save_dict() == before)
+
+func _test_rng_state_signed_64bit_validation() -> void:
+    var director = Director.new(2718, BOUNDS, 40.0)
+    director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
+    var before: Dictionary = director.to_save_dict()
+    var valid_states: Array[String] = [
+        "9223372036854775807",
+        "-9223372036854775808"
+    ]
+    for state in valid_states:
+        var candidate: Dictionary = before.duplicate(true)
+        candidate["rng_state"] = state
+        assert(director.load_save_dict(candidate), "Signed 64-bit boundary states must round-trip.")
+        assert(director.to_save_dict()["rng_state"] == state)
+        assert(director.load_save_dict(before), "The original state must be restorable after a boundary probe.")
+        assert(director.to_save_dict() == before)
+
