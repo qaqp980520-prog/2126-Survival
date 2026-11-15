@@ -99,7 +99,11 @@ func _run() -> void:
 		var viewport_aspect: float = float(viewport.size.x) / float(viewport.size.y)
 		var required_camera_size: float = maxf(entity_bounds.size.y, horizontal_extent / viewport_aspect)
 		smoke_camera.size = maxf(required_camera_size * CAMERA_FRAME_MARGIN, MIN_CAMERA_SIZE)
-		if is_west_window:
+		var is_front_facing_entity: bool = entity_id == "smiler" or entity_id == "hound"
+		if is_front_facing_entity:
+			# Smiler and Hound facial features are authored on their local -Z face.
+			smoke_camera.position = camera_target + Vector3(0.0, 1.0, -18.0)
+		elif is_west_window:
 			smoke_camera.position = camera_target + Vector3(18.0, 3.0, 0.0)
 		else:
 			smoke_camera.position = camera_target + Vector3(0.0, 3.0, 18.0)
@@ -126,6 +130,8 @@ func _run() -> void:
 			var silhouette_center := Vector2(visible_bounds.position) + Vector2(visible_bounds.size) * 0.5
 			_expect(absf(silhouette_center.x - float(isolated_image.get_width()) * 0.5) <= float(isolated_image.get_width()) * 0.18, "%s rendered silhouette is horizontally centered" % rendered_entity_ids[entity_index])
 			_expect(absf(silhouette_center.y - float(isolated_image.get_height()) * 0.5) <= float(isolated_image.get_height()) * 0.18, "%s rendered silhouette is vertically centered" % rendered_entity_ids[entity_index])
+			if entity_id == "smiler" or entity_id == "hound":
+				_assert_directional_eye_features(entity_id, rendered_entities[entity_index], isolated_image)
 			print("RENDERED_ENTITY: %s visible_samples=%d bounds=%s" % [rendered_entity_ids[entity_index], isolated_samples, visible_bounds])
 			var thumbnail: Image = isolated_image.duplicate()
 			thumbnail.resize(320, 180, Image.INTERPOLATE_LANCZOS)
@@ -271,6 +277,46 @@ func _assert_entity_meshes(entity_id: String, entity_root: Node3D) -> void:
 		var bounds: AABB = mesh_instance.get_aabb()
 		_expect(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0, "%s production mesh has non-zero local bounds" % entity_id)
 		built_mesh_count += 1
+
+func _assert_directional_eye_features(entity_id: String, entity_root: Node3D, image: Image) -> void:
+	var visuals := entity_root.get_node_or_null("Visuals") as Node3D
+	_expect(visuals != null, "%s exposes a Visuals subtree for facial-feature validation" % entity_id)
+	if visuals == null:
+		return
+	for eye_index in range(2):
+		var eye_name: String = "Eye_%d" % eye_index
+		var eye := visuals.get_node_or_null(eye_name) as MeshInstance3D
+		_expect(eye != null, "%s contains %s geometry" % [entity_id, eye_name])
+		if eye == null:
+			continue
+		var eye_screen_position: Vector2 = smoke_camera.unproject_position(eye.global_position)
+		var eye_pixel_center := Vector2i(roundi(eye_screen_position.x), roundi(eye_screen_position.y))
+		var color_samples: int = _count_expected_eye_color_samples(image, eye_pixel_center, entity_id, 8)
+		_expect(
+			color_samples >= 3,
+			"%s %s renders its expected eye-color pixels from the authored -Z face (samples=%d)" % [entity_id, eye_name, color_samples]
+		)
+		print("EYE_FEATURE: %s %s screen=%s color_samples=%d" % [entity_id, eye_name, eye_screen_position, color_samples])
+
+func _count_expected_eye_color_samples(image: Image, center: Vector2i, entity_id: String, radius: int) -> int:
+	var sample_count: int = 0
+	var min_x: int = maxi(0, center.x - radius)
+	var max_x: int = mini(image.get_width() - 1, center.x + radius)
+	var min_y: int = maxi(0, center.y - radius)
+	var max_y: int = mini(image.get_height() - 1, center.y + radius)
+	for y in range(min_y, max_y + 1):
+		for x in range(min_x, max_x + 1):
+			var pixel: Color = image.get_pixel(x, y)
+			var is_expected_color: bool = false
+			if entity_id == "smiler":
+				# Warm yellow/amber emission from the Smiler eye material.
+				is_expected_color = pixel.r >= 0.52 and pixel.g >= 0.34 and pixel.b <= 0.62 and pixel.r > pixel.b * 1.15 and pixel.g > pixel.b * 1.05
+			elif entity_id == "hound":
+				# Red emission from the Hound eye material; exclude neutral background pixels.
+				is_expected_color = pixel.r >= 0.42 and pixel.g <= 0.42 and pixel.b <= 0.35 and pixel.r > pixel.g * 1.3
+			if is_expected_color:
+				sample_count += 1
+	return sample_count
 
 func _get_entity_world_bounds(entity_root: Node3D) -> AABB:
 	var visuals := entity_root.get_node_or_null("Visuals") as Node3D
