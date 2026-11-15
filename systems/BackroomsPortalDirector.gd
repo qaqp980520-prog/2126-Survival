@@ -129,6 +129,8 @@ func load_save_dict(data: Dictionary) -> bool:
     var saved_rng_state: Variant = data.get("rng_state", null)
     var restored_rng_state: int = 0
     if has_rng_state:
+        if not (saved_rng_state is String):
+            return false
         var rng_state_string: String = str(saved_rng_state)
         if not _is_canonical_int64_string(rng_state_string):
             return false
