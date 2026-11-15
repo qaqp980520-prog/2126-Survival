@@ -128,3 +128,14 @@ The graphical job previously depended on the PR title phrase `graphical entity v
 The explicit workflow_dispatch and title-based routes remain supported. This removes the accidental title-only skip for the current Backrooms test chain while avoiding the graphical job on unrelated PRs. Workflow change commit: `47d6d56f6781c453feb46a6f0de7562fec2f93b0`.
 
 A new exact-head run is required to validate the workflow change itself. No new pass is claimed for the updated workflow HEAD until its Full Gate and graphical job complete.
+
+
+## Run 272 — eye-pixel window and camera-depth guard
+
+- Parent PR #368 exact HEAD: `043132532e725b3a7827e6e23993a820cf2c5d12`; its exact-head workflow #43689642040 completed successfully: 559/559 repository validation steps, 560/560 GitHub job steps including setup/cleanup, 0 failures and 0 skipped.
+- Parent graphical job #132737375133 passed 9/9. Smiler Eye_0/Eye_1 each produced 289 near-white samples; Hound Eye_0/Eye_1 each produced 289 red samples. All eight production entities and 58 MeshInstance3D parts rendered. All 18 focused workflows passed.
+- New child PR #369 adds three guards for each of the four directional eye checks: the actual eye point must be in front of the diagnostic camera; the entire 17×17 sample window must fit inside the viewport (no edge-clamped partial windows); at least 25 of 289 pixels must match the expected eye color (raised from 3 based on the observed 289/289 exact-head result).
+- Files: `tests/backrooms_entity_visual_factory_render_smoke_test.gd` and this version record. No production geometry, material, runtime, spawn algorithm, save schema or gameplay code changes.
+- Dependencies/import: parent PR #368; Godot 4.3, Xvfb, Mesa llvmpipe; no asset import or save migration.
+- New exact-head graphical and Full Compatibility validation is pending. Do not claim the new threshold until the child workflow completes.
+- Limitations: software renderer only; hardware GPU, iPhone, transparency, collision, navigation, AI and animation remain untested.

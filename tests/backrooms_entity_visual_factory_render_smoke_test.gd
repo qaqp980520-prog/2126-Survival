@@ -30,6 +30,8 @@ const MIN_CAMERA_SIZE: float = 0.75
 const MIN_VISIBLE_WIDTH_RATIO: float = 0.10
 const MIN_VISIBLE_HEIGHT_RATIO: float = 0.20
 const MIN_VISIBLE_EDGE_MARGIN_RATIO: float = 0.015
+const EYE_PIXEL_SAMPLE_RADIUS: int = 8
+const MIN_EXPECTED_EYE_COLOR_SAMPLES: int = 25
 const SCREENSHOT_PATH := "/tmp/backrooms-visual-factory-render-smoke.png"
 
 var failures: Array[String] = []
@@ -289,14 +291,27 @@ func _assert_directional_eye_features(entity_id: String, entity_root: Node3D, im
 		_expect(eye != null, "%s contains %s geometry" % [entity_id, eye_name])
 		if eye == null:
 			continue
+		var eye_is_in_front: bool = not smoke_camera.is_position_behind(eye.global_position)
+		_expect(eye_is_in_front, "%s %s is in front of the diagnostic camera" % [entity_id, eye_name])
+		if not eye_is_in_front:
+			continue
 		var eye_screen_position: Vector2 = smoke_camera.unproject_position(eye.global_position)
 		var eye_pixel_center := Vector2i(roundi(eye_screen_position.x), roundi(eye_screen_position.y))
-		var color_samples: int = _count_expected_eye_color_samples(image, eye_pixel_center, entity_id, 8)
-		_expect(
-			color_samples >= 3,
-			"%s %s renders its expected eye-color pixels from the authored -Z face (samples=%d)" % [entity_id, eye_name, color_samples]
+		var sample_window_in_frame: bool = (
+			eye_pixel_center.x >= EYE_PIXEL_SAMPLE_RADIUS
+			and eye_pixel_center.y >= EYE_PIXEL_SAMPLE_RADIUS
+			and eye_pixel_center.x + EYE_PIXEL_SAMPLE_RADIUS < image.get_width()
+			and eye_pixel_center.y + EYE_PIXEL_SAMPLE_RADIUS < image.get_height()
 		)
-		print("EYE_FEATURE: %s %s screen=%s color_samples=%d" % [entity_id, eye_name, eye_screen_position, color_samples])
+		_expect(sample_window_in_frame, "%s %s has a complete 17x17 sample window inside the viewport" % [entity_id, eye_name])
+		if not sample_window_in_frame:
+			continue
+		var color_samples: int = _count_expected_eye_color_samples(image, eye_pixel_center, entity_id, EYE_PIXEL_SAMPLE_RADIUS)
+		_expect(
+			color_samples >= MIN_EXPECTED_EYE_COLOR_SAMPLES,
+			"%s %s renders at least %d expected eye-color pixels from the authored -Z face (samples=%d)" % [entity_id, eye_name, MIN_EXPECTED_EYE_COLOR_SAMPLES, color_samples]
+		)
+		print("EYE_FEATURE: %s %s screen=%s color_samples=%d minimum=%d" % [entity_id, eye_name, eye_screen_position, color_samples, MIN_EXPECTED_EYE_COLOR_SAMPLES])
 
 func _count_expected_eye_color_samples(image: Image, center: Vector2i, entity_id: String, radius: int) -> int:
 	var sample_count: int = 0
