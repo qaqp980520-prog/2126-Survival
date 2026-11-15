@@ -45,6 +45,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_expect(DisplayServer.get_name() != "headless", "graphical DisplayServer is active under Xvfb")
+	_assert_eye_sample_window_boundary_contract()
 	if DisplayServer.get_name() == "headless":
 		_finish_with_failure()
 		return
@@ -280,6 +281,30 @@ func _assert_entity_meshes(entity_id: String, entity_root: Node3D) -> void:
 		_expect(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0, "%s production mesh has non-zero local bounds" % entity_id)
 		built_mesh_count += 1
 
+func _assert_eye_sample_window_boundary_contract() -> void:
+	var viewport_size := Vector2i(1280, 720)
+	var radius: int = EYE_PIXEL_SAMPLE_RADIUS
+	_expect(_has_complete_eye_sample_window(Vector2i(radius, radius), viewport_size, radius), "17x17 sample window accepts the exact top-left inclusive boundary")
+	_expect(_has_complete_eye_sample_window(Vector2i(viewport_size.x - radius - 1, viewport_size.y - radius - 1), viewport_size, radius), "17x17 sample window accepts the exact bottom-right inclusive boundary")
+	_expect(not _has_complete_eye_sample_window(Vector2i(radius - 1, radius), viewport_size, radius), "17x17 sample window rejects one pixel beyond the left boundary")
+	_expect(not _has_complete_eye_sample_window(Vector2i(viewport_size.x - radius, radius), viewport_size, radius), "17x17 sample window rejects one pixel beyond the right boundary")
+	_expect(not _has_complete_eye_sample_window(Vector2i(radius, radius - 1), viewport_size, radius), "17x17 sample window rejects one pixel beyond the top boundary")
+	_expect(not _has_complete_eye_sample_window(Vector2i(radius, viewport_size.y - radius), viewport_size, radius), "17x17 sample window rejects one pixel beyond the bottom boundary")
+	_expect(not _has_complete_eye_sample_window(Vector2i(-1, radius), viewport_size, radius), "17x17 sample window rejects negative viewport coordinates")
+	_expect(not _has_complete_eye_sample_window(Vector2i(radius, radius), Vector2i.ZERO, radius), "17x17 sample window rejects an empty viewport")
+	_expect(not _has_complete_eye_sample_window(Vector2i(radius, radius), viewport_size, -1), "17x17 sample window rejects a negative radius")
+	_expect(not _has_complete_eye_sample_window(Vector2i(8, 8), Vector2i(16, 16), 8), "17x17 sample window rejects a viewport that is one pixel too small")
+
+func _has_complete_eye_sample_window(center: Vector2i, image_size: Vector2i, radius: int) -> bool:
+	if radius < 0 or image_size.x <= 0 or image_size.y <= 0:
+		return false
+	return (
+		center.x >= radius
+		and center.y >= radius
+		and center.x + radius < image_size.x
+		and center.y + radius < image_size.y
+	)
+
 func _assert_directional_eye_features(entity_id: String, entity_root: Node3D, image: Image) -> void:
 	var visuals := entity_root.get_node_or_null("Visuals") as Node3D
 	_expect(visuals != null, "%s exposes a Visuals subtree for facial-feature validation" % entity_id)
@@ -297,11 +322,10 @@ func _assert_directional_eye_features(entity_id: String, entity_root: Node3D, im
 			continue
 		var eye_screen_position: Vector2 = smoke_camera.unproject_position(eye.global_position)
 		var eye_pixel_center := Vector2i(roundi(eye_screen_position.x), roundi(eye_screen_position.y))
-		var sample_window_in_frame: bool = (
-			eye_pixel_center.x >= EYE_PIXEL_SAMPLE_RADIUS
-			and eye_pixel_center.y >= EYE_PIXEL_SAMPLE_RADIUS
-			and eye_pixel_center.x + EYE_PIXEL_SAMPLE_RADIUS < image.get_width()
-			and eye_pixel_center.y + EYE_PIXEL_SAMPLE_RADIUS < image.get_height()
+		var sample_window_in_frame: bool = _has_complete_eye_sample_window(
+			eye_pixel_center,
+			image.get_size(),
+			EYE_PIXEL_SAMPLE_RADIUS
 		)
 		_expect(sample_window_in_frame, "%s %s has a complete 17x17 sample window inside the viewport" % [entity_id, eye_name])
 		if not sample_window_in_frame:
