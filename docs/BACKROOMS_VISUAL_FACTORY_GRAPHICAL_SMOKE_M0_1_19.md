@@ -102,3 +102,8 @@ The exact-head graphical and Full Compatibility jobs for this child PR must comp
 - Validation status at commit creation: pending exact-head graphical smoke and Full Compatibility Gate. No pass is claimed until both jobs complete.
 - Limitations: software rendering only; hardware GPU, iPhone, transparency quality, collision, navigation, AI and animation remain outside this test.
 - Next: inspect the eye-color assertions on exact HEAD, correct any camera/color-threshold issues based on CI logs, then update the PR's validation record. Keep the parent-first chain and main unchanged.
+
+
+## Run 271 — graphical job routing guard
+
+The workflow's `backrooms-visual-render-smoke` job runs on pull requests only when the PR title contains the exact phrase `graphical entity visual factory smoke` (or on workflow_dispatch). PR #368 retains this phrase in its title so the graphical eye-color regression cannot be silently skipped by the workflow condition.
