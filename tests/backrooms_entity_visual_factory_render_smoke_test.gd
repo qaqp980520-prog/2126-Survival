@@ -3,17 +3,6 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
-const ENTITY_CAMERA_TARGET_HEIGHTS := {
-	"window": 0.0,
-	"smiler": 0.0,
-	"hound": 0.0,
-	"skin_stealer": 0.95,
-	"clump": 0.15,
-	"faceling": 0.9,
-	"duller": 1.0,
-	"deathmoth": 0.02
-}
-
 const ENTITY_PART_COUNTS := {
 	"window": 5,
 	"smiler": 3,
@@ -35,7 +24,12 @@ const LEVEL_ENTITY_RULES := {
 
 const WORLD_SEED: int = 20261115
 const CELL_SIZE: float = 8.0
-const BACKGROUND_COLOR := Color(0.035, 0.045, 0.060, 1.0)
+const BACKGROUND_COLOR := Color(0.24, 0.26, 0.30, 1.0)
+const CAMERA_FRAME_MARGIN: float = 1.45
+const MIN_CAMERA_SIZE: float = 0.75
+const MIN_VISIBLE_WIDTH_RATIO: float = 0.10
+const MIN_VISIBLE_HEIGHT_RATIO: float = 0.20
+const MIN_VISIBLE_EDGE_MARGIN_RATIO: float = 0.015
 const SCREENSHOT_PATH := "/tmp/backrooms-visual-factory-render-smoke.png"
 
 var failures: Array[String] = []
@@ -96,13 +90,21 @@ func _run() -> void:
 		for other_index in range(rendered_entities.size()):
 			rendered_entities[other_index].visible = other_index == entity_index
 		var entity_id: String = rendered_entity_ids[entity_index]
-		var camera_target: Vector3 = rendered_entities[entity_index].global_position + Vector3(0.0, float(ENTITY_CAMERA_TARGET_HEIGHTS[entity_id]), 0.0)
-		if entity_id == "window" and rendered_entities[entity_index].get_meta("backrooms_wall_direction", Vector2i.ZERO) == Vector2i(-1, 0):
+		var entity_bounds: AABB = _get_entity_world_bounds(rendered_entities[entity_index])
+		_expect(entity_bounds.size.length() > 0.0, "%s production geometry has a non-empty world-space frame" % entity_id)
+		var camera_target: Vector3 = entity_bounds.get_center()
+		var wall_direction: Vector2i = rendered_entities[entity_index].get_meta("backrooms_wall_direction", Vector2i.ZERO)
+		var is_west_window: bool = entity_id == "window" and wall_direction == Vector2i(-1, 0)
+		var horizontal_extent: float = entity_bounds.size.z if is_west_window else entity_bounds.size.x
+		var viewport_aspect: float = float(viewport.size.x) / float(viewport.size.y)
+		var required_camera_size: float = maxf(entity_bounds.size.y, horizontal_extent / viewport_aspect)
+		smoke_camera.size = maxf(required_camera_size * CAMERA_FRAME_MARGIN, MIN_CAMERA_SIZE)
+		if is_west_window:
 			smoke_camera.position = camera_target + Vector3(18.0, 3.0, 0.0)
 		else:
 			smoke_camera.position = camera_target + Vector3(0.0, 3.0, 18.0)
-		smoke_camera.size = 4.8
 		smoke_camera.look_at(camera_target, Vector3.UP)
+		print("CAMERA_FRAME: %s bounds=%s camera_size=%.3f" % [entity_id, entity_bounds, smoke_camera.size])
 		await process_frame
 		await RenderingServer.frame_post_draw
 		await process_frame
@@ -111,8 +113,20 @@ func _run() -> void:
 		_expect(isolated_image != null and not isolated_image.is_empty(), "%s isolated render returns an image" % rendered_entity_ids[entity_index])
 		if isolated_image != null and not isolated_image.is_empty():
 			var isolated_samples: int = _count_non_background_samples(isolated_image, 4)
-			_expect(isolated_samples > 3, "%s independently contributes visible pixels (samples=%d)" % [rendered_entity_ids[entity_index], isolated_samples])
-			print("RENDERED_ENTITY: %s visible_samples=%d" % [rendered_entity_ids[entity_index], isolated_samples])
+			var visible_bounds: Rect2i = _get_non_background_bounds(isolated_image, 2)
+			var minimum_width: int = int(ceil(float(isolated_image.get_width()) * MIN_VISIBLE_WIDTH_RATIO))
+			var minimum_height: int = int(ceil(float(isolated_image.get_height()) * MIN_VISIBLE_HEIGHT_RATIO))
+			var edge_margin_x: int = int(float(isolated_image.get_width()) * MIN_VISIBLE_EDGE_MARGIN_RATIO)
+			var edge_margin_y: int = int(float(isolated_image.get_height()) * MIN_VISIBLE_EDGE_MARGIN_RATIO)
+			_expect(isolated_samples >= 25, "%s contributes a substantial number of visible pixels (samples=%d)" % [rendered_entity_ids[entity_index], isolated_samples])
+			_expect(visible_bounds.size.x >= minimum_width, "%s rendered silhouette width is at least %d pixels (actual=%d)" % [rendered_entity_ids[entity_index], minimum_width, visible_bounds.size.x])
+			_expect(visible_bounds.size.y >= minimum_height, "%s rendered silhouette height is at least %d pixels (actual=%d)" % [rendered_entity_ids[entity_index], minimum_height, visible_bounds.size.y])
+			_expect(visible_bounds.position.x >= edge_margin_x and visible_bounds.end.x <= isolated_image.get_width() - edge_margin_x, "%s rendered silhouette has horizontal frame margin" % rendered_entity_ids[entity_index])
+			_expect(visible_bounds.position.y >= edge_margin_y and visible_bounds.end.y <= isolated_image.get_height() - edge_margin_y, "%s rendered silhouette has vertical frame margin" % rendered_entity_ids[entity_index])
+			var silhouette_center := Vector2(visible_bounds.position) + Vector2(visible_bounds.size) * 0.5
+			_expect(absf(silhouette_center.x - float(isolated_image.get_width()) * 0.5) <= float(isolated_image.get_width()) * 0.18, "%s rendered silhouette is horizontally centered" % rendered_entity_ids[entity_index])
+			_expect(absf(silhouette_center.y - float(isolated_image.get_height()) * 0.5) <= float(isolated_image.get_height()) * 0.18, "%s rendered silhouette is vertically centered" % rendered_entity_ids[entity_index])
+			print("RENDERED_ENTITY: %s visible_samples=%d bounds=%s" % [rendered_entity_ids[entity_index], isolated_samples, visible_bounds])
 			var thumbnail: Image = isolated_image.duplicate()
 			thumbnail.resize(320, 180, Image.INTERPOLATE_LANCZOS)
 			entity_montage.blit_rect(thumbnail, Rect2i(Vector2i.ZERO, thumbnail.get_size()), Vector2i((entity_index % 4) * 320, int(entity_index / 4) * 180))
@@ -157,6 +171,7 @@ func _add_lighting(stage: Node3D) -> void:
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-38.0, -24.0, 0.0)
 	key_light.light_energy = 1.8
+	key_light.shadow_enabled = false
 	stage.add_child(key_light)
 
 func _assert_level_zero_is_entity_free(stage: Node3D) -> void:
@@ -256,6 +271,40 @@ func _assert_entity_meshes(entity_id: String, entity_root: Node3D) -> void:
 		var bounds: AABB = mesh_instance.get_aabb()
 		_expect(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0, "%s production mesh has non-zero local bounds" % entity_id)
 		built_mesh_count += 1
+
+func _get_entity_world_bounds(entity_root: Node3D) -> AABB:
+	var visuals := entity_root.get_node_or_null("Visuals") as Node3D
+	if visuals == null:
+		return AABB()
+	var has_bounds: bool = false
+	var combined_bounds := AABB()
+	for part in visuals.get_children():
+		var mesh_instance := part as MeshInstance3D
+		if mesh_instance == null or mesh_instance.mesh == null:
+			continue
+		var part_bounds: AABB = mesh_instance.global_transform * mesh_instance.get_aabb()
+		combined_bounds = part_bounds if not has_bounds else combined_bounds.merge(part_bounds)
+		has_bounds = true
+	return combined_bounds if has_bounds else AABB()
+
+func _get_non_background_bounds(image: Image, stride: int = 2) -> Rect2i:
+	var min_x: int = image.get_width()
+	var min_y: int = image.get_height()
+	var max_x: int = -1
+	var max_y: int = -1
+	for y in range(0, image.get_height(), stride):
+		for x in range(0, image.get_width(), stride):
+			var pixel: Color = image.get_pixel(x, y)
+			var delta: float = absf(pixel.r - BACKGROUND_COLOR.r) + absf(pixel.g - BACKGROUND_COLOR.g) + absf(pixel.b - BACKGROUND_COLOR.b)
+			if delta <= 0.08:
+				continue
+			min_x = mini(min_x, x)
+			min_y = mini(min_y, y)
+			max_x = maxi(max_x, x)
+			max_y = maxi(max_y, y)
+	if max_x < min_x or max_y < min_y:
+		return Rect2i()
+	return Rect2i(Vector2i(min_x, min_y), Vector2i(max_x - min_x + 1, max_y - min_y + 1))
 
 func _count_non_background_samples(image: Image, stride: int = 8) -> int:
 	var visible_samples: int = 0
