@@ -3,6 +3,17 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
+const ENTITY_CAMERA_TARGET_HEIGHTS := {
+	"window": 0.0,
+	"smiler": 0.0,
+	"hound": 0.0,
+	"skin_stealer": 0.95,
+	"clump": 0.15,
+	"faceling": 0.9,
+	"duller": 1.0,
+	"deathmoth": 0.02
+}
+
 const ENTITY_PART_COUNTS := {
 	"window": 5,
 	"smiler": 3,
@@ -84,16 +95,14 @@ func _run() -> void:
 	for entity_index in range(rendered_entities.size()):
 		for other_index in range(rendered_entities.size()):
 			rendered_entities[other_index].visible = other_index == entity_index
-		if rendered_entity_ids[entity_index] == "window":
-			var wall_direction: Vector2i = rendered_entities[entity_index].get_meta("backrooms_wall_direction", Vector2i.ZERO)
-			if wall_direction == Vector2i(-1, 0):
-				smoke_camera.position = Vector3(18.0, 4.5, 0.0)
-			else:
-				smoke_camera.position = Vector3(0.0, 4.5, 18.0)
+		var entity_id: String = rendered_entity_ids[entity_index]
+		var camera_target: Vector3 = rendered_entities[entity_index].global_position + Vector3(0.0, float(ENTITY_CAMERA_TARGET_HEIGHTS[entity_id]), 0.0)
+		if entity_id == "window" and rendered_entities[entity_index].get_meta("backrooms_wall_direction", Vector2i.ZERO) == Vector2i(-1, 0):
+			smoke_camera.position = camera_target + Vector3(18.0, 3.0, 0.0)
 		else:
-			smoke_camera.position = Vector3(0.0, 4.5, 18.0)
+			smoke_camera.position = camera_target + Vector3(0.0, 3.0, 18.0)
 		smoke_camera.size = 4.8
-		smoke_camera.look_at(Vector3(0.0, 2.6, 0.0), Vector3.UP)
+		smoke_camera.look_at(camera_target, Vector3.UP)
 		await process_frame
 		await RenderingServer.frame_post_draw
 		await process_frame
@@ -195,9 +204,8 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			if entity_root == null:
 				continue
 
-			if entity_id == "window":
-				runtime.global_position += target_position - entity_root.global_position
-				_expect(entity_root.global_position.is_equal_approx(target_position), "Window smoke target is centered while preserving its production wall orientation")
+			entity_root.global_position = target_position
+			_expect(entity_root.global_position.is_equal_approx(target_position), "%s isolated render root is centered in world space" % entity_id)
 			_expect(entity_root.get_meta("backrooms_entity_id", "") == entity_id, "%s root preserves its production entity identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_level_id", "") == level_id, "%s root preserves its production level identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_world_seed", -1) == WORLD_SEED, "%s root preserves its deterministic world seed" % entity_id)
