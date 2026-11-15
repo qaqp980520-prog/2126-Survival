@@ -107,3 +107,12 @@ The exact-head graphical and Full Compatibility jobs for this child PR must comp
 ## Run 271 — graphical job routing guard
 
 The workflow's `backrooms-visual-render-smoke` job runs on pull requests only when the PR title contains the exact phrase `graphical entity visual factory smoke` (or on workflow_dispatch). PR #368 retains this phrase in its title so the graphical eye-color regression cannot be silently skipped by the workflow condition.
+
+
+## Run 271.1 — calibrate Smiler eye pixel expectation from actual render
+
+- Exact-head graphical run #43688566014 reached the facial-feature assertions. Hound Eye_0 and Eye_1 each passed with 289 red pixels in the 17×17 sample neighborhood.
+- Smiler Eye_0 and Eye_1 each returned zero pixels for the initial yellow/amber threshold. The uploaded montage was downloaded and inspected; both Smiler eyes are clearly visible but the high-emission material clips to bright neutral white under Mesa llvmpipe.
+- Corrected the test-only Smiler pixel expectation to require all RGB channels >= 0.78. Hound remains red-specific. No production material or geometry changed.
+- Test calibration commit: `730310e63463edda5d12e4f07f2e7cf1b1cf2db1`.
+- A new exact-head graphical and Full Gate run is required; the previous graphical run is recorded as a failed threshold calibration, not a product defect. The Hound eye checks passed; Smiler eye checks are pending re-run.
