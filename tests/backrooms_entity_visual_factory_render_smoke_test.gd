@@ -31,6 +31,7 @@ var failures: Array[String] = []
 var built_mesh_count: int = 0
 var rendered_entities: Array[Node3D] = []
 var rendered_entity_ids: Array[String] = []
+var smoke_camera: Camera3D
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -76,12 +77,22 @@ func _run() -> void:
 	if rendered_image != null and not rendered_image.is_empty():
 		var visible_samples: int = _count_non_background_samples(rendered_image)
 		_expect(visible_samples > 80, "rendered frame contains visible production entity pixels (samples=%d)" % visible_samples)
-		var save_error: Error = rendered_image.save_png(SCREENSHOT_PATH)
-		_expect(save_error == OK, "rendered frame screenshot is saved for artifact inspection")
 
+
+	var entity_montage := Image.create(1280, 360, false, Image.FORMAT_RGBA8)
+	entity_montage.fill(BACKGROUND_COLOR)
 	for entity_index in range(rendered_entities.size()):
 		for other_index in range(rendered_entities.size()):
 			rendered_entities[other_index].visible = other_index == entity_index
+		if rendered_entity_ids[entity_index] == "window":
+			var wall_direction: Vector2i = rendered_entities[entity_index].get_meta("backrooms_wall_direction", Vector2i.ZERO)
+			if wall_direction == Vector2i(-1, 0):
+				smoke_camera.position = Vector3(18.0, 4.5, 0.0)
+			else:
+				smoke_camera.position = Vector3(0.0, 4.5, 18.0)
+		else:
+			smoke_camera.position = Vector3(0.0, 4.5, 18.0)
+		smoke_camera.look_at(Vector3(0.0, 2.6, 0.0), Vector3.UP)
 		await process_frame
 		await RenderingServer.frame_post_draw
 		await process_frame
@@ -92,9 +103,14 @@ func _run() -> void:
 			var isolated_samples: int = _count_non_background_samples(isolated_image, 4)
 			_expect(isolated_samples > 3, "%s independently contributes visible pixels (samples=%d)" % [rendered_entity_ids[entity_index], isolated_samples])
 			print("RENDERED_ENTITY: %s visible_samples=%d" % [rendered_entity_ids[entity_index], isolated_samples])
+			var thumbnail: Image = isolated_image.duplicate()
+			thumbnail.resize(320, 180, Image.INTERPOLATE_LANCZOS)
+			entity_montage.blit_rect(thumbnail, Rect2i(Vector2i.ZERO, thumbnail.get_size()), Vector2i((entity_index % 4) * 320, int(entity_index / 4) * 180))
 
 	for entity_root in rendered_entities:
 		entity_root.visible = true
+	var montage_save_error: Error = entity_montage.save_png(SCREENSHOT_PATH)
+	_expect(montage_save_error == OK, "eight isolated entity frames are saved as a 4-by-2 montage artifact")
 
 	stage.queue_free()
 	await process_frame
@@ -119,7 +135,8 @@ func _add_lighting(stage: Node3D) -> void:
 	environment_node.environment = environment
 	stage.add_child(environment_node)
 
-	var camera := Camera3D.new()
+	smoke_camera = Camera3D.new()
+	var camera := smoke_camera
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 8.5
 	stage.add_child(camera)
@@ -151,7 +168,9 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 	runtime.name = "RenderSmokeRuntime_%s" % entity_id
 	stage.add_child(runtime)
 
-	var target_position := Vector3((float(slot % 4) - 1.5) * 2.5, float(int(slot / 4)) * 3.0, 0.0)
+	var target_position := Vector3((float(slot % 4) - 1.5) * 2.0, float(int(slot / 4)) * 3.0, 0.0)
+	if entity_id == "window":
+		target_position = Vector3(0.0, 1.2, 0.0)
 	for z in range(-40, 41):
 		for x in range(-40, 41):
 			var cell := Vector2i(x, z)
@@ -175,6 +194,8 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			if entity_root == null:
 				continue
 
+			runtime.position -= entity_root.position
+			_expect(entity_root.global_position.is_equal_approx(target_position), "%s smoke target is centered in the render stage" % entity_id)
 			_expect(entity_root.get_meta("backrooms_entity_id", "") == entity_id, "%s root preserves its production entity identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_level_id", "") == level_id, "%s root preserves its production level identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_world_seed", -1) == WORLD_SEED, "%s root preserves its deterministic world seed" % entity_id)
