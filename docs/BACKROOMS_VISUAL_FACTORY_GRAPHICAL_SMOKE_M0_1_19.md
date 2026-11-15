@@ -7,7 +7,7 @@ Add a real graphical-mode validation path for the production Backrooms entity vi
 ## Files
 
 - `tests/backrooms_entity_visual_factory_render_smoke_test.gd`
-- `.github/workflows/backrooms-visual-factory-render-smoke.yml`
+- `.github/workflows/godot-validation.yml` (targeted graphical job appended to the existing workflow)
 - This document.
 
 ## Dependencies
@@ -30,7 +30,7 @@ The test refuses to proceed when `DisplayServer.get_name()` is `headless`. It cr
 
 ## Import and execution
 
-No project import or asset migration is required. The workflow checks out the PR candidate, installs Xvfb and Mesa packages in the Godot 4.3 CI container, and runs:
+No project import or asset migration is required. The existing `godot-validation.yml` workflow checks out the PR candidate and includes a targeted graphical job. The job runs only for this graphical-smoke PR title (or manual workflow dispatch), installs Xvfb and Mesa packages in the Godot 4.3 CI container, and runs:
 
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
@@ -39,12 +39,12 @@ godot --path . --rendering-method gl_compatibility \
 --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd
 ```
 
-The workflow is path-filtered to the visual factory, its graphical smoke test, project renderer settings, and its own workflow file. It can also be started manually after the workflow exists on the repository's default branch.
+The existing workflow's pull-request path filter includes the changed workflow file, so this PR triggers the established workflow. The graphical job is title-gated to avoid running for unrelated PRs and can also be run with workflow_dispatch.
 
 ## Validation status
 
 - Source branch starts at PR #365 exact HEAD `50f878a1afc6371ec3bf0311dbbb04b4d5562111`.
-- The branch currently contains the graphical smoke script, workflow, and this version record.
+- The branch currently contains the graphical smoke script, the targeted job in the existing validation workflow, and this version record.
 - No graphical test result is claimed until the new PR's exact-head workflow completes successfully.
 - The existing PR #365 headless contract gate remains separate and continues to validate geometry/material semantics without creating MeshInstance3D under the dummy renderer.
 
