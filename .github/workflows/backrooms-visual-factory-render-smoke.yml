@@ -1,0 +1,61 @@
+name: Backrooms visual factory graphical smoke
+
+on:
+  pull_request:
+    paths:
+      - 'systems/BackroomsEntityVisualFactory.gd'
+      - 'tests/backrooms_entity_visual_factory_render_smoke_test.gd'
+      - 'project.godot'
+      - '.github/workflows/backrooms-visual-factory-render-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backrooms-visual-render-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  graphical-render-smoke:
+    name: Godot 4.3 software-rendered entity smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Install Xvfb and Mesa software renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends xvfb xauth libgl1-mesa-dri libglx-mesa0
+          command -v xvfb-run
+          command -v godot
+          godot --version
+
+      - name: Run actual MeshInstance3D construction and frame capture
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -o pipefail
+          output="$(xvfb-run -a -s '-screen 0 1280x720x24' godot --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported errors during graphical entity visual smoke testing."
+            exit 1
+          fi
+          echo "$output" | grep -q 'Backrooms entity visual factory graphical smoke test passed.'
+
+      - name: Upload rendered frame
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backrooms-visual-factory-render-smoke
+          path: /tmp/backrooms-visual-factory-render-smoke.png
+          if-no-files-found: warn
