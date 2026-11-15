@@ -452,7 +452,7 @@ func _run() -> void:
 		_finish(1)
 		return
 	var min_restored_portal_state: Dictionary = min_restored_director.call("to_save_dict")
-	_expect(min_restored_portal_state.get("rng_state", null) is String and str(min_restored_portal_state.get("rng_state", "")) == INT64_MIN_RNG_STATE, "fresh-world file restore preserves exact string INT64_MIN portal RNG state")
+	_expect(min_restored_portal_state.get("rng_state", null) is String and str(min_restored_portal_state.get("rng_state", "")) == INT64_MIN_RNG_STATE, "returned SurfaceWorld file restore preserves exact string INT64_MIN portal RNG state")
 	var min_return_result: Dictionary = restored_world.call("return_from_backrooms")
 	_expect(bool(min_return_result.get("ok", false)), "INT64_MIN-restored Backrooms Session can return to SurfaceWorld")
 
