@@ -68,3 +68,14 @@ Run the focused visual-factory test and the exact-HEAD Full Gate. If both pass, 
 - The visual factory does not change the save schema or spawn algorithm; it consumes the versioned entity identity roots already staged by the parent runtime.
 - The visual factory's publication is failure-atomic: all geometry/material contracts are validated and the detached visual subtree is built before the root transform/children are changed.
 - Exact-head Godot 4.3 validation for the combined parent/child tree is required; no pass is claimed yet.
+
+
+## Run 267 — entity-specific geometry role and symmetry regression (2026-11-15)
+
+- Extended `tests/backrooms_entity_visual_factory_test.gd` with entity-specific semantic assertions for all eight production entity IDs.
+- Window checks glass-vs-frame material roles and mirrored side frames; Smiler checks body/eye roles and eye symmetry; Hound checks body/head/eye roles and paired front/rear leg symmetry.
+- Skin-Stealer, Faceling and Duller check torso/head/body roles plus mirrored arms and legs; Clump checks all seven masses remain body-material spheres; Deathmoth checks front/rear wing, compound-eye, antenna and six-leg material/symmetry contracts.
+- Added shared test helpers for part-name lookup, material-role lookup and bilateral X-mirror equivalence. The helper checks matching primitive kind/material, mirrored position and rotation, and equal primitive dimensions/radius/height.
+- No production runtime code, spawn algorithm, save schema, scene wiring or external dependencies changed.
+- Test remains renderer-independent and does not instantiate MeshInstance3D under the headless dummy renderer.
+- New exact-head Godot 4.3 focused/full validation is required; local Godot is unavailable in this environment.

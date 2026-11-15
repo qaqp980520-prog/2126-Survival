@@ -26,6 +26,7 @@ func _run() -> void:
 	_assert_invalid_specs_are_rejected()
 	_assert_duplicate_visual_attachment_is_rejected()
 	_assert_production_headless_guard()
+	_assert_entity_specific_geometry_semantics()
 
 	if failures.is_empty():
 		print("Backrooms entity visual factory contract tests passed.")
@@ -112,6 +113,97 @@ func _assert_production_headless_guard() -> void:
 	_expect(not FactoryScript.attach_visuals(root_node), "production visual factory refuses renderer construction in headless mode")
 	_expect(root_node.get_child_count() == 0, "headless production guard leaves the metadata root unchanged")
 	root_node.free()
+
+func _assert_entity_specific_geometry_semantics() -> void:
+	var window := _specs_by_name(FactoryScript.get_geometry_specs("window"))
+	_expect(_has_material(window, "DarkWindowPane", "glass"), "Window pane uses the glass material role")
+	for frame_name in ["FrameTop", "FrameBottom", "FrameLeft", "FrameRight"]:
+		_expect(_has_material(window, frame_name, "frame"), "%s uses the frame material role" % frame_name)
+	_expect(_pair_is_mirrored_x(window, "FrameLeft", "FrameRight"), "Window side frames remain mirrored")
+
+	var smiler := _specs_by_name(FactoryScript.get_geometry_specs("smiler"))
+	_expect(_has_material(smiler, "DarkSilhouette", "body"), "Smiler silhouette uses the body material role")
+	_expect(_has_material(smiler, "Eye_0", "eye") and _has_material(smiler, "Eye_1", "eye"), "Smiler eyes use the eye material role")
+	_expect(_pair_is_mirrored_x(smiler, "Eye_0", "Eye_1"), "Smiler eyes remain bilaterally symmetric")
+
+	var hound := _specs_by_name(FactoryScript.get_geometry_specs("hound"))
+	_expect(_has_material(hound, "Body", "body") and _has_material(hound, "Head", "body"), "Hound body and head use the body material role")
+	_expect(_has_material(hound, "Eye_0", "eye") and _has_material(hound, "Eye_1", "eye"), "Hound eyes use the eye material role")
+	_expect(_pair_is_mirrored_x(hound, "Leg_0_0", "Leg_1_0"), "Hound front legs remain mirrored")
+	_expect(_pair_is_mirrored_x(hound, "Leg_0_1", "Leg_1_1"), "Hound rear legs remain mirrored")
+
+	var skin_stealer := _specs_by_name(FactoryScript.get_geometry_specs("skin_stealer"))
+	_expect(_has_material(skin_stealer, "Torso", "body") and _has_material(skin_stealer, "Head", "body"), "Skin-Stealer torso and head use the body material role")
+	_expect(_pair_is_mirrored_x(skin_stealer, "Arm_0", "Arm_1"), "Skin-Stealer arms remain mirrored")
+	_expect(_pair_is_mirrored_x(skin_stealer, "Leg_0", "Leg_1"), "Skin-Stealer legs remain mirrored")
+
+	var clump := _specs_by_name(FactoryScript.get_geometry_specs("clump"))
+	for index in range(7):
+		var part_name := "Mass_%d" % index
+		_expect(clump.has(part_name) and str(clump[part_name].get("kind", "")) == "sphere", "Clump mass %d remains spherical" % index)
+		_expect(_has_material(clump, part_name, "body"), "Clump mass %d uses the body material role" % index)
+
+	var faceling := _specs_by_name(FactoryScript.get_geometry_specs("faceling"))
+	_expect(_has_material(faceling, "Torso", "body") and _has_material(faceling, "FeaturelessHead", "body"), "Faceling torso and featureless head use the body material role")
+	_expect(_pair_is_mirrored_x(faceling, "Arm_0", "Arm_1"), "Faceling arms remain mirrored")
+	_expect(_pair_is_mirrored_x(faceling, "Leg_0", "Leg_1"), "Faceling legs remain mirrored")
+
+	var duller := _specs_by_name(FactoryScript.get_geometry_specs("duller"))
+	_expect(_has_material(duller, "Torso", "body") and _has_material(duller, "FeaturelessHead", "body"), "Duller torso and featureless head use the body material role")
+	_expect(_pair_is_mirrored_x(duller, "LongArmLeft", "LongArmRight"), "Duller long arms remain mirrored")
+	_expect(_pair_is_mirrored_x(duller, "LegLeft", "LegRight"), "Duller legs remain mirrored")
+
+	var deathmoth := _specs_by_name(FactoryScript.get_geometry_specs("deathmoth"))
+	_expect(_has_material(deathmoth, "Wing_0", "wing") and _has_material(deathmoth, "Wing_1", "wing"), "Deathmoth front wings use the wing material role")
+	_expect(_has_material(deathmoth, "RearWing_0", "wing") and _has_material(deathmoth, "RearWing_1", "wing"), "Deathmoth rear wings use the wing material role")
+	_expect(_has_material(deathmoth, "CompoundEye_0", "eye") and _has_material(deathmoth, "CompoundEye_1", "eye"), "Deathmoth compound eyes use the eye material role")
+	_expect(_pair_is_mirrored_x(deathmoth, "Wing_0", "Wing_1"), "Deathmoth front wings remain mirrored with opposite tilt")
+	_expect(_pair_is_mirrored_x(deathmoth, "RearWing_0", "RearWing_1"), "Deathmoth rear wings remain mirrored with opposite tilt")
+	_expect(_pair_is_mirrored_x(deathmoth, "CompoundEye_0", "CompoundEye_1"), "Deathmoth compound eyes remain mirrored")
+	_expect(_pair_is_mirrored_x(deathmoth, "Antenna_0", "Antenna_1"), "Deathmoth antennae remain mirrored")
+	for leg_index in range(3):
+		_expect(_pair_is_mirrored_x(deathmoth, "Leg_0_%d" % leg_index, "Leg_1_%d" % leg_index), "Deathmoth leg pair %d remains mirrored" % leg_index)
+
+func _specs_by_name(specs: Array[Dictionary]) -> Dictionary:
+	var by_name: Dictionary = {}
+	for spec in specs:
+		by_name[str(spec.get("name", ""))] = spec
+	return by_name
+
+func _has_material(specs: Dictionary, part_name: String, material_key: String) -> bool:
+	return specs.has(part_name) and str(specs[part_name].get("material", "")) == material_key
+
+func _pair_is_mirrored_x(specs: Dictionary, left_name: String, right_name: String) -> bool:
+	if not specs.has(left_name) or not specs.has(right_name):
+		return false
+	var left: Dictionary = specs[left_name]
+	var right: Dictionary = specs[right_name]
+	if str(left.get("kind", "")) != str(right.get("kind", "")):
+		return false
+	if str(left.get("material", "")) != str(right.get("material", "")):
+		return false
+	var left_position: Vector3 = left.get("position", Vector3.ZERO)
+	var right_position: Vector3 = right.get("position", Vector3.ZERO)
+	var expected_position := Vector3(-left_position.x, left_position.y, left_position.z)
+	if not expected_position.is_equal_approx(right_position):
+		return false
+	var left_rotation: Vector3 = left.get("rotation", Vector3.ZERO)
+	var right_rotation: Vector3 = right.get("rotation", Vector3.ZERO)
+	var expected_rotation := Vector3(left_rotation.x, left_rotation.y, -left_rotation.z)
+	if not expected_rotation.is_equal_approx(right_rotation):
+		return false
+	if left.has("size") != right.has("size") or left.has("radius") != right.has("radius") or left.has("height") != right.has("height"):
+		return false
+	if left.has("size"):
+		var left_size: Vector3 = left.get("size", Vector3.ZERO)
+		var right_size: Vector3 = right.get("size", Vector3.ZERO)
+		if not left_size.is_equal_approx(right_size):
+			return false
+	if left.has("radius") and not is_equal_approx(float(left.get("radius", 0.0)), float(right.get("radius", 0.0))):
+		return false
+	if left.has("height") and not is_equal_approx(float(left.get("height", 0.0)), float(right.get("height", 0.0))):
+		return false
+	return true
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
