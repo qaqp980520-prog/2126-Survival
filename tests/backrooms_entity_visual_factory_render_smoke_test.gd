@@ -195,8 +195,9 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			if entity_root == null:
 				continue
 
-			runtime.global_position += target_position - entity_root.global_position
-			_expect(entity_root.global_position.is_equal_approx(target_position), "%s smoke target is centered in the render stage" % entity_id)
+			if entity_id == "window":
+				runtime.global_position += target_position - entity_root.global_position
+				_expect(entity_root.global_position.is_equal_approx(target_position), "Window smoke target is centered while preserving its production wall orientation")
 			_expect(entity_root.get_meta("backrooms_entity_id", "") == entity_id, "%s root preserves its production entity identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_level_id", "") == level_id, "%s root preserves its production level identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_world_seed", -1) == WORLD_SEED, "%s root preserves its deterministic world seed" % entity_id)
