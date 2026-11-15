@@ -87,3 +87,18 @@ The child revision adds test-only, geometry-derived camera framing and stronger 
 Only the graphical smoke harness and this document change. Production entity geometry, material definitions, runtime spawn placement, save schema and gameplay behavior are unchanged.
 
 The exact-head graphical and Full Compatibility jobs for this child PR must complete before this revision can be considered accepted. This is software-renderer smoke coverage only; hardware GPU and iPhone QA remain separate.
+
+
+## Run 271 — directional facial-feature graphical regression
+
+- Child validation branch: `test/backrooms-entity-eye-facing-smoke-2026-11-15`, based on PR #367 exact HEAD `888ef4899004279c720369acc679630f2372ae80`.
+- Test commit: `bf583f57409b53400c9f7a2e6adb45134a11f926`.
+- Changed test: `tests/backrooms_entity_visual_factory_render_smoke_test.gd`.
+- Smiler and Hound smoke cameras now face local -Z, where their production eye geometry is authored; other entity framing and Window wall-facing behavior remain unchanged.
+- For each of the two eyes on each entity, the test projects the actual Eye MeshInstance3D world position into the viewport and counts expected material-color pixels in a bounded neighborhood. Smiler expects warm yellow/amber pixels; Hound expects red pixels. Each eye requires at least three matching pixels.
+- This is a test-only change. Production entity geometry, materials, spawn selection, runtime placement and save schema are unchanged.
+- Dependencies: PR #367 smoke harness; `BackroomsMazeCellRuntime.gd`, `BackroomsEntityDirector.gd`, `BackroomsEntityVisualFactory.gd`; Godot 4.3, Xvfb and Mesa llvmpipe.
+- No project import or save migration is required. The graphical job runs through the existing Godot validation workflow.
+- Validation status at commit creation: pending exact-head graphical smoke and Full Compatibility Gate. No pass is claimed until both jobs complete.
+- Limitations: software rendering only; hardware GPU, iPhone, transparency quality, collision, navigation, AI and animation remain outside this test.
+- Next: inspect the eye-color assertions on exact HEAD, correct any camera/color-threshold issues based on CI logs, then update the PR's validation record. Keep the parent-first chain and main unchanged.
