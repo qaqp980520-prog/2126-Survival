@@ -92,6 +92,7 @@ func _run() -> void:
 				smoke_camera.position = Vector3(0.0, 4.5, 18.0)
 		else:
 			smoke_camera.position = Vector3(0.0, 4.5, 18.0)
+		smoke_camera.size = 4.8
 		smoke_camera.look_at(Vector3(0.0, 2.6, 0.0), Vector3.UP)
 		await process_frame
 		await RenderingServer.frame_post_draw
@@ -194,7 +195,7 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			if entity_root == null:
 				continue
 
-			runtime.position -= entity_root.position
+			runtime.global_position += target_position - entity_root.global_position
 			_expect(entity_root.global_position.is_equal_approx(target_position), "%s smoke target is centered in the render stage" % entity_id)
 			_expect(entity_root.get_meta("backrooms_entity_id", "") == entity_id, "%s root preserves its production entity identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_level_id", "") == level_id, "%s root preserves its production level identity" % entity_id)
