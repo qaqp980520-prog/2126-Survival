@@ -54,7 +54,7 @@ func _run() -> void:
 	for level_id in LEVEL_ENTITY_RULES.keys():
 		for entity_id_value in LEVEL_ENTITY_RULES[level_id]:
 			var entity_id: String = str(entity_id_value)
-			var entity_root: Node3D = await _build_production_entity(stage, str(level_id), entity_id, slot)
+			var entity_root: Node3D = _build_production_entity(stage, str(level_id), entity_id, slot)
 			_expect(entity_root != null, "%s production maze runtime creates %s with real visuals" % [level_id, entity_id])
 			if entity_root != null:
 				_assert_entity_meshes(entity_id, entity_root)
@@ -154,11 +154,19 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			if entity_root == null:
 				continue
 
+			_expect(entity_root.get_meta("backrooms_entity_id", "") == entity_id, "%s root preserves its production entity identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_level_id", "") == level_id, "%s root preserves its production level identity" % entity_id)
 			_expect(entity_root.get_meta("spawn_world_seed", -1) == WORLD_SEED, "%s root preserves its deterministic world seed" % entity_id)
+			_expect(entity_root.get_meta("spawn_cell", null) is Vector2i, "%s root preserves its owning maze cell" % entity_id)
 			_expect(int(entity_root.get_meta("spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s root preserves its spawn algorithm version" % entity_id)
 			_expect(entity_root.get_meta("backrooms_entity_visual_state", "") == "attached", "%s production root records attached visual state" % entity_id)
 			_expect(int(entity_root.get_meta("backrooms_entity_visual_version", 0)) == 1, "%s production root records visual factory version one" % entity_id)
+			_expect(int(runtime.call("get_loaded_cell_count")) == 1, "%s graphical runtime stages exactly its target cell" % entity_id)
+			if entity_id == "window":
+				var wall_direction: Vector2i = entity_root.get_meta("backrooms_wall_direction", Vector2i.ZERO)
+				var expected_yaw: float = 0.0 if wall_direction == Vector2i(0, -1) else PI * 0.5
+				_expect(wall_direction in [Vector2i(0, -1), Vector2i(-1, 0)], "Window production spawn owns a supported north or west wall")
+				_expect(is_equal_approx(entity_root.rotation.y, expected_yaw), "Window production visual follows its owned wall orientation")
 
 			for cell_child in cell_root.get_children():
 				if cell_child.name == "Floor" or str(cell_child.name).begins_with("Wall_"):
