@@ -29,6 +29,8 @@ const SCREENSHOT_PATH := "/tmp/backrooms-visual-factory-render-smoke.png"
 
 var failures: Array[String] = []
 var built_mesh_count: int = 0
+var rendered_entities: Array[Node3D] = []
+var rendered_entity_ids: Array[String] = []
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -58,6 +60,8 @@ func _run() -> void:
 			_expect(entity_root != null, "%s production maze runtime creates %s with real visuals" % [level_id, entity_id])
 			if entity_root != null:
 				_assert_entity_meshes(entity_id, entity_root)
+				rendered_entities.append(entity_root)
+				rendered_entity_ids.append(entity_id)
 			slot += 1
 
 	_expect(built_mesh_count == 58, "production runtime publishes all eight entities with exactly 58 target MeshInstance3D parts")
@@ -74,6 +78,23 @@ func _run() -> void:
 		_expect(visible_samples > 80, "rendered frame contains visible production entity pixels (samples=%d)" % visible_samples)
 		var save_error: Error = rendered_image.save_png(SCREENSHOT_PATH)
 		_expect(save_error == OK, "rendered frame screenshot is saved for artifact inspection")
+
+	for entity_index in range(rendered_entities.size()):
+		for other_index in range(rendered_entities.size()):
+			rendered_entities[other_index].visible = other_index == entity_index
+		await process_frame
+		await RenderingServer.frame_post_draw
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var isolated_image: Image = viewport.get_texture().get_image()
+		_expect(isolated_image != null and not isolated_image.is_empty(), "%s isolated render returns an image" % rendered_entity_ids[entity_index])
+		if isolated_image != null and not isolated_image.is_empty():
+			var isolated_samples: int = _count_non_background_samples(isolated_image, 4)
+			_expect(isolated_samples > 3, "%s independently contributes visible pixels (samples=%d)" % [rendered_entity_ids[entity_index], isolated_samples])
+			print("RENDERED_ENTITY: %s visible_samples=%d" % [rendered_entity_ids[entity_index], isolated_samples])
+
+	for entity_root in rendered_entities:
+		entity_root.visible = true
 
 	stage.queue_free()
 	await process_frame
@@ -205,10 +226,10 @@ func _assert_entity_meshes(entity_id: String, entity_root: Node3D) -> void:
 		_expect(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0, "%s production mesh has non-zero local bounds" % entity_id)
 		built_mesh_count += 1
 
-func _count_non_background_samples(image: Image) -> int:
+func _count_non_background_samples(image: Image, stride: int = 8) -> int:
 	var visible_samples: int = 0
-	for y in range(0, image.get_height(), 8):
-		for x in range(0, image.get_width(), 8):
+	for y in range(0, image.get_height(), stride):
+		for x in range(0, image.get_width(), stride):
 			var pixel: Color = image.get_pixel(x, y)
 			var delta: float = absf(pixel.r - BACKGROUND_COLOR.r) + absf(pixel.g - BACKGROUND_COLOR.g) + absf(pixel.b - BACKGROUND_COLOR.b)
 			if delta > 0.08:
