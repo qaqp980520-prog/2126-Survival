@@ -4861,7 +4861,7 @@ jobs:
           GALLIUM_DRIVER: llvmpipe
         run: |
           set -o pipefail
-          output="$(xvfb-run -a -s '-screen 0 1280x720x24' godot --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(xvfb-run -a -s '-screen 0 1280x720x24' godot --audio-driver Dummy --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported errors during graphical entity visual smoke testing."
