@@ -42,7 +42,7 @@ No project import or asset migration is required. The existing `godot-validation
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
 xvfb-run -a -s '-screen 0 1280x720x24' \
-godot --path . --rendering-method gl_compatibility \
+godot --audio-driver Dummy --path . --rendering-method gl_compatibility \
 --script res://tests/backrooms_entity_visual_factory_render_smoke_test.gd
 ```
 
