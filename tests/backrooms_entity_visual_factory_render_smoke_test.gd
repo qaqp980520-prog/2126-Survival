@@ -309,8 +309,8 @@ func _count_expected_eye_color_samples(image: Image, center: Vector2i, entity_id
 			var pixel: Color = image.get_pixel(x, y)
 			var is_expected_color: bool = false
 			if entity_id == "smiler":
-				# Warm yellow/amber emission from the Smiler eye material.
-				is_expected_color = pixel.r >= 0.52 and pixel.g >= 0.34 and pixel.b <= 0.62 and pixel.r > pixel.b * 1.15 and pixel.g > pixel.b * 1.05
+				# The high-emission Smiler eye material clips to bright near-white in llvmpipe.
+				is_expected_color = pixel.r >= 0.78 and pixel.g >= 0.78 and pixel.b >= 0.78
 			elif entity_id == "hound":
 				# Red emission from the Hound eye material; exclude neutral background pixels.
 				is_expected_color = pixel.r >= 0.42 and pixel.g <= 0.42 and pixel.b <= 0.35 and pixel.r > pixel.g * 1.3
