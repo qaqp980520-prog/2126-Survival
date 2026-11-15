@@ -11,6 +11,8 @@ const BackroomsSessionScript = preload("res://systems/BackroomsLocationSession.g
 const BackroomsStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const SAVE_PATH: String = "user://run240_surface_world_envelope.json"
 const BACKROOMS_SAVE_PATH: String = "user://run240_backrooms_world_envelope.json"
+const INT64_MAX_RNG_STATE: String = "9223372036854775807"
+const INT64_MIN_RNG_STATE: String = "-9223372036854775808"
 const FAIL_CLOSED_PATH: String = "user://run240_fail_closed_fallback.json"
 const NUMERIC_PATH: String = "user://run240_numeric_surface_envelope.json"
 const NUMERIC_SCHEMA_RECOVERY_PATH: String = "user://run242_integral_schema_recovery.json"
@@ -309,11 +311,19 @@ func _run() -> void:
 		_finish(1)
 		return
 	player.global_position += Vector3(8.0, 0.0, 0.0)
+	var max_rng_probe: Dictionary = director.call("to_save_dict")
+	max_rng_probe["rng_state"] = INT64_MAX_RNG_STATE
+	_expect(bool(director.call("load_save_dict", max_rng_probe)), "production portal director accepts INT64_MAX before combined file save")
+	_expect(str(director.call("to_save_dict").get("rng_state", "")) == INT64_MAX_RNG_STATE, "production portal director retains exact INT64_MAX before file save")
 	var backrooms_save_ok: bool = bool(source_world.call("save_game", BACKROOMS_SAVE_PATH))
 	if not backrooms_save_ok:
 		print("DEBUG: Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
 	_expect(backrooms_save_ok, "F5-equivalent production API writes an active Backrooms envelope to disk")
 	var backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
+	var max_surface_payload_value: Variant = backrooms_payload.get("surface_world", {})
+	var max_portal_envelope_value: Variant = max_surface_payload_value.get("backrooms_portal_director", {}) if max_surface_payload_value is Dictionary else {}
+	var max_portal_state_value: Variant = max_portal_envelope_value.get("state", {}) if max_portal_envelope_value is Dictionary else {}
+	_expect(max_portal_state_value is Dictionary and max_portal_state_value.get("rng_state", null) is String and str(max_portal_state_value.get("rng_state", "")) == INT64_MAX_RNG_STATE, "combined Backrooms file stores the exact string INT64_MAX portal RNG state")
 	var saved_visibility_value: Variant = backrooms_payload.get("surface_chunk_visibility", {})
 	_expect(
 		saved_visibility_value is Dictionary and saved_visibility_value == original_surface_visibility,
@@ -374,7 +384,13 @@ func _run() -> void:
 			surface_chunks_hidden = false
 	_expect(surface_chunks_hidden, "fresh-world Backrooms restore keeps all saved SurfaceWorld chunks hidden")
 	var restored_director: RefCounted = restored_world.get("backrooms_portal_director") as RefCounted
-	var restored_portal_value: Variant = restored_director.get("active_portal") if restored_director != null else null
+	_expect(restored_director != null, "restored Backrooms world exposes its portal director")
+	if restored_director == null:
+		_finish(1)
+		return
+	var restored_max_portal_state: Dictionary = restored_director.call("to_save_dict")
+	_expect(restored_max_portal_state.get("rng_state", null) is String and str(restored_max_portal_state.get("rng_state", "")) == INT64_MAX_RNG_STATE, "fresh-world file restore preserves exact string INT64_MAX portal RNG state")
+	var restored_portal_value: Variant = restored_director.get("active_portal")
 	_expect(
 		restored_portal_value is Dictionary and restored_portal_value.is_empty(),
 		"file restore preserves the consumed one-use portal state"
@@ -408,6 +424,37 @@ func _run() -> void:
 		):
 			surface_visibility_restored = false
 	_expect(surface_visibility_restored, "return after file load restores every original SurfaceWorld chunk visibility value")
+
+	# Repeat the real combined-file round-trip at the opposite signed-64-bit endpoint.
+	var min_rng_probe: Dictionary = director.call("to_save_dict")
+	min_rng_probe["rng_state"] = INT64_MIN_RNG_STATE
+	_expect(bool(director.call("load_save_dict", min_rng_probe)), "production portal director accepts INT64_MIN before combined file save")
+	_expect(str(director.call("to_save_dict").get("rng_state", "")) == INT64_MIN_RNG_STATE, "production portal director retains exact INT64_MIN before file save")
+	var min_backrooms_save_ok: bool = bool(source_world.call("save_game", BACKROOMS_SAVE_PATH))
+	if not min_backrooms_save_ok:
+		print("DEBUG: INT64_MIN Backrooms save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
+	_expect(min_backrooms_save_ok, "production file API writes an active Backrooms envelope with INT64_MIN RNG state")
+	var min_backrooms_payload: Dictionary = _read_dictionary(BACKROOMS_SAVE_PATH)
+	var min_surface_payload_value: Variant = min_backrooms_payload.get("surface_world", {})
+	var min_portal_envelope_value: Variant = min_surface_payload_value.get("backrooms_portal_director", {}) if min_surface_payload_value is Dictionary else {}
+	var min_portal_state_value: Variant = min_portal_envelope_value.get("state", {}) if min_portal_envelope_value is Dictionary else {}
+	_expect(min_portal_state_value is Dictionary and min_portal_state_value.get("rng_state", null) is String and str(min_portal_state_value.get("rng_state", "")) == INT64_MIN_RNG_STATE, "combined Backrooms file stores the exact string INT64_MIN portal RNG state")
+	var min_backrooms_loaded: bool = bool(restored_world.call("load_game", BACKROOMS_SAVE_PATH))
+	if not min_backrooms_loaded:
+		print("DEBUG: INT64_MIN Backrooms load report = ", restored_world.call("get_last_world_file_report"), " envelope = ", restored_world.call("get_last_world_envelope_restore_report"))
+	_expect(min_backrooms_loaded, "returned SurfaceWorld reloads the combined Backrooms file with INT64_MIN")
+	if not min_backrooms_loaded:
+		_finish(1)
+		return
+	var min_restored_director: RefCounted = restored_world.get("backrooms_portal_director") as RefCounted
+	_expect(min_restored_director != null, "INT64_MIN file restore exposes the production portal director")
+	if min_restored_director == null:
+		_finish(1)
+		return
+	var min_restored_portal_state: Dictionary = min_restored_director.call("to_save_dict")
+	_expect(min_restored_portal_state.get("rng_state", null) is String and str(min_restored_portal_state.get("rng_state", "")) == INT64_MIN_RNG_STATE, "fresh-world file restore preserves exact string INT64_MIN portal RNG state")
+	var min_return_result: Dictionary = restored_world.call("return_from_backrooms")
+	_expect(bool(min_return_result.get("ok", false)), "INT64_MIN-restored Backrooms Session can return to SurfaceWorld")
 
 	_finish(0 if failures.is_empty() else 1)
 
