@@ -116,3 +116,15 @@ The workflow's `backrooms-visual-render-smoke` job runs on pull requests only wh
 - Corrected the test-only Smiler pixel expectation to require all RGB channels >= 0.78. Hound remains red-specific. No production material or geometry changed.
 - Test calibration commit: `730310e63463edda5d12e4f07f2e7cf1b1cf2db1`.
 - A new exact-head graphical and Full Gate run is required; the previous graphical run is recorded as a failed threshold calibration, not a product defect. The Hound eye checks passed; Smiler eye checks are pending re-run.
+
+
+## Run 271.3 — graphical workflow trigger hardening
+
+The graphical job previously depended on the PR title phrase `graphical entity visual factory smoke`. A child PR with a different title could therefore show the graphical job as Skipped even when the changed file was the graphical smoke harness. The workflow condition now also runs the job for relevant branch families:
+
+- `test/backrooms-*`
+- `feat/backrooms-production-entity-visual-factory*`
+
+The explicit workflow_dispatch and title-based routes remain supported. This removes the accidental title-only skip for the current Backrooms test chain while avoiding the graphical job on unrelated PRs. Workflow change commit: `47d6d56f6781c453feb46a6f0de7562fec2f93b0`.
+
+A new exact-head run is required to validate the workflow change itself. No new pass is claimed for the updated workflow HEAD until its Full Gate and graphical job complete.
