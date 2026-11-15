@@ -4837,7 +4837,7 @@ jobs:
 
   backrooms-visual-render-smoke:
     name: Godot 4.3 software-rendered entity smoke
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, 'graphical entity visual factory smoke')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.title, 'graphical entity visual factory smoke') || startsWith(github.head_ref, 'test/backrooms-') || startsWith(github.head_ref, 'feat/backrooms-production-entity-visual-factory')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     container:
