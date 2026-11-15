@@ -24,7 +24,7 @@ const LEVEL_ENTITY_RULES := {
 
 const WORLD_SEED: int = 20261115
 const CELL_SIZE: float = 8.0
-const BACKGROUND_COLOR := Color(0.012, 0.018, 0.026, 1.0)
+const BACKGROUND_COLOR := Color(0.035, 0.045, 0.060, 1.0)
 const SCREENSHOT_PATH := "/tmp/backrooms-visual-factory-render-smoke.png"
 
 var failures: Array[String] = []
@@ -94,21 +94,21 @@ func _add_lighting(stage: Node3D) -> void:
 	environment.background_color = BACKGROUND_COLOR
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(0.62, 0.62, 0.62, 1.0)
-	environment.ambient_light_energy = 0.75
+	environment.ambient_light_energy = 1.15
 	environment_node.environment = environment
 	stage.add_child(environment_node)
 
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 7.0
+	camera.size = 8.5
 	stage.add_child(camera)
-	camera.position = Vector3(0.0, 2.8, 18.0)
-	camera.look_at(Vector3(0.0, 1.0, 0.0), Vector3.UP)
+	camera.position = Vector3(0.0, 4.5, 18.0)
+	camera.look_at(Vector3(0.0, 2.6, 0.0), Vector3.UP)
 	camera.make_current()
 
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-38.0, -24.0, 0.0)
-	key_light.light_energy = 1.4
+	key_light.light_energy = 1.8
 	stage.add_child(key_light)
 
 func _assert_level_zero_is_entity_free(stage: Node3D) -> void:
@@ -130,7 +130,7 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 	runtime.name = "RenderSmokeRuntime_%s" % entity_id
 	stage.add_child(runtime)
 
-	var target_position := Vector3((float(slot % 4) - 1.5) * 2.5, 0.0, (float(int(slot / 4)) - 0.5) * 2.0)
+	var target_position := Vector3((float(slot % 4) - 1.5) * 2.5, float(int(slot / 4)) * 3.0, 0.0)
 	for z in range(-40, 41):
 		for x in range(-40, 41):
 			var cell := Vector2i(x, z)
