@@ -31,6 +31,7 @@ It also prepares Level 0 and verifies that its spawn list remains empty. For eac
 - every target child has a non-null mesh, at least one renderable surface, a Material override, and non-zero local bounds;
 - the production cell runtime can activate the staged cell;
 - the root viewport produces a non-empty rendered image with non-background pixel samples;
+- each of the eight entities is isolated from the other seven and rendered separately; every isolated frame must contain its own non-background samples, preventing one visible model from masking an off-screen or invisible model;
 - a PNG frame is saved to `/tmp/backrooms-visual-factory-render-smoke.png` and uploaded as a workflow artifact.
 
 The test hides the production floor and wall meshes only in the smoke scene so the eight target entity silhouettes can be sampled without overlapping cell architecture. Production runtime and factory code are not modified by the test.
