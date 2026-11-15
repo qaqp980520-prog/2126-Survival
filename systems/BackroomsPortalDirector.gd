@@ -129,11 +129,10 @@ func load_save_dict(data: Dictionary) -> bool:
     var saved_rng_state: Variant = data.get("rng_state", null)
     var restored_rng_state: int = 0
     if has_rng_state:
-        if not (saved_rng_state is String) or not str(saved_rng_state).is_valid_int():
+        var rng_state_string: String = str(saved_rng_state)
+        if not _is_canonical_int64_string(rng_state_string):
             return false
-        restored_rng_state = int(str(saved_rng_state))
-        if str(restored_rng_state) != str(saved_rng_state):
-            return false
+        restored_rng_state = int(rng_state_string)
     var restored_portal: Dictionary = {}
     if not saved_portal.is_empty():
         var saved_id: Variant = saved_portal.get("id", null)
@@ -210,6 +209,20 @@ func _find_spawn_position(player_position: Vector2) -> Dictionary:
         if point.distance_to(player_position) >= min_player_distance:
             return {"ok": true, "position": point}
     return {"ok": false}
+
+func _is_canonical_int64_string(value: String) -> bool:
+    if not value.is_valid_int():
+        return false
+    var is_negative: bool = value.begins_with("-")
+    var digits: String = value.substr(1) if is_negative else value
+    var limit: String = "9223372036854775808" if is_negative else "9223372036854775807"
+    if digits.length() > limit.length():
+        return false
+    if digits.length() == limit.length() and digits > limit:
+        return false
+    # Only convert after the lexical range check, so oversized saves never emit
+    # Godot's signed-64-bit conversion error.
+    return str(int(value)) == value
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
     if not (value is int or value is float):
