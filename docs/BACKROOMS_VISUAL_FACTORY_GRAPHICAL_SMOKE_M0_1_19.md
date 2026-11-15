@@ -87,3 +87,55 @@ The child revision adds test-only, geometry-derived camera framing and stronger 
 Only the graphical smoke harness and this document change. Production entity geometry, material definitions, runtime spawn placement, save schema and gameplay behavior are unchanged.
 
 The exact-head graphical and Full Compatibility jobs for this child PR must complete before this revision can be considered accepted. This is software-renderer smoke coverage only; hardware GPU and iPhone QA remain separate.
+
+
+## Run 271 — directional facial-feature graphical regression
+
+- Child validation branch: `test/backrooms-entity-eye-facing-smoke-2026-11-15`, based on PR #367 exact HEAD `888ef4899004279c720369acc679630f2372ae80`.
+- Test commit: `bf583f57409b53400c9f7a2e6adb45134a11f926`.
+- Changed test: `tests/backrooms_entity_visual_factory_render_smoke_test.gd`.
+- Smiler and Hound smoke cameras now face local -Z, where their production eye geometry is authored; other entity framing and Window wall-facing behavior remain unchanged.
+- For each of the two eyes on each entity, the test projects the actual Eye MeshInstance3D world position into the viewport and counts expected material-color pixels in a bounded neighborhood. Smiler expects warm yellow/amber pixels; Hound expects red pixels. Each eye requires at least three matching pixels.
+- This is a test-only change. Production entity geometry, materials, spawn selection, runtime placement and save schema are unchanged.
+- Dependencies: PR #367 smoke harness; `BackroomsMazeCellRuntime.gd`, `BackroomsEntityDirector.gd`, `BackroomsEntityVisualFactory.gd`; Godot 4.3, Xvfb and Mesa llvmpipe.
+- No project import or save migration is required. The graphical job runs through the existing Godot validation workflow.
+- Validation status at commit creation: pending exact-head graphical smoke and Full Compatibility Gate. No pass is claimed until both jobs complete.
+- Limitations: software rendering only; hardware GPU, iPhone, transparency quality, collision, navigation, AI and animation remain outside this test.
+- Next: inspect the eye-color assertions on exact HEAD, correct any camera/color-threshold issues based on CI logs, then update the PR's validation record. Keep the parent-first chain and main unchanged.
+
+
+## Run 271 — graphical job routing guard
+
+The workflow's `backrooms-visual-render-smoke` job runs on pull requests only when the PR title contains the exact phrase `graphical entity visual factory smoke` (or on workflow_dispatch). PR #368 retains this phrase in its title so the graphical eye-color regression cannot be silently skipped by the workflow condition.
+
+
+## Run 271.1 — calibrate Smiler eye pixel expectation from actual render
+
+- Exact-head graphical run #43688566014 reached the facial-feature assertions. Hound Eye_0 and Eye_1 each passed with 289 red pixels in the 17×17 sample neighborhood.
+- Smiler Eye_0 and Eye_1 each returned zero pixels for the initial yellow/amber threshold. The uploaded montage was downloaded and inspected; both Smiler eyes are clearly visible but the high-emission material clips to bright neutral white under Mesa llvmpipe.
+- Corrected the test-only Smiler pixel expectation to require all RGB channels >= 0.78. Hound remains red-specific. No production material or geometry changed.
+- Test calibration commit: `730310e63463edda5d12e4f07f2e7cf1b1cf2db1`.
+- A new exact-head graphical and Full Gate run is required; the previous graphical run is recorded as a failed threshold calibration, not a product defect. The Hound eye checks passed; Smiler eye checks are pending re-run.
+
+
+## Run 271.3 — graphical workflow trigger hardening
+
+The graphical job previously depended on the PR title phrase `graphical entity visual factory smoke`. A child PR with a different title could therefore show the graphical job as Skipped even when the changed file was the graphical smoke harness. The workflow condition now also runs the job for relevant branch families:
+
+- `test/backrooms-*`
+- `feat/backrooms-production-entity-visual-factory*`
+
+The explicit workflow_dispatch and title-based routes remain supported. This removes the accidental title-only skip for the current Backrooms test chain while avoiding the graphical job on unrelated PRs. Workflow change commit: `47d6d56f6781c453feb46a6f0de7562fec2f93b0`.
+
+A new exact-head run is required to validate the workflow change itself. No new pass is claimed for the updated workflow HEAD until its Full Gate and graphical job complete.
+
+
+## Run 272 — eye-pixel window and camera-depth guard
+
+- Parent PR #368 exact HEAD: `043132532e725b3a7827e6e23993a820cf2c5d12`; its exact-head workflow #43689642040 completed successfully: 559/559 repository validation steps, 560/560 GitHub job steps including setup/cleanup, 0 failures and 0 skipped.
+- Parent graphical job #132737375133 passed 9/9. Smiler Eye_0/Eye_1 each produced 289 near-white samples; Hound Eye_0/Eye_1 each produced 289 red samples. All eight production entities and 58 MeshInstance3D parts rendered. All 18 focused workflows passed.
+- New child PR #369 adds three guards for each of the four directional eye checks: the actual eye point must be in front of the diagnostic camera; the entire 17×17 sample window must fit inside the viewport (no edge-clamped partial windows); at least 25 of 289 pixels must match the expected eye color (raised from 3 based on the observed 289/289 exact-head result).
+- Files: `tests/backrooms_entity_visual_factory_render_smoke_test.gd` and this version record. No production geometry, material, runtime, spawn algorithm, save schema or gameplay code changes.
+- Dependencies/import: parent PR #368; Godot 4.3, Xvfb, Mesa llvmpipe; no asset import or save migration.
+- New exact-head graphical and Full Compatibility validation is pending. Do not claim the new threshold until the child workflow completes.
+- Limitations: software renderer only; hardware GPU, iPhone, transparency, collision, navigation, AI and animation remain untested.
