@@ -69,3 +69,21 @@ This is a CI software-renderer smoke test, not a hardware GPU or mobile-device b
 3. If successful, retain this as a targeted regression gate for future production visual-factory changes.
 4. Arrange hardware/device QA before integrating PR #365 through its parent-first chain (#345 → #363 → #364 → #365).
 5. Keep main unchanged until independent review and required validation are complete.
+
+
+## Run 270 — visual framing and contrast regression hardening
+
+The previously inspected 4-by-2 montage showed that the silhouettes were technically visible but occupied too little of each 320×180 tile. Pixel analysis of the downloaded PNG measured the following bounding boxes (width × height): Window 64×63, Smiler 36×36, Hound 36×37, Skin-Stealer 30×71, Clump 44×44, Faceling 30×70, Duller 30×71, Deathmoth 68×25. The previous >3 sampled-pixel assertion was therefore too weak to act as a useful framing regression.
+
+The child revision adds test-only, geometry-derived camera framing and stronger image assertions:
+
+- Merge each generated MeshInstance3D world-space AABB to calculate the actual visual bounds.
+- Aim at the combined AABB center instead of per-entity hand-authored target heights.
+- Calculate orthographic camera size from the vertical and projected horizontal extents with a 1.45 framing margin; preserve the Window's north/west wall-facing camera direction.
+- Use a neutral mid-gray smoke background so black/dark entities remain distinguishable without changing their production materials.
+- Require at least 25 sampled visible pixels, a silhouette bounding box at least 10% of viewport width and 20% of viewport height, a 1.5% edge margin, and centering within 18% of viewport center on both axes.
+- Disable test-stage directional shadows so shadow pixels do not inflate silhouette bounds.
+
+Only the graphical smoke harness and this document change. Production entity geometry, material definitions, runtime spawn placement, save schema and gameplay behavior are unchanged.
+
+The exact-head graphical and Full Compatibility jobs for this child PR must complete before this revision can be considered accepted. This is software-renderer smoke coverage only; hardware GPU and iPhone QA remain separate.
