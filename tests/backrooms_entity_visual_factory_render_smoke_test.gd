@@ -101,9 +101,9 @@ func _add_lighting(stage: Node3D) -> void:
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 7.0
+	stage.add_child(camera)
 	camera.position = Vector3(0.0, 2.8, 18.0)
 	camera.look_at(Vector3(0.0, 1.0, 0.0), Vector3.UP)
-	stage.add_child(camera)
 	camera.make_current()
 
 	var key_light := DirectionalLight3D.new()
