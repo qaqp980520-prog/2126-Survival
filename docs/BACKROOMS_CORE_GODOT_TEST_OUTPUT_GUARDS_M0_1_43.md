@@ -49,6 +49,6 @@ Expected banners:
 ## Limitations and next steps
 
 - This change hardens the three remaining unguarded root-project test steps found in the workflow audit; it does not refactor the legacy standalone KROLL project test steps.
-- Wait for the exact-head Godot 4.3 Full Compatibility Gate and all associated focused workflows.
-- Scan the complete Full Gate job log for runtime Godot diagnostics.
+- M0.1.43 exact-head validation is complete on `72a47390fc6450fa9b6902aca0c299f4e1cb23d1`; the fourth remaining root-project gap is tracked separately in M0.1.44.
+- Full Gate log #43855532023: 7,743,181 characters / 84,667 lines; zero `SCRIPT ERROR:`, `ERROR:`, or `FAIL:` diagnostic lines after excluding the CI's own shell guard commands.
 - Keep this child PR Draft until exact-head validation passes; after independent review, merge only into PR #377's feature branch and rerun PR #377. Never merge directly to main.
