@@ -455,8 +455,8 @@ func _test_underground_deep_layer_round_trip(now: int) -> void:
 						_expect(restored_return.is_equal_approx(surface_position), "mine layer %d preserves the exact surface return anchor" % deep_layer_index)
 						_expect(world.call("get_loaded_surface_window_bounds") == surface_bounds, "mine layer %d leaves the surface window at the original return anchor" % deep_layer_index)
 						if deep_layer_index == 2 or deep_layer_index == max_layer_index:
-						_test_auxiliary_restore_rollback(layer_now + 3)
-						_test_underground_base_stream_failure_rollback(layer_now + 4)
+							_test_auxiliary_restore_rollback(layer_now + 3)
+							_test_underground_base_stream_failure_rollback(layer_now + 4)
 		var surface_restore_success: bool = bool(world.call("restore_stream_state", surface_payload, layer_now + 5))
 		_expect(surface_restore_success, "surface snapshot restores after mine layer %d regression" % deep_layer_index)
 		if surface_restore_success:
