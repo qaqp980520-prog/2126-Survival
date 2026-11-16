@@ -638,7 +638,16 @@ func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
 
 func get_loaded_surface_window_bounds() -> Rect2:
-	if player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+	if _surface_stream_pending or player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+		return Rect2()
+	var controller_value: Variant = director.get("chunk_controller")
+	if (
+		not (controller_value is Node3D)
+		or not is_instance_valid(controller_value)
+		or controller_value.is_queued_for_deletion()
+		or not controller_value.is_inside_tree()
+		or not controller_value.has_method("is_chunk_loaded")
+	):
 		return Rect2()
 	var chunk_size_x_value: Variant = director.get("chunk_size_x")
 	var chunk_size_z_value: Variant = director.get("chunk_size_z")
@@ -655,9 +664,17 @@ func get_loaded_surface_window_bounds() -> Rect2:
 	if not (grid_value is Vector2i):
 		return Rect2()
 	var grid: Vector2i = grid_value
-	var radius: float = float(int(load_radius_value))
+	var radius: int = int(load_radius_value)
+	# The geometric window is valid only while every chunk it describes is
+	# actually present in the controller. A successful prior sync is not enough
+	# if a chunk was later removed or its root became invalid.
+	for z in range(grid.y - radius, grid.y + radius + 1):
+		for x in range(grid.x - radius, grid.x + radius + 1):
+			var chunk_id: String = "surface/chunk_%d_%d" % [x, z]
+			if not bool(controller_value.call("is_chunk_loaded", chunk_id)):
+				return Rect2()
 	var center := Vector2((float(grid.x) + 0.5) * chunk_size_x, (float(grid.y) + 0.5) * chunk_size_z)
-	var half_extent := Vector2((radius + 0.5) * chunk_size_x, (radius + 0.5) * chunk_size_z)
+	var half_extent := Vector2((float(radius) + 0.5) * chunk_size_x, (float(radius) + 0.5) * chunk_size_z)
 	return Rect2(center - half_extent, half_extent * 2.0)
 
 
