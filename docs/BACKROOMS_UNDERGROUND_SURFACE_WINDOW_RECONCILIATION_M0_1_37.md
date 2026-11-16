@@ -49,6 +49,7 @@ The original PR #340 helper did not retain PR #375's pending-stream guard and al
 - Restore starts from a different mine window, rebuilds the surface window at the saved return anchor, then returns the player to the saved mine coordinates.
 - Active portal visual remains attached when its owner surface chunk remains loaded.
 - Stamina and Quick Use apply failures restore both streaming windows and the exact portal RNG envelope.
+- Mine-origin chunk assertion is baseline-aware: rollback preserves whether the origin chunk was loaded in the captured mine window, rather than incorrectly requiring it to be loaded for every underground position.
 - A one-shot SurfaceWorld chunk-factory failure during underground restore is injected; rollback must restore the exact mine window, surface window, return position, player position/velocity, world seed, registries and portal state.
 - Reference-position loaded-window bounds fail closed while asynchronous streaming is pending, including while underground.
 - The canonical parent safe-grid, radius and per-chunk checks remain intact.
