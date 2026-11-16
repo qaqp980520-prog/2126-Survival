@@ -328,7 +328,7 @@ func _run() -> void:
 					_test_auxiliary_restore_rollback(now + 12)
 					_test_underground_base_stream_failure_rollback(now + 12)
 			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
-		_test_underground_deep_layer_round_trip(now + 14)
+			_test_underground_deep_layer_round_trip(now + 14)
 			portal_director = world.get("backrooms_portal_director") as RefCounted
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
 		var live_player_position: Vector3 = world.player.global_position
