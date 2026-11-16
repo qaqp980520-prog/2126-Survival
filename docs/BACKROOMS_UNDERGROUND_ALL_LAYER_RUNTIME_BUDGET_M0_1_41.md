@@ -21,7 +21,7 @@ Give the all-eight-layer SurfaceWorld return-window regression enough execution 
 ## Commit and branch
 
 - CI adjustment commit: `54a80c5341b105ed595dbdcb420be3ec13f2c023`.
-- Updated M0.1.39 history commit: pending in the same branch history after the CI adjustment.
+- Updated M0.1.39 history commit: `4c0bc275c63b02a585678b18e8c8723be9d9547b`.
 - Branch: `fix/backrooms-underground-surface-window-on-reconciled-runtime-2026-11-16`.
 - PR: #377, base PR #376.
 
