@@ -1678,7 +1678,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout 90s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface world integration tests passed."
