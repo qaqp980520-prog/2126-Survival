@@ -12,6 +12,8 @@ PR #337 derived a geometrically correct rectangular window from the player's gri
 
 - Reject bounds while a surface streaming request is pending.
 - Resolve the controller from the production streaming director and verify it is alive, inside the SceneTree, and exposes is_chunk_loaded().
+- Reject load radii outside the streaming director's supported 0–8 range.
+- Reject non-finite player positions and grid coordinates outside the director's supported ±1,000,000,000 grid bound, avoiding the director's invalid-coordinate fallback to Vector2i.ZERO.
 - Enumerate every expected surface/chunk_x_z ID in the configured radius.
 - Return an empty Rect2 if any expected chunk is absent.
 - Keep configure_backrooms_portal_director() fail-closed; an incomplete window cannot mutate the candidate director's spawn policy.
@@ -25,6 +27,8 @@ The production SurfaceWorld test deliberately unloads one edge chunk from the in
 3. The previous portal director bounds remain unchanged.
 4. The streaming director can restore the missing chunk.
 5. The complete original bounds return after restoration.
+6. An unsupported far-away player coordinate fails closed instead of aliasing the origin window.
+7. A load radius outside 0–8 fails closed; restoring valid coordinates and radius restores the original bounds.
 
 ## Files
 
