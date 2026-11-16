@@ -328,6 +328,7 @@ func _run() -> void:
 					_test_auxiliary_restore_rollback(now + 12)
 					_test_underground_base_stream_failure_rollback(now + 12)
 			_expect(bool(world.call("restore_stream_state", portal_save_payload, now + 13)), "surface save can be restored after the underground round-trip regression")
+		_test_underground_deep_layer_round_trip(now + 14)
 			portal_director = world.get("backrooms_portal_director") as RefCounted
 		var live_director_state: Dictionary = portal_director.call("to_save_dict")
 		var live_player_position: Vector3 = world.player.global_position
@@ -400,6 +401,61 @@ func _run() -> void:
 						_expect(bool(world.call("_refresh_backrooms_portal_runtime_after_streaming")), "portal runtime refresh resumes after complete window recovery")
 	_finish(0 if failures.is_empty() else 1)
 
+func _test_underground_deep_layer_round_trip(now: int) -> void:
+	var surface_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not surface_payload.is_empty(), "deep-layer regression captures a valid surface snapshot")
+	if surface_payload.is_empty():
+		return
+	var surface_position: Vector3 = world.player.global_position
+	var surface_bounds: Rect2 = world.call("get_loaded_surface_window_bounds")
+	var mine_director: Node = world.get("mine_director") as Node
+	_expect(mine_director != null, "deep-layer regression has an underground mine director")
+	if mine_director == null:
+		return
+	var deep_layer_index: int = 2
+	var deep_floor_y: float = float(mine_director.call("get_layer_floor_y", deep_layer_index))
+	var deep_position := Vector3(73.0, deep_floor_y, 73.0)
+	var moved_to_deep_layer: bool = bool(mine_director.call("sync_to_world_position", deep_position, now))
+	_expect(moved_to_deep_layer, "deep-layer regression loads a nonzero underground layer outside the surface window")
+	if moved_to_deep_layer:
+		world.set("_surface_return_position", surface_position)
+		world.set("_is_underground", true)
+		world.set("_mine_layer_index", deep_layer_index)
+		world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", deep_position))
+		world.set("_last_mine_layer_index", deep_layer_index)
+		world.set("_mine_chunk_ready", world.chunk_controller.is_chunk_loaded("underground/mine_0_0"))
+		world.player.global_position = deep_position
+		var deep_payload: Dictionary = world.call("serialize_stream_state")
+		_expect(not deep_payload.is_empty(), "nonzero underground layer serializes with the saved surface return anchor")
+		if not deep_payload.is_empty():
+			_expect(int(deep_payload.get("mine_depth", -1)) == deep_layer_index, "deep-layer save records the exact nonzero mine depth")
+			_expect(mine_director.call("get_layer_index", deep_position) == deep_layer_index, "deep-layer fixture resolves to the intended mine layer")
+			var other_deep_position := Vector3(121.0, deep_floor_y, 121.0)
+			var moved_to_other_deep_window: bool = bool(mine_director.call("sync_to_world_position", other_deep_position, now + 1))
+			_expect(moved_to_other_deep_window, "deep-layer restore regression moves to a different mine window on the same layer")
+			if moved_to_other_deep_window:
+				world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", other_deep_position))
+				world.set("_last_mine_layer_index", deep_layer_index)
+				world.set("_mine_chunk_ready", world.chunk_controller.is_chunk_loaded("underground/mine_0_0"))
+				world.player.global_position = other_deep_position
+				var deep_restore_success: bool = bool(world.call("restore_stream_state", deep_payload, now + 2))
+				_expect(deep_restore_success, "nonzero underground save restores after the mine window moved")
+				if deep_restore_success:
+					_expect(world.player.global_position.is_equal_approx(deep_position), "deep-layer restore returns the player to the exact saved mine coordinates")
+					_expect(int(world.get("_mine_layer_index")) == deep_layer_index, "deep-layer restore preserves the exact mine layer index")
+					_expect(mine_director.call("get_layer_index", world.player.global_position) == deep_layer_index, "deep-layer restore aligns the player with the mine director layer")
+					var restored_return: Vector3 = world.get("_surface_return_position")
+					_expect(restored_return.is_equal_approx(surface_position), "deep-layer restore preserves the exact surface return anchor")
+					_expect(world.call("get_loaded_surface_window_bounds") == surface_bounds, "deep-layer restore leaves the surface window anchored at the original return position")
+					_test_auxiliary_restore_rollback(now + 3)
+					_test_underground_base_stream_failure_rollback(now + 4)
+		var surface_restore_success: bool = bool(world.call("restore_stream_state", surface_payload, now + 5))
+		_expect(surface_restore_success, "surface snapshot restores after nonzero-layer save, restore and rollback regressions")
+		if surface_restore_success:
+			_expect(not bool(world.get("_is_underground")), "returning from deep-layer regression restores the surface layer flag")
+			_expect(world.player.global_position.is_equal_approx(surface_position), "returning from deep-layer regression restores the exact surface player position")
+
+
 func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	var baseline_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not baseline_payload.is_empty(), "underground base-stream failure test captures a complete snapshot")
@@ -437,7 +493,8 @@ func _test_underground_base_stream_failure_rollback(now: int) -> void:
 	_expect(int(failure_state.get("remaining", -1)) == 0, "base stream failure was actually injected before rollback")
 	_expect(str(restore_report.get("phase", "")) == "stream_sync" and bool(restore_report.get("rollback_complete", false)), "failed underground base stream reports a complete cross-layer rollback")
 	_expect(world.player.global_position.is_equal_approx(baseline_position), "failed underground base stream restores the exact mine player position")
-	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == 0, "failed underground base stream restores the exact mine layer")
+	var baseline_mine_depth: int = int(baseline_payload.get("mine_depth", -1))
+	_expect(bool(world.get("_is_underground")) and int(world.get("_mine_layer_index")) == baseline_mine_depth, "failed underground base stream restores the exact mine layer")
 	var restored_return_position: Vector3 = world.get("_surface_return_position")
 	_expect(restored_return_position.is_equal_approx(baseline_return_position), "failed underground base stream restores the exact previous surface return position")
 	_expect(world.call("get_loaded_surface_window_bounds") == baseline_surface_bounds, "failed underground base stream restores the previous surface chunk window")
