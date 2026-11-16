@@ -10,6 +10,7 @@ const INTERACTION_RANGE: float = 3.25
 
 var _player_in_range: Node3D
 var _external_interaction_router_enabled: bool = false
+var activation_enabled: bool = true
 @onready var _prompt: Label3D = get_node_or_null("InteractPrompt")
 
 func _ready() -> void:
@@ -30,10 +31,17 @@ func set_external_interaction_router_enabled(enabled: bool) -> void:
     if enabled and _prompt != null:
         _prompt.visible = false
 
+func set_activation_enabled(enabled: bool) -> void:
+    activation_enabled = enabled
+    if not enabled and _prompt != null:
+        _prompt.visible = false
+
 func get_interaction_range() -> float:
     return INTERACTION_RANGE
 
 func interact(body: Node3D) -> bool:
+    if not activation_enabled:
+        return false
     if body == null or not is_instance_valid(body) or not is_inside_tree() or is_queued_for_deletion():
         return false
     if not body.is_inside_tree() or not body.is_in_group("player") or portal_id < 1:
