@@ -28,14 +28,15 @@ Extend PR #377's underground return-anchor regression beyond mine layer 0. The p
 - Import: `godot --headless --path . --import`.
 - Focused test: `godot --headless --path . --script res://tests/production_surface_world_test.gd`.
 
-## Validation status and first-run correction
+## Exact-head validation — code/test head passed
 
-- Initial M0.1.38 exact-head Full Gate [#43808308762](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43808308762) failed at root-project import, step #7. Godot reported `res://tests/production_surface_world_test.gd:332`: `Parse Error: Expected statement, found "Indent" instead.`
-- Cause: the new deep-layer helper invocation had one fewer tab than the surrounding nested test block. This was a test-source indentation error; the new runtime logic was not reached.
-- Corrected by commit `5d27a21d4a16166f2ce4a550c6e7f432b7ceaac1` (`fix(test): correct deep-layer regression call indentation`).
-- The failed run is not accepted as a pass. A fresh exact-head Godot 4.3 focused/full gate is required for the final branch head after the documentation closeout commits.
-- Previous head `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed 554/554 validation steps, but that run predates M0.1.38 and does not validate this version.
-- Local Godot executable is unavailable; no local engine pass is claimed.
+- Code/test HEAD `2985f132435517dc8b07ed6d79e624bea5b46e75` passed Godot 4.3 Full Compatibility Gate [#43808677944](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43808677944), job `133105237773`: workflow conclusion Success; 555/555 total job steps completed successfully; 0 failed and 0 skipped.
+- Production SurfaceWorld #207 passed with the new layer-2 save/restore between distinct mine windows, exact depth/player/return-anchor/window assertions, and layer-2 auxiliary plus injected base-stream rollback coverage.
+- Also passed Backrooms Portal Director #22; underground mining #213; mine director #214; carry/movement #219; interaction prompt #268; camera-ray interaction #273; mineral reload #292; all-mine-layer lift #302; bounded async streaming #361; controller teardown #366; async diagnostics/stress #372; randomized terrain soaks #433/#443; async dependency binding guard #453; and world-bridge restore read-isolation #547.
+- Full job log: 7,726,316 bytes / 84,487 lines; zero runtime `SCRIPT ERROR:`, `ERROR:` or `FAIL:` diagnostics.
+- The first M0.1.38 attempt [#43808308762](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43808308762) failed at root import step #7 due a test-source indentation error at line 332; commit `5d27a21d4a16166f2ce4a550c6e7f432b7ceaac1` corrected it. The failed attempt is retained as history and not counted as a pass.
+- The above pass validates code/test head `2985f...`. Updating this version record and the M0.1.37 record creates documentation-only commits; the final PR head after those commits still requires a fresh exact-head Full Gate before PR #377 can leave Draft.
+- Local Godot executable unavailable; no local engine pass is claimed.
 
 ## Limitations and next steps
 
