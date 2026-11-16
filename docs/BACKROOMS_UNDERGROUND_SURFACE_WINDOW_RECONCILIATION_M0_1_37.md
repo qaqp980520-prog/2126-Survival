@@ -54,12 +54,19 @@ The original PR #340 helper did not retain PR #375's pending-stream guard and al
 - Reference-position loaded-window bounds fail closed while asynchronous streaming is pending, including while underground.
 - The canonical parent safe-grid, radius and per-chunk checks remain intact.
 
-## Validation status
+## Validation status — M0.1.37 exact-head closeout
 
-- Static patch port and exact source comparison completed.
-- Exact-head Godot 4.3 focused tests and Full Compatibility Gate are pending on this branch.
-- Parent PR #376 Full Gate is still running; this child is not considered validated until its own exact-head run completes.
+- Previous PR #377 exact HEAD `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed Godot 4.3 Full Gate [#43799699023](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43799699023): 554/554 validation steps, 555/555 total job steps, 0 failures and 0 skipped.
+- Portal Director #22, Production SurfaceWorld #207 and async dependency-binding guard #453 passed.
+- Complete 7.71 MB / 84,412-line job log scan found zero timestamped runtime `SCRIPT ERROR:`, `ERROR:` or `FAIL:` diagnostics.
+- This evidence validates the M0.1.37 exact head only. The subsequent M0.1.38 layer-2 regression changes the branch and requires a fresh exact-head focused/full gate; do not reuse this prior pass for the new head.
 - Local Godot executable unavailable; no local engine pass is claimed.
+
+## M0.1.38 deep-layer follow-up
+
+- Added a representative layer-2 save/restore round-trip, different mine-window restore, and auxiliary/base-stream rollback coverage.
+- The base-stream rollback layer assertion now compares against the captured baseline depth instead of hard-coding layer 0.
+- See `docs/BACKROOMS_UNDERGROUND_DEEP_LAYER_RETURN_WINDOW_M0_1_38.md` for the independent version record.
 
 ## Limitations and next steps
 
