@@ -24,6 +24,7 @@ The production SurfaceWorld test deliberately unloads one edge chunk from the in
 
 1. The bounds getter returns an empty rectangle.
 2. Portal configuration is rejected.
+3. The bounds getter also returns an empty rectangle while asynchronous streaming is pending.
 3. The previous portal director bounds remain unchanged.
 4. The streaming director can restore the missing chunk.
 5. The complete original bounds return after restoration.
