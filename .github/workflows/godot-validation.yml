@@ -352,7 +352,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/world_bridge_save_adapter_integration.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during world bridge integration tests."
@@ -510,7 +510,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/mineral_grid_streaming_diagnostics_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E "SCRIPT ERROR|ERROR:|FAIL:"; then
             echo "Godot reported errors during mineral streaming diagnostics tests."
@@ -521,7 +521,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_recovery_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/mineral_grid_streaming_recovery_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported errors during mineral streaming recovery tests."
@@ -532,7 +532,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_grid_streaming_position_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/mineral_grid_streaming_position_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported errors during mineral streaming position validation tests."
@@ -712,7 +712,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/surface_mining_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/surface_mining_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported errors during underground-vein placement regression tests."
@@ -833,7 +833,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_session_save_roundtrip_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/world_session_save_roundtrip_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported active world save roundtrip errors."
@@ -869,7 +869,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/underground_mining_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/underground_mining_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported underground mining integration errors."
@@ -925,7 +925,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/mineral_mining_regeneration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/mineral_mining_regeneration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Mineral regeneration regression tests reported errors."
@@ -1049,7 +1049,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_inventory_mining_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/world_inventory_mining_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported world inventory/mining/vein persistence errors."
@@ -1098,7 +1098,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 15s godot --headless --path . --script res://tests/mineral_vein_registry_atomicity_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 15s godot --headless --path . --script res://tests/mineral_vein_registry_atomicity_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral vein registry transactionality tests passed."
@@ -1125,7 +1125,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 25s godot --headless --path . --script res://tests/crop_registry_persistence_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 25s godot --headless --path . --script res://tests/crop_registry_persistence_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop registry persistence integration test passed."
@@ -1152,7 +1152,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 15s godot --headless --path . --script res://tests/crop_registry_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 15s godot --headless --path . --script res://tests/crop_registry_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop registry lifecycle tests passed."
@@ -1178,7 +1178,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/crop_plot_controller_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/crop_plot_controller_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop plot controller integration tests passed."
@@ -1187,7 +1187,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/crop_plot_visual_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/crop_plot_visual_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop plot visual interaction integration tests passed."
@@ -1271,7 +1271,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/crop_chunk_offline_growth_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/crop_chunk_offline_growth_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Crop chunk offline growth integration test passed."
@@ -1298,7 +1298,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_session_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/world_session_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World session controller integration tests passed."
@@ -1325,7 +1325,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 15s godot --headless --path . --script res://tests/world_object_state_registry_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 15s godot --headless --path . --script res://tests/world_object_state_registry_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World object state registry tests passed."
@@ -1390,7 +1390,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/salvage_crate_inventory_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/salvage_crate_inventory_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate inventory integration test passed."
@@ -1443,7 +1443,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_loot_identity_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/salvage_crate_loot_identity_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported salvage loot identity errors."
@@ -1486,7 +1486,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_inventory_rollback_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/salvage_crate_inventory_rollback_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate inventory rollback tests passed."
@@ -1512,7 +1512,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_reentrancy_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/salvage_crate_reentrancy_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate reentrancy tests passed."
@@ -1549,7 +1549,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_state_mutation_guard_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/salvage_crate_state_mutation_guard_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate state mutation guard tests passed."
@@ -1588,7 +1588,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/salvage_crate_read_only_state_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/salvage_crate_read_only_state_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Salvage crate read-only state tests passed."
@@ -1627,7 +1627,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 35s godot --headless --path . --script res://tests/world_object_chunk_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 35s godot --headless --path . --script res://tests/world_object_chunk_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "World-object chunk lifecycle tests passed."
@@ -1700,7 +1700,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 90s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface world integration tests passed."
@@ -1747,7 +1747,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_mining_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path . --script res://tests/production_surface_world_mining_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface underground mining tests passed."
@@ -1756,7 +1756,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/underground_mine_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path . --script res://tests/underground_mine_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Underground mine director tests passed."
@@ -1797,7 +1797,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_carry_movement_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path . --script res://tests/production_surface_world_carry_movement_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface world carry movement tests passed."
@@ -1866,7 +1866,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/survival_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/survival_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Survival stamina model tests passed."
@@ -1874,7 +1874,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path . --script res://tests/production_surface_world_stamina_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production surface world stamina tests passed."
@@ -1947,7 +1947,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 20s godot --headless --path . --script res://tests/survival_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 20s godot --headless --path . --script res://tests/survival_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Survival quick-use model tests passed."
@@ -1955,7 +1955,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 40s godot --headless --path . --script res://tests/production_surface_world_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 40s godot --headless --path . --script res://tests/production_surface_world_quick_use_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld quick-use integration tests passed."
@@ -2025,7 +2025,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/underground_cache_distribution_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/underground_cache_distribution_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Underground cache distribution tests passed."
@@ -2034,7 +2034,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/underground_mine_layers_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/underground_mine_layers_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Underground mine layer tests passed."
@@ -2105,7 +2105,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 30s godot --headless --path . --script res://tests/underground_loot_tables_resource_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 30s godot --headless --path . --script res://tests/underground_loot_tables_resource_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Underground loot-table resource tests passed."
@@ -2145,7 +2145,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_seed_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/production_surface_world_seed_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld world-seed integration tests passed."
@@ -2185,7 +2185,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld interaction prompt tests passed."
@@ -2228,7 +2228,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/production_surface_world_interaction_prompt_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld camera-ray interaction tests passed."
@@ -2269,7 +2269,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/production_surface_world_interaction_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld interaction lifecycle tests passed."
@@ -2310,7 +2310,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 45s godot --headless --path . --script res://tests/production_surface_world_interaction_stream_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/production_surface_world_interaction_stream_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld interaction stream reload tests passed."
@@ -2390,7 +2390,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(timeout 60s godot --headless --path . --script res://tests/production_surface_world_mineral_vein_chunk_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/production_surface_world_mineral_vein_chunk_reload_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Production SurfaceWorld mineral-vein chunk reload tests passed."
