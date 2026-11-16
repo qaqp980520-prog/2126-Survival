@@ -654,13 +654,20 @@ func get_loaded_surface_window_bounds() -> Rect2:
 	var load_radius_value: Variant = director.get("load_radius")
 	if not (chunk_size_x_value is int or chunk_size_x_value is float) or not (chunk_size_z_value is int or chunk_size_z_value is float):
 		return Rect2()
-	if not (load_radius_value is int) or int(load_radius_value) < 0:
+	if not (load_radius_value is int) or int(load_radius_value) < 0 or int(load_radius_value) > 8:
 		return Rect2()
 	var chunk_size_x: float = float(chunk_size_x_value)
 	var chunk_size_z: float = float(chunk_size_z_value)
 	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
 		return Rect2()
-	var grid_value: Variant = director.call("get_grid_coordinate", player.global_position)
+	var player_position: Vector3 = player.global_position
+	if not is_finite(player_position.x) or not is_finite(player_position.y) or not is_finite(player_position.z):
+		return Rect2()
+	var grid_x: float = player_position.x / chunk_size_x
+	var grid_z: float = player_position.z / chunk_size_z
+	if not is_finite(grid_x) or not is_finite(grid_z) or absf(grid_x) > 1000000000.0 or absf(grid_z) > 1000000000.0:
+		return Rect2()
+	var grid_value: Variant = director.call("get_grid_coordinate", player_position)
 	if not (grid_value is Vector2i):
 		return Rect2()
 	var grid: Vector2i = grid_value
