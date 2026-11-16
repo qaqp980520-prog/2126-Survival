@@ -45,3 +45,12 @@ Give the all-eight-layer SurfaceWorld return-window regression enough execution 
 - Require the full 554-step gate and complete log scan to pass.
 - Keep PR #377 Draft until that evidence exists; independent review is required before merging to PR #376's feature branch.
 - No main merge.
+
+## Subsequent full-gate blocker and headless SVG correction — 2026-11-16
+
+- The first 90-second-timeout exact-head workflow [#43821375995](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43821375995) failed earlier at step #26, Backrooms portal playground integration.
+- Godot 4.3 reported that `res://assets/textures/backrooms_wallpaper.svg` had no resource loader when the prototype script was preloaded in the headless server build. The follow-on missing `get_current_level` call and watchdog timeout were consequences of the script parse failure.
+- Removed the parse-time SVG `preload` from `prototypes/BackroomsPortalPlayground.gd`. The wallpaper now loads at runtime only when the display is graphical and the resource exists; headless mode uses the existing deterministic wall-color fallback. If a graphical texture is unavailable, the same fallback is used with a warning.
+- This does not alter maze layout, portal behavior, collision, persistence, gameplay state, or the all-layer regression assertions.
+- The corrected head requires a fresh exact-head Godot 4.3 Full Gate. Run #43821375995 is a failure and is not reused as a pass.
+
