@@ -102,6 +102,62 @@ func _run() -> void:
 		_expect(diagnostics_panel.visible, "streaming diagnostics panel opens through its toggle API")
 		diagnostics_panel.call("toggle_open")
 		_expect(not diagnostics_panel.visible, "streaming diagnostics panel closes through its toggle API")
+	var loaded_window: Rect2 = world.call("get_loaded_surface_window_bounds")
+	_expect(loaded_window == Rect2(-10.0, -10.0, 30.0, 30.0), "portal spawn bounds exactly match the loaded 3x3 surface chunk window")
+	var backrooms_director: RefCounted = world.call("create_backrooms_portal_director") as RefCounted
+	_expect(backrooms_director != null, "production SurfaceWorld creates a Backrooms portal director configured for its loaded window")
+	if backrooms_director != null:
+		_expect(backrooms_director.get("world_bounds") == loaded_window, "portal director uses the exact loaded SurfaceWorld bounds")
+		_expect(is_equal_approx(float(backrooms_director.get("min_player_distance")), float(world.get("backrooms_portal_safe_distance"))), "portal director uses the exported player-safe distance")
+		_expect(is_equal_approx(float(backrooms_director.get("spawn_padding")), float(world.get("backrooms_portal_spawn_padding"))), "portal director uses the exported loaded-window edge margin")
+		backrooms_director.set("next_spawn_in", 0.01)
+		var portal_spawn: Dictionary = backrooms_director.call("tick", 0.02, Vector2(world.player.global_position.x, world.player.global_position.z))
+		_expect(str(portal_spawn.get("event", "")) == "spawned", "configured production loaded window can produce a portal candidate")
+		if str(portal_spawn.get("event", "")) == "spawned":
+			var portal_position: Vector2 = portal_spawn["portal"]["position"]
+			var safe_distance: float = float(world.get("backrooms_portal_safe_distance"))
+			var padding: float = float(world.get("backrooms_portal_spawn_padding"))
+			_expect(loaded_window.has_point(portal_position), "portal candidate stays inside currently loaded surface chunks")
+			_expect(portal_position.x >= loaded_window.position.x + padding and portal_position.x <= loaded_window.end.x - padding, "portal candidate respects loaded-window X edge margin")
+			_expect(portal_position.y >= loaded_window.position.y + padding and portal_position.y <= loaded_window.end.y - padding, "portal candidate respects loaded-window Z edge margin")
+			_expect(portal_position.distance_to(Vector2(world.player.global_position.x, world.player.global_position.z)) >= safe_distance, "portal candidate respects the player-safe distance")
+		var director_bounds_before_rejection: Rect2 = backrooms_director.get("world_bounds")
+		world.set("_surface_stream_pending", true)
+		_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "loaded-window bounds are unavailable while asynchronous surface streaming is pending")
+		_expect(not bool(world.call("configure_backrooms_portal_director", backrooms_director)), "portal spawn-window configuration is blocked while surface streaming is pending")
+		_expect(backrooms_director.get("world_bounds") == director_bounds_before_rejection, "a blocked stream-time reconfiguration leaves the director window unchanged")
+		world.set("_surface_stream_pending", false)
+		var window_controller: Node = world.get("chunk_controller") as Node
+		var window_director: Node = world.get("director") as Node
+		var missing_chunk_id: String = "surface/chunk_1_1"
+		var missing_chunk_unloaded: bool = (
+			window_controller != null
+			and window_controller.has_method("unload_chunk")
+			and bool(window_controller.call("unload_chunk", missing_chunk_id, int(Time.get_unix_time_from_system())))
+		)
+		_expect(missing_chunk_unloaded, "surface-window integrity fixture can remove one loaded edge chunk")
+		if missing_chunk_unloaded:
+			var incomplete_bounds: Rect2 = world.call("get_loaded_surface_window_bounds")
+			_expect(incomplete_bounds.size == Vector2.ZERO, "a missing surface chunk invalidates the loaded-window bounds")
+			var previous_director_bounds: Rect2 = backrooms_director.get("world_bounds")
+			_expect(not bool(world.call("configure_backrooms_portal_director", backrooms_director)), "portal configuration fails closed when any described surface chunk is missing")
+			_expect(backrooms_director.get("world_bounds") == previous_director_bounds, "missing-chunk rejection leaves the active portal policy unchanged")
+			var window_restored: bool = (
+				window_director != null
+				and bool(window_director.call("sync_to_world_position", world.player.global_position, int(Time.get_unix_time_from_system())))
+			)
+			_expect(window_restored, "streaming director can restore the deliberately removed surface chunk")
+			_expect(bool(window_controller.call("is_chunk_loaded", missing_chunk_id)), "restored surface window contains the previously missing chunk")
+			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "complete surface-window bounds recover after the missing chunk is restored")
+			var valid_player_position: Vector3 = world.player.global_position
+			world.player.global_position = Vector3(1000000000000.0, valid_player_position.y, valid_player_position.z)
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "unsupported player grid coordinates fail closed instead of aliasing the origin window")
+			world.player.global_position = valid_player_position
+			var original_load_radius: int = int(window_director.get("load_radius"))
+			window_director.set("load_radius", 9)
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "load radius outside the streaming contract fails closed")
+			window_director.set("load_radius", original_load_radius)
+			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "valid player coordinates and load radius restore the complete window")
 	var status: Dictionary = world.call("get_world_session_status")
 	_expect(bool(status.get("ready", false)), "surface world reports ready")
 	var ids: PackedStringArray = status.get("active_chunk_ids", PackedStringArray())
