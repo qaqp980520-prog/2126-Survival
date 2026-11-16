@@ -150,21 +150,64 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 		return _failure("backrooms_session_not_active")
 	if not restore_surface.is_valid():
 		return _failure("surface_restore_callback_invalid")
+	if session == null or not is_instance_valid(session) or not session.has_method("to_save_dict") or not session.has_method("load_save_dict"):
+		return _failure("session_rollback_contract_unavailable")
+	var session_snapshot_value: Variant = session.call("to_save_dict")
+	if not (session_snapshot_value is Dictionary) or session_snapshot_value.is_empty():
+		return _failure("session_snapshot_unavailable")
+	var session_snapshot: Dictionary = session_snapshot_value.duplicate(true)
 	var return_context: Dictionary = session.call("get_return_context")
 	if return_context.is_empty():
 		return _failure("surface_return_context_missing")
 	var restored: Variant = restore_surface.call(return_context.duplicate(true))
 	if not (restored is bool) or not bool(restored):
+		var callback_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = "surface_restore_failed"
-		return {"ok": false, "reason": last_error, "session_retained": true}
-	if not bool(session.call("is_active")) or session.call("get_return_context") != return_context:
+		return {
+			"ok": false,
+			"reason": last_error,
+			"session_retained": bool(session.call("is_active")),
+			"session_state_restored": callback_session_restored,
+			"rollback_complete": callback_session_restored
+		}
+	var current_return_context: Variant = session.call("get_return_context")
+	if not bool(session.call("is_active")) or current_return_context != return_context:
+		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = "session_changed_during_surface_restore"
-		return {"ok": false, "reason": last_error, "session_retained": bool(session.call("is_active"))}
-	var completed: Dictionary = session.call("complete_return")
-	if not bool(completed.get("ok", false)):
-		last_error = "session_return_commit_failed_after_surface_restore"
-		return {"ok": false, "reason": last_error, "surface_restored": true, "session_retained": true}
+		return {
+			"ok": false,
+			"reason": last_error,
+			"surface_restored": true,
+			"session_retained": bool(session.call("is_active")),
+			"session_state_restored": changed_session_restored,
+			"rollback_complete": changed_session_restored
+		}
+	var completed_value: Variant = session.call("complete_return")
+	var completed: Dictionary = completed_value if completed_value is Dictionary else {}
+	var expected_inactive_session: Dictionary = SessionScript.new().to_save_dict()
+	var final_session_payload: Variant = session.call("to_save_dict")
+	var final_return_context: Variant = session.call("get_return_context")
+	var session_cleared: bool = (
+		not bool(session.call("is_active"))
+		and final_return_context is Dictionary
+		and final_return_context.is_empty()
+		and final_session_payload is Dictionary
+		and final_session_payload == expected_inactive_session
+	)
+	if not bool(completed.get("ok", false)) or not session_cleared:
+		var completed_session_restored: bool = _restore_session_snapshot(session_snapshot)
+		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		last_error = "session_return_commit_failed_after_surface_restore" if not bool(completed.get("ok", false)) else "session_return_commit_incomplete_after_surface_restore"
+		return {
+			"ok": false,
+			"reason": last_error,
+			"surface_restored": true,
+			"session_retained": bool(session.call("is_active")),
+			"session_state_restored": completed_session_restored,
+			"rollback_complete": completed_session_restored
+		}
 	state = TransitionState.IDLE
 	return {"ok": true, "event": "returned", "context": completed}
 

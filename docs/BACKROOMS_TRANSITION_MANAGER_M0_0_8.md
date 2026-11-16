@@ -59,3 +59,15 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - Added a fail-closed regression proving that a Session without snapshot/restore methods cannot consume the one-use portal.
 - Updated files: `systems/BackroomsTransitionManager.gd`, `tests/backrooms_transition_manager_test.gd`, and this version record.
 - Dependency remains PR #332 and its ancestors #331/#327. Godot 4.3 focused and Full Compatibility Gate are pending for the new child HEAD; no pass is claimed yet.
+
+
+## M0.0.8.2 — Return-side Session rollback hardening
+
+- Before invoking the SurfaceWorld restore callback, the manager now requires a non-empty Session save snapshot and a load/restore method. A missing rollback contract fails closed before changing the SurfaceWorld.
+- If the SurfaceWorld callback fails or mutates the Session context before returning, the manager restores the pre-return Session snapshot and reads it back for exact Dictionary equality.
+- After the SurfaceWorld is restored, a failed or partially mutating complete_return() also restores and verifies the exact active return context.
+- A reported successful complete_return() is accepted only when the Session is inactive, its return context is empty, and its full save payload equals the canonical inactive BackroomsLocationSession payload.
+- Added regressions for a partially mutating complete_return() failure, a callback that mutates the Session before failing, and a Session without snapshot/restore support. The existing successful return/retry path remains covered.
+- Updated files: systems/BackroomsTransitionManager.gd, tests/backrooms_transition_manager_test.gd, and this version record.
+- Dependency: PR #334 integration candidate, which reconciles the production SurfaceWorld interaction/restore stack with the Backrooms Director/Session/TransitionManager stack.
+- Validation: pending exact-head Godot 4.3 focused and Full Compatibility Gate. Local Godot executable unavailable; no local engine pass is claimed.
