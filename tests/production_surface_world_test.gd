@@ -123,6 +123,7 @@ func _run() -> void:
 			_expect(portal_position.distance_to(Vector2(world.player.global_position.x, world.player.global_position.z)) >= safe_distance, "portal candidate respects the player-safe distance")
 		var director_bounds_before_rejection: Rect2 = backrooms_director.get("world_bounds")
 		world.set("_surface_stream_pending", true)
+		_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "loaded-window bounds are unavailable while asynchronous surface streaming is pending")
 		_expect(not bool(world.call("configure_backrooms_portal_director", backrooms_director)), "portal spawn-window configuration is blocked while surface streaming is pending")
 		_expect(backrooms_director.get("world_bounds") == director_bounds_before_rejection, "a blocked stream-time reconfiguration leaves the director window unchanged")
 		world.set("_surface_stream_pending", false)
