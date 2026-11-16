@@ -41,6 +41,8 @@ A failed temporary write or rename must not overwrite the previous primary. Temp
   - Exercises surface file round-trip, previous-primary backup, malformed JSON fallback, semantic-invalid fallback, missing-primary recovery, fail-closed backup blocking after incomplete rollback, temporary-path obstruction, and active Backrooms save/load/return.
 - `.github/workflows/godot-validation.yml`
   - Adds the production file-persistence test to the Godot 4.3 Full Compatibility Gate.
+- `.github/workflows/world-file-persistence-validation.yml`
+  - Focused Godot 4.3 root-import plus production file-persistence integration gate, triggered when the file store, production SurfaceWorld save path, or its restore dependencies/tests change.
 
 ## Dependencies and import
 
@@ -129,3 +131,52 @@ Run the exact-head Full Compatibility Gate, inspect the new Step #213 logs, corr
 - It verifies the saved Backrooms envelope retains that original visibility snapshot even though the live SurfaceWorld chunks are hidden during the visit.
 - A fresh-world file load must keep those surface chunks hidden while Backrooms is active, preserve the consumed one-use portal state, and restore every original chunk visibility value after returning to the saved SurfaceWorld position.
 - This guards the two-world handoff boundary against invisible-surface returns and accidental reappearance of a consumed portal.
+
+
+## Nested user:// save-directory support — 2026-11-13
+
+- `WorldEnvelopeFileStore.write_atomically()` now creates a missing parent directory recursively after validating the destination path and JSON payload, but before touching the primary, temporary, or backup files.
+- If directory creation fails, the operation reports `directory_create` and leaves existing save files untouched.
+- The production file-persistence test exercises nested `user://` paths through both the helper and actual `SurfaceWorld.save_game()` / `load_game()` API. It verifies traversal-segment rejection before directory creation, directory creation, production world-envelope/player-position round-trip, first-write readback, second-save `.bak` rotation, normal primary restore, then corrupts the nested primary and verifies `.bak` fallback, corrupt-primary preservation, and verified primary repair.
+- Test cleanup removes the nested save files and empty test directories.
+- Import/use remains unchanged: `SurfaceWorld.save_game(path)` and `load_game(path)` accept the nested `user://` path; no Project Settings, autoload, or third-party dependency is required.
+- Validation: new exact-head Godot 4.3 Full Compatibility Gate required. Local Godot executable is unavailable; no local engine pass is claimed.
+- Limitation: paths remain restricted to non-empty `user://` paths without traversal segments. This change does not add save-slot UI or cloud synchronization.
+
+
+## Focused production file-persistence CI
+
+- Added `.github/workflows/world-file-persistence-validation.yml` so changes to the file store, production SurfaceWorld save/load boundary, its Session/Runtime/JSON validators, or the persistence test run a focused Godot 4.3 job.
+- The job performs a root-project editor import with explicit `--import`, checks Backrooms SVG import metadata, then runs `tests/surface_world_file_persistence_test.gd` with a 150-second external timeout and requires the explicit success marker.
+- The repository-wide Full Compatibility Gate remains required; this focused workflow is an earlier, narrower signal and does not replace the full exact-head gate.
+
+
+## Focused CI shell correction — 2026-11-13
+
+- The first focused workflow run [#43415353968](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43415353968) failed in the Godot-version preflight before import or test execution. Its default container shell was `sh`, which does not support `set -o pipefail`.
+- Added explicit `shell: bash` to the preflight step. The failure is a workflow-shell configuration error, not a Godot or save-system test result.
+- A new exact-head focused workflow and full compatibility gate are required; no production test pass is claimed from the failed run.
+
+
+- Focused run #43415527398 reached the new nested tests and found six assertion mismatches in the test fixture comparisons: JSON-decoded integral schema numbers are floats, while the expected Dictionaries used integer `1`. The production save/load path and directory creation assertions passed; the six failures were direct helper readback/backup comparisons. The fixture now uses `1.0` for both schema versions so comparisons use the canonical JSON-decoded type. A fresh exact-head run is required.
+
+
+## Parent-directory obstruction hardening — 2026-11-13
+
+- `WorldEnvelopeFileStore.write_atomically()` now checks each existing ancestor of a missing parent directory before calling recursive directory creation. If a regular file occupies any required ancestor path, the writer reports `directory_create` without invoking the failing mkdir operation.
+- This avoids expected engine-level directory-creation errors for a deterministic obstruction case and preserves the blocking file.
+- `tests/surface_world_file_persistence_test.gd` creates a sentinel file where a parent directory is required, attempts a nested save beneath it, and verifies: the result is rejected with `directory_create`; sentinel bytes are unchanged; no primary, `.tmp`, or `.bak` file appears; no partial nested directory is created; and the fixture is removed.
+- Import/use remains unchanged: the existing `SurfaceWorld.save_game(path)` / `load_game(path)` APIs and `WorldEnvelopeFileStore` are reused. No new dependencies or Project Settings are required.
+- Validation status: exact-head focused Godot 4.3 file-persistence workflow and repository-wide Full Compatibility Gate are required for the updated branch. No result is claimed until both complete on the new HEAD.
+- Limitation: this guard detects regular-file ancestors; it does not claim to provide a filesystem sandbox against hostile symlink manipulation. The public save API remains restricted to non-empty `user://` paths without traversal segments.
+
+
+## User-data symbolic-link path guard — 2026-11-13
+
+- `WorldEnvelopeFileStore` now rejects save and load paths that traverse a symbolic link, directory junction, or other reparse point below the trusted `user://` root.
+- The guard checks the primary, temporary, and backup write paths before creating directories or touching save files; load checks both primary and backup paths before reading or invoking restore callbacks.
+- Corrupt-primary diagnostic candidates that resolve through a link are skipped.
+- The Godot regressions create a directory link and direct file links under `user://`. They cover linked ancestors, a linked primary file, a linked `.tmp` write path, a linked `.bak` write path, and a linked `.bak` load path. Every operation must reject with `path_symlink` before target mutation or restore callbacks; target bytes remain unchanged.
+- This is a preflight defense against pre-existing links, not a race-free filesystem sandbox: concurrent replacement of a path component between validation and I/O is outside the guarantee. The `user://` root itself is treated as trusted.
+- API dependency: Godot 4.3 `DirAccess.open()`, instance `is_link()`, and `create_link()`; see [Godot 4.3 DirAccess](https://docs.godotengine.org/en/4.3/classes/class_diraccess.html).
+- Validation status: pending exact-head focused file-persistence workflow and repository-wide Full Compatibility Gate. Local Godot executable is unavailable; do not claim engine validation until GitHub Actions completes.
