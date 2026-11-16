@@ -303,7 +303,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_portal_scene_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during portal scene tests."
@@ -314,7 +314,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_portal_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during portal playground integration tests."
@@ -325,7 +325,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/inventory_weight_boundaries.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_weight_boundaries.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during inventory weight tests."
@@ -371,7 +371,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_catalog_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_catalog_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors or failures during mineral regression tests."
@@ -382,7 +382,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_vein_chunk_stream_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_vein_chunk_stream_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors or failures during mineral chunk-stream tests."
@@ -393,7 +393,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_chunk_lifecycle_adapter_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_chunk_lifecycle_adapter_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors or failures during mineral chunk lifecycle adapter tests."
@@ -451,7 +451,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_chunk_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_chunk_controller_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during mineral chunk controller integration tests."
@@ -463,7 +463,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/backrooms_player_input_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_player_input_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during player input tests."
@@ -475,7 +475,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/backrooms_settings_profile_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_settings_profile_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during settings profile tests."
@@ -487,7 +487,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/backrooms_settings_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_settings_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during settings integration tests."
@@ -543,7 +543,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported script/runtime errors during mineral grid streaming director tests."
@@ -723,7 +723,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/surface_chunk_streaming_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/surface_chunk_streaming_playground_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported surface chunk streaming integration errors."
@@ -961,7 +961,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --script res://tests/inventory_mineral_catalog_compatibility_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/inventory_mineral_catalog_compatibility_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported inventory/mineral weight compatibility errors."
