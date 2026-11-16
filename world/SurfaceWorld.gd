@@ -7,6 +7,7 @@ const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDire
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
+const BackroomsPortalDirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
 const MINE_ENTRY_SURFACE_RETURN: Vector3 = Vector3(1.5, 2.0, 7.5)
@@ -21,6 +22,8 @@ const BASE_JUMP_SPEED: float = 7.0
 const LEGACY_WORLD_SEED: int = 0
 const MAX_WORLD_SEED: int = 2147483647
 @export_range(0, MAX_WORLD_SEED, 1) var world_seed: int = LEGACY_WORLD_SEED
+@export_range(0.0, 100.0, 0.5) var backrooms_portal_safe_distance: float = 8.0
+@export_range(0.0, 16.0, 0.5) var backrooms_portal_spawn_padding: float = 4.0
 var stamina: RefCounted = StaminaScript.new()
 var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
@@ -633,6 +636,53 @@ func _build_underground_mine() -> bool:
 
 func _make_underground_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
 	return UndergroundMineFactoryScript.make_chunk(now_unix, coord, layer_index, world_seed)
+
+func get_loaded_surface_window_bounds() -> Rect2:
+	if player == null or director == null or not is_instance_valid(director) or not director.has_method("get_grid_coordinate"):
+		return Rect2()
+	var chunk_size_x_value: Variant = director.get("chunk_size_x")
+	var chunk_size_z_value: Variant = director.get("chunk_size_z")
+	var load_radius_value: Variant = director.get("load_radius")
+	if not (chunk_size_x_value is int or chunk_size_x_value is float) or not (chunk_size_z_value is int or chunk_size_z_value is float):
+		return Rect2()
+	if not (load_radius_value is int) or int(load_radius_value) < 0:
+		return Rect2()
+	var chunk_size_x: float = float(chunk_size_x_value)
+	var chunk_size_z: float = float(chunk_size_z_value)
+	if not is_finite(chunk_size_x) or not is_finite(chunk_size_z) or chunk_size_x <= 0.0 or chunk_size_z <= 0.0:
+		return Rect2()
+	var grid_value: Variant = director.call("get_grid_coordinate", player.global_position)
+	if not (grid_value is Vector2i):
+		return Rect2()
+	var grid: Vector2i = grid_value
+	var radius: float = float(int(load_radius_value))
+	var center := Vector2((float(grid.x) + 0.5) * chunk_size_x, (float(grid.y) + 0.5) * chunk_size_z)
+	var half_extent := Vector2((radius + 0.5) * chunk_size_x, (radius + 0.5) * chunk_size_z)
+	return Rect2(center - half_extent, half_extent * 2.0)
+
+
+func configure_backrooms_portal_director(candidate: RefCounted) -> bool:
+	if _is_underground or _surface_stream_pending or player == null or director == null:
+		return false
+	if candidate == null or not is_instance_valid(candidate) or not candidate.has_method("set_spawn_window"):
+		return false
+	var loaded_bounds: Rect2 = get_loaded_surface_window_bounds()
+	if loaded_bounds.size.x <= 0.0 or loaded_bounds.size.y <= 0.0:
+		return false
+	return bool(candidate.call(
+		"set_spawn_window",
+		loaded_bounds,
+		backrooms_portal_safe_distance,
+		backrooms_portal_spawn_padding
+	))
+
+
+func create_backrooms_portal_director() -> RefCounted:
+	var candidate: RefCounted = BackroomsPortalDirectorScript.new(world_seed)
+	if not configure_backrooms_portal_director(candidate):
+		return null
+	return candidate
+
 
 func _build_mine_entrance_visual() -> void:
 	var marker := Node3D.new()
