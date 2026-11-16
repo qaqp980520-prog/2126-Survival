@@ -66,7 +66,9 @@ The original PR #340 helper did not retain PR #375's pending-stream guard and al
 
 - Added a representative layer-2 save/restore round-trip, different mine-window restore, and auxiliary/base-stream rollback coverage.
 - The base-stream rollback layer assertion now compares against the captured baseline depth instead of hard-coding layer 0.
-- See `docs/BACKROOMS_UNDERGROUND_DEEP_LAYER_RETURN_WINDOW_M0_1_38.md` for the independent version record.
+- Initial M0.1.38 Full Gate #43808308762 failed at root-project import due a test-source indentation error at `production_surface_world_test.gd:332`; commit `5d27a21d4a16166f2ce4a550c6e7f432b7ceaac1` corrected the helper invocation.
+- The failed run is not a pass. A fresh exact-head Godot 4.3 focused/full gate is required for the final branch head; keep PR #377 Draft.
+- See `docs/BACKROOMS_UNDERGROUND_DEEP_LAYER_RETURN_WINDOW_M0_1_38.md` for the independent version record and first-run correction.
 
 ## Limitations and next steps
 
