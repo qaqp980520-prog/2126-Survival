@@ -10,7 +10,7 @@ const CropRegistryScript = preload("res://systems/CropRegistry.gd")
 const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
-const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
+const BACKROOMS_WALLPAPER_PATH: String = "res://assets/textures/backrooms_wallpaper.svg"
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
 const WORLD_SEED: int = 20261026
 const SAFE_DISTANCE: float = 7.0
@@ -429,14 +429,22 @@ func _prepare_maze_materials() -> void:
     # Preserve the original wallpaper asset and UV scale, but prevent the maze
     # lighting from turning its yellow surface nearly black.
     _cell_material_wall.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    _cell_material_wall.albedo_color = Color.WHITE
+    _cell_material_wall.albedo_color = wall_color
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
-    _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
     _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     _cell_material_wall.uv1_triplanar = false
     _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
-    if _cell_material_wall.albedo_texture == null:
-        push_error("Backrooms wallpaper preload is null: res://assets/textures/backrooms_wallpaper.svg")
+    # SVG is an editor-imported texture and is not available in the headless
+    # server build used by CI. Load it only for graphical runs; headless tests
+    # use the deterministic wall-color fallback without a parse-time preload.
+    var wallpaper_texture: Texture2D = null
+    if DisplayServer.get_name() != "headless" and ResourceLoader.exists(BACKROOMS_WALLPAPER_PATH):
+        wallpaper_texture = ResourceLoader.load(BACKROOMS_WALLPAPER_PATH) as Texture2D
+    if wallpaper_texture != null:
+        _cell_material_wall.albedo_texture = wallpaper_texture
+        _cell_material_wall.albedo_color = Color.WHITE
+    elif DisplayServer.get_name() != "headless":
+        push_warning("Backrooms wallpaper texture is unavailable; using the wall-color fallback.")
 
 func _build_backrooms_room(level_name: String) -> void:
     if backrooms_room != null and is_instance_valid(backrooms_room):
