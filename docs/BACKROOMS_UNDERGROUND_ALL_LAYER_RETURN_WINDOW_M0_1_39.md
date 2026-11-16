@@ -28,6 +28,13 @@ Close the M0.1.38 coverage limitation by validating the SurfaceWorld return-wind
 - Import: `godot --headless --path . --import`.
 - Focused test: `godot --headless --path . --script res://tests/production_surface_world_test.gd`.
 
+## Initial exact-head CI failure and correction — 2026-11-16
+
+- First M0.1.39 exact-head run [#43811473967](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43811473967), job `133115526759`, failed at root project import before any focused regression executed.
+- Godot 4.3 reported `Expected indented block after "if" block` at `tests/production_surface_world_test.gd:457`. The two rollback helper calls under the layer-2/layer-8 guard were aligned with the `if` instead of nested beneath it.
+- Corrected both call indents in commit `199eb771c184b224d06c4b1072c0daf3b099279a`. This is a syntax correction only; test intent and production code are unchanged.
+- The failed run is not a pass. A new exact-head workflow is required for the corrected commit.
+
 ## Validation status
 
 - Code committed to PR #377 feature branch at the new test commit; full Godot 4.3 exact-head validation has been triggered by the updated PR head and is pending.
