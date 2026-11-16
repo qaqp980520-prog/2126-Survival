@@ -2,8 +2,12 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
+const PortalVisualScript = preload("res://systems/BackroomsPortalVisual.gd")
 var failures: Array[String] = []
 var world: Node3D
+var portal_entered_count: int = 0
+var portal_entered_id: int = -1
+var portal_entered_body: Node3D
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -14,6 +18,19 @@ func _run() -> void:
 	if world == null:
 		quit(1)
 		return
+	var portal := Area3D.new()
+	portal.set_script(PortalVisualScript)
+	portal.set("portal_id", 77)
+	portal.collision_layer = 1 << 1
+	portal.collision_mask = 1
+	var portal_collision := CollisionShape3D.new()
+	var portal_shape := SphereShape3D.new()
+	portal_shape.radius = 1.25
+	portal_collision.shape = portal_shape
+	portal.add_child(portal_collision)
+	portal.position = Vector3(1.0, 2.0, -1.5)
+	portal.connect("portal_entered", Callable(self, "_on_portal_entered"))
+	world.add_child(portal)
 	root.add_child(world)
 	await process_frame
 	await physics_frame
@@ -22,6 +39,65 @@ func _run() -> void:
 	if prompt == null:
 		_finish(1)
 		return
+
+	_expect(world.is_in_group("production_surface_world"), "production SurfaceWorld registers its interaction-router ownership before child portals enter")
+	var disabled_proxy_layers: Array[Dictionary] = _disable_other_interaction_proxies(world, portal)
+	await _aim_at(portal, Vector3(0.0, 0.0, 2.0))
+	_expect(portal.is_in_group("backrooms_portal"), "portal script registers the shared backrooms_portal target group")
+	_expect((portal.collision_layer & (1 << 1)) != 0, "portal Area3D exposes the production interaction collision layer")
+	_expect(bool(portal.get("_external_interaction_router_enabled")), "production portal delegates E handling to SurfaceWorld instead of competing with it")
+	var portal_target: Dictionary = world.call("get_camera_interaction_target")
+	var portal_ray_start: Vector3 = world.camera.global_position
+	var portal_ray_direction: Vector3 = (-world.camera.global_basis.z).normalized()
+	var portal_ray_query := PhysicsRayQueryParameters3D.create(portal_ray_start, portal_ray_start + portal_ray_direction * 5.0)
+	portal_ray_query.collision_mask = 1 << 1
+	portal_ray_query.collide_with_areas = true
+	portal_ray_query.collide_with_bodies = false
+	portal_ray_query.exclude = [world.player.get_rid()]
+	var portal_ray_hit: Dictionary = world.get_world_3d().direct_space_state.intersect_ray(portal_ray_query)
+	_expect(portal_ray_hit.get("collider") == portal, "layer-2 production physics ray directly hits the portal Area3D")
+	_expect(str(portal_target.get("kind", "")) == "portal" and portal_target.get("node") == portal, "production camera ray resolves a world-owned portal outside chunk registries")
+	world.call("_refresh_hud")
+	_expect(prompt.text == "E  ACTIVATE BACKROOMS PORTAL", "production HUD prompts for the portal under the reticle")
+	var touch_buttons: Dictionary = world.get("touch_buttons")
+	var portal_button: Button = touch_buttons.get("crop") as Button
+	_expect(portal_button != null and portal_button.text == "PORTAL", "mobile interaction button changes from CROP to PORTAL for the aimed target")
+	var enter_event := InputEventKey.new()
+	enter_event.keycode = KEY_E
+	enter_event.pressed = true
+	world.call("_unhandled_input", enter_event)
+	_expect(portal_entered_count == 1 and portal_entered_id == 77 and portal_entered_body == world.player, "SurfaceWorld E dispatch emits exactly one portal-enter request for the production player")
+	portal.call("_unhandled_input", enter_event)
+	_expect(portal_entered_count == 1, "portal-local E handler stays disabled under production routing and cannot double-activate")
+	if portal_button != null:
+		portal_button.emit_signal("pressed")
+	_expect(portal_entered_count == 2, "mobile interaction button uses the same portal activation dispatcher")
+	var non_player := Node3D.new()
+	world.add_child(non_player)
+	non_player.global_position = world.player.global_position
+	_expect(not bool(portal.call("interact", non_player)), "portal rejects an in-tree body outside the shared player group")
+	non_player.queue_free()
+	var valid_portal_id: int = int(portal.get("portal_id"))
+	portal.set("portal_id", 0)
+	_expect(not bool(portal.call("interact", world.player)), "portal rejects activation until a valid director ID is configured")
+	portal.set("portal_id", valid_portal_id)
+	world.player.global_position = portal.global_position + Vector3(0.0, 0.0, 5.0)
+	world.player.velocity = Vector3.ZERO
+	_expect(not bool(portal.call("interact", world.player)), "portal rejects activation outside its declared interaction range")
+	await _aim_at(portal)
+	portal.queue_free()
+	_expect(world.call("get_camera_interaction_target").is_empty(), "queued portal immediately invalidates the cached camera target")
+	await physics_frame
+	world.call("_refresh_hud")
+	_expect(prompt.text == "NO INTERACTION IN SIGHT", "HUD clears a portal target after its node is queued for deletion")
+	_expect(portal_button == null or portal_button.text == "CROP", "mobile interaction button returns to CROP after portal removal")
+	for proxy_entry in disabled_proxy_layers:
+		var restored_proxy: Area3D = proxy_entry.get("area") as Area3D
+		if restored_proxy != null and is_instance_valid(restored_proxy) and not restored_proxy.is_queued_for_deletion():
+			restored_proxy.collision_layer = int(proxy_entry.get("layer", 0))
+	_expect(_move_player_to(Vector3(1.0, 2.0, 1.0)), "test restores the production player to the surface origin after portal coverage")
+	await physics_frame
+	await physics_frame
 
 	var surface_crate: Node3D = _find_world_prop("SalvageCrate", "Chunk_0_0")
 	_expect(surface_crate != null, "surface origin chunk exposes its salvage crate")
@@ -156,6 +232,18 @@ func _move_player_to(position: Vector3) -> bool:
 		world.player.velocity = Vector3.ZERO
 	return moved
 
+func _disable_other_interaction_proxies(root: Node, keep: Area3D) -> Array[Dictionary]:
+	var changed: Array[Dictionary] = []
+	for candidate in root.find_children("*", "Area3D", true, false):
+		var area: Area3D = candidate as Area3D
+		if area == null or area == keep:
+			continue
+		var previous_layer: int = area.collision_layer
+		if (previous_layer & (1 << 1)) != 0:
+			changed.append({"area": area, "layer": previous_layer})
+			area.collision_layer = previous_layer & ~(1 << 1)
+	return changed
+
 func _find_world_prop(node_name: String, chunk_name: String) -> Node3D:
 	var candidates: Array = world.chunk_controller.call("get_loaded_world_state_nodes")
 	for candidate in candidates:
@@ -175,6 +263,11 @@ func _find_mineral_node(node_name: String, chunk_name: String) -> Node3D:
 		if is_instance_valid(parent_node) and parent_node.name == chunk_name:
 			return candidate as Node3D
 	return null
+
+func _on_portal_entered(body: Node3D, entered_portal_id: int) -> void:
+	portal_entered_count += 1
+	portal_entered_id = entered_portal_id
+	portal_entered_body = body
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
