@@ -28,11 +28,13 @@ Extend PR #377's underground return-anchor regression beyond mine layer 0. The p
 - Import: `godot --headless --path . --import`.
 - Focused test: `godot --headless --path . --script res://tests/production_surface_world_test.gd`.
 
-## Validation
+## Validation status and first-run correction
 
-- This change is committed to the existing PR #377 branch after preserving the previous exact head in backup branch `backup/pr377-pre-deep-layer-roundtrip-2026-11-16`.
-- Exact-head Godot 4.3 focused and full compatibility validation is pending for the new commit.
-- Previous PR #377 head `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed Full Gate run [#43799699023](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43799699023), 554/554 validation steps and 555/555 total job steps. This historical pass does not validate the new deep-layer test commit.
+- Initial M0.1.38 exact-head Full Gate [#43808308762](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43808308762) failed at root-project import, step #7. Godot reported `res://tests/production_surface_world_test.gd:332`: `Parse Error: Expected statement, found "Indent" instead.`
+- Cause: the new deep-layer helper invocation had one fewer tab than the surrounding nested test block. This was a test-source indentation error; the new runtime logic was not reached.
+- Corrected by commit `5d27a21d4a16166f2ce4a550c6e7f432b7ceaac1` (`fix(test): correct deep-layer regression call indentation`).
+- The failed run is not accepted as a pass. A fresh exact-head Godot 4.3 focused/full gate is required for the final branch head after the documentation closeout commits.
+- Previous head `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed 554/554 validation steps, but that run predates M0.1.38 and does not validate this version.
 - Local Godot executable is unavailable; no local engine pass is claimed.
 
 ## Limitations and next steps
