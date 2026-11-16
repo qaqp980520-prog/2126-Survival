@@ -324,7 +324,7 @@ func _run() -> void:
 			_expect(world.get("backrooms_portal_visual") == null, "retired portal visual is removed after chunk unload")
 			_expect(int(restored_portal_director.get("portal_serial")) == restored_portal_serial, "retirement preserves the portal serial for deterministic history")
 			_expect(float(restored_portal_director.get("next_spawn_in")) >= BackroomsPortalDirectorScript.MIN_SPAWN_INTERVAL and float(restored_portal_director.get("next_spawn_in")) <= BackroomsPortalDirectorScript.MAX_SPAWN_INTERVAL, "retirement schedules a normal future spawn interval")
-			_expect(bool(world.call("debug_move_player_to", Vector3(1.0, 2.0, 1.0), now + 10)), "test returns to the origin surface window for an incomplete-window portal retirement check")
+			_expect(bool(world.call("debug_move_player_to", Vector3(5.0, 2.0, 5.0), now + 10)), "test returns to the origin surface window for an incomplete-window portal retirement check")
 			var incomplete_window_director: RefCounted = world.get("backrooms_portal_director") as RefCounted
 			_expect(incomplete_window_director != null, "SurfaceWorld retains its portal director after a normal retirement")
 			if incomplete_window_director != null:
