@@ -148,6 +148,15 @@ func _run() -> void:
 			_expect(window_restored, "streaming director can restore the deliberately removed surface chunk")
 			_expect(bool(window_controller.call("is_chunk_loaded", missing_chunk_id)), "restored surface window contains the previously missing chunk")
 			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "complete surface-window bounds recover after the missing chunk is restored")
+			var valid_player_position: Vector3 = world.player.global_position
+			world.player.global_position = Vector3(1000000000000.0, valid_player_position.y, valid_player_position.z)
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "unsupported player grid coordinates fail closed instead of aliasing the origin window")
+			world.player.global_position = valid_player_position
+			var original_load_radius: int = int(window_director.get("load_radius"))
+			window_director.set("load_radius", 9)
+			_expect(world.call("get_loaded_surface_window_bounds") == Rect2(), "load radius outside the streaming contract fails closed")
+			window_director.set("load_radius", original_load_radius)
+			_expect(world.call("get_loaded_surface_window_bounds") == loaded_window, "valid player coordinates and load radius restore the complete window")
 	var status: Dictionary = world.call("get_world_session_status")
 	_expect(bool(status.get("ready", false)), "surface world reports ready")
 	var ids: PackedStringArray = status.get("active_chunk_ids", PackedStringArray())
