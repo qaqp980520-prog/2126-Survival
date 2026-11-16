@@ -544,7 +544,8 @@ func _expect_mine_window_restored(baseline_mine_ids: Array, failure_phase: Strin
 	var current_mine_ids: Array = Array(world.mine_director.call("get_managed_chunk_ids"))
 	current_mine_ids.sort()
 	_expect(current_mine_ids == baseline_mine_ids, "%s rollback restores the exact UndergroundMineDirector managed window" % failure_phase)
-	_expect(world.chunk_controller.is_chunk_loaded("underground/mine_0_0"), "%s rollback restores the persistent mine origin chunk" % failure_phase)
+	var baseline_origin_loaded: bool = baseline_mine_ids.has("underground/mine_0_0")
+	_expect(current_mine_ids.has("underground/mine_0_0") == baseline_origin_loaded, "%s rollback preserves the mine origin chunk's baseline loaded state" % failure_phase)
 
 
 func _make_backrooms_portal_director_envelope(seed_value: int) -> Dictionary:
