@@ -35,6 +35,14 @@ Close the M0.1.38 coverage limitation by validating the SurfaceWorld return-wind
 - Corrected both call indents in commit `199eb771c184b224d06c4b1072c0daf3b099279a`. This is a syntax correction only; test intent and production code are unchanged.
 - The failed run is not a pass. A new exact-head workflow is required for the corrected commit.
 
+## First all-layer runtime-budget failure and CI adjustment — 2026-11-16
+
+- Corrected parser head `399b6c91e2e9820208d07301fce31a1db1d1f168` imported successfully; Portal Director #22 passed.
+- Full Gate [#43820399009](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43820399009), job `133141952503`, reached Production SurfaceWorld step #207. The test output showed successful round-trips through layers 1–7, including layer-2 and layer-8 rollback checks only when reached; the process was terminated at the step's existing 40-second timeout before layer 8 completed.
+- The log contains no Godot `SCRIPT ERROR`, `ERROR:`, or `FAIL:` diagnostics. The failure is a test time-budget exhaustion, not a parser or asserted state failure.
+- Increased only the Production SurfaceWorld integration step timeout from 40 seconds to 90 seconds in `.github/workflows/godot-validation.yml`, commit `54a80c5341b105ed595dbdcb420be3ec13f2c023`. The command's captured-output error guards and success-banner requirement are unchanged.
+- A fresh exact-head workflow is required; the timed-out run is not a pass.
+
 ## Validation status
 
 - Code committed to PR #377 feature branch at the new test commit; full Godot 4.3 exact-head validation has been triggered by the updated PR head and is pending.
