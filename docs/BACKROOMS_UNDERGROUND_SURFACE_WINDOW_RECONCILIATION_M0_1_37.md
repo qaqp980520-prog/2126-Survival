@@ -54,21 +54,22 @@ The original PR #340 helper did not retain PR #375's pending-stream guard and al
 - Reference-position loaded-window bounds fail closed while asynchronous streaming is pending, including while underground.
 - The canonical parent safe-grid, radius and per-chunk checks remain intact.
 
-## Validation status — M0.1.37 exact-head closeout
+## M0.1.37 / M0.1.38 exact-head validation history
 
-- Previous PR #377 exact HEAD `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed Godot 4.3 Full Gate [#43799699023](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43799699023): 554/554 validation steps, 555/555 total job steps, 0 failures and 0 skipped.
-- Portal Director #22, Production SurfaceWorld #207 and async dependency-binding guard #453 passed.
-- Complete 7.71 MB / 84,412-line job log scan found zero timestamped runtime `SCRIPT ERROR:`, `ERROR:` or `FAIL:` diagnostics.
-- This evidence validates the M0.1.37 exact head only. The subsequent M0.1.38 layer-2 regression changes the branch and requires a fresh exact-head focused/full gate; do not reuse this prior pass for the new head.
+- Previous M0.1.37 HEAD `27c1a61daa44139ddcf8a82212752ea4290fd9fd` passed Full Gate [#43799699023](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43799699023): 554/554 validation steps, 555/555 total job steps, 0 failures/skips.
+- M0.1.38 code/test HEAD `2985f132435517dc8b07ed6d79e624bea5b46e75` passed Full Gate [#43808677944](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/43808677944): workflow Success, 555/555 total job steps, 0 failures/skips.
+- Production SurfaceWorld #207 passed with the new layer-2 save/restore and rollback regression; #22, #213, #214, #219, #268, #273, #292, #302, #361, #366, #372, #433, #443, #453 and #547 also passed.
+- Full job log: 7,726,316 bytes / 84,487 lines; zero runtime `SCRIPT ERROR:`, `ERROR:` or `FAIL:` diagnostics.
+- Initial M0.1.38 run #43808308762 failed at root import due the helper-call indentation error at `production_surface_world_test.gd:332`; commit `5d27a21` corrected it. The failed run is not counted as a pass.
+- The above Full Gate validates code/test HEAD `2985f...`. Documentation-only closeout commits after that head require a fresh exact-head gate before PR #377 can leave Draft.
 - Local Godot executable unavailable; no local engine pass is claimed.
 
 ## M0.1.38 deep-layer follow-up
 
-- Added a representative layer-2 save/restore round-trip, different mine-window restore, and auxiliary/base-stream rollback coverage.
-- The base-stream rollback layer assertion now compares against the captured baseline depth instead of hard-coding layer 0.
-- Initial M0.1.38 Full Gate #43808308762 failed at root-project import due a test-source indentation error at `production_surface_world_test.gd:332`; commit `5d27a21d4a16166f2ce4a550c6e7f432b7ceaac1` corrected the helper invocation.
-- The failed run is not a pass. A fresh exact-head Godot 4.3 focused/full gate is required for the final branch head; keep PR #377 Draft.
-- See `docs/BACKROOMS_UNDERGROUND_DEEP_LAYER_RETURN_WINDOW_M0_1_38.md` for the independent version record and first-run correction.
+- Added a representative layer-2 save/restore round-trip between distinct mine windows, with exact player position, mine depth, surface return anchor and loaded-window bounds assertions.
+- Re-ran auxiliary restore rollback and injected base-stream failure rollback with a layer-2 baseline.
+- Base-stream rollback depth assertion compares against the captured baseline instead of hard-coding layer 0.
+- GitHub version record: `docs/BACKROOMS_UNDERGROUND_DEEP_LAYER_RETURN_WINDOW_M0_1_38.md`.
 
 ## Limitations and next steps
 
