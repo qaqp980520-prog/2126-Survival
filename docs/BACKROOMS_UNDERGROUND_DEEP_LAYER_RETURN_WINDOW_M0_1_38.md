@@ -45,3 +45,11 @@ Extend PR #377's underground return-anchor regression beyond mine layer 0. The p
 - GPU visuals, Z-fighting, iPhone, chunk pin/retire stress and target-device performance remain unverified.
 - Complete all exact-head workflows and scan the full Godot job log before returning PR #377 to Ready for Review.
 - After independent review, merge PR #377 into PR #376's feature branch only, then rerun the updated parent exact-head Full Gate.
+
+
+## Coverage extension — M0.1.39
+
+- The original M0.1.38 layer-2 regression remains preserved as a representative deep-layer and rollback case.
+- Follow-up M0.1.39 extends the same production round-trip contract to every supported nonzero layer 1–8, verifies that layer 9 is rejected, and runs rollback injection at layer 2 and layer 8.
+- New version record: `docs/BACKROOMS_UNDERGROUND_ALL_LAYER_RETURN_WINDOW_M0_1_39.md`.
+- The updated test is on PR #377's feature branch. Exact-head Godot 4.3 validation is pending; no M0.1.39 pass is claimed until the updated Full Gate and complete log scan finish.
