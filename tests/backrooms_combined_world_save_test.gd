@@ -207,13 +207,13 @@ func _run() -> void:
 	_expect(window_target.is_empty(), "non-3D Window candidates are ignored before typed Node3D membership checks")
 	var invalid_envelope: Dictionary = envelope.duplicate(true)
 	invalid_envelope["backrooms_session"]["surface_world_seed"] = int(invalid_envelope["backrooms_session"].get("surface_world_seed", 0)) + 1
-	_expect(not bool(restored_world.call("restore_world_envelope", invalid_envelope, now + 1)), "combined restore rejects a Session bound to a different surface seed")
+	_expect(not bool(restored_world.call("restore_world_envelope", invalid_envelope, now + 6)), "combined restore rejects a Session bound to a different surface seed")
 	_expect(restored_world.call("serialize_stream_state") == baseline_surface, "preflight rejection leaves the complete fresh SurfaceWorld payload unchanged")
 	_expect(restored_session.call("to_save_dict") == baseline_session and not bool(restored_session.call("is_active")), "preflight rejection leaves the Session inactive and unchanged")
 	_expect(not bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")), "preflight rejection leaves the maze runtime empty")
 
 	restored_runtime.call("set_cell_builder_for_testing", Callable(self, "_reject_maze_cell_builder"))
-	var failed_restore: bool = bool(restored_world.call("restore_world_envelope", envelope, now + 2))
+	var failed_restore: bool = bool(restored_world.call("restore_world_envelope", envelope, now + 7))
 	var failed_report: Dictionary = restored_world.call("get_last_world_envelope_restore_report")
 	_expect(not failed_restore and str(failed_report.get("phase", "")) == "runtime_restore", "injected maze-cell staging failure rejects the combined restore at the runtime phase")
 	_expect(bool(failed_report.get("rollback_complete", false)), "runtime staging failure reports a complete combined-world rollback")
@@ -229,7 +229,7 @@ func _run() -> void:
 	_expect(not bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")) and int(restored_runtime.call("get_loaded_cell_count")) == 0, "failed combined restore leaves no staged maze cells")
 	_expect(str(restored_manager.call("get_state_name")) == "IDLE", "failed combined restore returns the transition manager to IDLE")
 
-	var restored: bool = bool(restored_world.call("restore_world_envelope", envelope, now + 3))
+	var restored: bool = bool(restored_world.call("restore_world_envelope", envelope, now + 8))
 	_expect(restored, "combined envelope restores SurfaceWorld, LocationSession, maze runtime and player as one operation")
 	if restored:
 		var saved_session: Dictionary = envelope.get("backrooms_session", {})
