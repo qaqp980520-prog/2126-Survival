@@ -207,6 +207,22 @@ jobs:
           test -f daily_games/KROLL_Skyline_Courier/project.godot
           test -f daily_games/KROLL_Skyline_Courier/tests/rules_test.gd
           test -f daily_games/KROLL_Skyline_Courier/tests/game_smoke_test.gd
+      - name: Verify GNU timeout hard-kill grace
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_file="$(mktemp)"
+          trap 'rm -f "$output_file"' EXIT
+          set +e
+          timeout -k 1s 1s sh -c 'trap "" TERM; while :; do :; done' >"$output_file" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 137 ]; then
+            cat "$output_file"
+            echo "Expected timeout to SIGKILL a TERM-ignoring child; received exit status $status."
+            exit 1
+          fi
+          echo "GNU timeout hard-kill grace self-test passed (exit 137 after TERM-ignoring child)."
       - name: Import and parse root 2126 Survival project
         shell: bash
         run: |
