@@ -207,6 +207,47 @@ jobs:
           test -f daily_games/KROLL_Skyline_Courier/project.godot
           test -f daily_games/KROLL_Skyline_Courier/tests/rules_test.gd
           test -f daily_games/KROLL_Skyline_Courier/tests/game_smoke_test.gd
+      - name: Verify GNU timeout hard-kill grace
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          pid_file="$workdir/child.pid"
+          output_file="$workdir/timeout.log"
+          cleanup() {
+            if [ -s "$pid_file" ]; then
+              child_pid="$(cat "$pid_file" 2>/dev/null || true)"
+              if [ -n "$child_pid" ]; then
+                child_state="$(ps -o stat= -p "$child_pid" 2>/dev/null | tr -d ' ' || true)"
+                if [ -n "$child_state" ] && [[ "$child_state" != Z* ]]; then
+                  kill -KILL "$child_pid" 2>/dev/null || true
+                fi
+              fi
+            fi
+            rm -rf "$workdir"
+          }
+          trap cleanup EXIT
+          set +e
+          timeout -k 5s 1s sh -c 'echo "$$" > "$1"; trap "" TERM; while :; do :; done' sh "$pid_file" >"$output_file" 2>&1
+          status=$?
+          set -e
+          cat "$output_file"
+          if [ "$status" -ne 137 ]; then
+            echo "Expected timeout hard-kill exit 137; received $status."
+            exit 1
+          fi
+          if [ ! -s "$pid_file" ]; then
+            echo "Child PID was not recorded."
+            exit 1
+          fi
+          child_pid="$(cat "$pid_file")"
+          child_state="$(ps -o stat= -p "$child_pid" 2>/dev/null | tr -d ' ' || true)"
+          if [ -n "$child_state" ] && [[ "$child_state" != Z* ]]; then
+            echo "Child process $child_pid is still alive (state=$child_state)."
+            exit 1
+          fi
+          echo "GNU timeout hard-kill grace self-test passed; child process is no longer running."
       - name: Import and parse root 2126 Survival project
         shell: bash
         run: |
