@@ -6,7 +6,7 @@ class_name BackroomsEntityBrain
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
 const BEHAVIOR_VERSION: int = 1
-const SUPPORTED_ENTITY_IDS: Array[String] = [
+const SUPPORTED_ENTITY_IDS := [
 	"window",
 	"smiler",
 	"hound",
@@ -17,7 +17,7 @@ const SUPPORTED_ENTITY_IDS: Array[String] = [
 	"deathmoth"
 ]
 
-const BEHAVIOR_PROFILES: Dictionary = {
+const BEHAVIOR_PROFILES := {
 	"window": {
 		"role": "anchored_observer",
 		"sight_radius": 14.0
@@ -83,7 +83,10 @@ static func is_behavior_version_supported(version: int) -> bool:
 	return version == BEHAVIOR_VERSION
 
 static func get_supported_entity_ids() -> Array[String]:
-	return SUPPORTED_ENTITY_IDS.duplicate()
+	var result: Array[String] = []
+	for requested_entity_id in SUPPORTED_ENTITY_IDS:
+		result.append(str(requested_entity_id))
+	return result
 
 static func get_behavior_profile(requested_entity_id: String) -> Dictionary:
 	var value: Variant = BEHAVIOR_PROFILES.get(requested_entity_id, null)

@@ -283,7 +283,7 @@ func _assert_deterministic_state_and_elapsed_time() -> void:
 	second.free()
 
 func _assert_runtime_perception_gate() -> void:
-	var runtime: Node3D = RuntimeScript.new()
+	var runtime: Variant = RuntimeScript.new()
 	runtime.force_metadata_only = true
 	root.add_child(runtime)
 	var prepared: Dictionary = runtime.call("prepare_destination", "Level 1", 20261118, Vector3.ZERO, 8.0, 1)
