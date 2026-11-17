@@ -164,6 +164,24 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 				print("DEBUG session JSON round-trip mismatch: key=", key, " saved=", saved_session.get(key), " restored=", restored_save_dict.get(key))
 	assert(restored_save_dict == saved_session, "Session JSON round-trip must preserve the canonical save dictionary.")
 
+	var legacy_nested_payload: Dictionary = saved_session.duplicate(true)
+	var legacy_nested_stream: Dictionary = legacy_nested_payload["maze_stream_state"].duplicate(true)
+	legacy_nested_stream["schema_version"] = 1
+	legacy_nested_stream.erase("entity_spawn_algorithm_version")
+	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
+	var legacy_nested_session = SessionScript.new()
+	assert(bool(legacy_nested_session.call("load_save_dict", legacy_nested_payload)), "Active Session accepts a legacy schema-one nested maze stream.")
+	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
+	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 2, "Session canonicalizes the legacy nested maze stream to schema two.")
+	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
+	var legacy_nested_manager = ManagerScript.new(legacy_nested_session)
+	var legacy_nested_runtime = RuntimeScript.new()
+	legacy_nested_runtime.force_metadata_only = true
+	root.add_child(legacy_nested_runtime)
+	assert(bool(legacy_nested_manager.call("restore_runtime_from_session", legacy_nested_runtime)), "Production runtime restores a legacy nested maze stream through Session.")
+	assert(legacy_nested_runtime.call("to_save_dict") == canonical_legacy_stream, "Restored production runtime matches the canonicalized Session stream payload.")
+	legacy_nested_runtime.queue_free()
+
 	var legacy_payload: Dictionary = saved_session.duplicate(true)
 	legacy_payload.erase("maze_stream_state")
 	var legacy_session = SessionScript.new()
