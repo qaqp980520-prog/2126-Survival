@@ -164,6 +164,9 @@ func _run() -> void:
 			var underground_loaded: bool = bool(mine_director.call("sync_to_world_position", underground_position, now + 2))
 			_expect(underground_loaded, "combined envelope fixture loads underground layer 2 outside the surface window")
 			if underground_loaded:
+				var saved_underground_chunk_ids: Array = Array(mine_director.call("get_managed_chunk_ids"))
+				saved_underground_chunk_ids.sort()
+				_expect(not saved_underground_chunk_ids.is_empty(), "combined envelope fixture captures the managed underground chunk window")
 				restored_world.set("_surface_return_position", baseline_position)
 				restored_world.set("_is_underground", true)
 				restored_world.set("_mine_layer_index", underground_layer)
@@ -197,6 +200,9 @@ func _run() -> void:
 							var restored_surface_return: Vector3 = restored_world.get("_surface_return_position")
 							_expect(restored_surface_return.is_equal_approx(baseline_position), "underground restore preserves the exact surface return anchor")
 							_expect(_loaded_surface_ids(restored_world) == baseline_surface_ids, "underground restore leaves the exact surface chunk window intact")
+							var restored_underground_chunk_ids: Array = Array(mine_director.call("get_managed_chunk_ids"))
+							restored_underground_chunk_ids.sort()
+							_expect(restored_underground_chunk_ids == saved_underground_chunk_ids, "underground restore reconstructs the exact saved mine chunk window")
 					var surface_after_underground: bool = bool(restored_world.call("restore_world_envelope", surface_envelope, now + 5))
 					_expect(surface_after_underground, "combined envelope returns the same world from underground to its saved surface state")
 					if surface_after_underground:
