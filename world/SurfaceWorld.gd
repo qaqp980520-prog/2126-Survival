@@ -12,6 +12,7 @@ const BackroomsPortalVisualScript = preload("res://systems/BackroomsPortalVisual
 const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
+const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
 const BACKROOMS_CELL_SIZE: float = 8.0
