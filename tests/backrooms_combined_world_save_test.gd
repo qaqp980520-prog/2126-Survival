@@ -261,8 +261,8 @@ func _run() -> void:
 		_expect(restored_player.global_position.is_equal_approx(saved_backrooms_position), "restored player returns to the exact saved Backrooms position")
 		_expect(restored_session.call("to_save_dict") == saved_session, "restored LocationSession exactly matches the saved Session")
 		_expect(restored_runtime.call("to_save_dict") == envelope.get("backrooms_runtime", {}), "restored maze runtime exactly matches the saved stream state")
-	_expect(int(restored_runtime.call("to_save_dict").get("schema_version", -1)) == 2, "restored runtime keeps the versioned maze stream schema")
-	_expect(int(restored_runtime.call("to_save_dict").get("entity_spawn_algorithm_version", -1)) == 1, "restored runtime keeps the saved entity-spawn algorithm version")
+		_expect(int(restored_runtime.call("to_save_dict").get("schema_version", -1)) == 2, "restored runtime keeps the versioned maze stream schema")
+		_expect(int(restored_runtime.call("to_save_dict").get("entity_spawn_algorithm_version", -1)) == 1, "restored runtime keeps the saved entity-spawn algorithm version")
 		_expect(bool(restored_runtime.call("is_prepared")) and bool(restored_runtime.call("is_active")) and restored_runtime.visible, "restored maze runtime is prepared, active and visible")
 		_expect(_loaded_surface_ids(restored_world) == envelope.get("surface_chunk_ids", []), "restored world retains the exact saved surface chunk window")
 		for chunk_id_value in envelope.get("surface_chunk_ids", []):
