@@ -209,6 +209,7 @@ jobs:
           test -f daily_games/KROLL_Skyline_Courier/tests/game_smoke_test.gd
       - name: Verify GNU timeout hard-kill grace
         shell: bash
+        timeout-minutes: 1
         run: |
           set -euo pipefail
           output_file="$(mktemp)"
