@@ -5,8 +5,11 @@ class_name BackroomsMazeStreamState
 ## A caller stages every new cell root first, then commits the exact staged key set.
 ## Existing cells are not retired until that commit succeeds.
 const Layout = preload("res://systems/BackroomsMazeLayout.gd")
+const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
-const SAVE_SCHEMA_VERSION: int = 1
+const SAVE_SCHEMA_VERSION: int = 2
+const MIN_SUPPORTED_SAVE_SCHEMA_VERSION: int = 1
+const LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const MAX_STREAM_RADIUS: int = 8
 const MAX_ABS_CELL_COORD: int = Layout.MAX_ABS_CELL_COORD
@@ -20,6 +23,7 @@ var level_id: String = ""
 var world_seed: int = 0
 var cell_size: float = 8.0
 var stream_radius: int = 1
+var entity_spawn_algorithm_version: int = EntityDirectorScript.SPAWN_ALGORITHM_VERSION
 var center_cell: Vector2i = Vector2i.ZERO
 var last_load_error: String = ""
 
@@ -41,7 +45,7 @@ func configure(
 		return false
 	if requested_stream_radius < 0 or requested_stream_radius > MAX_STREAM_RADIUS:
 		return false
-	if configured and level_id == destination_level and world_seed == seed_value and is_equal_approx(cell_size, requested_cell_size) and stream_radius == requested_stream_radius:
+	if configured and level_id == destination_level and world_seed == seed_value and is_equal_approx(cell_size, requested_cell_size) and stream_radius == requested_stream_radius and entity_spawn_algorithm_version == EntityDirectorScript.SPAWN_ALGORITHM_VERSION:
 		last_load_error = ""
 		return true
 
@@ -49,6 +53,7 @@ func configure(
 	world_seed = seed_value
 	cell_size = requested_cell_size
 	stream_radius = requested_stream_radius
+	entity_spawn_algorithm_version = EntityDirectorScript.SPAWN_ALGORITHM_VERSION
 	center_cell = Vector2i.ZERO
 	_loaded_cells.clear()
 	configured = true
@@ -205,6 +210,7 @@ func to_save_dict() -> Dictionary:
 	return {
 		"schema_version": SAVE_SCHEMA_VERSION,
 		"layout_algorithm_version": Layout.ALGORITHM_VERSION,
+		"entity_spawn_algorithm_version": entity_spawn_algorithm_version,
 		"level_id": level_id,
 		"world_seed": world_seed,
 		"cell_size": cell_size,
@@ -216,9 +222,28 @@ func to_save_dict() -> Dictionary:
 ## A version mismatch fails closed; it must not silently regenerate a different maze.
 func load_save_dict(payload: Dictionary) -> bool:
 	last_load_error = ""
-	var schema_result: Dictionary = _read_integer(payload.get("schema_version", null), SAVE_SCHEMA_VERSION, SAVE_SCHEMA_VERSION)
+	var schema_result: Dictionary = _read_integer(
+		payload.get("schema_version", null),
+		MIN_SUPPORTED_SAVE_SCHEMA_VERSION,
+		SAVE_SCHEMA_VERSION
+	)
 	if not bool(schema_result.get("ok", false)):
 		return _reject_load("invalid_schema_version")
+	var schema_version: int = int(schema_result.get("value", 0))
+	var spawn_version_result: Dictionary
+	if schema_version == 1:
+		spawn_version_result = {"ok": true, "value": LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION}
+	else:
+		spawn_version_result = _read_integer(
+			payload.get("entity_spawn_algorithm_version", null),
+			1,
+			MAX_WORLD_SEED
+		)
+	if not bool(spawn_version_result.get("ok", false)):
+		return _reject_load("unsupported_entity_spawn_algorithm_version")
+	var candidate_spawn_algorithm_version: int = int(spawn_version_result.get("value", 0))
+	if not EntityDirectorScript.is_spawn_algorithm_version_supported(candidate_spawn_algorithm_version):
+		return _reject_load("unsupported_entity_spawn_algorithm_version")
 	var layout_result: Dictionary = _read_integer(
 		payload.get("layout_algorithm_version", null),
 		Layout.ALGORITHM_VERSION,
@@ -260,6 +285,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	world_seed = candidate_seed
 	stream_radius = candidate_radius
 	cell_size = candidate_cell_size
+	entity_spawn_algorithm_version = candidate_spawn_algorithm_version
 	center_cell = candidate_center
 	configured = true
 	_loaded_cells.clear()
@@ -279,6 +305,7 @@ func _build_cell_descriptor(cell: Vector2i) -> Dictionary:
 		"level_id": level_id,
 		"world_seed": world_seed,
 		"layout_algorithm_version": Layout.ALGORITHM_VERSION,
+		"entity_spawn_algorithm_version": entity_spawn_algorithm_version,
 		"parent_direction": Layout.parent_toward_origin(cell),
 		"open_edges": {
 			"north": Layout.edge_is_open(cell, north, world_seed),
