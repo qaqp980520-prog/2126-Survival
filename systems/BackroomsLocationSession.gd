@@ -6,6 +6,8 @@ class_name BackroomsLocationSession
 ## the production manager must build the destination runtime before committing this state.
 
 const PortalDirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
+const MazeStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
+const MazeLayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 const SAVE_SCHEMA_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 
@@ -16,6 +18,7 @@ var surface_return_position: Vector3 = Vector3.ZERO
 var backrooms_position: Vector3 = Vector3.ZERO
 var surface_world_seed: int = 0
 var backrooms_seed: int = 0
+var maze_stream_state: Dictionary = {}
 var last_load_error: String = ""
 
 func can_begin_transition(
@@ -23,7 +26,8 @@ func can_begin_transition(
 	portal_id: int,
 	return_position: Vector3,
 	source_world_seed: int,
-	entry_position: Vector3 = Vector3.ZERO
+	entry_position: Vector3 = Vector3.ZERO,
+	maze_stream_payload: Dictionary = {}
 ) -> bool:
 	if active:
 		return false
@@ -35,6 +39,8 @@ func can_begin_transition(
 		return false
 	if source_world_seed < 0 or source_world_seed > MAX_WORLD_SEED:
 		return false
+	if not maze_stream_payload.is_empty() and not _validate_maze_stream_payload(destination_level, _derive_backrooms_seed(source_world_seed, portal_id), entry_position, maze_stream_payload):
+		return false
 	return true
 
 func begin_transition(
@@ -42,9 +48,10 @@ func begin_transition(
 	portal_id: int,
 	return_position: Vector3,
 	source_world_seed: int,
-	entry_position: Vector3 = Vector3.ZERO
+	entry_position: Vector3 = Vector3.ZERO,
+	maze_stream_payload: Dictionary = {}
 ) -> bool:
-	if not can_begin_transition(destination_level, portal_id, return_position, source_world_seed, entry_position):
+	if not can_begin_transition(destination_level, portal_id, return_position, source_world_seed, entry_position, maze_stream_payload):
 		return false
 	active = true
 	level_id = destination_level
@@ -53,13 +60,15 @@ func begin_transition(
 	backrooms_position = entry_position
 	surface_world_seed = source_world_seed
 	backrooms_seed = _derive_backrooms_seed(source_world_seed, portal_id)
+	maze_stream_state = maze_stream_payload.duplicate(true)
 	return true
 
 func can_begin_from_portal_result(
 	portal_result: Dictionary,
 	return_position: Vector3,
 	source_world_seed: int,
-	entry_position: Vector3 = Vector3.ZERO
+	entry_position: Vector3 = Vector3.ZERO,
+	maze_stream_payload: Dictionary = {}
 ) -> bool:
 	if not bool(portal_result.get("ok", false)):
 		return false
@@ -74,32 +83,50 @@ func can_begin_from_portal_result(
 		int(portal_id_value),
 		return_position,
 		source_world_seed,
-		entry_position
+		entry_position,
+		maze_stream_payload
 	)
 
 func begin_from_portal_result(
 	portal_result: Dictionary,
 	return_position: Vector3,
 	source_world_seed: int,
-	entry_position: Vector3 = Vector3.ZERO
+	entry_position: Vector3 = Vector3.ZERO,
+	maze_stream_payload: Dictionary = {}
 ) -> bool:
 	if str(portal_result.get("event", "")) != "entered":
 		return false
-	if not can_begin_from_portal_result(portal_result, return_position, source_world_seed, entry_position):
+	if not can_begin_from_portal_result(portal_result, return_position, source_world_seed, entry_position, maze_stream_payload):
 		return false
 	return begin_transition(
 		str(portal_result["destination_level"]),
 		int(portal_result["portal_id"]),
 		return_position,
 		source_world_seed,
-		entry_position
+		entry_position,
+		maze_stream_payload
 	)
 
 func set_backrooms_position(position: Vector3) -> bool:
 	if not active or not _is_finite_vector3(position):
 		return false
+	if not maze_stream_state.is_empty() and not _validate_maze_stream_payload(level_id, backrooms_seed, position, maze_stream_state):
+		return false
 	backrooms_position = position
 	return true
+
+## Update the persisted maze window and player position as one validated Session mutation.
+func update_backrooms_runtime_state(position: Vector3, maze_stream_payload: Dictionary) -> bool:
+	if not active or not _is_finite_vector3(position):
+		return false
+	if not _validate_maze_stream_payload(level_id, backrooms_seed, position, maze_stream_payload):
+		return false
+	backrooms_position = position
+	maze_stream_state = maze_stream_payload.duplicate(true)
+	return true
+
+func get_maze_stream_state() -> Dictionary:
+	return maze_stream_state.duplicate(true)
 
 func get_return_context() -> Dictionary:
 	if not active:
@@ -135,7 +162,8 @@ func to_save_dict() -> Dictionary:
 		"surface_return_position": _vector_to_array(surface_return_position),
 		"backrooms_position": _vector_to_array(backrooms_position),
 		"surface_world_seed": surface_world_seed,
-		"backrooms_seed": backrooms_seed
+		"backrooms_seed": backrooms_seed,
+		"maze_stream_state": maze_stream_state.duplicate(true)
 	}
 
 ## Validate the complete candidate into locals before changing any live field.
@@ -148,6 +176,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var portal_id_value: Variant = payload.get("entry_portal_id", null)
 	var source_seed_value: Variant = payload.get("surface_world_seed", null)
 	var backrooms_seed_value: Variant = payload.get("backrooms_seed", null)
+	var maze_stream_value: Variant = payload.get("maze_stream_state", {})
 	if not _is_integer_in_range(schema_value, SAVE_SCHEMA_VERSION, SAVE_SCHEMA_VERSION):
 		return _reject_load("schema_version_invalid")
 	if not (active_value is bool) or not (level_value is String):
@@ -158,6 +187,8 @@ func load_save_dict(payload: Dictionary) -> bool:
 		return _reject_load("surface_world_seed_invalid")
 	if not _is_integer_in_range(backrooms_seed_value, 0, MAX_WORLD_SEED):
 		return _reject_load("backrooms_seed_invalid")
+	if not (maze_stream_value is Dictionary):
+		return _reject_load("maze_stream_state_invalid")
 	var return_parse: Dictionary = _parse_vector3(payload.get("surface_return_position", null))
 	var player_parse: Dictionary = _parse_vector3(payload.get("backrooms_position", null))
 	if not bool(return_parse.get("ok", false)) or not bool(player_parse.get("ok", false)):
@@ -169,6 +200,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var next_player_position: Vector3 = player_parse["value"]
 	var next_source_seed: int = int(source_seed_value)
 	var next_backrooms_seed: int = int(backrooms_seed_value)
+	var next_maze_stream_state: Dictionary = maze_stream_value.duplicate(true)
 	if next_active:
 		if not PortalDirectorScript.TARGET_LEVELS.has(next_level):
 			return _reject_load("destination_level_unsupported")
@@ -176,6 +208,13 @@ func load_save_dict(payload: Dictionary) -> bool:
 			return _reject_load("active_portal_id_not_positive")
 		if next_backrooms_seed != _derive_backrooms_seed(next_source_seed, next_portal_id):
 			return _reject_load("backrooms_seed_derivation_mismatch")
+		if not next_maze_stream_state.is_empty():
+			if not _validate_maze_stream_payload(next_level, next_backrooms_seed, next_player_position, next_maze_stream_state):
+				return _reject_load("maze_stream_state_mismatch")
+			var canonical_stream_state: RefCounted = MazeStreamStateScript.new()
+			if not bool(canonical_stream_state.call("load_save_dict", next_maze_stream_state)):
+				return _reject_load("maze_stream_state_canonicalization_failed")
+			next_maze_stream_state = canonical_stream_state.call("to_save_dict")
 	else:
 		if next_level != "" or next_portal_id != 0:
 			return _reject_load("inactive_identity_not_canonical")
@@ -183,6 +222,8 @@ func load_save_dict(payload: Dictionary) -> bool:
 			return _reject_load("inactive_position_not_canonical")
 		if next_source_seed != 0 or next_backrooms_seed != 0:
 			return _reject_load("inactive_seed_not_canonical")
+		if not next_maze_stream_state.is_empty():
+			return _reject_load("inactive_maze_stream_state_not_empty")
 	active = next_active
 	level_id = next_level
 	entry_portal_id = next_portal_id
@@ -190,6 +231,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	backrooms_position = next_player_position
 	surface_world_seed = next_source_seed
 	backrooms_seed = next_backrooms_seed
+	maze_stream_state = next_maze_stream_state
 	return true
 
 func get_last_load_error() -> String:
@@ -207,6 +249,25 @@ func _reset() -> void:
 	backrooms_position = Vector3.ZERO
 	surface_world_seed = 0
 	backrooms_seed = 0
+	maze_stream_state.clear()
+
+func derive_backrooms_seed(source_seed: int, portal_id: int) -> int:
+	if source_seed < 0 or source_seed > MAX_WORLD_SEED or portal_id < 1 or portal_id > PortalDirectorScript.MAX_PORTAL_SERIAL:
+		return -1
+	return _derive_backrooms_seed(source_seed, portal_id)
+
+func _validate_maze_stream_payload(destination_level: String, expected_seed: int, position: Vector3, payload: Dictionary) -> bool:
+	if payload.is_empty() or not _is_finite_vector3(position):
+		return false
+	var candidate: RefCounted = MazeStreamStateScript.new()
+	if not bool(candidate.call("load_save_dict", payload.duplicate(true))):
+		return false
+	if str(candidate.get("level_id")) != destination_level or int(candidate.get("world_seed")) != expected_seed:
+		return false
+	var mapping: Dictionary = MazeLayoutScript.try_cell_for_position(position, float(candidate.get("cell_size")))
+	if not bool(mapping.get("ok", false)) or not (mapping.get("cell", null) is Vector2i):
+		return false
+	return candidate.get("center_cell") == mapping["cell"]
 
 func _derive_backrooms_seed(source_seed: int, portal_id: int) -> int:
 	# All products remain inside signed 64-bit range for the validated inputs.
