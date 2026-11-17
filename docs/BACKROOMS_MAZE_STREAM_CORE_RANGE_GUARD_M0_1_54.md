@@ -17,7 +17,7 @@ Port the deterministic maze topology and renderer-independent streamed-window st
 ## Files
 
 - `systems/BackroomsMazeLayout.gd` — deterministic topology, safe cell mapping and bounded edge evaluation.
-- `tests/backrooms_maze_layout_test.gd` — centered boundaries, invalid sizes, extreme finite coordinates, out-of-range cells, spanning-tree connectivity, edge symmetry and seed determinism.
+- `tests/backrooms_maze_layout_test.gd` — centered boundaries, invalid sizes, extreme finite Vector3 coordinates (1e30), out-of-range cells, spanning-tree connectivity, edge symmetry and seed determinism.
 - `systems/BackroomsMazeStreamState.gd` — transactional plan/commit and versioned save/restore.
 - `tests/backrooms_maze_stream_state_test.gd` — load/keep/unload planning, partial/duplicate stage rejection, stale plans/configuration, save round-trip, version rejection, and extreme positive/negative finite-float rejection with exact state preservation.
 - `prototypes/BackroomsPortalPlayground.gd` — delegates existing topology helpers to the shared Layout module while retaining the hardened headless visual fallback from the active runtime branch.
@@ -39,7 +39,7 @@ Port the deterministic maze topology and renderer-independent streamed-window st
 
 The legacy `BackroomsMazeStreamState._read_integer()` converted a finite integral float to `int()` before checking the caller's much smaller allowed range. A value such as `1e300` could therefore reach an overflowing conversion. The new guard rejects out-of-domain values before conversion and tests schema version, layout version, seed, radius and both center-cell axes while asserting the previously committed window remains unchanged.
 
-The legacy `BackroomsMazeLayout.try_cell_for_position()` checked only finiteness before `floori()`. An extreme finite world coordinate could reach integer cell conversion. The shared layout now applies the same ±1,000,000-cell safety envelope used by stream state before `floori()`; edge queries reject out-of-range source or neighbor cells before hashing.
+The legacy `BackroomsMazeLayout.try_cell_for_position()` checked only finiteness before `floori()`. An extreme but finite Vector3 coordinate such as 1e30 could reach integer cell conversion. The layout test uses 1e30 (rather than 1e300) because Godot's Vector3 storage is narrower than the GDScript Variant float used by the save-payload tests. The shared layout now applies the same ±1,000,000-cell safety envelope used by stream state before `floori()`; edge queries reject out-of-range source or neighbor cells before hashing.
 
 ## Limitations
 
