@@ -19,7 +19,7 @@ Prove that the GNU `timeout -k` behavior used by the root Godot validation comma
 Add a shell-only self-test immediately before root-project Godot import:
 
 - Start a child shell that explicitly ignores SIGTERM and remains active.
-- Run it under `timeout -k 1s 1s`.
+- Run it under `timeout -k 5s 1s`.
 - Require exit status 137, proving the child was ultimately terminated by SIGKILL after the grace period.
 - Capture output and fail closed on any unexpected exit status.
 - Remove the temporary output file with an EXIT trap.
