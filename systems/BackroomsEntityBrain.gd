@@ -69,6 +69,7 @@ var world_seed: int = 0
 var current_state: String = "unconfigured"
 var current_intent: String = "none"
 var state_elapsed_seconds: float = 0.0
+var has_evaluated_perception: bool = false
 var has_target_position: bool = false
 var target_position: Vector3 = Vector3.ZERO
 
@@ -112,6 +113,7 @@ func configure(
 	current_state = _initial_state(entity_id)
 	current_intent = _intent_for_state(current_state)
 	state_elapsed_seconds = 0.0
+	has_evaluated_perception = false
 	has_target_position = false
 	target_position = Vector3.ZERO
 	configured = true
@@ -176,12 +178,13 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 		noise_distance,
 		is_dark
 	)
-	if next_state == current_state:
-		state_elapsed_seconds += delta_seconds
-	else:
+	if not has_evaluated_perception or next_state != current_state:
 		state_elapsed_seconds = 0.0
+	else:
+		state_elapsed_seconds += delta_seconds
 	current_state = next_state
 	current_intent = _intent_for_state(next_state)
+	has_evaluated_perception = true
 
 	if has_line_of_sight and has_player_position:
 		target_position = player_position_value
@@ -208,6 +211,7 @@ func get_behavior_snapshot() -> Dictionary:
 		"state": current_state,
 		"intent": current_intent,
 		"state_elapsed_seconds": state_elapsed_seconds,
+		"has_evaluated_perception": has_evaluated_perception,
 		"has_target_position": has_target_position,
 		"target_position": target_position if has_target_position else Vector3.ZERO
 	}
@@ -218,6 +222,7 @@ func reset_behavior() -> bool:
 	current_state = _initial_state(entity_id)
 	current_intent = _intent_for_state(current_state)
 	state_elapsed_seconds = 0.0
+	has_evaluated_perception = false
 	has_target_position = false
 	target_position = Vector3.ZERO
 	return true
