@@ -149,6 +149,59 @@ func _run() -> void:
 	var baseline_surface_ids: Array = _loaded_surface_ids(restored_world)
 	var baseline_session: Dictionary = restored_session.call("to_save_dict")
 	_expect(not baseline_surface.is_empty() and baseline_surface_ids.size() == 9, "fresh restore target captures a complete baseline surface snapshot after surface round-trip")
+	# The combined envelope also supports an active underground mine visit. Exercise
+	# that location independently from the Backrooms branch so its layer/depth and
+	# return anchor survive the same envelope boundary.
+	var mine_director: Node = restored_world.get("mine_director") as Node
+	_expect(mine_director != null, "combined envelope target exposes its production underground mine director")
+	if mine_director != null:
+		var underground_layer: int = 2
+		var underground_floor_y: float = float(mine_director.call("get_layer_floor_y", underground_layer))
+		_expect(is_finite(underground_floor_y), "combined envelope underground fixture resolves a supported mine floor")
+		if is_finite(underground_floor_y):
+			var underground_position := Vector3(73.0, underground_floor_y, 73.0)
+			var underground_loaded: bool = bool(mine_director.call("sync_to_world_position", underground_position, now + 2))
+			_expect(underground_loaded, "combined envelope fixture loads underground layer 2 outside the surface window")
+			if underground_loaded:
+				restored_world.set("_surface_return_position", baseline_position)
+				restored_world.set("_is_underground", true)
+				restored_world.set("_mine_layer_index", underground_layer)
+				restored_world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", underground_position))
+				restored_world.set("_last_mine_layer_index", underground_layer)
+				restored_world.set("_mine_chunk_ready", restored_controller.call("is_chunk_loaded", "underground/mine_0_0"))
+				restored_player.global_position = underground_position
+				restored_player.velocity = Vector3(0.25, 0.0, 0.0)
+				var underground_envelope: Dictionary = restored_world.call("serialize_world_envelope")
+				_expect(str(underground_envelope.get("active_location", "")) == "underground", "combined envelope records an active underground location")
+				_expect(str(underground_envelope.get("surface_world", {}).get("location_layer", "")) == "underground", "underground envelope preserves the SurfaceWorld layer contract")
+				_expect(int(underground_envelope.get("surface_world", {}).get("mine_depth", -1)) == underground_layer, "underground envelope records the exact mine depth")
+				_expect(underground_envelope.get("backrooms_session", {}).get("active", false) == false and underground_envelope.get("backrooms_runtime", {}).is_empty(), "underground envelope contains no active Backrooms Session or maze Runtime")
+				_expect(not underground_envelope.is_empty(), "active underground state serializes through the combined envelope")
+				if not underground_envelope.is_empty():
+					var other_underground_position := Vector3(121.0, underground_floor_y, 121.0)
+					var moved_to_other_underground_window: bool = bool(mine_director.call("sync_to_world_position", other_underground_position, now + 3))
+					_expect(moved_to_other_underground_window, "underground envelope restore fixture moves to a different mine window")
+					if moved_to_other_underground_window:
+						restored_world.set("_last_mine_grid", mine_director.call("get_grid_coordinate", other_underground_position))
+						restored_world.set("_last_mine_layer_index", underground_layer)
+						restored_world.set("_mine_chunk_ready", restored_controller.call("is_chunk_loaded", "underground/mine_0_0"))
+						restored_player.global_position = other_underground_position
+						restored_player.velocity = Vector3.ZERO
+						var underground_restored: bool = bool(restored_world.call("restore_world_envelope", underground_envelope, now + 4))
+						_expect(underground_restored, "combined envelope restores an underground visit after the mine window moved")
+						if underground_restored:
+							_expect(bool(restored_world.get("_is_underground")) and not bool(restored_world.get("_is_in_backrooms")), "underground restore selects the correct active world mode")
+							_expect(restored_player.global_position.is_equal_approx(underground_position), "underground restore returns the player to the exact saved coordinates")
+							_expect(int(restored_world.get("_mine_layer_index")) == underground_layer and mine_director.call("get_layer_index", restored_player.global_position) == underground_layer, "underground restore preserves the exact mine layer")
+							_expect((restored_world.get("_surface_return_position") as Vector3).is_equal_approx(baseline_position), "underground restore preserves the exact surface return anchor")
+							_expect(_loaded_surface_ids(restored_world) == baseline_surface_ids, "underground restore leaves the exact surface chunk window intact")
+					var surface_after_underground: bool = bool(restored_world.call("restore_world_envelope", surface_envelope, now + 5))
+					_expect(surface_after_underground, "combined envelope returns the same world from underground to its saved surface state")
+					if surface_after_underground:
+						_expect(not bool(restored_world.get("_is_underground")), "surface envelope restore clears the underground mode")
+						_expect(restored_player.global_position.is_equal_approx(baseline_position), "surface envelope restore returns to the exact saved surface position")
+						_expect(_loaded_surface_ids(restored_world) == baseline_surface_ids, "surface envelope restore retains the original surface chunk window")
+						_expect(restored_world.call("serialize_stream_state") == baseline_surface, "surface envelope restore returns the complete SurfaceWorld payload to its baseline")
 	var window_target: Dictionary = restored_world.call("_resolve_camera_interaction_target", root)
 	_expect(window_target.is_empty(), "non-3D Window candidates are ignored before typed Node3D membership checks")
 	var invalid_envelope: Dictionary = envelope.duplicate(true)
