@@ -142,7 +142,13 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_expect(found_root.position.x >= -4.0 and found_root.position.x <= 4.0 and found_root.position.z >= -4.0 and found_root.position.z <= 4.0, "%s root stays inside its owning cell" % entity_id)
 			_expect(found_root.get_children().is_empty(), "%s production root remains renderer-independent until visual factory integration" % entity_id)
 			if entity_id == "window":
-				_expect(found_root.get_meta("backrooms_wall_direction") != Vector2i.ZERO, "Window root is anchored to a closed north or west wall owned by its cell")
+				var wall_direction: Vector2i = found_root.get_meta("backrooms_wall_direction", Vector2i.ZERO)
+				var open_edges: Dictionary = found_cell_root.get_meta("backrooms_open_edges", {})
+				_expect(wall_direction == Vector2i(0, -1) or wall_direction == Vector2i(-1, 0), "Window root uses only its owning north or west wall")
+				if wall_direction == Vector2i(0, -1):
+					_expect(not bool(open_edges.get("north", true)), "Window north wall is actually closed")
+				elif wall_direction == Vector2i(-1, 0):
+					_expect(not bool(open_edges.get("west", true)), "Window west wall is actually closed")
 			_assert_cell_spawn_descriptors_match(level_id, found_cell, found_cell_root)
 			_assert_spawn_save_restore(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
 			_assert_spawn_repeat_staging(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
