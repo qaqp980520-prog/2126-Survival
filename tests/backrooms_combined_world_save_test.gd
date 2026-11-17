@@ -215,6 +215,9 @@ func _run() -> void:
 						var returned_surface_envelope: Dictionary = restored_world.call("serialize_world_envelope")
 						_expect(str(returned_surface_envelope.get("active_location", "")) == "surface", "combined envelope reports the restored surface as the active location")
 						_expect(not bool(restored_session.call("is_active")) and not bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")), "surface envelope restore leaves no active Backrooms Session or maze Runtime")
+						# The successful restore legitimately advances full-vein regeneration clocks; use the
+						# post-round-trip state as the baseline for the following atomic rollback probes.
+						baseline_surface = restored_world.call("serialize_stream_state")
 	var window_target: Dictionary = restored_world.call("_resolve_camera_interaction_target", root)
 	_expect(window_target.is_empty(), "non-3D Window candidates are ignored before typed Node3D membership checks")
 	var invalid_envelope: Dictionary = envelope.duplicate(true)
