@@ -188,7 +188,9 @@ func _assert_cell_spawn_descriptors_match(level_id: String, cell: Vector2i, cell
 	actual_ids.sort()
 	expected_ids.sort()
 	_expect(actual_ids == expected_ids, "%s cell roots exactly match the Director's filtered spawn descriptors" % level_id)
-	_expect(cell_root.get_meta("backrooms_entity_spawn_ids", []) == expected_ids, "%s cell metadata matches its attached spawn roots" % level_id)
+	var metadata_ids: Array = cell_root.get_meta("backrooms_entity_spawn_ids", []).duplicate()
+	metadata_ids.sort()
+	_expect(metadata_ids == expected_ids, "%s cell metadata matches its attached spawn roots" % level_id)
 
 func _assert_spawn_save_restore(
 	runtime: Variant,
