@@ -68,6 +68,7 @@ The CI wrapper uses `timeout -k 5s 120s`, captures stdout/stderr, rejects `SCRIP
 ## Validation status
 
 - Historical source compatibility review completed against PR #347.
+- Added an exact layer-2 underground combined-envelope round-trip: save the mine layer and surface return anchor, move the mine window, restore the underground player/layer/window, then restore the same envelope back to the saved surface state. Exact-head CI result is tracked in the PR closeout.
 - Current branch changes are being applied to child branch `integration/backrooms-combined-world-save-envelope-2026-11-17`.
 - Exact-head Godot 4.3 test and Full Compatibility Gate: pending.
 - Local Godot executable is unavailable; no local engine pass is claimed.
