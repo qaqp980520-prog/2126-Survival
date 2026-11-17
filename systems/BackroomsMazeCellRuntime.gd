@@ -6,6 +6,7 @@ class_name BackroomsMazeCellRuntime
 const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const VisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.gd")
+const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -173,6 +174,37 @@ func get_cell_root(cell_key: String) -> Node3D:
 		return value as Node3D
 	return null
 
+## Submit a validated perception snapshot to one loaded entity.
+## The owning SurfaceWorld/perception driver supplies sensors; this runtime gates
+## decisions so hidden or inactive Backrooms destinations cannot run entity logic.
+func submit_entity_perception(
+	cell_key: String,
+	requested_entity_id: String,
+	perception: Dictionary,
+	delta_seconds: float = 0.0
+) -> Dictionary:
+	if not active:
+		return {"ok": false, "reason": "destination_not_active"}
+	if cell_key.is_empty() or requested_entity_id.is_empty():
+		return {"ok": false, "reason": "entity_identity_invalid"}
+	var cell_root: Node3D = get_cell_root(cell_key)
+	if cell_root == null:
+		return {"ok": false, "reason": "cell_not_loaded"}
+	var entity_root: Node3D = null
+	for child in cell_root.get_children():
+		if child is Node3D and child.get_meta("backrooms_entity_id", "") == requested_entity_id:
+			entity_root = child as Node3D
+			break
+	if entity_root == null:
+		return {"ok": false, "reason": "entity_not_loaded"}
+	var brain: Node = entity_root.get_node_or_null("AI")
+	if brain == null or not brain.has_method("evaluate_perception"):
+		return {"ok": false, "reason": "entity_brain_unavailable"}
+	var decision_value: Variant = brain.call("evaluate_perception", perception.duplicate(true), delta_seconds)
+	if decision_value is Dictionary:
+		return decision_value
+	return {"ok": false, "reason": "entity_brain_result_invalid"}
+
 func is_active() -> bool:
 	return active
 
@@ -316,6 +348,14 @@ func _build_cell_entity_roots(
 		if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
 			entity_root.free()
 			return false
+		var brain: Node = EntityBrainScript.new()
+		brain.name = "AI"
+		if not bool(brain.call("configure", entity_id, level_id, cell, world_seed)):
+			brain.free()
+			entity_root.free()
+			return false
+		entity_root.set_meta("backrooms_entity_behavior_version", EntityBrainScript.BEHAVIOR_VERSION)
+		entity_root.add_child(brain)
 		cell_root.add_child(entity_root)
 		seen[entity_id] = true
 		spawn_ids.append(entity_id)
