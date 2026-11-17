@@ -2,6 +2,7 @@ extends SceneTree
 
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
+const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 
 var failures: Array[String] = []
 
@@ -140,7 +141,14 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_expect(int(found_root.get_meta("spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s root records its spawn algorithm version" % entity_id)
 			_expect(int(found_cell_root.get_meta("backrooms_entity_spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s cell root records the spawn algorithm version" % entity_id)
 			_expect(found_root.position.x >= -4.0 and found_root.position.x <= 4.0 and found_root.position.z >= -4.0 and found_root.position.z <= 4.0, "%s root stays inside its owning cell" % entity_id)
-			_expect(found_root.get_children().is_empty(), "%s production root remains renderer-independent until visual factory integration" % entity_id)
+			var brain: Node = found_root.get_node_or_null("AI")
+			_expect(brain != null, "%s metadata-only production root owns a logic controller" % entity_id)
+			_expect(found_root.get_node_or_null("Visuals") == null, "%s metadata-only production root remains renderer-independent" % entity_id)
+			_expect(found_root.get_children().size() == 1 and brain != null, "%s metadata-only root contains only its AI controller" % entity_id)
+			_expect(
+				int(found_root.get_meta("backrooms_entity_behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION,
+				"%s root records its explicit behavior version" % entity_id
+			)
 			if entity_id == "window":
 				var wall_direction: Vector2i = found_root.get_meta("backrooms_wall_direction", Vector2i.ZERO)
 				var open_edges: Dictionary = found_cell_root.get_meta("backrooms_open_edges", {})
