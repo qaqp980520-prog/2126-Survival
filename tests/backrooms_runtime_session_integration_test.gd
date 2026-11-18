@@ -175,12 +175,16 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
 	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 3, "Session canonicalizes the legacy nested maze stream to schema three.")
 	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
+	assert(canonical_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy migration starts with an empty mobile-entity cache.")
 	var legacy_nested_manager = ManagerScript.new(legacy_nested_session)
 	var legacy_nested_runtime = RuntimeScript.new()
 	legacy_nested_runtime.force_metadata_only = true
 	root.add_child(legacy_nested_runtime)
 	assert(bool(legacy_nested_manager.call("restore_runtime_from_session", legacy_nested_runtime)), "Production runtime restores a legacy nested maze stream through Session.")
-	assert(legacy_nested_runtime.call("to_save_dict") == canonical_legacy_stream, "Restored production runtime matches the canonicalized Session stream payload.")
+	var restored_legacy_stream: Dictionary = legacy_nested_runtime.call("to_save_dict")
+	var migrated_legacy_stream: Dictionary = legacy_nested_manager.get_session().call("get_maze_stream_state")
+	assert(_json_values_equal(restored_legacy_stream, migrated_legacy_stream), "Legacy Session and restored runtime converge on the same schema-three snapshot.")
+	assert(not migrated_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy restore materializes deterministic default mobile-entity snapshots into Session.")
 	legacy_nested_runtime.queue_free()
 
 	var legacy_payload: Dictionary = saved_session.duplicate(true)
