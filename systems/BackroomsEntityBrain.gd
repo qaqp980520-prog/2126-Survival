@@ -5,7 +5,7 @@ class_name BackroomsEntityBrain
 ## This layer emits behavior intents; navigation, movement, animation and combat are separate systems.
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
-const BEHAVIOR_VERSION: int = 1
+const BEHAVIOR_VERSION: int = 2
 const SUPPORTED_ENTITY_IDS := [
 	"window",
 	"smiler",
@@ -144,6 +144,10 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 	if typeof(line_of_sight_value) != TYPE_BOOL:
 		return _reject("line_of_sight_invalid")
 	var has_line_of_sight: bool = bool(line_of_sight_value)
+	var player_looking_value: Variant = perception.get("player_looking_at_entity", has_line_of_sight)
+	if typeof(player_looking_value) != TYPE_BOOL:
+		return _reject("player_looking_at_entity_invalid")
+	var player_looking_at_entity: bool = bool(player_looking_value)
 
 	var noise_value: Variant = perception.get("noise_strength", 0.0)
 	if not _is_number(noise_value):
@@ -177,6 +181,7 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 	var next_state: String = _decide_state(
 		distance_to_player,
 		has_line_of_sight,
+		player_looking_at_entity,
 		noise_strength,
 		noise_distance,
 		is_dark
@@ -233,6 +238,7 @@ func reset_behavior() -> bool:
 func _decide_state(
 	distance_to_player: float,
 	has_line_of_sight: bool,
+	player_looking_at_entity: bool,
 	noise_strength: float,
 	noise_distance: float,
 	is_dark: bool
@@ -240,13 +246,13 @@ func _decide_state(
 	var profile: Dictionary = get_behavior_profile(entity_id)
 	match entity_id:
 		"window":
-			if has_line_of_sight and distance_to_player <= float(profile.get("sight_radius", 0.0)):
+			if player_looking_at_entity and distance_to_player <= float(profile.get("sight_radius", 0.0)):
 				return "watch"
 			return "dormant"
 		"smiler":
 			if not is_dark:
 				return "dormant"
-			if has_line_of_sight:
+			if player_looking_at_entity:
 				return "freeze"
 			if distance_to_player <= float(profile.get("activation_radius", 0.0)):
 				return "approach"
