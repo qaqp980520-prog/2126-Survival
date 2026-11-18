@@ -983,8 +983,8 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 	_is_in_backrooms = true
 	if backrooms_perception_driver != null:
 		backrooms_perception_driver.call("reset")
-		if backrooms_entity_movement_driver != null:
-			backrooms_entity_movement_driver.call("reset")
+	if backrooms_entity_movement_driver != null:
+		backrooms_entity_movement_driver.call("reset")
 	_last_backrooms_sync_position = player.global_position
 	_set_surface_chunk_visibility(false)
 	_remove_backrooms_portal_visual()
@@ -1033,8 +1033,8 @@ func return_from_backrooms() -> Dictionary:
 	_is_in_backrooms = false
 	if backrooms_perception_driver != null:
 		backrooms_perception_driver.call("reset")
-		if backrooms_entity_movement_driver != null:
-			backrooms_entity_movement_driver.call("reset")
+	if backrooms_entity_movement_driver != null:
+		backrooms_entity_movement_driver.call("reset")
 	player.velocity = Vector3.ZERO
 	backrooms_maze_runtime.position = Vector3.ZERO
 	_set_surface_chunk_visibility(true)
@@ -1165,8 +1165,8 @@ func _tick_backrooms_entity_perception(delta_seconds: float, previous_position: 
 	):
 		if backrooms_perception_driver != null:
 			backrooms_perception_driver.call("reset")
-			if backrooms_entity_movement_driver != null:
-				backrooms_entity_movement_driver.call("reset")
+		if backrooms_entity_movement_driver != null:
+			backrooms_entity_movement_driver.call("reset")
 		return
 	var safe_delta: float = maxf(delta_seconds, 0.000001)
 	var displacement: Vector3 = player.global_position - previous_position
