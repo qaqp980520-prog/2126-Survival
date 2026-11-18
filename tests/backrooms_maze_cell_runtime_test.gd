@@ -170,6 +170,19 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_assert_cell_spawn_descriptors_match(level_id, found_cell, found_cell_root)
 			_assert_spawn_save_restore(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
 			_assert_spawn_repeat_staging(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
+	var activation_candidate: Dictionary = _find_runtime_spawn_candidate(
+		spawn_runtime, "Level 5", "deathmoth", world_seed
+	)
+	var activation_root: CharacterBody3D = activation_candidate.get("entity_root", null) as CharacterBody3D
+	_expect(activation_root != null, "a mobile entity is available for activation collision lifecycle verification")
+	if activation_root != null:
+		var activation_shape: CollisionShape3D = activation_root.get_node_or_null("EntityCollision") as CollisionShape3D
+		_expect(activation_shape != null and activation_shape.disabled, "prepared mobile entity collision shape remains disabled")
+		_expect(activation_root.collision_layer == 0 and activation_root.collision_mask == 0, "prepared mobile entity remains outside the physics collision world")
+		_expect(bool(spawn_runtime.call("activate_destination")), "metadata-only runtime activates for collision lifecycle verification")
+		_expect(activation_shape != null and not activation_shape.disabled, "runtime activation enables the entity collision shape")
+		_expect(activation_root.collision_layer == 4 and activation_root.collision_mask == 1, "runtime activation restores the entity collision layer and mask")
+		_expect(bool(spawn_runtime.call("deactivate_destination")), "metadata-only runtime deactivates after collision lifecycle verification")
 	spawn_runtime.queue_free()
 
 func _find_runtime_spawn_candidate(runtime: Variant, level_id: String, entity_id: String, world_seed: int) -> Dictionary:
