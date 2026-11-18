@@ -203,6 +203,9 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 	elif has_player_position and (has_line_of_sight or next_state in ["approach", "pursue", "observe"]):
 		target_position = player_position_value
 		has_target_position = true
+	elif next_state in ["avoid", "retreat"]:
+		target_position = Vector3.ZERO
+		has_target_position = false
 	elif not _state_retains_target(next_state):
 		target_position = Vector3.ZERO
 		has_target_position = false
