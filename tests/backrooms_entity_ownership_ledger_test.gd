@@ -188,6 +188,69 @@ func _run() -> void:
 		"foreign-world route snapshot cannot authorize an ownership transfer"
 	)
 
+	var prune_ledger: RefCounted = LedgerScript.new()
+	_expect(
+		bool(prune_ledger.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 7, 3, loaded_keys)),
+		"retention ledger configures"
+	)
+	_expect(bool(prune_ledger.call("register_deterministic_spawns").get("ok", false)), "retention ledger registers mobile spawns")
+	var prune_plan_result: Dictionary = prune_ledger.call(
+		"plan_transfer",
+		spawn_key,
+		entity_id,
+		target_key,
+		_make_route(spawn_cell, target_cell, direction, loaded_keys, 7, 3)
+	)
+	_expect(bool(prune_plan_result.get("ok", false)), "retention fixture prepares a real owner transfer")
+	if bool(prune_plan_result.get("ok", false)):
+		_expect(bool(prune_ledger.call("commit_transfer", prune_plan_result["plan"]).get("ok", false)), "retention fixture commits owner transfer")
+	var retained_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [target_key])
+	_expect(
+		bool(retained_result.get("ok", false))
+		and int(retained_result.get("removed_count", -1)) == 0
+		and str(prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"record is retained while its mutable owner cell remains inside the retained halo"
+	)
+	var pruned_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [spawn_key])
+	_expect(
+		bool(pruned_result.get("ok", false))
+		and int(pruned_result.get("removed_count", -1)) >= 1
+		and prune_ledger.call("get_record", spawn_key, entity_id).is_empty(),
+		"record is evicted when its owner cell leaves retention even if its spawn cell remains"
+	)
+	_expect(
+		not bool(prune_ledger.call("prune_to_retained_owner_cells", ["01,0"]).get("ok", false)),
+		"noncanonical retention keys are rejected"
+	)
+
+	var pending_prune_ledger: RefCounted = LedgerScript.new()
+	_expect(
+		bool(pending_prune_ledger.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 7, 3, loaded_keys)),
+		"pending-prune ledger configures"
+	)
+	_expect(bool(pending_prune_ledger.call("register_deterministic_spawns").get("ok", false)), "pending-prune ledger registers mobile spawns")
+	var pending_prune_plan: Dictionary = pending_prune_ledger.call(
+		"plan_transfer",
+		spawn_key,
+		entity_id,
+		target_key,
+		_make_route(spawn_cell, target_cell, direction, loaded_keys, 7, 3)
+	)
+	_expect(bool(pending_prune_plan.get("ok", false)), "pending-prune fixture prepares a transfer")
+	_expect(
+		not bool(pending_prune_ledger.call("prune_to_retained_owner_cells", []).get("ok", false))
+		and str(pending_prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == spawn_key,
+		"pruning is rejected while a transfer is pending and leaves ownership unchanged"
+	)
+	if bool(pending_prune_plan.get("ok", false)):
+		_expect(bool(pending_prune_ledger.call("rollback_transfer", pending_prune_plan["plan"])), "pending-prune transfer can be rolled back")
+	var empty_retention: Dictionary = pending_prune_ledger.call("prune_to_retained_owner_cells", [])
+	_expect(
+		bool(empty_retention.get("ok", false))
+		and int(empty_retention.get("record_count", -1)) == 0,
+		"an empty retained window evicts all committed ownership records"
+	)
+
 	var noncanonical: RefCounted = LedgerScript.new()
 	_expect(
 		not bool(noncanonical.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 0, 0, ["01,0"])),
