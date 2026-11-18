@@ -16,11 +16,11 @@ Prepare the existing mobile-entity persistence contract for ownership migration 
 - `cell_key`: current owner cell; position is expressed in this cell's local coordinate space.
 - `spawn_cell_key`: immutable deterministic spawn origin. AI behavior save validation and deterministic spawn descriptor validation use this key.
 - `entity_id`, `spawn_algorithm_version`, `position`, `brain_state`, and `patrol_index` retain their existing meanings.
-- The stable runtime-state key remains `cell_key|entity_id`, because only one entity of a given ID may occupy a cell under the current entity director contract.
+- The stable runtime-state key is `spawn_cell_key|entity_id`, so two entities of the same type may share one mutable owner cell without colliding. Codec v1 migration sets `spawn_cell_key = cell_key`, preserving the legacy key for unmigrated entities.
 - Codec v1 records did not contain `spawn_cell_key`; migration explicitly sets it equal to the old `cell_key`.
 - New captures and saves emit codec v2. A v2 record missing `spawn_cell_key` is rejected.
 - Owner-cell position bounds are checked against `cell_key`; deterministic spawn and AI identity are checked against `spawn_cell_key`.
-- Restore requires the destination cell root to match `cell_key` and the entity's immutable `spawn_cell` metadata to match `spawn_cell_key`.
+- Restore requires the destination cell root to match `cell_key` and the entity's immutable `spawn_cell` metadata to match `spawn_cell_key`. Runtime lookup is keyed by immutable spawn identity, not by mutable owner location.
 
 ## Validation
 
@@ -28,7 +28,8 @@ The root Godot 4.3 Full Compatibility Gate runs the existing Backrooms maze cell
 - ordinary same-cell records explicitly preserve identical owner and spawn keys;
 - codec v1 payloads load and re-save as codec v2;
 - a valid deterministic spawn identity can be stored with a distinct owner cell;
-- changing the spawn key to a cell that does not contain that deterministic spawn is rejected.
+- changing the spawn key to a cell that does not contain that deterministic spawn is rejected;
+- two same-type entities with different spawn cells can share one owner cell and retain distinct runtime-state keys.
 
 ## Explicit boundary
 
