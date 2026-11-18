@@ -12,6 +12,7 @@ const BackroomsPortalVisualScript = preload("res://systems/BackroomsPortalVisual
 const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.tscn")
 const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
+const BackroomsPerceptionDriverScript = preload("res://systems/BackroomsPerceptionDriver.gd")
 const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
@@ -59,6 +60,7 @@ var _backrooms_portal_world_seed: int = -1
 var backrooms_portal_visual: Area3D
 var backrooms_maze_runtime: Node3D
 var backrooms_transition_manager: RefCounted
+var backrooms_perception_driver: RefCounted
 var _is_in_backrooms: bool = false
 var _backrooms_surface_visibility_snapshot: Dictionary = {}
 var _last_world_envelope_restore_report: Dictionary = {}
@@ -103,6 +105,7 @@ func _ready() -> void:
 	if backrooms_maze_runtime == null:
 		push_error("Surface world could not create its Backrooms maze runtime owner.")
 	backrooms_transition_manager = BackroomsTransitionManagerScript.new()
+	backrooms_perception_driver = BackroomsPerceptionDriverScript.new()
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _is_in_backrooms or _surface_stream_pending:
@@ -944,6 +947,8 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 		_refresh_hud()
 		return {"ok": false, "reason": "maze_runtime_activation_failed", "rollback_complete": bool(aborted.get("rollback_complete", false))}
 	_is_in_backrooms = true
+	if backrooms_perception_driver != null:
+		backrooms_perception_driver.call("reset")
 	_last_backrooms_sync_position = player.global_position
 	_set_surface_chunk_visibility(false)
 	_remove_backrooms_portal_visual()
@@ -976,6 +981,8 @@ func return_from_backrooms() -> Dictionary:
 		_refresh_hud()
 		return returned
 	_is_in_backrooms = false
+	if backrooms_perception_driver != null:
+		backrooms_perception_driver.call("reset")
 	player.velocity = Vector3.ZERO
 	backrooms_maze_runtime.position = Vector3.ZERO
 	_set_surface_chunk_visibility(true)
@@ -1092,7 +1099,40 @@ func _physics_process_backrooms(delta: float) -> void:
 		else:
 			_last_backrooms_sync_position = player.global_position
 	_camera_interaction_target_cache = _cast_camera_interaction_target()
+	_tick_backrooms_entity_perception(delta, previous_position)
 	_refresh_hud()
+
+
+func _tick_backrooms_entity_perception(delta_seconds: float, previous_position: Vector3) -> void:
+	if (
+		backrooms_perception_driver == null
+		or backrooms_maze_runtime == null
+		or not bool(backrooms_maze_runtime.call("is_active"))
+		or player == null
+		or camera == null
+	):
+		if backrooms_perception_driver != null:
+			backrooms_perception_driver.call("reset")
+		return
+	var safe_delta: float = maxf(delta_seconds, 0.000001)
+	var displacement: Vector3 = player.global_position - previous_position
+	var actual_horizontal_speed: float = Vector2(displacement.x, displacement.z).length() / safe_delta
+	var movement_noise_strength: float = 0.0
+	if actual_horizontal_speed >= 0.2:
+		movement_noise_strength = 0.8 if _sprint_active else 0.45
+	var world_3d: World3D = get_world_3d()
+	# The current Backrooms still shares the sunlit SurfaceWorld environment. Do not
+	# fabricate darkness until a dedicated Backrooms lighting profile is installed.
+	backrooms_perception_driver.call(
+		"tick",
+		backrooms_maze_runtime,
+		player,
+		camera,
+		world_3d,
+		delta_seconds,
+		false,
+		movement_noise_strength
+	)
 
 
 func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
