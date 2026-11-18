@@ -18,7 +18,9 @@ class FakeRuntime:
 
 	func get_cell_root(cell_key: String) -> Node3D:
 		var value: Variant = cell_roots.get(cell_key, null)
-		return value as Node3D if value is Node3D and is_instance_valid(value) else null
+		if value is Node3D and is_instance_valid(value):
+			return value as Node3D
+		return null
 
 var failures: Array[String] = []
 
