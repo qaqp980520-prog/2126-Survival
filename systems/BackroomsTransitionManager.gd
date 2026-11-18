@@ -771,7 +771,20 @@ func restore_session_for_world_load(payload: Dictionary) -> bool:
 	if not session.has_method("to_save_dict") or not session.has_method("load_save_dict") or not session.has_method("is_active"):
 		return false
 	var previous_snapshot: Dictionary = session.call("to_save_dict")
-	if not bool(session.call("load_save_dict", payload)) or not _save_values_equal(session.call("to_save_dict"), payload) or not bool(session.call("is_active")):
+	var allow_legacy_canonicalization: bool = _requires_legacy_session_canonicalization(payload)
+	var loaded: bool = bool(session.call("load_save_dict", payload))
+	var canonical_snapshot_value: Variant = session.call("to_save_dict")
+	var canonical_valid: bool = (
+		canonical_snapshot_value is Dictionary
+		and not canonical_snapshot_value.is_empty()
+		and bool(session.call("is_active"))
+	)
+	if canonical_valid:
+		if allow_legacy_canonicalization:
+			canonical_valid = _is_canonical_legacy_session_snapshot(canonical_snapshot_value)
+		else:
+			canonical_valid = _save_values_equal(canonical_snapshot_value, payload)
+	if not loaded or not canonical_valid:
 		var restored: bool = _restore_session_snapshot(previous_snapshot)
 		state = TransitionState.IDLE if restored else TransitionState.ENTRY_PREPARED
 		return false
@@ -788,7 +801,18 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 	if _active_runtime != null and is_instance_valid(_active_runtime):
 		if _active_runtime.has_method("is_active") and bool(_active_runtime.call("is_active")):
 			return false
-	if not bool(session.call("load_save_dict", payload)) or not _save_values_equal(session.call("to_save_dict"), payload):
+	var allow_legacy_canonicalization: bool = _requires_legacy_session_canonicalization(payload)
+	if not bool(session.call("load_save_dict", payload)):
+		return false
+	var canonical_snapshot_value: Variant = session.call("to_save_dict")
+	if not (canonical_snapshot_value is Dictionary):
+		return false
+	var canonical_valid: bool = (
+		_is_canonical_legacy_session_snapshot(canonical_snapshot_value)
+		if allow_legacy_canonicalization
+		else _save_values_equal(canonical_snapshot_value, payload)
+	)
+	if not canonical_valid:
 		return false
 	_active_runtime = null
 	_active_runtime_instance_id = 0
@@ -822,3 +846,30 @@ static func _save_values_equal(left: Variant, right: Variant) -> bool:
 	if (left is int or left is float) and (right is int or right is float):
 		return float(left) == float(right)
 	return left == right
+
+
+static func _requires_legacy_session_canonicalization(payload: Dictionary) -> bool:
+	if not payload.has("maze_stream_state"):
+		return true
+	var stream_value: Variant = payload.get("maze_stream_state", null)
+	if not (stream_value is Dictionary) or stream_value.is_empty():
+		return false
+	var schema_value: Variant = stream_value.get("schema_version", null)
+	return (schema_value is int or schema_value is float) and int(schema_value) in [1, 2]
+
+static func _is_canonical_legacy_session_snapshot(snapshot: Variant) -> bool:
+	if not (snapshot is Dictionary):
+		return false
+	var stream_value: Variant = snapshot.get("maze_stream_state", null)
+	if not (stream_value is Dictionary):
+		return false
+	if stream_value.is_empty():
+		return true
+	var records_value: Variant = stream_value.get("entity_runtime_states", null)
+	return (
+		int(stream_value.get("schema_version", -1)) == MazeStreamStateScript.SAVE_SCHEMA_VERSION
+		and int(stream_value.get("entity_spawn_algorithm_version", -1)) == MazeStreamStateScript.LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION
+		and int(stream_value.get("entity_runtime_state_version", -1)) == MazeStreamStateScript.ENTITY_RUNTIME_STATE_VERSION
+		and records_value is Array
+		and records_value.is_empty()
+	)
