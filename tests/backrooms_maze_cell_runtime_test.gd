@@ -247,6 +247,35 @@ func _assert_entity_runtime_state_round_trip() -> void:
 		EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
 	)
 	_expect(bool(migrated_validation.get("ok", false)), "codec v2 accepts an entity whose mutable owner cell differs from its immutable deterministic spawn cell")
+	var second_spawn_cell := selected_cell
+	var second_spawn_found: bool = false
+	for z in range(-40, 41):
+		for x in range(-40, 41):
+			var candidate_spawn_cell := Vector2i(x, z)
+			if candidate_spawn_cell == selected_cell:
+				continue
+			if EntityDirectorScript.get_cell_spawns("Level 2", candidate_spawn_cell).has(selected_entity_id):
+				second_spawn_cell = candidate_spawn_cell
+				second_spawn_found = true
+				break
+		if second_spawn_found:
+			break
+	_expect(second_spawn_found, "fixture finds a second deterministic spawn identity of the same entity type")
+	if second_spawn_found:
+		var second_owner_record: Dictionary = migrated_record.duplicate(true)
+		second_owner_record["spawn_cell_key"] = "%d,%d" % [second_spawn_cell.x, second_spawn_cell.y]
+		var second_brain_state: Dictionary = second_owner_record.get("brain_state", {}).duplicate(true)
+		second_brain_state["spawn_cell"] = [second_spawn_cell.x, second_spawn_cell.y]
+		second_owner_record["brain_state"] = second_brain_state
+		var shared_owner_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+			[migrated_record, second_owner_record], "Level 2", 20261118, 8.0,
+			EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+		)
+		_expect(bool(shared_owner_validation.get("ok", false)), "two same-type entities from distinct spawn cells may share one mutable owner cell")
+		_expect(
+			EntityRuntimeStateScript.get_state_key(migrated_record) != EntityRuntimeStateScript.get_state_key(second_owner_record),
+			"runtime-state keys remain distinct by immutable spawn identity when owner cells match"
+		)
 	var tampered_identity: Dictionary = migrated_record.duplicate(true)
 	tampered_identity["spawn_cell_key"] = "%d,%d" % [owner_cell.x, owner_cell.y]
 	var tampered_validation: Dictionary = EntityRuntimeStateScript.validate_records(
