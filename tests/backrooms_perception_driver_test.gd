@@ -154,14 +154,27 @@ func _assert_darkness_drives_smiler() -> void:
 	_expect(not bool(dark_perception.get("player_looking_at_entity", true)), "camera facing away keeps the Smiler outside the player's gaze")
 	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "approach", "Smiler approaches an unseen player in a dark cell")
 	driver.call("reset")
-	cell_root.set_meta("backrooms_light_descriptor", LightingProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0))
+	var lit_descriptor: Dictionary = LightingProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0)
+	cell_root.set_meta("backrooms_light_descriptor", lit_descriptor)
+	var smiler_root: Node3D = cell_root.get_node("Entity_smiler") as Node3D
+	var outside_coverage_aim_point: Vector3 = smiler_root.global_position + Vector3.UP * 0.6
+	_expect(
+		LightingProfileScript.is_position_dark(cell_root, outside_coverage_aim_point, false),
+		"an enabled ceiling light does not illuminate an entity outside its effective radius"
+	)
+	smiler_root.position = Vector3(0.0, 0.6, 0.0)
+	var lit_aim_point: Vector3 = smiler_root.global_position + Vector3.UP * 0.6
+	_expect(
+		not LightingProfileScript.is_position_dark(cell_root, lit_aim_point, true),
+		"lit fixture places Smiler inside deterministic ceiling-light coverage"
+	)
 	var lit_result: Dictionary = driver.call(
 		"tick", runtime, player, camera, world_root.get_world_3d(), 0.2, false, 0.0
 	)
 	var lit_perception: Dictionary = runtime.last_perceptions.get("cell_0_0|smiler", {})
-	_expect(int(lit_result.get("accepted_count", 0)) == 1, "Smiler receives a second perception sample after the cell becomes lit")
-	_expect(not bool(lit_perception.get("is_dark", true)), "perception driver detects the local ceiling-light coverage")
-	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "dormant", "Smiler remains dormant in a lit Level 1 cell")
+	_expect(int(lit_result.get("accepted_count", 0)) == 1, "Smiler receives a second perception sample beneath the ceiling light")
+	_expect(not bool(lit_perception.get("is_dark", true)), "perception driver forwards local ceiling-light coverage")
+	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "dormant", "Smiler remains dormant inside Level 1 light coverage")
 	driver.call("reset")
 	runtime.cell_roots.clear()
 	driver = null
