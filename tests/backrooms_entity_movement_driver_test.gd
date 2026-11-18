@@ -292,9 +292,26 @@ func _assert_round_robin_movement_budget() -> void:
 	var first: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(first.get("sampled_count", 0)) == 12, "one movement tick never exceeds the 12-entity work budget")
 	_expect(int(first.get("pending_count", -1)) == 1, "round-robin movement reports one deferred entity")
+	var deferred_key: String = str(first.get("next_entity_key", ""))
+	var deferred_parts: PackedStringArray = deferred_key.split("|")
+	var deferred_cell_key: String = deferred_parts[0] if not deferred_parts.is_empty() else ""
+	var deferred_cell_root: Node3D = runtime.get_cell_root(deferred_cell_key)
+	var deferred_entity_root: Node3D = null
+	if deferred_cell_root != null:
+		for child in deferred_cell_root.get_children():
+			if child is Node3D and str(child.get_meta("backrooms_entity_id", "")) == "hound":
+				deferred_entity_root = child as Node3D
+				break
+	_expect(deferred_entity_root != null, "the round-robin cursor identifies the deferred entity")
+	var deferred_start: Vector3 = deferred_entity_root.global_position if deferred_entity_root != null else Vector3.ZERO
 	var second: Dictionary = driver.call("tick", runtime, 0.1)
-	_expect(int(second.get("sampled_count", 0)) == 1, "the next movement tick services the deferred entity")
-	_expect(int(second.get("pending_count", -1)) == 0, "round-robin movement drains the complete entity set")
+	_expect(int(second.get("sampled_count", 0)) == 12, "the next movement tick keeps the full 12-entity budget")
+	_expect(int(second.get("pending_count", -1)) == 1, "round-robin defers one different entity on each tick")
+	if deferred_entity_root != null:
+		_expect(
+			deferred_entity_root.global_position.distance_to(deferred_start) > 0.01,
+			"the previously deferred entity is serviced on the next movement tick"
+		)
 	driver.call("reset")
 	world_root.free()
 	await process_frame
