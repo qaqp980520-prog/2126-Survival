@@ -45,7 +45,7 @@ func _assert_profiles_and_level_whitelist() -> void:
 		_expect(bool(brain.call("configure", entity_id, level_id, Vector2i(2, -3), 20261118)), "%s configures only on its permitted level" % entity_id)
 		var profile: Dictionary = BrainScript.get_behavior_profile(entity_id)
 		_expect(not profile.is_empty() and not str(profile.get("role", "")).is_empty(), "%s exposes a named behavior profile" % entity_id)
-		_expect(int(brain.call("get_behavior_snapshot").get("behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION, "%s records behavior version one" % entity_id)
+		_expect(int(brain.call("get_behavior_snapshot").get("behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION, "%s records behavior version two" % entity_id)
 		brain.free()
 
 	var wrong_level: Node = BrainScript.new()
@@ -62,14 +62,16 @@ func _assert_window_and_smiler_policies() -> void:
 	var window: Node = _make_brain("window", "Level 1")
 	var watched: Dictionary = window.call("evaluate_perception", {
 		"distance_to_player": 5.0,
-		"has_line_of_sight": true,
+		"has_line_of_sight": false,
+		"player_looking_at_entity": true,
 		"noise_strength": 0.0,
 		"is_dark": true
 	}, 0.1)
-	_expect(bool(watched.get("ok", false)) and str(watched.get("state", "")) == "watch", "Window observes a nearby visible player without becoming a pursuer")
+	_expect(bool(watched.get("ok", false)) and str(watched.get("state", "")) == "watch", "Window observes a nearby player looking at it")
 	var hidden_window: Dictionary = window.call("evaluate_perception", {
 		"distance_to_player": 2.0,
 		"has_line_of_sight": false,
+		"player_looking_at_entity": false,
 		"noise_strength": 0.0
 	}, 0.1)
 	_expect(str(hidden_window.get("state", "")) == "dormant", "Window remains dormant without direct line of sight")
@@ -78,7 +80,8 @@ func _assert_window_and_smiler_policies() -> void:
 	var smiler: Node = _make_brain("smiler", "Level 1")
 	var approach: Dictionary = smiler.call("evaluate_perception", {
 		"distance_to_player": 8.0,
-		"has_line_of_sight": false,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
 		"noise_strength": 0.0,
 		"is_dark": true
 	}, 0.1)
@@ -86,6 +89,7 @@ func _assert_window_and_smiler_policies() -> void:
 	var freeze: Dictionary = smiler.call("evaluate_perception", {
 		"distance_to_player": 8.0,
 		"has_line_of_sight": true,
+		"player_looking_at_entity": true,
 		"noise_strength": 0.0,
 		"is_dark": true,
 		"player_position": Vector3(4.0, 0.0, 2.0)
@@ -247,6 +251,14 @@ func _assert_invalid_perception_is_transactional() -> void:
 	}, -0.1)
 	_expect(not bool(invalid_delta.get("ok", true)), "negative decision delta is rejected")
 	_expect(brain.call("get_behavior_snapshot") == before, "negative delta cannot mutate the current decision")
+	var invalid_gaze: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 5.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": "yes",
+		"noise_strength": 0.0
+	}, 0.5)
+	_expect(not bool(invalid_gaze.get("ok", true)), "non-boolean player gaze is rejected")
+	_expect(brain.call("get_behavior_snapshot") == before, "invalid player gaze leaves the brain snapshot unchanged")
 	var invalid_position: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 5.0,
 		"has_line_of_sight": true,
