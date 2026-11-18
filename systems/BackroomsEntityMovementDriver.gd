@@ -7,6 +7,8 @@ class_name BackroomsEntityMovementDriver
 ## and cross-cell ownership migration are implemented.
 const MOVEMENT_INTERVAL_SECONDS: float = 0.1
 const MAX_ENTITY_MOVES_PER_TICK: int = 12
+const MAX_FRAME_DELTA_SECONDS: float = 0.5
+const MAX_CATCHUP_SECONDS: float = 0.25
 const SAFE_CELL_MARGIN: float = 0.65
 const PATROL_RADIUS: float = 1.45
 const MOVABLE_ENTITY_IDS := [
@@ -51,7 +53,8 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 	if not runtime.has_method("get_loaded_cell_keys") or not runtime.has_method("get_cell_root"):
 		return _failure("runtime_movement_contract_unavailable")
 
-	_accumulator += delta_seconds
+	var safe_delta_seconds: float = minf(delta_seconds, MAX_FRAME_DELTA_SECONDS)
+	_accumulator += safe_delta_seconds
 	if _accumulator + 0.000001 < MOVEMENT_INTERVAL_SECONDS:
 		return {
 			"ok": true,
@@ -95,7 +98,10 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 		var record: Dictionary = records[record_index]
 		var entity_key: String = str(record.get("key", ""))
 		var previous_tick: int = int(_last_move_tick_by_entity.get(entity_key, _tick_index - 1))
-		var move_delta: float = float(maxi(1, _tick_index - previous_tick)) * MOVEMENT_INTERVAL_SECONDS
+		var move_delta: float = minf(
+			float(maxi(1, _tick_index - previous_tick)) * MOVEMENT_INTERVAL_SECONDS,
+			MAX_CATCHUP_SECONDS
+		)
 		_last_move_tick_by_entity[entity_key] = _tick_index
 		var result: Dictionary = _move_entity(record, move_delta)
 		if bool(result.get("moved", false)):
@@ -184,6 +190,8 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		return {"moved": false, "blocked": true, "reason": "cell_size_invalid"}
 	var half_extent: float = cell_size * 0.5 - SAFE_CELL_MARGIN
 	var current_local: Vector3 = cell_root.to_local(entity_root.global_position)
+	if not _is_finite_vector3(current_local):
+		return {"moved": false, "blocked": true, "reason": "entity_position_invalid"}
 	var target_local: Vector3 = current_local
 	var stop_distance: float = 0.0
 	var speed: float = float(SPEED_BY_ENTITY.get(entity_id, 0.0))
@@ -198,7 +206,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 			if not (target_value is Vector3) or not _is_finite_vector3(target_value):
 				return {"moved": false, "blocked": true, "reason": "target_position_invalid"}
 			target_local = cell_root.to_local(target_value)
-			if not _is_inside_safe_cell(target_local, half_extent):
+			if not _is_inside_cell(target_local, cell_size * 0.5 - 0.1):
 				return {"moved": false, "blocked": true, "reason": "target_outside_owning_cell"}
 			match state_name:
 				"approach":
@@ -217,7 +225,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 			if not (player_value is Vector3) or not _is_finite_vector3(player_value):
 				return {"moved": false, "blocked": true, "reason": "avoidance_target_invalid"}
 			var player_local: Vector3 = cell_root.to_local(player_value)
-			if not _is_inside_safe_cell(player_local, half_extent):
+			if not _is_inside_cell(player_local, cell_size * 0.5 - 0.1):
 				return {"moved": false, "blocked": true, "reason": "avoidance_target_outside_owning_cell"}
 			var away := Vector2(current_local.x - player_local.x, current_local.z - player_local.z)
 			if away.length_squared() <= 0.0001:
@@ -293,7 +301,7 @@ func _deterministic_fallback_direction(entity_root: Node3D) -> Vector2:
 	var value: int = (cell.x * 73856093) ^ (cell.y * 19349663) ^ seed_value
 	return Vector2.RIGHT if posmod(value, 2) == 0 else Vector2.LEFT
 
-func _is_inside_safe_cell(local_position: Vector3, half_extent: float) -> bool:
+func _is_inside_cell(local_position: Vector3, half_extent: float) -> bool:
 	return (
 		_is_finite_vector3(local_position)
 		and absf(local_position.x) <= half_extent
