@@ -395,8 +395,10 @@ func _build_cell_geometry(
 	if bool(lighting_descriptor.get("enabled", false)):
 		var ceiling_light := OmniLight3D.new()
 		ceiling_light.name = "BackroomsCeilingLight"
-		ceiling_light.position = lighting_descriptor.get("local_position", Vector3(0.0, WALL_HEIGHT - 0.22, 0.0))
-		ceiling_light.light_color = lighting_descriptor.get("color", Color.WHITE)
+		var light_position: Vector3 = lighting_descriptor.get("local_position", Vector3(0.0, WALL_HEIGHT - 0.22, 0.0))
+		var light_color: Color = lighting_descriptor.get("color", Color.WHITE)
+		ceiling_light.position = light_position
+		ceiling_light.light_color = light_color
 		ceiling_light.light_energy = float(lighting_descriptor.get("energy", 0.0))
 		ceiling_light.omni_range = float(lighting_descriptor.get("range", 0.0))
 		ceiling_light.shadow_enabled = false
