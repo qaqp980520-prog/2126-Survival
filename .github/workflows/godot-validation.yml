@@ -97,6 +97,9 @@ jobs:
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
           test -f tests/backrooms_perception_driver_test.gd
+          # Keep the perception test double aligned with the immutable spawn-key API.
+          grep -q 'spawn_cell_key: String = ""' tests/backrooms_perception_driver_test.gd
+          grep -q 'set_meta("spawn_cell", spawn_cell)' tests/backrooms_perception_driver_test.gd
           test -f systems/BackroomsEntityMovementDriver.gd
           test -f tests/backrooms_entity_movement_driver_test.gd
           test -f systems/BackroomsEntityCollisionFactory.gd
