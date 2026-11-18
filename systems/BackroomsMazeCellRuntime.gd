@@ -10,6 +10,8 @@ const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const CellRoutePlannerScript = preload("res://systems/BackroomsCellRoutePlanner.gd")
+const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -200,6 +202,115 @@ func get_loaded_cell_count() -> int:
 
 func get_loaded_cell_keys() -> Array:
 	return stream_state.call("get_loaded_cell_keys")
+
+## Plan a deterministic route through the active loaded-cell graph.
+## This is read-only and deliberately rejects cells outside the current stream window.
+func plan_route_between_loaded_cells(start_cell: Vector2i, goal_cell: Vector2i) -> Dictionary:
+	if not prepared:
+		return {"ok": false, "reason": "runtime_not_prepared"}
+	if not active:
+		return {"ok": false, "reason": "runtime_not_active"}
+	if stream_state == null or not stream_state.has_method("get_loaded_cell_descriptors"):
+		return {"ok": false, "reason": "loaded_cell_descriptor_contract_unavailable"}
+	var descriptors_value: Variant = stream_state.call("get_loaded_cell_descriptors")
+	if not (descriptors_value is Array):
+		return {"ok": false, "reason": "loaded_cell_descriptors_invalid"}
+	var result: Dictionary = CellRoutePlannerScript.plan_route(
+		start_cell,
+		goal_cell,
+		descriptors_value,
+		str(stream_state.get("level_id")),
+		int(stream_state.get("world_seed"))
+	)
+	if bool(result.get("ok", false)):
+		result["stream_center_cell"] = stream_state.get("center_cell")
+		result["loaded_cell_count"] = descriptors_value.size()
+		result["stream_generation"] = int(stream_state.call("get_generation"))
+		result["configuration_revision"] = int(stream_state.call("get_configuration_revision"))
+	return result
+
+## A route is a snapshot of one committed loaded window. Reject stale or modified
+## snapshots before a movement/navigation consumer acts on them.
+func is_route_snapshot_current(route: Dictionary) -> bool:
+	if not prepared or not active or stream_state == null:
+		return false
+	var ok_value: Variant = route.get("ok", null)
+	if not (ok_value is bool) or not bool(ok_value):
+		return false
+	var snapshot_version_value: Variant = route.get("route_snapshot_version", null)
+	if not (snapshot_version_value is int) or int(snapshot_version_value) != CellRoutePlannerScript.ROUTE_SNAPSHOT_VERSION:
+		return false
+	var generation_value: Variant = route.get("stream_generation", null)
+	var revision_value: Variant = route.get("configuration_revision", null)
+	if not (generation_value is int) or int(generation_value) != int(stream_state.call("get_generation")):
+		return false
+	if not (revision_value is int) or int(revision_value) != int(stream_state.call("get_configuration_revision")):
+		return false
+	var level_value: Variant = route.get("level_id", null)
+	var world_seed_value: Variant = route.get("world_seed", null)
+	var layout_version_value: Variant = route.get("layout_algorithm_version", null)
+	if not (level_value is String) or str(level_value) != str(stream_state.get("level_id")):
+		return false
+	if not (world_seed_value is int) or int(world_seed_value) != int(stream_state.get("world_seed")):
+		return false
+	if not (layout_version_value is int) or int(layout_version_value) != LayoutScript.ALGORITHM_VERSION:
+		return false
+	var center_value: Variant = route.get("stream_center_cell", null)
+	if not (center_value is Vector2i) or center_value != stream_state.get("center_cell"):
+		return false
+	var loaded_count_value: Variant = route.get("loaded_cell_count", null)
+	if not (loaded_count_value is int) or int(loaded_count_value) != int(stream_state.call("get_loaded_cell_count")):
+		return false
+	var cells_value: Variant = route.get("cell_path", null)
+	var keys_value: Variant = route.get("cell_keys", null)
+	var directions_value: Variant = route.get("edge_directions", null)
+	if not (cells_value is Array) or not (keys_value is Array) or not (directions_value is Array):
+		return false
+	var cells: Array = cells_value
+	var cell_keys: Array = keys_value
+	var directions: Array = directions_value
+	if cells.is_empty() or cells.size() > 289 or cell_keys.size() != cells.size() or directions.size() != cells.size() - 1:
+		return false
+	var start_value: Variant = route.get("start_cell", null)
+	var goal_value: Variant = route.get("goal_cell", null)
+	var route_count_value: Variant = route.get("route_cell_count", null)
+	var expanded_value: Variant = route.get("expanded_count", null)
+	if not (start_value is Vector2i) or not (goal_value is Vector2i):
+		return false
+	if start_value != cells.front() or goal_value != cells.back():
+		return false
+	if not (route_count_value is int) or int(route_count_value) != cells.size():
+		return false
+	if not (expanded_value is int) or int(expanded_value) < 1 or int(expanded_value) > 289:
+		return false
+	var seen: Dictionary = {}
+	var world_seed: int = int(stream_state.get("world_seed"))
+	for index in range(cells.size()):
+		var cell_value: Variant = cells[index]
+		if not (cell_value is Vector2i):
+			return false
+		var cell: Vector2i = cell_value
+		var cell_key: String = "%d,%d" % [cell.x, cell.y]
+		if not (cell_keys[index] is String) or str(cell_keys[index]) != cell_key or seen.has(cell_key):
+			return false
+		if not bool(stream_state.call("is_cell_loaded", cell)):
+			return false
+		seen[cell_key] = true
+		if index + 1 >= cells.size():
+			continue
+		var next_value: Variant = cells[index + 1]
+		var direction_value: Variant = directions[index]
+		if not (next_value is Vector2i) or not (direction_value is Vector2i):
+			return false
+		var next_cell: Vector2i = next_value
+		var direction: Vector2i = direction_value
+		if absi(direction.x) + absi(direction.y) != 1 or next_cell - cell != direction:
+			return false
+		if not LayoutScript.edge_is_open(cell, direction, world_seed):
+			return false
+		if not LayoutScript.edge_is_open(next_cell, -direction, world_seed):
+			return false
+	return true
 
 func get_cell_root(cell_key: String) -> Node3D:
 	var value: Variant = cell_roots.get(cell_key, null)

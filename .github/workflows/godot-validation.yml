@@ -76,7 +76,10 @@ jobs:
           test -f systems/BackroomsEntityDirector.gd
           test -f tests/backrooms_entity_director_test.gd
           test -f systems/BackroomsMazeLayout.gd
+          test -f systems/BackroomsCellRoutePlanner.gd
           test -f tests/backrooms_maze_layout_test.gd
+          test -f tests/backrooms_cell_route_planner_test.gd
+          test -f docs/BACKROOMS_CELL_ROUTE_PLANNER_M0_1_68.md
           test -f systems/BackroomsMazeStreamState.gd
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
@@ -281,10 +284,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          # --import waits for the editor scan and resource import to finish before exiting.
+          # --editor --quit can abort the scan thread and leave SVG textures unavailable to later tests.
+          output="$(timeout -k 5s 120s godot --headless --path . --import 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
-            echo "Godot reported root-project import or parse errors."
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|Scan thread aborted'; then
+            echo "Godot reported root-project import, scan, or parse errors."
             exit 1
           fi
       - name: Run survival test hub smoke test
@@ -359,6 +364,18 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms maze layout tests passed."
+
+      - name: Run Backrooms loaded-cell route planner tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/backrooms_cell_route_planner_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms loaded-cell route planner tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms loaded-cell route planner tests passed."
 
       - name: Run Backrooms transactional maze stream state tests
         shell: bash

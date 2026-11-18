@@ -206,6 +206,12 @@ func get_loaded_cell_count() -> int:
 func get_center_cell() -> Vector2i:
 	return center_cell
 
+func get_generation() -> int:
+	return _generation
+
+func get_configuration_revision() -> int:
+	return _configuration_revision
+
 func clone_for_transaction() -> RefCounted:
 	var clone_value: Variant = get_script().new()
 	if not (clone_value is RefCounted):
