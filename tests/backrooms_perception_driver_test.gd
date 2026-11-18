@@ -183,7 +183,7 @@ func _add_entity(
 	entity_id: String,
 	level_id: String,
 	position: Vector3
-) -> Node3D:
+) -> Node:
 	var cell_root := Node3D.new()
 	cell_root.name = "Cell_" + cell_key
 	runtime.add_child(cell_root)
