@@ -144,11 +144,6 @@ func _test_loaded_window_routes() -> void:
 		"routes fail closed when the requested start is not loaded"
 	)
 	_expect(runtime.call("to_save_dict") == before_save, "route planning does not mutate the maze save state")
-	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
-	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
-	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
-	var fresh_route: Dictionary = runtime.call("plan_route_between_loaded_cells", Vector2i(3, 0), Vector2i(3, 0))
-	_expect(bool(fresh_route.get("ok", false)) and bool(runtime.call("is_route_snapshot_current", fresh_route)), "a new route snapshot is accepted for the committed window")
 
 	var stream_state: RefCounted = runtime.get("stream_state") as RefCounted
 	var descriptors: Array = stream_state.call("get_loaded_cell_descriptors")
@@ -199,6 +194,12 @@ func _test_loaded_window_routes() -> void:
 		and str(limited.get("reason", "")) == "search_budget_exceeded",
 		"the planner respects its explicit expansion budget"
 	)
+
+	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
+	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
+	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
+	var fresh_route: Dictionary = runtime.call("plan_route_between_loaded_cells", Vector2i(3, 0), Vector2i(3, 0))
+	_expect(bool(fresh_route.get("ok", false)) and bool(runtime.call("is_route_snapshot_current", fresh_route)), "a new route snapshot is accepted for the committed window")
 
 	runtime.call("deactivate_destination")
 	host.free()
