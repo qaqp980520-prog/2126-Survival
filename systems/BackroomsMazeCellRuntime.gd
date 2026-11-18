@@ -273,6 +273,7 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_
 	root.position = origin_value
 	root.set_meta("backrooms_cell_key", str(descriptor.get("cell_key", "")))
 	root.set_meta("backrooms_cell", cell)
+	root.set_meta("backrooms_cell_size", cell_size)
 	root.set_meta("backrooms_level_id", str(descriptor.get("level_id", "")))
 	root.set_meta("backrooms_world_seed", int(descriptor.get("world_seed", 0)))
 	root.set_meta("backrooms_layout_algorithm_version", int(descriptor.get("layout_algorithm_version", 0)))
