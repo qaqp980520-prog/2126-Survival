@@ -194,11 +194,14 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 	current_intent = _intent_for_state(next_state)
 	has_evaluated_perception = true
 
-	if has_line_of_sight and has_player_position:
+	if next_state in ["avoid", "retreat"] and has_player_position:
 		target_position = player_position_value
 		has_target_position = true
-	elif noise_strength > 0.0 and has_noise_position:
+	elif next_state in ["investigate", "pursue"] and noise_strength > 0.0 and has_noise_position:
 		target_position = noise_position_value
+		has_target_position = true
+	elif has_player_position and (has_line_of_sight or next_state in ["approach", "pursue", "observe"]):
+		target_position = player_position_value
 		has_target_position = true
 	elif not _state_retains_target(next_state):
 		target_position = Vector3.ZERO
@@ -338,7 +341,7 @@ func _intent_for_state(state_name: String) -> String:
 			return "wait"
 
 func _state_retains_target(state_name: String) -> bool:
-	return state_name in ["watch", "freeze", "approach", "pursue", "investigate", "observe", "ambush"]
+	return state_name in ["watch", "freeze", "approach", "pursue", "investigate", "observe", "ambush", "avoid", "retreat"]
 
 func _reject(reason: String) -> Dictionary:
 	return {
