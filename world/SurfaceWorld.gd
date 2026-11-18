@@ -29,6 +29,9 @@ const MINE_INTERACTION_RANGE: float = 3.5
 const INTERACTION_RAY_DISTANCE: float = 5.0
 const INTERACTION_PROXY_COLLISION_MASK: int = 1 << 1
 const WORLD_GEOMETRY_COLLISION_MASK: int = 1
+const BACKROOMS_ENTITY_COLLISION_LAYER: int = 1 << 2
+const PLAYER_COLLISION_LAYER: int = WORLD_GEOMETRY_COLLISION_MASK
+const PLAYER_COLLISION_MASK: int = WORLD_GEOMETRY_COLLISION_MASK | BACKROOMS_ENTITY_COLLISION_LAYER
 const BASE_MOVE_SPEED: float = 5.0
 const BASE_JUMP_SPEED: float = 7.0
 const LEGACY_WORLD_SEED: int = 0
@@ -148,6 +151,8 @@ func _build_environment() -> void:
 func _build_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "Player"
+	player.collision_layer = PLAYER_COLLISION_LAYER
+	player.collision_mask = PLAYER_COLLISION_MASK
 	player.position = Vector3(1.0, 2.0, 1.0)
 	add_child(player)
 	player.add_to_group("player")

@@ -8,6 +8,7 @@ const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const VisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.gd")
 const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
+const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -348,7 +349,7 @@ func _build_cell_entity_roots(
 			return false
 		if entity_id != "window" and wall_direction != Vector2i.ZERO:
 			return false
-		var entity_root := Node3D.new()
+		var entity_root := CharacterBody3D.new()
 		entity_root.name = "Entity_" + entity_id
 		entity_root.position = local_position
 		entity_root.set_meta("backrooms_entity_id", entity_id)
@@ -358,6 +359,9 @@ func _build_cell_entity_roots(
 		entity_root.set_meta("spawn_algorithm_version", spawn_algorithm_version)
 		entity_root.set_meta("backrooms_wall_direction", wall_direction)
 		entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
+		if not CollisionFactoryScript.attach_collision(entity_root, entity_id, active):
+			entity_root.free()
+			return false
 		if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
 			entity_root.free()
 			return false
@@ -480,6 +484,9 @@ func _set_collision_enabled(enabled: bool) -> void:
 		var collision := root_value.get_node_or_null("WorldCollision") as StaticBody3D
 		if collision != null:
 			collision.collision_layer = WORLD_GEOMETRY_LAYER if enabled else 0
+		for child in root_value.get_children():
+			if child is CharacterBody3D and child.has_meta("backrooms_entity_id"):
+				CollisionFactoryScript.set_collision_enabled(child as CharacterBody3D, enabled)
 
 func _replace_all_cell_roots(replacements: Dictionary) -> void:
 	for key_value in cell_roots.keys().duplicate():

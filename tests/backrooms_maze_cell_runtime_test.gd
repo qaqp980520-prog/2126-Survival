@@ -142,9 +142,19 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_expect(int(found_cell_root.get_meta("backrooms_entity_spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s cell root records the spawn algorithm version" % entity_id)
 			_expect(found_root.position.x >= -4.0 and found_root.position.x <= 4.0 and found_root.position.z >= -4.0 and found_root.position.z <= 4.0, "%s root stays inside its owning cell" % entity_id)
 			var brain: Node = found_root.get_node_or_null("AI")
+			var collision_shape: CollisionShape3D = found_root.get_node_or_null("EntityCollision") as CollisionShape3D
+			var mobile_entity_ids: Array[String] = ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
+			var expects_mobile_collision: bool = mobile_entity_ids.has(entity_id)
+			_expect(found_root is CharacterBody3D, "%s production root is a CharacterBody3D" % entity_id)
 			_expect(brain != null, "%s metadata-only production root owns a logic controller" % entity_id)
 			_expect(found_root.get_node_or_null("Visuals") == null, "%s metadata-only production root remains renderer-independent" % entity_id)
-			_expect(found_root.get_children().size() == 1 and brain != null, "%s metadata-only root contains only its AI controller" % entity_id)
+			if expects_mobile_collision:
+				_expect(collision_shape != null and collision_shape.shape != null, "%s metadata-only root retains its physics collision proxy" % entity_id)
+				_expect(collision_shape != null and collision_shape.disabled, "%s prepared destination keeps entity collision disabled" % entity_id)
+				_expect(found_root.get_children().size() == 2, "%s metadata-only root contains AI and collision nodes only" % entity_id)
+			else:
+				_expect(collision_shape == null, "%s anchored root has no mobile collision shape" % entity_id)
+				_expect(found_root.get_children().size() == 1, "%s anchored metadata-only root contains only its AI controller" % entity_id)
 			_expect(
 				int(found_root.get_meta("backrooms_entity_behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION,
 				"%s root records its explicit behavior version" % entity_id
@@ -160,6 +170,19 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_assert_cell_spawn_descriptors_match(level_id, found_cell, found_cell_root)
 			_assert_spawn_save_restore(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
 			_assert_spawn_repeat_staging(spawn_runtime, level_id, entity_id, found_cell, world_seed, found_root.position)
+	var activation_candidate: Dictionary = _find_runtime_spawn_candidate(
+		spawn_runtime, "Level 5", "deathmoth", world_seed
+	)
+	var activation_root: CharacterBody3D = activation_candidate.get("entity_root", null) as CharacterBody3D
+	_expect(activation_root != null, "a mobile entity is available for activation collision lifecycle verification")
+	if activation_root != null:
+		var activation_shape: CollisionShape3D = activation_root.get_node_or_null("EntityCollision") as CollisionShape3D
+		_expect(activation_shape != null and activation_shape.disabled, "prepared mobile entity collision shape remains disabled")
+		_expect(activation_root.collision_layer == 0 and activation_root.collision_mask == 0, "prepared mobile entity remains outside the physics collision world")
+		_expect(bool(spawn_runtime.call("activate_destination")), "metadata-only runtime activates for collision lifecycle verification")
+		_expect(activation_shape != null and not activation_shape.disabled, "runtime activation enables the entity collision shape")
+		_expect(activation_root.collision_layer == 4 and activation_root.collision_mask == 1, "runtime activation restores the entity collision layer and mask")
+		_expect(bool(spawn_runtime.call("deactivate_destination")), "metadata-only runtime deactivates after collision lifecycle verification")
 	spawn_runtime.queue_free()
 
 func _find_runtime_spawn_candidate(runtime: Variant, level_id: String, entity_id: String, world_seed: int) -> Dictionary:

@@ -10,6 +10,7 @@ const MAX_ENTITY_MOVES_PER_TICK: int = 12
 const MAX_FRAME_DELTA_SECONDS: float = 0.5
 const MAX_CATCHUP_SECONDS: float = 0.25
 const SAFE_CELL_MARGIN: float = 0.65
+const COLLISION_SAFE_MARGIN: float = 0.02
 const PATROL_RADIUS: float = 1.45
 const MOVABLE_ENTITY_IDS := [
 	"smiler",
@@ -115,7 +116,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 		var result: Dictionary = _move_entity(record, move_delta)
 		if bool(result.get("moved", false)):
 			moved_count += 1
-		elif bool(result.get("blocked", false)):
+		if bool(result.get("blocked", false)):
 			blocked_count += 1
 
 	var next_index: int = (start_index + move_count) % records.size()
@@ -182,6 +183,14 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		return {"moved": false, "blocked": true, "reason": "brain_unavailable"}
 
 	var entity_root: Node3D = entity_root_value as Node3D
+	if not (entity_root is CharacterBody3D):
+		return {"moved": false, "blocked": true, "reason": "entity_physics_body_unavailable"}
+	var entity_body: CharacterBody3D = entity_root as CharacterBody3D
+	if not entity_body.is_inside_tree():
+		return {"moved": false, "blocked": true, "reason": "entity_physics_body_outside_tree"}
+	var collision_shape: CollisionShape3D = entity_body.get_node_or_null("EntityCollision") as CollisionShape3D
+	if collision_shape == null or collision_shape.shape == null or collision_shape.disabled or entity_body.collision_mask == 0:
+		return {"moved": false, "blocked": true, "reason": "entity_collision_proxy_unavailable"}
 	var cell_root: Node3D = cell_root_value as Node3D
 	var brain: Node = brain_value as Node
 	var snapshot_value: Variant = brain.call("get_behavior_snapshot")
@@ -266,13 +275,31 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 	if state_name == "fly_patrol":
 		var vertical_offset: float = target_local.y - current_local.y
 		next_local.y = current_local.y + clampf(vertical_offset, -speed * delta_seconds, speed * delta_seconds)
-	entity_root.global_position = cell_root.to_global(next_local)
-	entity_root.set_meta("backrooms_movement_mode", "cell_local_kinematic_v1")
-	return {
-		"moved": entity_root.global_position.distance_squared_to(cell_root.to_global(current_local)) > 0.000001,
-		"blocked": false,
-		"reason": "moved"
-	}
+	var previous_world_position: Vector3 = entity_body.global_position
+	var desired_world_position: Vector3 = cell_root.to_global(next_local)
+	var motion: Vector3 = desired_world_position - previous_world_position
+	if motion.length_squared() <= 0.000001:
+		return {"moved": false, "blocked": false, "reason": "movement_below_epsilon"}
+	var collision: KinematicCollision3D = entity_body.move_and_collide(
+		motion,
+		false,
+		COLLISION_SAFE_MARGIN,
+		false
+	)
+	var actual_local: Vector3 = cell_root.to_local(entity_body.global_position)
+	if not _is_inside_cell(actual_local, half_extent):
+		entity_body.global_position = previous_world_position
+		return {"moved": false, "blocked": true, "reason": "physics_motion_exceeded_safe_cell_bounds"}
+	var did_move: bool = entity_body.global_position.distance_squared_to(previous_world_position) > 0.000001
+	entity_body.set_meta("backrooms_movement_mode", "cell_local_physics_v1")
+	if collision != null:
+		entity_body.set_meta("backrooms_last_collision_normal", collision.get_normal())
+		if state_name in ["patrol", "fly_patrol"]:
+			_advance_patrol(entity_key)
+		return {"moved": did_move, "blocked": true, "reason": "world_collision"}
+	if entity_body.has_meta("backrooms_last_collision_normal"):
+		entity_body.remove_meta("backrooms_last_collision_normal")
+	return {"moved": did_move, "blocked": false, "reason": "moved"}
 
 func _get_patrol_target(
 	entity_root: Node3D,

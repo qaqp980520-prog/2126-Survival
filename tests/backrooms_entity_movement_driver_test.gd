@@ -2,6 +2,7 @@ extends SceneTree
 
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const MovementDriverScript = preload("res://systems/BackroomsEntityMovementDriver.gd")
+const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 
 class FakeRuntime:
 	extends Node
@@ -29,6 +30,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _assert_same_cell_pursuit_moves_toward_player()
+	await _assert_wall_collision_blocks_pursuit()
 	await _assert_smiler_approach_uses_unseen_player_target()
 	await _assert_cross_cell_target_fails_closed()
 	await _assert_avoidance_moves_away_from_player()
@@ -69,7 +71,49 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(result.get("moved_count", 0)) == 1, "bounded movement driver updates one eligible entity")
 	_expect(entity_root.global_position.x > start_position.x, "Hound moves toward a same-cell player target")
-	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_kinematic_v1", "movement mode is explicitly marked as cell-local kinematic")
+	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_physics_v1", "movement mode is explicitly marked as cell-local physics collision")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
+func _assert_wall_collision_blocks_pursuit() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var wall := StaticBody3D.new()
+	wall.name = "TestWall"
+	wall.collision_layer = 1
+	wall.collision_mask = 0
+	wall.position = Vector3(1.0, 1.0, 0.0)
+	var wall_shape := CollisionShape3D.new()
+	var wall_box := BoxShape3D.new()
+	wall_box.size = Vector3(0.2, 2.0, 4.0)
+	wall_shape.shape = wall_box
+	wall.add_child(wall_shape)
+	cell_root.add_child(wall)
+	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 20261118, Vector3(0.0, 0.55, 0.0))
+	var brain: Node = entity["brain"] as Node
+	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
+	brain.call("evaluate_perception", {
+		"distance_to_player": 3.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": Vector3(3.0, 0.55, 0.0)
+	}, 0.2)
+	await physics_frame
+	var driver = MovementDriverScript.new()
+	var blocked_total: int = 0
+	for _tick_index in range(6):
+		var result: Dictionary = driver.call("tick", runtime, 0.1)
+		blocked_total += int(result.get("blocked_count", 0))
+		await physics_frame
+	var local_position: Vector3 = cell_root.to_local(entity_root.global_position)
+	_expect(blocked_total > 0, "a real StaticBody3D wall reports a blocked movement result")
+	_expect(local_position.x > 0.2, "Hound advances toward the wall before contact")
+	_expect(local_position.x < 0.75, "Hound collision proxy cannot pass through the wall")
 	driver.call("reset")
 	world_root.free()
 	await process_frame
@@ -352,12 +396,16 @@ func _add_entity(
 	world_seed: int,
 	local_position: Vector3
 ) -> Dictionary:
-	var entity_root := Node3D.new()
+	var entity_root := CharacterBody3D.new()
 	entity_root.name = "Entity_" + entity_id
 	entity_root.position = local_position
 	entity_root.set_meta("backrooms_entity_id", entity_id)
 	entity_root.set_meta("spawn_cell", spawn_cell)
 	entity_root.set_meta("spawn_world_seed", world_seed)
+	_expect(
+		CollisionFactoryScript.attach_collision(entity_root, entity_id, true),
+		"%s collision proxy configures for its allowed level" % entity_id
+	)
 	cell_root.add_child(entity_root)
 	var brain: Node = BrainScript.new()
 	brain.name = "AI"

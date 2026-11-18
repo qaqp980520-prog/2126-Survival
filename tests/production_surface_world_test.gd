@@ -151,6 +151,8 @@ func _run() -> void:
 	_expect(world.player != null, "surface world creates its production player")
 	if world.player != null:
 		_expect(world.player.is_in_group("player"), "production player joins the shared player group used by world-transition triggers")
+		_expect(world.player.collision_layer == 1, "player retains the existing world/player collision layer for Area3D compatibility")
+		_expect(world.player.collision_mask == 5, "player collides with world geometry and Backrooms entities without including interaction proxies")
 	var maze_runtime: Node3D = world.get("backrooms_maze_runtime") as Node3D
 	_expect(maze_runtime != null and maze_runtime.get_parent() == world, "SurfaceWorld owns one Backrooms maze cell runtime")
 	if maze_runtime != null:
