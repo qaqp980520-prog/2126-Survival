@@ -4,6 +4,7 @@ const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 var failures: Array[String] = []
 
@@ -221,10 +222,10 @@ func _assert_entity_runtime_state_round_trip() -> void:
 	var owner_cell := selected_cell + Vector2i(1, 0)
 	for _attempt in range(32):
 		var owner_edges := {
-			"north": EntityDirectorScript.LayoutScript.edge_is_open(owner_cell, Vector2i(0, -1), 20261118),
-			"east": EntityDirectorScript.LayoutScript.edge_is_open(owner_cell, Vector2i(1, 0), 20261118),
-			"south": EntityDirectorScript.LayoutScript.edge_is_open(owner_cell, Vector2i(0, 1), 20261118),
-			"west": EntityDirectorScript.LayoutScript.edge_is_open(owner_cell, Vector2i(-1, 0), 20261118)
+			"north": LayoutScript.edge_is_open(owner_cell, Vector2i(0, -1), 20261118),
+			"east": LayoutScript.edge_is_open(owner_cell, Vector2i(1, 0), 20261118),
+			"south": LayoutScript.edge_is_open(owner_cell, Vector2i(0, 1), 20261118),
+			"west": LayoutScript.edge_is_open(owner_cell, Vector2i(-1, 0), 20261118)
 		}
 		var owner_spawns: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors("Level 2", owner_cell, 8.0, owner_edges, EntityDirectorScript.SPAWN_ALGORITHM_VERSION)
 		var same_identity_exists: bool = false
