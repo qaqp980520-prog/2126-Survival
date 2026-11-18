@@ -102,6 +102,7 @@ Correction on this PR branch:
 - The production perception collector now checks `has_meta("spawn_cell")` before reading the metadata, so incomplete staging nodes are skipped without emitting Godot missing-metadata errors.
 - The perception test fixture now assigns explicit immutable spawn cells, passes the fifth `spawn_cell_key` argument, and matches the requested immutable identity.
 - The 13-entity round-robin fixture uses unique spawn-cell identities.
+- The fake AI brain is configured with the same immutable spawn cell recorded on its entity root, so perception fixtures exercise the production identity contract end to end.
 - A regression asserts that an incomplete staging entity without immutable spawn metadata is ignored while the valid entity is still sampled.
 
 The exact-head Full Gate and all focused workflows for the new HEAD must complete before PR #400 can leave Draft. No pass is claimed until then.
