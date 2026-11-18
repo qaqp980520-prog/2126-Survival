@@ -263,7 +263,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 	var distance: float = offset.length()
 	if distance <= stop_distance + 0.0001:
 		if state_name in ["patrol", "fly_patrol"]:
-			_advance_patrol(entity_key)
+			_advance_patrol(entity_key, entity_root)
 		return {"moved": false, "blocked": false, "reason": "within_stop_distance"}
 	var travel_distance: float = minf(speed * maxf(delta_seconds, 0.0), maxf(0.0, distance - stop_distance))
 	if travel_distance <= 0.0001:
@@ -295,7 +295,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 	if collision != null:
 		entity_body.set_meta("backrooms_last_collision_normal", collision.get_normal())
 		if state_name in ["patrol", "fly_patrol"]:
-			_advance_patrol(entity_key)
+			_advance_patrol(entity_key, entity_root)
 		return {"moved": did_move, "blocked": true, "reason": "world_collision"}
 	if entity_body.has_meta("backrooms_last_collision_normal"):
 		entity_body.remove_meta("backrooms_last_collision_normal")
@@ -307,8 +307,10 @@ func _get_patrol_target(
 	current_local: Vector3,
 	state_name: String
 ) -> Vector3:
-	var index: int = int(_patrol_index_by_entity.get(entity_key, _initial_patrol_index(entity_root)))
+	var saved_index: int = int(entity_root.get_meta("backrooms_patrol_index", _initial_patrol_index(entity_root)))
+	var index: int = int(_patrol_index_by_entity.get(entity_key, saved_index))
 	_patrol_index_by_entity[entity_key] = index
+	entity_root.set_meta("backrooms_patrol_index", posmod(index, 4))
 	var y_values: Array[float] = [current_local.y, current_local.y, current_local.y, current_local.y]
 	if state_name == "fly_patrol":
 		y_values = [1.9, 2.25, 2.05, 1.8]
@@ -329,8 +331,10 @@ func _initial_patrol_index(entity_root: Node3D) -> int:
 	var value: int = (cell.x * 73856093) ^ (cell.y * 19349663) ^ seed_value
 	return posmod(value, 4)
 
-func _advance_patrol(entity_key: String) -> void:
-	_patrol_index_by_entity[entity_key] = posmod(int(_patrol_index_by_entity.get(entity_key, 0)) + 1, 4)
+func _advance_patrol(entity_key: String, entity_root: Node3D) -> void:
+	var next_index: int = posmod(int(_patrol_index_by_entity.get(entity_key, 0)) + 1, 4)
+	_patrol_index_by_entity[entity_key] = next_index
+	entity_root.set_meta("backrooms_patrol_index", next_index)
 
 func _deterministic_fallback_direction(entity_root: Node3D) -> Vector2:
 	var cell_value: Variant = entity_root.get_meta("spawn_cell", Vector2i.ZERO)
