@@ -63,6 +63,7 @@ The test verifies:
 - Cross-cell target is rejected and entity position remains unchanged.
 - Faceling retains player position without line of sight and moves away.
 - Hound patrol moves while remaining inside the safe cell bounds.
+- Window and Clump remain stationary and are excluded from the mobile scheduling budget.
 - Deathmoth aerial patrol changes altitude within its owning cell.
 - Smiler approaches an unseen player while the cell is dark.
 - Duller retreats from a nearby player without line of sight.
