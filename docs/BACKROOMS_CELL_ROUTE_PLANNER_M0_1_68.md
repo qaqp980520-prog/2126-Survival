@@ -57,3 +57,14 @@ After independent review and exact-head validation, add bounded intra-cell navig
 - No navigation agent, cross-cell entity movement, ownership transfer or save-schema change is introduced. Route snapshots are read-only and generation-bound.
 
 - Route snapshots carry a schema version plus explicit start/goal cells, route length, and expansion count. The runtime validator requires strict value types and checks these fields against the actual path before accepting a snapshot.
+
+
+## M0.1.70 — Deterministic root resource-import gate
+
+- The Full Gate previously invoked `godot --headless --path . --editor --quit` for the root project. Godot 4.3 logged `Scan thread aborted...` because the editor was asked to quit before the filesystem scan/import completed.
+- The later Backrooms settings integration test then correctly exposed missing SVG import loaders for `assets/textures/backrooms_carpet.svg` and `assets/textures/backrooms_wallpaper.svg`.
+- The root import step now uses `timeout -k 5s 120s godot --headless --path . --import`. Godot 4.3's documented `--import` mode waits for resources to finish importing, then exits; it implies editor and quit modes.
+- The workflow now treats `Scan thread aborted` as a hard failure and retains the timeout hard-kill guard.
+- The existing settings integration test remains the resource-load regression: both SVG textures must load into the floor and wall materials.
+- Exact-head CI after this change is pending. The previous Full Gate [44292729749](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44292729749) passed the loaded-cell route planner tests but failed the unrelated settings integration texture checks because the root import scan had been aborted.
+- No gameplay code, visual asset or daily_games file was changed by this CI correction.
