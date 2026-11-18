@@ -62,7 +62,7 @@ func _assert_window_and_smiler_policies() -> void:
 	var window: Node = _make_brain("window", "Level 1")
 	var watched: Dictionary = window.call("evaluate_perception", {
 		"distance_to_player": 5.0,
-		"has_line_of_sight": false,
+		"has_line_of_sight": true,
 		"player_looking_at_entity": true,
 		"noise_strength": 0.0,
 		"is_dark": true
@@ -70,7 +70,7 @@ func _assert_window_and_smiler_policies() -> void:
 	_expect(bool(watched.get("ok", false)) and str(watched.get("state", "")) == "watch", "Window observes a nearby player looking at it")
 	var hidden_window: Dictionary = window.call("evaluate_perception", {
 		"distance_to_player": 2.0,
-		"has_line_of_sight": false,
+		"has_line_of_sight": true,
 		"player_looking_at_entity": false,
 		"noise_strength": 0.0
 	}, 0.1)
