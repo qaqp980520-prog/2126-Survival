@@ -99,7 +99,7 @@ static func validate_records(records: Array, level_id: String, world_seed: int, 
 			return {"ok": false, "reason": "entity_runtime_duplicate"}
 		seen[key] = true
 		var record_spawn_version: Variant = raw.get("spawn_algorithm_version", null)
-		if not (record_spawn_version is int) or int(record_spawn_version) != spawn_algorithm_version:
+		if not _is_integer_value(record_spawn_version) or int(record_spawn_version) != spawn_algorithm_version:
 			return {"ok": false, "reason": "entity_runtime_spawn_version_mismatch"}
 		var open_edges := {
 			"north": LayoutScript.edge_is_open(cell, Vector2i(0, -1), world_seed),
@@ -126,7 +126,7 @@ static func validate_records(records: Array, level_id: String, world_seed: int, 
 		if not (brain_value is Dictionary) or not BrainScript.validate_save_dict(brain_value, entity_id, level_id, cell, world_seed):
 			return {"ok": false, "reason": "entity_runtime_brain_state_invalid"}
 		var patrol_value: Variant = raw.get("patrol_index", null)
-		if not (patrol_value is int) or int(patrol_value) < 0 or int(patrol_value) > 3:
+		if not _is_integer_value(patrol_value) or int(patrol_value) < 0 or int(patrol_value) > 3:
 			return {"ok": false, "reason": "entity_runtime_patrol_index_invalid"}
 		normalized.append({
 			"cell_key": cell_key,
@@ -178,6 +178,14 @@ static func _parse_vector3(value: Variant) -> Dictionary:
 		if not (component is int or component is float) or not is_finite(float(component)):
 			return {"ok": false}
 	return {"ok": true, "value": Vector3(float(value[0]), float(value[1]), float(value[2]))}
+
+static func _is_integer_value(value: Variant) -> bool:
+	if value is int:
+		return true
+	if value is float:
+		var number: float = float(value)
+		return is_finite(number) and floorf(number) == number
+	return false
 
 static func _is_finite_vector3(value: Vector3) -> bool:
 	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
