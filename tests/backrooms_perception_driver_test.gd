@@ -28,13 +28,23 @@ class FakeRuntime:
 		cell_key: String,
 		entity_id: String,
 		perception: Dictionary,
-		delta_seconds: float
+		delta_seconds: float,
+		spawn_cell_key: String = ""
 	) -> Dictionary:
 		var cell_root: Node3D = get_cell_root(cell_key)
 		if cell_root == null:
 			return {"ok": false, "reason": "cell_not_loaded"}
 		for child in cell_root.get_children():
 			if not (child is Node3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
+				continue
+			if not child.has_meta("spawn_cell"):
+				continue
+			var spawn_value: Variant = child.get_meta("spawn_cell")
+			if not (spawn_value is Vector2i):
+				continue
+			var spawn_cell: Vector2i = spawn_value
+			var candidate_spawn_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+			if not spawn_cell_key.is_empty() and candidate_spawn_key != spawn_cell_key:
 				continue
 			var brain: Node = child.get_node_or_null("AI")
 			if brain == null:
@@ -75,10 +85,19 @@ func _assert_real_line_of_sight_and_noise() -> void:
 	camera.fov = 76.0
 	player.add_child(camera)
 	var brain: Node = _add_entity(runtime, "cell_0_0", "hound", "Level 2", Vector3(0.0, 0.6, -6.0))
+	var malformed_entity := Node3D.new()
+	malformed_entity.set_meta("backrooms_entity_id", "hound")
+	var malformed_brain: Node = BrainScript.new()
+	malformed_brain.name = "AI"
+	malformed_brain.call("configure", "hound", "Level 2", Vector2i(9, 9), 20261118)
+	malformed_entity.add_child(malformed_brain)
+	runtime.get_cell_root("cell_0_0").add_child(malformed_entity)
 	await physics_frame
 	await physics_frame
 
 	var driver = DriverScript.new()
+	var collected_records: Array[Dictionary] = driver.call("_collect_entity_records", runtime)
+	_expect(collected_records.size() == 1, "perception collector ignores staging entities without immutable spawn metadata")
 	var throttled: Dictionary = driver.call(
 		"tick", runtime, player, camera, world_root.get_world_3d(), 0.05, false, 0.0
 	)
@@ -204,7 +223,8 @@ func _assert_round_robin_budget() -> void:
 			"cell_%02d" % index,
 			"hound",
 			"Level 2",
-			Vector3(float(index) * 0.25, 0.6, -6.0)
+			Vector3(float(index) * 0.25, 0.6, -6.0),
+			Vector2i(index, 0)
 		)
 	await physics_frame
 	var driver = DriverScript.new()
@@ -255,7 +275,8 @@ func _add_entity(
 	cell_key: String,
 	entity_id: String,
 	level_id: String,
-	position: Vector3
+	position: Vector3,
+	spawn_cell: Vector2i = Vector2i.ZERO
 ) -> Node:
 	var cell_root := Node3D.new()
 	cell_root.name = "Cell_" + cell_key
@@ -265,6 +286,7 @@ func _add_entity(
 	entity_root.name = "Entity_" + entity_id
 	entity_root.position = position
 	entity_root.set_meta("backrooms_entity_id", entity_id)
+	entity_root.set_meta("spawn_cell", spawn_cell)
 	cell_root.add_child(entity_root)
 	var brain: Node = BrainScript.new()
 	brain.name = "AI"
