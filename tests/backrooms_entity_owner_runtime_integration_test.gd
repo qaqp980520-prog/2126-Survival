@@ -65,6 +65,7 @@ func _run() -> void:
 	_expect(entity_root != null and int(entity_root.get_meta("spawn_world_seed", -1)) == 20261118, "spawn descriptor factory preserves the runtime world seed")
 
 	var initial_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(spawn_cell_key == source_key, "selected entity begins in its immutable deterministic spawn cell")
 	_expect(str(initial_owner.get("owner_cell_key", "")) == source_key, "initial ownership ledger assigns the deterministic spawn cell")
 	_expect(int(initial_owner.get("owner_revision", -1)) == 0, "initial ownership revision is zero")
 	var identity_key: String = spawn_cell_key + "|" + entity_id
