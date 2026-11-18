@@ -170,13 +170,13 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	legacy_nested_stream.erase("entity_runtime_state_version")
 	legacy_nested_stream.erase("entity_runtime_states")
 	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
-	var legacy_nested_session = SessionScript.new()
-	assert(bool(legacy_nested_session.call("load_save_dict", legacy_nested_payload)), "Active Session accepts a legacy schema-one nested maze stream.")
+	var legacy_nested_manager = ManagerScript.new()
+	assert(bool(legacy_nested_manager.call("restore_session_for_world_load", legacy_nested_payload)), "Production world-load manager accepts a validated legacy schema-one nested maze stream.")
+	var legacy_nested_session = legacy_nested_manager.get_session()
 	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
 	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 3, "Session canonicalizes the legacy nested maze stream to schema three.")
 	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
 	assert(canonical_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy migration starts with an empty mobile-entity cache.")
-	var legacy_nested_manager = ManagerScript.new(legacy_nested_session)
 	var legacy_nested_runtime = RuntimeScript.new()
 	legacy_nested_runtime.force_metadata_only = true
 	root.add_child(legacy_nested_runtime)
@@ -189,8 +189,9 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 
 	var legacy_payload: Dictionary = saved_session.duplicate(true)
 	legacy_payload.erase("maze_stream_state")
-	var legacy_session = SessionScript.new()
-	assert(bool(legacy_session.call("load_save_dict", legacy_payload)), "Legacy schema-v1 active sessions without a maze payload remain loadable.")
+	var legacy_session_manager = ManagerScript.new()
+	assert(bool(legacy_session_manager.call("restore_session_for_world_load", legacy_payload)), "Production world-load manager accepts a legacy active Session without a nested maze payload.")
+	var legacy_session = legacy_session_manager.get_session()
 	assert(legacy_session.call("get_maze_stream_state").is_empty())
 
 	var tampered_payload: Dictionary = saved_session.duplicate(true)
