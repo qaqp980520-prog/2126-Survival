@@ -21,9 +21,19 @@ static func parse_cell_key(cell_key: String) -> Dictionary:
 	var parts: PackedStringArray = cell_key.split(",", false)
 	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
 		return {"ok": false, "reason": "cell_key_invalid"}
-	var cell := Vector2i(parts[0].to_int(), parts[1].to_int())
-	if absi(cell.x) > LayoutScript.MAX_ABS_CELL_COORD or absi(cell.y) > LayoutScript.MAX_ABS_CELL_COORD or ("%d,%d" % [cell.x, cell.y]) != cell_key:
+	# Validate the parsed 64-bit values before narrowing them into Vector2i.
+	# This avoids absolute-value overflow at the signed integer minimum.
+	var x_value: int = parts[0].to_int()
+	var y_value: int = parts[1].to_int()
+	if (
+		x_value < -LayoutScript.MAX_ABS_CELL_COORD
+		or x_value > LayoutScript.MAX_ABS_CELL_COORD
+		y_value < -LayoutScript.MAX_ABS_CELL_COORD
+		or y_value > LayoutScript.MAX_ABS_CELL_COORD
+		or ("%d,%d" % [x_value, y_value]) != cell_key
+	):
 		return {"ok": false, "reason": "cell_key_out_of_range_or_noncanonical"}
+	var cell := Vector2i(x_value, y_value)
 	return {"ok": true, "cell": cell}
 
 static func capture_cell_states(cell_root: Node3D) -> Dictionary:
