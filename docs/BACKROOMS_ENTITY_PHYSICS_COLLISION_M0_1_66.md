@@ -44,7 +44,7 @@ godot --headless --path . --script res://tests/backrooms_entity_collision_factor
 godot --headless --path . --script res://tests/backrooms_entity_movement_driver_test.gd
 ```
 
-The collision factory test verifies shape presence, layer/mask values, inactive/active toggling, anchored entity behavior and invalid ID rejection. The movement regression places a real StaticBody3D wall between a Hound and its same-cell target and verifies the body cannot pass through it.
+The collision factory test verifies shape presence, layer/mask values, inactive/active toggling, anchored entity behavior and invalid ID rejection. The maze Runtime test verifies that collision remains disabled while prepared and is enabled/disabled with destination activation. The movement regression places a real StaticBody3D wall between a Hound and its same-cell target and verifies the body cannot pass through it.
 
 ## Limitations
 
