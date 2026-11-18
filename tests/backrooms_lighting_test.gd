@@ -43,6 +43,8 @@ func _assert_profiles_and_determinism() -> void:
 
 func _assert_darkness_sampling() -> void:
 	var cell_root := Node3D.new()
+	root.add_child(cell_root)
+	_expect(cell_root.is_inside_tree(), "darkness sampler fixture is inside the SceneTree before global-transform sampling")
 	cell_root.set_meta("backrooms_light_descriptor", ProfileScript.get_cell_light_descriptor("Level 1", Vector2i(1, 0), 0))
 	var descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor")
 	_expect(not bool(descriptor.get("enabled", true)), "chosen Level 1 cell is an unlit dark pocket")
