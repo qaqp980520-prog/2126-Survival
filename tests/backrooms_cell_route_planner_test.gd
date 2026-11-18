@@ -95,6 +95,15 @@ func _test_loaded_window_routes() -> void:
 		"repeated route requests return the same deterministic path"
 	)
 	_expect(bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is current before the loaded window changes")
+	var invalid_ok_type: Dictionary = route.duplicate(true)
+	invalid_ok_type["ok"] = "true"
+	_expect(not bool(runtime.call("is_route_snapshot_current", invalid_ok_type)), "route snapshots require a boolean success flag")
+	var invalid_seed_type: Dictionary = route.duplicate(true)
+	invalid_seed_type["world_seed"] = str(TEST_SEED)
+	_expect(not bool(runtime.call("is_route_snapshot_current", invalid_seed_type)), "route snapshots reject string-encoded world seeds")
+	var invalid_endpoint: Dictionary = route.duplicate(true)
+	invalid_endpoint["start_cell"] = Vector2i.ZERO
+	_expect(not bool(runtime.call("is_route_snapshot_current", invalid_endpoint)), "route snapshots reject endpoints that disagree with the cell path")
 	var tampered_route: Dictionary = route.duplicate(true)
 	var tampered_directions: Array = tampered_route.get("edge_directions", []).duplicate(true)
 	if not tampered_directions.is_empty():
