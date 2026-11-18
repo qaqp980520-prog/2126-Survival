@@ -199,18 +199,40 @@ func to_save_dict() -> Dictionary:
 	if not bool(state_collection.get("ok", false)):
 		last_error = str(state_collection.get("reason", "entity_runtime_state_capture_failed"))
 		return {}
-	if not bool(stream_state.call("set_entity_runtime_states", state_collection.get("records", []))):
-		last_error = "entity_runtime_state_validation_failed"
-		return {}
 	var ownership_save: Dictionary = _get_ownership_ledger_save(stream_state, ownership_ledger)
 	if ownership_save.is_empty():
 		last_error = "entity_ownership_ledger_snapshot_invalid"
 		return {}
-	if not bool(stream_state.call("set_entity_ownership_ledger_state", ownership_save)):
+	var ownership_records_value: Variant = ownership_save.get("records", null)
+	if not (ownership_records_value is Array):
+		last_error = "entity_ownership_ledger_records_invalid"
+		return {}
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		state_collection.get("records", []),
+		ownership_records_value
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		last_error = "entity_state_ownership_pair_invalid:" + str(pairing_validation.get("reason", "unknown"))
+		return {}
+
+	# Build the save snapshot on a detached clone. A failed pairing or setter must not
+	# partially replace the live stream state's previously committed archive.
+	var candidate_state: RefCounted = stream_state.call("clone_for_transaction") as RefCounted
+	if candidate_state == null:
+		last_error = "entity_save_candidate_unavailable"
+		return {}
+	if not bool(candidate_state.call("set_entity_runtime_states", state_collection.get("records", []))):
+		last_error = "entity_runtime_state_validation_failed"
+		return {}
+	if not bool(candidate_state.call("set_entity_ownership_ledger_state", ownership_save)):
 		last_error = "entity_ownership_ledger_state_rejected"
 		return {}
+	var snapshot_value: Variant = candidate_state.call("to_save_dict")
+	if not (snapshot_value is Dictionary) or (snapshot_value as Dictionary).is_empty():
+		last_error = "entity_save_snapshot_invalid"
+		return {}
 	last_error = ""
-	return stream_state.call("to_save_dict")
+	return snapshot_value
 
 ## Restore into a detached candidate state and candidate roots. Existing live roots/state
 ## are replaced only after the entire candidate window has staged and committed.
@@ -235,6 +257,15 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var candidate_ledger: RefCounted = ownership_setup.get("ledger") as RefCounted
 	var ownership_records: Array = candidate_ledger.call("get_records")
 	var entity_state_records: Array = candidate.call("get_entity_runtime_states")
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		entity_state_records,
+		ownership_records
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		return _reject(
+			"restore_entity_state_ownership_pair_invalid:"
+			+ str(pairing_validation.get("reason", "unknown"))
+			)
 	var staged_result: Dictionary = _stage_cell_roots(candidate, plan, ownership_records, entity_state_records)
 	if not bool(staged_result.get("ok", false)):
 		return _reject(str(staged_result.get("reason", "restore_cell_staging_failed")))
@@ -865,6 +896,71 @@ func _collect_entity_runtime_states(state: RefCounted, requested_center: Vector2
 		int(state.get("entity_spawn_algorithm_version"))
 	)
 
+func _validate_entity_state_ownership_pair(
+	runtime_records: Array,
+	ownership_records: Array
+) -> Dictionary:
+	var states_by_key: Dictionary = {}
+	for record_value in runtime_records:
+		if not (record_value is Dictionary):
+			return {"ok": false, "reason": "runtime_state_record_invalid"}
+		var record: Dictionary = record_value
+		var key: String = EntityRuntimeStateScript.get_state_key(record)
+		if key.is_empty() or states_by_key.has(key):
+			return {"ok": false, "reason": "runtime_state_identity_duplicate_or_invalid"}
+		var owner_cell_value: Variant = record.get("cell_key", null)
+		if not (owner_cell_value is String) or not bool(
+			EntityRuntimeStateScript.parse_cell_key(str(owner_cell_value)).get("ok", false)
+		):
+			return {"ok": false, "reason": "runtime_state_owner_cell_invalid"}
+		states_by_key[key] = record
+
+	var owners_by_key: Dictionary = {}
+	for ownership_value in ownership_records:
+		if not (ownership_value is Dictionary):
+			return {"ok": false, "reason": "ownership_record_invalid"}
+		var ownership_record: Dictionary = ownership_value
+		var spawn_cell_value: Variant = ownership_record.get("spawn_cell_key", null)
+		var owner_cell_value: Variant = ownership_record.get("owner_cell_key", null)
+		var entity_id_value: Variant = ownership_record.get("entity_id", null)
+		if not (spawn_cell_value is String) or not (owner_cell_value is String) or not (entity_id_value is String):
+			return {"ok": false, "reason": "ownership_identity_invalid"}
+		var key: String = OwnershipLedgerScript.get_state_key(
+			str(spawn_cell_value),
+			str(entity_id_value)
+		)
+		if key.is_empty() or owners_by_key.has(key):
+			return {"ok": false, "reason": "ownership_identity_duplicate_or_invalid"}
+		if not bool(EntityRuntimeStateScript.parse_cell_key(str(spawn_cell_value)).get("ok", false)):
+			return {"ok": false, "reason": "ownership_spawn_cell_invalid"}
+		if not bool(EntityRuntimeStateScript.parse_cell_key(str(owner_cell_value)).get("ok", false)):
+			return {"ok": false, "reason": "ownership_owner_cell_invalid"}
+		owners_by_key[key] = ownership_record
+
+	for key_value in states_by_key.keys():
+		var key: String = str(key_value)
+		if not owners_by_key.has(key):
+			return {"ok": false, "reason": "runtime_state_ownership_record_missing"}
+		var state_record: Dictionary = states_by_key[key]
+		var ownership_record: Dictionary = owners_by_key[key]
+		if str(state_record.get("cell_key", "")) != str(ownership_record.get("owner_cell_key", "")):
+			return {"ok": false, "reason": "runtime_state_owner_cell_mismatch"}
+
+	for key_value in owners_by_key.keys():
+		var key: String = str(key_value)
+		var ownership_record: Dictionary = owners_by_key[key]
+		var spawn_cell_key: String = str(ownership_record.get("spawn_cell_key", ""))
+		var owner_cell_key: String = str(ownership_record.get("owner_cell_key", ""))
+		if owner_cell_key != spawn_cell_key and not states_by_key.has(key):
+			return {"ok": false, "reason": "migrated_runtime_state_missing"}
+
+	return {
+		"ok": true,
+		"runtime_state_count": states_by_key.size(),
+		"ownership_record_count": owners_by_key.size()
+	}
+
+
 func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array, ownership_records: Array = []) -> bool:
 	var by_key: Dictionary = {}
 	for record_value in records:
@@ -1045,6 +1141,35 @@ func _create_ownership_ledger(
 	var registration: Dictionary = ledger.call("register_deterministic_spawns")
 	if not bool(registration.get("ok", false)):
 		return {"ok": false, "reason": str(registration.get("reason", "ownership_spawn_registration_failed"))}
+
+	# Legacy schema-three archives had deterministic spawn state but no ownership ledger.
+	# Backfill only records whose archived owner is still the immutable spawn cell; a
+	# migrated state without its ledger record must remain a hard restore failure.
+	var archived_states_value: Variant = state.call("get_entity_runtime_states")
+	if not (archived_states_value is Array):
+		return {"ok": false, "reason": "ownership_archive_runtime_states_invalid"}
+	for archived_value in archived_states_value:
+		if not (archived_value is Dictionary):
+			return {"ok": false, "reason": "ownership_archive_runtime_record_invalid"}
+		var archived_record: Dictionary = archived_value
+		var archived_cell_key: String = str(archived_record.get("cell_key", ""))
+		var archived_spawn_key: String = str(archived_record.get("spawn_cell_key", archived_cell_key))
+		var archived_entity_id: String = str(archived_record.get("entity_id", ""))
+		if archived_cell_key != archived_spawn_key or not retained_lookup.has(archived_cell_key):
+			continue
+		var existing_archived_record: Dictionary = ledger.call(
+			"get_record", archived_spawn_key, archived_entity_id
+		) as Dictionary
+		if not existing_archived_record.is_empty():
+			continue
+		var backfill: Dictionary = ledger.call(
+			"register_deterministic_spawn_identity",
+			archived_spawn_key,
+			archived_entity_id
+		)
+		if not bool(backfill.get("ok", false)):
+			return {"ok": false, "reason": str(backfill.get("reason", "ownership_archive_spawn_backfill_failed"))}
+
 	var pruning: Dictionary = ledger.call(
 		"prune_to_retained_owner_cells", retained,
 		expected_stream_generation, expected_configuration_revision
