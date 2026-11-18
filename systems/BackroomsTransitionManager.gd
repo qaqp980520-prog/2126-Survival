@@ -801,11 +801,13 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 	if _active_runtime != null and is_instance_valid(_active_runtime):
 		if _active_runtime.has_method("is_active") and bool(_active_runtime.call("is_active")):
 			return false
+	var previous_snapshot: Dictionary = session.call("to_save_dict")
 	var allow_legacy_canonicalization: bool = _requires_legacy_session_canonicalization(payload)
 	if not bool(session.call("load_save_dict", payload)):
 		return false
 	var canonical_snapshot_value: Variant = session.call("to_save_dict")
 	if not (canonical_snapshot_value is Dictionary):
+		_restore_session_snapshot(previous_snapshot)
 		return false
 	var canonical_valid: bool = (
 		_is_canonical_legacy_session_snapshot(canonical_snapshot_value)
@@ -813,6 +815,7 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 		else _save_values_equal(canonical_snapshot_value, payload)
 	)
 	if not canonical_valid:
+		_restore_session_snapshot(previous_snapshot)
 		return false
 	_active_runtime = null
 	_active_runtime_instance_id = 0
