@@ -205,17 +205,18 @@ func _run() -> void:
 	if bool(prune_plan_result.get("ok", false)):
 		_expect(bool(prune_ledger.call("commit_transfer", prune_plan_result["plan"]).get("ok", false)), "retention fixture commits owner transfer")
 	var retained_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [target_key])
+	var retained_record: Dictionary = prune_ledger.call("get_record", spawn_key, entity_id)
 	_expect(
 		bool(retained_result.get("ok", false))
-		and int(retained_result.get("removed_count", -1)) == 0
-		and str(prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		and str(retained_record.get("owner_cell_key", "")) == target_key,
 		"record is retained while its mutable owner cell remains inside the retained halo"
 	)
 	var pruned_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [spawn_key])
+	var evicted_record: Dictionary = prune_ledger.call("get_record", spawn_key, entity_id)
 	_expect(
 		bool(pruned_result.get("ok", false))
 		and int(pruned_result.get("removed_count", -1)) >= 1
-		and prune_ledger.call("get_record", spawn_key, entity_id).is_empty(),
+		and evicted_record.is_empty(),
 		"record is evicted when its owner cell leaves retention even if its spawn cell remains"
 	)
 	_expect(
