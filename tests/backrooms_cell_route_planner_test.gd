@@ -148,6 +148,20 @@ func _test_loaded_window_routes() -> void:
 		"the planner does not invent a route through cells that are not loaded"
 	)
 
+	var adjacent_with_one_expansion: Dictionary = RoutePlannerScript.plan_route(
+		Vector2i.ZERO,
+		Vector2i(1, 0),
+		descriptors,
+		TEST_LEVEL,
+		TEST_SEED,
+		1
+	)
+	_expect(
+		bool(adjacent_with_one_expansion.get("ok", false))
+		and adjacent_with_one_expansion.get("cell_path", []) == [Vector2i.ZERO, Vector2i(1, 0)],
+		"a goal discovered within the final allowed expansion is accepted"
+	)
+
 	var limited: Dictionary = RoutePlannerScript.plan_route(
 		Vector2i(-1, 0),
 		Vector2i(1, 0),
