@@ -11,7 +11,7 @@ Add versioned, validated persistence for mobile entity state before enabling cro
 - `systems/BackroomsMazeStreamState.gd` — schema 3 entity-state cache, schema 1/2 migration and transactional clone support.
 - `systems/BackroomsMazeCellRuntime.gd` — transactional capture, staging, restore and one-cell-halo retention.
 - `systems/BackroomsEntityMovementDriver.gd` — patrol waypoint index mirrored to entity metadata.
-- `tests/backrooms_maze_cell_runtime_test.gd` — unload/reload, save/restore and tampered-position regressions.
+- `tests/backrooms_maze_cell_runtime_test.gd` — unload/reload, save/restore, tampered-position rejection, one-cell-halo eviction and deterministic spawn-default restoration after eviction.
 - `tests/backrooms_entity_movement_driver_test.gd` — restored patrol metadata overrides stale in-memory waypoint state.
 - `tests/backrooms_maze_stream_state_test.gd` — schema 1/2 migration and transactional clone coverage.
 - `tests/backrooms_runtime_session_integration_test.gd` — JSON serialization/deserialization of the canonical Session envelope.
@@ -39,7 +39,7 @@ Godot 4.3; existing Backrooms EntityDirector, MazeLayout, EntityBrain, MazeCellR
 
 ## Validation
 
-Exact-head GitHub Actions Godot 4.3 Full Compatibility Gate is required. The new regression exercises a real cell unload/reload, checks position/AI/patrol restoration, round-trips the cache through save/load, and rejects a tampered out-of-cell position without mutating the existing runtime. Stream-state tests verify transactional clones preserve loaded-cell keys and a one-cell shift plan.
+Exact-head GitHub Actions Godot 4.3 Full Compatibility Gate is required. The new regression exercises a real cell unload/reload, checks position/AI/patrol restoration, round-trips the cache through save/load, rejects a tampered out-of-cell position without mutating the existing runtime, and verifies that moving beyond the one-cell halo evicts the cached state so a later revisit restores the deterministic spawn position and initial AI/patrol state. Stream-state tests verify transactional clones preserve loaded-cell keys and a one-cell shift plan.
 
 ## Known limitations
 
