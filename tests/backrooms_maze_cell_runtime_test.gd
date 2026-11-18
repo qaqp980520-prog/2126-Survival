@@ -115,15 +115,12 @@ func _run() -> void:
 	var legacy_v3_saved_records: Array = legacy_v3_saved_ledger.get("records", [])
 	if legacy_v3_saved_records.is_empty():
 		print(
-			"LEGACY_V3_DIAGNOSTIC loaded_cells=%d ledger_records=%d saved_records=%d last_error=%s spawn=%s entity=%s owner=%s"
+			"LEGACY_V3_DIAGNOSTIC loaded_cells=%d ledger_records=%d saved_records=%d last_error=%s"
 			% [
 				int(legacy_v3_restored.call("get_loaded_cell_count")),
 				legacy_v3_ledger_records.size(),
 				legacy_v3_saved_records.size(),
-				str(legacy_v3_restored.get("last_error")),
-				str(target_record.get("spawn_cell_key", "")),
-				selected_entity_id,
-				str(legacy_v3_restored.call("get_entity_owner_record", str(target_record.get("spawn_cell_key", "")), selected_entity_id))
+				str(legacy_v3_restored.get("last_error"))
 			]
 		)
 	_expect(legacy_v3_saved_records.size() > 0, "legacy schema-three migration materializes deterministic spawn ownership records")
