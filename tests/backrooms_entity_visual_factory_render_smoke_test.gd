@@ -193,6 +193,13 @@ func _assert_level_zero_is_entity_free(stage: Node3D) -> void:
 	_expect(cell_root != null, "Level 0 production cell root exists")
 	if cell_root != null:
 		_expect(cell_root.get_meta("backrooms_entity_spawn_ids", []).is_empty(), "Level 0 spawn identity list remains empty")
+		var light_descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor", {})
+		var ceiling_light: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
+		_expect(bool(light_descriptor.get("enabled", false)), "Level 0 deterministic cell descriptor enables its ceiling light")
+		_expect(ceiling_light != null, "Level 0 graphical runtime creates a real OmniLight3D ceiling light")
+		if ceiling_light != null:
+			_expect(is_equal_approx(ceiling_light.light_energy, float(light_descriptor.get("energy", 0.0))), "Level 0 live light energy matches its deterministic descriptor")
+			_expect(is_equal_approx(ceiling_light.omni_range, float(light_descriptor.get("range", 0.0))), "Level 0 live light range matches its deterministic descriptor")
 		_expect(_find_entity_root(cell_root, "window") == null, "Level 0 never creates a Window entity")
 		_expect(_find_entity_root(cell_root, "smiler") == null, "Level 0 never creates a Smiler entity")
 	runtime.queue_free()
@@ -227,6 +234,13 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			var entity_root: Node3D = _find_entity_root(cell_root, entity_id)
 			if entity_root == null:
 				continue
+			var light_descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor", {})
+			var ceiling_light: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
+			_expect(not light_descriptor.is_empty(), "%s owning cell exposes a deterministic lighting descriptor" % entity_id)
+			if bool(light_descriptor.get("enabled", false)):
+				_expect(ceiling_light != null, "%s lit cell creates a real ceiling OmniLight3D" % entity_id)
+			else:
+				_expect(ceiling_light == null, "%s unlit cell does not create a fake ceiling light" % entity_id)
 
 			entity_root.global_position = target_position
 			_expect(entity_root.global_position.is_equal_approx(target_position), "%s isolated render root is centered in world space" % entity_id)
