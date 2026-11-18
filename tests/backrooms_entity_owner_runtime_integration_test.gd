@@ -321,6 +321,19 @@ func _run() -> void:
 		var mismatch_save: Dictionary = runtime.call("to_save_dict")
 		_expect(mismatch_save.is_empty(), "save rejects an archived state whose owner cell disagrees with the ledger")
 		_expect(live_stream_state.call("to_save_dict") == before_mismatch_save, "failed mismatched save leaves the committed StreamState snapshot unchanged")
+		var before_shift_center: Vector2i = live_stream_state.call("get_center_cell")
+		var before_shift_loaded: Array = runtime.call("get_loaded_cell_keys")
+		var rejected_shift: Dictionary = runtime.call(
+			"sync_to_world_position",
+			Vector3(
+				float(before_shift_center.x + mismatched_owner_cell.x - target_cell.x) * 8.0,
+				0.0,
+				float(before_shift_center.y + mismatched_owner_cell.y - target_cell.y) * 8.0
+			)
+		)
+		_expect(not bool(rejected_shift.get("ok", false)), "stream-window shift rejects a retained state/ledger owner mismatch")
+		_expect(live_stream_state.call("get_center_cell") == before_shift_center, "rejected stream shift preserves the committed center cell")
+		_expect(runtime.call("get_loaded_cell_keys") == before_shift_loaded, "rejected stream shift preserves the loaded-cell window")
 		_expect(bool(live_stream_state.call("set_entity_runtime_states", original_archived_states)), "test restores the original archived state after mismatch-save probe")
 
 		var missing_live_states: Array = original_archived_states.duplicate(true)
@@ -354,6 +367,23 @@ func _run() -> void:
 		var record: Dictionary = missing_payload_states[index]
 		if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
 			missing_payload_states.remove_at(index)
+	var missing_ledger_payload: Dictionary = archive_after_unload.duplicate(true)
+	var ownership_payload: Dictionary = missing_ledger_payload.get("entity_ownership_ledger", {})
+	var ownership_records: Array = ownership_payload.get("records", [])
+	for index in range(ownership_records.size() - 1, -1, -1):
+		var ownership_record: Dictionary = ownership_records[index]
+		if str(ownership_record.get("spawn_cell_key", "")) == spawn_cell_key and str(ownership_record.get("entity_id", "")) == entity_id:
+			ownership_records.remove_at(index)
+	ownership_payload["records"] = ownership_records
+	missing_ledger_payload["entity_ownership_ledger"] = ownership_payload
+	var missing_ledger_restore: Node3D = RuntimeScript.new() as Node3D
+	missing_ledger_restore.set("force_metadata_only", true)
+	root.add_child(missing_ledger_restore)
+	var missing_ledger_restore_ok: bool = bool(missing_ledger_restore.call("load_save_dict", missing_ledger_payload))
+	_expect(not missing_ledger_restore_ok, "restore rejects a runtime-state record with no matching ownership-ledger record")
+	_expect(not bool(missing_ledger_restore.call("is_prepared")) and int(missing_ledger_restore.call("get_loaded_cell_count")) == 0, "missing ownership record leaves the destination runtime unprepared and empty")
+	missing_ledger_restore.queue_free()
+
 	missing_payload["entity_runtime_states"] = missing_payload_states
 	var missing_restore: Node3D = RuntimeScript.new() as Node3D
 	missing_restore.set("force_metadata_only", true)
