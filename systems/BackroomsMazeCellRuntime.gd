@@ -288,7 +288,7 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_
 		root.free()
 		return null
 	root.set_meta("backrooms_light_descriptor", lighting_descriptor.duplicate(true))
-	root.set_meta("backrooms_graphical_lighting_expected", not _metadata_only)
+	root.set_meta("backrooms_graphical_lighting_expected", not _is_metadata_only())
 	if not _build_cell_entity_roots(
 		root,
 		cell,
