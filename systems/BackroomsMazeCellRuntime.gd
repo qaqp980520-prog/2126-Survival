@@ -131,6 +131,15 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 	var candidate_ledger: RefCounted = ownership_setup.get("ledger") as RefCounted
 	var ownership_records: Array = candidate_ledger.call("get_records")
 	var entity_state_records: Array = candidate.call("get_entity_runtime_states")
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		entity_state_records,
+		ownership_records
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		return _failure(
+			"entity_state_ownership_pair_invalid:"
+			+ str(pairing_validation.get("reason", "unknown"))
+		)
 	var staged_result: Dictionary = _stage_cell_roots(candidate, plan, ownership_records, entity_state_records)
 	if not bool(staged_result.get("ok", false)):
 		return _failure(str(staged_result.get("reason", "cell_staging_failed")))
