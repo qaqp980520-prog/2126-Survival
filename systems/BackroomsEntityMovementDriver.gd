@@ -34,6 +34,15 @@ var _next_entity_key: String = ""
 var _last_move_tick_by_entity: Dictionary = {}
 var _patrol_index_by_entity: Dictionary = {}
 
+func get_diagnostics() -> Dictionary:
+	return {
+		"tick_index": _tick_index,
+		"tracked_entities": _last_move_tick_by_entity.size(),
+		"next_entity_key": _next_entity_key,
+		"movement_interval_seconds": MOVEMENT_INTERVAL_SECONDS,
+		"max_entities_per_tick": MAX_ENTITY_MOVES_PER_TICK
+	}
+
 func reset() -> void:
 	_accumulator = 0.0
 	_tick_index = 0
