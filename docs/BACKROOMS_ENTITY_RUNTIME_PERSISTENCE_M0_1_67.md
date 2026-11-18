@@ -35,6 +35,7 @@ Godot 4.3; existing Backrooms EntityDirector, MazeLayout, EntityBrain, MazeCellR
 - Streaming shifts clone the complete logical state, including loaded-cell keys and generation, before staging. A failed stage/commit leaves the live stream state and roots untouched.
 - Cross-cell entity movement and ownership transfer remain disabled.
 - Restoring a legacy schema 1/2 stream (or schema 3 with an empty entity cache) rebuilds deterministic mobile entities at spawn defaults, then writes those captured defaults back into Session before accepting the runtime. A non-empty saved cache must match the rebuilt runtime semantically; mismatches fail closed.
+- The production world-load coordinator accepts a legacy nested schema 1/2 stream or an active Session without a nested maze payload only after Session validation canonicalizes it to the expected schema-three empty-cache representation. Current schema-three payloads still require semantic readback.
 
 ## Validation
 
