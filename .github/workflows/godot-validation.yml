@@ -88,6 +88,7 @@ jobs:
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
           test -f tests/backrooms_maze_cell_runtime_test.gd
+          test -f tests/backrooms_entity_owner_runtime_integration_test.gd
           test -f systems/BackroomsEntityVisualFactory.gd
           test -f tests/backrooms_entity_visual_factory_test.gd
           test -f tests/backrooms_entity_visual_factory_render_smoke_test.gd
@@ -415,6 +416,14 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms maze cell runtime tests passed."
+      - name: Run Backrooms entity owner runtime integration tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/backrooms_entity_owner_runtime_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Backrooms entity owner runtime integration tests passed."
       - name: Run Backrooms production entity visual factory contract tests
         shell: bash
         run: |
