@@ -17,6 +17,7 @@ const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 const ENTITY_SAFE_CELL_MARGIN: float = 0.65
 const ENTITY_COLLISION_SAFE_MARGIN: float = 0.02
 const ENTITY_TRANSFER_EDGE_TOLERANCE: float = 0.25
+const ENTITY_TRANSFER_ENTRY_INSET: float = 0.02
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -1160,6 +1161,10 @@ func transfer_entity_to_next_cell(
 	):
 		return {"ok": false, "reason": "transfer_cell_size_invalid"}
 	var safe_extent: float = source_cell_size * 0.5 - ENTITY_SAFE_CELL_MARGIN
+	# Keep the destination center slightly inside the strict save boundary. Reparenting
+	# between cell roots can introduce tiny global/local float rounding at the exact edge.
+	var transfer_inset: float = minf(ENTITY_TRANSFER_ENTRY_INSET, safe_extent * 0.1)
+	var transfer_extent: float = safe_extent - transfer_inset
 	var source_local: Vector3 = source_root.to_local(entity_root.global_position)
 	if not _is_finite_vector3(source_local):
 		return {"ok": false, "reason": "transfer_entity_position_invalid"}
@@ -1182,9 +1187,9 @@ func transfer_entity_to_next_cell(
 		return {"ok": false, "reason": "transfer_reparent_failed"}
 	var target_local: Vector3 = target_root.to_local(entity_root.global_position)
 	if direction.x != 0:
-		target_local.x = -float(direction.x) * safe_extent
+		target_local.x = -float(direction.x) * transfer_extent
 	else:
-		target_local.z = -float(direction.y) * safe_extent
+		target_local.z = -float(direction.y) * transfer_extent
 	target_local.x = clampf(target_local.x, -safe_extent, safe_extent)
 	target_local.z = clampf(target_local.z, -safe_extent, safe_extent)
 	var desired_world_position: Vector3 = target_root.to_global(target_local)
