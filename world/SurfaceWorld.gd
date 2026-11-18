@@ -13,6 +13,7 @@ const BackroomsPortalVisualScene = preload("res://systems/BackroomsPortalVisual.
 const BackroomsMazeCellRuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const BackroomsTransitionManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 const BackroomsPerceptionDriverScript = preload("res://systems/BackroomsPerceptionDriver.gd")
+const BackroomsLightingControllerScript = preload("res://systems/BackroomsLightingController.gd")
 const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
@@ -61,6 +62,9 @@ var backrooms_portal_visual: Area3D
 var backrooms_maze_runtime: Node3D
 var backrooms_transition_manager: RefCounted
 var backrooms_perception_driver: RefCounted
+var backrooms_lighting_controller: RefCounted
+var surface_world_environment: WorldEnvironment
+var surface_sun: DirectionalLight3D
 var _is_in_backrooms: bool = false
 var _backrooms_surface_visibility_snapshot: Dictionary = {}
 var _last_world_envelope_restore_report: Dictionary = {}
@@ -106,6 +110,7 @@ func _ready() -> void:
 		push_error("Surface world could not create its Backrooms maze runtime owner.")
 	backrooms_transition_manager = BackroomsTransitionManagerScript.new()
 	backrooms_perception_driver = BackroomsPerceptionDriverScript.new()
+	backrooms_lighting_controller = BackroomsLightingControllerScript.new()
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _is_in_backrooms or _surface_stream_pending:
@@ -124,18 +129,18 @@ func _process(delta: float) -> void:
 			_refresh_hud()
 
 func _build_environment() -> void:
-	var world_environment := WorldEnvironment.new()
+	surface_world_environment = WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
 	environment.background_color = Color(0.018, 0.032, 0.052)
-	world_environment.environment = environment
-	add_child(world_environment)
-	var sun := DirectionalLight3D.new()
-	sun.name = "KrollSun"
-	sun.rotation_degrees = Vector3(-52.0, -28.0, 0.0)
-	sun.light_energy = 1.4
-	sun.shadow_enabled = true
-	add_child(sun)
+	surface_world_environment.environment = environment
+	add_child(surface_world_environment)
+	surface_sun = DirectionalLight3D.new()
+	surface_sun.name = "KrollSun"
+	surface_sun.rotation_degrees = Vector3(-52.0, -28.0, 0.0)
+	surface_sun.light_energy = 1.4
+	surface_sun.shadow_enabled = true
+	add_child(surface_sun)
 
 func _build_player() -> void:
 	player = CharacterBody3D.new()
@@ -918,6 +923,30 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 		_world_object_action_message = "Backrooms portal commit failed: %s." % str(committed.get("reason", "unknown"))
 		_refresh_hud()
 		return committed
+	var lighting_result: Dictionary = backrooms_lighting_controller.call(
+		"enter_backrooms",
+		surface_world_environment,
+		surface_sun,
+		str(committed.get("destination_level", ""))
+	)
+	if not bool(lighting_result.get("ok", false)):
+		var lighting_abort: Dictionary = backrooms_transition_manager.call(
+			"abort_committed_entry", backrooms_portal_director, backrooms_maze_runtime
+		)
+		if bool(lighting_abort.get("ok", false)):
+			backrooms_maze_runtime.position = Vector3.ZERO
+			player.global_position = surface_position
+			player.velocity = surface_velocity
+			_world_object_action_message = "Backrooms lighting setup failed; the portal and SurfaceWorld were restored."
+		else:
+			_is_in_backrooms = bool(backrooms_maze_runtime.call("is_active"))
+			if _is_in_backrooms:
+				_set_surface_chunk_visibility(false)
+			else:
+				_surface_stream_pending = true
+			_world_object_action_message = "Backrooms lighting setup failed and rollback is incomplete; world interaction is locked."
+		_refresh_hud()
+		return {"ok": false, "reason": "backrooms_lighting_setup_failed", "rollback_complete": bool(lighting_abort.get("rollback_complete", false))}
 	player.global_position = entry_position
 	player.velocity = Vector3.ZERO
 	_jump_was_down = false
@@ -929,6 +958,7 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 	if not activated:
 		var aborted: Dictionary = backrooms_transition_manager.call("abort_committed_entry", backrooms_portal_director, backrooms_maze_runtime)
 		if bool(aborted.get("ok", false)):
+			backrooms_lighting_controller.call("restore_surface")
 			player.global_position = surface_position
 			player.velocity = surface_velocity
 			backrooms_maze_runtime.position = Vector3.ZERO
@@ -938,6 +968,7 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 			if _is_in_backrooms:
 				_set_surface_chunk_visibility(false)
 			else:
+				backrooms_lighting_controller.call("restore_surface")
 				player.global_position = surface_position
 				player.velocity = surface_velocity
 				_surface_stream_pending = true
@@ -968,12 +999,26 @@ func return_from_backrooms() -> Dictionary:
 		return {"ok": false, "reason": "backrooms_world_not_active"}
 	var previous_backrooms_position: Vector3 = player.global_position
 	var previous_backrooms_velocity: Vector3 = player.velocity
+	var backrooms_level_before_return: String = str(backrooms_lighting_controller.call("get_current_level"))
+	if not bool(backrooms_lighting_controller.call("restore_surface")):
+		_world_object_action_message = "Surface lighting could not be restored; Backrooms state was retained."
+		_refresh_hud()
+		return {"ok": false, "reason": "surface_lighting_restore_failed"}
 	var returned: Dictionary = backrooms_transition_manager.call(
 		"return_to_surface_with_runtime",
 		backrooms_maze_runtime,
 		Callable(self, "_restore_surface_from_backrooms")
 	)
 	if not bool(returned.get("ok", false)):
+		if not backrooms_level_before_return.is_empty():
+			var lighting_reapplied: Dictionary = backrooms_lighting_controller.call(
+				"enter_backrooms", surface_world_environment, surface_sun, backrooms_level_before_return
+			)
+			if not bool(lighting_reapplied.get("ok", false)):
+				_world_object_action_message = "Surface restoration failed and Backrooms lighting recovery also failed."
+				_surface_stream_pending = true
+				_refresh_hud()
+				return {"ok": false, "reason": "backrooms_lighting_recovery_failed", "rollback_complete": false}
 		player.global_position = previous_backrooms_position
 		player.velocity = previous_backrooms_velocity
 		_is_in_backrooms = true
@@ -2239,6 +2284,7 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		or bool(backrooms_transition_manager.call("get_session_save_dict").get("active", false))
 		or bool(backrooms_maze_runtime.call("is_prepared"))
 		or bool(backrooms_maze_runtime.call("is_active"))
+		or (backrooms_lighting_controller != null and bool(backrooms_lighting_controller.call("is_active")))
 	):
 		_set_world_envelope_restore_report(false, "precondition", "Restore requires an idle SurfaceWorld with an inactive Session and empty maze runtime.", true)
 		return false
@@ -2384,6 +2430,18 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 				previous_surface_ids, previous_visibility, now
 			)
 			_set_world_envelope_restore_report(false, "runtime_activation", "Restored Backrooms runtime could not be activated after player handoff.", activation_rollback)
+			return false
+		var restored_session_for_lighting: RefCounted = backrooms_transition_manager.call("get_session")
+		var restored_level_for_lighting: String = str(restored_session_for_lighting.call("get_current_level"))
+		var restored_lighting: Dictionary = backrooms_lighting_controller.call(
+			"enter_backrooms", surface_world_environment, surface_sun, restored_level_for_lighting
+		)
+		if not bool(restored_lighting.get("ok", false)):
+			var lighting_rollback: bool = _rollback_world_envelope_restore(
+				previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+				previous_surface_ids, previous_visibility, now
+			)
+			_set_world_envelope_restore_report(false, "backrooms_lighting", "Backrooms lighting profile could not be restored from the saved Session.", lighting_rollback)
 			return false
 		_is_in_backrooms = true
 		_last_backrooms_sync_position = player.global_position
@@ -2562,6 +2620,7 @@ func _rollback_world_envelope_restore(
 	previous_visibility: Dictionary,
 	now_unix: int
 ) -> bool:
+	var lighting_restored: bool = backrooms_lighting_controller == null or bool(backrooms_lighting_controller.call("restore_surface"))
 	var runtime_clean: bool = true
 	if backrooms_maze_runtime != null and is_instance_valid(backrooms_maze_runtime):
 		if bool(backrooms_maze_runtime.call("is_prepared")) or bool(backrooms_maze_runtime.call("is_active")):
