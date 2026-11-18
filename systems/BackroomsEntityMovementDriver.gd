@@ -287,7 +287,9 @@ func _get_patrol_target(
 func _initial_patrol_index(entity_root: Node3D) -> int:
 	var cell_value: Variant = entity_root.get_meta("spawn_cell", Vector2i.ZERO)
 	var seed_value: int = int(entity_root.get_meta("spawn_world_seed", 0))
-	var cell: Vector2i = cell_value if cell_value is Vector2i else Vector2i.ZERO
+	var cell: Vector2i = Vector2i.ZERO
+	if cell_value is Vector2i:
+		cell = cell_value
 	var value: int = (cell.x * 73856093) ^ (cell.y * 19349663) ^ seed_value
 	return posmod(value, 4)
 
@@ -297,9 +299,13 @@ func _advance_patrol(entity_key: String) -> void:
 func _deterministic_fallback_direction(entity_root: Node3D) -> Vector2:
 	var cell_value: Variant = entity_root.get_meta("spawn_cell", Vector2i.ZERO)
 	var seed_value: int = int(entity_root.get_meta("spawn_world_seed", 0))
-	var cell: Vector2i = cell_value if cell_value is Vector2i else Vector2i.ZERO
+	var cell: Vector2i = Vector2i.ZERO
+	if cell_value is Vector2i:
+		cell = cell_value
 	var value: int = (cell.x * 73856093) ^ (cell.y * 19349663) ^ seed_value
-	return Vector2.RIGHT if posmod(value, 2) == 0 else Vector2.LEFT
+	if posmod(value, 2) == 0:
+		return Vector2(1.0, 0.0)
+	return Vector2(-1.0, 0.0)
 
 func _is_inside_cell(local_position: Vector3, half_extent: float) -> bool:
 	return (
