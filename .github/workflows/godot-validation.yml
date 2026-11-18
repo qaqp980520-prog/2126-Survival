@@ -83,6 +83,7 @@ jobs:
           test -f systems/BackroomsEntityOwnershipLedger.gd
           test -f tests/backrooms_entity_ownership_ledger_test.gd
           test -f docs/BACKROOMS_ENTITY_OWNERSHIP_LEDGER_M0_1_69.md
+          test -f docs/BACKROOMS_ENTITY_OWNER_SPAWN_IDENTITY_CODEC_V2_M0_1_71.md
           test -f systems/BackroomsMazeStreamState.gd
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
