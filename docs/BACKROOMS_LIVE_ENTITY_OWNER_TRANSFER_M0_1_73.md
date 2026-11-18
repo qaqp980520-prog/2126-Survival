@@ -73,3 +73,20 @@ The test is run under the existing timeout -k 5s 90s hard-kill guard. The full G
 ## Next
 
 Integrate the movement driver with the loaded-cell route planner: move toward the next-hop boundary, request one validated adjacent transfer when the entity reaches the safe edge, and recompute the route after each committed hop. Add bounded NavigationRegion3D/NavigationAgent3D intra-cell pathfinding afterward, then verify multi-hop pursuit, streaming, rollback, and Combined World Save under a single end-to-end scenario.
+
+
+## Exact-head correction — owner-local save boundary
+
+The first exact-head Full Gate on HEAD `befb1cdec3a9fb969048081e5e3c47dc26214462` reached the live-transfer integration test and passed the boundary precondition, stale-route rejection, physics obstruction rollback, valid one-hop transfer, owner revision and source/target identity metadata checks. The first failing operation was the immediate post-transfer save:
+
+- Diagnostic: `entity_runtime_position_out_of_bounds`.
+- Captured owner-local position: `(0, 0, 3.35)`.
+- The transfer placed the CharacterBody3D center exactly on the strict serialized safe extent. Reparenting through global/local transforms introduced a small floating-point boundary overshoot, so the strict save validator correctly rejected the snapshot. All later unload/reconstruction/save assertions were cascading failures.
+
+Correction on the same PR branch:
+
+- Add `ENTITY_TRANSFER_ENTRY_INSET = 0.02`.
+- Compute a bounded inward inset (at most 10% of the safe extent) and land the entity inside, rather than exactly on, the target-cell serialization boundary.
+- Extend the real owner-runtime integration test to assert the inset and require immediate post-transfer save to succeed.
+
+The exact-head Full Gate and all focused workflows for the new HEAD must complete before PR #400 can leave Draft. No pass is claimed until then.
