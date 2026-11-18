@@ -14,6 +14,28 @@ func _run() -> void:
 	var runtime: Node3D = RuntimeScript.new() as Node3D
 	runtime.set("force_metadata_only", true)
 	root.add_child(runtime)
+	var metadata_probe := Node3D.new()
+	var probe_window := CharacterBody3D.new()
+	probe_window.set_meta("backrooms_entity_id", "window")
+	probe_window.set_meta("spawn_cell", Vector2i(-1, 0))
+	metadata_probe.add_child(probe_window)
+	var probe_hound := CharacterBody3D.new()
+	probe_hound.set_meta("backrooms_entity_id", "hound")
+	probe_hound.set_meta("spawn_cell", Vector2i(0, 0))
+	metadata_probe.add_child(probe_hound)
+	metadata_probe.set_meta("backrooms_entity_identity_keys", ["-1,0|window", "0,0|hound"])
+	metadata_probe.set_meta("backrooms_entity_spawn_ids", ["window", "hound"])
+	_expect(
+		bool(runtime.call("_validate_cell_entity_identity_metadata", metadata_probe)),
+		"cell identity metadata accepts supported static and mobile entities with aligned live nodes"
+	)
+	metadata_probe.set_meta("backrooms_entity_identity_keys", ["-1,0|window", "-1,0|window"])
+	metadata_probe.set_meta("backrooms_entity_spawn_ids", ["window", "window"])
+	_expect(
+		not bool(runtime.call("_validate_cell_entity_identity_metadata", metadata_probe)),
+		"cell identity metadata rejects duplicate live spawn identities"
+	)
+	metadata_probe.free()
 	var prepared: Dictionary = runtime.call(
 		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3
 	)
@@ -39,6 +61,8 @@ func _run() -> void:
 	var source_key: String = "%d,%d" % [source_cell.x, source_cell.y]
 	var route: Dictionary = candidate.get("route", {})
 	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
+	_expect(entity_root != null and str(entity_root.get_meta("spawn_level_id", "")) == "Level 2", "spawn descriptor factory preserves the runtime level identity")
+	_expect(entity_root != null and int(entity_root.get_meta("spawn_world_seed", -1)) == 20261118, "spawn descriptor factory preserves the runtime world seed")
 
 	var initial_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 	_expect(str(initial_owner.get("owner_cell_key", "")) == source_key, "initial ownership ledger assigns the deterministic spawn cell")
