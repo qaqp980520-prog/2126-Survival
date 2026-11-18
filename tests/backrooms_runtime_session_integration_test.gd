@@ -290,7 +290,7 @@ func _test_session_mutation_failure_restores_director_session_and_runtime() -> v
 	assert(bool(rejected.get("session_state_restored", false)))
 	assert(bool(rejected.get("runtime_state_restored", false)))
 	assert(bool(rejected.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before)
+	assert(_json_values_equal(director.to_save_dict(), director_before))
 	assert(_json_values_equal(session.to_save_dict(), session_before))
 	assert(not session.is_active())
 	assert(manager.get_state_name() == "IDLE")
@@ -362,7 +362,7 @@ func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
 	)
 	assert(bool(retry.get("ok", false)), "The restored one-use portal can be prepared again after an aborted handoff.")
 	assert(bool(manager.call("cancel_prepared_entry")))
-	assert(director.to_save_dict() == director_before)
+	assert(_json_values_equal(director.to_save_dict(), director_before))
 	assert(int(runtime.call("get_loaded_cell_count")) == 0)
 	if runtime.get_parent() == root:
 		root.remove_child(runtime)
