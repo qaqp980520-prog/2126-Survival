@@ -7,6 +7,7 @@ const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 const MAX_LOADED_CELL_DESCRIPTORS: int = 289
 const DEFAULT_MAX_EXPANSIONS: int = MAX_LOADED_CELL_DESCRIPTORS
+const ROUTE_SNAPSHOT_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, -1),
@@ -162,6 +163,9 @@ static func plan_route(
 		cell_keys.append(_cell_key(cell))
 	return {
 		"ok": true,
+		"route_snapshot_version": ROUTE_SNAPSHOT_VERSION,
+		"start_cell": start_cell,
+		"goal_cell": goal_cell,
 		"cell_path": reversed_cells,
 		"cell_keys": cell_keys,
 		"edge_directions": reversed_directions,
