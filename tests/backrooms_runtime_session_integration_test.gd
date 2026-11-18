@@ -168,11 +168,13 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var legacy_nested_stream: Dictionary = legacy_nested_payload["maze_stream_state"].duplicate(true)
 	legacy_nested_stream["schema_version"] = 1
 	legacy_nested_stream.erase("entity_spawn_algorithm_version")
+	legacy_nested_stream.erase("entity_runtime_state_version")
+	legacy_nested_stream.erase("entity_runtime_states")
 	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
 	var legacy_nested_session = SessionScript.new()
 	assert(bool(legacy_nested_session.call("load_save_dict", legacy_nested_payload)), "Active Session accepts a legacy schema-one nested maze stream.")
 	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
-	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 2, "Session canonicalizes the legacy nested maze stream to schema two.")
+	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 3, "Session canonicalizes the legacy nested maze stream to schema three.")
 	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
 	var legacy_nested_manager = ManagerScript.new(legacy_nested_session)
 	var legacy_nested_runtime = RuntimeScript.new()
