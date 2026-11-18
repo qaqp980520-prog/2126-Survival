@@ -17,8 +17,9 @@ This work is a persistence-integrity layer. It does not add autonomous roaming, 
   - Adds `register_deterministic_spawn_identity()` for bounded legacy spawn-state migration. It validates the immutable spawn descriptor and creates only an owner==spawn, revision-zero record.
 - `tests/backrooms_entity_owner_runtime_integration_test.gd`
   - Adds valid unloaded-owner restore and subsequent reconstruction.
-  - Adds mismatched owner-key and missing migrated-state restore rejection.
+  - Adds mismatched owner-key, orphan runtime-state, and missing migrated-state restore rejection.
   - Adds fail-closed save tests for both mismatch and missing-state cases, including proof that the committed StreamState snapshot remains unchanged.
+  - Adds stream-window shift rejection with proof that the committed center and loaded-cell window remain unchanged.
   - Adds pre-ledger schema-three owner==spawn backfill coverage while the spawn cell is retained but unloaded.
 - `.github/workflows/godot-validation.yml`
   - Requires this versioned design/implementation record in the root project validation guard.
