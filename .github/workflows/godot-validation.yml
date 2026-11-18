@@ -93,6 +93,10 @@ jobs:
           test -f systems/BackroomsEntityCollisionFactory.gd
           test -f systems/BackroomsEntityRuntimeState.gd
           test -f tests/backrooms_entity_collision_factory_test.gd
+          test -f tests/backrooms_maze_cell_runtime_test.gd
+          test -f tests/backrooms_maze_stream_state_test.gd
+          test -f tests/backrooms_runtime_session_integration_test.gd
+          test -f tests/backrooms_combined_world_save_test.gd
           test -f docs/BACKROOMS_ENTITY_RUNTIME_PERSISTENCE_M0_1_67.md
           test -f docs/BACKROOMS_ENTITY_MOVEMENT_M0_1_65.md
           test -f docs/BACKROOMS_ENTITY_PHYSICS_COLLISION_M0_1_66.md
