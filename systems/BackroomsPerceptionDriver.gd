@@ -219,8 +219,9 @@ func _build_perception(
 		"noise_distance": distance_to_player,
 		"is_dark": resolved_is_dark
 	}
-	if has_line_of_sight:
-		perception["player_position"] = player.global_position
+	# Movement intents such as Smiler approach and Faceling/Duller avoidance
+	# need a player target even when the physics ray reports no line of sight.
+	perception["player_position"] = player.global_position
 	if effective_noise > 0.0:
 		perception["noise_position"] = player.global_position
 	return perception
