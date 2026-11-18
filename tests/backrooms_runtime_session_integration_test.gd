@@ -195,6 +195,13 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	legacy_nested_stream.erase("entity_spawn_algorithm_version")
 	legacy_nested_stream.erase("entity_runtime_state_version")
 	legacy_nested_stream.erase("entity_runtime_states")
+	legacy_nested_stream.erase("entity_ownership_ledger_version")
+	legacy_nested_stream.erase("entity_ownership_ledger")
+	assert(
+		not legacy_nested_stream.has("entity_ownership_ledger_version")
+		and not legacy_nested_stream.has("entity_ownership_ledger"),
+		"legacy schema-one fixture omits schema-four ownership fields"
+	)
 	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
 	var legacy_nested_manager = ManagerScript.new()
 	assert(bool(legacy_nested_manager.call("restore_session_for_world_load", legacy_nested_payload)), "Production world-load manager accepts a validated legacy schema-one nested maze stream.")
