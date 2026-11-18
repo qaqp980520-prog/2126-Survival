@@ -158,11 +158,10 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var restored_session = SessionScript.new()
 	assert(bool(restored_session.call("load_save_dict", parsed)))
 	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
-	if restored_save_dict != saved_session:
-		for key in saved_session.keys():
-			if restored_save_dict.get(key) != saved_session.get(key):
-				print("DEBUG session JSON round-trip mismatch: key=", key, " saved=", saved_session.get(key), " restored=", restored_save_dict.get(key))
-	assert(restored_save_dict == saved_session, "Session JSON round-trip must preserve the canonical save dictionary.")
+	assert(
+		_canonicalize_json_value(restored_save_dict) == _canonicalize_json_value(saved_session),
+		"Session JSON round-trip must preserve every value independent of Dictionary insertion order."
+	)
 
 	var legacy_nested_payload: Dictionary = saved_session.duplicate(true)
 	var legacy_nested_stream: Dictionary = legacy_nested_payload["maze_stream_state"].duplicate(true)
@@ -372,3 +371,21 @@ func _restore_surface(context: Dictionary) -> bool:
 	assert(context.has("surface_world_seed"))
 	assert(context.has("entry_portal_id"))
 	return restore_result
+
+
+## Canonical JSON comparison
+
+func _canonicalize_json_value(value: Variant) -> Variant:
+	if value is Dictionary:
+		var keys: Array = value.keys()
+		keys.sort()
+		var canonical_dictionary: Dictionary = {}
+		for key in keys:
+			canonical_dictionary[key] = _canonicalize_json_value(value[key])
+		return canonical_dictionary
+	if value is Array:
+		var canonical_array: Array = []
+		for item in value:
+			canonical_array.append(_canonicalize_json_value(item))
+		return canonical_array
+	return value
