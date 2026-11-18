@@ -127,7 +127,8 @@ func _test_loaded_window_routes() -> void:
 	)
 	_expect(runtime.call("to_save_dict") == before_save, "route planning does not mutate the maze save state")
 
-	var descriptors: Array = runtime.get("stream_state").call("get_loaded_cell_descriptors")
+	var stream_state: RefCounted = runtime.get("stream_state") as RefCounted
+	var descriptors: Array = stream_state.call("get_loaded_cell_descriptors")
 	var restricted_descriptors: Array = []
 	for descriptor_value in descriptors:
 		if descriptor_value is Dictionary:
@@ -197,7 +198,8 @@ func _test_rejected_descriptors_and_budgets() -> void:
 	if not bool(prepared.get("ok", false)):
 		host.free()
 		return
-	var descriptors: Array = runtime.get("stream_state").call("get_loaded_cell_descriptors")
+	var stream_state: RefCounted = runtime.get("stream_state") as RefCounted
+	var descriptors: Array = stream_state.call("get_loaded_cell_descriptors")
 
 	var duplicate_descriptors: Array = descriptors.duplicate(true)
 	duplicate_descriptors.append(duplicate_descriptors[0].duplicate(true))
