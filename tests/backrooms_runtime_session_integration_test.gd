@@ -4,6 +4,8 @@ const DirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const ManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
+const MazeStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
+const MazeLayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 class MutatingRejectRuntimeSession extends RefCounted:
 	var active: bool = false
@@ -156,7 +158,31 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var parsed: Variant = JSON.parse_string(JSON.stringify(saved_session))
 	assert(parsed is Dictionary)
 	var restored_session = SessionScript.new()
-	assert(bool(restored_session.call("load_save_dict", parsed)))
+	var restored_load_ok: bool = bool(restored_session.call("load_save_dict", parsed))
+	if not restored_load_ok:
+		var stream_payload: Dictionary = parsed.get("maze_stream_state", {})
+		var stream_probe = MazeStreamStateScript.new()
+		var stream_probe_ok: bool = bool(stream_probe.call("load_save_dict", stream_payload))
+		var position_value: Array = parsed.get("backrooms_position", [])
+		var cell_size_value: float = float(stream_payload.get("cell_size", 0.0))
+		var mapping: Dictionary = {}
+		if position_value.size() == 3 and cell_size_value > 0.0:
+			mapping = MazeLayoutScript.try_cell_for_position(
+				Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2])),
+				cell_size_value
+			)
+		var state_records_value: Variant = stream_payload.get("entity_runtime_states", [])
+		var ownership_value: Variant = stream_payload.get("entity_ownership_ledger", {})
+		print(
+			"Backrooms session load diagnostic: session_error=", restored_session.call("get_last_load_error"),
+			" stream_ok=", stream_probe_ok,
+			" stream_error=", stream_probe.get("last_load_error"),
+			" saved_center=", stream_payload.get("center_cell", []),
+			" mapped_center=", mapping.get("cell", null),
+			" entity_state_count=", state_records_value.size() if state_records_value is Array else -1,
+			" ownership_keys=", ownership_value.keys() if ownership_value is Dictionary else []
+		)
+	assert(restored_load_ok, "Session JSON round-trip must accept the current canonical maze stream.")
 	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
 	assert(
 		_json_values_equal(restored_save_dict, saved_session),
