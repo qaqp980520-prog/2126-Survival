@@ -157,7 +157,11 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 			var entity_id: String = str(entity_root.get_meta("backrooms_entity_id", ""))
 			if entity_id.is_empty() or entity_root.get_node_or_null("AI") == null:
 				continue
-			var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell", null)
+			# Godot logs an error when get_meta() is called for an absent key, even
+			# with a fallback. Ignore incomplete test/staging nodes before reading it.
+			if not entity_root.has_meta("spawn_cell"):
+				continue
+			var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell")
 			if not (spawn_cell_value is Vector2i):
 				continue
 			var spawn_cell: Vector2i = spawn_cell_value
