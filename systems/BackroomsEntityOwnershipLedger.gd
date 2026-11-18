@@ -13,6 +13,7 @@ const PLAN_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const MAX_RECORDS: int = 4096
 const MAX_ROUTE_CELLS: int = 289
+const MAX_RETAINED_OWNER_CELLS: int = 361
 const MAX_OWNER_REVISION: int = 1000000000
 const MOBILE_ENTITY_IDS: Array[String] = [
 	"smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"
@@ -92,6 +93,37 @@ func set_loaded_window(
 
 ## Register deterministic mobile spawns in the currently loaded window without overwriting
 ## an existing owner-cell assignment.
+## Prune records whose current owner cell is outside the runtime's retained window
+## (loaded window plus its one-cell halo). A pending transaction blocks pruning.
+## An empty retained set intentionally evicts every committed record.
+func prune_to_retained_owner_cells(retained_owner_cell_keys: Array) -> Dictionary:
+	if not configured:
+		return _failure("ledger_not_configured")
+	if not _pending_transfers.is_empty():
+		return _failure("pending_transfer_exists")
+	var retained_result: Dictionary = _parse_cell_key_set(
+		retained_owner_cell_keys,
+		MAX_RETAINED_OWNER_CELLS,
+		true
+	)
+	if not bool(retained_result.get("ok", false)):
+		return _failure("retained_owner_cell_keys_invalid")
+	var retained_keys: Dictionary = retained_result.get("keys", {})
+	var candidate: Dictionary = _records.duplicate(true)
+	var removed_count: int = 0
+	for key_value in candidate.keys():
+		var key: String = str(key_value)
+		var record: Dictionary = candidate[key]
+		if not retained_keys.has(str(record.get("owner_cell_key", ""))):
+			candidate.erase(key)
+			removed_count += 1
+	_records = candidate
+	return {
+		"ok": true,
+		"removed_count": removed_count,
+		"record_count": _records.size()
+	}
+
 func register_deterministic_spawns() -> Dictionary:
 	if not configured:
 		return _failure("ledger_not_configured")
@@ -458,15 +490,18 @@ func _open_edges_for_cell(cell: Vector2i) -> Dictionary:
 	}
 
 func _parse_loaded_cell_keys(keys: Array) -> Dictionary:
-	if keys.is_empty() or keys.size() > MAX_ROUTE_CELLS:
-		return {"ok": false, "reason": "loaded_cell_key_count_invalid"}
+	return _parse_cell_key_set(keys, MAX_ROUTE_CELLS, false)
+
+func _parse_cell_key_set(keys: Array, maximum_count: int, allow_empty: bool) -> Dictionary:
+	if maximum_count < 1 or keys.size() > maximum_count or (keys.is_empty() and not allow_empty):
+		return {"ok": false, "reason": "cell_key_count_invalid"}
 	var result: Dictionary = {}
 	for key_value in keys:
 		if not (key_value is String):
-			return {"ok": false, "reason": "loaded_cell_key_invalid"}
+			return {"ok": false, "reason": "cell_key_invalid"}
 		var key: String = str(key_value)
 		if not bool(parse_cell_key(key).get("ok", false)) or result.has(key):
-			return {"ok": false, "reason": "loaded_cell_key_duplicate_or_invalid"}
+			return {"ok": false, "reason": "cell_key_duplicate_or_invalid"}
 		result[key] = true
 	return {"ok": true, "keys": result}
 
