@@ -142,9 +142,19 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			_expect(int(found_cell_root.get_meta("backrooms_entity_spawn_algorithm_version", 0)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "%s cell root records the spawn algorithm version" % entity_id)
 			_expect(found_root.position.x >= -4.0 and found_root.position.x <= 4.0 and found_root.position.z >= -4.0 and found_root.position.z <= 4.0, "%s root stays inside its owning cell" % entity_id)
 			var brain: Node = found_root.get_node_or_null("AI")
+			var collision_shape: CollisionShape3D = found_root.get_node_or_null("EntityCollision") as CollisionShape3D
+			var mobile_entity_ids: Array[String] = ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
+			var expects_mobile_collision: bool = mobile_entity_ids.has(entity_id)
+			_expect(found_root is CharacterBody3D, "%s production root is a CharacterBody3D" % entity_id)
 			_expect(brain != null, "%s metadata-only production root owns a logic controller" % entity_id)
 			_expect(found_root.get_node_or_null("Visuals") == null, "%s metadata-only production root remains renderer-independent" % entity_id)
-			_expect(found_root.get_children().size() == 1 and brain != null, "%s metadata-only root contains only its AI controller" % entity_id)
+			if expects_mobile_collision:
+				_expect(collision_shape != null and collision_shape.shape != null, "%s metadata-only root retains its physics collision proxy" % entity_id)
+				_expect(collision_shape != null and collision_shape.disabled, "%s prepared destination keeps entity collision disabled" % entity_id)
+				_expect(found_root.get_children().size() == 2, "%s metadata-only root contains AI and collision nodes only" % entity_id)
+			else:
+				_expect(collision_shape == null, "%s anchored root has no mobile collision shape" % entity_id)
+				_expect(found_root.get_children().size() == 1, "%s anchored metadata-only root contains only its AI controller" % entity_id)
 			_expect(
 				int(found_root.get_meta("backrooms_entity_behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION,
 				"%s root records its explicit behavior version" % entity_id
