@@ -3,6 +3,7 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const RoutePlannerScript = preload("res://systems/BackroomsCellRoutePlanner.gd")
 const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
+const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 
 const TEST_SEED: int = 20261118
 const TEST_LEVEL: String = "Level 0"
@@ -12,6 +13,7 @@ var failures: Array[String] = []
 func _initialize() -> void:
 	_test_loaded_window_routes()
 	_test_rejected_descriptors_and_budgets()
+	_test_maximum_loaded_window_stress()
 	if failures.is_empty():
 		print("Backrooms loaded-cell route planner tests passed.")
 		quit(0)
@@ -92,6 +94,13 @@ func _test_loaded_window_routes() -> void:
 		and repeated.get("cell_path", []) == route.get("cell_path", []),
 		"repeated route requests return the same deterministic path"
 	)
+	_expect(bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is current before the loaded window changes")
+	var tampered_route: Dictionary = route.duplicate(true)
+	var tampered_directions: Array = tampered_route.get("edge_directions", []).duplicate(true)
+	if not tampered_directions.is_empty():
+		tampered_directions[0] = Vector2i.ZERO
+		tampered_route["edge_directions"] = tampered_directions
+	_expect(not bool(runtime.call("is_route_snapshot_current", tampered_route)), "a modified route edge is rejected by snapshot validation")
 
 	var same_cell: Dictionary = runtime.call(
 		"plan_route_between_loaded_cells",
@@ -126,6 +135,11 @@ func _test_loaded_window_routes() -> void:
 		"routes fail closed when the requested start is not loaded"
 	)
 	_expect(runtime.call("to_save_dict") == before_save, "route planning does not mutate the maze save state")
+	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
+	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
+	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
+	var fresh_route: Dictionary = runtime.call("plan_route_between_loaded_cells", Vector2i(3, 0), Vector2i(3, 0))
+	_expect(bool(fresh_route.get("ok", false)) and bool(runtime.call("is_route_snapshot_current", fresh_route)), "a new route snapshot is accepted for the committed window")
 
 	var stream_state: RefCounted = runtime.get("stream_state") as RefCounted
 	var descriptors: Array = stream_state.call("get_loaded_cell_descriptors")
@@ -265,6 +279,69 @@ func _test_rejected_descriptors_and_budgets() -> void:
 		"zero or negative expansion budgets are rejected"
 	)
 	host.free()
+
+
+func _test_maximum_loaded_window_stress() -> void:
+	var seeds: Array[int] = [0, 1, 42, 20261118, 2147483647]
+	for seed in seeds:
+		var stream_state: RefCounted = StreamStateScript.new()
+		_expect(bool(stream_state.call("configure", TEST_LEVEL, seed, 8.0, 8)), "maximum-window stream configures for seed %d" % seed)
+		var plan: Dictionary = stream_state.call("plan_window_at_cell", Vector2i.ZERO)
+		_expect(bool(plan.get("ok", false)), "maximum-window plan succeeds for seed %d" % seed)
+		if not bool(plan.get("ok", false)):
+			continue
+		var staged_keys: Array = plan.get("load_cell_keys", [])
+		_expect(staged_keys.size() == 289, "the stream exposes exactly 289 cells at radius eight for seed %d" % seed)
+		_expect(bool(stream_state.call("commit_window", plan, staged_keys)), "all 289 descriptors commit for seed %d" % seed)
+		var descriptors: Array = stream_state.call("get_loaded_cell_descriptors")
+		_expect(descriptors.size() == 289, "the committed maximum window returns 289 descriptors for seed %d" % seed)
+		var route: Dictionary = RoutePlannerScript.plan_route(
+			Vector2i(-8, -8), Vector2i(8, 8), descriptors, TEST_LEVEL, seed, 289
+		)
+		_expect(bool(route.get("ok", false)), "the planner connects opposite corners in the maximum window for seed %d" % seed)
+		if not bool(route.get("ok", false)):
+			continue
+		var cells: Array = route.get("cell_path", [])
+		var directions: Array = route.get("edge_directions", [])
+		_expect(cells.size() <= 33, "BFS is no longer than the guaranteed 33-cell spanning-tree route for seed %d" % seed)
+		_expect(int(route.get("expanded_count", 999)) <= 289, "BFS expansion count stays within the 289-cell budget for seed %d" % seed)
+		_expect(directions.size() == cells.size() - 1, "maximum-window route edge count is consistent for seed %d" % seed)
+		var seen_cells: Dictionary = {}
+		for index in range(cells.size()):
+			var cell_value: Variant = cells[index]
+			if not (cell_value is Vector2i):
+				_expect(false, "maximum-window route cells are typed for seed %d" % seed)
+				continue
+			var cell: Vector2i = cell_value
+			var key: String = "%d,%d" % [cell.x, cell.y]
+			_expect(not seen_cells.has(key), "maximum-window route contains no cycles for seed %d" % seed)
+			seen_cells[key] = true
+			_expect(abs(cell.x) <= 8 and abs(cell.y) <= 8, "maximum-window route remains inside the 17x17 window for seed %d" % seed)
+			if index + 1 >= cells.size():
+				continue
+			var next_cell: Vector2i = cells[index + 1]
+			var direction: Vector2i = directions[index]
+			_expect(next_cell - cell == direction, "maximum-window transitions are cardinal for seed %d" % seed)
+			_expect(LayoutScript.edge_is_open(cell, direction, seed), "maximum-window source edge is open for seed %d" % seed)
+			_expect(LayoutScript.edge_is_open(next_cell, -direction, seed), "maximum-window destination edge is reciprocal for seed %d" % seed)
+		var repeated: Dictionary = RoutePlannerScript.plan_route(
+			Vector2i(-8, -8), Vector2i(8, 8), descriptors, TEST_LEVEL, seed, 289
+		)
+		_expect(
+			bool(repeated.get("ok", false)) and repeated.get("cell_path", []) == cells,
+			"maximum-window route is deterministic across repeated requests for seed %d" % seed
+		)
+		if seed == seeds[0]:
+			var oversized: Array = descriptors.duplicate(true)
+			oversized.append(descriptors[0].duplicate(true))
+			var oversized_result: Dictionary = RoutePlannerScript.plan_route(
+				Vector2i(-8, -8), Vector2i(8, 8), oversized, TEST_LEVEL, seed, 289
+			)
+			_expect(
+				not bool(oversized_result.get("ok", false))
+				and str(oversized_result.get("reason", "")) == "loaded_cell_descriptor_count_invalid",
+				"the planner rejects a 290th loaded-cell descriptor"
+			)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
