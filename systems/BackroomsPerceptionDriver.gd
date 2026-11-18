@@ -5,6 +5,7 @@ class_name BackroomsPerceptionDriver
 ## The driver never creates a per-entity process loop; SurfaceWorld calls tick()
 ## from its existing physics callback.
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
+const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 
 const SENSOR_INTERVAL_SECONDS: float = 0.2
 const MAX_ENTITY_SAMPLES_PER_TICK: int = 12
@@ -159,7 +160,8 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 				"key": cell_key + "|" + entity_id,
 				"cell_key": cell_key,
 				"entity_id": entity_id,
-				"entity_root": entity_root
+				"entity_root": entity_root,
+				"cell_root": cell_root
 			})
 	records.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
@@ -205,13 +207,17 @@ func _build_perception(
 	if noise_radius <= 0.0 or distance_to_player > noise_radius:
 		effective_noise = 0.0
 
+	var cell_root_value: Variant = record.get("cell_root", null)
+	var resolved_is_dark: bool = is_dark
+	if cell_root_value is Node3D:
+		resolved_is_dark = LightingProfileScript.is_position_dark(cell_root_value as Node3D, target_point, is_dark)
 	var perception: Dictionary = {
 		"distance_to_player": distance_to_player,
 		"has_line_of_sight": has_line_of_sight,
 		"player_looking_at_entity": player_looking_at_entity,
 		"noise_strength": effective_noise,
 		"noise_distance": distance_to_player,
-		"is_dark": is_dark
+		"is_dark": resolved_is_dark
 	}
 	if has_line_of_sight:
 		perception["player_position"] = player.global_position
