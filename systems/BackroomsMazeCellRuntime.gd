@@ -596,7 +596,8 @@ func _build_cell_entity_roots(
 		if not (initial_position_value is Vector3):
 			return false
 		var entity_root: CharacterBody3D = _create_entity_root_from_descriptor(
-			descriptor, owner_cell_key, initial_position_value, int(owner_record.get("owner_revision", 0))
+			descriptor, owner_cell_key, initial_position_value,
+			int(owner_record.get("owner_revision", 0)), level_id, world_seed
 		)
 		if entity_root == null:
 			return false
@@ -629,7 +630,8 @@ func _build_cell_entity_roots(
 		if spawn_descriptor.is_empty():
 			return false
 		var migrated_root: CharacterBody3D = _create_entity_root_from_descriptor(
-			spawn_descriptor, owner_cell_key, Vector3.ZERO, int(record.get("owner_revision", 0))
+			spawn_descriptor, owner_cell_key, Vector3.ZERO,
+			int(record.get("owner_revision", 0)), level_id, world_seed
 		)
 		if migrated_root == null:
 			return false
@@ -646,13 +648,13 @@ func _create_entity_root_from_descriptor(
 	descriptor: Dictionary,
 	owner_cell_key: String,
 	initial_position: Vector3,
-	owner_revision: int
+	owner_revision: int,
+	level_id: String,
+	world_seed: int
 ) -> CharacterBody3D:
 	var entity_id: String = str(descriptor.get("entity_id", ""))
 	var spawn_cell_value: Variant = descriptor.get("cell", null)
 	var wall_value: Variant = descriptor.get("wall_direction", null)
-	var level_id: String = str(descriptor.get("level_id", ""))
-	var world_seed: int = int(descriptor.get("world_seed", -1))
 	var spawn_version: int = int(descriptor.get("spawn_algorithm_version", 0))
 	if (
 		entity_id.is_empty()
@@ -1241,6 +1243,23 @@ func _validate_cell_entity_identity_metadata(cell_root: Node3D) -> bool:
 		or identity_keys_value.size() != spawn_ids_value.size()
 	):
 		return false
+	var live_identity_by_key: Dictionary = {}
+	for child in cell_root.get_children():
+		if not (child is CharacterBody3D) or not child.has_meta("backrooms_entity_id"):
+			continue
+		var live_entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
+		var live_spawn_value: Variant = child.get_meta("spawn_cell", null)
+		if not (live_spawn_value is Vector2i) or not EntityBrainScript.SUPPORTED_ENTITY_IDS.has(live_entity_id):
+			return false
+		var live_spawn_cell: Vector2i = live_spawn_value
+		var live_key: String = OwnershipLedgerScript.get_state_key(
+			"%d,%d" % [live_spawn_cell.x, live_spawn_cell.y], live_entity_id
+		)
+		if live_key.is_empty() or live_identity_by_key.has(live_key):
+			return false
+		live_identity_by_key[live_key] = live_entity_id
+	if live_identity_by_key.size() != identity_keys_value.size():
+		return false
 	var seen: Dictionary = {}
 	for index in range(identity_keys_value.size()):
 		var identity_value: Variant = identity_keys_value[index]
@@ -1252,11 +1271,14 @@ func _validate_cell_entity_identity_metadata(cell_root: Node3D) -> bool:
 		var parts: PackedStringArray = identity_key.split("|", false)
 		if (
 			identity_key.is_empty()
-			or not EntityRuntimeStateScript.MOBILE_ENTITY_IDS.has(spawn_id)
+			or not EntityBrainScript.SUPPORTED_ENTITY_IDS.has(spawn_id)
 			or parts.size() != 2
+			or identity_key != parts[0] + "|" + parts[1]
 			or parts[1] != spawn_id
 			or not bool(EntityRuntimeStateScript.parse_cell_key(parts[0]).get("ok", false))
 			or seen.has(identity_key)
+			or not live_identity_by_key.has(identity_key)
+			or str(live_identity_by_key.get(identity_key, "")) != spawn_id
 		):
 			return false
 		seen[identity_key] = true
