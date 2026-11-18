@@ -284,10 +284,12 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          output="$(godot --headless --path . --editor --quit 2>&1)" || { echo "$output"; exit 1; }
+          # --import waits for the editor scan and resource import to finish before exiting.
+          # --editor --quit can abort the scan thread and leave SVG textures unavailable to later tests.
+          output="$(timeout -k 5s 120s godot --headless --path . --import 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
-          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:'; then
-            echo "Godot reported root-project import or parse errors."
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|Scan thread aborted'; then
+            echo "Godot reported root-project import, scan, or parse errors."
             exit 1
           fi
       - name: Run survival test hub smoke test
