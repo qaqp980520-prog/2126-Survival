@@ -5,7 +5,7 @@ class_name BackroomsEntityRuntimeState
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
-const STATE_VERSION: int = 1
+const STATE_VERSION: int = 2
 const MAX_RECORDS: int = 4096
 const SAFE_CELL_MARGIN: float = 0.65
 const MIN_LOCAL_Y: float = -0.25
@@ -57,6 +57,13 @@ static func capture_cell_states(cell_root: Node3D) -> Dictionary:
 		var entity_id: String = str(entity_root.get_meta("backrooms_entity_id", ""))
 		if not MOBILE_ENTITY_IDS.has(entity_id):
 			continue
+		var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell", null)
+		if not (spawn_cell_value is Vector2i):
+			return {"ok": false, "reason": "entity_spawn_identity_invalid"}
+		var spawn_cell: Vector2i = spawn_cell_value
+		var spawn_cell_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+		if not bool(parse_cell_key(spawn_cell_key).get("ok", false)):
+			return {"ok": false, "reason": "entity_spawn_cell_invalid"}
 		var brain: Node = entity_root.get_node_or_null("AI")
 		if brain == null or not brain.has_method("to_save_dict"):
 			return {"ok": false, "reason": "entity_brain_save_contract_unavailable"}
@@ -66,9 +73,10 @@ static func capture_cell_states(cell_root: Node3D) -> Dictionary:
 		var local_position: Vector3 = entity_root.position
 		if not _is_finite_vector3(local_position):
 			return {"ok": false, "reason": "entity_position_invalid"}
-		var patrol_index: int = int(entity_root.get_meta("backrooms_patrol_index", _initial_patrol_index(cell, world_seed)))
+		var patrol_index: int = int(entity_root.get_meta("backrooms_patrol_index", _initial_patrol_index(spawn_cell, world_seed)))
 		records.append({
 			"cell_key": cell_key,
+			"spawn_cell_key": spawn_cell_key,
 			"entity_id": entity_id,
 			"spawn_algorithm_version": spawn_version,
 			"position": _vector_to_array(local_position),
@@ -77,7 +85,16 @@ static func capture_cell_states(cell_root: Node3D) -> Dictionary:
 		})
 	return {"ok": true, "records": records}
 
-static func validate_records(records: Array, level_id: String, world_seed: int, cell_size: float, spawn_algorithm_version: int) -> Dictionary:
+static func validate_records(
+	records: Array,
+	level_id: String,
+	world_seed: int,
+	cell_size: float,
+	spawn_algorithm_version: int,
+	record_version: int = STATE_VERSION
+) -> Dictionary:
+	if record_version < 1 or record_version > STATE_VERSION:
+		return {"ok": false, "reason": "entity_runtime_state_version_unsupported"}
 	if records.size() > MAX_RECORDS:
 		return {"ok": false, "reason": "entity_runtime_state_limit_exceeded"}
 	if not EntityDirectorScript.is_spawn_algorithm_version_supported(spawn_algorithm_version):
@@ -98,7 +115,19 @@ static func validate_records(records: Array, level_id: String, world_seed: int, 
 		var cell_parse: Dictionary = parse_cell_key(cell_key)
 		if not bool(cell_parse.get("ok", false)):
 			return {"ok": false, "reason": "entity_runtime_cell_invalid"}
-		var cell: Vector2i = cell_parse["cell"]
+		var owner_cell: Vector2i = cell_parse["cell"]
+		var spawn_cell_key: String = cell_key
+		if record_version >= 2:
+			var spawn_cell_value: Variant = raw.get("spawn_cell_key", null)
+			if not (spawn_cell_value is String):
+				return {"ok": false, "reason": "entity_runtime_spawn_identity_invalid"}
+			spawn_cell_key = str(spawn_cell_value)
+		elif raw.has("spawn_cell_key"):
+			return {"ok": false, "reason": "entity_runtime_legacy_spawn_identity_unexpected"}
+		var spawn_parse: Dictionary = parse_cell_key(spawn_cell_key)
+		if not bool(spawn_parse.get("ok", false)):
+			return {"ok": false, "reason": "entity_runtime_spawn_cell_invalid"}
+		var spawn_cell: Vector2i = spawn_parse["cell"]
 		var entity_id: String = str(entity_id_value)
 		if not MOBILE_ENTITY_IDS.has(entity_id):
 			return {"ok": false, "reason": "entity_runtime_entity_not_mobile"}
@@ -110,12 +139,12 @@ static func validate_records(records: Array, level_id: String, world_seed: int, 
 		if not _is_integer_value(record_spawn_version) or int(record_spawn_version) != spawn_algorithm_version:
 			return {"ok": false, "reason": "entity_runtime_spawn_version_mismatch"}
 		var open_edges := {
-			"north": LayoutScript.edge_is_open(cell, Vector2i(0, -1), world_seed),
-			"east": LayoutScript.edge_is_open(cell, Vector2i(1, 0), world_seed),
-			"south": LayoutScript.edge_is_open(cell, Vector2i(0, 1), world_seed),
-			"west": LayoutScript.edge_is_open(cell, Vector2i(-1, 0), world_seed)
+			"north": LayoutScript.edge_is_open(spawn_cell, Vector2i(0, -1), world_seed),
+			"east": LayoutScript.edge_is_open(spawn_cell, Vector2i(1, 0), world_seed),
+			"south": LayoutScript.edge_is_open(spawn_cell, Vector2i(0, 1), world_seed),
+			"west": LayoutScript.edge_is_open(spawn_cell, Vector2i(-1, 0), world_seed)
 		}
-		var spawn_descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(level_id, cell, cell_size, open_edges, spawn_algorithm_version)
+		var spawn_descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(level_id, spawn_cell, cell_size, open_edges, spawn_algorithm_version)
 		var spawn_exists: bool = false
 		for descriptor in spawn_descriptors:
 			if str(descriptor.get("entity_id", "")) == entity_id:
@@ -131,13 +160,14 @@ static func validate_records(records: Array, level_id: String, world_seed: int, 
 		if absf(local_position.x) > half_extent or absf(local_position.z) > half_extent or local_position.y < MIN_LOCAL_Y or local_position.y > MAX_LOCAL_Y:
 			return {"ok": false, "reason": "entity_runtime_position_out_of_bounds"}
 		var brain_value: Variant = raw.get("brain_state", null)
-		if not (brain_value is Dictionary) or not BrainScript.validate_save_dict(brain_value, entity_id, level_id, cell, world_seed):
+		if not (brain_value is Dictionary) or not BrainScript.validate_save_dict(brain_value, entity_id, level_id, spawn_cell, world_seed):
 			return {"ok": false, "reason": "entity_runtime_brain_state_invalid"}
 		var patrol_value: Variant = raw.get("patrol_index", null)
 		if not _is_integer_value(patrol_value) or int(patrol_value) < 0 or int(patrol_value) > 3:
 			return {"ok": false, "reason": "entity_runtime_patrol_index_invalid"}
 		normalized.append({
 			"cell_key": cell_key,
+			"spawn_cell_key": spawn_cell_key,
 			"entity_id": entity_id,
 			"spawn_algorithm_version": spawn_algorithm_version,
 			"position": _vector_to_array(local_position),
@@ -156,8 +186,9 @@ static func restore_entity_state(cell_root: Node3D, entity_root: CharacterBody3D
 	var entity_id: String = str(record.get("entity_id", ""))
 	if entity_id != str(entity_root.get_meta("backrooms_entity_id", "")):
 		return false
-	var cell_parse: Dictionary = parse_cell_key(cell_key)
-	if not bool(cell_parse.get("ok", false)) or entity_root.get_meta("spawn_cell", null) != cell_parse["cell"]:
+	var spawn_cell_key: String = str(record.get("spawn_cell_key", cell_key))
+	var spawn_parse: Dictionary = parse_cell_key(spawn_cell_key)
+	if not bool(spawn_parse.get("ok", false)) or entity_root.get_meta("spawn_cell", null) != spawn_parse["cell"]:
 		return false
 	var position_result: Dictionary = _parse_vector3(record.get("position", null))
 	if not bool(position_result.get("ok", false)):
