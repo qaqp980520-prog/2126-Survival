@@ -139,7 +139,8 @@ static func is_position_dark(
 	var local_position_value: Variant = descriptor.get("local_position", null)
 	if not (local_position_value is Vector3):
 		return true
-	var light_position: Vector3 = cell_root.to_global(local_position_value)
+	var local_position: Vector3 = local_position_value
+	var light_position: Vector3 = cell_root.to_global(local_position)
 	var light_energy: float = float(descriptor.get("energy", 0.0))
 	var light_range: float = float(descriptor.get("range", 0.0))
 	if not _is_finite_vector3(light_position) or not is_finite(light_energy) or not is_finite(light_range):
