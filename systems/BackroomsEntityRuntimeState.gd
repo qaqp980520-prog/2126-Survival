@@ -25,13 +25,11 @@ static func parse_cell_key(cell_key: String) -> Dictionary:
 	# This avoids absolute-value overflow at the signed integer minimum.
 	var x_value: int = parts[0].to_int()
 	var y_value: int = parts[1].to_int()
-	if (
-		x_value < -LayoutScript.MAX_ABS_CELL_COORD
-		or x_value > LayoutScript.MAX_ABS_CELL_COORD
-		y_value < -LayoutScript.MAX_ABS_CELL_COORD
-		or y_value > LayoutScript.MAX_ABS_CELL_COORD
-		or ("%d,%d" % [x_value, y_value]) != cell_key
-	):
+	if x_value < -LayoutScript.MAX_ABS_CELL_COORD or x_value > LayoutScript.MAX_ABS_CELL_COORD:
+		return {"ok": false, "reason": "cell_key_out_of_range_or_noncanonical"}
+	if y_value < -LayoutScript.MAX_ABS_CELL_COORD or y_value > LayoutScript.MAX_ABS_CELL_COORD:
+		return {"ok": false, "reason": "cell_key_out_of_range_or_noncanonical"}
+	if ("%d,%d" % [x_value, y_value]) != cell_key:
 		return {"ok": false, "reason": "cell_key_out_of_range_or_noncanonical"}
 	var cell := Vector2i(x_value, y_value)
 	return {"ok": true, "cell": cell}
