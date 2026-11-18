@@ -270,7 +270,7 @@ func _run() -> void:
 		)
 		_expect(bool(restored_world.get("_is_in_backrooms")), "restored world switches into Backrooms mode only after runtime activation")
 		_expect(bool(restored_lighting_controller.call("is_active")), "combined world restore reapplies the saved Session's Backrooms lighting profile")
-		_expect(str(restored_lighting_controller.call("get_current_level")) == str(saved_session.get("current_level", "")), "restored lighting level matches the saved LocationSession")
+		_expect(str(restored_lighting_controller.call("get_current_level")) == str(saved_session.get("level_id", "")), "restored lighting level matches the saved LocationSession")
 		_expect(restored_environment.environment != original_restored_environment and is_zero_approx(restored_sun.light_energy), "combined restore restores the dark Backrooms Environment and disables the surface sun")
 		_expect(restored_player.global_position.is_equal_approx(saved_backrooms_position), "restored player returns to the exact saved Backrooms position")
 		_expect(restored_session.call("to_save_dict") == saved_session, "restored LocationSession exactly matches the saved Session")
