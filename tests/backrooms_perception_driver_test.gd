@@ -118,7 +118,12 @@ func _assert_real_line_of_sight_and_noise() -> void:
 	_expect(int(sprint_result.get("accepted_count", 0)) == 1, "strong movement noise is accepted")
 	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "pursue", "Hound pursues strong nearby sprint noise without line of sight")
 	driver.call("reset")
+	runtime.cell_roots.clear()
+	runtime.last_perceptions.clear()
+	driver = null
+	brain = null
 	world_root.free()
+	await process_frame
 
 func _assert_round_robin_budget() -> void:
 	var world_root := Node3D.new()
@@ -152,7 +157,10 @@ func _assert_round_robin_budget() -> void:
 	_expect(int(second.get("sampled_count", 0)) == 1, "next sensor tick services the remaining entity")
 	_expect(int(second.get("pending_count", -1)) == 0, "round-robin scheduler drains the complete loaded entity set")
 	driver.call("reset")
+	runtime.cell_roots.clear()
+	driver = null
 	world_root.free()
+	await process_frame
 
 func _assert_rejection_and_inactive_reset() -> void:
 	var world_root := Node3D.new()
@@ -175,7 +183,10 @@ func _assert_rejection_and_inactive_reset() -> void:
 	)
 	_expect(not bool(inactive.get("ok", true)) and str(inactive.get("reason", "")) == "runtime_inactive", "inactive Backrooms Runtime is rejected and scheduler state is reset")
 	driver.call("reset")
+	runtime.cell_roots.clear()
+	driver = null
 	world_root.free()
+	await process_frame
 
 func _add_entity(
 	runtime: FakeRuntime,
