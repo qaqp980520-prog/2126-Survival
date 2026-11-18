@@ -13,7 +13,9 @@ Add deterministic level-specific Backrooms lighting profiles, per-cell ceiling-l
 - `world/SurfaceWorld.gd` — Applies the Backrooms environment after a committed entry, restores the SurfaceWorld environment on return, and derives the same level profile after combined-world-save restore.
 - `tests/backrooms_lighting_test.gd` — Profile coverage, deterministic placement, lit/dark sampling, invalid-level rejection, and environment transaction rollback.
 - `tests/backrooms_combined_world_save_test.gd` — Entry/return and save-restore lighting regression assertions.
-- `.github/workflows/godot-validation.yml` — File-presence and bounded lighting test steps.
+- `tests/backrooms_perception_driver_test.gd` — Proves the sampled Level 1 lit/dark descriptor changes Smiler's actual AI state.
+- `tests/backrooms_entity_visual_factory_render_smoke_test.gd` — Graphical-mode checks that real Level 0 and level-scoped cells create (or omit) live OmniLight3D nodes consistently with their descriptors.
+- `.github/workflows/godot-validation.yml` — File-presence and bounded lighting test steps; the software-rendered smoke is also enabled for this branch.
 - `docs/BACKROOMS_LIGHTING_M0_1_64.md` — This version record.
 
 ## Dependencies and import
