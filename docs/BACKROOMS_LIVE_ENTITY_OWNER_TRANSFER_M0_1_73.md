@@ -106,3 +106,22 @@ Correction on this PR branch:
 - A regression asserts that an incomplete staging entity without immutable spawn metadata is ignored while the valid entity is still sampled.
 
 The exact-head Full Gate and all focused workflows for the new HEAD must complete before PR #400 can leave Draft. No pass is claimed until then.
+
+
+## Exact-head correction — JSON numeric normalization for ownership saves
+
+The owner-transfer and perception tests passed on HEAD `c34ee2bf08a8a09f57a71b61630c27a4bdab0b20`. The next exact-head Full Gate exposed a real Session JSON round-trip defect at the runtime-session integration test:
+
+- Diagnostic: Session `last_load_error=maze_stream_state_mismatch`; nested MazeStreamState `last_load_error=entity_ownership_ledger_payload_invalid`.
+- Saved center `[1, 0]` matched the position-derived center `(1, 0)`; one entity runtime-state record was present.
+- Root cause: `JSON.parse_string(JSON.stringify(...))` converts integer-valued JSON numbers to floats. The ownership ledger loader and nested schema checks required Variant type `int`, rejecting valid values such as schema version, world seed, spawn algorithm version and owner revision after a normal JSON save/load round-trip.
+
+Correction on this PR branch:
+
+- `BackroomsEntityOwnershipLedger.gd` now uses bounded integer parsing for schema version, world seed, spawn algorithm version and owner revision. Integer-valued floats are normalized to integers; fractional, non-finite and out-of-range values remain rejected.
+- `BackroomsMazeStreamState.gd` validates the nested ownership schema with its bounded integer parser and stores the schema version canonically as an integer.
+- `set_entity_ownership_ledger_state` applies the same canonical schema normalization.
+- `tests/backrooms_entity_ownership_ledger_test.gd` now performs a real JSON stringify/parse restore and verifies that a fractional owner revision is rejected without mutating the existing ledger.
+- `tests/backrooms_runtime_session_integration_test.gd` prints failure-only nested validation diagnostics for Session and MazeStreamState errors.
+
+The latest exact-head Full Gate and focused workflows must pass before PR #400 can leave Draft. No pass is claimed until then.
