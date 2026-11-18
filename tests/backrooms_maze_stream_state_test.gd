@@ -166,6 +166,14 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	assert(legacy_v2_restored.load_save_dict(legacy_v2_payload))
 	assert(legacy_v2_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
 	assert(legacy_v2_restored.get_entity_runtime_states().is_empty())
+	var legacy_v3_payload: Dictionary = saved.duplicate(true)
+	legacy_v3_payload["schema_version"] = 3
+	legacy_v3_payload.erase("entity_ownership_ledger_version")
+	legacy_v3_payload.erase("entity_ownership_ledger")
+	var legacy_v3_restored = StreamState.new()
+	assert(legacy_v3_restored.load_save_dict(legacy_v3_payload))
+	assert(legacy_v3_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
+	assert(legacy_v3_restored.get_entity_ownership_ledger_state().is_empty())
 
 	var transaction_clone = source.clone_for_transaction()
 	assert(transaction_clone.get_loaded_cell_keys() == source.get_loaded_cell_keys())
