@@ -68,7 +68,7 @@ The test verifies:
 - Deathmoth aerial patrol changes altitude within its owning cell.
 - Smiler approaches an unseen player while the cell is dark.
 - Duller retreats from a nearby player without line of sight.
-- 13 entities are serviced as 12 + 1 across two movement ticks.
+- With 13 entities, each tick processes 12 and defers one; the rotating cursor services the previously deferred entity on the next tick while deferring the next entity.
 - Non-finite delta and inactive runtime are rejected; a 2 s frame hitch is capped to five 100 ms scheduler ticks.
 - Production SurfaceWorld handoff integration verifies that the world-owned driver advances its scheduler after perception.
 
