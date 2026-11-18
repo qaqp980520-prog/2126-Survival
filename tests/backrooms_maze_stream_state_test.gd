@@ -149,6 +149,8 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	legacy_payload.erase("entity_spawn_algorithm_version")
 	legacy_payload.erase("entity_runtime_state_version")
 	legacy_payload.erase("entity_runtime_states")
+	legacy_payload.erase("entity_ownership_ledger_version")
+	legacy_payload.erase("entity_ownership_ledger")
 	var legacy_restored = StreamState.new()
 	assert(legacy_restored.load_save_dict(legacy_payload))
 	assert(legacy_restored.get_center_cell() == Vector2i(-3, 7))
@@ -158,6 +160,8 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	legacy_v2_payload["schema_version"] = 2
 	legacy_v2_payload.erase("entity_runtime_state_version")
 	legacy_v2_payload.erase("entity_runtime_states")
+	legacy_v2_payload.erase("entity_ownership_ledger_version")
+	legacy_v2_payload.erase("entity_ownership_ledger")
 	var legacy_v2_restored = StreamState.new()
 	assert(legacy_v2_restored.load_save_dict(legacy_v2_payload))
 	assert(legacy_v2_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
