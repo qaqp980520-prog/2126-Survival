@@ -33,6 +33,7 @@ func _run() -> void:
 	await _assert_duller_retreat_moves_away_from_player()
 	await _assert_patrol_moves_within_cell()
 	await _assert_deathmoth_aerial_patrol_changes_height()
+	await _assert_anchored_entities_remain_stationary()
 	await _assert_round_robin_movement_budget()
 	await _assert_invalid_and_inactive_runtime_rejection()
 	if failures.is_empty():
@@ -229,6 +230,41 @@ func _assert_deathmoth_aerial_patrol_changes_height() -> void:
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(result.get("moved_count", 0)) == 1, "Deathmoth receives a bounded aerial patrol update")
 	_expect(entity_root.global_position.y > start_y, "Deathmoth changes altitude during its aerial patrol")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
+func _assert_anchored_entities_remain_stationary() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var window_entity: Dictionary = _add_entity(cell_root, "window", "Level 1", Vector2i.ZERO, 31, Vector3(0.0, 1.2, -3.9))
+	var clump_entity: Dictionary = _add_entity(cell_root, "clump", "Level 3", Vector2i.ZERO, 37, Vector3(0.0, 0.42, 0.0))
+	var window_root: Node3D = window_entity["root"] as Node3D
+	var clump_root: Node3D = clump_entity["root"] as Node3D
+	(window_entity["brain"] as Node).call("evaluate_perception", {
+		"distance_to_player": 2.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": true,
+		"noise_strength": 0.0,
+		"player_position": Vector3(1.0, 0.0, 0.0)
+	}, 0.2)
+	(clump_entity["brain"] as Node).call("evaluate_perception", {
+		"distance_to_player": 4.0,
+		"has_line_of_sight": true,
+		"noise_strength": 0.0,
+		"player_position": Vector3(1.0, 0.0, 0.0)
+	}, 0.2)
+	await process_frame
+	var window_start: Vector3 = window_root.global_position
+	var clump_start: Vector3 = clump_root.global_position
+	var driver = MovementDriverScript.new()
+	var result: Dictionary = driver.call("tick", runtime, 0.1)
+	_expect(int(result.get("total_count", 0)) == 0, "Window and Clump are excluded from mobile entity scheduling")
+	_expect(window_root.global_position.is_equal_approx(window_start), "Window remains attached to its wall")
+	_expect(clump_root.global_position.is_equal_approx(clump_start), "Clump remains anchored in its cell")
 	driver.call("reset")
 	world_root.free()
 	await process_frame
