@@ -208,7 +208,8 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(str(return_without_runtime.get("reason", "")) == "runtime_restore_required_before_return")
 	assert(bool(restored_manager.call("restore_runtime_from_session", restored_runtime)))
 	assert(bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")))
-	assert(restored_runtime.call("to_save_dict") == restored_session.call("get_maze_stream_state"))
+	assert(_json_values_equal(restored_runtime.call("to_save_dict"), restored_session.call("get_maze_stream_state")), "Schema-three Session and restored runtime preserve the same mobile entity snapshots.")
+	assert(not restored_session.call("get_maze_stream_state").get("entity_runtime_states", []).is_empty(), "Schema-three restore retains the persisted mobile entity cache.")
 	assert(bool(restored_manager.call("activate_prepared_runtime_after_handoff", restored_runtime)), "Restored hidden runtime should activate after the world handoff.")
 
 	restore_result = false
