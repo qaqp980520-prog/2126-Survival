@@ -162,6 +162,7 @@ func _assert_entity_runtime_state_round_trip() -> void:
 		runtime.queue_free()
 		await process_frame
 		return
+	var original_spawn_position: Vector3 = selected_root.position
 	var saved_local_position := Vector3(1.25, selected_root.position.y, -0.75)
 	selected_root.position = saved_local_position
 	var brain: Node = selected_root.get_node_or_null("AI")
@@ -250,6 +251,44 @@ func _assert_entity_runtime_state_round_trip() -> void:
 	invalid_payload["entity_runtime_states"] = invalid_records
 	_expect(not bool(restored.call("load_save_dict", invalid_payload)), "out-of-cell entity positions are rejected during transactional restore")
 	_expect(restored.call("to_save_dict") == before_invalid_restore, "rejected entity-state restore leaves the existing runtime snapshot unchanged")
+
+	# Move beyond the one-cell retention halo. The archived state must be evicted,
+	# and returning later must rebuild the deterministic spawn defaults.
+	var evicted_center := Vector2i(selected_cell.x + 5, selected_cell.y)
+	var evicted_position := Vector3(float(evicted_center.x) * 8.0, 0.0, float(evicted_center.y) * 8.0)
+	var evicted_shift: Dictionary = runtime.call("sync_to_world_position", evicted_position)
+	_expect(bool(evicted_shift.get("ok", false)), "moving beyond the one-cell halo commits a distant stream window")
+	var evicted_save: Dictionary = runtime.call("to_save_dict")
+	var stale_record_found: bool = false
+	for record_value in evicted_save.get("entity_runtime_states", []):
+		if record_value is Dictionary:
+			var record: Dictionary = record_value
+			if str(record.get("cell_key", "")) == selected_cell_key and str(record.get("entity_id", "")) == selected_entity_id:
+				stale_record_found = true
+				break
+	_expect(not stale_record_found, "entity state outside the one-cell retention halo is evicted from the bounded cache")
+	var respawn_position := Vector3(float(selected_cell.x) * 8.0, 0.0, float(selected_cell.y) * 8.0)
+	var respawn_shift: Dictionary = runtime.call("sync_to_world_position", respawn_position)
+	_expect(bool(respawn_shift.get("ok", false)), "returning after halo eviction rebuilds the original deterministic cell")
+	var respawn_cell_root: Node3D = runtime.call("get_cell_root", selected_cell_key) as Node3D
+	var respawned_entity: CharacterBody3D = null
+	if respawn_cell_root != null:
+		for child in respawn_cell_root.get_children():
+			if child is CharacterBody3D and str(child.get_meta("backrooms_entity_id", "")) == selected_entity_id:
+				respawned_entity = child as CharacterBody3D
+				break
+	_expect(respawned_entity != null, "evicted mobile entity is rebuilt from its deterministic spawn descriptor")
+	if respawned_entity != null:
+		_expect(respawned_entity.position.is_equal_approx(original_spawn_position), "evicted entity returns to its deterministic spawn position")
+		var respawned_brain: Node = respawned_entity.get_node_or_null("AI")
+		var respawned_snapshot: Dictionary = respawned_brain.call("get_behavior_snapshot") if respawned_brain != null else {}
+		_expect(
+			str(respawned_snapshot.get("state", "")) == "patrol"
+			and not bool(respawned_snapshot.get("has_evaluated_perception", true)),
+			"evicted entity returns to its initial unevaluated patrol brain state"
+		)
+		_expect(not respawned_entity.has_meta("backrooms_patrol_index"), "evicted entity resets its patrol waypoint metadata")
+
 	restored.queue_free()
 	runtime.queue_free()
 	await process_frame
