@@ -123,7 +123,9 @@ static func is_position_dark(
 		return fallback
 	if not _is_finite_vector3(world_position):
 		return fallback
-	var descriptor_value: Variant = cell_root.get_meta("backrooms_light_descriptor", null)
+	if not cell_root.has_meta("backrooms_light_descriptor"):
+		return fallback
+	var descriptor_value: Variant = cell_root.get_meta("backrooms_light_descriptor")
 	if not (descriptor_value is Dictionary):
 		return fallback
 	var descriptor: Dictionary = descriptor_value
@@ -148,17 +150,19 @@ static func is_position_dark(
 	if light_energy <= 0.0 or light_range <= 0.0:
 		return true
 
-	# In graphical mode, use the live light node so disabling/removing it immediately
-	# changes perception. Headless tests use the identical saved descriptor.
-	if cell_root.is_inside_tree() and DisplayServer.get_name() != "headless":
-		var light_node: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
-		if light_node == null or not is_instance_valid(light_node) or not light_node.visible:
+	# If graphical construction was expected, a missing live light is a dark cell.
+	# Metadata-only/headless fixtures intentionally use the same deterministic descriptor.
+	var light_node: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
+	if light_node != null:
+		if not is_instance_valid(light_node) or not light_node.visible:
 			return true
 		light_position = light_node.global_position
 		light_energy = light_node.light_energy
 		light_range = light_node.omni_range
 		if light_energy <= 0.0 or light_range <= 0.0:
 			return true
+	elif cell_root.has_meta("backrooms_graphical_lighting_expected") and bool(cell_root.get_meta("backrooms_graphical_lighting_expected")):
+		return true
 
 	var normalized_distance: float = clampf(light_position.distance_to(world_position) / light_range, 0.0, 1.0)
 	var attenuation: float = 1.0 - normalized_distance
