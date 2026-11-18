@@ -220,7 +220,8 @@ func _assert_entity_runtime_state_round_trip() -> void:
 	_expect(not target_record.is_empty(), "runtime save contains the moved hunter's stable owner-cell/entity identity")
 	_expect(str(target_record.get("spawn_cell_key", "")) == selected_cell_key, "codec v2 preserves immutable spawn-cell identity separately from owner cell")
 	var owner_cell := selected_cell + Vector2i(1, 0)
-	for _attempt in range(32):
+	var owner_cell_found: bool = false
+	for _attempt in range(128):
 		var owner_edges := {
 			"north": LayoutScript.edge_is_open(owner_cell, Vector2i(0, -1), 20261118),
 			"east": LayoutScript.edge_is_open(owner_cell, Vector2i(1, 0), 20261118),
@@ -234,8 +235,10 @@ func _assert_entity_runtime_state_round_trip() -> void:
 				same_identity_exists = true
 				break
 		if not same_identity_exists:
+			owner_cell_found = true
 			break
 		owner_cell += Vector2i(1, 0)
+	_expect(owner_cell_found, "fixture finds a distinct owner cell without a duplicate deterministic spawn identity")
 	var migrated_record: Dictionary = target_record.duplicate(true)
 	migrated_record["cell_key"] = "%d,%d" % [owner_cell.x, owner_cell.y]
 	migrated_record["spawn_cell_key"] = selected_cell_key
