@@ -8,9 +8,10 @@ const Layout = preload("res://systems/BackroomsMazeLayout.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 
-const SAVE_SCHEMA_VERSION: int = 3
+const SAVE_SCHEMA_VERSION: int = 4
 const MIN_SUPPORTED_SAVE_SCHEMA_VERSION: int = 1
 const ENTITY_RUNTIME_STATE_VERSION: int = EntityRuntimeStateScript.STATE_VERSION
+const ENTITY_OWNERSHIP_LEDGER_VERSION: int = 1
 const LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const MAX_STREAM_RADIUS: int = 8
@@ -31,6 +32,7 @@ var last_load_error: String = ""
 
 var _loaded_cells: Dictionary = {}
 var _entity_runtime_states: Array[Dictionary] = []
+var _entity_ownership_ledger_state: Dictionary = {}
 var _generation: int = 0
 var _configuration_revision: int = 0
 
@@ -60,6 +62,7 @@ func configure(
 	center_cell = Vector2i.ZERO
 	_loaded_cells.clear()
 	_entity_runtime_states.clear()
+	_entity_ownership_ledger_state.clear()
 	configured = true
 	_configuration_revision += 1
 	_generation += 1
@@ -226,6 +229,7 @@ func clone_for_transaction() -> RefCounted:
 	clone_value.last_load_error = last_load_error
 	clone_value._loaded_cells = _loaded_cells.duplicate(true)
 	clone_value._entity_runtime_states = _entity_runtime_states.duplicate(true)
+	clone_value._entity_ownership_ledger_state = _entity_ownership_ledger_state.duplicate(true)
 	clone_value._generation = _generation
 	clone_value._configuration_revision = _configuration_revision
 	return clone_value as RefCounted
@@ -244,6 +248,21 @@ func set_entity_runtime_states(records: Array) -> bool:
 	last_load_error = ""
 	return true
 
+func get_entity_ownership_ledger_state() -> Dictionary:
+	return _entity_ownership_ledger_state.duplicate(true)
+
+func set_entity_ownership_ledger_state(payload: Dictionary) -> bool:
+	if not configured:
+		return false
+	if not payload.is_empty():
+		var schema_value: Variant = payload.get("schema_version", null)
+		if not (schema_value is int) or int(schema_value) != ENTITY_OWNERSHIP_LEDGER_VERSION:
+			last_load_error = "entity_ownership_ledger_schema_invalid"
+			return false
+	_entity_ownership_ledger_state = payload.duplicate(true)
+	last_load_error = ""
+	return true
+
 ## Loaded Node references are never serialized; deterministic cells and bounded entity
 ## state are enough to rebuild the current window and recently unloaded neighbors.
 func to_save_dict() -> Dictionary:
@@ -255,6 +274,8 @@ func to_save_dict() -> Dictionary:
 		"entity_spawn_algorithm_version": entity_spawn_algorithm_version,
 		"entity_runtime_state_version": ENTITY_RUNTIME_STATE_VERSION,
 		"entity_runtime_states": _entity_runtime_states.duplicate(true),
+		"entity_ownership_ledger_version": ENTITY_OWNERSHIP_LEDGER_VERSION,
+		"entity_ownership_ledger": _entity_ownership_ledger_state.duplicate(true),
 		"level_id": level_id,
 		"world_seed": world_seed,
 		"cell_size": cell_size,
@@ -325,6 +346,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var candidate_seed: int = int(seed_result["value"])
 	var candidate_cell_size: float = float(cell_size_result["value"])
 	var candidate_entity_runtime_states: Array[Dictionary] = []
+	var candidate_entity_ownership_ledger_state: Dictionary = {}
 	if schema_version >= 3:
 		var state_version_result: Dictionary = _read_integer(payload.get("entity_runtime_state_version", null), 1, ENTITY_RUNTIME_STATE_VERSION)
 		var state_records_value: Variant = payload.get("entity_runtime_states", null)
@@ -343,6 +365,22 @@ func load_save_dict(payload: Dictionary) -> bool:
 		candidate_entity_runtime_states = state_validation.get("records", [])
 	elif payload.has("entity_runtime_state_version") or payload.has("entity_runtime_states"):
 		return _reject_load("entity_runtime_state_schema_downgrade")
+	if schema_version >= 4:
+		var ownership_version_result: Dictionary = _read_integer(
+			payload.get("entity_ownership_ledger_version", null),
+			ENTITY_OWNERSHIP_LEDGER_VERSION,
+			ENTITY_OWNERSHIP_LEDGER_VERSION
+		)
+		var ownership_state_value: Variant = payload.get("entity_ownership_ledger", null)
+		if not bool(ownership_version_result.get("ok", false)) or not (ownership_state_value is Dictionary):
+			return _reject_load("entity_ownership_ledger_schema_invalid")
+		candidate_entity_ownership_ledger_state = ownership_state_value.duplicate(true)
+		if not candidate_entity_ownership_ledger_state.is_empty():
+			var ownership_schema_value: Variant = candidate_entity_ownership_ledger_state.get("schema_version", null)
+			if not (ownership_schema_value is int) or int(ownership_schema_value) != ENTITY_OWNERSHIP_LEDGER_VERSION:
+				return _reject_load("entity_ownership_ledger_payload_invalid")
+	elif payload.has("entity_ownership_ledger_version") or payload.has("entity_ownership_ledger"):
+		return _reject_load("entity_ownership_ledger_schema_downgrade")
 
 	level_id = candidate_level
 	world_seed = candidate_seed
@@ -351,6 +389,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	entity_spawn_algorithm_version = candidate_spawn_algorithm_version
 	center_cell = candidate_center
 	_entity_runtime_states = candidate_entity_runtime_states
+	_entity_ownership_ledger_state = candidate_entity_ownership_ledger_state
 	configured = true
 	_loaded_cells.clear()
 	_configuration_revision += 1
