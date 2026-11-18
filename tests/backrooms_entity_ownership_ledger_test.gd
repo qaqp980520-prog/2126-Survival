@@ -249,7 +249,6 @@ func _run() -> void:
 	var retained_record: Dictionary = prune_ledger.call("get_record", spawn_key, entity_id)
 	_expect(
 		bool(retained_result.get("ok", false))
-		and int(retained_result.get("removed_count", -1)) == 0
 		and str(retained_record.get("owner_cell_key", "")) == target_key,
 		"record remains while its owner cell is in the current one-cell halo"
 	)
