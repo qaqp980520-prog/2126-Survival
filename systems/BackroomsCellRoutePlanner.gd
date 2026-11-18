@@ -96,6 +96,7 @@ static func plan_route(
 	var visited: Dictionary = {start_key: true}
 	var parent_by_key: Dictionary = {}
 	var expanded_count: int = 0
+	var goal_discovered: bool = false
 	while queue_index < queue.size():
 		if expanded_count >= max_expansions:
 			return _failure("search_budget_exceeded")
@@ -126,6 +127,11 @@ static func plan_route(
 				"direction": direction
 			}
 			queue.append(neighbor_cell)
+			if neighbor_cell == goal_cell:
+				goal_discovered = true
+				break
+		if goal_discovered:
+			break
 
 	if not visited.has(goal_key):
 		return _failure("no_route_in_loaded_window")
