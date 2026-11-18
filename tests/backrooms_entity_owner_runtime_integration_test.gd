@@ -95,6 +95,7 @@ func _run() -> void:
 	_expect(str(premature_transfer.get("reason", "")) == "transfer_entity_not_at_cell_edge", "premature transfer reports the boundary precondition")
 	_expect(entity_root.get_parent() == source_root, "premature transfer leaves node ownership unchanged")
 
+	# The edge tolerance applies only along the travel axis, never to the perpendicular serialized coordinate.
 	var invalid_horizontal: Vector3 = source_local
 	if direction.x != 0:
 		invalid_horizontal.x = float(direction.x) * safe_extent

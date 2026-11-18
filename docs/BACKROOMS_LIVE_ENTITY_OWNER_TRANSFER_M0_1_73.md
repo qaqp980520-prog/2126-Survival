@@ -145,7 +145,7 @@ Code review found that the live transfer API checked finite source coordinates a
 
 Correction on the live-transfer path:
 
-- Before creating a pending ownership transaction or reparenting the Node, validate both horizontal local coordinates against the safe cell extent plus the existing edge tolerance.
+- Before creating a pending ownership transaction or reparenting the Node, validate the perpendicular X/Z coordinate against the serialized safe cell extent plus only a 0.001 numeric-rounding tolerance. The 0.25 edge tolerance is reserved exclusively for the travel-axis boundary check.
 - Validate local Y against the runtime-state codec's shared `MIN_LOCAL_Y` and `MAX_LOCAL_Y` constants.
 - Reject invalid positions with `transfer_entity_position_out_of_bounds`; do not create a pending transfer or mutate owner metadata.
 
@@ -156,3 +156,16 @@ Regression coverage in `tests/backrooms_entity_owner_runtime_integration_test.gd
 - Both rejections preserve the source parent, owner cell, owner revision, and zero pending ledger transactions.
 
 This is a fail-closed precondition hardening; the save schema and successful transfer behavior are unchanged. Exact-head Full Gate and all focused workflows must be rerun for the resulting commit.
+
+## Exact-head regression correction — separate edge and perpendicular tolerances
+
+The first bounds-hardening commit correctly added the vertical preflight but reused the 0.25 travel-edge tolerance for the perpendicular axis. The new regression intentionally placed the perpendicular coordinate at safe extent +0.25, exposing that the invalid position was still accepted and the transfer test then cascaded.
+
+Correction:
+
+- Added `ENTITY_TRANSFER_PERPENDICULAR_TOLERANCE = 0.001`.
+- Only the axis perpendicular to travel is checked against safe extent plus the small numeric-rounding tolerance.
+- The travel axis continues to use the existing 0.25 edge tolerance and is clamped to the safe destination extent during handoff.
+- Vertical Y remains strictly bounded by the runtime-state codec constants.
+
+The horizontal regression uses a +0.25 perpendicular offset and now must be rejected before ledger planning; the vertical regression remains unchanged. The failed exact-head Full Gate is recorded as a real regression and is not treated as a pass.

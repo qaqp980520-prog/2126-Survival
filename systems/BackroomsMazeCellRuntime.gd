@@ -17,6 +17,7 @@ const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 const ENTITY_SAFE_CELL_MARGIN: float = 0.65
 const ENTITY_COLLISION_SAFE_MARGIN: float = 0.02
 const ENTITY_TRANSFER_EDGE_TOLERANCE: float = 0.25
+const ENTITY_TRANSFER_PERPENDICULAR_TOLERANCE: float = 0.001
 const ENTITY_TRANSFER_ENTRY_INSET: float = 0.02
 
 const FLOOR_THICKNESS: float = 0.2
@@ -1168,10 +1169,9 @@ func transfer_entity_to_next_cell(
 	var source_local: Vector3 = source_root.to_local(entity_root.global_position)
 	if not _is_finite_vector3(source_local):
 		return {"ok": false, "reason": "transfer_entity_position_invalid"}
-	var maximum_local_extent: float = safe_extent + ENTITY_TRANSFER_EDGE_TOLERANCE
+	var perpendicular_coordinate: float = source_local.z if direction.x != 0 else source_local.x
 	if (
-		absf(source_local.x) > maximum_local_extent
-		or absf(source_local.z) > maximum_local_extent
+		absf(perpendicular_coordinate) > safe_extent + ENTITY_TRANSFER_PERPENDICULAR_TOLERANCE
 		or source_local.y < EntityRuntimeStateScript.MIN_LOCAL_Y
 		or source_local.y > EntityRuntimeStateScript.MAX_LOCAL_Y
 	):
