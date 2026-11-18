@@ -145,11 +145,27 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	var legacy_payload: Dictionary = saved.duplicate(true)
 	legacy_payload["schema_version"] = 1
 	legacy_payload.erase("entity_spawn_algorithm_version")
+	legacy_payload.erase("entity_runtime_state_version")
+	legacy_payload.erase("entity_runtime_states")
 	var legacy_restored = StreamState.new()
 	assert(legacy_restored.load_save_dict(legacy_payload))
 	assert(legacy_restored.get_center_cell() == Vector2i(-3, 7))
 	assert(legacy_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
 	assert(legacy_restored.to_save_dict()["entity_spawn_algorithm_version"] == EntityDirector.SPAWN_ALGORITHM_VERSION)
+	var legacy_v2_payload: Dictionary = saved.duplicate(true)
+	legacy_v2_payload["schema_version"] = 2
+	legacy_v2_payload.erase("entity_runtime_state_version")
+	legacy_v2_payload.erase("entity_runtime_states")
+	var legacy_v2_restored = StreamState.new()
+	assert(legacy_v2_restored.load_save_dict(legacy_v2_payload))
+	assert(legacy_v2_restored.to_save_dict()["schema_version"] == StreamState.SAVE_SCHEMA_VERSION)
+	assert(legacy_v2_restored.get_entity_runtime_states().is_empty())
+
+	var transaction_clone = source.clone_for_transaction()
+	assert(transaction_clone.get_loaded_cell_keys() == source.get_loaded_cell_keys())
+	var clone_target_cell: Vector2i = source.get_center_cell() + Vector2i(1, 0)
+	var transaction_plan: Dictionary = transaction_clone.plan_window_at_cell(clone_target_cell)
+	assert(transaction_plan["load_cell_keys"].size() == 3 and transaction_plan["unload_cell_keys"].size() == 3)
 
 	var before_invalid_load: Dictionary = restored.to_save_dict()
 	var unsupported: Dictionary = saved.duplicate(true)
