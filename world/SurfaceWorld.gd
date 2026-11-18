@@ -2670,7 +2670,8 @@ func _rollback_world_envelope_restore(
 	var surface_payload_readback: Dictionary = serialize_stream_state()
 	var surface_payload_restored: bool = surface_payload_readback == previous_surface_payload
 	var rollback_complete: bool = (
-		runtime_clean
+		lighting_restored
+		and runtime_clean
 		and session_restored
 		and surface_restored
 		and minerals_restored
