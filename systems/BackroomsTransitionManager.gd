@@ -446,13 +446,40 @@ func restore_runtime_from_session(runtime: Object) -> bool:
 			return false
 	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		return false
+	var session_snapshot_value: Variant = session.call("to_save_dict")
+	if not (session_snapshot_value is Dictionary):
+		return false
+	var session_snapshot: Dictionary = session_snapshot_value.duplicate(true)
 	var payload: Dictionary = session.call("get_maze_stream_state")
 	if payload.is_empty():
 		return false
 	if not bool(runtime.call("load_save_dict", payload.duplicate(true))):
 		return false
-	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")) or runtime.call("to_save_dict") != payload:
+	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		runtime.call("deactivate_destination")
+		return false
+	var runtime_payload_value: Variant = runtime.call("to_save_dict")
+	if not (runtime_payload_value is Dictionary) or runtime_payload_value.is_empty():
+		runtime.call("deactivate_destination")
+		return false
+	var runtime_payload: Dictionary = runtime_payload_value
+	var records_value: Variant = payload.get("entity_runtime_states", null)
+	if records_value is Array and records_value.is_empty():
+		# Legacy schemas (or a valid empty cache) rebuild deterministic mobile entities
+		# at their spawn defaults. Persist those defaults into Session before accepting
+		# the restored runtime so the next save cannot lose the materialized state.
+		var position_value: Variant = session.get("backrooms_position")
+		if not (position_value is Vector3) or not session.has_method("update_backrooms_runtime_state"):
+			runtime.call("deactivate_destination")
+			return false
+		if not bool(session.call("update_backrooms_runtime_state", position_value, runtime_payload.duplicate(true))):
+			runtime.call("deactivate_destination")
+			_restore_session_snapshot(session_snapshot)
+			return false
+		payload = session.call("get_maze_stream_state")
+	if not _save_values_equal(runtime_payload, payload):
+		runtime.call("deactivate_destination")
+		_restore_session_snapshot(session_snapshot)
 		return false
 	_active_runtime = runtime
 	_active_runtime_instance_id = runtime.get_instance_id()
@@ -773,3 +800,25 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 
 ## Restore SurfaceWorld first, then retire the maze and clear Session.
 ## Any failure restores the exact active Session and runtime snapshot.
+
+
+## Save snapshots are JSON values: Dictionary key order is irrelevant, arrays remain ordered,
+## and equal integer/float values are equivalent after JSON decoding.
+static func _save_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _save_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _save_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
