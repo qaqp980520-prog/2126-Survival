@@ -6,6 +6,7 @@ class_name BackroomsEntityBrain
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 
 const BEHAVIOR_VERSION: int = 2
+const SAVE_SCHEMA_VERSION: int = 1
 const SUPPORTED_ENTITY_IDS := [
 	"window",
 	"smiler",
@@ -230,6 +231,93 @@ func get_behavior_snapshot() -> Dictionary:
 		"target_position": target_position if has_target_position else Vector3.ZERO
 	}
 
+func to_save_dict() -> Dictionary:
+	return {
+		"schema_version": SAVE_SCHEMA_VERSION,
+		"behavior_version": BEHAVIOR_VERSION,
+		"entity_id": entity_id,
+		"level_id": level_id,
+		"spawn_cell": [spawn_cell.x, spawn_cell.y],
+		"world_seed": world_seed,
+		"state": current_state,
+		"intent": current_intent,
+		"state_elapsed_seconds": state_elapsed_seconds,
+		"has_evaluated_perception": has_evaluated_perception,
+		"has_target_position": has_target_position,
+		"target_position": [
+			target_position.x if has_target_position else 0.0,
+			target_position.y if has_target_position else 0.0,
+			target_position.z if has_target_position else 0.0
+		]
+	}
+
+static func validate_save_dict(payload: Dictionary, expected_entity_id: String, expected_level_id: String, expected_spawn_cell: Vector2i, expected_world_seed: int) -> bool:
+	var schema_value: Variant = payload.get("schema_version", null)
+	var behavior_value: Variant = payload.get("behavior_version", null)
+	var seed_value: Variant = payload.get("world_seed", null)
+	if not _is_integer_value(schema_value) or int(schema_value) != SAVE_SCHEMA_VERSION:
+		return false
+	if not _is_integer_value(behavior_value) or int(behavior_value) != BEHAVIOR_VERSION:
+		return false
+	if not _is_integer_value(seed_value) or int(seed_value) != expected_world_seed:
+		return false
+	if str(payload.get("entity_id", "")) != expected_entity_id or str(payload.get("level_id", "")) != expected_level_id:
+		return false
+	var spawn_value: Variant = payload.get("spawn_cell", null)
+	if not (spawn_value is Array) or spawn_value.size() != 2:
+		return false
+	if not _is_integer_value(spawn_value[0]) or not _is_integer_value(spawn_value[1]):
+		return false
+	if int(spawn_value[0]) != expected_spawn_cell.x or int(spawn_value[1]) != expected_spawn_cell.y:
+		return false
+	var state_value: Variant = payload.get("state", null)
+	var intent_value: Variant = payload.get("intent", null)
+	var elapsed_value: Variant = payload.get("state_elapsed_seconds", null)
+	var evaluated_value: Variant = payload.get("has_evaluated_perception", null)
+	var target_flag_value: Variant = payload.get("has_target_position", null)
+	var target_value: Variant = payload.get("target_position", null)
+	if not (state_value is String) or not (intent_value is String):
+		return false
+	if not (elapsed_value is int or elapsed_value is float):
+		return false
+	var elapsed: float = float(elapsed_value)
+	if not is_finite(elapsed) or elapsed < 0.0 or elapsed > 1000000000.0:
+		return false
+	if not (evaluated_value is bool) or not (target_flag_value is bool):
+		return false
+	if not _is_state_allowed_for_entity(expected_entity_id, str(state_value)):
+		return false
+	if str(intent_value) != _intent_for_state_value(str(state_value)):
+		return false
+	if not (target_value is Array) or target_value.size() != 3:
+		return false
+	for component in target_value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return false
+	if not bool(target_flag_value) and (
+		float(target_value[0]) != 0.0 or float(target_value[1]) != 0.0 or float(target_value[2]) != 0.0
+	):
+		return false
+	if not bool(evaluated_value) and (
+		str(state_value) != _initial_state_for_entity(expected_entity_id)
+		or elapsed != 0.0
+		or bool(target_flag_value)
+	):
+		return false
+	return true
+
+func load_save_dict(payload: Dictionary) -> bool:
+	if not configured or not validate_save_dict(payload, entity_id, level_id, spawn_cell, world_seed):
+		return false
+	current_state = str(payload["state"])
+	current_intent = str(payload["intent"])
+	state_elapsed_seconds = float(payload["state_elapsed_seconds"])
+	has_evaluated_perception = bool(payload["has_evaluated_perception"])
+	has_target_position = bool(payload["has_target_position"])
+	var target: Array = payload["target_position"]
+	target_position = Vector3(float(target[0]), float(target[1]), float(target[2]))
+	return true
+
 func reset_behavior() -> bool:
 	if not configured:
 		return false
@@ -300,6 +388,9 @@ func _decide_state(
 	return "dormant"
 
 func _initial_state(requested_entity_id: String) -> String:
+	return _initial_state_for_entity(requested_entity_id)
+
+static func _initial_state_for_entity(requested_entity_id: String) -> String:
 	match requested_entity_id:
 		"hound", "skin_stealer":
 			return "patrol"
@@ -312,7 +403,38 @@ func _initial_state(requested_entity_id: String) -> String:
 		_:
 			return "dormant"
 
+static func _is_state_allowed_for_entity(requested_entity_id: String, state_name: String) -> bool:
+	match requested_entity_id:
+		"window":
+			return state_name in ["watch", "dormant"]
+		"smiler":
+			return state_name in ["dormant", "freeze", "approach"]
+		"hound":
+			return state_name in ["pursue", "investigate", "patrol"]
+		"skin_stealer":
+			return state_name in ["pursue", "investigate", "observe", "patrol"]
+		"clump":
+			return state_name in ["ambush", "anchored"]
+		"faceling":
+			return state_name in ["avoid", "passive"]
+		"duller":
+			return state_name in ["retreat", "passive"]
+		"deathmoth":
+			return state_name in ["pursue", "investigate", "fly_patrol"]
+	return false
+
+static func _is_integer_value(value: Variant) -> bool:
+	if value is int:
+		return true
+	if value is float:
+		var number: float = float(value)
+		return is_finite(number) and floorf(number) == number
+	return false
+
 func _intent_for_state(state_name: String) -> String:
+	return _intent_for_state_value(state_name)
+
+static func _intent_for_state_value(state_name: String) -> String:
 	match state_name:
 		"watch":
 			return "observe"
