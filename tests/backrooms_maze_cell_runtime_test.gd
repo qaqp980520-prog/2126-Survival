@@ -109,7 +109,24 @@ func _run() -> void:
 	_expect(bool(legacy_v3_restored.call("load_save_dict", legacy_v3_payload)), "legacy schema-three runtime saves rebuild default ownership records")
 	var legacy_v3_migrated: Dictionary = legacy_v3_restored.call("to_save_dict")
 	_expect(int(legacy_v3_migrated.get("schema_version", -1)) == 4, "legacy schema-three runtime saves migrate to schema four")
-	_expect(legacy_v3_migrated.get("entity_ownership_ledger", {}).get("records", []).size() > 0, "legacy schema-three migration materializes deterministic spawn ownership records")
+	var legacy_v3_ledger: RefCounted = legacy_v3_restored.get("ownership_ledger") as RefCounted
+	var legacy_v3_ledger_records: Array = legacy_v3_ledger.call("get_records") if legacy_v3_ledger != null else []
+	var legacy_v3_saved_ledger: Dictionary = legacy_v3_migrated.get("entity_ownership_ledger", {})
+	var legacy_v3_saved_records: Array = legacy_v3_saved_ledger.get("records", [])
+	if legacy_v3_saved_records.is_empty():
+		print(
+			"LEGACY_V3_DIAGNOSTIC loaded_cells=%d ledger_records=%d saved_records=%d last_error=%s spawn=%s entity=%s owner=%s"
+			% [
+				int(legacy_v3_restored.call("get_loaded_cell_count")),
+				legacy_v3_ledger_records.size(),
+				legacy_v3_saved_records.size(),
+				str(legacy_v3_restored.get("last_error")),
+				str(target_record.get("spawn_cell_key", "")),
+				selected_entity_id,
+				str(legacy_v3_restored.call("get_entity_owner_record", str(target_record.get("spawn_cell_key", "")), selected_entity_id))
+			]
+		)
+	_expect(legacy_v3_saved_records.size() > 0, "legacy schema-three migration materializes deterministic spawn ownership records")
 	legacy_v3_restored.queue_free()
 	var legacy_state_v1_payload: Dictionary = saved.duplicate(true)
 	legacy_state_v1_payload["entity_runtime_state_version"] = 1
