@@ -1,0 +1,245 @@
+extends SceneTree
+
+const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
+const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
+
+var failures: Array[String] = []
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var runtime: Node3D = RuntimeScript.new() as Node3D
+	runtime.set("force_metadata_only", true)
+	root.add_child(runtime)
+	var prepared: Dictionary = runtime.call(
+		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3
+	)
+	_expect(bool(prepared.get("ok", false)), "runtime prepares a deterministic Level 2 ownership window")
+	if not bool(prepared.get("ok", false)):
+		_finish(runtime, null)
+		return
+	_expect(bool(runtime.call("activate_destination")), "prepared ownership runtime activates")
+
+	var candidate: Dictionary = _find_transfer_candidate(runtime)
+	_expect(not candidate.is_empty(), "loaded maze contains a mobile entity with an open adjacent ownership hop")
+	if candidate.is_empty():
+		_finish(runtime, null)
+		return
+	var entity_root: CharacterBody3D = candidate.get("entity_root") as CharacterBody3D
+	var source_root: Node3D = candidate.get("source_root") as Node3D
+	var spawn_cell_key: String = str(candidate.get("spawn_cell_key", ""))
+	var entity_id: String = str(candidate.get("entity_id", ""))
+	var source_cell: Vector2i = candidate.get("source_cell", Vector2i.ZERO)
+	var target_cell: Vector2i = candidate.get("target_cell", Vector2i.ZERO)
+	var direction: Vector2i = candidate.get("direction", Vector2i.ZERO)
+	var target_key: String = "%d,%d" % [target_cell.x, target_cell.y]
+	var source_key: String = "%d,%d" % [source_cell.x, source_cell.y]
+	var route: Dictionary = candidate.get("route", {})
+	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
+
+	var initial_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(str(initial_owner.get("owner_cell_key", "")) == source_key, "initial ownership ledger assigns the deterministic spawn cell")
+	var stale_route: Dictionary = route.duplicate(true)
+	stale_route["stream_generation"] = int(stale_route.get("stream_generation", 0)) + 1
+	var stale_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, stale_route
+	)
+	_expect(not bool(stale_transfer.get("ok", false)), "stale route snapshot is rejected before node reparent")
+	_expect(entity_root.get_parent() == source_root, "rejected stale transfer leaves the live entity under its original owner")
+	_expect(
+		str(runtime.call("get_entity_owner_record", spawn_cell_key, entity_id).get("owner_cell_key", "")) == source_key,
+		"rejected stale transfer leaves the ownership ledger unchanged"
+	)
+
+	var transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	_expect(bool(transfer.get("ok", false)), "valid adjacent route commits a live CharacterBody3D owner transfer")
+	if not bool(transfer.get("ok", false)):
+		_finish(runtime, null)
+		return
+	var target_root: Node3D = runtime.call("get_cell_root", target_key) as Node3D
+	_expect(target_root != null and entity_root.get_parent() == target_root, "live entity is reparented to the next loaded cell")
+	_expect(entity_root.get_meta("spawn_cell", null) == source_cell, "ownership transfer preserves immutable spawn-cell identity")
+	_expect(str(entity_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "entity metadata records the new owner cell")
+	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "entity metadata records the committed owner revision")
+	var owner_record: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 1, "ownership ledger commits the same owner and revision")
+	var safe_extent: float = 8.0 * 0.5 - 0.65
+	_expect(
+		absf(entity_root.position.x) <= safe_extent + 0.001
+		and absf(entity_root.position.z) <= safe_extent + 0.001,
+		"transferred entity lands inside the target cell's safe physics bounds"
+	)
+
+	var saved_after_transfer: Dictionary = runtime.call("to_save_dict")
+	_expect(int(saved_after_transfer.get("schema_version", -1)) == 4, "runtime saves ownership state using maze schema four")
+	_expect(int(saved_after_transfer.get("entity_ownership_ledger_version", -1)) == 1, "runtime save declares ownership ledger version one")
+	var ledger_payload: Dictionary = saved_after_transfer.get("entity_ownership_ledger", {})
+	var saved_owner_found: bool = false
+	for record_value in ledger_payload.get("records", []):
+		if record_value is Dictionary:
+			var record: Dictionary = record_value
+			if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
+				saved_owner_found = str(record.get("owner_cell_key", "")) == target_key
+	_expect(saved_owner_found, "save snapshot persists the migrated owner-cell assignment")
+
+	var far_center: Vector2i = target_cell + direction * 4
+	var far_position := Vector3(float(far_center.x) * 8.0, 0.0, float(far_center.y) * 8.0)
+	var away_result: Dictionary = runtime.call("sync_to_world_position", far_position)
+	_expect(bool(away_result.get("ok", false)), "stream can unload the owner cell while retaining its one-cell-halo ownership record")
+	_expect(runtime.call("get_cell_root", target_key) == null, "owner cell is actually unloaded before reconstruction")
+	var retained_after_unload: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(str(retained_after_unload.get("owner_cell_key", "")) == target_key, "ownership ledger retains the owner assignment inside the one-cell halo")
+	var archive_after_unload: Dictionary = runtime.call("to_save_dict")
+	var archived_owner_found: bool = false
+	for record_value in archive_after_unload.get("entity_runtime_states", []):
+		if record_value is Dictionary:
+			var record: Dictionary = record_value
+			if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
+				archived_owner_found = str(record.get("cell_key", "")) == target_key
+	_expect(archived_owner_found, "unloaded migrated entity remains archived under its mutable owner cell")
+
+	var return_position := Vector3(float(target_cell.x) * 8.0, 0.0, float(target_cell.y) * 8.0)
+	var return_result: Dictionary = runtime.call("sync_to_world_position", return_position)
+	_expect(bool(return_result.get("ok", false)), "returning to the retained owner cell stages a reconstruction transaction")
+	var reconstructed: Dictionary = _find_entity(runtime, spawn_cell_key, entity_id)
+	_expect(int(reconstructed.get("count", 0)) == 1, "reconstruction creates exactly one entity for the immutable spawn identity")
+	var reconstructed_root: CharacterBody3D = reconstructed.get("entity_root") as CharacterBody3D
+	var reconstructed_owner_root: Node3D = runtime.call("get_cell_root", target_key) as Node3D
+	_expect(
+		reconstructed_root != null and reconstructed_owner_root != null
+		and reconstructed_root.get_parent() == reconstructed_owner_root,
+		"reconstructed entity is attached to its persisted owner cell, not its original spawn cell"
+	)
+	if reconstructed_root != null:
+		_expect(str(reconstructed_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "reconstructed node restores owner-cell metadata")
+		_expect(int(reconstructed_root.get_meta("backrooms_owner_revision", -1)) == 1, "reconstructed node restores owner revision")
+	var spawn_root: Node3D = runtime.call("get_cell_root", spawn_cell_key) as Node3D
+	var spawn_cell_identity_count: int = _count_identity_in_root(spawn_root, spawn_cell_key, entity_id)
+	_expect(spawn_cell_identity_count == 0, "original spawn cell does not create a duplicate after owner-cell reconstruction")
+
+	var final_save: Dictionary = runtime.call("to_save_dict")
+	var restored: Node3D = RuntimeScript.new() as Node3D
+	restored.set("force_metadata_only", true)
+	root.add_child(restored)
+	_expect(bool(restored.call("load_save_dict", final_save)), "fresh runtime reconstructs migrated ownership from the combined maze payload")
+	_expect(bool(restored.call("activate_destination")), "restored ownership runtime activates only after reconstruction")
+	var restored_identity: Dictionary = _find_entity(restored, spawn_cell_key, entity_id)
+	_expect(int(restored_identity.get("count", 0)) == 1, "save/load round trip preserves exactly one migrated entity")
+	var restored_root: CharacterBody3D = restored_identity.get("entity_root") as CharacterBody3D
+	var restored_owner_root: Node3D = restored.call("get_cell_root", target_key) as Node3D
+	_expect(
+		restored_root != null and restored_owner_root != null and restored_root.get_parent() == restored_owner_root,
+		"save/load round trip restores the entity under its committed owner cell"
+	)
+	_expect(
+		str(restored.call("get_entity_owner_record", spawn_cell_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"save/load round trip restores the ownership ledger assignment"
+	)
+	_expect(restored.call("to_save_dict") == final_save, "restored ownership runtime reproduces the exact saved maze and ledger snapshot")
+
+	_finish(runtime, restored)
+
+
+func _find_transfer_candidate(runtime: Node) -> Dictionary:
+	var directions: Array[Vector2i] = [
+		Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)
+	]
+	for cell_key_value in runtime.call("get_loaded_cell_keys"):
+		var cell_key: String = str(cell_key_value)
+		var cell_root: Node3D = runtime.call("get_cell_root", cell_key) as Node3D
+		if cell_root == null:
+			continue
+		var cell_value: Variant = cell_root.get_meta("backrooms_cell", null)
+		if not (cell_value is Vector2i):
+			continue
+		var cell: Vector2i = cell_value
+		for child in cell_root.get_children():
+			if not (child is CharacterBody3D):
+				continue
+			var entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
+			if not MOBILE_ENTITY_IDS.has(entity_id):
+				continue
+			var spawn_value: Variant = child.get_meta("spawn_cell", null)
+			if not (spawn_value is Vector2i):
+				continue
+			var spawn_cell: Vector2i = spawn_value
+			var spawn_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+			for direction in directions:
+				var target_cell: Vector2i = cell + direction
+				var route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, target_cell)
+				if bool(route.get("ok", false)) and route.get("cell_path", []).size() == 2:
+					return {
+						"entity_root": child,
+						"source_root": cell_root,
+						"spawn_cell_key": spawn_key,
+						"entity_id": entity_id,
+						"source_cell": cell,
+						"target_cell": target_cell,
+						"direction": direction,
+						"route": route
+					}
+	return {}
+
+
+func _find_entity(runtime: Node, spawn_cell_key: String, entity_id: String) -> Dictionary:
+	var matches: Array[CharacterBody3D] = []
+	for cell_key_value in runtime.call("get_loaded_cell_keys"):
+		var cell_root: Node3D = runtime.call("get_cell_root", str(cell_key_value)) as Node3D
+		if cell_root == null:
+			continue
+		for child in cell_root.get_children():
+			if not (child is CharacterBody3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
+				continue
+			var spawn_value: Variant = child.get_meta("spawn_cell", null)
+			if not (spawn_value is Vector2i):
+				continue
+			var spawn_cell: Vector2i = spawn_value
+			if ("%d,%d" % [spawn_cell.x, spawn_cell.y]) == spawn_cell_key:
+				matches.append(child as CharacterBody3D)
+	return {
+		"count": matches.size(),
+		"entity_root": matches[0] if matches.size() == 1 else null
+	}
+
+
+func _count_identity_in_root(cell_root: Node3D, spawn_cell_key: String, entity_id: String) -> int:
+	if cell_root == null:
+		return 0
+	var count: int = 0
+	for child in cell_root.get_children():
+		if not (child is CharacterBody3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
+			continue
+		var spawn_value: Variant = child.get_meta("spawn_cell", null)
+		if not (spawn_value is Vector2i):
+			continue
+		var spawn_cell: Vector2i = spawn_value
+		if ("%d,%d" % [spawn_cell.x, spawn_cell.y]) == spawn_cell_key:
+			count += 1
+	return count
+
+
+func _expect(condition: bool, message: String) -> void:
+	if condition:
+		return
+	failures.append(message)
+	push_error("FAILED: " + message)
+
+
+func _finish(runtime: Node3D, restored: Node3D) -> void:
+	if restored != null:
+		restored.queue_free()
+	if runtime != null:
+		runtime.queue_free()
+	await process_frame
+	if failures.is_empty():
+		print("Backrooms entity owner runtime integration tests passed.")
+		quit(0)
+	else:
+		for failure in failures:
+			push_error("FAILED: " + failure)
+		quit(1)
