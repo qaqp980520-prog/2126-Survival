@@ -1168,6 +1168,14 @@ func transfer_entity_to_next_cell(
 	var source_local: Vector3 = source_root.to_local(entity_root.global_position)
 	if not _is_finite_vector3(source_local):
 		return {"ok": false, "reason": "transfer_entity_position_invalid"}
+	var maximum_local_extent: float = safe_extent + ENTITY_TRANSFER_EDGE_TOLERANCE
+	if (
+		absf(source_local.x) > maximum_local_extent
+		or absf(source_local.z) > maximum_local_extent
+		or source_local.y < EntityRuntimeStateScript.MIN_LOCAL_Y
+		or source_local.y > EntityRuntimeStateScript.MAX_LOCAL_Y
+	):
+		return {"ok": false, "reason": "transfer_entity_position_out_of_bounds"}
 	var edge_coordinate: float = source_local.x if direction.x != 0 else source_local.z
 	var expected_edge_coordinate: float = float(direction.x) * safe_extent if direction.x != 0 else float(direction.y) * safe_extent
 	if absf(edge_coordinate - expected_edge_coordinate) > ENTITY_TRANSFER_EDGE_TOLERANCE:

@@ -95,6 +95,66 @@ func _run() -> void:
 	_expect(str(premature_transfer.get("reason", "")) == "transfer_entity_not_at_cell_edge", "premature transfer reports the boundary precondition")
 	_expect(entity_root.get_parent() == source_root, "premature transfer leaves node ownership unchanged")
 
+	var invalid_horizontal: Vector3 = source_local
+	if direction.x != 0:
+		invalid_horizontal.x = float(direction.x) * safe_extent
+		invalid_horizontal.z = safe_extent + 0.25
+	else:
+		invalid_horizontal.z = float(direction.y) * safe_extent
+		invalid_horizontal.x = safe_extent + 0.25
+	entity_root.position = invalid_horizontal
+	var horizontal_bounds_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	_expect(
+		not bool(horizontal_bounds_transfer.get("ok", false))
+		and str(horizontal_bounds_transfer.get("reason", "")) == "transfer_entity_position_out_of_bounds",
+		"transfer rejects an out-of-bounds perpendicular cell coordinate before preparing ownership"
+	)
+	_expect(entity_root.get_parent() == source_root, "horizontal bounds rejection preserves the source Node owner")
+	var horizontal_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(
+		str(horizontal_owner.get("owner_cell_key", "")) == source_key
+		and int(horizontal_owner.get("owner_revision", -1)) == 0,
+		"horizontal bounds rejection preserves the committed owner and revision"
+	)
+	var ledger_after_horizontal: RefCounted = runtime.get("ownership_ledger") as RefCounted
+	_expect(
+		ledger_after_horizontal != null
+		and int(ledger_after_horizontal.call("get_pending_transfer_count")) == 0,
+		"horizontal bounds rejection creates no pending ledger transaction"
+	)
+
+	var invalid_vertical: Vector3 = source_local
+	if direction.x != 0:
+		invalid_vertical.x = float(direction.x) * safe_extent
+	else:
+		invalid_vertical.z = float(direction.y) * safe_extent
+	invalid_vertical.y = EntityRuntimeStateScript.MAX_LOCAL_Y + 0.25
+	entity_root.position = invalid_vertical
+	var vertical_bounds_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	_expect(
+		not bool(vertical_bounds_transfer.get("ok", false))
+		and str(vertical_bounds_transfer.get("reason", "")) == "transfer_entity_position_out_of_bounds",
+		"transfer rejects a vertical position outside the serialized owner-cell bounds"
+	)
+	_expect(entity_root.get_parent() == source_root, "vertical bounds rejection preserves the source Node owner")
+	var vertical_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(
+		str(vertical_owner.get("owner_cell_key", "")) == source_key
+		and int(vertical_owner.get("owner_revision", -1)) == 0,
+		"vertical bounds rejection preserves the committed owner and revision"
+	)
+	var ledger_after_vertical: RefCounted = runtime.get("ownership_ledger") as RefCounted
+	_expect(
+		ledger_after_vertical != null
+		and int(ledger_after_vertical.call("get_pending_transfer_count")) == 0,
+		"vertical bounds rejection creates no pending ledger transaction"
+	)
+	entity_root.position = source_local
+
 	if direction.x != 0:
 		entity_root.position.x = float(direction.x) * safe_extent
 	else:

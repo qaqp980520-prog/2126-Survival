@@ -137,3 +137,22 @@ Correction:
 - The production downgrade rejection behavior is unchanged.
 
 The latest exact-head Full Gate must pass the Session JSON round-trip and the corrected legacy migration fixture before PR #400 can leave Draft.
+
+
+## Exact-head preflight hardening — serialized owner-local bounds
+
+Code review found that the live transfer API checked finite source coordinates and the boundary axis, but did not independently enforce the same perpendicular X/Z and vertical Y limits used by the runtime-state save codec. A caller could therefore present an entity at the correct edge while its other local coordinate was outside the serializable cell bounds; the ledger could commit an owner change that the next save would reject.
+
+Correction on the live-transfer path:
+
+- Before creating a pending ownership transaction or reparenting the Node, validate both horizontal local coordinates against the safe cell extent plus the existing edge tolerance.
+- Validate local Y against the runtime-state codec's shared `MIN_LOCAL_Y` and `MAX_LOCAL_Y` constants.
+- Reject invalid positions with `transfer_entity_position_out_of_bounds`; do not create a pending transfer or mutate owner metadata.
+
+Regression coverage in `tests/backrooms_entity_owner_runtime_integration_test.gd`:
+
+- Correct edge coordinate plus an out-of-bounds perpendicular coordinate is rejected.
+- Correct edge coordinate plus an out-of-bounds vertical coordinate is rejected.
+- Both rejections preserve the source parent, owner cell, owner revision, and zero pending ledger transactions.
+
+This is a fail-closed precondition hardening; the save schema and successful transfer behavior are unchanged. Exact-head Full Gate and all focused workflows must be rerun for the resulting commit.
