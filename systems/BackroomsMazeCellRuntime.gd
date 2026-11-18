@@ -228,11 +228,15 @@ func to_save_dict() -> Dictionary:
 		last_error = "entity_ownership_ledger_state_rejected"
 		return {}
 	var snapshot_value: Variant = candidate_state.call("to_save_dict")
-	if not (snapshot_value is Dictionary) or (snapshot_value as Dictionary).is_empty():
+	if not (snapshot_value is Dictionary):
+		last_error = "entity_save_snapshot_invalid"
+		return {}
+	var snapshot: Dictionary = snapshot_value
+	if snapshot.is_empty():
 		last_error = "entity_save_snapshot_invalid"
 		return {}
 	last_error = ""
-	return snapshot_value
+	return snapshot
 
 ## Restore into a detached candidate state and candidate roots. Existing live roots/state
 ## are replaced only after the entire candidate window has staged and committed.
@@ -1143,32 +1147,33 @@ func _create_ownership_ledger(
 		return {"ok": false, "reason": str(registration.get("reason", "ownership_spawn_registration_failed"))}
 
 	# Legacy schema-three archives had deterministic spawn state but no ownership ledger.
-	# Backfill only records whose archived owner is still the immutable spawn cell; a
-	# migrated state without its ledger record must remain a hard restore failure.
-	var archived_states_value: Variant = state.call("get_entity_runtime_states")
-	if not (archived_states_value is Array):
-		return {"ok": false, "reason": "ownership_archive_runtime_states_invalid"}
-	for archived_value in archived_states_value:
-		if not (archived_value is Dictionary):
-			return {"ok": false, "reason": "ownership_archive_runtime_record_invalid"}
-		var archived_record: Dictionary = archived_value
-		var archived_cell_key: String = str(archived_record.get("cell_key", ""))
-		var archived_spawn_key: String = str(archived_record.get("spawn_cell_key", archived_cell_key))
-		var archived_entity_id: String = str(archived_record.get("entity_id", ""))
-		if archived_cell_key != archived_spawn_key or not retained_lookup.has(archived_cell_key):
-			continue
-		var existing_archived_record: Dictionary = ledger.call(
-			"get_record", archived_spawn_key, archived_entity_id
-		) as Dictionary
-		if not existing_archived_record.is_empty():
-			continue
-		var backfill: Dictionary = ledger.call(
-			"register_deterministic_spawn_identity",
-			archived_spawn_key,
-			archived_entity_id
-		)
-		if not bool(backfill.get("ok", false)):
-			return {"ok": false, "reason": str(backfill.get("reason", "ownership_archive_spawn_backfill_failed"))}
+	# Backfill only when the source payload predates the ledger. Current schema-four
+	# payloads must provide their exact ledger/state pairing and are never auto-repaired.
+	if saved_payload.is_empty():
+		var archived_states_value: Variant = state.call("get_entity_runtime_states")
+		if not (archived_states_value is Array):
+			return {"ok": false, "reason": "ownership_archive_runtime_states_invalid"}
+		for archived_value in archived_states_value:
+			if not (archived_value is Dictionary):
+				return {"ok": false, "reason": "ownership_archive_runtime_record_invalid"}
+			var archived_record: Dictionary = archived_value
+			var archived_cell_key: String = str(archived_record.get("cell_key", ""))
+			var archived_spawn_key: String = str(archived_record.get("spawn_cell_key", archived_cell_key))
+			var archived_entity_id: String = str(archived_record.get("entity_id", ""))
+			if archived_cell_key != archived_spawn_key or not retained_lookup.has(archived_cell_key):
+				continue
+			var existing_archived_record: Dictionary = ledger.call(
+				"get_record", archived_spawn_key, archived_entity_id
+			)
+			if not existing_archived_record.is_empty():
+				continue
+			var backfill: Dictionary = ledger.call(
+				"register_deterministic_spawn_identity",
+				archived_spawn_key,
+				archived_entity_id
+			)
+			if not bool(backfill.get("ok", false)):
+				return {"ok": false, "reason": str(backfill.get("reason", "ownership_archive_spawn_backfill_failed"))}
 
 	var pruning: Dictionary = ledger.call(
 		"prune_to_retained_owner_cells", retained,
