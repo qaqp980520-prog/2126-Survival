@@ -159,8 +159,8 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(restored_session.call("load_save_dict", parsed)))
 	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
 	assert(
-		_canonicalize_json_value(restored_save_dict) == _canonicalize_json_value(saved_session),
-		"Session JSON round-trip must preserve every value independent of Dictionary insertion order."
+		_json_values_equal(restored_save_dict, saved_session),
+		"Session JSON round-trip must preserve all JSON values independent of Dictionary order and integer/float representation."
 	)
 
 	var legacy_nested_payload: Dictionary = saved_session.duplicate(true)
@@ -373,19 +373,23 @@ func _restore_surface(context: Dictionary) -> bool:
 	return restore_result
 
 
-## Canonical JSON comparison
-
-func _canonicalize_json_value(value: Variant) -> Variant:
-	if value is Dictionary:
-		var keys: Array = value.keys()
-		keys.sort()
-		var canonical_dictionary: Dictionary = {}
-		for key in keys:
-			canonical_dictionary[key] = _canonicalize_json_value(value[key])
-		return canonical_dictionary
-	if value is Array:
-		var canonical_array: Array = []
-		for item in value:
-			canonical_array.append(_canonicalize_json_value(item))
-		return canonical_array
-	return value
+## JSON semantic equality: dictionary order is irrelevant, arrays remain ordered,
+## and JSON's integer/float decoding representation may differ for equal numbers.
+func _json_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _json_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _json_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
