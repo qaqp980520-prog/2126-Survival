@@ -5,7 +5,9 @@ class_name BackroomsEntityCollisionFactory
 ## Collision is disabled while a destination is prepared and enabled only after activation.
 const COLLISION_FACTORY_VERSION: int = 1
 const WORLD_GEOMETRY_LAYER: int = 1
-const ENTITY_COLLISION_LAYER: int = 1 << 1
+const ENTITY_COLLISION_LAYER: int = 1 << 2
+const PLAYER_COLLISION_LAYER: int = 1 << 3
+const ENTITY_COLLISION_MASK: int = WORLD_GEOMETRY_LAYER | PLAYER_COLLISION_LAYER
 const MOBILE_ENTITY_IDS := [
 	"smiler",
 	"hound",
@@ -62,7 +64,7 @@ static func set_collision_enabled(entity_body: CharacterBody3D, enabled: bool) -
 		return false
 	collision_shape.disabled = not enabled
 	entity_body.collision_layer = ENTITY_COLLISION_LAYER if enabled else 0
-	entity_body.collision_mask = WORLD_GEOMETRY_LAYER if enabled else 0
+	entity_body.collision_mask = ENTITY_COLLISION_MASK if enabled else 0
 	return true
 
 static func _create_collision_shape(entity_id: String) -> CollisionShape3D:
