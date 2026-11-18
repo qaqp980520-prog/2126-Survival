@@ -180,6 +180,30 @@ func _run() -> void:
 	)
 
 	var saved_after_transfer: Dictionary = runtime.call("to_save_dict")
+	if int(saved_after_transfer.get("schema_version", -1)) != 4:
+		var runtime_state: RefCounted = runtime.get("stream_state") as RefCounted
+		var capture_diagnostic: Dictionary = runtime.call(
+			"_collect_entity_runtime_states", runtime_state, runtime_state.call("get_center_cell")
+		) if runtime_state != null else {"ok": false, "reason": "stream_state_unavailable"}
+		var ledger_diagnostic: RefCounted = runtime.get("ownership_ledger") as RefCounted
+		var ledger_save_diagnostic: Dictionary = runtime.call(
+			"_get_ownership_ledger_save", runtime_state, ledger_diagnostic
+		) if runtime_state != null and ledger_diagnostic != null else {}
+		print(
+			"POST_TRANSFER_SAVE_DIAGNOSTIC last_error=%s capture_ok=%s capture_reason=%s capture_records=%d live_ledger_records=%d ledger_save_records=%d pending=%d owner=%s revision=%d local_position=%s"
+			% [
+				str(runtime.get("last_error")),
+				str(capture_diagnostic.get("ok", false)),
+				str(capture_diagnostic.get("reason", "")),
+				(capture_diagnostic.get("records", []) as Array).size(),
+				(ledger_diagnostic.call("get_records") as Array).size() if ledger_diagnostic != null else -1,
+				(ledger_save_diagnostic.get("records", []) as Array).size(),
+				int(ledger_diagnostic.call("get_pending_transfer_count")) if ledger_diagnostic != null else -1,
+				str(entity_root.get_meta("backrooms_owner_cell_key", "")),
+				int(entity_root.get_meta("backrooms_owner_revision", -1)),
+				str(entity_root.position)
+			]
+		)
 	_expect(int(saved_after_transfer.get("schema_version", -1)) == 4, "runtime saves ownership state using maze schema four")
 	_expect(int(saved_after_transfer.get("entity_ownership_ledger_version", -1)) == 1, "runtime save declares ownership ledger version one")
 	var ledger_payload: Dictionary = saved_after_transfer.get("entity_ownership_ledger", {})
