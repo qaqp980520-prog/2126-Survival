@@ -206,6 +206,52 @@ func _run() -> void:
 		var record: Dictionary = out_of_range_owner_records[index]
 		if str(record.get("spawn_cell_key", "")) == spawn_key and str(record.get("entity_id", "")) == entity_id:
 			record["owner_cell_key"] = "1000001,0"
+			out_of_range_owner_records[index] = record
+			break
+	out_of_range_owner_payload["records"] = out_of_range_owner_records
+	_expect(
+		not bool(restored.call("load_save_dict", out_of_range_owner_payload, retained_keys, 9, 3)),
+		"out-of-range owner cell is rejected"
+	)
+
+	var invalid_spawn_payload: Dictionary = before_invalid.duplicate(true)
+	var invalid_spawn_records: Array = invalid_spawn_payload.get("records", []).duplicate(true)
+	for index in range(invalid_spawn_records.size()):
+		var record: Dictionary = invalid_spawn_records[index]
+		if str(record.get("spawn_cell_key", "")) == spawn_key and str(record.get("entity_id", "")) == entity_id:
+			record["spawn_cell_key"] = "1000001,0"
+			invalid_spawn_records[index] = record
+			break
+	invalid_spawn_payload["records"] = invalid_spawn_records
+	_expect(
+		not bool(restored.call("load_save_dict", invalid_spawn_payload, retained_keys, 9, 3)),
+		"out-of-range immutable spawn identity is rejected"
+	)
+	_expect(
+		restored.call("to_save_dict", retained_keys, 9, 3) == before_invalid,
+		"invalid spawn identity cannot partially replace the restored ledger"
+	)
+
+	var foreign_seed_payload: Dictionary = before_invalid.duplicate(true)
+	foreign_seed_payload["world_seed"] = WORLD_SEED + 1
+	_expect(
+		not bool(restored.call("load_save_dict", foreign_seed_payload, retained_keys, 9, 3)),
+		"foreign-world ownership payload is rejected"
+	)
+
+	var tampered_route: Dictionary = _make_route(target_cell, spawn_cell, -direction, loaded_keys, 9, 3)
+	tampered_route["edge_directions"] = [direction]
+	_expect(
+		not bool(restored.call("plan_transfer", spawn_key, entity_id, spawn_key, tampered_route).get("ok", false)),
+		"tampered route direction is rejected before ownership changes"
+	)
+	var foreign_route: Dictionary = _make_route(target_cell, spawn_cell, -direction, loaded_keys, 9, 3)
+	foreign_route["world_seed"] = WORLD_SEED + 1
+	_expect(
+		not bool(restored.call("plan_transfer", spawn_key, entity_id, spawn_key, foreign_route).get("ok", false)),
+		"foreign-world route snapshot cannot authorize an ownership transfer"
+	)
+
 	var prune_ledger: RefCounted = LedgerScript.new()
 	_expect(
 		bool(prune_ledger.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 7, 3, loaded_keys)),
