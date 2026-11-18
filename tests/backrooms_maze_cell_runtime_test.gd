@@ -315,10 +315,27 @@ func _assert_entity_runtime_state_round_trip() -> void:
 		restore_probe.force_metadata_only = true
 		root.add_child(restore_probe)
 		var shared_owner_records: Array = [migrated_record, second_owner_record]
+		var shared_owner_ledger_records: Array = [
+			{
+				"spawn_cell_key": str(migrated_record.get("spawn_cell_key", "")),
+				"entity_id": str(migrated_record.get("entity_id", "")),
+				"owner_cell_key": str(migrated_record.get("cell_key", "")),
+				"spawn_algorithm_version": EntityDirectorScript.SPAWN_ALGORITHM_VERSION,
+				"owner_revision": 1
+			},
+			{
+				"spawn_cell_key": str(second_owner_record.get("spawn_cell_key", "")),
+				"entity_id": str(second_owner_record.get("entity_id", "")),
+				"owner_cell_key": str(second_owner_record.get("cell_key", "")),
+				"spawn_algorithm_version": EntityDirectorScript.SPAWN_ALGORITHM_VERSION,
+				"owner_revision": 2
+			}
+		]
 		var synthetic_restore_ok: bool = bool(restore_probe.call(
 			"_restore_entity_runtime_states",
 			{str(migrated_record.get("cell_key", "")): synthetic_owner_root},
-			shared_owner_records
+			shared_owner_records,
+			shared_owner_ledger_records
 		))
 		_expect(synthetic_restore_ok, "runtime restores two same-type migrated entities under one owner cell by immutable spawn identity")
 		_expect(first_migrated_root.position.is_equal_approx(saved_local_position), "first migrated entity restores its owner-local position")
