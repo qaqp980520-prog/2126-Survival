@@ -11,7 +11,7 @@ This work is a persistence-integrity layer. It does not add autonomous roaming, 
 - `systems/BackroomsMazeCellRuntime.gd`
   - Validates runtime-state and ownership-ledger snapshots as a pair before producing a save snapshot.
   - Builds the serialized result on a detached StreamState clone so a rejected save cannot partially mutate the live archive.
-  - Validates the pair after candidate ledger reconstruction and before staging/committing restored cell roots.
+  - Validates the pair after candidate ledger reconstruction and before staging/committing restored cell roots, and on every subsequent stream-window shift.
   - Backfills only pre-ledger schema-three deterministic spawn records whose archived owner still equals the immutable spawn cell.
 - `systems/BackroomsEntityOwnershipLedger.gd`
   - Adds `register_deterministic_spawn_identity()` for bounded legacy spawn-state migration. It validates the immutable spawn descriptor and creates only an owner==spawn, revision-zero record.
@@ -19,6 +19,7 @@ This work is a persistence-integrity layer. It does not add autonomous roaming, 
   - Adds valid unloaded-owner restore and subsequent reconstruction.
   - Adds mismatched owner-key and missing migrated-state restore rejection.
   - Adds fail-closed save tests for both mismatch and missing-state cases, including proof that the committed StreamState snapshot remains unchanged.
+  - Adds pre-ledger schema-three owner==spawn backfill coverage while the spawn cell is retained but unloaded.
 - `.github/workflows/godot-validation.yml`
   - Requires this versioned design/implementation record in the root project validation guard.
 
