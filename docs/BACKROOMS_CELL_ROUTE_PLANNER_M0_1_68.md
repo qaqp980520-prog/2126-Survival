@@ -55,3 +55,5 @@ After independent review and exact-head validation, add bounded intra-cell navig
 - Maximum-window stress creates the full 17x17 / 289-cell loaded window for seeds 0, 1, 42, 20261118 and 2147483647. For every seed it routes opposite corners, checks the guaranteed <=33-cell spanning-tree upper bound, verifies every reciprocal edge, enforces <=289 expansions, and confirms repeatability. It also rejects a 290th descriptor.
 - The same existing Godot 4.3 test entry remains under the workflow's `timeout -k 5s 45s` guard.
 - No navigation agent, cross-cell entity movement, ownership transfer or save-schema change is introduced. Route snapshots are read-only and generation-bound.
+
+- Route snapshots carry a schema version plus explicit start/goal cells, route length, and expansion count. The runtime validator requires strict value types and checks these fields against the actual path before accepting a snapshot.
