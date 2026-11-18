@@ -531,6 +531,16 @@ func _run() -> void:
 			var entry_result: Dictionary = world.call("enter_backrooms_from_portal", handoff_portal_id)
 			_expect(bool(entry_result.get("ok", false)), "SurfaceWorld completes the validated player handoff after the failed activation transaction is rolled back")
 			_expect(bool(world.get("_is_in_backrooms")), "SurfaceWorld switches its movement and streaming mode to Backrooms")
+			var movement_driver: RefCounted = world.get("backrooms_entity_movement_driver") as RefCounted
+			_expect(movement_driver != null, "SurfaceWorld owns a bounded Backrooms entity movement driver")
+			if movement_driver != null:
+				var movement_before: Dictionary = movement_driver.call("get_diagnostics")
+				world.call("_tick_backrooms_entity_perception", 0.2, world.player.global_position)
+				var movement_after: Dictionary = movement_driver.call("get_diagnostics")
+				_expect(
+					int(movement_after.get("tick_index", 0)) >= int(movement_before.get("tick_index", 0)) + 2,
+					"SurfaceWorld ticks the movement driver after perception while the Backrooms runtime is active"
+				)
 			_expect(world.player.global_position.y >= 1000.0, "the production player is moved into the isolated Backrooms runtime space")
 			_expect(bool(world.backrooms_maze_runtime.call("is_active")) and world.backrooms_maze_runtime.visible, "the committed maze runtime is active and visible after player handoff")
 			_expect(handoff_director.get("active_portal").is_empty(), "the one-use portal is consumed only after the destination is prepared")
