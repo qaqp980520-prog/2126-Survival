@@ -178,8 +178,14 @@ func _run() -> void:
 		and absf(entity_root.position.z) <= safe_extent + 0.001,
 		"transferred entity lands inside the target cell's safe physics bounds"
 	)
+	var transferred_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
+	_expect(
+		absf(transferred_edge_coordinate) <= safe_extent - 0.02 + 0.001,
+		"owner transfer lands inside the strict serialization boundary with a rounding inset"
+	)
 
 	var saved_after_transfer: Dictionary = runtime.call("to_save_dict")
+	_expect(not saved_after_transfer.is_empty(), "immediate save after owner transfer accepts the migrated owner-local position")
 	if int(saved_after_transfer.get("schema_version", -1)) != 4:
 		var runtime_state: RefCounted = runtime.get("stream_state") as RefCounted
 		var capture_diagnostic: Dictionary = runtime.call(
