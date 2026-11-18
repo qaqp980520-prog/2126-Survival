@@ -13,6 +13,7 @@ Add versioned, validated persistence for mobile entity state before enabling cro
 - `systems/BackroomsEntityMovementDriver.gd` — patrol waypoint index mirrored to entity metadata.
 - `tests/backrooms_maze_cell_runtime_test.gd` — unload/reload, save/restore and tampered-position regressions.
 - `tests/backrooms_maze_stream_state_test.gd` — schema 1/2 migration and transactional clone coverage.
+- `tests/backrooms_runtime_session_integration_test.gd` — JSON serialization/deserialization of the canonical Session envelope.
 - `tests/backrooms_combined_world_save_test.gd` — combined-envelope schema 3 coverage.
 - `.github/workflows/godot-validation.yml` — required input checks for the new codec and versioned asset.
 
@@ -28,7 +29,7 @@ Godot 4.3; existing Backrooms EntityDirector, MazeLayout, EntityBrain, MazeCellR
 - Only mobile entities are persisted; Window and Clump remain deterministic anchored entities.
 - Every record must match a deterministic spawn descriptor for the same level, world seed, cell and spawn algorithm.
 - Positions must remain inside the owning cell's safe interior and bounded vertical range.
-- Duplicate identities, unknown entities, invalid AI states, unsupported versions and out-of-bounds positions fail closed.
+- Duplicate identities, unknown entities, invalid AI states, unsupported versions and out-of-bounds positions fail closed. Integral numeric fields are validated after JSON round-trip whether decoded as integers or integral floats.
 - Runtime state is retained within a one-cell halo beyond the current stream radius. The cache is capped at 4096 records.
 - Streaming shifts clone the complete logical state, including loaded-cell keys and generation, before staging. A failed stage/commit leaves the live stream state and roots untouched.
 - Cross-cell entity movement and ownership transfer remain disabled.
