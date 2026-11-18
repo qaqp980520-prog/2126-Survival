@@ -64,6 +64,12 @@ static func capture_cell_states(cell_root: Node3D) -> Dictionary:
 		var spawn_cell_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
 		if not bool(parse_cell_key(spawn_cell_key).get("ok", false)):
 			return {"ok": false, "reason": "entity_spawn_cell_invalid"}
+		if str(entity_root.get_meta("spawn_level_id", "")) != str(cell_root.get_meta("backrooms_level_id", "")):
+			return {"ok": false, "reason": "entity_spawn_level_mismatch"}
+		if int(entity_root.get_meta("spawn_world_seed", -1)) != world_seed:
+			return {"ok": false, "reason": "entity_spawn_world_seed_mismatch"}
+		if int(entity_root.get_meta("spawn_algorithm_version", 0)) != spawn_version:
+			return {"ok": false, "reason": "entity_spawn_algorithm_version_mismatch"}
 		var brain: Node = entity_root.get_node_or_null("AI")
 		if brain == null or not brain.has_method("to_save_dict"):
 			return {"ok": false, "reason": "entity_brain_save_contract_unavailable"}
