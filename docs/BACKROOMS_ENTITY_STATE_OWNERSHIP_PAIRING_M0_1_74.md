@@ -58,7 +58,7 @@ A valid migrated owner may remain outside the loaded window but inside the one-c
 
 ## Legacy compatibility
 
-Schema-three saves predate the ownership ledger. During restore only, a retained archived record whose owner cell equals its immutable spawn cell may be backfilled as a deterministic owner==spawn, revision-zero ledger record. The backfill is disabled whenever a schema-four ownership payload is present. A legacy-looking record whose owner differs from spawn is not inferred or repaired; it fails closed because migration history cannot be reconstructed safely without the ledger.
+Schema-three saves predate the ownership ledger. During restore, a retained archived record whose owner cell equals its immutable spawn cell may be backfilled as a deterministic owner==spawn, revision-zero ledger record when the ownership payload is absent or empty. No migrated owner is inferred: any state whose owner differs from spawn still requires an explicit matching ledger record and fails closed when it is missing. A non-empty current ownership payload is never auto-repaired.
 
 ## Dependencies and import
 
