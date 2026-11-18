@@ -56,7 +56,9 @@ func _run() -> void:
 	_expect(runtime.call("get_cell_root", "2,0") != null, "newly required edge cells are attached after commit")
 
 	var saved: Dictionary = runtime.call("to_save_dict")
-	_expect(int(saved.get("schema_version", -1)) == 2, "runtime writes the versioned entity-spawn save schema")
+	_expect(int(saved.get("schema_version", -1)) == 3, "runtime writes the entity-runtime persistence schema")
+	_expect(int(saved.get("entity_runtime_state_version", -1)) == 1, "runtime save declares the entity-state codec version")
+	_expect(saved.get("entity_runtime_states", null) is Array, "runtime save includes a validated entity-state array")
 	_expect(int(saved.get("layout_algorithm_version", -1)) == 1, "runtime save is bound to the explicit maze algorithm version")
 	_expect(int(saved.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "runtime save persists the entity-spawn algorithm version")
 	var restored: Variant = RuntimeScript.new()
@@ -72,13 +74,25 @@ func _run() -> void:
 	var legacy_payload: Dictionary = saved.duplicate(true)
 	legacy_payload["schema_version"] = 1
 	legacy_payload.erase("entity_spawn_algorithm_version")
+	legacy_payload.erase("entity_runtime_state_version")
+	legacy_payload.erase("entity_runtime_states")
 	var legacy_restored: Variant = RuntimeScript.new()
 	legacy_restored.force_metadata_only = true
 	root.add_child(legacy_restored)
 	_expect(bool(legacy_restored.call("load_save_dict", legacy_payload)), "legacy schema-one maze saves migrate using spawn algorithm version one")
 	var migrated_save: Dictionary = legacy_restored.call("to_save_dict")
-	_expect(int(migrated_save.get("schema_version", -1)) == 2 and int(migrated_save.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "legacy restore writes the explicit schema-two spawn version on the next save")
+	_expect(int(migrated_save.get("schema_version", -1)) == 3 and int(migrated_save.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "legacy restore writes the current schema-three spawn/runtime versions on the next save")
 	legacy_restored.queue_free()
+	var legacy_v2_payload: Dictionary = saved.duplicate(true)
+	legacy_v2_payload["schema_version"] = 2
+	legacy_v2_payload.erase("entity_runtime_state_version")
+	legacy_v2_payload.erase("entity_runtime_states")
+	var legacy_v2_restored: Variant = RuntimeScript.new()
+	legacy_v2_restored.force_metadata_only = true
+	root.add_child(legacy_v2_restored)
+	_expect(bool(legacy_v2_restored.call("load_save_dict", legacy_v2_payload)), "legacy schema-two saves migrate without losing deterministic spawn compatibility")
+	_expect(int(legacy_v2_restored.call("to_save_dict").get("schema_version", -1)) == 3, "legacy schema-two restore writes the new runtime-state schema")
+	legacy_v2_restored.queue_free()
 
 	var before_bad_restore: Array = restored.call("get_loaded_cell_keys")
 	var invalid_save: Dictionary = saved.duplicate(true)
@@ -98,6 +112,7 @@ func _run() -> void:
 	_expect(not bool(restored.call("is_prepared")) and int(restored.call("get_loaded_cell_count")) == 0, "deactivation retires all cell roots and clears runtime state")
 
 	_production_entity_spawn_contract_is_valid()
+	await _assert_entity_runtime_state_round_trip()
 
 	restored.queue_free()
 	runtime.queue_free()
@@ -109,6 +124,136 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _assert_entity_runtime_state_round_trip() -> void:
+	var runtime: Variant = RuntimeScript.new()
+	runtime.force_metadata_only = true
+	root.add_child(runtime)
+	var prepared: Dictionary = runtime.call("prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3)
+	_expect(bool(prepared.get("ok", false)), "entity-state fixture prepares a deterministic Level 2 window")
+	if not bool(prepared.get("ok", false)):
+		runtime.queue_free()
+		await process_frame
+		return
+	var selected_cell_key: String = ""
+	var selected_entity_id: String = ""
+	var selected_cell: Vector2i = Vector2i.ZERO
+	var selected_root: CharacterBody3D = null
+	var selected_cell_root: Node3D = null
+	for cell_key_value in runtime.call("get_loaded_cell_keys"):
+		var cell_key: String = str(cell_key_value)
+		var cell_root: Node3D = runtime.call("get_cell_root", cell_key) as Node3D
+		if cell_root == null:
+			continue
+		for child in cell_root.get_children():
+			if child is CharacterBody3D:
+				var entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
+				if entity_id in ["hound", "skin_stealer"]:
+					selected_cell_key = cell_key
+					selected_entity_id = entity_id
+					selected_cell = cell_root.get_meta("backrooms_cell", Vector2i.ZERO)
+					selected_root = child as CharacterBody3D
+					selected_cell_root = cell_root
+					break
+		if selected_root != null:
+			break
+	_expect(selected_root != null and selected_cell_root != null, "Level 2 fixture contains at least one mobile hunter in its 7x7 loaded window")
+	if selected_root == null or selected_cell_root == null:
+		runtime.queue_free()
+		await process_frame
+		return
+	var saved_local_position := Vector3(1.25, selected_root.position.y, -0.75)
+	selected_root.position = saved_local_position
+	var brain: Node = selected_root.get_node_or_null("AI")
+	_expect(brain != null and brain.has_method("to_save_dict"), "mobile entity exposes its versioned behavior save contract")
+	if brain == null:
+		runtime.queue_free()
+		await process_frame
+		return
+	var player_target: Vector3 = selected_cell_root.to_global(Vector3(2.0, selected_root.position.y, 2.0))
+	var perception := {
+		"distance_to_player": 3.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": player_target
+	}
+	brain.call("evaluate_perception", perception, 0.1)
+	brain.call("evaluate_perception", perception, 0.75)
+	selected_root.set_meta("backrooms_patrol_index", 3)
+	var saved: Dictionary = runtime.call("to_save_dict")
+	_expect(int(saved.get("schema_version", -1)) == 3, "entity runtime save uses schema three")
+	var target_record: Dictionary = {}
+	for record_value in saved.get("entity_runtime_states", []):
+		if record_value is Dictionary:
+			var record: Dictionary = record_value
+			if str(record.get("cell_key", "")) == selected_cell_key and str(record.get("entity_id", "")) == selected_entity_id:
+				target_record = record
+				break
+	_expect(not target_record.is_empty(), "runtime save contains the moved hunter's stable cell/entity identity")
+	_expect(target_record.get("position", []) == [saved_local_position.x, saved_local_position.y, saved_local_position.z], "runtime save captures the moved local position")
+	_expect(int(target_record.get("patrol_index", -1)) == 3, "runtime save captures the patrol waypoint index")
+	_expect(str(target_record.get("brain_state", {}).get("state", "")) == str(brain.call("get_behavior_snapshot").get("state", "")), "runtime save captures the current AI decision state")
+	var shifted_position := Vector3(float(selected_cell.x + 4) * 8.0, 0.0, float(selected_cell.y) * 8.0)
+	var shifted: Dictionary = runtime.call("sync_to_world_position", shifted_position)
+	_expect(bool(shifted.get("ok", false)), "streaming away stages and commits while archiving the mobile entity")
+	_expect(runtime.call("get_cell_root", selected_cell_key) == null, "the original entity cell is genuinely unloaded")
+	var returned: Dictionary = runtime.call(
+		"sync_to_world_position",
+		Vector3(float(selected_cell.x) * 8.0, 0.0, float(selected_cell.y) * 8.0)
+	)
+	_expect(bool(returned.get("ok", false)), "returning to the original cell rebuilds it from the deterministic layout")
+	var rebuilt_cell_root: Node3D = runtime.call("get_cell_root", selected_cell_key) as Node3D
+	var rebuilt_entity: CharacterBody3D = null
+	if rebuilt_cell_root != null:
+		for child in rebuilt_cell_root.get_children():
+			if child is CharacterBody3D and str(child.get_meta("backrooms_entity_id", "")) == selected_entity_id:
+				rebuilt_entity = child as CharacterBody3D
+				break
+	_expect(rebuilt_entity != null, "the original mobile entity is recreated in its owning cell")
+	if rebuilt_entity != null:
+		_expect(rebuilt_entity.position.is_equal_approx(saved_local_position), "unloaded/reloaded cell restores the entity's moved position")
+		_expect(int(rebuilt_entity.get_meta("backrooms_patrol_index", -1)) == 3, "unloaded/reloaded cell restores the patrol waypoint index")
+		var rebuilt_brain: Node = rebuilt_entity.get_node_or_null("AI")
+		var rebuilt_snapshot: Dictionary = rebuilt_brain.call("get_behavior_snapshot") if rebuilt_brain != null else {}
+		_expect(
+			str(rebuilt_snapshot.get("state", "")) == str(target_record.get("brain_state", {}).get("state", ""))
+			and is_equal_approx(float(rebuilt_snapshot.get("state_elapsed_seconds", -1.0)), float(target_record.get("brain_state", {}).get("state_elapsed_seconds", -2.0))),
+			"unloaded/reloaded cell restores the AI state and elapsed decision time"
+		)
+	var restored: Variant = RuntimeScript.new()
+	restored.force_metadata_only = true
+	root.add_child(restored)
+	_expect(bool(restored.call("load_save_dict", saved)), "fresh runtime restores the saved entity-state cache")
+	var restored_cell_root: Node3D = restored.call("get_cell_root", selected_cell_key) as Node3D
+	var restored_entity: CharacterBody3D = null
+	if restored_cell_root != null:
+		for child in restored_cell_root.get_children():
+			if child is CharacterBody3D and str(child.get_meta("backrooms_entity_id", "")) == selected_entity_id:
+				restored_entity = child as CharacterBody3D
+				break
+	_expect(restored_entity != null, "fresh save restore rebuilds the same deterministic entity root")
+	if restored_entity != null:
+		_expect(restored_entity.position.is_equal_approx(saved_local_position), "fresh save restore preserves the moved entity position")
+		_expect(int(restored_entity.get_meta("backrooms_patrol_index", -1)) == 3, "fresh save restore preserves patrol progress")
+	var before_invalid_restore: Dictionary = restored.call("to_save_dict")
+	var invalid_payload: Dictionary = saved.duplicate(true)
+	var invalid_records: Array = invalid_payload.get("entity_runtime_states", []).duplicate(true)
+	for index in range(invalid_records.size()):
+		var record: Dictionary = invalid_records[index]
+		if str(record.get("cell_key", "")) == selected_cell_key and str(record.get("entity_id", "")) == selected_entity_id:
+			var invalid_position: Array = record.get("position", []).duplicate()
+			invalid_position[0] = 999.0
+			record["position"] = invalid_position
+			invalid_records[index] = record
+			break
+	invalid_payload["entity_runtime_states"] = invalid_records
+	_expect(not bool(restored.call("load_save_dict", invalid_payload)), "out-of-cell entity positions are rejected during transactional restore")
+	_expect(restored.call("to_save_dict") == before_invalid_restore, "rejected entity-state restore leaves the existing runtime snapshot unchanged")
+	restored.queue_free()
+	runtime.queue_free()
+	await process_frame
+
 
 func _production_entity_spawn_contract_is_valid() -> void:
 	var spawn_runtime: Variant = RuntimeScript.new()
