@@ -156,12 +156,17 @@ func _assert_darkness_drives_smiler() -> void:
 	driver.call("reset")
 	var lit_descriptor: Dictionary = LightingProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0)
 	cell_root.set_meta("backrooms_light_descriptor", lit_descriptor)
-	var smiler_root: Node3D = cell_root.get_node("Entity_smiler") as Node3D
-	var outside_coverage_aim_point: Vector3 = smiler_root.global_position + Vector3.UP * 0.6
-	_expect(
-		LightingProfileScript.is_position_dark(cell_root, outside_coverage_aim_point, false),
-		"an enabled ceiling light does not illuminate an entity outside its effective radius"
+	_expect(bool(lit_descriptor.get("enabled", false)), "the selected Level 1 cell has an enabled deterministic ceiling light")
+	var light_local_position: Vector3 = lit_descriptor.get("local_position", Vector3.ZERO)
+	var light_range: float = float(lit_descriptor.get("range", 0.0))
+	var outside_coverage_point: Vector3 = cell_root.to_global(
+		light_local_position + Vector3(0.0, 0.0, light_range + 1.0)
 	)
+	_expect(
+		LightingProfileScript.is_position_dark(cell_root, outside_coverage_point, false),
+		"positions beyond the deterministic ceiling-light range remain dark"
+	)
+	var smiler_root: Node3D = cell_root.get_node("Entity_smiler") as Node3D
 	smiler_root.position = Vector3(0.0, 0.6, 0.0)
 	var lit_aim_point: Vector3 = smiler_root.global_position + Vector3.UP * 0.6
 	_expect(
