@@ -291,10 +291,13 @@ func load_save_dict(payload: Dictionary) -> bool:
 		return false
 	if not (spawn_version_value is int) or int(spawn_version_value) != spawn_algorithm_version:
 		return false
-	if not (records_value is Array) or (records_value as Array).size() > MAX_RECORDS:
+	if not (records_value is Array):
+		return false
+	var records: Array = records_value
+	if records.size() > MAX_RECORDS:
 		return false
 	var candidate: Dictionary = {}
-	for record_value in records_value:
+	for record_value in records:
 		if not (record_value is Dictionary):
 			return false
 		var record: Dictionary = record_value
