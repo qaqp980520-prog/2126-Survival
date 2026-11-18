@@ -101,8 +101,8 @@ static func get_cell_light_descriptor(
 	if profile.is_empty() or not is_finite(wall_height) or wall_height <= 0.5:
 		return {}
 	var period: int = maxi(1, int(profile.get("light_period", 1)))
-	var seed_phase: int = posmod(world_seed, period)
-	var cell_phase: int = posmod(cell.x + cell.y * 2 + seed_phase, period)
+	var seed_phase: int = _positive_mod(world_seed, period)
+	var cell_phase: int = _positive_mod(cell.x + cell.y * 2 + seed_phase, period)
 	var enabled: bool = cell_phase == int(profile.get("light_phase", 0))
 	return {
 		"enabled": enabled,
@@ -168,6 +168,10 @@ static func is_position_dark(
 	var attenuation: float = 1.0 - normalized_distance
 	var estimated_illumination: float = light_energy * attenuation * attenuation
 	return estimated_illumination < darkness_threshold
+
+static func _positive_mod(value: int, modulus: int) -> int:
+	var remainder: int = value % modulus
+	return remainder if remainder >= 0 else remainder + modulus
 
 static func _is_finite_vector3(value: Vector3) -> bool:
 	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
