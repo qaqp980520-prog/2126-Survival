@@ -24,7 +24,7 @@ const LEVEL_PROFILES := {
 		"light_period": 2,
 		"light_phase": 0,
 		"light_energy": 1.2,
-		"light_range": 8.0,
+		"light_range": 11.0,
 		"light_color": Color(1.0, 0.91, 0.68),
 		"darkness_threshold": 0.12
 	},
