@@ -16,6 +16,7 @@ const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 const ENTITY_SAFE_CELL_MARGIN: float = 0.65
 const ENTITY_COLLISION_SAFE_MARGIN: float = 0.02
+const ENTITY_TRANSFER_EDGE_TOLERANCE: float = 0.25
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -1081,10 +1082,20 @@ func transfer_entity_to_next_cell(
 	var owner_record: Dictionary = ownership_ledger.call("get_record", spawn_cell_key, entity_id)
 	if owner_record.is_empty() or str(owner_record.get("owner_cell_key", "")) != from_owner_key:
 		return {"ok": false, "reason": "entity_owner_record_mismatch"}
+	var owner_revision: int = int(owner_record.get("owner_revision", -1))
+	if owner_revision < 0:
+		return {"ok": false, "reason": "entity_owner_revision_invalid"}
 	var source_root: Node3D = get_cell_root(from_owner_key)
 	var target_root: Node3D = get_cell_root(to_owner_key)
 	if source_root == null or target_root == null:
 		return {"ok": false, "reason": "transfer_cell_root_unavailable"}
+	if (
+		str(source_root.get_meta("backrooms_cell_key", "")) != from_owner_key
+		or str(target_root.get_meta("backrooms_cell_key", "")) != to_owner_key
+	):
+		return {"ok": false, "reason": "transfer_cell_root_identity_mismatch"}
+	if not _validate_cell_entity_identity_metadata(source_root) or not _validate_cell_entity_identity_metadata(target_root):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
 	var entity_root: CharacterBody3D = null
 	for child in source_root.get_children():
 		if not (child is CharacterBody3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
@@ -1099,13 +1110,24 @@ func transfer_entity_to_next_cell(
 			entity_root = child as CharacterBody3D
 	if entity_root == null or entity_root.get_parent() != source_root:
 		return {"ok": false, "reason": "transfer_entity_not_owned_by_source"}
-	if str(entity_root.get_meta("backrooms_owner_cell_key", from_owner_key)) != from_owner_key:
+	if str(entity_root.get_meta("backrooms_owner_cell_key", "")) != from_owner_key:
 		return {"ok": false, "reason": "transfer_entity_owner_metadata_mismatch"}
+	if int(entity_root.get_meta("backrooms_owner_revision", -1)) != owner_revision:
+		return {"ok": false, "reason": "transfer_entity_owner_revision_mismatch"}
+	var spawn_parse: Dictionary = EntityRuntimeStateScript.parse_cell_key(spawn_cell_key)
+	if not bool(spawn_parse.get("ok", false)):
+		return {"ok": false, "reason": "transfer_entity_spawn_key_invalid"}
+	if (
+		str(entity_root.get_meta("spawn_level_id", "")) != str(stream_state.get("level_id"))
+		or int(entity_root.get_meta("spawn_world_seed", -1)) != int(stream_state.get("world_seed"))
+		or int(entity_root.get_meta("spawn_algorithm_version", 0)) != int(stream_state.get("entity_spawn_algorithm_version"))
+	):
+		return {"ok": false, "reason": "transfer_entity_spawn_metadata_mismatch"}
 	var identity_key: String = OwnershipLedgerScript.get_state_key(spawn_cell_key, entity_id)
-	var source_identity_keys_value: Variant = source_root.get_meta("backrooms_entity_identity_keys", [])
-	var source_spawn_ids_value: Variant = source_root.get_meta("backrooms_entity_spawn_ids", [])
-	var target_identity_keys_value: Variant = target_root.get_meta("backrooms_entity_identity_keys", [])
-	var target_spawn_ids_value: Variant = target_root.get_meta("backrooms_entity_spawn_ids", [])
+	var source_identity_keys_value: Variant = source_root.get_meta("backrooms_entity_identity_keys", null)
+	var source_spawn_ids_value: Variant = source_root.get_meta("backrooms_entity_spawn_ids", null)
+	var target_identity_keys_value: Variant = target_root.get_meta("backrooms_entity_identity_keys", null)
+	var target_spawn_ids_value: Variant = target_root.get_meta("backrooms_entity_spawn_ids", null)
 	if (
 		not (source_identity_keys_value is Array)
 		or not (source_spawn_ids_value is Array)
@@ -1113,11 +1135,36 @@ func transfer_entity_to_next_cell(
 		or not (target_spawn_ids_value is Array)
 		or source_identity_keys_value.size() != source_spawn_ids_value.size()
 		or target_identity_keys_value.size() != target_spawn_ids_value.size()
-		or not source_identity_keys_value.has(identity_key)
-		or target_identity_keys_value.has(identity_key)
 	):
 		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
 	var source_identity_index: int = source_identity_keys_value.find(identity_key)
+	if (
+		source_identity_index < 0
+		or source_identity_index >= source_spawn_ids_value.size()
+		or str(source_spawn_ids_value[source_identity_index]) != entity_id
+		or target_identity_keys_value.has(identity_key)
+	):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
+	var source_cell_size: float = float(source_root.get_meta("backrooms_cell_size", 0.0))
+	var target_cell_size: float = float(target_root.get_meta("backrooms_cell_size", 0.0))
+	var configured_cell_size: float = float(stream_state.get("cell_size"))
+	if (
+		not is_finite(source_cell_size)
+		or not is_finite(target_cell_size)
+		or not is_finite(configured_cell_size)
+		or source_cell_size <= ENTITY_SAFE_CELL_MARGIN * 2.0
+		or not is_equal_approx(source_cell_size, target_cell_size)
+		or not is_equal_approx(source_cell_size, configured_cell_size)
+	):
+		return {"ok": false, "reason": "transfer_cell_size_invalid"}
+	var safe_extent: float = source_cell_size * 0.5 - ENTITY_SAFE_CELL_MARGIN
+	var source_local: Vector3 = source_root.to_local(entity_root.global_position)
+	if not _is_finite_vector3(source_local):
+		return {"ok": false, "reason": "transfer_entity_position_invalid"}
+	var edge_coordinate: float = source_local.x if direction.x != 0 else source_local.z
+	var expected_edge_coordinate: float = float(direction.x) * safe_extent if direction.x != 0 else float(direction.y) * safe_extent
+	if absf(edge_coordinate - expected_edge_coordinate) > ENTITY_TRANSFER_EDGE_TOLERANCE:
+		return {"ok": false, "reason": "transfer_entity_not_at_cell_edge"}
 	var transfer_setup: Dictionary = ownership_ledger.call(
 		"plan_transfer", spawn_cell_key, entity_id, to_owner_key, route_snapshot
 	)
@@ -1126,11 +1173,7 @@ func transfer_entity_to_next_cell(
 	var plan: Dictionary = transfer_setup.get("plan", {})
 	var previous_transform: Transform3D = entity_root.global_transform
 	var previous_owner_key: String = str(entity_root.get_meta("backrooms_owner_cell_key", from_owner_key))
-	var cell_size: float = float(target_root.get_meta("backrooms_cell_size", 0.0))
-	if not is_finite(cell_size) or cell_size <= ENTITY_SAFE_CELL_MARGIN * 2.0:
-		ownership_ledger.call("rollback_transfer", plan)
-		return {"ok": false, "reason": "transfer_cell_size_invalid"}
-	var safe_extent: float = cell_size * 0.5 - ENTITY_SAFE_CELL_MARGIN
+	var previous_owner_revision: int = int(entity_root.get_meta("backrooms_owner_revision", owner_revision))
 	entity_root.reparent(target_root, true)
 	if entity_root.get_parent() != target_root:
 		ownership_ledger.call("rollback_transfer", plan)
@@ -1151,6 +1194,7 @@ func transfer_entity_to_next_cell(
 		entity_root.reparent(source_root, true)
 		entity_root.global_transform = previous_transform
 		entity_root.set_meta("backrooms_owner_cell_key", previous_owner_key)
+		entity_root.set_meta("backrooms_owner_revision", previous_owner_revision)
 		ownership_ledger.call("rollback_transfer", plan)
 		return {"ok": false, "reason": "transfer_physics_handoff_blocked"}
 	var commit: Dictionary = ownership_ledger.call("commit_transfer", plan)
@@ -1158,6 +1202,7 @@ func transfer_entity_to_next_cell(
 		entity_root.reparent(source_root, true)
 		entity_root.global_transform = previous_transform
 		entity_root.set_meta("backrooms_owner_cell_key", previous_owner_key)
+		entity_root.set_meta("backrooms_owner_revision", previous_owner_revision)
 		ownership_ledger.call("rollback_transfer", plan)
 		return {"ok": false, "reason": str(commit.get("reason", "transfer_commit_rejected"))}
 	var committed_record: Dictionary = commit.get("record", {})
@@ -1184,6 +1229,38 @@ func transfer_entity_to_next_cell(
 		"owner_revision": int(committed_record.get("owner_revision", 0)),
 		"position": entity_root.global_position
 	}
+
+func _validate_cell_entity_identity_metadata(cell_root: Node3D) -> bool:
+	if cell_root == null or not is_instance_valid(cell_root):
+		return false
+	var identity_keys_value: Variant = cell_root.get_meta("backrooms_entity_identity_keys", null)
+	var spawn_ids_value: Variant = cell_root.get_meta("backrooms_entity_spawn_ids", null)
+	if (
+		not (identity_keys_value is Array)
+		or not (spawn_ids_value is Array)
+		or identity_keys_value.size() != spawn_ids_value.size()
+	):
+		return false
+	var seen: Dictionary = {}
+	for index in range(identity_keys_value.size()):
+		var identity_value: Variant = identity_keys_value[index]
+		var spawn_id_value: Variant = spawn_ids_value[index]
+		if not (identity_value is String) or not (spawn_id_value is String):
+			return false
+		var identity_key: String = str(identity_value)
+		var spawn_id: String = str(spawn_id_value)
+		var parts: PackedStringArray = identity_key.split("|", false)
+		if (
+			identity_key.is_empty()
+			or not EntityRuntimeStateScript.MOBILE_ENTITY_IDS.has(spawn_id)
+			or parts.size() != 2
+			or parts[1] != spawn_id
+			or not bool(EntityRuntimeStateScript.parse_cell_key(parts[0]).get("ok", false))
+			or seen.has(identity_key)
+		):
+			return false
+		seen[identity_key] = true
+	return true
 
 func get_entity_owner_record(spawn_cell_key: String, entity_id: String) -> Dictionary:
 	if ownership_ledger == null or not bool(ownership_ledger.get("configured")):
