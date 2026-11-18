@@ -719,7 +719,7 @@ func _restore_session_snapshot(snapshot: Dictionary) -> bool:
 	if not (restored is bool) or not bool(restored):
 		return false
 	var verified_snapshot: Variant = session.call("to_save_dict")
-	return verified_snapshot is Dictionary and verified_snapshot == snapshot
+	return verified_snapshot is Dictionary and _save_values_equal(verified_snapshot, snapshot)
 
 func _preview_matches(candidate: Dictionary) -> bool:
 	if not bool(candidate.get("ok", false)) or str(candidate.get("event", "")) != "prepared":
