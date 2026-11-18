@@ -276,6 +276,45 @@ func _assert_entity_runtime_state_round_trip() -> void:
 			EntityRuntimeStateScript.get_state_key(migrated_record) != EntityRuntimeStateScript.get_state_key(second_owner_record),
 			"runtime-state keys remain distinct by immutable spawn identity when owner cells match"
 		)
+		var synthetic_owner_root := Node3D.new()
+		synthetic_owner_root.set_meta("backrooms_cell_key", str(migrated_record.get("cell_key", "")))
+		root.add_child(synthetic_owner_root)
+		var first_migrated_root := CharacterBody3D.new()
+		first_migrated_root.set_meta("backrooms_entity_id", selected_entity_id)
+		first_migrated_root.set_meta("spawn_cell", selected_cell)
+		var first_migrated_brain: Node = BrainScript.new()
+		first_migrated_brain.name = "AI"
+		_expect(bool(first_migrated_brain.call("configure", selected_entity_id, "Level 2", selected_cell, 20261118)), "first synthetic migrated brain configures with immutable spawn identity")
+		first_migrated_root.add_child(first_migrated_brain)
+		synthetic_owner_root.add_child(first_migrated_root)
+		var second_migrated_root := CharacterBody3D.new()
+		second_migrated_root.set_meta("backrooms_entity_id", selected_entity_id)
+		second_migrated_root.set_meta("spawn_cell", second_spawn_cell)
+		var second_migrated_brain: Node = BrainScript.new()
+		second_migrated_brain.name = "AI"
+		_expect(bool(second_migrated_brain.call("configure", selected_entity_id, "Level 2", second_spawn_cell, 20261118)), "second synthetic migrated brain configures with its distinct immutable spawn identity")
+		second_migrated_root.add_child(second_migrated_brain)
+		synthetic_owner_root.add_child(second_migrated_root)
+		var restore_probe: Variant = RuntimeScript.new()
+		restore_probe.force_metadata_only = true
+		root.add_child(restore_probe)
+		var shared_owner_records: Array = [migrated_record, second_owner_record]
+		var synthetic_restore_ok: bool = bool(restore_probe.call(
+			"_restore_entity_runtime_states",
+			{str(migrated_record.get("cell_key", "")): synthetic_owner_root},
+			shared_owner_records
+		))
+		_expect(synthetic_restore_ok, "runtime restores two same-type migrated entities under one owner cell by immutable spawn identity")
+		_expect(first_migrated_root.position.is_equal_approx(saved_local_position), "first migrated entity restores its owner-local position")
+		_expect(second_migrated_root.position.is_equal_approx(saved_local_position), "second migrated entity restores its owner-local position")
+		restore_probe.queue_free()
+		synthetic_owner_root.queue_free()
+		await process_frame
+		var duplicate_identity_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+			[migrated_record, migrated_record], "Level 2", 20261118, 8.0,
+			EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+		)
+		_expect(not bool(duplicate_identity_validation.get("ok", false)), "codec v2 rejects duplicate immutable spawn identities even when owner data matches")
 	var tampered_identity: Dictionary = migrated_record.duplicate(true)
 	tampered_identity["spawn_cell_key"] = "%d,%d" % [owner_cell.x, owner_cell.y]
 	var tampered_validation: Dictionary = EntityRuntimeStateScript.validate_records(
