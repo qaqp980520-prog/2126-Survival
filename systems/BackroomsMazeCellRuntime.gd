@@ -234,7 +234,11 @@ func plan_route_between_loaded_cells(start_cell: Vector2i, goal_cell: Vector2i) 
 func is_route_snapshot_current(route: Dictionary) -> bool:
 	if not prepared or not active or stream_state == null:
 		return false
-	if not bool(route.get("ok", false)):
+	var ok_value: Variant = route.get("ok", null)
+	if not (ok_value is bool) or not bool(ok_value):
+		return false
+	var snapshot_version_value: Variant = route.get("route_snapshot_version", null)
+	if not (snapshot_version_value is int) or int(snapshot_version_value) != CellRoutePlannerScript.ROUTE_SNAPSHOT_VERSION:
 		return false
 	var generation_value: Variant = route.get("stream_generation", null)
 	var revision_value: Variant = route.get("configuration_revision", null)
@@ -242,16 +246,20 @@ func is_route_snapshot_current(route: Dictionary) -> bool:
 		return false
 	if not (revision_value is int) or int(revision_value) != int(stream_state.call("get_configuration_revision")):
 		return false
-	if str(route.get("level_id", "")) != str(stream_state.get("level_id")):
+	var level_value: Variant = route.get("level_id", null)
+	var world_seed_value: Variant = route.get("world_seed", null)
+	var layout_version_value: Variant = route.get("layout_algorithm_version", null)
+	if not (level_value is String) or str(level_value) != str(stream_state.get("level_id")):
 		return false
-	if int(route.get("world_seed", -1)) != int(stream_state.get("world_seed")):
+	if not (world_seed_value is int) or int(world_seed_value) != int(stream_state.get("world_seed")):
 		return false
-	if int(route.get("layout_algorithm_version", -1)) != LayoutScript.ALGORITHM_VERSION:
+	if not (layout_version_value is int) or int(layout_version_value) != LayoutScript.ALGORITHM_VERSION:
 		return false
 	var center_value: Variant = route.get("stream_center_cell", null)
 	if not (center_value is Vector2i) or center_value != stream_state.get("center_cell"):
 		return false
-	if int(route.get("loaded_cell_count", -1)) != int(stream_state.call("get_loaded_cell_count")):
+	var loaded_count_value: Variant = route.get("loaded_cell_count", null)
+	if not (loaded_count_value is int) or int(loaded_count_value) != int(stream_state.call("get_loaded_cell_count")):
 		return false
 	var cells_value: Variant = route.get("cell_path", null)
 	var keys_value: Variant = route.get("cell_keys", null)
@@ -263,6 +271,18 @@ func is_route_snapshot_current(route: Dictionary) -> bool:
 	var directions: Array = directions_value
 	if cells.is_empty() or cells.size() > 289 or cell_keys.size() != cells.size() or directions.size() != cells.size() - 1:
 		return false
+	var start_value: Variant = route.get("start_cell", null)
+	var goal_value: Variant = route.get("goal_cell", null)
+	var route_count_value: Variant = route.get("route_cell_count", null)
+	var expanded_value: Variant = route.get("expanded_count", null)
+	if not (start_value is Vector2i) or not (goal_value is Vector2i):
+		return false
+	if start_value != cells.front() or goal_value != cells.back():
+		return false
+	if not (route_count_value is int) or int(route_count_value) != cells.size():
+		return false
+	if not (expanded_value is int) or int(expanded_value) < 1 or int(expanded_value) > 289:
+		return false
 	var seen: Dictionary = {}
 	var world_seed: int = int(stream_state.get("world_seed"))
 	for index in range(cells.size()):
@@ -271,7 +291,7 @@ func is_route_snapshot_current(route: Dictionary) -> bool:
 			return false
 		var cell: Vector2i = cell_value
 		var cell_key: String = "%d,%d" % [cell.x, cell.y]
-		if str(cell_keys[index]) != cell_key or seen.has(cell_key):
+		if not (cell_keys[index] is String) or str(cell_keys[index]) != cell_key or seen.has(cell_key):
 			return false
 		if not bool(stream_state.call("is_cell_loaded", cell)):
 			return false
