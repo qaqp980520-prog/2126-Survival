@@ -29,6 +29,7 @@ This is deliberately a cell-local first movement stage. Cross-cell roaming is no
 
 - Movement cadence: 10 Hz.
 - Maximum work: 12 mobile entities per movement tick, round-robin.
+- A single frame delta is capped at 0.5 s and per-entity catch-up movement is capped at 0.25 s to avoid large frame-hitch teleports.
 - Mobile IDs: Smiler, Hound, Skin-Stealer, Faceling, Duller and Deathmoth.
 - Window and Clump remain anchored.
 - Hound and Skin-Stealer patrol deterministically inside their owning cell when no target is available.
@@ -62,8 +63,11 @@ The test verifies:
 - Cross-cell target is rejected and entity position remains unchanged.
 - Faceling retains player position without line of sight and moves away.
 - Hound patrol moves while remaining inside the safe cell bounds.
+- Deathmoth aerial patrol changes altitude within its owning cell.
+- Smiler approaches an unseen player while the cell is dark.
+- Duller retreats from a nearby player without line of sight.
 - 13 entities are serviced as 12 + 1 across two movement ticks.
-- Non-finite delta and inactive runtime are rejected.
+- Non-finite delta and inactive runtime are rejected; a 2 s frame hitch is capped to five 100 ms scheduler ticks.
 
 The complete Godot 4.3 Full Gate is required before this PR can be marked Ready for Review. Local Godot availability is checked separately; no engine pass is claimed from static inspection.
 
