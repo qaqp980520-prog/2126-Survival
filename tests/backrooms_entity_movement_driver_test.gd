@@ -71,7 +71,7 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(result.get("moved_count", 0)) == 1, "bounded movement driver updates one eligible entity")
 	_expect(entity_root.global_position.x > start_position.x, "Hound moves toward a same-cell player target")
-	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_kinematic_v1", "movement mode is explicitly marked as cell-local kinematic")
+	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_physics_v1", "movement mode is explicitly marked as cell-local physics collision")
 	driver.call("reset")
 	world_root.free()
 	await process_frame
