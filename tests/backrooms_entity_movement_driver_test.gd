@@ -269,6 +269,8 @@ func _assert_invalid_and_inactive_runtime_rejection() -> void:
 	var driver = MovementDriverScript.new()
 	var invalid: Dictionary = driver.call("tick", runtime, NAN)
 	_expect(not bool(invalid.get("ok", true)) and str(invalid.get("reason", "")) == "delta_seconds_invalid", "non-finite movement delta is rejected")
+	var hitch: Dictionary = driver.call("tick", runtime, 2.0)
+	_expect(bool(hitch.get("ok", false)) and int(hitch.get("tick_index", 0)) == 5, "large frame hitches are capped to half a second of movement scheduling")
 	runtime.active = false
 	var inactive: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(not bool(inactive.get("ok", true)) and str(inactive.get("reason", "")) == "runtime_inactive", "inactive Backrooms Runtime is rejected and movement state resets")
