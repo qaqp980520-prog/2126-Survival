@@ -27,9 +27,12 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _assert_same_cell_pursuit_moves_toward_player()
+	await _assert_smiler_approach_uses_unseen_player_target()
 	await _assert_cross_cell_target_fails_closed()
 	await _assert_avoidance_moves_away_from_player()
+	await _assert_duller_retreat_moves_away_from_player()
 	await _assert_patrol_moves_within_cell()
+	await _assert_deathmoth_aerial_patrol_changes_height()
 	await _assert_round_robin_movement_budget()
 	await _assert_invalid_and_inactive_runtime_rejection()
 	if failures.is_empty():
@@ -47,8 +50,8 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 20261118, Vector3.ZERO)
-	var brain: Node = entity["brain"]
-	var entity_root: Node3D = entity["root"]
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 3.0,
 		"has_line_of_sight": true,
@@ -64,6 +67,35 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	_expect(int(result.get("moved_count", 0)) == 1, "bounded movement driver updates one eligible entity")
 	_expect(entity_root.global_position.x > start_position.x, "Hound moves toward a same-cell player target")
 	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_kinematic_v1", "movement mode is explicitly marked as cell-local kinematic")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
+func _assert_smiler_approach_uses_unseen_player_target() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var entity: Dictionary = _add_entity(cell_root, "smiler", "Level 1", Vector2i.ZERO, 19, Vector3.ZERO)
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
+	var decision: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 4.0,
+		"has_line_of_sight": false,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"is_dark": true,
+		"player_position": Vector3(3.0, 0.0, 0.0)
+	}, 0.2)
+	_expect(str(decision.get("state", "")) == "approach", "dark unseen Smiler receives an approach intent")
+	_expect(bool(decision.get("has_target_position", false)), "unseen Smiler retains the current player position as its target")
+	await process_frame
+	var start_x: float = entity_root.global_position.x
+	var driver = MovementDriverScript.new()
+	var result: Dictionary = driver.call("tick", runtime, 0.1)
+	_expect(int(result.get("moved_count", 0)) == 1, "Smiler receives a bounded approach movement update")
+	_expect(entity_root.global_position.x > start_x, "Smiler approaches the unseen player while its cell is dark")
 	driver.call("reset")
 	world_root.free()
 	await process_frame
@@ -122,6 +154,33 @@ func _assert_avoidance_moves_away_from_player() -> void:
 	world_root.free()
 	await process_frame
 
+func _assert_duller_retreat_moves_away_from_player() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var entity: Dictionary = _add_entity(cell_root, "duller", "Level 4", Vector2i.ZERO, 23, Vector3(0.5, 0.0, 0.0))
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
+	var decision: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 5.0,
+		"has_line_of_sight": false,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": Vector3(2.5, 0.0, 0.0)
+	}, 0.2)
+	_expect(str(decision.get("state", "")) == "retreat", "Duller enters retreat without line of sight")
+	await process_frame
+	var start_x: float = entity_root.global_position.x
+	var driver = MovementDriverScript.new()
+	var result: Dictionary = driver.call("tick", runtime, 0.1)
+	_expect(int(result.get("moved_count", 0)) == 1, "Duller receives a bounded retreat movement update")
+	_expect(entity_root.global_position.x < start_x, "Duller withdraws from the nearby player")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
 func _assert_patrol_moves_within_cell() -> void:
 	var world_root := Node3D.new()
 	root.add_child(world_root)
@@ -145,6 +204,31 @@ func _assert_patrol_moves_within_cell() -> void:
 	_expect(entity_root.global_position.distance_to(start_position) > 0.01, "patrol waypoint produces actual movement")
 	var local_position: Vector3 = cell_root.to_local(entity_root.global_position)
 	_expect(absf(local_position.x) <= 3.35 and absf(local_position.z) <= 3.35, "patrol remains inside the safe owning-cell bounds")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
+func _assert_deathmoth_aerial_patrol_changes_height() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var entity: Dictionary = _add_entity(cell_root, "deathmoth", "Level 5", Vector2i.ZERO, 29, Vector3(0.0, 1.55, 0.0))
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
+	var decision: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 30.0,
+		"has_line_of_sight": false,
+		"noise_strength": 0.0
+	}, 0.2)
+	_expect(str(decision.get("state", "")) == "fly_patrol", "Deathmoth selects aerial patrol without a player signal")
+	await process_frame
+	var start_y: float = entity_root.global_position.y
+	var driver = MovementDriverScript.new()
+	var result: Dictionary = driver.call("tick", runtime, 0.1)
+	_expect(int(result.get("moved_count", 0)) == 1, "Deathmoth receives a bounded aerial patrol update")
+	_expect(entity_root.global_position.y > start_y, "Deathmoth changes altitude during its aerial patrol")
 	driver.call("reset")
 	world_root.free()
 	await process_frame
