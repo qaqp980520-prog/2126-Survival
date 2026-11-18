@@ -123,7 +123,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(prepared.get("ok", false)))
 	assert(bool(prepared.get("runtime_prepared", false)))
 	assert(int(prepared.get("loaded_cell_count", 0)) == 9)
-	assert(director.to_save_dict() == director_before, "Runtime preparation must not consume the portal or advance RNG.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Runtime preparation must not consume the portal or advance RNG.")
 	assert(bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")) and not runtime.visible)
 	assert(not bool(manager.get_session().call("is_active")))
 
@@ -138,7 +138,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(not bool(runtime.call("is_active")) and not runtime.visible, "Commit retains the runtime hidden until the world handoff completes.")
 	var position_drift_before: Dictionary = manager.get_session_save_dict()
 	assert(not bool(manager.get_session().call("set_backrooms_position", Vector3(8.0, 0.0, 0.0))), "Session cannot move into another cell without a matching runtime window update.")
-	assert(manager.get_session_save_dict() == position_drift_before)
+	assert(_json_values_equal(manager.get_session_save_dict(), position_drift_before))
 
 	assert(bool(manager.call("activate_prepared_runtime_after_handoff", runtime)))
 	var bypass_return: Dictionary = manager.call("return_to_surface", Callable(self, "_restore_surface"))
@@ -149,7 +149,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var shifted: Dictionary = manager.call("sync_backrooms_runtime", runtime, Vector3(8.0, 0.0, 0.0))
 	assert(bool(shifted.get("ok", false)))
 	assert(int(shifted.get("runtime", {}).get("load_count", -1)) == 3)
-	assert(manager.get_session().call("get_maze_stream_state") == runtime.call("to_save_dict"))
+	assert(_json_values_equal(manager.get_session().call("get_maze_stream_state"), runtime.call("to_save_dict")))
 	assert(manager.get_session().call("to_save_dict").get("backrooms_position", []) == [8.0, 0.0, 0.0])
 
 	var saved_session: Dictionary = manager.get_session_save_dict()
@@ -225,9 +225,9 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(failed_return.get("rollback_complete", false)))
 	assert(bool(failed_return.get("session_retained", false)))
 	assert(restored_manager.get_state_name() == "IN_BACKROOMS")
-	assert(restored_manager.get_session_save_dict() == before_failed_return)
+	assert(_json_values_equal(restored_manager.get_session_save_dict(), before_failed_return))
 	assert(bool(restored_runtime.call("is_active")))
-	assert(restored_runtime.call("to_save_dict") == before_failed_return["maze_stream_state"])
+	assert(_json_values_equal(restored_runtime.call("to_save_dict"), before_failed_return["maze_stream_state"]))
 
 	restore_result = true
 	var returned: Dictionary = restored_manager.call(
@@ -260,7 +260,7 @@ func _test_runtime_staging_failure_preserves_portal() -> void:
 	)
 	assert(not bool(prepared.get("ok", false)))
 	assert(manager.get_state_name() == "IDLE")
-	assert(director.to_save_dict() == director_before, "Failed runtime staging must not consume the one-use portal.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Failed runtime staging must not consume the one-use portal.")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
 
@@ -291,7 +291,7 @@ func _test_session_mutation_failure_restores_director_session_and_runtime() -> v
 	assert(bool(rejected.get("runtime_state_restored", false)))
 	assert(bool(rejected.get("rollback_complete", false)))
 	assert(director.to_save_dict() == director_before)
-	assert(session.to_save_dict() == session_before)
+	assert(_json_values_equal(session.to_save_dict(), session_before))
 	assert(not session.is_active())
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
@@ -318,7 +318,7 @@ func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
 	assert(not bool(rejected.get("ok", false)))
 	assert(str(rejected.get("reason", "")) == "prepared_runtime_state_changed")
 	assert(bool(rejected.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before, "A stale runtime snapshot must be rejected before portal consumption.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "A stale runtime snapshot must be rejected before portal consumption.")
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
@@ -350,9 +350,9 @@ func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
 	var aborted: Dictionary = manager.call("abort_committed_entry", director, runtime)
 	assert(bool(aborted.get("ok", false)))
 	assert(bool(aborted.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before, "Aborting a committed but unhanded entry restores the exact one-use portal and RNG state.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Aborting a committed but unhanded entry restores the exact one-use portal and RNG state.")
 	assert(not bool(manager.get_session().call("is_active")))
-	assert(manager.get_session_save_dict() == SessionScript.new().to_save_dict())
+	assert(_json_values_equal(manager.get_session_save_dict(), SessionScript.new().to_save_dict()))
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")))
 	assert(int(runtime.call("get_loaded_cell_count")) == 0)
