@@ -1156,8 +1156,8 @@ func _create_ownership_ledger(
 		return {"ok": false, "reason": str(registration.get("reason", "ownership_spawn_registration_failed"))}
 
 	# Legacy schema-three archives had deterministic spawn state but no ownership ledger.
-	# Backfill only when the source payload predates the ledger. Current schema-four
-	# payloads must provide their exact ledger/state pairing and are never auto-repaired.
+	# When the ownership payload is absent or empty, only deterministic owner==spawn
+	# records can be reconstructed. A migrated owner is never inferred from state alone.
 	if saved_payload.is_empty():
 		var archived_states_value: Variant = state.call("get_entity_runtime_states")
 		if not (archived_states_value is Array):
