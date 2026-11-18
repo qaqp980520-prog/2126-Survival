@@ -3,9 +3,11 @@ extends SceneTree
 const Layout = preload("res://systems/BackroomsMazeLayout.gd")
 const StreamState = preload("res://systems/BackroomsMazeStreamState.gd")
 const EntityDirector = preload("res://systems/BackroomsEntityDirector.gd")
+const EntityRuntimeState = preload("res://systems/BackroomsEntityRuntimeState.gd")
 
 func _initialize() -> void:
 	_test_configuration_and_initial_window()
+	_test_cell_key_parser_bounds()
 	_test_load_first_shift_and_failed_stage()
 	_test_unload_reload_determinism_and_stale_plans()
 	_test_save_restore_and_layout_version_guard()
@@ -253,6 +255,17 @@ func _test_extreme_float_inputs_fail_atomically() -> void:
 		assert(restored.last_load_error == str(test_case["reason"]), "Out-of-range float rejection reports the field-specific reason.")
 		assert(restored.to_save_dict() == before, "Rejected extreme-float load must leave the saved configuration unchanged.")
 		assert(restored.get_loaded_cell_count() == before_count, "Rejected extreme-float load must preserve the committed cell window.")
+
+func _test_cell_key_parser_bounds() -> void:
+	assert(bool(EntityRuntimeState.parse_cell_key("0,0").get("ok", false)))
+	assert(bool(EntityRuntimeState.parse_cell_key("1000000,-1000000").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("1000001,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("-1000001,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("2147483648,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("-2147483648,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("-9223372036854775808,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("01,0").get("ok", false)))
+	assert(not bool(EntityRuntimeState.parse_cell_key("0,-0").get("ok", false)))
 
 func state_commit(state: RefCounted, plan: Dictionary) -> bool:
 	return state.commit_window(plan, plan["load_cell_keys"])
