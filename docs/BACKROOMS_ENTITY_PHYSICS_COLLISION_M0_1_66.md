@@ -16,8 +16,9 @@ Replace direct Node3D position writes with collision-aware CharacterBody3D movem
 ## Dependencies and import
 
 - Godot 4.3 built-in 3D physics; no external plugins or assets.
-- World geometry remains collision layer 1.
-- Mobile entities use collision layer 2 and collision mask 1.
+- World geometry remains collision layer 1; interaction proxies retain layer 2.
+- Mobile entities use collision layer 4 and collision mask 9 (world geometry layer 1 plus player layer 8).
+- The player uses collision layer 8 and collision mask 5 (world geometry layer 1 plus entity layer 4), so entity/player contact is symmetric without making entity bodies appear in the existing interaction-proxy ray mask.
 - CharacterBody3D roots own their existing AI and Visuals children; no new per-entity process loops.
 - Collision proxies are created while cells are staged but remain disabled until the Backrooms destination is activated.
 - Cell retirement continues to free the complete cell root and all entity bodies.
