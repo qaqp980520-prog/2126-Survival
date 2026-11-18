@@ -9,6 +9,8 @@ Replace direct Node3D position writes with collision-aware CharacterBody3D movem
 - `systems/BackroomsEntityCollisionFactory.gd` — creates entity-specific SphereShape3D/CapsuleShape3D proxies and toggles collision with runtime activation.
 - `systems/BackroomsMazeCellRuntime.gd` — creates CharacterBody3D entity roots and enables/disables their collision together with cell world geometry.
 - `systems/BackroomsEntityMovementDriver.gd` — uses PhysicsBody3D.move_and_collide, records partial blocking, and keeps the safe cell bounds as a second guard.
+- `world/SurfaceWorld.gd` — separates player collision onto layer 8 and configures its mask to world geometry plus mobile entities.
+- `tests/production_surface_world_test.gd` — verifies the player collision-layer contract.
 - `tests/backrooms_entity_collision_factory_test.gd` — validates all mobile/stationary collision contracts and activation toggles.
 - `tests/backrooms_entity_movement_driver_test.gd` — adds an actual StaticBody3D wall obstruction regression.
 - `.github/workflows/godot-validation.yml` — adds file-presence and bounded Godot 4.3 collision-factory test steps.
@@ -28,7 +30,7 @@ Replace direct Node3D position writes with collision-aware CharacterBody3D movem
 - Smiler and Deathmoth use bounded sphere proxies.
 - Hound, Skin-Stealer, Faceling and Duller use capsule proxies sized for their current blockout geometry.
 - Window and Clump remain anchored and have no mobile collision shape.
-- Entity bodies collide with world geometry only; entity-to-entity collision is not enabled.
+- Entity bodies collide with world geometry and the player; entity-to-entity collision is not enabled.
 - Movement uses `move_and_collide` and retains the 0.65 m safe cell interior margin.
 - A wall collision can stop movement before the target; partial movement and blocked status are reported separately.
 - Patrol advances to its next deterministic waypoint after a collision to avoid repeatedly targeting an obstructed point.
