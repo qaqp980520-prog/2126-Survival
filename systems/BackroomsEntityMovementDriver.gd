@@ -307,10 +307,12 @@ func _get_patrol_target(
 	current_local: Vector3,
 	state_name: String
 ) -> Vector3:
-	var saved_index: int = int(entity_root.get_meta("backrooms_patrol_index", _initial_patrol_index(entity_root)))
-	var index: int = int(_patrol_index_by_entity.get(entity_key, saved_index))
+	var index: int = posmod(
+		int(entity_root.get_meta("backrooms_patrol_index", _initial_patrol_index(entity_root))),
+		4
+	)
 	_patrol_index_by_entity[entity_key] = index
-	entity_root.set_meta("backrooms_patrol_index", posmod(index, 4))
+	entity_root.set_meta("backrooms_patrol_index", index)
 	var y_values: Array[float] = [current_local.y, current_local.y, current_local.y, current_local.y]
 	if state_name == "fly_patrol":
 		y_values = [1.9, 2.25, 2.05, 1.8]
