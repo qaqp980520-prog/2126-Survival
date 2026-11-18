@@ -689,6 +689,7 @@ func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) ->
 			return false
 		by_key[key] = record
 	var restored_keys: Dictionary = {}
+	var live_identity_keys: Dictionary = {}
 	for cell_key_value in staged_roots.keys():
 		var cell_key: String = str(cell_key_value)
 		var cell_root: Variant = staged_roots[cell_key_value]
@@ -700,7 +701,18 @@ func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) ->
 			var entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
 			if not EntityRuntimeStateScript.MOBILE_ENTITY_IDS.has(entity_id):
 				continue
-			var key: String = cell_key + "|" + entity_id
+			var spawn_cell_value: Variant = child.get_meta("spawn_cell", null)
+			if not (spawn_cell_value is Vector2i):
+				return false
+			var spawn_cell: Vector2i = spawn_cell_value
+			var identity_record := {
+				"spawn_cell_key": "%d,%d" % [spawn_cell.x, spawn_cell.y],
+				"entity_id": entity_id
+			}
+			var key: String = EntityRuntimeStateScript.get_state_key(identity_record)
+			if key.is_empty() or live_identity_keys.has(key):
+				return false
+			live_identity_keys[key] = true
 			if not by_key.has(key):
 				continue
 			if not EntityRuntimeStateScript.restore_entity_state(cell_root as Node3D, child as CharacterBody3D, by_key[key]):
