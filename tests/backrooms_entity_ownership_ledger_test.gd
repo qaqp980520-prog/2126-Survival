@@ -64,8 +64,8 @@ func _run() -> void:
 		return
 	var forward_plan: Dictionary = forward_plan_result["plan"]
 	_expect(int(ledger.call("get_pending_transfer_count")) == 1, "prepared transfer is tracked as pending")
-	var pending_save: Variant = ledger.call("to_save_dict")
-	_expect(pending_save is Dictionary and pending_save.is_empty(), "save is rejected while an ownership transfer is pending")
+	var pending_save: Dictionary = ledger.call("to_save_dict")
+	_expect(pending_save.is_empty(), "save is rejected while an ownership transfer is pending")
 	var committed: Dictionary = ledger.call("commit_transfer", forward_plan)
 	_expect(bool(committed.get("ok", false)), "exact pending transfer commits")
 	var moved_record: Dictionary = ledger.call("get_record", spawn_key, entity_id)
