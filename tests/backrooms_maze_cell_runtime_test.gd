@@ -99,6 +99,18 @@ func _run() -> void:
 	_expect(bool(legacy_v2_restored.call("load_save_dict", legacy_v2_payload)), "legacy schema-two saves migrate without losing deterministic spawn compatibility")
 	_expect(int(legacy_v2_restored.call("to_save_dict").get("schema_version", -1)) == 4, "legacy schema-two restore writes the new ownership/runtime schema")
 	legacy_v2_restored.queue_free()
+	var legacy_v3_payload: Dictionary = saved.duplicate(true)
+	legacy_v3_payload["schema_version"] = 3
+	legacy_v3_payload.erase("entity_ownership_ledger_version")
+	legacy_v3_payload.erase("entity_ownership_ledger")
+	var legacy_v3_restored: Variant = RuntimeScript.new()
+	legacy_v3_restored.force_metadata_only = true
+	root.add_child(legacy_v3_restored)
+	_expect(bool(legacy_v3_restored.call("load_save_dict", legacy_v3_payload)), "legacy schema-three runtime saves rebuild default ownership records")
+	var legacy_v3_migrated: Dictionary = legacy_v3_restored.call("to_save_dict")
+	_expect(int(legacy_v3_migrated.get("schema_version", -1)) == 4, "legacy schema-three runtime saves migrate to schema four")
+	_expect(legacy_v3_migrated.get("entity_ownership_ledger", {}).get("records", []).size() > 0, "legacy schema-three migration materializes deterministic spawn ownership records")
+	legacy_v3_restored.queue_free()
 	var legacy_state_v1_payload: Dictionary = saved.duplicate(true)
 	legacy_state_v1_payload["entity_runtime_state_version"] = 1
 	var legacy_state_v1_records: Array = []
