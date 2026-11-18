@@ -88,6 +88,9 @@ jobs:
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
           test -f tests/backrooms_perception_driver_test.gd
+          test -f systems/BackroomsEntityMovementDriver.gd
+          test -f tests/backrooms_entity_movement_driver_test.gd
+          test -f docs/BACKROOMS_ENTITY_MOVEMENT_M0_1_65.md
           test -f systems/BackroomsLightingProfile.gd
           test -f systems/BackroomsLightingController.gd
           test -f tests/backrooms_lighting_test.gd
@@ -398,6 +401,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms perception driver tests passed."
+      - name: Run Backrooms bounded entity movement tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_entity_movement_driver_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms entity movement tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms entity movement driver tests passed."
       - name: Run Backrooms lighting profile and darkness sampling tests
         shell: bash
         run: |
