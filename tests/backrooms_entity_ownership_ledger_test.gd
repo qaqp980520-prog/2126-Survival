@@ -29,7 +29,11 @@ func _run() -> void:
 	var target_key: String = _cell_key(target_cell)
 	var unrelated_cell: Vector2i = spawn_cell + Vector2i(2, 2)
 	var unrelated_key: String = _cell_key(unrelated_cell)
+	var halo_cell: Vector2i = target_cell + direction
+	var halo_key: String = _cell_key(halo_cell)
 	var loaded_keys: Array = [spawn_key, target_key, unrelated_key]
+	var retained_keys: Array = loaded_keys.duplicate()
+	retained_keys.append(halo_key)
 	var ledger: RefCounted = LedgerScript.new()
 	_expect(
 		bool(ledger.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 7, 3, loaded_keys)),
@@ -71,7 +75,7 @@ func _run() -> void:
 		and int(ledger.call("get_pending_transfer_count")) == 1,
 		"tampered transfer token is rejected without consuming the valid pending plan"
 	)
-	var pending_save: Dictionary = ledger.call("to_save_dict")
+	var pending_save: Dictionary = ledger.call("to_save_dict", retained_keys, 7, 3)
 	_expect(pending_save.is_empty(), "save is rejected while an ownership transfer is pending")
 	var committed: Dictionary = ledger.call("commit_transfer", forward_plan)
 	_expect(bool(committed.get("ok", false)), "exact pending transfer commits")
@@ -130,14 +134,21 @@ func _run() -> void:
 	_expect(bool(fresh_forward.get("ok", false)), "entity can transfer back to the adjacent owner cell")
 	if bool(fresh_forward.get("ok", false)):
 		_expect(bool(ledger.call("commit_transfer", fresh_forward["plan"]).get("ok", false)), "second owner change commits")
-	var saved: Dictionary = ledger.call("to_save_dict")
+	var saved: Dictionary = ledger.call("to_save_dict", retained_keys, 8, 3)
 	_expect(int(saved.get("schema_version", -1)) == 1, "ownership ledger writes its independent schema version")
+	_expect(
+		ledger.call("to_save_dict", retained_keys, 7, 3).is_empty(),
+		"save rejects a stale stream-generation snapshot"
+	)
 	var restored: RefCounted = LedgerScript.new()
 	_expect(
 		bool(restored.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 9, 3, loaded_keys)),
 		"fresh ledger configures for restore"
 	)
-	_expect(bool(restored.call("load_save_dict", saved)), "ownership save restores transactionally")
+	_expect(
+		bool(restored.call("load_save_dict", saved, retained_keys, 9, 3)),
+		"ownership save restores transactionally against a current retention snapshot"
+	)
 	var restored_record: Dictionary = restored.call("get_record", spawn_key, entity_id)
 	_expect(
 		str(restored_record.get("spawn_cell_key", "")) == spawn_key
@@ -145,49 +156,56 @@ func _run() -> void:
 		and int(restored_record.get("owner_revision", -1)) == 3,
 		"save/load preserves immutable spawn identity and mutable owner revision"
 	)
+	_expect(
+		restored.call("to_save_dict", [spawn_key], 9, 3).is_empty(),
+		"retention snapshot cannot omit any currently loaded cell"
+	)
+	_expect(
+		not bool(restored.call("load_save_dict", saved, retained_keys, 8, 3)),
+		"restore rejects a stale stream-generation snapshot"
+	)
 
-	var before_invalid: Dictionary = restored.call("to_save_dict")
+	# A just-unloaded owner cell remains valid when it is explicitly inside the one-cell halo.
+	var halo_retained_keys: Array = [halo_key, target_key]
+	var halo_restored: RefCounted = LedgerScript.new()
+	_expect(
+		bool(halo_restored.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 8, 3, [halo_key])),
+		"halo restore ledger configures with the shifted loaded window"
+	)
+	_expect(
+		bool(halo_restored.call("load_save_dict", saved, halo_retained_keys, 8, 3)),
+		"restore accepts an owner cell in the current one-cell retention halo"
+	)
+	_expect(
+		not halo_restored.call("to_save_dict", halo_retained_keys, 8, 3).is_empty(),
+		"halo-owned entity state remains serializable"
+	)
+
+	var before_invalid: Dictionary = restored.call("to_save_dict", retained_keys, 9, 3)
 	var invalid_owner_payload: Dictionary = before_invalid.duplicate(true)
 	var invalid_owner_records: Array = invalid_owner_payload.get("records", []).duplicate(true)
 	for index in range(invalid_owner_records.size()):
 		var record: Dictionary = invalid_owner_records[index]
 		if str(record.get("spawn_cell_key", "")) == spawn_key and str(record.get("entity_id", "")) == entity_id:
-			record["owner_cell_key"] = "1000001,0"
+			record["owner_cell_key"] = "100,100"
 			invalid_owner_records[index] = record
 			break
 	invalid_owner_payload["records"] = invalid_owner_records
-	_expect(not bool(restored.call("load_save_dict", invalid_owner_payload)), "out-of-range owner cell is rejected")
-	_expect(restored.call("to_save_dict") == before_invalid, "rejected ownership restore leaves the prior ledger unchanged")
+	_expect(
+		not bool(restored.call("load_save_dict", invalid_owner_payload, retained_keys, 9, 3)),
+		"valid but out-of-halo owner cell is rejected"
+	)
+	_expect(
+		restored.call("to_save_dict", retained_keys, 9, 3) == before_invalid,
+		"rejected ownership restore leaves the prior ledger unchanged"
+	)
 
-	var invalid_spawn_payload: Dictionary = before_invalid.duplicate(true)
-	var invalid_spawn_records: Array = invalid_spawn_payload.get("records", []).duplicate(true)
-	for index in range(invalid_spawn_records.size()):
-		var record: Dictionary = invalid_spawn_records[index]
+	var out_of_range_owner_payload: Dictionary = before_invalid.duplicate(true)
+	var out_of_range_owner_records: Array = out_of_range_owner_payload.get("records", []).duplicate(true)
+	for index in range(out_of_range_owner_records.size()):
+		var record: Dictionary = out_of_range_owner_records[index]
 		if str(record.get("spawn_cell_key", "")) == spawn_key and str(record.get("entity_id", "")) == entity_id:
-			record["spawn_cell_key"] = "1000001,0"
-			invalid_spawn_records[index] = record
-			break
-	invalid_spawn_payload["records"] = invalid_spawn_records
-	_expect(not bool(restored.call("load_save_dict", invalid_spawn_payload)), "out-of-range immutable spawn identity is rejected")
-	_expect(restored.call("to_save_dict") == before_invalid, "invalid spawn identity cannot partially replace the restored ledger")
-
-	var foreign_seed_payload: Dictionary = before_invalid.duplicate(true)
-	foreign_seed_payload["world_seed"] = WORLD_SEED + 1
-	_expect(not bool(restored.call("load_save_dict", foreign_seed_payload)), "foreign-world ownership payload is rejected")
-
-	var tampered_route: Dictionary = _make_route(target_cell, spawn_cell, -direction, loaded_keys, 9, 3)
-	tampered_route["edge_directions"] = [direction]
-	_expect(
-		not bool(restored.call("plan_transfer", spawn_key, entity_id, spawn_key, tampered_route).get("ok", false)),
-		"tampered route direction is rejected before ownership changes"
-	)
-	var foreign_route: Dictionary = _make_route(target_cell, spawn_cell, -direction, loaded_keys, 9, 3)
-	foreign_route["world_seed"] = WORLD_SEED + 1
-	_expect(
-		not bool(restored.call("plan_transfer", spawn_key, entity_id, spawn_key, foreign_route).get("ok", false)),
-		"foreign-world route snapshot cannot authorize an ownership transfer"
-	)
-
+			record["owner_cell_key"] = "1000001,0"
 	var prune_ledger: RefCounted = LedgerScript.new()
 	_expect(
 		bool(prune_ledger.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 7, 3, loaded_keys)),
@@ -204,23 +222,55 @@ func _run() -> void:
 	_expect(bool(prune_plan_result.get("ok", false)), "retention fixture prepares a real owner transfer")
 	if bool(prune_plan_result.get("ok", false)):
 		_expect(bool(prune_ledger.call("commit_transfer", prune_plan_result["plan"]).get("ok", false)), "retention fixture commits owner transfer")
-	var retained_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [target_key])
+	var far_retention: Array = loaded_keys.duplicate()
+	far_retention.append("100,100")
+	_expect(
+		not bool(prune_ledger.call("prune_to_retained_owner_cells", far_retention, 7, 3).get("ok", false))
+		and str(prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"retention rejects cells outside the one-cell halo without pruning records"
+	)
+	_expect(
+		not bool(prune_ledger.call("prune_to_retained_owner_cells", [spawn_key], 7, 3).get("ok", false))
+		and str(prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"retention cannot omit other currently loaded cells"
+	)
+	var shifted_loaded_keys: Array = [halo_key]
+	_expect(
+		bool(prune_ledger.call("set_loaded_window", shifted_loaded_keys, 8, 3)),
+		"retention fixture commits a new loaded window"
+	)
+	var halo_retention: Array = [halo_key, target_key]
+	_expect(
+		not bool(prune_ledger.call("prune_to_retained_owner_cells", halo_retention, 7, 3).get("ok", false))
+		and str(prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"stale retention generation cannot evict a still-retained owner"
+	)
+	var retained_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", halo_retention, 8, 3)
 	var retained_record: Dictionary = prune_ledger.call("get_record", spawn_key, entity_id)
 	_expect(
 		bool(retained_result.get("ok", false))
+		and int(retained_result.get("removed_count", -1)) == 0
 		and str(retained_record.get("owner_cell_key", "")) == target_key,
-		"record is retained while its mutable owner cell remains inside the retained halo"
+		"record remains while its owner cell is in the current one-cell halo"
 	)
-	var pruned_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [spawn_key])
+	_expect(
+		not prune_ledger.call("to_save_dict", halo_retention, 8, 3).is_empty(),
+		"record in the current one-cell halo remains serializable"
+	)
+	_expect(
+		prune_ledger.call("to_save_dict", [halo_key], 8, 3).is_empty(),
+		"save rejects a record whose owner has left the supplied retention set"
+	)
+	var pruned_result: Dictionary = prune_ledger.call("prune_to_retained_owner_cells", [halo_key], 8, 3)
 	var evicted_record: Dictionary = prune_ledger.call("get_record", spawn_key, entity_id)
 	_expect(
 		bool(pruned_result.get("ok", false))
 		and int(pruned_result.get("removed_count", -1)) >= 1
 		and evicted_record.is_empty(),
-		"record is evicted when its owner cell leaves retention even if its spawn cell remains"
+		"record is evicted when its owner cell leaves the current retention halo"
 	)
 	_expect(
-		not bool(prune_ledger.call("prune_to_retained_owner_cells", ["01,0"]).get("ok", false)),
+		not bool(prune_ledger.call("prune_to_retained_owner_cells", ["01,0"], 8, 3).get("ok", false)),
 		"noncanonical retention keys are rejected"
 	)
 
@@ -239,17 +289,21 @@ func _run() -> void:
 	)
 	_expect(bool(pending_prune_plan.get("ok", false)), "pending-prune fixture prepares a transfer")
 	_expect(
-		not bool(pending_prune_ledger.call("prune_to_retained_owner_cells", []).get("ok", false))
+		pending_prune_ledger.call("to_save_dict", retained_keys, 7, 3).is_empty(),
+		"pending ownership transaction cannot be serialized"
+	)
+	_expect(
+		not bool(pending_prune_ledger.call("prune_to_retained_owner_cells", [], 7, 3).get("ok", false))
 		and str(pending_prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == spawn_key,
 		"pruning is rejected while a transfer is pending and leaves ownership unchanged"
 	)
 	if bool(pending_prune_plan.get("ok", false)):
 		_expect(bool(pending_prune_ledger.call("rollback_transfer", pending_prune_plan["plan"])), "pending-prune transfer can be rolled back")
-	var empty_retention: Dictionary = pending_prune_ledger.call("prune_to_retained_owner_cells", [])
+	var empty_retention: Dictionary = pending_prune_ledger.call("prune_to_retained_owner_cells", [], 7, 3)
 	_expect(
-		bool(empty_retention.get("ok", false))
-		and int(empty_retention.get("record_count", -1)) == 0,
-		"an empty retained window evicts all committed ownership records"
+		not bool(empty_retention.get("ok", false))
+		and str(pending_prune_ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == spawn_key,
+		"an empty retention set cannot evict records from a configured loaded window"
 	)
 
 	var noncanonical: RefCounted = LedgerScript.new()

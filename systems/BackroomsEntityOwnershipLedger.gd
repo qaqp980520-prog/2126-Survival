@@ -96,18 +96,20 @@ func set_loaded_window(
 ## Prune records whose current owner cell is outside the runtime's retained window
 ## (loaded window plus its one-cell halo). A pending transaction blocks pruning.
 ## An empty retained set intentionally evicts every committed record.
-func prune_to_retained_owner_cells(retained_owner_cell_keys: Array) -> Dictionary:
+func prune_to_retained_owner_cells(
+	retained_owner_cell_keys: Array,
+	expected_stream_generation: int,
+	expected_configuration_revision: int
+) -> Dictionary:
 	if not configured:
 		return _failure("ledger_not_configured")
 	if not _pending_transfers.is_empty():
 		return _failure("pending_transfer_exists")
-	var retained_result: Dictionary = _parse_cell_key_set(
-		retained_owner_cell_keys,
-		MAX_RETAINED_OWNER_CELLS,
-		true
-	)
+	if expected_stream_generation != stream_generation or expected_configuration_revision != configuration_revision:
+		return _failure("retention_snapshot_stale")
+	var retained_result: Dictionary = _validate_retained_owner_cell_keys(retained_owner_cell_keys)
 	if not bool(retained_result.get("ok", false)):
-		return _failure("retained_owner_cell_keys_invalid")
+		return retained_result
 	var retained_keys: Dictionary = retained_result.get("keys", {})
 	var candidate: Dictionary = _records.duplicate(true)
 	var removed_count: int = 0
@@ -291,9 +293,25 @@ func get_pending_transfer_count() -> int:
 
 ## Pending transfers are deliberately not serialized. Saving during a half-completed ownership
 ## change fails closed so a load cannot observe a transfer that was never committed.
-func to_save_dict() -> Dictionary:
+func to_save_dict(
+	retained_owner_cell_keys: Array,
+	expected_stream_generation: int,
+	expected_configuration_revision: int
+) -> Dictionary:
 	if not configured or not _pending_transfers.is_empty():
 		return {}
+	if expected_stream_generation != stream_generation or expected_configuration_revision != configuration_revision:
+		return {}
+	var retained_result: Dictionary = _validate_retained_owner_cell_keys(retained_owner_cell_keys)
+	if not bool(retained_result.get("ok", false)):
+		return {}
+	var retained_keys: Dictionary = retained_result.get("keys", {})
+	for record_value in _records.values():
+		if not (record_value is Dictionary):
+			return {}
+		var record: Dictionary = record_value
+		if not retained_keys.has(str(record.get("owner_cell_key", ""))):
+			return {}
 	return {
 		"schema_version": SCHEMA_VERSION,
 		"level_id": level_id,
@@ -303,10 +321,20 @@ func to_save_dict() -> Dictionary:
 		"records": get_records()
 	}
 
-## Transactional restore: every record is validated into a candidate map before live state changes.
-func load_save_dict(payload: Dictionary) -> bool:
+func load_save_dict(
+	payload: Dictionary,
+	retained_owner_cell_keys: Array,
+	expected_stream_generation: int,
+	expected_configuration_revision: int
+) -> bool:
 	if not configured or not _pending_transfers.is_empty():
 		return false
+	if expected_stream_generation != stream_generation or expected_configuration_revision != configuration_revision:
+		return false
+	var retained_result: Dictionary = _validate_retained_owner_cell_keys(retained_owner_cell_keys)
+	if not bool(retained_result.get("ok", false)):
+		return false
+	var retained_keys: Dictionary = retained_result.get("keys", {})
 	var schema_value: Variant = payload.get("schema_version", null)
 	var level_value: Variant = payload.get("level_id", null)
 	var seed_value: Variant = payload.get("world_seed", null)
@@ -349,6 +377,8 @@ func load_save_dict(payload: Dictionary) -> bool:
 		var spawn_parse: Dictionary = parse_cell_key(str(spawn_key_value))
 		var owner_parse: Dictionary = parse_cell_key(str(owner_key_value))
 		if not bool(spawn_parse.get("ok", false)) or not bool(owner_parse.get("ok", false)):
+			return false
+		if not retained_keys.has(str(owner_key_value)):
 			return false
 		if not _is_deterministic_spawn(spawn_parse["cell"], str(entity_value)):
 			return false
@@ -489,11 +519,40 @@ func _open_edges_for_cell(cell: Vector2i) -> Dictionary:
 		"west": LayoutScript.edge_is_open(cell, Vector2i(-1, 0), world_seed)
 	}
 
-func _parse_loaded_cell_keys(keys: Array) -> Dictionary:
-	return _parse_cell_key_set(keys, MAX_ROUTE_CELLS, false)
+func _validate_retained_owner_cell_keys(keys: Array) -> Dictionary:
+	var parsed_result: Dictionary = _parse_cell_key_set(keys, MAX_RETAINED_OWNER_CELLS)
+	if not bool(parsed_result.get("ok", false)):
+		return _failure("retained_owner_cell_keys_invalid")
+	var retained_keys: Dictionary = parsed_result.get("keys", {})
+	var loaded_cells: Array[Vector2i] = []
+	for loaded_key_value in _loaded_cell_keys.keys():
+		var loaded_key: String = str(loaded_key_value)
+		if not retained_keys.has(loaded_key):
+			return _failure("retained_window_missing_loaded_cell")
+		var loaded_parse: Dictionary = parse_cell_key(loaded_key)
+		if not bool(loaded_parse.get("ok", false)):
+			return _failure("loaded_cell_key_invalid")
+		var loaded_cell: Vector2i = loaded_parse["cell"]
+		loaded_cells.append(loaded_cell)
+	for retained_key_value in retained_keys.keys():
+		var retained_parse: Dictionary = parse_cell_key(str(retained_key_value))
+		if not bool(retained_parse.get("ok", false)):
+			return _failure("retained_owner_cell_key_invalid")
+		var retained_cell: Vector2i = retained_parse["cell"]
+		var within_one_cell_halo: bool = false
+		for loaded_cell in loaded_cells:
+			if abs(retained_cell.x - loaded_cell.x) <= 1 and abs(retained_cell.y - loaded_cell.y) <= 1:
+				within_one_cell_halo = true
+				break
+		if not within_one_cell_halo:
+			return _failure("retained_owner_cell_outside_one_cell_halo")
+	return {"ok": true, "keys": retained_keys}
 
-func _parse_cell_key_set(keys: Array, maximum_count: int, allow_empty: bool) -> Dictionary:
-	if maximum_count < 1 or keys.size() > maximum_count or (keys.is_empty() and not allow_empty):
+func _parse_loaded_cell_keys(keys: Array) -> Dictionary:
+	return _parse_cell_key_set(keys, MAX_ROUTE_CELLS)
+
+func _parse_cell_key_set(keys: Array, maximum_count: int) -> Dictionary:
+	if maximum_count < 1 or keys.is_empty() or keys.size() > maximum_count:
 		return {"ok": false, "reason": "cell_key_count_invalid"}
 	var result: Dictionary = {}
 	for key_value in keys:
