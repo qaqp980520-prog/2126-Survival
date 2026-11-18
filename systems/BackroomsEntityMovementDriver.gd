@@ -227,7 +227,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 			target_local.z = clampf(current_local.z + away.normalized().y * retreat_distance, -half_extent, half_extent)
 			target_local.y = current_local.y
 		"patrol", "fly_patrol":
-			target_local = _get_patrol_target(entity_root, cell_root, entity_key, current_local, state_name)
+			target_local = _get_patrol_target(entity_root, entity_key, current_local, state_name)
 		_:
 			return {"moved": false, "blocked": false, "reason": "state_is_stationary"}
 
@@ -259,7 +259,6 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 
 func _get_patrol_target(
 	entity_root: Node3D,
-	cell_root: Node3D,
 	entity_key: String,
 	current_local: Vector3,
 	state_name: String
