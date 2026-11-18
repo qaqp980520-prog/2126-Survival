@@ -46,6 +46,10 @@ func _run() -> void:
 		return
 	root.add_child(source_world)
 	await process_frame
+	var source_environment: WorldEnvironment = source_world.get("surface_world_environment") as WorldEnvironment
+	var original_source_environment: Environment = source_environment.environment
+	var source_sun: DirectionalLight3D = source_world.get("surface_sun") as DirectionalLight3D
+	var source_lighting_controller: RefCounted = source_world.get("backrooms_lighting_controller") as RefCounted
 	var source_player: CharacterBody3D = source_world.get("player") as CharacterBody3D
 	var director: RefCounted = source_world.get("backrooms_portal_director") as RefCounted
 	_expect(source_player != null and director != null, "source SurfaceWorld creates its production player and portal director")
@@ -83,6 +87,9 @@ func _run() -> void:
 		_finish(1)
 		return
 	_expect(bool(source_world.get("_is_in_backrooms")), "source SurfaceWorld enters Backrooms mode")
+	_expect(bool(source_lighting_controller.call("is_active")), "portal entry activates the level-specific Backrooms lighting controller")
+	_expect(source_environment.environment != original_source_environment, "portal entry swaps in a dedicated Backrooms Environment clone")
+	_expect(is_zero_approx(source_sun.light_energy), "portal entry disables the SurfaceWorld directional sun energy")
 	var source_manager: RefCounted = source_world.get("backrooms_transition_manager") as RefCounted
 	var source_runtime: Node3D = source_world.get("backrooms_maze_runtime") as Node3D
 	var source_session: RefCounted = source_manager.call("get_session") as RefCounted
@@ -139,6 +146,10 @@ func _run() -> void:
 		return
 	root.add_child(restored_world)
 	await process_frame
+	var restored_environment: WorldEnvironment = restored_world.get("surface_world_environment") as WorldEnvironment
+	var original_restored_environment: Environment = restored_environment.environment
+	var restored_sun: DirectionalLight3D = restored_world.get("surface_sun") as DirectionalLight3D
+	var restored_lighting_controller: RefCounted = restored_world.get("backrooms_lighting_controller") as RefCounted
 	var restored_player: CharacterBody3D = restored_world.get("player") as CharacterBody3D
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
 	var restored_runtime: Node3D = restored_world.get("backrooms_maze_runtime") as Node3D
@@ -258,6 +269,9 @@ func _run() -> void:
 			float(saved_backrooms_position_value[2])
 		)
 		_expect(bool(restored_world.get("_is_in_backrooms")), "restored world switches into Backrooms mode only after runtime activation")
+		_expect(bool(restored_lighting_controller.call("is_active")), "combined world restore reapplies the saved Session's Backrooms lighting profile")
+		_expect(str(restored_lighting_controller.call("get_current_level")) == str(saved_session.get("current_level", "")), "restored lighting level matches the saved LocationSession")
+		_expect(restored_environment.environment != original_restored_environment and is_zero_approx(restored_sun.light_energy), "combined restore restores the dark Backrooms Environment and disables the surface sun")
 		_expect(restored_player.global_position.is_equal_approx(saved_backrooms_position), "restored player returns to the exact saved Backrooms position")
 		_expect(restored_session.call("to_save_dict") == saved_session, "restored LocationSession exactly matches the saved Session")
 		_expect(restored_runtime.call("to_save_dict") == envelope.get("backrooms_runtime", {}), "restored maze runtime exactly matches the saved stream state")
@@ -271,6 +285,8 @@ func _run() -> void:
 			_expect(surface_root != null and not surface_root.visible, "surface chunk %s remains hidden while Backrooms is active" % chunk_id)
 		var returned: Dictionary = restored_world.call("return_from_backrooms")
 		_expect(bool(returned.get("ok", false)), "restored Backrooms Session can return to SurfaceWorld normally")
+		_expect(not bool(restored_lighting_controller.call("is_active")), "successful return clears the Backrooms lighting transaction")
+		_expect(restored_environment.environment == original_restored_environment and is_equal_approx(restored_sun.light_energy, 1.4), "successful return restores the exact SurfaceWorld Environment and sun energy")
 		_expect(not bool(restored_world.get("_is_in_backrooms")), "successful restored return clears Backrooms world mode")
 		var saved_return: Array = saved_session.get("surface_return_position", [])
 		var expected_return := Vector3(float(saved_return[0]), float(saved_return[1]), float(saved_return[2]))
@@ -284,6 +300,8 @@ func _run() -> void:
 
 	var source_return: Dictionary = source_world.call("return_from_backrooms")
 	_expect(bool(source_return.get("ok", false)), "source world remains independently returnable after the combined save round-trip")
+	_expect(not bool(source_lighting_controller.call("is_active")), "source return clears its Backrooms lighting transaction")
+	_expect(source_environment.environment == original_source_environment and is_equal_approx(source_sun.light_energy, 1.4), "source return restores the exact original SurfaceWorld Environment and sun energy")
 	_finish(0 if failures.is_empty() else 1)
 
 
