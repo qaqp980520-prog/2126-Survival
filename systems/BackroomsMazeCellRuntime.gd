@@ -9,6 +9,7 @@ const VisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.
 const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
+const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -81,16 +82,30 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		return _failure("destination_not_prepared")
 	if not _is_finite_vector3(world_position):
 		return _failure("world_position_invalid")
-	var plan_value: Variant = stream_state.call("plan_window_for_position", world_position)
+	var candidate: RefCounted = stream_state.call("clone_for_transaction")
+	if candidate == null or not bool(candidate.get("configured")):
+		return _failure("stream_state_clone_failed")
+	var plan_value: Variant = candidate.call("plan_window_for_position", world_position)
 	if not (plan_value is Dictionary) or not bool(plan_value.get("ok", false)):
 		return _failure(str(plan_value.get("reason", "window_plan_rejected")) if plan_value is Dictionary else "window_plan_invalid")
 	var plan: Dictionary = plan_value
-	var staged_result: Dictionary = _stage_cell_roots(stream_state, plan)
+	var state_collection: Dictionary = _collect_entity_runtime_states(
+		candidate,
+		plan.get("center_cell", candidate.get("center_cell"))
+	)
+	if not bool(state_collection.get("ok", false)):
+		return _failure(str(state_collection.get("reason", "entity_runtime_state_capture_failed")))
+	if not bool(candidate.call("set_entity_runtime_states", state_collection.get("records", []))):
+		return _failure("entity_runtime_state_validation_failed")
+	var staged_result: Dictionary = _stage_cell_roots(candidate, plan)
 	if not bool(staged_result.get("ok", false)):
 		return _failure(str(staged_result.get("reason", "cell_staging_failed")))
 	var staged_roots: Dictionary = staged_result.get("roots", {})
+	if not _restore_entity_runtime_states(staged_roots, candidate.call("get_entity_runtime_states")):
+		_dispose_staged_roots(staged_roots)
+		return _failure("staged_entity_runtime_state_restore_failed")
 	var staged_keys: Array = plan.get("load_cell_keys", [])
-	if not bool(stream_state.call("commit_window", plan, staged_keys)):
+	if not bool(candidate.call("commit_window", plan, staged_keys)):
 		_dispose_staged_roots(staged_roots)
 		return _failure("stream_commit_rejected")
 	for key_value in staged_roots.keys():
@@ -100,6 +115,7 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		cell_roots[key] = cell_root
 	for key_value in plan.get("unload_cell_keys", []):
 		_retire_cell_root(str(key_value))
+	stream_state = candidate
 	_set_collision_enabled(active)
 	return {
 		"ok": true,
@@ -108,7 +124,8 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		"loaded_cell_count": get_loaded_cell_count(),
 		"load_count": staged_roots.size(),
 		"keep_count": plan.get("keep_cell_keys", []).size(),
-		"unload_count": plan.get("unload_cell_keys", []).size()
+		"unload_count": plan.get("unload_cell_keys", []).size(),
+		"retained_entity_state_count": stream_state.call("get_entity_runtime_states").size()
 	}
 
 func activate_destination() -> bool:
@@ -134,6 +151,17 @@ func deactivate_destination() -> bool:
 func to_save_dict() -> Dictionary:
 	if not prepared:
 		return {}
+	var state_collection: Dictionary = _collect_entity_runtime_states(
+		stream_state,
+		stream_state.get("center_cell")
+	)
+	if not bool(state_collection.get("ok", false)):
+		last_error = str(state_collection.get("reason", "entity_runtime_state_capture_failed"))
+		return {}
+	if not bool(stream_state.call("set_entity_runtime_states", state_collection.get("records", []))):
+		last_error = "entity_runtime_state_validation_failed"
+		return {}
+	last_error = ""
 	return stream_state.call("to_save_dict")
 
 ## Restore into a detached candidate state and candidate roots. Existing live roots/state
@@ -153,6 +181,9 @@ func load_save_dict(payload: Dictionary) -> bool:
 	if not bool(staged_result.get("ok", false)):
 		return _reject(str(staged_result.get("reason", "restore_cell_staging_failed")))
 	var staged_roots: Dictionary = staged_result.get("roots", {})
+	if not _restore_entity_runtime_states(staged_roots, candidate.call("get_entity_runtime_states")):
+		_dispose_staged_roots(staged_roots)
+		return _reject("restore_entity_runtime_state_failed")
 	if not bool(candidate.call("commit_window", plan, plan.get("load_cell_keys", []))):
 		_dispose_staged_roots(staged_roots)
 		return _reject("restore_stream_commit_rejected")
@@ -487,6 +518,89 @@ func _set_collision_enabled(enabled: bool) -> void:
 		for child in root_value.get_children():
 			if child is CharacterBody3D and child.has_meta("backrooms_entity_id"):
 				CollisionFactoryScript.set_collision_enabled(child as CharacterBody3D, enabled)
+
+func _collect_entity_runtime_states(state: RefCounted, requested_center: Vector2i) -> Dictionary:
+	var merged: Dictionary = {}
+	var archived_value: Variant = state.call("get_entity_runtime_states")
+	if not (archived_value is Array):
+		return {"ok": false, "reason": "entity_runtime_archive_invalid"}
+	for record_value in archived_value:
+		if not (record_value is Dictionary):
+			return {"ok": false, "reason": "entity_runtime_archive_record_invalid"}
+		var record: Dictionary = record_value
+		var key: String = EntityRuntimeStateScript.get_state_key(record)
+		if key.is_empty() or merged.has(key):
+			return {"ok": false, "reason": "entity_runtime_archive_key_invalid"}
+		merged[key] = record.duplicate(true)
+	for cell_root_value in cell_roots.values():
+		if not (cell_root_value is Node3D) or not is_instance_valid(cell_root_value):
+			continue
+		var capture: Dictionary = EntityRuntimeStateScript.capture_cell_states(cell_root_value as Node3D)
+		if not bool(capture.get("ok", false)):
+			return {"ok": false, "reason": str(capture.get("reason", "entity_runtime_capture_failed"))}
+		for record_value in capture.get("records", []):
+			if not (record_value is Dictionary):
+				return {"ok": false, "reason": "entity_runtime_capture_record_invalid"}
+			var record: Dictionary = record_value
+			var key: String = EntityRuntimeStateScript.get_state_key(record)
+			if key.is_empty():
+				return {"ok": false, "reason": "entity_runtime_capture_key_invalid"}
+			merged[key] = record.duplicate(true)
+	var retention_radius: int = int(state.get("stream_radius")) + 1
+	for key_value in merged.keys().duplicate():
+		var record: Dictionary = merged[key_value]
+		var parsed: Dictionary = EntityRuntimeStateScript.parse_cell_key(str(record.get("cell_key", "")))
+		if not bool(parsed.get("ok", false)):
+			return {"ok": false, "reason": "entity_runtime_cell_key_invalid"}
+		var cell: Vector2i = parsed["cell"]
+		if absi(cell.x - requested_center.x) > retention_radius or absi(cell.y - requested_center.y) > retention_radius:
+			merged.erase(key_value)
+	var records: Array[Dictionary] = []
+	for record_value in merged.values():
+		if record_value is Dictionary:
+			records.append(record_value.duplicate(true))
+	return EntityRuntimeStateScript.validate_records(
+		records,
+		str(state.get("level_id")),
+		int(state.get("world_seed")),
+		float(state.get("cell_size")),
+		int(state.get("entity_spawn_algorithm_version"))
+	)
+
+func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) -> bool:
+	var by_key: Dictionary = {}
+	for record_value in records:
+		if not (record_value is Dictionary):
+			return false
+		var record: Dictionary = record_value
+		var key: String = EntityRuntimeStateScript.get_state_key(record)
+		if key.is_empty() or by_key.has(key):
+			return false
+		by_key[key] = record
+	var restored_keys: Dictionary = {}
+	for cell_key_value in staged_roots.keys():
+		var cell_key: String = str(cell_key_value)
+		var cell_root: Variant = staged_roots[cell_key_value]
+		if not (cell_root is Node3D):
+			return false
+		for child in (cell_root as Node3D).get_children():
+			if not (child is CharacterBody3D) or not child.has_meta("backrooms_entity_id"):
+				continue
+			var entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
+			if not EntityRuntimeStateScript.MOBILE_ENTITY_IDS.has(entity_id):
+				continue
+			var key: String = cell_key + "|" + entity_id
+			if not by_key.has(key):
+				continue
+			if not EntityRuntimeStateScript.restore_entity_state(cell_root as Node3D, child as CharacterBody3D, by_key[key]):
+				return false
+			restored_keys[key] = true
+	for key_value in by_key.keys():
+		var record: Dictionary = by_key[key_value]
+		var cell_key: String = str(record.get("cell_key", ""))
+		if staged_roots.has(cell_key) and not restored_keys.has(key_value):
+			return false
+	return true
 
 func _replace_all_cell_roots(replacements: Dictionary) -> void:
 	for key_value in cell_roots.keys().duplicate():

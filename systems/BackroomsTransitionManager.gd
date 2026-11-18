@@ -4,6 +4,7 @@ class_name BackroomsTransitionManager
 ## Coordinates the validated two-phase portal handoff and failure-safe return.
 ## Scene construction/activation remains owned by the production world controller.
 const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
+const MazeStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 
 enum TransitionState {
 	IDLE,
@@ -151,7 +152,7 @@ func commit_portal_entry(
 		if not _commit_runtime_authorized or not is_instance_valid(_pending_runtime) or _pending_runtime.get_instance_id() != _pending_runtime_instance_id:
 			return _failure("runtime_commit_requires_explicit_handoff", true)
 		var live_runtime_payload: Variant = _pending_runtime.call("to_save_dict")
-		if not bool(_pending_runtime.call("is_prepared")) or bool(_pending_runtime.call("is_active")) or not (live_runtime_payload is Dictionary) or live_runtime_payload != _pending_runtime_payload:
+		if not bool(_pending_runtime.call("is_prepared")) or bool(_pending_runtime.call("is_active")) or not (live_runtime_payload is Dictionary) or not _save_values_equal(live_runtime_payload, _pending_runtime_payload):
 			return _failure("prepared_runtime_state_changed", true)
 	elif _commit_runtime_authorized:
 		return _failure("unexpected_runtime_commit_authorization", true)
@@ -233,7 +234,7 @@ func commit_portal_entry(
 		}
 	if _pending_runtime != null:
 		var committed_maze_payload: Variant = session.call("get_maze_stream_state")
-		if not (committed_maze_payload is Dictionary) or committed_maze_payload != _pending_runtime_payload:
+		if not (committed_maze_payload is Dictionary) or not _save_values_equal(committed_maze_payload, _pending_runtime_payload):
 			var readback_director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 			var readback_session_restored: bool = _restore_session_snapshot(session_snapshot)
 			var readback_runtime_restored: bool = _discard_pending_runtime()
@@ -302,7 +303,7 @@ func activate_prepared_runtime_after_handoff(runtime: Object) -> bool:
 		return false
 	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		return false
-	if runtime.call("to_save_dict") != session.call("get_maze_stream_state"):
+	if not _save_values_equal(runtime.call("to_save_dict"), session.call("get_maze_stream_state")):
 		return false
 	var activated: bool = bool(runtime.call("activate_destination"))
 	if activated:
@@ -423,7 +424,7 @@ func sync_backrooms_runtime(runtime: Object, world_position: Vector3) -> Diction
 		}
 	var saved_session: Dictionary = session.call("to_save_dict")
 	var expected_position: Array = [world_position.x, world_position.y, world_position.z]
-	if saved_session.get("maze_stream_state", {}) != runtime_after or saved_session.get("backrooms_position", []) != expected_position:
+	if not _save_values_equal(saved_session.get("maze_stream_state", {}), runtime_after) or saved_session.get("backrooms_position", []) != expected_position:
 		var runtime_verified_restore: bool = _restore_runtime_snapshot(runtime, runtime_before, true)
 		var session_verified_restore: bool = _restore_session_snapshot(session_before)
 		return {
@@ -446,13 +447,40 @@ func restore_runtime_from_session(runtime: Object) -> bool:
 			return false
 	if bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		return false
+	var session_snapshot_value: Variant = session.call("to_save_dict")
+	if not (session_snapshot_value is Dictionary):
+		return false
+	var session_snapshot: Dictionary = session_snapshot_value.duplicate(true)
 	var payload: Dictionary = session.call("get_maze_stream_state")
 	if payload.is_empty():
 		return false
 	if not bool(runtime.call("load_save_dict", payload.duplicate(true))):
 		return false
-	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")) or runtime.call("to_save_dict") != payload:
+	if not bool(runtime.call("is_prepared")) or bool(runtime.call("is_active")):
 		runtime.call("deactivate_destination")
+		return false
+	var runtime_payload_value: Variant = runtime.call("to_save_dict")
+	if not (runtime_payload_value is Dictionary) or runtime_payload_value.is_empty():
+		runtime.call("deactivate_destination")
+		return false
+	var runtime_payload: Dictionary = runtime_payload_value
+	var records_value: Variant = payload.get("entity_runtime_states", null)
+	if records_value is Array and records_value.is_empty():
+		# Legacy schemas (or a valid empty cache) rebuild deterministic mobile entities
+		# at their spawn defaults. Persist those defaults into Session before accepting
+		# the restored runtime so the next save cannot lose the materialized state.
+		var position_value: Variant = session.get("backrooms_position")
+		if not (position_value is Vector3) or not session.has_method("update_backrooms_runtime_state"):
+			runtime.call("deactivate_destination")
+			return false
+		if not bool(session.call("update_backrooms_runtime_state", position_value, runtime_payload.duplicate(true))):
+			runtime.call("deactivate_destination")
+			_restore_session_snapshot(session_snapshot)
+			return false
+		payload = session.call("get_maze_stream_state")
+	if not _save_values_equal(runtime_payload, payload):
+		runtime.call("deactivate_destination")
+		_restore_session_snapshot(session_snapshot)
 		return false
 	_active_runtime = runtime
 	_active_runtime_instance_id = runtime.get_instance_id()
@@ -479,7 +507,7 @@ func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) 
 		return _failure("return_snapshot_unavailable")
 	var runtime_snapshot: Dictionary = runtime_snapshot_value.duplicate(true)
 	var return_context: Dictionary = session.call("get_return_context")
-	if return_context.is_empty() or session_snapshot.get("maze_stream_state", {}) != runtime_snapshot:
+	if return_context.is_empty() or not _save_values_equal(session_snapshot.get("maze_stream_state", {}), runtime_snapshot):
 		return _failure("return_runtime_session_mismatch")
 	var surface_value: Variant = restore_surface.call(return_context.duplicate(true))
 	if not (surface_value is bool) or not bool(surface_value):
@@ -495,7 +523,7 @@ func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) 
 			"runtime_state_restored": failed_runtime_restored,
 			"rollback_complete": failed_session_restored and failed_runtime_restored
 		}
-	if not bool(session.call("is_active")) or session.call("get_return_context") != return_context:
+	if not bool(session.call("is_active")) or not _save_values_equal(session.call("get_return_context"), return_context):
 		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
 		var changed_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
 		state = TransitionState.IN_BACKROOMS
@@ -524,7 +552,7 @@ func return_to_surface_with_runtime(runtime: Object, restore_surface: Callable) 
 	var completed_value: Variant = session.call("complete_return")
 	var completed: Dictionary = completed_value if completed_value is Dictionary else {}
 	var expected_inactive: Dictionary = SessionScript.new().to_save_dict()
-	if not bool(completed.get("ok", false)) or session.call("to_save_dict") != expected_inactive:
+	if not bool(completed.get("ok", false)) or not _save_values_equal(session.call("to_save_dict"), expected_inactive):
 		var complete_session_restored: bool = _restore_session_snapshot(session_snapshot)
 		var complete_runtime_restored: bool = _restore_runtime_snapshot(runtime, runtime_snapshot, true)
 		state = TransitionState.IN_BACKROOMS
@@ -579,7 +607,7 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 			"rollback_complete": callback_session_restored
 		}
 	var current_return_context: Variant = session.call("get_return_context")
-	if not bool(session.call("is_active")) or current_return_context != return_context:
+	if not bool(session.call("is_active")) or not _save_values_equal(current_return_context, return_context):
 		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
 		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
 		last_error = "session_changed_during_surface_restore"
@@ -601,7 +629,7 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 		and final_return_context is Dictionary
 		and final_return_context.is_empty()
 		and final_session_payload is Dictionary
-		and final_session_payload == expected_inactive_session
+		and _save_values_equal(final_session_payload, expected_inactive_session)
 	)
 	if not bool(completed.get("ok", false)) or not session_cleared:
 		var completed_session_restored: bool = _restore_session_snapshot(session_snapshot)
@@ -646,7 +674,7 @@ func _restore_director_snapshot(director: RefCounted, snapshot: Dictionary) -> b
 	if not (restored is bool) or not bool(restored):
 		return false
 	var verified_snapshot: Variant = director.call("to_save_dict")
-	return verified_snapshot is Dictionary and verified_snapshot == snapshot
+	return verified_snapshot is Dictionary and _save_values_equal(verified_snapshot, snapshot)
 
 func _restore_runtime_snapshot(runtime: Object, snapshot: Dictionary, was_active: bool) -> bool:
 	if runtime == null or not is_instance_valid(runtime):
@@ -662,7 +690,7 @@ func _restore_runtime_snapshot(runtime: Object, snapshot: Dictionary, was_active
 	if was_active and not bool(runtime.call("activate_destination")):
 		return false
 	var verified: Variant = runtime.call("to_save_dict")
-	return verified is Dictionary and verified == snapshot and bool(runtime.call("is_active")) == was_active
+	return verified is Dictionary and _save_values_equal(verified, snapshot) and bool(runtime.call("is_active")) == was_active
 
 func _discard_pending_runtime() -> bool:
 	if _pending_runtime == null:
@@ -692,7 +720,7 @@ func _restore_session_snapshot(snapshot: Dictionary) -> bool:
 	if not (restored is bool) or not bool(restored):
 		return false
 	var verified_snapshot: Variant = session.call("to_save_dict")
-	return verified_snapshot is Dictionary and verified_snapshot == snapshot
+	return verified_snapshot is Dictionary and _save_values_equal(verified_snapshot, snapshot)
 
 func _preview_matches(candidate: Dictionary) -> bool:
 	if not bool(candidate.get("ok", false)) or str(candidate.get("event", "")) != "prepared":
@@ -744,7 +772,20 @@ func restore_session_for_world_load(payload: Dictionary) -> bool:
 	if not session.has_method("to_save_dict") or not session.has_method("load_save_dict") or not session.has_method("is_active"):
 		return false
 	var previous_snapshot: Dictionary = session.call("to_save_dict")
-	if not bool(session.call("load_save_dict", payload)) or session.call("to_save_dict") != payload or not bool(session.call("is_active")):
+	var allow_legacy_canonicalization: bool = _requires_legacy_session_canonicalization(payload)
+	var loaded: bool = bool(session.call("load_save_dict", payload))
+	var canonical_snapshot_value: Variant = session.call("to_save_dict")
+	var canonical_valid: bool = (
+		canonical_snapshot_value is Dictionary
+		and not canonical_snapshot_value.is_empty()
+		and bool(session.call("is_active"))
+	)
+	if canonical_valid:
+		if allow_legacy_canonicalization:
+			canonical_valid = _is_canonical_legacy_session_snapshot(canonical_snapshot_value)
+		else:
+			canonical_valid = _save_values_equal(canonical_snapshot_value, payload)
+	if not loaded or not canonical_valid:
 		var restored: bool = _restore_session_snapshot(previous_snapshot)
 		state = TransitionState.IDLE if restored else TransitionState.ENTRY_PREPARED
 		return false
@@ -761,7 +802,21 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 	if _active_runtime != null and is_instance_valid(_active_runtime):
 		if _active_runtime.has_method("is_active") and bool(_active_runtime.call("is_active")):
 			return false
-	if not bool(session.call("load_save_dict", payload)) or session.call("to_save_dict") != payload:
+	var previous_snapshot: Dictionary = session.call("to_save_dict")
+	var allow_legacy_canonicalization: bool = _requires_legacy_session_canonicalization(payload)
+	if not bool(session.call("load_save_dict", payload)):
+		return false
+	var canonical_snapshot_value: Variant = session.call("to_save_dict")
+	if not (canonical_snapshot_value is Dictionary):
+		_restore_session_snapshot(previous_snapshot)
+		return false
+	var canonical_valid: bool = (
+		_is_canonical_legacy_session_snapshot(canonical_snapshot_value)
+		if allow_legacy_canonicalization
+		else _save_values_equal(canonical_snapshot_value, payload)
+	)
+	if not canonical_valid:
+		_restore_session_snapshot(previous_snapshot)
 		return false
 	_active_runtime = null
 	_active_runtime_instance_id = 0
@@ -773,3 +828,52 @@ func rollback_session_for_world_load(payload: Dictionary) -> bool:
 
 ## Restore SurfaceWorld first, then retire the maze and clear Session.
 ## Any failure restores the exact active Session and runtime snapshot.
+
+
+## Save snapshots are JSON values: Dictionary key order is irrelevant, arrays remain ordered,
+## and equal integer/float values are equivalent after JSON decoding.
+static func _save_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _save_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _save_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
+
+
+static func _requires_legacy_session_canonicalization(payload: Dictionary) -> bool:
+	if not payload.has("maze_stream_state"):
+		return true
+	var stream_value: Variant = payload.get("maze_stream_state", null)
+	if not (stream_value is Dictionary) or stream_value.is_empty():
+		return false
+	var schema_value: Variant = stream_value.get("schema_version", null)
+	return (schema_value is int or schema_value is float) and int(schema_value) in [1, 2]
+
+static func _is_canonical_legacy_session_snapshot(snapshot: Variant) -> bool:
+	if not (snapshot is Dictionary):
+		return false
+	var stream_value: Variant = snapshot.get("maze_stream_state", null)
+	if not (stream_value is Dictionary):
+		return false
+	if stream_value.is_empty():
+		return true
+	var records_value: Variant = stream_value.get("entity_runtime_states", null)
+	return (
+		int(stream_value.get("schema_version", -1)) == MazeStreamStateScript.SAVE_SCHEMA_VERSION
+		and int(stream_value.get("entity_spawn_algorithm_version", -1)) == MazeStreamStateScript.LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION
+		and int(stream_value.get("entity_runtime_state_version", -1)) == MazeStreamStateScript.ENTITY_RUNTIME_STATE_VERSION
+		and records_value is Array
+		and records_value.is_empty()
+	)

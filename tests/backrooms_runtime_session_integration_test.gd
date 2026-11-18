@@ -123,7 +123,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(prepared.get("ok", false)))
 	assert(bool(prepared.get("runtime_prepared", false)))
 	assert(int(prepared.get("loaded_cell_count", 0)) == 9)
-	assert(director.to_save_dict() == director_before, "Runtime preparation must not consume the portal or advance RNG.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Runtime preparation must not consume the portal or advance RNG.")
 	assert(bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")) and not runtime.visible)
 	assert(not bool(manager.get_session().call("is_active")))
 
@@ -134,11 +134,11 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(str(entered.get("event", "")) == "entered")
 	assert(director.active_portal.is_empty())
 	assert(bool(manager.get_session().call("is_active")))
-	assert(manager.get_session().call("get_maze_stream_state") == runtime.call("to_save_dict"))
+	assert(_json_values_equal(manager.get_session().call("get_maze_stream_state"), runtime.call("to_save_dict")))
 	assert(not bool(runtime.call("is_active")) and not runtime.visible, "Commit retains the runtime hidden until the world handoff completes.")
 	var position_drift_before: Dictionary = manager.get_session_save_dict()
 	assert(not bool(manager.get_session().call("set_backrooms_position", Vector3(8.0, 0.0, 0.0))), "Session cannot move into another cell without a matching runtime window update.")
-	assert(manager.get_session_save_dict() == position_drift_before)
+	assert(_json_values_equal(manager.get_session_save_dict(), position_drift_before))
 
 	assert(bool(manager.call("activate_prepared_runtime_after_handoff", runtime)))
 	var bypass_return: Dictionary = manager.call("return_to_surface", Callable(self, "_restore_surface"))
@@ -149,7 +149,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var shifted: Dictionary = manager.call("sync_backrooms_runtime", runtime, Vector3(8.0, 0.0, 0.0))
 	assert(bool(shifted.get("ok", false)))
 	assert(int(shifted.get("runtime", {}).get("load_count", -1)) == 3)
-	assert(manager.get_session().call("get_maze_stream_state") == runtime.call("to_save_dict"))
+	assert(_json_values_equal(manager.get_session().call("get_maze_stream_state"), runtime.call("to_save_dict")))
 	assert(manager.get_session().call("to_save_dict").get("backrooms_position", []) == [8.0, 0.0, 0.0])
 
 	var saved_session: Dictionary = manager.get_session_save_dict()
@@ -158,41 +158,47 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var restored_session = SessionScript.new()
 	assert(bool(restored_session.call("load_save_dict", parsed)))
 	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
-	if restored_save_dict != saved_session:
-		for key in saved_session.keys():
-			if restored_save_dict.get(key) != saved_session.get(key):
-				print("DEBUG session JSON round-trip mismatch: key=", key, " saved=", saved_session.get(key), " restored=", restored_save_dict.get(key))
-	assert(restored_save_dict == saved_session, "Session JSON round-trip must preserve the canonical save dictionary.")
+	assert(
+		_json_values_equal(restored_save_dict, saved_session),
+		"Session JSON round-trip must preserve all JSON values independent of Dictionary order and integer/float representation."
+	)
 
 	var legacy_nested_payload: Dictionary = saved_session.duplicate(true)
 	var legacy_nested_stream: Dictionary = legacy_nested_payload["maze_stream_state"].duplicate(true)
 	legacy_nested_stream["schema_version"] = 1
 	legacy_nested_stream.erase("entity_spawn_algorithm_version")
+	legacy_nested_stream.erase("entity_runtime_state_version")
+	legacy_nested_stream.erase("entity_runtime_states")
 	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
-	var legacy_nested_session = SessionScript.new()
-	assert(bool(legacy_nested_session.call("load_save_dict", legacy_nested_payload)), "Active Session accepts a legacy schema-one nested maze stream.")
+	var legacy_nested_manager = ManagerScript.new()
+	assert(bool(legacy_nested_manager.call("restore_session_for_world_load", legacy_nested_payload)), "Production world-load manager accepts a validated legacy schema-one nested maze stream.")
+	var legacy_nested_session = legacy_nested_manager.get_session()
 	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
-	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 2, "Session canonicalizes the legacy nested maze stream to schema two.")
+	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 3, "Session canonicalizes the legacy nested maze stream to schema three.")
 	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
-	var legacy_nested_manager = ManagerScript.new(legacy_nested_session)
+	assert(canonical_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy migration starts with an empty mobile-entity cache.")
 	var legacy_nested_runtime = RuntimeScript.new()
 	legacy_nested_runtime.force_metadata_only = true
 	root.add_child(legacy_nested_runtime)
 	assert(bool(legacy_nested_manager.call("restore_runtime_from_session", legacy_nested_runtime)), "Production runtime restores a legacy nested maze stream through Session.")
-	assert(legacy_nested_runtime.call("to_save_dict") == canonical_legacy_stream, "Restored production runtime matches the canonicalized Session stream payload.")
+	var restored_legacy_stream: Dictionary = legacy_nested_runtime.call("to_save_dict")
+	var migrated_legacy_stream: Dictionary = legacy_nested_manager.get_session().call("get_maze_stream_state")
+	assert(_json_values_equal(restored_legacy_stream, migrated_legacy_stream), "Legacy Session and restored runtime converge on the same schema-three snapshot.")
+	assert(not migrated_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy restore materializes deterministic default mobile-entity snapshots into Session.")
 	legacy_nested_runtime.queue_free()
 
 	var legacy_payload: Dictionary = saved_session.duplicate(true)
 	legacy_payload.erase("maze_stream_state")
-	var legacy_session = SessionScript.new()
-	assert(bool(legacy_session.call("load_save_dict", legacy_payload)), "Legacy schema-v1 active sessions without a maze payload remain loadable.")
+	var legacy_session_manager = ManagerScript.new()
+	assert(bool(legacy_session_manager.call("restore_session_for_world_load", legacy_payload)), "Production world-load manager accepts a legacy active Session without a nested maze payload.")
+	var legacy_session = legacy_session_manager.get_session()
 	assert(legacy_session.call("get_maze_stream_state").is_empty())
 
 	var tampered_payload: Dictionary = saved_session.duplicate(true)
 	tampered_payload["maze_stream_state"]["world_seed"] = int(tampered_payload["maze_stream_state"]["world_seed"]) + 1
 	var before_tampered_load: Dictionary = restored_session.call("to_save_dict")
 	assert(not bool(restored_session.call("load_save_dict", tampered_payload)), "A nested maze seed mismatch is rejected.")
-	assert(restored_session.call("to_save_dict") == before_tampered_load, "A rejected nested payload must leave the active Session unchanged.")
+	assert(_json_values_equal(restored_session.call("to_save_dict"), before_tampered_load), "A rejected nested payload must leave the active Session unchanged.")
 
 	var restored_manager = ManagerScript.new(restored_session)
 	var restored_runtime = RuntimeScript.new()
@@ -203,7 +209,8 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(str(return_without_runtime.get("reason", "")) == "runtime_restore_required_before_return")
 	assert(bool(restored_manager.call("restore_runtime_from_session", restored_runtime)))
 	assert(bool(restored_runtime.call("is_prepared")) and not bool(restored_runtime.call("is_active")))
-	assert(restored_runtime.call("to_save_dict") == restored_session.call("get_maze_stream_state"))
+	assert(_json_values_equal(restored_runtime.call("to_save_dict"), restored_session.call("get_maze_stream_state")), "Schema-three Session and restored runtime preserve the same mobile entity snapshots.")
+	assert(not restored_session.call("get_maze_stream_state").get("entity_runtime_states", []).is_empty(), "Schema-three restore retains the persisted mobile entity cache.")
 	assert(bool(restored_manager.call("activate_prepared_runtime_after_handoff", restored_runtime)), "Restored hidden runtime should activate after the world handoff.")
 
 	restore_result = false
@@ -218,9 +225,9 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(failed_return.get("rollback_complete", false)))
 	assert(bool(failed_return.get("session_retained", false)))
 	assert(restored_manager.get_state_name() == "IN_BACKROOMS")
-	assert(restored_manager.get_session_save_dict() == before_failed_return)
+	assert(_json_values_equal(restored_manager.get_session_save_dict(), before_failed_return))
 	assert(bool(restored_runtime.call("is_active")))
-	assert(restored_runtime.call("to_save_dict") == before_failed_return["maze_stream_state"])
+	assert(_json_values_equal(restored_runtime.call("to_save_dict"), before_failed_return["maze_stream_state"]))
 
 	restore_result = true
 	var returned: Dictionary = restored_manager.call(
@@ -253,7 +260,7 @@ func _test_runtime_staging_failure_preserves_portal() -> void:
 	)
 	assert(not bool(prepared.get("ok", false)))
 	assert(manager.get_state_name() == "IDLE")
-	assert(director.to_save_dict() == director_before, "Failed runtime staging must not consume the one-use portal.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Failed runtime staging must not consume the one-use portal.")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
 
@@ -283,8 +290,8 @@ func _test_session_mutation_failure_restores_director_session_and_runtime() -> v
 	assert(bool(rejected.get("session_state_restored", false)))
 	assert(bool(rejected.get("runtime_state_restored", false)))
 	assert(bool(rejected.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before)
-	assert(session.to_save_dict() == session_before)
+	assert(_json_values_equal(director.to_save_dict(), director_before))
+	assert(_json_values_equal(session.to_save_dict(), session_before))
 	assert(not session.is_active())
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
@@ -311,7 +318,7 @@ func _test_stale_runtime_snapshot_cannot_consume_portal() -> void:
 	assert(not bool(rejected.get("ok", false)))
 	assert(str(rejected.get("reason", "")) == "prepared_runtime_state_changed")
 	assert(bool(rejected.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before, "A stale runtime snapshot must be rejected before portal consumption.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "A stale runtime snapshot must be rejected before portal consumption.")
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(manager.get_session().call("is_active")))
 	assert(not bool(runtime.call("is_prepared")) and int(runtime.call("get_loaded_cell_count")) == 0)
@@ -343,9 +350,9 @@ func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
 	var aborted: Dictionary = manager.call("abort_committed_entry", director, runtime)
 	assert(bool(aborted.get("ok", false)))
 	assert(bool(aborted.get("rollback_complete", false)))
-	assert(director.to_save_dict() == director_before, "Aborting a committed but unhanded entry restores the exact one-use portal and RNG state.")
+	assert(_json_values_equal(director.to_save_dict(), director_before), "Aborting a committed but unhanded entry restores the exact one-use portal and RNG state.")
 	assert(not bool(manager.get_session().call("is_active")))
-	assert(manager.get_session_save_dict() == SessionScript.new().to_save_dict())
+	assert(_json_values_equal(manager.get_session_save_dict(), SessionScript.new().to_save_dict()))
 	assert(manager.get_state_name() == "IDLE")
 	assert(not bool(runtime.call("is_prepared")) and not bool(runtime.call("is_active")))
 	assert(int(runtime.call("get_loaded_cell_count")) == 0)
@@ -355,7 +362,7 @@ func _test_committed_entry_abort_restores_portal_session_and_runtime() -> void:
 	)
 	assert(bool(retry.get("ok", false)), "The restored one-use portal can be prepared again after an aborted handoff.")
 	assert(bool(manager.call("cancel_prepared_entry")))
-	assert(director.to_save_dict() == director_before)
+	assert(_json_values_equal(director.to_save_dict(), director_before))
 	assert(int(runtime.call("get_loaded_cell_count")) == 0)
 	if runtime.get_parent() == root:
 		root.remove_child(runtime)
@@ -370,3 +377,25 @@ func _restore_surface(context: Dictionary) -> bool:
 	assert(context.has("surface_world_seed"))
 	assert(context.has("entry_portal_id"))
 	return restore_result
+
+
+## JSON semantic equality: dictionary order is irrelevant, arrays remain ordered,
+## and JSON's integer/float decoding representation may differ for equal numbers.
+func _json_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _json_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _json_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
