@@ -36,6 +36,7 @@ func _run() -> void:
 	await _assert_avoidance_moves_away_from_player()
 	await _assert_duller_retreat_moves_away_from_player()
 	await _assert_patrol_moves_within_cell()
+	await _assert_patrol_index_metadata_is_authoritative()
 	await _assert_deathmoth_aerial_patrol_changes_height()
 	await _assert_anchored_entities_remain_stationary()
 	await _assert_round_robin_movement_budget()
@@ -254,6 +255,25 @@ func _assert_patrol_moves_within_cell() -> void:
 	driver.call("reset")
 	world_root.free()
 	await process_frame
+
+func _assert_patrol_index_metadata_is_authoritative() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 20261118, Vector3.ZERO)
+	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
+	var driver = MovementDriverScript.new()
+	driver.call("_advance_patrol", "0,0|hound", entity_root)
+	entity_root.set_meta("backrooms_patrol_index", 3)
+	var target: Vector3 = driver.call("_get_patrol_target", entity_root, "0,0|hound", entity_root.position, "patrol")
+	_expect(target.x < 0.0 and target.z > 0.0, "restored entity patrol metadata overrides a stale in-memory waypoint index")
+	_expect(int(entity_root.get_meta("backrooms_patrol_index", -1)) == 3, "patrol metadata remains the authoritative persisted waypoint")
+	driver.call("reset")
+	world_root.free()
+	await process_frame
+
 
 func _assert_deathmoth_aerial_patrol_changes_height() -> void:
 	var world_root := Node3D.new()
