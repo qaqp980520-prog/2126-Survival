@@ -28,9 +28,14 @@ func _run() -> void:
 		holder.add_child(body)
 		var shape := body.get_node_or_null("EntityCollision") as CollisionShape3D
 		_expect(shape != null and shape.shape != null, "%s collision shape is present" % entity_id)
-		_expect(body.collision_layer == 2, "%s occupies the dedicated entity collision layer" % entity_id)
-		_expect(body.collision_mask == 1, "%s collides with world geometry only" % entity_id)
-		_expect(not shape.disabled if shape != null else false, "%s collision is enabled in an active runtime" % entity_id)
+		_expect(body.collision_layer == 4, "%s occupies the dedicated entity collision layer" % entity_id)
+		_expect(body.collision_mask == 9, "%s collides with world geometry and the player, not other entities" % entity_id)
+		_expect(shape != null and not shape.disabled, "%s collision is enabled in an active runtime" % entity_id)
+		if shape != null:
+			if entity_id in ["smiler", "deathmoth"]:
+				_expect(shape.shape is SphereShape3D, "%s uses a spherical collision proxy" % entity_id)
+			else:
+				_expect(shape.shape is CapsuleShape3D, "%s uses a capsule collision proxy" % entity_id)
 		_expect(
 			body.motion_mode == CharacterBody3D.MOTION_MODE_FLOATING,
 			"%s uses floating kinematic motion without implicit gravity" % entity_id
@@ -44,7 +49,7 @@ func _run() -> void:
 			CollisionFactoryScript.set_collision_enabled(body, true),
 			"%s collision can be re-enabled after destination activation" % entity_id
 		)
-		_expect(body.collision_layer == 2 and body.collision_mask == 1, "%s restores its collision contract" % entity_id)
+		_expect(body.collision_layer == 4 and body.collision_mask == 9, "%s restores its collision contract" % entity_id)
 
 	for entity_id in STATIONARY_ENTITY_IDS:
 		var body := CharacterBody3D.new()
