@@ -13,7 +13,7 @@ const MAX_LOCAL_Y: float = 3.0
 const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 
 static func get_state_key(record: Dictionary) -> String:
-	return str(record.get("cell_key", "")) + "|" + str(record.get("entity_id", ""))
+	return str(record.get("spawn_cell_key", record.get("cell_key", ""))) + "|" + str(record.get("entity_id", ""))
 
 static func parse_cell_key(cell_key: String) -> Dictionary:
 	if cell_key.is_empty():
@@ -137,7 +137,7 @@ static func validate_records(
 		var entity_id: String = str(entity_id_value)
 		if not MOBILE_ENTITY_IDS.has(entity_id):
 			return {"ok": false, "reason": "entity_runtime_entity_not_mobile"}
-		var key: String = cell_key + "|" + entity_id
+		var key: String = spawn_cell_key + "|" + entity_id
 		if seen.has(key):
 			return {"ok": false, "reason": "entity_runtime_duplicate"}
 		seen[key] = true
