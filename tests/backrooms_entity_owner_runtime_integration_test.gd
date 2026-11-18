@@ -298,6 +298,93 @@ func _run() -> void:
 				archived_owner_found = str(record.get("cell_key", "")) == target_key
 	_expect(archived_owner_found, "unloaded migrated entity remains archived under its mutable owner cell")
 
+	var live_stream_state: RefCounted = runtime.get("stream_state") as RefCounted
+	var original_archived_states: Array = live_stream_state.call("get_entity_runtime_states")
+	var migrated_state_index: int = -1
+	for index in range(original_archived_states.size()):
+		var archived_record: Dictionary = original_archived_states[index]
+		if str(archived_record.get("spawn_cell_key", "")) == spawn_cell_key and str(archived_record.get("entity_id", "")) == entity_id:
+			migrated_state_index = index
+	_expect(migrated_state_index >= 0, "unloaded migrated owner has one archived runtime-state record")
+
+	# Save must fail closed for either half of a broken state/ledger pair, without
+	# mutating the already committed StreamState snapshot.
+	if migrated_state_index >= 0:
+		var mismatched_live_states: Array = original_archived_states.duplicate(true)
+		var mismatched_live_record: Dictionary = mismatched_live_states[migrated_state_index]
+		mismatched_live_record["cell_key"] = spawn_cell_key
+		mismatched_live_states[migrated_state_index] = mismatched_live_record
+		_expect(bool(live_stream_state.call("set_entity_runtime_states", mismatched_live_states)), "test fixture accepts a structurally valid but owner-mismatched archived record")
+		var before_mismatch_save: Dictionary = live_stream_state.call("to_save_dict")
+		var mismatch_save: Dictionary = runtime.call("to_save_dict")
+		_expect(mismatch_save.is_empty(), "save rejects an archived state whose owner cell disagrees with the ledger")
+		_expect(live_stream_state.call("to_save_dict") == before_mismatch_save, "failed mismatched save leaves the committed StreamState snapshot unchanged")
+		_expect(bool(live_stream_state.call("set_entity_runtime_states", original_archived_states)), "test restores the original archived state after mismatch-save probe")
+
+		var missing_live_states: Array = original_archived_states.duplicate(true)
+		missing_live_states.remove_at(migrated_state_index)
+		_expect(bool(live_stream_state.call("set_entity_runtime_states", missing_live_states)), "test fixture removes only the migrated archived state")
+		var before_missing_save: Dictionary = live_stream_state.call("to_save_dict")
+		var missing_save: Dictionary = runtime.call("to_save_dict")
+		_expect(missing_save.is_empty(), "save rejects a migrated ownership record with no runtime-state archive")
+		_expect(live_stream_state.call("to_save_dict") == before_missing_save, "failed missing-state save leaves the committed StreamState snapshot unchanged")
+		_expect(bool(live_stream_state.call("set_entity_runtime_states", original_archived_states)), "test restores the original archive after missing-state save probe")
+
+	var mismatched_payload: Dictionary = archive_after_unload.duplicate(true)
+	var mismatched_payload_states: Array = mismatched_payload.get("entity_runtime_states", [])
+	for index in range(mismatched_payload_states.size()):
+		var record: Dictionary = mismatched_payload_states[index]
+		if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
+			record["cell_key"] = spawn_cell_key
+			mismatched_payload_states[index] = record
+	mismatched_payload["entity_runtime_states"] = mismatched_payload_states
+	var mismatch_restore: Node3D = RuntimeScript.new() as Node3D
+	mismatch_restore.set("force_metadata_only", true)
+	root.add_child(mismatch_restore)
+	var mismatch_restore_ok: bool = bool(mismatch_restore.call("load_save_dict", mismatched_payload))
+	_expect(not mismatch_restore_ok, "restore rejects a retained runtime-state owner key that disagrees with the ownership ledger")
+	_expect(not bool(mismatch_restore.call("is_prepared")) and int(mismatch_restore.call("get_loaded_cell_count")) == 0, "owner-key mismatch leaves the destination runtime unprepared and empty")
+	mismatch_restore.queue_free()
+
+	var missing_payload: Dictionary = archive_after_unload.duplicate(true)
+	var missing_payload_states: Array = missing_payload.get("entity_runtime_states", [])
+	for index in range(missing_payload_states.size() - 1, -1, -1):
+		var record: Dictionary = missing_payload_states[index]
+		if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
+			missing_payload_states.remove_at(index)
+	missing_payload["entity_runtime_states"] = missing_payload_states
+	var missing_restore: Node3D = RuntimeScript.new() as Node3D
+	missing_restore.set("force_metadata_only", true)
+	root.add_child(missing_restore)
+	var missing_restore_ok: bool = bool(missing_restore.call("load_save_dict", missing_payload))
+	_expect(not missing_restore_ok, "restore rejects a migrated ownership record whose runtime-state archive is missing")
+	_expect(not bool(missing_restore.call("is_prepared")) and int(missing_restore.call("get_loaded_cell_count")) == 0, "missing migrated state leaves the destination runtime unprepared and empty")
+	missing_restore.queue_free()
+
+	# The valid owner cell is outside the loaded window but still inside the retention
+	# halo. Restore must keep its ledger/state pair, then reconstruct it when streamed in.
+	var unloaded_restored: Node3D = RuntimeScript.new() as Node3D
+	unloaded_restored.set("force_metadata_only", true)
+	root.add_child(unloaded_restored)
+	var valid_unloaded_restore: bool = bool(unloaded_restored.call("load_save_dict", archive_after_unload))
+	_expect(valid_unloaded_restore, "valid migrated owner restores while its owner cell is retained but unloaded")
+	if valid_unloaded_restore:
+		_expect(unloaded_restored.call("get_cell_root", target_key) == null, "valid unloaded-owner restore does not eagerly load the retained owner cell")
+		var unloaded_owner_record: Dictionary = unloaded_restored.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		_expect(str(unloaded_owner_record.get("owner_cell_key", "")) == target_key, "unloaded restore preserves the mutable owner-cell assignment")
+		_expect(bool(unloaded_restored.call("activate_destination")), "unloaded-owner restore activates only after candidate validation")
+		var unloaded_return: Dictionary = unloaded_restored.call("sync_to_world_position", Vector3(float(target_cell.x) * 8.0, 0.0, float(target_cell.y) * 8.0))
+		_expect(bool(unloaded_return.get("ok", false)), "streaming the retained owner cell back in succeeds after unloaded restore")
+		var unloaded_identity: Dictionary = _find_entity(unloaded_restored, spawn_cell_key, entity_id)
+		_expect(int(unloaded_identity.get("count", 0)) == 1, "unloaded-owner restore reconstructs exactly one migrated entity when its cell loads")
+		var unloaded_entity: CharacterBody3D = unloaded_identity.get("entity_root") as CharacterBody3D
+		var unloaded_owner_root: Node3D = unloaded_restored.call("get_cell_root", target_key) as Node3D
+		_expect(
+			unloaded_entity != null and unloaded_owner_root != null and unloaded_entity.get_parent() == unloaded_owner_root,
+			"unloaded-owner reconstruction attaches the entity under the persisted owner cell"
+		)
+	unloaded_restored.queue_free()
+
 	var return_position := Vector3(float(target_cell.x) * 8.0, 0.0, float(target_cell.y) * 8.0)
 	var return_result: Dictionary = runtime.call("sync_to_world_position", return_position)
 	_expect(bool(return_result.get("ok", false)), "returning to the retained owner cell stages a reconstruction transaction")
