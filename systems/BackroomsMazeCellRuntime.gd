@@ -1099,6 +1099,25 @@ func transfer_entity_to_next_cell(
 			entity_root = child as CharacterBody3D
 	if entity_root == null or entity_root.get_parent() != source_root:
 		return {"ok": false, "reason": "transfer_entity_not_owned_by_source"}
+	if str(entity_root.get_meta("backrooms_owner_cell_key", from_owner_key)) != from_owner_key:
+		return {"ok": false, "reason": "transfer_entity_owner_metadata_mismatch"}
+	var identity_key: String = OwnershipLedgerScript.get_state_key(spawn_cell_key, entity_id)
+	var source_identity_keys_value: Variant = source_root.get_meta("backrooms_entity_identity_keys", [])
+	var source_spawn_ids_value: Variant = source_root.get_meta("backrooms_entity_spawn_ids", [])
+	var target_identity_keys_value: Variant = target_root.get_meta("backrooms_entity_identity_keys", [])
+	var target_spawn_ids_value: Variant = target_root.get_meta("backrooms_entity_spawn_ids", [])
+	if (
+		not (source_identity_keys_value is Array)
+		or not (source_spawn_ids_value is Array)
+		or not (target_identity_keys_value is Array)
+		or not (target_spawn_ids_value is Array)
+		or source_identity_keys_value.size() != source_spawn_ids_value.size()
+		or target_identity_keys_value.size() != target_spawn_ids_value.size()
+		or not source_identity_keys_value.has(identity_key)
+		or target_identity_keys_value.has(identity_key)
+	):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
+	var source_identity_index: int = source_identity_keys_value.find(identity_key)
 	var transfer_setup: Dictionary = ownership_ledger.call(
 		"plan_transfer", spawn_cell_key, entity_id, to_owner_key, route_snapshot
 	)
@@ -1142,6 +1161,18 @@ func transfer_entity_to_next_cell(
 		ownership_ledger.call("rollback_transfer", plan)
 		return {"ok": false, "reason": str(commit.get("reason", "transfer_commit_rejected"))}
 	var committed_record: Dictionary = commit.get("record", {})
+	var source_identity_keys: Array = source_identity_keys_value.duplicate()
+	var source_spawn_ids: Array = source_spawn_ids_value.duplicate()
+	var target_identity_keys: Array = target_identity_keys_value.duplicate()
+	var target_spawn_ids: Array = target_spawn_ids_value.duplicate()
+	source_identity_keys.remove_at(source_identity_index)
+	source_spawn_ids.remove_at(source_identity_index)
+	target_identity_keys.append(identity_key)
+	target_spawn_ids.append(entity_id)
+	source_root.set_meta("backrooms_entity_identity_keys", source_identity_keys)
+	source_root.set_meta("backrooms_entity_spawn_ids", source_spawn_ids)
+	target_root.set_meta("backrooms_entity_identity_keys", target_identity_keys)
+	target_root.set_meta("backrooms_entity_spawn_ids", target_spawn_ids)
 	entity_root.set_meta("backrooms_owner_cell_key", to_owner_key)
 	entity_root.set_meta("backrooms_owner_revision", int(committed_record.get("owner_revision", 0)))
 	return {
