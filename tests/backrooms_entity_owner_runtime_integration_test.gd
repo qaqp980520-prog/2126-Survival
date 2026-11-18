@@ -42,6 +42,40 @@ func _run() -> void:
 
 	var initial_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 	_expect(str(initial_owner.get("owner_cell_key", "")) == source_key, "initial ownership ledger assigns the deterministic spawn cell")
+	_expect(int(initial_owner.get("owner_revision", -1)) == 0, "initial ownership revision is zero")
+	var identity_key: String = spawn_cell_key + "|" + entity_id
+	var target_root: Node3D = runtime.call("get_cell_root", target_key) as Node3D
+	_expect(target_root != null, "adjacent transfer target root is loaded")
+	var source_identity_keys_before: Array = source_root.get_meta("backrooms_entity_identity_keys", []).duplicate()
+	var source_spawn_ids_before: Array = source_root.get_meta("backrooms_entity_spawn_ids", []).duplicate()
+	var target_identity_keys_before: Array = target_root.get_meta("backrooms_entity_identity_keys", []).duplicate() if target_root != null else []
+	var target_spawn_ids_before: Array = target_root.get_meta("backrooms_entity_spawn_ids", []).duplicate() if target_root != null else []
+	var source_identity_index_before: int = source_identity_keys_before.find(identity_key)
+	_expect(source_identity_index_before >= 0, "source cell identity metadata contains the immutable spawn key")
+	_expect(
+		source_identity_index_before >= 0
+		and source_identity_index_before < source_spawn_ids_before.size()
+		and str(source_spawn_ids_before[source_identity_index_before]) == entity_id,
+		"source cell identity arrays preserve aligned spawn IDs"
+	)
+
+	var safe_extent: float = 8.0 * 0.5 - 0.65
+	var source_local: Vector3 = entity_root.position
+	source_local.x = 0.0
+	source_local.z = 0.0
+	entity_root.position = source_local
+	var premature_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	_expect(not bool(premature_transfer.get("ok", false)), "transfer is rejected before the entity reaches the source-cell edge")
+	_expect(str(premature_transfer.get("reason", "")) == "transfer_entity_not_at_cell_edge", "premature transfer reports the boundary precondition")
+	_expect(entity_root.get_parent() == source_root, "premature transfer leaves node ownership unchanged")
+
+	if direction.x != 0:
+		entity_root.position.x = float(direction.x) * safe_extent
+	else:
+		entity_root.position.z = float(direction.y) * safe_extent
+	var edge_transform: Transform3D = entity_root.global_transform
 	var stale_route: Dictionary = route.duplicate(true)
 	stale_route["stream_generation"] = int(stale_route.get("stream_generation", 0)) + 1
 	var stale_transfer: Dictionary = runtime.call(
@@ -49,10 +83,47 @@ func _run() -> void:
 	)
 	_expect(not bool(stale_transfer.get("ok", false)), "stale route snapshot is rejected before node reparent")
 	_expect(entity_root.get_parent() == source_root, "rejected stale transfer leaves the live entity under its original owner")
+	_expect(entity_root.global_transform.origin.is_equal_approx(edge_transform.origin), "rejected stale transfer preserves the exact entity position")
 	_expect(
 		str(runtime.call("get_entity_owner_record", spawn_cell_key, entity_id).get("owner_cell_key", "")) == source_key,
 		"rejected stale transfer leaves the ownership ledger unchanged"
 	)
+
+	var ownership_ledger: RefCounted = runtime.get("ownership_ledger") as RefCounted
+	var blocked_target_local: Vector3 = target_root.to_local(entity_root.global_position)
+	if direction.x != 0:
+		blocked_target_local.x = -float(direction.x) * safe_extent
+	else:
+		blocked_target_local.z = -float(direction.y) * safe_extent
+	var blocker := StaticBody3D.new()
+	blocker.name = "TransferRollbackBlocker"
+	blocker.collision_layer = 1
+	blocker.collision_mask = 0
+	var blocker_shape := CollisionShape3D.new()
+	var blocker_box := BoxShape3D.new()
+	blocker_box.size = Vector3(1.4, 4.0, 1.4)
+	blocker_shape.shape = blocker_box
+	blocker.add_child(blocker_shape)
+	blocker.position = blocked_target_local
+	target_root.add_child(blocker)
+	await physics_frame
+	var blocked_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	_expect(not bool(blocked_transfer.get("ok", false)), "physical obstruction rejects the live owner transfer")
+	_expect(str(blocked_transfer.get("reason", "")) == "transfer_physics_handoff_blocked", "blocked transfer reports the physics handoff failure")
+	_expect(entity_root.get_parent() == source_root, "blocked transfer reparents the entity back to its original cell")
+	_expect(entity_root.global_transform.origin.is_equal_approx(edge_transform.origin), "blocked transfer restores the exact pre-transfer transform")
+	var owner_after_block: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(str(owner_after_block.get("owner_cell_key", "")) == source_key and int(owner_after_block.get("owner_revision", -1)) == 0, "blocked transfer leaves the ownership ledger and revision unchanged")
+	_expect(ownership_ledger != null and int(ownership_ledger.call("get_pending_transfer_count")) == 0, "blocked transfer clears its pending ledger transaction")
+	_expect(source_root.get_meta("backrooms_entity_identity_keys", []) == source_identity_keys_before, "blocked transfer leaves source identity metadata unchanged")
+	_expect(source_root.get_meta("backrooms_entity_spawn_ids", []) == source_spawn_ids_before, "blocked transfer leaves source spawn IDs unchanged")
+	_expect(target_root.get_meta("backrooms_entity_identity_keys", []) == target_identity_keys_before, "blocked transfer leaves target identity metadata unchanged")
+	_expect(target_root.get_meta("backrooms_entity_spawn_ids", []) == target_spawn_ids_before, "blocked transfer leaves target spawn IDs unchanged")
+	target_root.remove_child(blocker)
+	blocker.free()
+	await physics_frame
 
 	var transfer: Dictionary = runtime.call(
 		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
@@ -61,14 +132,23 @@ func _run() -> void:
 	if not bool(transfer.get("ok", false)):
 		_finish(runtime, null)
 		return
-	var target_root: Node3D = runtime.call("get_cell_root", target_key) as Node3D
 	_expect(target_root != null and entity_root.get_parent() == target_root, "live entity is reparented to the next loaded cell")
 	_expect(entity_root.get_meta("spawn_cell", null) == source_cell, "ownership transfer preserves immutable spawn-cell identity")
 	_expect(str(entity_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "entity metadata records the new owner cell")
 	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "entity metadata records the committed owner revision")
 	var owner_record: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 1, "ownership ledger commits the same owner and revision")
-	var safe_extent: float = 8.0 * 0.5 - 0.65
+	var source_identity_keys_after: Array = source_root.get_meta("backrooms_entity_identity_keys", [])
+	var source_spawn_ids_after: Array = source_root.get_meta("backrooms_entity_spawn_ids", [])
+	var target_identity_keys_after: Array = target_root.get_meta("backrooms_entity_identity_keys", [])
+	var target_spawn_ids_after: Array = target_root.get_meta("backrooms_entity_spawn_ids", [])
+	var target_identity_index: int = target_identity_keys_after.find(identity_key)
+	_expect(not source_identity_keys_after.has(identity_key), "successful transfer removes immutable identity from source cell metadata")
+	_expect(target_identity_index >= 0, "successful transfer registers immutable identity in target cell metadata")
+	_expect(target_identity_index >= 0 and str(target_spawn_ids_after[target_identity_index]) == entity_id, "target cell identity and spawn ID arrays remain aligned")
+	_expect(source_identity_keys_after.size() == source_spawn_ids_after.size(), "source cell identity arrays remain aligned after transfer")
+	_expect(target_identity_keys_after.size() == target_spawn_ids_after.size(), "target cell identity arrays remain aligned after transfer")
+	_expect(ownership_ledger != null and int(ownership_ledger.call("get_pending_transfer_count")) == 0, "successful transfer closes its ledger transaction")
 	_expect(
 		absf(entity_root.position.x) <= safe_extent + 0.001
 		and absf(entity_root.position.z) <= safe_extent + 0.001,
