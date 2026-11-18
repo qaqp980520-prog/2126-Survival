@@ -6,9 +6,11 @@ class_name BackroomsMazeStreamState
 ## Existing cells are not retired until that commit succeeds.
 const Layout = preload("res://systems/BackroomsMazeLayout.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
+const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 
-const SAVE_SCHEMA_VERSION: int = 2
+const SAVE_SCHEMA_VERSION: int = 3
 const MIN_SUPPORTED_SAVE_SCHEMA_VERSION: int = 1
+const ENTITY_RUNTIME_STATE_VERSION: int = EntityRuntimeStateScript.STATE_VERSION
 const LEGACY_ENTITY_SPAWN_ALGORITHM_VERSION: int = 1
 const MAX_WORLD_SEED: int = 2147483647
 const MAX_STREAM_RADIUS: int = 8
@@ -28,6 +30,7 @@ var center_cell: Vector2i = Vector2i.ZERO
 var last_load_error: String = ""
 
 var _loaded_cells: Dictionary = {}
+var _entity_runtime_states: Array[Dictionary] = []
 var _generation: int = 0
 var _configuration_revision: int = 0
 
@@ -56,6 +59,7 @@ func configure(
 	entity_spawn_algorithm_version = EntityDirectorScript.SPAWN_ALGORITHM_VERSION
 	center_cell = Vector2i.ZERO
 	_loaded_cells.clear()
+	_entity_runtime_states.clear()
 	configured = true
 	_configuration_revision += 1
 	_generation += 1
@@ -202,8 +206,40 @@ func get_loaded_cell_count() -> int:
 func get_center_cell() -> Vector2i:
 	return center_cell
 
-## The saved center and layout version are sufficient to rebuild the loaded window.
-## Loaded Node references are intentionally never serialized.
+func clone_for_transaction() -> RefCounted:
+	var clone_value: Variant = get_script().new()
+	if not (clone_value is RefCounted):
+		return null
+	clone_value.configured = configured
+	clone_value.level_id = level_id
+	clone_value.world_seed = world_seed
+	clone_value.cell_size = cell_size
+	clone_value.stream_radius = stream_radius
+	clone_value.entity_spawn_algorithm_version = entity_spawn_algorithm_version
+	clone_value.center_cell = center_cell
+	clone_value.last_load_error = last_load_error
+	clone_value._loaded_cells = _loaded_cells.duplicate(true)
+	clone_value._entity_runtime_states = _entity_runtime_states.duplicate(true)
+	clone_value._generation = _generation
+	clone_value._configuration_revision = _configuration_revision
+	return clone_value as RefCounted
+
+func get_entity_runtime_states() -> Array[Dictionary]:
+	return _entity_runtime_states.duplicate(true)
+
+func set_entity_runtime_states(records: Array) -> bool:
+	if not configured:
+		return false
+	var validation: Dictionary = EntityRuntimeStateScript.validate_records(records, level_id, world_seed, cell_size, entity_spawn_algorithm_version)
+	if not bool(validation.get("ok", false)):
+		last_load_error = str(validation.get("reason", "entity_runtime_state_invalid"))
+		return false
+	_entity_runtime_states = validation.get("records", [])
+	last_load_error = ""
+	return true
+
+## Loaded Node references are never serialized; deterministic cells and bounded entity
+## state are enough to rebuild the current window and recently unloaded neighbors.
 func to_save_dict() -> Dictionary:
 	if not configured:
 		return {}
@@ -211,6 +247,8 @@ func to_save_dict() -> Dictionary:
 		"schema_version": SAVE_SCHEMA_VERSION,
 		"layout_algorithm_version": Layout.ALGORITHM_VERSION,
 		"entity_spawn_algorithm_version": entity_spawn_algorithm_version,
+		"entity_runtime_state_version": ENTITY_RUNTIME_STATE_VERSION,
+		"entity_runtime_states": _entity_runtime_states.duplicate(true),
 		"level_id": level_id,
 		"world_seed": world_seed,
 		"cell_size": cell_size,
@@ -280,6 +318,20 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var candidate_level: String = str(level_value)
 	var candidate_seed: int = int(seed_result["value"])
 	var candidate_cell_size: float = float(cell_size_result["value"])
+	var candidate_entity_runtime_states: Array[Dictionary] = []
+	if schema_version >= 3:
+		var state_version_result: Dictionary = _read_integer(payload.get("entity_runtime_state_version", null), ENTITY_RUNTIME_STATE_VERSION, ENTITY_RUNTIME_STATE_VERSION)
+		var state_records_value: Variant = payload.get("entity_runtime_states", null)
+		if not bool(state_version_result.get("ok", false)) or not (state_records_value is Array):
+			return _reject_load("entity_runtime_state_schema_invalid")
+		var state_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+			state_records_value, candidate_level, candidate_seed, candidate_cell_size, candidate_spawn_algorithm_version
+		)
+		if not bool(state_validation.get("ok", false)):
+			return _reject_load("entity_runtime_states_invalid")
+		candidate_entity_runtime_states = state_validation.get("records", [])
+	elif payload.has("entity_runtime_state_version") or payload.has("entity_runtime_states"):
+		return _reject_load("entity_runtime_state_schema_downgrade")
 
 	level_id = candidate_level
 	world_seed = candidate_seed
@@ -287,6 +339,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	cell_size = candidate_cell_size
 	entity_spawn_algorithm_version = candidate_spawn_algorithm_version
 	center_cell = candidate_center
+	_entity_runtime_states = candidate_entity_runtime_states
 	configured = true
 	_loaded_cells.clear()
 	_configuration_revision += 1
