@@ -91,7 +91,9 @@ jobs:
           test -f systems/BackroomsEntityMovementDriver.gd
           test -f tests/backrooms_entity_movement_driver_test.gd
           test -f systems/BackroomsEntityCollisionFactory.gd
+          test -f systems/BackroomsEntityRuntimeState.gd
           test -f tests/backrooms_entity_collision_factory_test.gd
+          test -f docs/BACKROOMS_ENTITY_RUNTIME_PERSISTENCE_M0_1_67.md
           test -f docs/BACKROOMS_ENTITY_MOVEMENT_M0_1_65.md
           test -f docs/BACKROOMS_ENTITY_PHYSICS_COLLISION_M0_1_66.md
           test -f systems/BackroomsLightingProfile.gd
