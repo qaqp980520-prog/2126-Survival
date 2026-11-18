@@ -306,13 +306,15 @@ func _run() -> void:
 		if str(archived_record.get("spawn_cell_key", "")) == spawn_cell_key and str(archived_record.get("entity_id", "")) == entity_id:
 			migrated_state_index = index
 	_expect(migrated_state_index >= 0, "unloaded migrated owner has one archived runtime-state record")
+	var mismatched_owner_cell: Vector2i = target_cell + Vector2i(-direction.y, direction.x)
+	var mismatched_owner_key: String = "%d,%d" % [mismatched_owner_cell.x, mismatched_owner_cell.y]
 
 	# Save must fail closed for either half of a broken state/ledger pair, without
 	# mutating the already committed StreamState snapshot.
 	if migrated_state_index >= 0:
 		var mismatched_live_states: Array = original_archived_states.duplicate(true)
 		var mismatched_live_record: Dictionary = mismatched_live_states[migrated_state_index]
-		mismatched_live_record["cell_key"] = spawn_cell_key
+		mismatched_live_record["cell_key"] = mismatched_owner_key
 		mismatched_live_states[migrated_state_index] = mismatched_live_record
 		_expect(bool(live_stream_state.call("set_entity_runtime_states", mismatched_live_states)), "test fixture accepts a structurally valid but owner-mismatched archived record")
 		var before_mismatch_save: Dictionary = live_stream_state.call("to_save_dict")
@@ -335,7 +337,7 @@ func _run() -> void:
 	for index in range(mismatched_payload_states.size()):
 		var record: Dictionary = mismatched_payload_states[index]
 		if str(record.get("spawn_cell_key", "")) == spawn_cell_key and str(record.get("entity_id", "")) == entity_id:
-			record["cell_key"] = spawn_cell_key
+			record["cell_key"] = mismatched_owner_key
 			mismatched_payload_states[index] = record
 	mismatched_payload["entity_runtime_states"] = mismatched_payload_states
 	var mismatch_restore: Node3D = RuntimeScript.new() as Node3D
