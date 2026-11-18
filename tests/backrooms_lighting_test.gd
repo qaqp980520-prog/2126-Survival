@@ -11,7 +11,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_assert_profiles_and_determinism()
 	_assert_darkness_sampling()
-	_assert_environment_transaction()
+	await _assert_environment_transaction()
 	if failures.is_empty():
 		print("Backrooms lighting profile tests passed.")
 		quit(0)
@@ -43,11 +43,11 @@ func _assert_profiles_and_determinism() -> void:
 
 func _assert_darkness_sampling() -> void:
 	var cell_root := Node3D.new()
-	cell_root.set_meta("backrooms_light_descriptor", ProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0))
+	cell_root.set_meta("backrooms_light_descriptor", ProfileScript.get_cell_light_descriptor("Level 1", Vector2i(1, 0), 0))
 	var descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor")
 	_expect(not bool(descriptor.get("enabled", true)), "chosen Level 1 cell is an unlit dark pocket")
 	_expect(ProfileScript.is_position_dark(cell_root, Vector3.ZERO, false), "unlit Level 1 cell is sampled as dark")
-	cell_root.set_meta("backrooms_light_descriptor", ProfileScript.get_cell_light_descriptor("Level 1", Vector2i(1, 0), 0))
+	cell_root.set_meta("backrooms_light_descriptor", ProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0))
 	descriptor = cell_root.get_meta("backrooms_light_descriptor")
 	_expect(bool(descriptor.get("enabled", false)), "adjacent Level 1 cell receives a deterministic light")
 	var light_position: Vector3 = cell_root.to_global(descriptor.get("local_position", Vector3.ZERO))
