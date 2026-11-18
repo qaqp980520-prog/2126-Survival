@@ -12,6 +12,7 @@ Add versioned, validated persistence for mobile entity state before enabling cro
 - `systems/BackroomsMazeCellRuntime.gd` — transactional capture, staging, restore and one-cell-halo retention.
 - `systems/BackroomsEntityMovementDriver.gd` — patrol waypoint index mirrored to entity metadata.
 - `tests/backrooms_maze_cell_runtime_test.gd` — unload/reload, save/restore and tampered-position regressions.
+- `tests/backrooms_entity_movement_driver_test.gd` — restored patrol metadata overrides stale in-memory waypoint state.
 - `tests/backrooms_maze_stream_state_test.gd` — schema 1/2 migration and transactional clone coverage.
 - `tests/backrooms_runtime_session_integration_test.gd` — JSON serialization/deserialization of the canonical Session envelope.
 - `tests/backrooms_combined_world_save_test.gd` — combined-envelope schema 3 coverage.
