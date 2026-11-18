@@ -64,6 +64,13 @@ func _run() -> void:
 		return
 	var forward_plan: Dictionary = forward_plan_result["plan"]
 	_expect(int(ledger.call("get_pending_transfer_count")) == 1, "prepared transfer is tracked as pending")
+	var tampered_plan: Dictionary = forward_plan.duplicate(true)
+	tampered_plan["to_owner_cell_key"] = unrelated_key
+	_expect(
+		not bool(ledger.call("commit_transfer", tampered_plan).get("ok", false))
+		and int(ledger.call("get_pending_transfer_count")) == 1,
+		"tampered transfer token is rejected without consuming the valid pending plan"
+	)
 	var pending_save: Dictionary = ledger.call("to_save_dict")
 	_expect(pending_save.is_empty(), "save is rejected while an ownership transfer is pending")
 	var committed: Dictionary = ledger.call("commit_transfer", forward_plan)
@@ -76,6 +83,13 @@ func _run() -> void:
 		"commit changes only runtime owner cell and increments its revision"
 	)
 	_expect(not bool(ledger.call("commit_transfer", forward_plan).get("ok", false)), "a committed plan cannot be replayed")
+	var post_transfer_registration: Dictionary = ledger.call("register_deterministic_spawns")
+	_expect(
+		bool(post_transfer_registration.get("ok", false))
+		and int(post_transfer_registration.get("registered_count", -1)) == 0
+		and str(ledger.call("get_record", spawn_key, entity_id).get("owner_cell_key", "")) == target_key,
+		"re-registering deterministic spawns never resets a migrated owner cell"
+	)
 
 	var reverse_route: Dictionary = _make_route(target_cell, spawn_cell, -direction, loaded_keys, 7, 3)
 	var rollback_result: Dictionary = ledger.call("plan_transfer", spawn_key, entity_id, spawn_key, reverse_route)
