@@ -290,7 +290,7 @@ func _add_entity(
 	cell_root.add_child(entity_root)
 	var brain: Node = BrainScript.new()
 	brain.name = "AI"
-	brain.call("configure", entity_id, level_id, Vector2i.ZERO, 20261118)
+	brain.call("configure", entity_id, level_id, spawn_cell, 20261118)
 	entity_root.add_child(brain)
 	return brain
 
