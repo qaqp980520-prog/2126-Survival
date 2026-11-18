@@ -134,7 +134,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(str(entered.get("event", "")) == "entered")
 	assert(director.active_portal.is_empty())
 	assert(bool(manager.get_session().call("is_active")))
-	assert(manager.get_session().call("get_maze_stream_state") == runtime.call("to_save_dict"))
+	assert(_json_values_equal(manager.get_session().call("get_maze_stream_state"), runtime.call("to_save_dict")))
 	assert(not bool(runtime.call("is_active")) and not runtime.visible, "Commit retains the runtime hidden until the world handoff completes.")
 	var position_drift_before: Dictionary = manager.get_session_save_dict()
 	assert(not bool(manager.get_session().call("set_backrooms_position", Vector3(8.0, 0.0, 0.0))), "Session cannot move into another cell without a matching runtime window update.")
@@ -197,7 +197,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	tampered_payload["maze_stream_state"]["world_seed"] = int(tampered_payload["maze_stream_state"]["world_seed"]) + 1
 	var before_tampered_load: Dictionary = restored_session.call("to_save_dict")
 	assert(not bool(restored_session.call("load_save_dict", tampered_payload)), "A nested maze seed mismatch is rejected.")
-	assert(restored_session.call("to_save_dict") == before_tampered_load, "A rejected nested payload must leave the active Session unchanged.")
+	assert(_json_values_equal(restored_session.call("to_save_dict"), before_tampered_load), "A rejected nested payload must leave the active Session unchanged.")
 
 	var restored_manager = ManagerScript.new(restored_session)
 	var restored_runtime = RuntimeScript.new()
