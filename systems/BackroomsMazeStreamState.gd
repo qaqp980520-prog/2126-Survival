@@ -255,11 +255,18 @@ func set_entity_ownership_ledger_state(payload: Dictionary) -> bool:
 	if not configured:
 		return false
 	if not payload.is_empty():
-		var schema_value: Variant = payload.get("schema_version", null)
-		if not (schema_value is int) or int(schema_value) != ENTITY_OWNERSHIP_LEDGER_VERSION:
+		var schema_result: Dictionary = _read_integer(
+			payload.get("schema_version", null),
+			ENTITY_OWNERSHIP_LEDGER_VERSION,
+			ENTITY_OWNERSHIP_LEDGER_VERSION
+		)
+		if not bool(schema_result.get("ok", false)):
 			last_load_error = "entity_ownership_ledger_schema_invalid"
 			return false
-	_entity_ownership_ledger_state = payload.duplicate(true)
+	var normalized_payload: Dictionary = payload.duplicate(true)
+	if not normalized_payload.is_empty():
+		normalized_payload["schema_version"] = ENTITY_OWNERSHIP_LEDGER_VERSION
+	_entity_ownership_ledger_state = normalized_payload
 	last_load_error = ""
 	return true
 
@@ -376,9 +383,17 @@ func load_save_dict(payload: Dictionary) -> bool:
 			return _reject_load("entity_ownership_ledger_schema_invalid")
 		candidate_entity_ownership_ledger_state = ownership_state_value.duplicate(true)
 		if not candidate_entity_ownership_ledger_state.is_empty():
-			var ownership_schema_value: Variant = candidate_entity_ownership_ledger_state.get("schema_version", null)
-			if not (ownership_schema_value is int) or int(ownership_schema_value) != ENTITY_OWNERSHIP_LEDGER_VERSION:
+			var ownership_schema_result: Dictionary = _read_integer(
+				candidate_entity_ownership_ledger_state.get("schema_version", null),
+				ENTITY_OWNERSHIP_LEDGER_VERSION,
+				ENTITY_OWNERSHIP_LEDGER_VERSION
+			)
+			if not bool(ownership_schema_result.get("ok", false)):
 				return _reject_load("entity_ownership_ledger_payload_invalid")
+			# JSON.parse_string represents integer-valued JSON numbers as floats.
+			# Store the nested schema canonically so Runtime's strict setter and the
+			# ownership ledger loader receive the same integer schema representation.
+			candidate_entity_ownership_ledger_state["schema_version"] = ENTITY_OWNERSHIP_LEDGER_VERSION
 	elif payload.has("entity_ownership_ledger_version") or payload.has("entity_ownership_ledger"):
 		return _reject_load("entity_ownership_ledger_schema_downgrade")
 
