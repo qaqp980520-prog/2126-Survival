@@ -23,6 +23,7 @@ This is a foundational ownership contract, not yet live Node migration. It does 
 - Commit checks the original owner and owner revision to prevent stale or replayed transactions.
 - Pending transactions are not serialized; save returns an empty payload until they are committed or rolled back.
 - Records are capped at 4,096 and sorted by immutable spawn identity.
+- Pruning is based on mutable owner-cell retention, not immutable spawn-cell location. The accepted retention set is capped at 361 cells (radius-8 loaded window plus one-cell halo); pending transfers block pruning. An empty committed retention set intentionally evicts all records.
 - Restore validates every record into a candidate map before replacing the existing ledger.
 
 ## Dependencies / import
@@ -43,6 +44,7 @@ Pending exact-head GitHub Actions Godot 4.3 validation on PR #398. Local Godot e
 
 - This ledger is not yet wired into `BackroomsMazeCellRuntime` or `BackroomsEntityMovementDriver`.
 - It records logical owner-cell transitions only; it does not move live Nodes.
+- The retention-prune API only updates ledger records. The future runtime integration must free or archive the corresponding live Node when an owner record is evicted.
 - It does not yet merge owner-cell records into the existing maze stream save schema.
 - Cross-cell roaming remains disabled until the runtime reparent transaction, unload/reload reconstruction, movement scheduling, and combined-world save integration are implemented together.
 
