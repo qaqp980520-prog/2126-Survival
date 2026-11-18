@@ -326,12 +326,17 @@ func load_save_dict(payload: Dictionary) -> bool:
 	var candidate_cell_size: float = float(cell_size_result["value"])
 	var candidate_entity_runtime_states: Array[Dictionary] = []
 	if schema_version >= 3:
-		var state_version_result: Dictionary = _read_integer(payload.get("entity_runtime_state_version", null), ENTITY_RUNTIME_STATE_VERSION, ENTITY_RUNTIME_STATE_VERSION)
+		var state_version_result: Dictionary = _read_integer(payload.get("entity_runtime_state_version", null), 1, ENTITY_RUNTIME_STATE_VERSION)
 		var state_records_value: Variant = payload.get("entity_runtime_states", null)
 		if not bool(state_version_result.get("ok", false)) or not (state_records_value is Array):
 			return _reject_load("entity_runtime_state_schema_invalid")
 		var state_validation: Dictionary = EntityRuntimeStateScript.validate_records(
-			state_records_value, candidate_level, candidate_seed, candidate_cell_size, candidate_spawn_algorithm_version
+			state_records_value,
+			candidate_level,
+			candidate_seed,
+			candidate_cell_size,
+			candidate_spawn_algorithm_version,
+			int(state_version_result.get("value", 0))
 		)
 		if not bool(state_validation.get("ok", false)):
 			return _reject_load("entity_runtime_states_invalid")

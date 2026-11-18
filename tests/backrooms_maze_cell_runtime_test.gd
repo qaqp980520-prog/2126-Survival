@@ -3,6 +3,8 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
+const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 var failures: Array[String] = []
 
@@ -57,7 +59,7 @@ func _run() -> void:
 
 	var saved: Dictionary = runtime.call("to_save_dict")
 	_expect(int(saved.get("schema_version", -1)) == 3, "runtime writes the entity-runtime persistence schema")
-	_expect(int(saved.get("entity_runtime_state_version", -1)) == 1, "runtime save declares the entity-state codec version")
+	_expect(int(saved.get("entity_runtime_state_version", -1)) == 2, "runtime save declares the owner/spawn identity codec version")
 	_expect(saved.get("entity_runtime_states", null) is Array, "runtime save includes a validated entity-state array")
 	_expect(int(saved.get("layout_algorithm_version", -1)) == 1, "runtime save is bound to the explicit maze algorithm version")
 	_expect(int(saved.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "runtime save persists the entity-spawn algorithm version")
@@ -93,6 +95,30 @@ func _run() -> void:
 	_expect(bool(legacy_v2_restored.call("load_save_dict", legacy_v2_payload)), "legacy schema-two saves migrate without losing deterministic spawn compatibility")
 	_expect(int(legacy_v2_restored.call("to_save_dict").get("schema_version", -1)) == 3, "legacy schema-two restore writes the new runtime-state schema")
 	legacy_v2_restored.queue_free()
+	var legacy_state_v1_payload: Dictionary = saved.duplicate(true)
+	legacy_state_v1_payload["entity_runtime_state_version"] = 1
+	var legacy_state_v1_records: Array = []
+	for legacy_record_value in legacy_state_v1_payload.get("entity_runtime_states", []):
+		if not (legacy_record_value is Dictionary):
+			continue
+		var legacy_record: Dictionary = legacy_record_value.duplicate(true)
+		legacy_record.erase("spawn_cell_key")
+		legacy_state_v1_records.append(legacy_record)
+	legacy_state_v1_payload["entity_runtime_states"] = legacy_state_v1_records
+	var legacy_state_v1_restored: Variant = RuntimeScript.new()
+	legacy_state_v1_restored.force_metadata_only = true
+	root.add_child(legacy_state_v1_restored)
+	_expect(bool(legacy_state_v1_restored.call("load_save_dict", legacy_state_v1_payload)), "codec-v1 records migrate with spawn identity equal to their former owner cell")
+	var codec_v2_migrated_save: Dictionary = legacy_state_v1_restored.call("to_save_dict")
+	_expect(int(codec_v2_migrated_save.get("entity_runtime_state_version", -1)) == 2, "legacy codec-v1 restore writes codec v2")
+	var migrated_records_are_explicit: bool = true
+	for migrated_record_value in codec_v2_migrated_save.get("entity_runtime_states", []):
+		if migrated_record_value is Dictionary:
+			var migrated_record: Dictionary = migrated_record_value
+			if str(migrated_record.get("spawn_cell_key", "")) != str(migrated_record.get("cell_key", "")):
+				migrated_records_are_explicit = false
+	_expect(migrated_records_are_explicit, "codec-v1 migration explicitly materializes immutable spawn-cell identity")
+	legacy_state_v1_restored.queue_free()
 
 	var before_bad_restore: Array = restored.call("get_loaded_cell_keys")
 	var invalid_save: Dictionary = saved.duplicate(true)
@@ -191,7 +217,111 @@ func _assert_entity_runtime_state_round_trip() -> void:
 			if str(record.get("cell_key", "")) == selected_cell_key and str(record.get("entity_id", "")) == selected_entity_id:
 				target_record = record
 				break
-	_expect(not target_record.is_empty(), "runtime save contains the moved hunter's stable cell/entity identity")
+	_expect(not target_record.is_empty(), "runtime save contains the moved hunter's stable owner-cell/entity identity")
+	_expect(str(target_record.get("spawn_cell_key", "")) == selected_cell_key, "codec v2 preserves immutable spawn-cell identity separately from owner cell")
+	var owner_cell := selected_cell + Vector2i(1, 0)
+	var owner_cell_found: bool = false
+	for _attempt in range(128):
+		var owner_edges := {
+			"north": LayoutScript.edge_is_open(owner_cell, Vector2i(0, -1), 20261118),
+			"east": LayoutScript.edge_is_open(owner_cell, Vector2i(1, 0), 20261118),
+			"south": LayoutScript.edge_is_open(owner_cell, Vector2i(0, 1), 20261118),
+			"west": LayoutScript.edge_is_open(owner_cell, Vector2i(-1, 0), 20261118)
+		}
+		var owner_spawns: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors("Level 2", owner_cell, 8.0, owner_edges, EntityDirectorScript.SPAWN_ALGORITHM_VERSION)
+		var same_identity_exists: bool = false
+		for owner_spawn in owner_spawns:
+			if str(owner_spawn.get("entity_id", "")) == selected_entity_id:
+				same_identity_exists = true
+				break
+		if not same_identity_exists:
+			owner_cell_found = true
+			break
+		owner_cell += Vector2i(1, 0)
+	_expect(owner_cell_found, "fixture finds a distinct owner cell without a duplicate deterministic spawn identity")
+	var migrated_record: Dictionary = target_record.duplicate(true)
+	migrated_record["cell_key"] = "%d,%d" % [owner_cell.x, owner_cell.y]
+	migrated_record["spawn_cell_key"] = selected_cell_key
+	var migrated_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+		[migrated_record], "Level 2", 20261118, 8.0,
+		EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+	)
+	_expect(bool(migrated_validation.get("ok", false)), "codec v2 accepts an entity whose mutable owner cell differs from its immutable deterministic spawn cell")
+	var second_spawn_cell := selected_cell
+	var second_spawn_found: bool = false
+	for z in range(-40, 41):
+		for x in range(-40, 41):
+			var candidate_spawn_cell := Vector2i(x, z)
+			if candidate_spawn_cell == selected_cell:
+				continue
+			if EntityDirectorScript.get_cell_spawns("Level 2", candidate_spawn_cell).has(selected_entity_id):
+				second_spawn_cell = candidate_spawn_cell
+				second_spawn_found = true
+				break
+		if second_spawn_found:
+			break
+	_expect(second_spawn_found, "fixture finds a second deterministic spawn identity of the same entity type")
+	if second_spawn_found:
+		var second_owner_record: Dictionary = migrated_record.duplicate(true)
+		second_owner_record["spawn_cell_key"] = "%d,%d" % [second_spawn_cell.x, second_spawn_cell.y]
+		var second_brain_state: Dictionary = second_owner_record.get("brain_state", {}).duplicate(true)
+		second_brain_state["spawn_cell"] = [second_spawn_cell.x, second_spawn_cell.y]
+		second_owner_record["brain_state"] = second_brain_state
+		var shared_owner_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+			[migrated_record, second_owner_record], "Level 2", 20261118, 8.0,
+			EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+		)
+		_expect(bool(shared_owner_validation.get("ok", false)), "two same-type entities from distinct spawn cells may share one mutable owner cell")
+		_expect(
+			EntityRuntimeStateScript.get_state_key(migrated_record) != EntityRuntimeStateScript.get_state_key(second_owner_record),
+			"runtime-state keys remain distinct by immutable spawn identity when owner cells match"
+		)
+		var synthetic_owner_root := Node3D.new()
+		synthetic_owner_root.set_meta("backrooms_cell_key", str(migrated_record.get("cell_key", "")))
+		root.add_child(synthetic_owner_root)
+		var first_migrated_root := CharacterBody3D.new()
+		first_migrated_root.set_meta("backrooms_entity_id", selected_entity_id)
+		first_migrated_root.set_meta("spawn_cell", selected_cell)
+		var first_migrated_brain: Node = BrainScript.new()
+		first_migrated_brain.name = "AI"
+		_expect(bool(first_migrated_brain.call("configure", selected_entity_id, "Level 2", selected_cell, 20261118)), "first synthetic migrated brain configures with immutable spawn identity")
+		first_migrated_root.add_child(first_migrated_brain)
+		synthetic_owner_root.add_child(first_migrated_root)
+		var second_migrated_root := CharacterBody3D.new()
+		second_migrated_root.set_meta("backrooms_entity_id", selected_entity_id)
+		second_migrated_root.set_meta("spawn_cell", second_spawn_cell)
+		var second_migrated_brain: Node = BrainScript.new()
+		second_migrated_brain.name = "AI"
+		_expect(bool(second_migrated_brain.call("configure", selected_entity_id, "Level 2", second_spawn_cell, 20261118)), "second synthetic migrated brain configures with its distinct immutable spawn identity")
+		second_migrated_root.add_child(second_migrated_brain)
+		synthetic_owner_root.add_child(second_migrated_root)
+		var restore_probe: Variant = RuntimeScript.new()
+		restore_probe.force_metadata_only = true
+		root.add_child(restore_probe)
+		var shared_owner_records: Array = [migrated_record, second_owner_record]
+		var synthetic_restore_ok: bool = bool(restore_probe.call(
+			"_restore_entity_runtime_states",
+			{str(migrated_record.get("cell_key", "")): synthetic_owner_root},
+			shared_owner_records
+		))
+		_expect(synthetic_restore_ok, "runtime restores two same-type migrated entities under one owner cell by immutable spawn identity")
+		_expect(first_migrated_root.position.is_equal_approx(saved_local_position), "first migrated entity restores its owner-local position")
+		_expect(second_migrated_root.position.is_equal_approx(saved_local_position), "second migrated entity restores its owner-local position")
+		restore_probe.queue_free()
+		synthetic_owner_root.queue_free()
+		await process_frame
+		var duplicate_identity_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+			[migrated_record, migrated_record], "Level 2", 20261118, 8.0,
+			EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+		)
+		_expect(not bool(duplicate_identity_validation.get("ok", false)), "codec v2 rejects duplicate immutable spawn identities even when owner data matches")
+	var tampered_identity: Dictionary = migrated_record.duplicate(true)
+	tampered_identity["spawn_cell_key"] = "%d,%d" % [owner_cell.x, owner_cell.y]
+	var tampered_validation: Dictionary = EntityRuntimeStateScript.validate_records(
+		[tampered_identity], "Level 2", 20261118, 8.0,
+		EntityDirectorScript.SPAWN_ALGORITHM_VERSION, 2
+	)
+	_expect(not bool(tampered_validation.get("ok", false)), "codec v2 rejects a tampered spawn-cell identity even when the owner cell is valid")
 	_expect(target_record.get("position", []) == [saved_local_position.x, saved_local_position.y, saved_local_position.z], "runtime save captures the moved local position")
 	_expect(int(target_record.get("patrol_index", -1)) == 3, "runtime save captures the patrol waypoint index")
 	_expect(str(target_record.get("brain_state", {}).get("state", "")) == str(brain.call("get_behavior_snapshot").get("state", "")), "runtime save captures the current AI decision state")
