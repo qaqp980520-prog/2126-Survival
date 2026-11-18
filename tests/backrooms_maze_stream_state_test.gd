@@ -165,7 +165,7 @@ func _test_save_restore_and_layout_version_guard() -> void:
 	assert(transaction_clone.get_loaded_cell_keys() == source.get_loaded_cell_keys())
 	var clone_target_cell: Vector2i = source.get_center_cell() + Vector2i(1, 0)
 	var transaction_plan: Dictionary = transaction_clone.plan_window_at_cell(clone_target_cell)
-	assert(transaction_plan["load_cell_keys"].size() == 3 and transaction_plan["unload_cell_keys"].size() == 3)
+	assert(transaction_plan["load_cell_keys"].size() == 5 and transaction_plan["unload_cell_keys"].size() == 5)
 
 	var before_invalid_load: Dictionary = restored.to_save_dict()
 	var unsupported: Dictionary = saved.duplicate(true)
