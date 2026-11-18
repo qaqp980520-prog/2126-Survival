@@ -424,6 +424,43 @@ func _run() -> void:
 	)
 	_expect(restored.call("to_save_dict") == final_save, "restored ownership runtime reproduces the exact saved maze and ledger snapshot")
 
+	# Schema-three saves predate the ownership ledger. A retained owner==spawn
+	# archive must be deterministically backfilled even when its cell is not loaded.
+	var legacy_payload: Dictionary = final_save.duplicate(true)
+	legacy_payload["schema_version"] = 3
+	legacy_payload.erase("entity_ownership_ledger_version")
+	legacy_payload.erase("entity_ownership_ledger")
+	var legacy_center: Vector2i = source_cell + direction * 4
+	legacy_payload["center_cell"] = [legacy_center.x, legacy_center.y]
+	var legacy_state: Dictionary = {}
+	for state_value in final_save.get("entity_runtime_states", []):
+		if state_value is Dictionary:
+			var state_record: Dictionary = state_value
+			if str(state_record.get("spawn_cell_key", "")) == spawn_cell_key and str(state_record.get("entity_id", "")) == entity_id:
+				legacy_state = state_record.duplicate(true)
+				legacy_state["cell_key"] = spawn_cell_key
+				break
+	legacy_payload["entity_runtime_states"] = [legacy_state] if not legacy_state.is_empty() else []
+	_expect(not legacy_state.is_empty(), "legacy migration fixture retains the original deterministic spawn state")
+	var legacy_restored: Node3D = RuntimeScript.new() as Node3D
+	legacy_restored.set("force_metadata_only", true)
+	root.add_child(legacy_restored)
+	var legacy_loaded: bool = bool(legacy_restored.call("load_save_dict", legacy_payload))
+	_expect(legacy_loaded, "schema-three owner==spawn archive restores through deterministic ledger backfill")
+	if legacy_loaded:
+		_expect(legacy_restored.call("get_cell_root", spawn_cell_key) == null, "legacy backfilled owner remains archived while its cell is outside the loaded window")
+		var legacy_owner: Dictionary = legacy_restored.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		_expect(str(legacy_owner.get("owner_cell_key", "")) == spawn_cell_key, "legacy backfill assigns only the immutable spawn cell as owner")
+		_expect(bool(legacy_restored.call("activate_destination")), "legacy migrated runtime activates after backfill validation")
+		var legacy_return: Dictionary = legacy_restored.call(
+			"sync_to_world_position",
+			Vector3(float(source_cell.x) * 8.0, 0.0, float(source_cell.y) * 8.0)
+		)
+		_expect(bool(legacy_return.get("ok", false)), "legacy owner cell streams back in after deterministic backfill")
+		var legacy_identity: Dictionary = _find_entity(legacy_restored, spawn_cell_key, entity_id)
+		_expect(int(legacy_identity.get("count", 0)) == 1, "legacy owner==spawn state reconstructs exactly once")
+	legacy_restored.queue_free()
+
 	_finish(runtime, restored)
 
 
