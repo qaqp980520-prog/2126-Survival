@@ -125,3 +125,15 @@ Correction on this PR branch:
 - `tests/backrooms_runtime_session_integration_test.gd` prints failure-only nested validation diagnostics for Session and MazeStreamState errors.
 
 The latest exact-head Full Gate and focused workflows must pass before PR #400 can leave Draft. No pass is claimed until then.
+
+
+## Exact-head correction — schema-one migration fixture
+
+After the JSON ownership-ledger normalization passed its direct ledger test and the Session JSON round-trip, the next Full Gate reached the legacy nested-stream migration assertions and rejected the schema-one fixture. The fixture changed `schema_version` to 1 and removed the schema-two/three fields, but retained `entity_ownership_ledger_version` and `entity_ownership_ledger` from schema four. The production loader correctly rejects newer fields on a legacy schema to prevent downgrade ambiguity.
+
+Correction:
+- The legacy integration fixture now removes both schema-four ownership fields before presenting the payload as schema one.
+- It explicitly asserts those fields are absent before invoking the production world-load manager.
+- The production downgrade rejection behavior is unchanged.
+
+The latest exact-head Full Gate must pass the Session JSON round-trip and the corrected legacy migration fixture before PR #400 can leave Draft.
