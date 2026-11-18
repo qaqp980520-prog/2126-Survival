@@ -50,8 +50,8 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 20261118, Vector3.ZERO)
-	var brain: Node = entity["brain"] as Node
-	var entity_root: Node3D = entity["root"] as Node3D
+	var brain: Node = entity["brain"] as Node as Node
+	var entity_root: Node3D = entity["root"] as Node3D as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 3.0,
 		"has_line_of_sight": true,
@@ -78,8 +78,8 @@ func _assert_smiler_approach_uses_unseen_player_target() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "smiler", "Level 1", Vector2i.ZERO, 19, Vector3.ZERO)
-	var brain: Node = entity["brain"] as Node
-	var entity_root: Node3D = entity["root"] as Node3D
+	var brain: Node = entity["brain"] as Node as Node
+	var entity_root: Node3D = entity["root"] as Node3D as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 4.0,
 		"has_line_of_sight": false,
@@ -107,8 +107,8 @@ func _assert_cross_cell_target_fails_closed() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 7, Vector3.ZERO)
-	var brain: Node = entity["brain"]
-	var entity_root: Node3D = entity["root"]
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
 	brain.call("evaluate_perception", {
 		"distance_to_player": 8.0,
 		"has_line_of_sight": true,
@@ -133,8 +133,8 @@ func _assert_avoidance_moves_away_from_player() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "faceling", "Level 3", Vector2i.ZERO, 11, Vector3(0.5, 0.0, 0.0))
-	var brain: Node = entity["brain"]
-	var entity_root: Node3D = entity["root"]
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 2.0,
 		"has_line_of_sight": false,
@@ -161,8 +161,8 @@ func _assert_duller_retreat_moves_away_from_player() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "duller", "Level 4", Vector2i.ZERO, 23, Vector3(0.5, 0.0, 0.0))
-	var brain: Node = entity["brain"] as Node
-	var entity_root: Node3D = entity["root"] as Node3D
+	var brain: Node = entity["brain"] as Node as Node
+	var entity_root: Node3D = entity["root"] as Node3D as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 5.0,
 		"has_line_of_sight": false,
@@ -188,8 +188,8 @@ func _assert_patrol_moves_within_cell() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i(3, -2), 2026, Vector3.ZERO)
-	var brain: Node = entity["brain"]
-	var entity_root: Node3D = entity["root"]
+	var brain: Node = entity["brain"] as Node
+	var entity_root: Node3D = entity["root"] as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 30.0,
 		"has_line_of_sight": false,
@@ -215,8 +215,8 @@ func _assert_deathmoth_aerial_patrol_changes_height() -> void:
 	world_root.add_child(runtime)
 	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	var entity: Dictionary = _add_entity(cell_root, "deathmoth", "Level 5", Vector2i.ZERO, 29, Vector3(0.0, 1.55, 0.0))
-	var brain: Node = entity["brain"] as Node
-	var entity_root: Node3D = entity["root"] as Node3D
+	var brain: Node = entity["brain"] as Node as Node
+	var entity_root: Node3D = entity["root"] as Node3D as Node3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
 		"distance_to_player": 30.0,
 		"has_line_of_sight": false,
@@ -243,7 +243,7 @@ func _assert_round_robin_movement_budget() -> void:
 		var key: String = "%d,0" % index
 		var cell_root: Node3D = _add_cell(runtime, key, cell)
 		var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", cell, 100 + index, Vector3.ZERO)
-		var brain: Node = entity["brain"]
+		var brain: Node = entity["brain"] as Node
 		brain.call("evaluate_perception", {
 			"distance_to_player": 30.0,
 			"has_line_of_sight": false,
