@@ -80,6 +80,9 @@ jobs:
           test -f tests/backrooms_maze_layout_test.gd
           test -f tests/backrooms_cell_route_planner_test.gd
           test -f docs/BACKROOMS_CELL_ROUTE_PLANNER_M0_1_68.md
+          test -f systems/BackroomsEntityOwnershipLedger.gd
+          test -f tests/backrooms_entity_ownership_ledger_test.gd
+          test -f docs/BACKROOMS_ENTITY_OWNERSHIP_LEDGER_M0_1_69.md
           test -f systems/BackroomsMazeStreamState.gd
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
@@ -376,6 +379,18 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms loaded-cell route planner tests passed."
+
+      - name: Run Backrooms transactional entity ownership ledger tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 45s godot --headless --path . --script res://tests/backrooms_entity_ownership_ledger_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms entity ownership ledger tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms entity ownership ledger tests passed."
 
       - name: Run Backrooms transactional maze stream state tests
         shell: bash
