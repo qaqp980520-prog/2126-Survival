@@ -14,6 +14,7 @@ This is deliberately a cell-local first movement stage. Cross-cell roaming is no
 - `systems/BackroomsMazeCellRuntime.gd` — exposes each cell's size as runtime metadata for safe movement bounds.
 - `world/SurfaceWorld.gd` — owns, ticks and resets the movement driver alongside perception on entry, return and inactive-runtime paths.
 - `tests/backrooms_entity_movement_driver_test.gd` — pursuit, cross-cell rejection, avoidance, patrol bounds, round-robin budget and invalid/inactive runtime tests.
+- `tests/production_surface_world_test.gd` — verifies SurfaceWorld owns the movement driver and ticks it after perception while Backrooms is active.
 - `.github/workflows/godot-validation.yml` — file-presence and bounded Godot 4.3 movement test step.
 - `docs/BACKROOMS_ENTITY_MOVEMENT_M0_1_65.md` — this version record.
 
@@ -69,6 +70,7 @@ The test verifies:
 - Duller retreats from a nearby player without line of sight.
 - 13 entities are serviced as 12 + 1 across two movement ticks.
 - Non-finite delta and inactive runtime are rejected; a 2 s frame hitch is capped to five 100 ms scheduler ticks.
+- Production SurfaceWorld handoff integration verifies that the world-owned driver advances its scheduler after perception.
 
 The complete Godot 4.3 Full Gate is required before this PR can be marked Ready for Review. Local Godot availability is checked separately; no engine pass is claimed from static inspection.
 
