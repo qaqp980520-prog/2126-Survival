@@ -10,6 +10,7 @@ const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const CellRoutePlannerScript = preload("res://systems/BackroomsCellRoutePlanner.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -200,6 +201,30 @@ func get_loaded_cell_count() -> int:
 
 func get_loaded_cell_keys() -> Array:
 	return stream_state.call("get_loaded_cell_keys")
+
+## Plan a deterministic route through the active loaded-cell graph.
+## This is read-only and deliberately rejects cells outside the current stream window.
+func plan_route_between_loaded_cells(start_cell: Vector2i, goal_cell: Vector2i) -> Dictionary:
+	if not prepared:
+		return {"ok": false, "reason": "runtime_not_prepared"}
+	if not active:
+		return {"ok": false, "reason": "runtime_not_active"}
+	if stream_state == null or not stream_state.has_method("get_loaded_cell_descriptors"):
+		return {"ok": false, "reason": "loaded_cell_descriptor_contract_unavailable"}
+	var descriptors_value: Variant = stream_state.call("get_loaded_cell_descriptors")
+	if not (descriptors_value is Array):
+		return {"ok": false, "reason": "loaded_cell_descriptors_invalid"}
+	var result: Dictionary = CellRoutePlannerScript.plan_route(
+		start_cell,
+		goal_cell,
+		descriptors_value,
+		str(stream_state.get("level_id")),
+		int(stream_state.get("world_seed"))
+	)
+	if bool(result.get("ok", false)):
+		result["stream_center_cell"] = stream_state.get("center_cell")
+		result["loaded_cell_count"] = descriptors_value.size()
+	return result
 
 func get_cell_root(cell_key: String) -> Node3D:
 	var value: Variant = cell_roots.get(cell_key, null)
