@@ -4,6 +4,7 @@ class_name BackroomsTransitionManager
 ## Coordinates the validated two-phase portal handoff and failure-safe return.
 ## Scene construction/activation remains owned by the production world controller.
 const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
+const MazeStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 
 enum TransitionState {
 	IDLE,
