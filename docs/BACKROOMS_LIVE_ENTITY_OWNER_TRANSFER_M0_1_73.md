@@ -15,6 +15,7 @@ This is a runtime ownership primitive. It does not yet enable autonomous cross-c
 - systems/BackroomsPerceptionDriver.gd — submits perception with the immutable spawn key to disambiguate same-type entities sharing one owner cell.
 - systems/BackroomsMazeStreamState.gd — persists the ownership-ledger schema in maze save schema v4.
 - tests/backrooms_entity_owner_runtime_integration_test.gd — exercises stale-route rejection, edge-only handoff, physics-blocked rollback, live Node reparent, owner metadata-array transfer, owner-cell unload/reconstruction, and save/load round-trip.
+- tests/backrooms_perception_driver_test.gd — keeps the fake runtime contract aligned with immutable spawn-cell identity and verifies incomplete staging nodes are ignored safely.
 - tests/backrooms_maze_cell_runtime_test.gd — covers schema-v4 migration and shared-owner runtime restoration.
 - tests/backrooms_maze_stream_state_test.gd — covers legacy schema 1/2/3 migration to the current schema.
 - tests/backrooms_combined_world_save_test.gd — verifies the ownership ledger is included in the combined world envelope.
@@ -88,5 +89,19 @@ Correction on the same PR branch:
 - Add `ENTITY_TRANSFER_ENTRY_INSET = 0.02`.
 - Compute a bounded inward inset (at most 10% of the safe extent) and land the entity inside, rather than exactly on, the target-cell serialization boundary.
 - Extend the real owner-runtime integration test to assert the inset and require immediate post-transfer save to succeed.
+
+The exact-head Full Gate and all focused workflows for the new HEAD must complete before PR #400 can leave Draft. No pass is claimed until then.
+
+
+## Exact-head correction — perception fixture contract
+
+The first validation of the owner-local boundary fix passed the new owner-transfer integration test (Full Gate step #29), including immediate post-transfer save and the subsequent ownership reconstruction assertions. It then exposed an existing perception-driver test fixture that had not been updated for immutable spawn identity: its fake entities omitted the `spawn_cell` metadata and its fake Runtime method still used the pre-codec four-argument submission signature.
+
+Correction on this PR branch:
+
+- The production perception collector now checks `has_meta("spawn_cell")` before reading the metadata, so incomplete staging nodes are skipped without emitting Godot missing-metadata errors.
+- The perception test fixture now assigns explicit immutable spawn cells, passes the fifth `spawn_cell_key` argument, and matches the requested immutable identity.
+- The 13-entity round-robin fixture uses unique spawn-cell identities.
+- A regression asserts that an incomplete staging entity without immutable spawn metadata is ignored while the valid entity is still sampled.
 
 The exact-head Full Gate and all focused workflows for the new HEAD must complete before PR #400 can leave Draft. No pass is claimed until then.
