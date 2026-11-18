@@ -156,6 +156,41 @@ func _run() -> void:
 		and int(restored_record.get("owner_revision", -1)) == 3,
 		"save/load preserves immutable spawn identity and mutable owner revision"
 	)
+	var json_payload: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect(json_payload is Dictionary, "ownership save serializes to a JSON dictionary")
+	var json_restored: RefCounted = LedgerScript.new()
+	_expect(
+		bool(json_restored.call("configure", LEVEL_ID, WORLD_SEED, CELL_SIZE, SPAWN_VERSION, 9, 3, loaded_keys)),
+		"JSON restore ledger configures"
+	)
+	_expect(
+		bool(json_restored.call("load_save_dict", json_payload, retained_keys, 9, 3)),
+		"JSON-round-tripped integer-valued fields restore through the ownership ledger codec"
+	)
+	var json_record: Dictionary = json_restored.call("get_record", spawn_key, entity_id)
+	_expect(
+		str(json_record.get("owner_cell_key", "")) == target_key
+		and int(json_record.get("owner_revision", -1)) == 3,
+		"JSON restore preserves the migrated owner and revision"
+	)
+	var fractional_payload: Dictionary = json_payload.duplicate(true)
+	var fractional_records: Array = fractional_payload.get("records", []).duplicate(true)
+	for index in range(fractional_records.size()):
+		var fractional_record: Dictionary = fractional_records[index]
+		if str(fractional_record.get("spawn_cell_key", "")) == spawn_key and str(fractional_record.get("entity_id", "")) == entity_id:
+			fractional_record["owner_revision"] = 3.5
+			fractional_records[index] = fractional_record
+			break
+	fractional_payload["records"] = fractional_records
+	var before_fractional_restore: Dictionary = json_restored.call("to_save_dict", retained_keys, 9, 3)
+	_expect(
+		not bool(json_restored.call("load_save_dict", fractional_payload, retained_keys, 9, 3)),
+		"fractional JSON ownership revision is rejected"
+	)
+	_expect(
+		json_restored.call("to_save_dict", retained_keys, 9, 3) == before_fractional_restore,
+		"fractional JSON rejection leaves the restored ledger unchanged"
+	)
 	_expect(
 		restored.call("to_save_dict", [spawn_key], 9, 3).is_empty(),
 		"retention snapshot cannot omit any currently loaded cell"
