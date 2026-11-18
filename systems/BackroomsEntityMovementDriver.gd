@@ -265,6 +265,7 @@ func _get_patrol_target(
 	state_name: String
 ) -> Vector3:
 	var index: int = int(_patrol_index_by_entity.get(entity_key, _initial_patrol_index(entity_root)))
+	_patrol_index_by_entity[entity_key] = index
 	var y_values: Array[float] = [current_local.y, current_local.y, current_local.y, current_local.y]
 	if state_name == "fly_patrol":
 		y_values = [1.9, 2.25, 2.05, 1.8]
