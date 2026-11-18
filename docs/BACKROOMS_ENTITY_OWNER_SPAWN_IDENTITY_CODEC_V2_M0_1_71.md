@@ -6,9 +6,10 @@ Prepare the existing mobile-entity persistence contract for ownership migration 
 
 ## Files
 
-- `systems/BackroomsEntityRuntimeState.gd` — codec v2 adds immutable `spawn_cell_key` while retaining `cell_key` as the mutable owner-cell key.
+- `systems/BackroomsEntityRuntimeState.gd` — codec v2 adds immutable `spawn_cell_key` while retaining `cell_key` as the mutable owner-cell key; state keys use immutable spawn identity.
 - `systems/BackroomsMazeStreamState.gd` — accepts codec v1 and v2 payloads; writes the current codec v2.
-- `tests/backrooms_maze_cell_runtime_test.gd` — covers v1 migration, v2 owner/spawn separation, and tampered spawn identity rejection.
+- `systems/BackroomsMazeCellRuntime.gd` — staged restore lookup derives the key from each live node's immutable `spawn_cell` metadata, allowing same-type entities with different spawn origins to share one owner cell.
+- `tests/backrooms_maze_cell_runtime_test.gd` — covers v1 migration, owner/spawn separation, shared-owner same-type entities, distinct immutable keys, two-node restore, and tampered/duplicate spawn identity rejection.
 - `.github/workflows/godot-validation.yml` — requires this contract document in the root validation inputs.
 
 ## Record contract
