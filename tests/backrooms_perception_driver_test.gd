@@ -2,6 +2,7 @@ extends SceneTree
 
 const DriverScript = preload("res://systems/BackroomsPerceptionDriver.gd")
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
+const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 
 class FakeRuntime:
 	extends Node
@@ -50,6 +51,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _assert_real_line_of_sight_and_noise()
+	await _assert_darkness_drives_smiler()
 	_assert_round_robin_budget()
 	_assert_rejection_and_inactive_reset()
 	if failures.is_empty():
@@ -120,6 +122,66 @@ func _assert_real_line_of_sight_and_noise() -> void:
 	driver.call("reset")
 	runtime.cell_roots.clear()
 	runtime.last_perceptions.clear()
+	driver = null
+	brain = null
+	world_root.free()
+	await process_frame
+
+func _assert_darkness_drives_smiler() -> void:
+	var world_root := Node3D.new()
+	world_root.name = "PerceptionLightingTestWorld"
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var player := CharacterBody3D.new()
+	world_root.add_child(player)
+	var camera := Camera3D.new()
+	camera.position = Vector3(0.0, 1.48, 0.0)
+	camera.rotation.y = PI
+	player.add_child(camera)
+	var brain: Node = _add_entity(runtime, "cell_0_0", "smiler", "Level 1", Vector3(0.0, 0.6, -6.0))
+	var cell_root: Node3D = runtime.get_cell_root("cell_0_0")
+	cell_root.set_meta("backrooms_light_descriptor", LightingProfileScript.get_cell_light_descriptor("Level 1", Vector2i(1, 0), 0))
+	await physics_frame
+	await physics_frame
+	var driver = DriverScript.new()
+	var dark_result: Dictionary = driver.call(
+		"tick", runtime, player, camera, world_root.get_world_3d(), 0.2, false, 0.0
+	)
+	var dark_perception: Dictionary = runtime.last_perceptions.get("cell_0_0|smiler", {})
+	_expect(int(dark_result.get("accepted_count", 0)) == 1, "Smiler receives a perception sample in a dark Level 1 cell")
+	_expect(bool(dark_perception.get("is_dark", false)), "perception driver forwards sampled darkness from the owning maze cell")
+	_expect(not bool(dark_perception.get("player_looking_at_entity", true)), "camera facing away keeps the Smiler outside the player's gaze")
+	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "approach", "Smiler approaches an unseen player in a dark cell")
+	driver.call("reset")
+	var lit_descriptor: Dictionary = LightingProfileScript.get_cell_light_descriptor("Level 1", Vector2i.ZERO, 0)
+	cell_root.set_meta("backrooms_light_descriptor", lit_descriptor)
+	_expect(bool(lit_descriptor.get("enabled", false)), "the selected Level 1 cell has an enabled deterministic ceiling light")
+	var light_local_position: Vector3 = lit_descriptor.get("local_position", Vector3.ZERO)
+	var light_range: float = float(lit_descriptor.get("range", 0.0))
+	var outside_coverage_point: Vector3 = cell_root.to_global(
+		light_local_position + Vector3(0.0, 0.0, light_range + 1.0)
+	)
+	_expect(
+		LightingProfileScript.is_position_dark(cell_root, outside_coverage_point, false),
+		"positions beyond the deterministic ceiling-light range remain dark"
+	)
+	var smiler_root: Node3D = cell_root.get_node("Entity_smiler") as Node3D
+	smiler_root.position = Vector3(0.0, 0.6, 0.0)
+	var lit_aim_point: Vector3 = smiler_root.global_position + Vector3.UP * 0.6
+	_expect(
+		not LightingProfileScript.is_position_dark(cell_root, lit_aim_point, true),
+		"lit fixture places Smiler inside deterministic ceiling-light coverage"
+	)
+	var lit_result: Dictionary = driver.call(
+		"tick", runtime, player, camera, world_root.get_world_3d(), 0.2, false, 0.0
+	)
+	var lit_perception: Dictionary = runtime.last_perceptions.get("cell_0_0|smiler", {})
+	_expect(int(lit_result.get("accepted_count", 0)) == 1, "Smiler receives a second perception sample beneath the ceiling light")
+	_expect(not bool(lit_perception.get("is_dark", true)), "perception driver forwards local ceiling-light coverage")
+	_expect(str(brain.call("get_behavior_snapshot").get("state", "")) == "dormant", "Smiler remains dormant inside Level 1 light coverage")
+	driver.call("reset")
+	runtime.cell_roots.clear()
 	driver = null
 	brain = null
 	world_root.free()

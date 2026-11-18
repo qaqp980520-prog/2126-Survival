@@ -88,6 +88,9 @@ jobs:
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
           test -f tests/backrooms_perception_driver_test.gd
+          test -f systems/BackroomsLightingProfile.gd
+          test -f systems/BackroomsLightingController.gd
+          test -f tests/backrooms_lighting_test.gd
           test -f systems/BackroomsSettingsProfile.gd
           test -f tests/backrooms_settings_profile_test.gd
           test -f tests/backrooms_settings_integration_test.gd
@@ -395,6 +398,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms perception driver tests passed."
+      - name: Run Backrooms lighting profile and darkness sampling tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_lighting_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms lighting tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms lighting profile tests passed."
       - name: Run Backrooms location session contract tests
         shell: bash
         run: |
@@ -4955,7 +4969,7 @@ jobs:
 
   backrooms-visual-render-smoke:
     name: Godot 4.3 software-rendered Backrooms entity smoke
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     container:

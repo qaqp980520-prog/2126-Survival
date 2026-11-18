@@ -7,6 +7,7 @@ const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const VisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.gd")
 const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
+const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -277,6 +278,17 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_
 	root.set_meta("backrooms_layout_algorithm_version", int(descriptor.get("layout_algorithm_version", 0)))
 	root.set_meta("backrooms_entity_spawn_algorithm_version", spawn_algorithm_version)
 	root.set_meta("backrooms_open_edges", edges_value.duplicate(true))
+	var lighting_descriptor: Dictionary = LightingProfileScript.get_cell_light_descriptor(
+		str(descriptor.get("level_id", "")),
+		cell,
+		int(descriptor.get("world_seed", 0)),
+		WALL_HEIGHT
+	)
+	if lighting_descriptor.is_empty():
+		root.free()
+		return null
+	root.set_meta("backrooms_light_descriptor", lighting_descriptor.duplicate(true))
+	root.set_meta("backrooms_graphical_lighting_expected", not _is_metadata_only())
 	if not _build_cell_entity_roots(
 		root,
 		cell,
@@ -290,7 +302,7 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_
 		return null
 	if _is_metadata_only():
 		return root
-	_build_cell_geometry(root, edges_value, cell_size)
+	_build_cell_geometry(root, edges_value, cell_size, lighting_descriptor)
 	return root
 
 func _build_cell_entity_roots(
@@ -366,7 +378,12 @@ func _build_cell_entity_roots(
 	)
 	return true
 
-func _build_cell_geometry(root: Node3D, open_edges: Dictionary, cell_size: float) -> void:
+func _build_cell_geometry(
+	root: Node3D,
+	open_edges: Dictionary,
+	cell_size: float,
+	lighting_descriptor: Dictionary
+) -> void:
 	var floor_mesh := MeshInstance3D.new()
 	floor_mesh.name = "Floor"
 	var floor_box := BoxMesh.new()
@@ -375,6 +392,18 @@ func _build_cell_geometry(root: Node3D, open_edges: Dictionary, cell_size: float
 	floor_mesh.position = Vector3(0.0, -FLOOR_THICKNESS * 0.5, 0.0)
 	floor_mesh.material_override = _get_floor_material()
 	root.add_child(floor_mesh)
+
+	if bool(lighting_descriptor.get("enabled", false)):
+		var ceiling_light := OmniLight3D.new()
+		ceiling_light.name = "BackroomsCeilingLight"
+		var light_position: Vector3 = lighting_descriptor.get("local_position", Vector3(0.0, WALL_HEIGHT - 0.22, 0.0))
+		var light_color: Color = lighting_descriptor.get("color", Color.WHITE)
+		ceiling_light.position = light_position
+		ceiling_light.light_color = light_color
+		ceiling_light.light_energy = float(lighting_descriptor.get("energy", 0.0))
+		ceiling_light.omni_range = float(lighting_descriptor.get("range", 0.0))
+		ceiling_light.shadow_enabled = false
+		root.add_child(ceiling_light)
 
 	var collision := StaticBody3D.new()
 	collision.name = "WorldCollision"
