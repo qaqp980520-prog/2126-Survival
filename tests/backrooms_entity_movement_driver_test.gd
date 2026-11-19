@@ -176,14 +176,28 @@ func _assert_navigation_agent_routes_around_obstacle() -> void:
 		if absf(point.z) > 2.2:
 			detour_found = true
 	_expect(path.size() >= 3 and detour_found, "navigation path contains an intermediate waypoint outside the inflated wall bounds")
+	print("Navigation detour path points: %s" % str(path))
 	var driver = MovementDriverScript.new()
 	var blocked_total: int = 0
-	for _tick_index in range(40):
+	var blocked_events: Array[String] = []
+	for tick_index in range(40):
+		var before_position: Vector3 = entity_root.global_position
 		var movement_result: Dictionary = driver.call("tick", runtime, 0.1)
-		blocked_total += int(movement_result.get("blocked_count", 0))
+		var tick_blocked: int = int(movement_result.get("blocked_count", 0))
+		blocked_total += tick_blocked
+		if tick_blocked > 0:
+			var normal_value: Variant = entity_root.get_meta("backrooms_last_collision_normal") if entity_root.has_meta("backrooms_last_collision_normal") else Vector3.ZERO
+			blocked_events.append(
+				"tick=%d before=%s after=%s normal=%s" % [
+					tick_index,
+					str(before_position),
+					str(entity_root.global_position),
+					str(normal_value)
+				]
+			)
 		await physics_frame
 	var final_local: Vector3 = cell_root.to_local(entity_root.global_position)
-	print("Navigation detour diagnostic: blocked=%d final=%s" % [blocked_total, str(final_local)])
+	print("Navigation detour diagnostic: blocked=%d final=%s events=%s" % [blocked_total, str(final_local), str(blocked_events)])
 	_expect(
 		blocked_total == 0,
 		"NavigationAgent3D detour avoids physical wall collisions (blocked=%d)" % blocked_total
