@@ -291,7 +291,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 			speed * maxf(delta_seconds, 0.0)
 		)
 	else:
-		var navigation_agent := entity_body.get_node_or_null("NavigationAgent") as NavigationAgent3D
+		var navigation_agent := NavigationFactoryScript.get_agent(entity_body)
 		if navigation_agent == null:
 			return {"moved": false, "blocked": true, "reason": "navigation_agent_unavailable"}
 		var navigation_target_local: Vector3 = target_local

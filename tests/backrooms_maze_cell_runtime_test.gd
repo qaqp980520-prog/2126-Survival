@@ -5,6 +5,7 @@ const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
+const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
 
 var failures: Array[String] = []
 
@@ -530,14 +531,15 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			var collision_shape: CollisionShape3D = found_root.get_node_or_null("EntityCollision") as CollisionShape3D
 			var mobile_entity_ids: Array[String] = ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 			var expects_mobile_collision: bool = mobile_entity_ids.has(entity_id)
-			var navigation_agent := found_root.get_node_or_null("NavigationAgent") as NavigationAgent3D
+			var navigation_anchor := found_root.get_node_or_null("NavigationAnchor") as Node3D
+			var navigation_agent := NavigationFactoryScript.get_agent(found_root)
 			_expect(found_root is CharacterBody3D, "%s production root is a CharacterBody3D" % entity_id)
 			_expect(brain != null, "%s metadata-only production root owns a logic controller" % entity_id)
 			_expect(found_root.get_node_or_null("Visuals") == null, "%s metadata-only production root remains renderer-independent" % entity_id)
 			if expects_mobile_collision:
 				_expect(collision_shape != null and collision_shape.shape != null, "%s metadata-only root retains its physics collision proxy" % entity_id)
 				_expect(collision_shape != null and collision_shape.disabled, "%s prepared destination keeps entity collision disabled" % entity_id)
-				_expect(navigation_agent != null, "%s mobile metadata-only root owns a NavigationAgent3D" % entity_id)
+				_expect(navigation_anchor != null and navigation_agent != null, "%s mobile metadata-only root owns a floor-aligned NavigationAgent3D anchor" % entity_id)
 				_expect(found_root.get_children().size() == 3, "%s metadata-only root contains AI, collision and navigation nodes" % entity_id)
 			else:
 				_expect(collision_shape == null, "%s anchored root has no mobile collision shape" % entity_id)

@@ -32,12 +32,14 @@ func _run() -> void:
 	var body := CharacterBody3D.new()
 	body.position = Vector3(-2.0, 0.55, 0.0)
 	_expect(NavigationFactoryScript.attach_agent(body, "hound"), "mobile Hound receives a NavigationAgent3D")
-	var agent := body.get_node_or_null("NavigationAgent") as NavigationAgent3D
+	var navigation_anchor := body.get_node_or_null("NavigationAnchor") as Node3D
+	var agent := NavigationFactoryScript.get_agent(body)
 	_expect(agent != null, "mobile entity agent is attached under its CharacterBody3D")
-	if agent != null:
+	_expect(navigation_anchor != null, "mobile agent receives a Node3D navigation anchor")
+	if agent != null and navigation_anchor != null:
 		_expect(
-			absf(agent.position.y + body.position.y - NavigationFactoryScript.NAVIGATION_SURFACE_Y) <= 0.0001,
-			"NavigationAgent3D origin is aligned to the cell floor independently of capsule center height"
+			absf(navigation_anchor.position.y + body.position.y - NavigationFactoryScript.NAVIGATION_SURFACE_Y) <= 0.0001,
+			"NavigationAgent3D parent origin is aligned to the cell floor independently of capsule center height"
 		)
 		_expect(not agent.avoidance_enabled, "agent avoidance stays disabled until a separate bounded avoidance design exists")
 		_expect(absf(agent.radius - 0.32) <= 0.0001, "Hound navigation radius matches its collision proxy")

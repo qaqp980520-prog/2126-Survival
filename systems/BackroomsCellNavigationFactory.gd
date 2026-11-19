@@ -52,13 +52,16 @@ static func attach_agent(entity_root: CharacterBody3D, entity_id: String) -> boo
 		return false
 	if not is_mobile_entity(entity_id):
 		return false
-	if entity_root.get_node_or_null("NavigationAgent") != null:
+	if entity_root.get_node_or_null("NavigationAnchor") != null:
 		return false
+	var navigation_anchor := Node3D.new()
+	navigation_anchor.name = "NavigationAnchor"
+	# NavigationAgent3D is a Node, so its parent Node3D provides the floor-aligned
+	# transform while the CharacterBody3D remains at capsule-center height.
+	navigation_anchor.position.y = NAVIGATION_SURFACE_Y - entity_root.position.y
+	entity_root.add_child(navigation_anchor)
 	var agent := NavigationAgent3D.new()
 	agent.name = "NavigationAgent"
-	# NavigationAgent3D must start on the floor navigation surface, not at the
-	# CharacterBody3D capsule center. Keep the body at its collision height.
-	agent.position.y = NAVIGATION_SURFACE_Y - entity_root.position.y
 	agent.navigation_layers = NAVIGATION_LAYER
 	agent.radius = float(MOBILE_ENTITY_RADII[entity_id])
 	agent.avoidance_enabled = false
@@ -66,9 +69,15 @@ static func attach_agent(entity_root: CharacterBody3D, entity_id: String) -> boo
 	# the largest single Hound movement step (3.8 m/s * 0.1 s = 0.38 m).
 	agent.path_desired_distance = 0.45
 	agent.target_desired_distance = MIN_TARGET_DESIRED_DISTANCE
-	entity_root.add_child(agent)
+	navigation_anchor.add_child(agent)
+	navigation_anchor.set_meta("backrooms_navigation_anchor_version", FACTORY_VERSION)
 	entity_root.set_meta("backrooms_navigation_agent_version", FACTORY_VERSION)
 	return true
+
+static func get_agent(entity_root: Node3D) -> NavigationAgent3D:
+	if entity_root == null or not is_instance_valid(entity_root):
+		return null
+	return entity_root.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
 
 static func set_region_enabled(cell_root: Node3D, enabled: bool) -> bool:
 	if cell_root == null or not is_instance_valid(cell_root):

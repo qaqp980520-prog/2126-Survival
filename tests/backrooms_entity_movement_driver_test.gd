@@ -156,7 +156,7 @@ func _assert_navigation_agent_routes_around_obstacle() -> void:
 		"player_position": Vector3(3.0, 0.55, 0.0)
 	}, 0.2)
 	await physics_frame
-	var agent := entity_root.get_node_or_null("NavigationAgent") as NavigationAgent3D
+	var agent := NavigationFactoryScript.get_agent(entity_root)
 	_expect(agent != null, "Hound exposes its NavigationAgent3D")
 	if agent == null:
 		world_root.free()
