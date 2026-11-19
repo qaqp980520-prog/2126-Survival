@@ -42,6 +42,7 @@ func _run() -> void:
 			"NavigationAgent3D parent origin is aligned to the cell floor independently of capsule center height"
 		)
 		_expect(not agent.avoidance_enabled, "agent avoidance stays disabled until a separate bounded avoidance design exists")
+		_expect(absf(agent.path_desired_distance - 0.2) <= 0.0001, "waypoint acceptance is tight enough to avoid cutting obstacle corners")
 		_expect(absf(agent.radius - 0.32) <= 0.0001, "Hound navigation radius matches its collision proxy")
 	_expect(not NavigationFactoryScript.attach_agent(body, "hound"), "duplicate NavigationAgent3D attachment is rejected")
 	var anchored := CharacterBody3D.new()

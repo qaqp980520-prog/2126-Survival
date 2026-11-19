@@ -12,7 +12,7 @@ This is a cell-local navigation layer only. It does not change the loaded-cell r
   - Creates a deterministic rectangular NavigationMesh with a 0.65 m inset.
   - Disables NavigationRegion3D edge connections so adjacent cell regions cannot silently become one cross-cell navigation surface.
   - Attaches NavigationAgent3D only to the six supported mobile entity types.
-  - Uses a 0.45 m path waypoint tolerance and at least 0.5 m target tolerance to match the central 10 Hz movement cadence and avoid sub-step target thresholds.
+  - Uses a 0.2 m path waypoint tolerance and at least 0.5 m target tolerance to match the central 10 Hz movement cadence and avoid sub-step target thresholds.
 - `systems/BackroomsMazeCellRuntime.gd`
   - Adds the cell navigation region before entity roots are staged.
   - Enables/disables navigation regions together with the existing runtime collision lifecycle.

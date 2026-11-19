@@ -65,9 +65,9 @@ static func attach_agent(entity_root: CharacterBody3D, entity_id: String) -> boo
 	agent.navigation_layers = NAVIGATION_LAYER
 	agent.radius = float(MOBILE_ENTITY_RADII[entity_id])
 	agent.avoidance_enabled = false
-	# The central movement driver samples at 10 Hz. Keep waypoint acceptance above
-	# the largest single Hound movement step (3.8 m/s * 0.1 s = 0.38 m).
-	agent.path_desired_distance = 0.45
+	# The central driver clamps each movement step to the current waypoint distance.
+	# A tighter 0.2 m acceptance prevents cutting obstacle corners at the 10 Hz cadence.
+	agent.path_desired_distance = 0.2
 	agent.target_desired_distance = MIN_TARGET_DESIRED_DISTANCE
 	navigation_anchor.add_child(agent)
 	navigation_anchor.set_meta("backrooms_navigation_anchor_version", FACTORY_VERSION)
