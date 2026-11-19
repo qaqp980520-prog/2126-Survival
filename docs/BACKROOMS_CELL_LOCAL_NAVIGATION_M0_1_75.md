@@ -40,7 +40,7 @@ This is a cell-local navigation layer only. It does not change the loaded-cell r
 - A cell region is enabled only while the Backrooms runtime is active.
 - Region edge connections are disabled; cross-cell routing remains controlled by the deterministic loaded-cell route planner and transactional owner transfer.
 - The navigation polygon is inset by 0.65 m to preserve the same safe cell boundary used by movement and ownership transfer.
-- The current production cell geometry has a flat floor and perimeter walls. The production mesh therefore describes the current traversable interior; future interior props/obstacles must contribute to a baked or explicitly cut-out navigation mesh before they can be treated as pathfinding obstacles.
+- The current production cell geometry has a flat floor and perimeter walls. Each agent origin is vertically offset to the cell floor plane while its CharacterBody3D remains at the entity collision height. The production mesh therefore describes the current traversable interior; future interior props/obstacles must contribute to a baked or explicitly cut-out navigation mesh before they can be treated as pathfinding obstacles.
 - NavigationAgent3D avoidance is disabled in this version. Physical collision remains authoritative.
 - The central movement driver samples navigation waypoints at its existing 10 Hz cadence; it does not create per-entity process loops. This is a deliberate first integration step and must be profiled before increasing entity counts or moving path updates to a separate central physics-frame cache.
 

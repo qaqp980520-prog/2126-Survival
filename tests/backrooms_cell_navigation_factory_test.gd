@@ -30,10 +30,15 @@ func _run() -> void:
 				"navigation polygon remains inside the physical cell safe extent"
 			)
 	var body := CharacterBody3D.new()
+	body.position = Vector3(-2.0, 0.55, 0.0)
 	_expect(NavigationFactoryScript.attach_agent(body, "hound"), "mobile Hound receives a NavigationAgent3D")
 	var agent := body.get_node_or_null("NavigationAgent") as NavigationAgent3D
 	_expect(agent != null, "mobile entity agent is attached under its CharacterBody3D")
 	if agent != null:
+		_expect(
+			absf(agent.position.y + body.position.y - NavigationFactoryScript.NAVIGATION_SURFACE_Y) <= 0.0001,
+			"NavigationAgent3D origin is aligned to the cell floor independently of capsule center height"
+		)
 		_expect(not agent.avoidance_enabled, "agent avoidance stays disabled until a separate bounded avoidance design exists")
 		_expect(absf(agent.radius - 0.32) <= 0.0001, "Hound navigation radius matches its collision proxy")
 	_expect(not NavigationFactoryScript.attach_agent(body, "hound"), "duplicate NavigationAgent3D attachment is rejected")
@@ -43,7 +48,6 @@ func _run() -> void:
 	var world_root := Node3D.new()
 	root.add_child(world_root)
 	world_root.add_child(region)
-	body.position = Vector3(-2.0, 0.55, 0.0)
 	world_root.add_child(body)
 	region.enabled = true
 	await physics_frame

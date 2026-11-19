@@ -56,6 +56,9 @@ static func attach_agent(entity_root: CharacterBody3D, entity_id: String) -> boo
 		return false
 	var agent := NavigationAgent3D.new()
 	agent.name = "NavigationAgent"
+	# NavigationAgent3D must start on the floor navigation surface, not at the
+	# CharacterBody3D capsule center. Keep the body at its collision height.
+	agent.position.y = NAVIGATION_SURFACE_Y - entity_root.position.y
 	agent.navigation_layers = NAVIGATION_LAYER
 	agent.radius = float(MOBILE_ENTITY_RADII[entity_id])
 	agent.avoidance_enabled = false
