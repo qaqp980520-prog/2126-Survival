@@ -88,10 +88,12 @@ static func set_agent_target(
 	var safe_desired_distance: float = maxf(MIN_TARGET_DESIRED_DISTANCE, desired_distance)
 	if absf(agent.target_desired_distance - safe_desired_distance) > 0.01:
 		agent.target_desired_distance = safe_desired_distance
-	var previous_value: Variant = agent.get_meta("backrooms_navigation_target_position", null)
-	var should_update_target: bool = not (previous_value is Vector3)
-	if previous_value is Vector3:
-		should_update_target = (previous_value as Vector3).distance_to(target_position) > TARGET_POSITION_UPDATE_DISTANCE
+	var should_update_target: bool = true
+	if agent.has_meta("backrooms_navigation_target_position"):
+		var previous_value: Variant = agent.get_meta("backrooms_navigation_target_position")
+		if previous_value is Vector3:
+			var previous_position: Vector3 = previous_value
+			should_update_target = previous_position.distance_to(target_position) > TARGET_POSITION_UPDATE_DISTANCE
 	if should_update_target:
 		agent.target_position = target_position
 		agent.set_meta("backrooms_navigation_target_position", target_position)

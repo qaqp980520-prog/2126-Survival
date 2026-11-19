@@ -54,6 +54,7 @@ func _run() -> void:
 			NavigationFactoryScript.set_agent_target(agent, target, 0.5),
 			"active NavigationAgent3D accepts a finite target"
 		)
+		_expect(agent.has_meta("backrooms_navigation_target_position"), "first target assignment stores a target cache without missing-meta diagnostics")
 		var path_result: Dictionary = NavigationFactoryScript.get_next_waypoint(agent)
 		_expect(bool(path_result.get("ok", false)), "headless NavigationServer returns a live cell-local path")
 		_expect(int(path_result.get("path_point_count", 0)) >= 2, "live path contains a start and destination point")
