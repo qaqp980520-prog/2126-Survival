@@ -183,7 +183,11 @@ func _assert_navigation_agent_routes_around_obstacle() -> void:
 		blocked_total += int(movement_result.get("blocked_count", 0))
 		await physics_frame
 	var final_local: Vector3 = cell_root.to_local(entity_root.global_position)
-	_expect(blocked_total == 0, "NavigationAgent3D detour avoids physical wall collisions")
+	print("Navigation detour diagnostic: blocked=%d final=%s" % [blocked_total, str(final_local)])
+	_expect(
+		blocked_total == 0,
+		"NavigationAgent3D detour avoids physical wall collisions (blocked=%d)" % blocked_total
+	)
 	_expect(
 		final_local.x > 1.5 and absf(final_local.z) < 1.0,
 		"Hound reaches the far side of the wall and returns toward the target corridor"
@@ -196,20 +200,20 @@ func _make_wall_detour_navigation_mesh() -> NavigationMesh:
 	var navigation_mesh := NavigationMesh.new()
 	navigation_mesh.vertices = PackedVector3Array([
 		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
-		Vector3(0.58, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
-		Vector3(1.42, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
 		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
-		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.32),
-		Vector3(0.58, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.32),
-		Vector3(1.42, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.32),
-		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.32),
-		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.32),
-		Vector3(0.58, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.32),
-		Vector3(1.42, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.32),
-		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.32),
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
 		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
-		Vector3(0.58, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
-		Vector3(1.42, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
 		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35)
 	])
 	navigation_mesh.add_polygon(PackedInt32Array([4, 5, 1, 0]))
