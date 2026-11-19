@@ -733,9 +733,10 @@ func _create_entity_root_from_descriptor(
 	if not CollisionFactoryScript.attach_collision(entity_root, entity_id, active):
 		entity_root.free()
 		return null
-	if not CellNavigationFactoryScript.attach_agent(entity_root, entity_id):
-		entity_root.free()
-		return null
+	if CellNavigationFactoryScript.is_mobile_entity(entity_id):
+		if not CellNavigationFactoryScript.attach_agent(entity_root, entity_id):
+			entity_root.free()
+			return null
 	if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
 		entity_root.free()
 		return null

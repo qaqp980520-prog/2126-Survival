@@ -62,8 +62,8 @@ func _run() -> void:
 	_expect(not region.enabled, "disabled cell region leaves the navigation map")
 
 	world_root.free()
-	body.free() if is_instance_valid(body) else null
-	anchored.free()
+	if is_instance_valid(anchored):
+		anchored.free()
 	await physics_frame
 	_finish()
 
