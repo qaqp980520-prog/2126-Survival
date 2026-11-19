@@ -9,6 +9,7 @@ const VisualFactoryScript = preload("res://systems/BackroomsEntityVisualFactory.
 const EntityBrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd")
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
+const CellNavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const CellRoutePlannerScript = preload("res://systems/BackroomsCellRoutePlanner.gd")
 const OwnershipLedgerScript = preload("res://systems/BackroomsEntityOwnershipLedger.gd")
@@ -563,6 +564,11 @@ func _build_cell_root(
 		return null
 	root.set_meta("backrooms_light_descriptor", lighting_descriptor.duplicate(true))
 	root.set_meta("backrooms_graphical_lighting_expected", not _is_metadata_only())
+	var navigation_region: NavigationRegion3D = CellNavigationFactoryScript.create_cell_region(cell_size)
+	if navigation_region == null:
+		root.free()
+		return null
+	root.add_child(navigation_region)
 	if not _build_cell_entity_roots(
 		root,
 		cell,
@@ -727,6 +733,9 @@ func _create_entity_root_from_descriptor(
 	if not CollisionFactoryScript.attach_collision(entity_root, entity_id, active):
 		entity_root.free()
 		return null
+	if not CellNavigationFactoryScript.attach_agent(entity_root, entity_id):
+		entity_root.free()
+		return null
 	if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
 		entity_root.free()
 		return null
@@ -854,6 +863,9 @@ func _set_collision_enabled(enabled: bool) -> void:
 	for root_value in cell_roots.values():
 		if not (root_value is Node3D) or not is_instance_valid(root_value):
 			continue
+		var navigation_region := root_value.get_node_or_null("CellNavigation") as NavigationRegion3D
+		if navigation_region != null:
+			navigation_region.enabled = enabled
 		var collision := root_value.get_node_or_null("WorldCollision") as StaticBody3D
 		if collision != null:
 			collision.collision_layer = WORLD_GEOMETRY_LAYER if enabled else 0

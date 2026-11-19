@@ -86,6 +86,7 @@ jobs:
           test -f docs/BACKROOMS_ENTITY_OWNER_SPAWN_IDENTITY_CODEC_V2_M0_1_71.md
           test -f docs/BACKROOMS_LIVE_ENTITY_OWNER_TRANSFER_M0_1_73.md
           test -f docs/BACKROOMS_ENTITY_STATE_OWNERSHIP_PAIRING_M0_1_74.md
+          test -f docs/BACKROOMS_CELL_LOCAL_NAVIGATION_M0_1_75.md
           test -f systems/BackroomsMazeStreamState.gd
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
@@ -102,7 +103,9 @@ jobs:
           grep -q 'spawn_cell_key: String = ""' tests/backrooms_perception_driver_test.gd
           grep -q 'set_meta("spawn_cell", spawn_cell)' tests/backrooms_perception_driver_test.gd
           test -f systems/BackroomsEntityMovementDriver.gd
+          test -f systems/BackroomsCellNavigationFactory.gd
           test -f tests/backrooms_entity_movement_driver_test.gd
+          test -f tests/backrooms_cell_navigation_factory_test.gd
           test -f systems/BackroomsEntityCollisionFactory.gd
           test -f systems/BackroomsEntityRuntimeState.gd
           test -f tests/backrooms_entity_collision_factory_test.gd
@@ -457,6 +460,17 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms perception driver tests passed."
+      - name: Run Backrooms cell navigation factory tests
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_cell_navigation_factory_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported script/runtime errors during Backrooms cell navigation factory tests."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms cell navigation factory tests passed."
       - name: Run Backrooms bounded entity movement tests
         shell: bash
         run: |
