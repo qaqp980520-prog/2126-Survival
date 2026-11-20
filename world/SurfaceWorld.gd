@@ -2238,7 +2238,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use") + " · F5 save · F9 load"
+	var action_help: String = ("G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")) + " · F5 save · F9 load"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, displayed_vein_count,
 		displayed_crop_count, displayed_object_count,
