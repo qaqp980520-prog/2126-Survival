@@ -10,11 +10,11 @@ Extend M0.1.92's straight two-hop A→B→C persistence test to a deterministic 
 - World seed: `20261118`
 - Loaded window: 3×3 cells centered at `(0,0)`
 - Deterministic Hound spawn cell: `(1,0)`
-- Selected route: `(1,0) → (1,-1) → (0,-1)`
-- First direction: north `(0,-1)`
-- Second direction: west `(-1,0)`
+- Selected route: `(1,0) → (0,0) → (0,-1)`
+- First direction: west `(-1,0)`
+- Second direction: north `(0,-1)`
 
-The route planner uses the loaded-cell topology only. The fixture must reject a route if the first hop does not match the selected adjacent owner, if the route is not exactly two edges, or if the second direction is straight or reversing rather than a 90-degree turn.
+The deterministic Level 2 fixture places the Hound in `(1,0)` for this seed. The route planner uses the loaded-cell topology only. The fixture must reject a route if the first hop does not match the selected adjacent owner, if the route is not exactly two edges, or if the second direction is straight or reversing rather than a 90-degree turn.
 
 ## Scope and files
 
