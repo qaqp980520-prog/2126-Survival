@@ -11,6 +11,8 @@ const NAVIGATION_SURFACE_Y: float = 0.02
 const MIN_CELL_SIZE: float = 1.4
 const TARGET_POSITION_UPDATE_DISTANCE: float = 0.25
 const MIN_TARGET_DESIRED_DISTANCE: float = 0.5
+const MIN_EDGE_TARGET_DESIRED_DISTANCE: float = 0.05
+const MAX_EDGE_TARGET_DESIRED_DISTANCE: float = 0.1
 const MOBILE_ENTITY_RADII := {
 	"smiler": 0.30,
 	"hound": 0.32,
@@ -91,15 +93,23 @@ static func set_region_enabled(cell_root: Node3D, enabled: bool) -> bool:
 static func set_agent_target(
 	agent: NavigationAgent3D,
 	target_position: Vector3,
-	desired_distance: float
+	desired_distance: float,
+	edge_precision: bool = false
 ) -> bool:
 	if agent == null or not is_instance_valid(agent) or not agent.is_inside_tree():
 		return false
 	if not _is_finite_vector3(target_position) or not is_finite(desired_distance) or desired_distance < 0.0:
 		return false
-	var safe_desired_distance: float = maxf(MIN_TARGET_DESIRED_DISTANCE, desired_distance)
+	var safe_desired_distance: float = MIN_TARGET_DESIRED_DISTANCE
+	if edge_precision:
+		if desired_distance > MAX_EDGE_TARGET_DESIRED_DISTANCE:
+			return false
+		safe_desired_distance = maxf(MIN_EDGE_TARGET_DESIRED_DISTANCE, desired_distance)
+	else:
+		safe_desired_distance = maxf(MIN_TARGET_DESIRED_DISTANCE, desired_distance)
 	if absf(agent.target_desired_distance - safe_desired_distance) > 0.01:
 		agent.target_desired_distance = safe_desired_distance
+	agent.set_meta("backrooms_navigation_edge_precision", edge_precision)
 	var should_update_target: bool = true
 	if agent.has_meta("backrooms_navigation_target_position"):
 		var previous_value: Variant = agent.get_meta("backrooms_navigation_target_position")
