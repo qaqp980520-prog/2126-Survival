@@ -2446,7 +2446,9 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 				"runtime_error": runtime_error,
 				"runtime_mismatch_keys": runtime_mismatch_keys,
 				"runtime_readback_keys": runtime_readback.keys(),
-				"session_stream_keys": session_stream_readback.keys()
+				"session_stream_keys": session_stream_readback.keys(),
+				"runtime_ownership_ledger": runtime_readback.get("entity_ownership_ledger", {}),
+				"session_ownership_ledger": session_stream_readback.get("entity_ownership_ledger", {})
 			}
 			runtime_probe.free()
 			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true, runtime_details)
