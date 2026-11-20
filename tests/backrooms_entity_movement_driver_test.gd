@@ -411,6 +411,13 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	await physics_frame
 	var second_move: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(second_move.get("transferred_count", 0)) == 1, "Hound commits exactly one ownership hop after reaching the edge")
+	var transfer_results: Array = second_move.get("transfer_results", [])
+	_expect(
+		transfer_results.size() == 1
+		and transfer_results[0] is Dictionary
+		and bool(transfer_results[0].get("ok", false)),
+		"movement tick exposes the committed first-hop result to its caller"
+	)
 	_expect(runtime.transfer_calls == 1, "one movement tick can commit at most the current route's first hop")
 	_expect(str(runtime.last_transfer.get("spawn_cell_key", "")) == "0,0", "cross-cell handoff retains the immutable spawn-cell identity")
 	_expect(str(runtime.last_transfer.get("entity_id", "")) == "hound", "cross-cell handoff identifies the Hound entity")
