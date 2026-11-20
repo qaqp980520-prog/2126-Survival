@@ -248,10 +248,10 @@ func _run() -> void:
 		var pursuit_staging_local: Vector3 = entity_root.position
 		if direction.x != 0:
 			pursuit_staging_local.x = float(direction.x) * 2.5
-			pursuit_staging_local.z = 0.0
+			pursuit_staging_local.z = 1.0
 		else:
 			pursuit_staging_local.z = float(direction.y) * 2.5
-			pursuit_staging_local.x = 0.0
+			pursuit_staging_local.x = 1.0
 		entity_root.position = pursuit_staging_local
 		var perpendicular_target_offset := Vector3.ZERO
 		if direction.x != 0:
