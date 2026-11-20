@@ -448,7 +448,7 @@ func _run() -> void:
 		var expected_level_id: String = str(final_save.get("level_id", "Level 2"))
 		var expected_world_seed: int = int(final_save.get("world_seed", 20261118))
 		var expected_cell_size: float = float(final_save.get("cell_size", 8.0))
-		var expected_spawn_version: int = int(final_save.get("spawn_algorithm_version", 1))
+		var expected_spawn_version: int = int(final_save.get("entity_spawn_algorithm_version", 1))
 		var huge_spawn_version_records: Array = runtime_records.duplicate(true)
 		huge_spawn_version_records[0]["spawn_algorithm_version"] = 1e308
 		var huge_spawn_version_result: Dictionary = EntityRuntimeStateScript.validate_records(
