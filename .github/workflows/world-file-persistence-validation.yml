@@ -8,6 +8,8 @@ on:
       - 'world/SurfaceWorld.tscn'
       - 'scripts/world.gd'
       - 'tests/surface_world_file_persistence_test.gd'
+      - 'tests/surface_world_hound_file_roundtrip_test.gd'
+      - 'docs/BACKROOMS_SURFACEWORLD_HOUND_DURABLE_ENVELOPE_ROUNDTRIP_M0_1_85.md'
       - 'tests/backrooms_entity_owner_runtime_integration_test.gd'
       - 'tests/world_save_load_input_test.gd'
       - 'systems/BackroomsEntityOwnershipLedger.gd'
@@ -49,6 +51,8 @@ jobs:
           test -f project.godot
           test -f systems/WorldEnvelopeFileStore.gd
           test -f tests/surface_world_file_persistence_test.gd
+          test -f tests/surface_world_hound_file_roundtrip_test.gd
+          test -f docs/BACKROOMS_SURFACEWORLD_HOUND_DURABLE_ENVELOPE_ROUNDTRIP_M0_1_85.md
           test -f tests/backrooms_entity_owner_runtime_integration_test.gd
           test -f tests/world_save_load_input_test.gd
           test -f world/SurfaceWorld.tscn
@@ -78,6 +82,18 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "SurfaceWorld file persistence integration tests passed."
+
+      - name: Run combined SurfaceWorld and Hound durable envelope round-trip
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_world_hound_file_roundtrip_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Combined SurfaceWorld and Hound durable envelope regression failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "SurfaceWorld Hound durable envelope round-trip tests passed."
 
       - name: Run Hound owner-ledger durable file round-trip
         shell: bash
