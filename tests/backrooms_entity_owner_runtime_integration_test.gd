@@ -105,7 +105,8 @@ func _run() -> void:
 		and pursuit_path_value.size() == 3
 		and pursuit_path_value[1] == target_cell
 		and pursuit_path_value[2] == pursuit_goal_cell
-		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1,
+		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1
+		and second_hop_direction == direction,
 		"selected Hound has a validated two-hop loaded-cell route through the expected first owner"
 	)
 	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
@@ -808,7 +809,7 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if not (goal_cell_value is Vector2i):
 						continue
 					var goal_cell: Vector2i = goal_cell_value
-					if goal_cell == cell or goal_cell == target_cell:
+					if goal_cell != cell + direction * 2:
 						continue
 					var pursuit_route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, goal_cell)
 					var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
