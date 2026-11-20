@@ -26,10 +26,10 @@ The deterministic Level 2 fixture places the Hound in `(1,0)` for this seed. The
 ## Test behavior
 
 1. Retain all existing direct-transfer preconditions: source edge, perpendicular serialized bounds, vertical bounds, stale route rejection, and physical rollback.
-2. Select the deterministic Hound at `(1,0)` and validate a two-edge route whose first direction is north and second direction is west.
+2. Select the deterministic Hound at `(1,0)` and validate a two-edge route whose first direction is west and second direction is north.
 3. Set the pursuit target inside the final loaded cell and run the movement driver through an actual `_physics_process` callback.
 4. Require exactly one transactional A→B transfer and owner revision 0→1.
-5. Start a separate physics-driven tick. The driver must re-collect the same immutable spawn identity under B, replan the route, compute a west-facing edge target, and commit exactly one B→C transfer.
+5. Start a separate physics-driven tick. The driver must re-collect the same immutable spawn identity under B, replan the route, compute a north-facing edge target, and commit exactly one B→C transfer.
 6. Require owner revision 1→2, no duplicate in A or B, and exactly one Hound in C.
 7. Preserve the existing post-transfer stream unload/reload and durable file/backup round-trip. The fresh runtime must restore owner C, revision 2, immutable spawn identity and a newly constructed NavigationAgent3D.
 8. Keep the test fail-closed: if the deterministic turning route is unavailable, fail the fixture rather than silently falling back to a straight route.
@@ -63,7 +63,7 @@ The existing Full Compatibility Gate and SurfaceWorld File Persistence workflow 
 
 - The branch is created from exact parent PR #406 HEAD `9da4693389ff8e7022d3beb4b38e20ad176d4e95`.
 - The integration test now requires a two-hop turning route, explicitly validates both directions, and rejects straight/reversing routes.
-- Static source review and deterministic topology calculation identify the expected route `(1,0) → (1,-1) → (0,-1)`.
+- Static source review and deterministic topology calculation identify the expected route `(1,0) → (0,0) → (0,-1)`.
 - Exact-head Godot 4.3 Full Compatibility Gate, focused persistence and Xvfb/Mesa validation are required. No runtime pass is claimed until these runs complete and their logs are audited.
 - Local Godot executable is unavailable in the authoring environment.
 
