@@ -212,7 +212,7 @@ func _test_invalid_save_is_atomic() -> void:
     for valid_state in valid_rng_states:
         bad = before.duplicate(true)
         bad["rng_state"] = valid_state
-        assert(director.load_save_dict(bad), "A canonical signed 64-bit RNG boundary state must load.")
+        assert(director.load_save_dict(bad), "A canonical signed 64-bit boundary state must load.")
         assert(director.to_save_dict()["rng_state"] == valid_state)
         assert(director.load_save_dict(before), "The original save must be restorable after a boundary-state probe.")
         assert(director.to_save_dict() == before)
@@ -251,4 +251,3 @@ func _test_rng_state_signed_64bit_validation() -> void:
         assert(director.to_save_dict()["rng_state"] == state)
         assert(director.load_save_dict(before), "The original state must be restorable after a boundary probe.")
         assert(director.to_save_dict() == before)
-

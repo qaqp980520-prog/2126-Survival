@@ -222,8 +222,7 @@ func _is_canonical_int64_string(value: String) -> bool:
         return false
     if digits.length() == limit.length() and digits > limit:
         return false
-    # Only convert after the lexical range check, so oversized saves never emit
-    # Godot's signed-64-bit conversion error.
+    # Convert only after lexical range validation to avoid Godot overflow diagnostics.
     return str(int(value)) == value
 
 func _is_integer_in_range(value: Variant, minimum: int, maximum: int) -> bool:
