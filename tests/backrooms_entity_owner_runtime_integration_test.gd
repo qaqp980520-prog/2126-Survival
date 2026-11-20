@@ -504,13 +504,10 @@ func _run() -> void:
 		_expect(str(disk_entity.get_meta("backrooms_owner_cell_key", "")) == target_key, "disk-recovered Hound node restores owner-cell metadata")
 		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 1, "disk-recovered Hound node restores owner revision metadata")
 		var disk_agent: NavigationAgent3D = disk_entity.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
-		if DisplayServer.get_name() == "headless":
-			_expect(disk_agent == null, "headless metadata-only restore intentionally omits graphical NavigationAgent3D nodes")
-		else:
-			_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
-			if disk_agent != null:
-				_expect(not disk_agent.avoidance_enabled, "disk-recovered NavigationAgent3D preserves the bounded non-avoidance policy")
-				_expect(absf(disk_agent.path_desired_distance - 0.2) <= 0.0001, "disk-recovered NavigationAgent3D uses the current waypoint tolerance")
+		_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
+		if disk_agent != null:
+			_expect(not disk_agent.avoidance_enabled, "disk-recovered NavigationAgent3D preserves the bounded non-avoidance policy")
+			_expect(absf(disk_agent.path_desired_distance - 0.2) <= 0.0001, "disk-recovered NavigationAgent3D uses the current waypoint tolerance")
 	var disk_runtime_snapshot: Dictionary = disk_restore_runtime.call("to_save_dict")
 	_expect(
 		_save_values_equal(disk_runtime_snapshot, final_save),
