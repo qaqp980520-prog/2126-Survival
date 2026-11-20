@@ -734,7 +734,8 @@ func _run() -> void:
 	legacy_payload["schema_version"] = 3
 	legacy_payload.erase("entity_ownership_ledger_version")
 	legacy_payload.erase("entity_ownership_ledger")
-	var legacy_center: Vector2i = target_cell + direction * 2
+	# Center at C so the original spawn cell A is unloaded but remains in the retention halo.
+	var legacy_center: Vector2i = source_cell + direction * 2
 	legacy_payload["center_cell"] = [legacy_center.x, legacy_center.y]
 	var legacy_state: Dictionary = {}
 	for state_value in final_save.get("entity_runtime_states", []):
