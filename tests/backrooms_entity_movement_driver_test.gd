@@ -101,6 +101,7 @@ func _run() -> void:
 	await _assert_navigation_agent_routes_around_obstacle()
 	await _assert_smiler_approach_uses_unseen_player_target()
 	await _assert_cross_cell_target_fails_closed()
+	await _assert_hound_waits_for_perpendicular_edge_alignment()
 	await _assert_hound_cross_cell_pursuit_uses_precision_edge()
 	await _assert_avoidance_moves_away_from_player()
 	await _assert_duller_retreat_moves_away_from_player()
@@ -358,6 +359,53 @@ func _assert_cross_cell_target_fails_closed() -> void:
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(result.get("blocked_count", 0)) == 1, "cross-cell Hound pursuit fails closed when no loaded-cell route is available")
 	_expect(entity_root.global_position.is_equal_approx(start_position), "entity never crosses an unloaded or unowned cell boundary")
+	driver.call("reset")
+	world_root.free()
+	await physics_frame
+
+func _assert_hound_waits_for_perpendicular_edge_alignment() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var source_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	_add_cell(runtime, "1,0", Vector2i(1, 0))
+	runtime.route_snapshot = {
+		"ok": true,
+		"start_cell": Vector2i.ZERO,
+		"goal_cell": Vector2i(1, 0),
+		"cell_keys": ["0,0", "1,0"],
+		"edge_directions": [Vector2i(1, 0)]
+	}
+	runtime.transfer_succeeds = true
+	var entity: Dictionary = _add_entity(
+		source_root, "hound", "Level 2", Vector2i.ZERO, 20261120, Vector3(3.2, 0.55, -2.0)
+	)
+	var brain: Node = entity["brain"] as Node
+	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
+	var target_position := Vector3(8.0, 0.55, 2.0)
+	var decision: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 6.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": target_position
+	}, 0.2)
+	_expect(str(decision.get("state", "")) == "pursue", "visible player in the adjacent cell produces a Hound pursue intent")
+	await physics_frame
+	var driver = MovementDriverScript.new()
+	var start_local: Vector3 = source_root.to_local(entity_root.global_position)
+	var result: Dictionary = driver.call("tick", runtime, 0.1)
+	var moved_local: Vector3 = source_root.to_local(entity_root.global_position)
+	_expect(
+		int(result.get("transferred_count", 0)) == 0 and runtime.transfer_calls == 0,
+		"Hound does not transfer merely because its travel axis is inside the edge tolerance"
+	)
+	_expect(entity_root.get_parent() == source_root, "laterally misaligned Hound remains owned by the source cell")
+	_expect(
+		absf(moved_local.z - 2.0) < absf(start_local.z - 2.0),
+		"Hound continues moving laterally toward the projected edge target before ownership transfer"
+	)
 	driver.call("reset")
 	world_root.free()
 	await physics_frame
