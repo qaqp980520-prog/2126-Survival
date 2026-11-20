@@ -71,3 +71,12 @@ All three tests are already registered in `.github/workflows/godot-validation.ym
 - The driver commits one transactional hop per movement tick; it does not transfer multiple cells in one frame.
 - Only Hound pursuit is enabled. Investigate, patrol, avoidance, retreat and other entity types remain cell-local.
 - After exact-head Full Compatibility Gate and software-rendered owner-runtime integration pass, extend the scenario to A→B→C pursuit and verify multi-hop save/recovery across a fresh-world reload.
+
+
+## Run 346 follow-up regressions
+
+- The production owner-runtime integration now invokes the movement driver from a dedicated Node `_physics_process` callback, matching the call context used by `SurfaceWorld._physics_process_backrooms()`. It verifies the transactional reparent, owner revision and durable save/restore from that callback context.
+- The production integration fixture uses a non-center player target offset perpendicular to the open edge and asserts that the projected coordinate survives the handoff within the safe cell bounds.
+- The movement-driver unit fixture now routes toward a target two loaded cells away (`0,0 -> 1,0 -> 2,0`) and asserts that one movement tick commits only the first hop to `1,0`, preserving the full route snapshot and revision 1. The next tick/replan remains a separate multi-hop milestone.
+- The no-route assertion wording now reflects the implemented Hound one-hop capability: cross-cell pursuit fails closed when no loaded-cell route is available.
+- These tests are included in the existing Full Compatibility Gate and Xvfb/Mesa owner-runtime job; no new dependency or workflow is required.
