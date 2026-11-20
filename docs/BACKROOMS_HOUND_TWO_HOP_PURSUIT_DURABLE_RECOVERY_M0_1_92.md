@@ -20,7 +20,7 @@ Extend the production Hound pursuit integration from one adjacent ownership tran
 
 ## Test behavior
 
-The deterministic Level 2 fixture searches the loaded maze for a Hound with a validated two-hop route whose first hop is the existing adjacent-cell fixture.
+The deterministic Level 2 fixture searches the loaded maze for a Hound with a validated straight two-hop corridor (A → B → C) whose two edge directions are identical and whose first hop is the existing adjacent-cell fixture. This keeps the off-center doorway projection invariant across both hops.
 
 1. Keep the existing source-edge rejection, invalid perpendicular/vertical bounds, stale-route rejection and physical rollback checks.
 2. Give the Hound a pursuit target in a loaded cell exactly two route edges away.
@@ -57,7 +57,7 @@ The existing Full Compatibility Gate, SurfaceWorld File Persistence workflow and
 
 ## Limitations and next steps
 
-- This version verifies two hops in one loaded-window route; it does not yet claim unbounded pursuit across arbitrarily long streamed routes.
+- This version verifies two consecutive hops along one straight loaded-window corridor; it does not yet claim turning multi-hop or unbounded pursuit across arbitrarily long streamed routes.
 - No physical iPhone/iPad or hardware-GPU validation is claimed.
 - If the deterministic fixture cannot find a two-hop path, the test must fail explicitly rather than silently fall back to a one-hop scenario.
 - Next: run exact-head Full Compatibility Gate, focused file persistence and Xvfb/Mesa jobs; audit complete logs; only then mark the PR Ready for Review.
