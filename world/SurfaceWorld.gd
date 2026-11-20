@@ -1114,11 +1114,7 @@ func _restore_surface_from_backrooms(context: Dictionary) -> bool:
 	var return_seed_value: Variant = context.get("surface_world_seed", null)
 	if not (return_position_value is Vector3) or not (return_seed_value is int or return_seed_value is float):
 		return false
-	if (
-		not is_finite(float(return_seed_value))
-		or not is_equal_approx(float(return_seed_value), roundf(float(return_seed_value)))
-		or int(roundf(float(return_seed_value))) != world_seed
-	):
+	if not _is_world_save_integer(return_seed_value, world_seed):
 		return false
 	var return_position: Vector3 = return_position_value
 	if not is_finite(return_position.x) or not is_finite(return_position.y) or not is_finite(return_position.z):
@@ -1652,11 +1648,11 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal save envelope must be a dictionary; no world state was changed.", true)
 			return false
 		var portal_schema_value: Variant = portal_envelope_value.get("schema_version", 1)
-		if not (portal_schema_value is int or portal_schema_value is float) or not is_finite(float(portal_schema_value)) or floorf(float(portal_schema_value)) != float(portal_schema_value) or int(portal_schema_value) != 1:
+		if not _is_world_save_integer(portal_schema_value, 1):
 			_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal save envelope schema is invalid; no world state was changed.", true)
 			return false
 		var portal_seed_value: Variant = portal_envelope_value.get("world_seed", null)
-		if not (portal_seed_value is int or portal_seed_value is float) or not is_finite(float(portal_seed_value)) or not is_equal_approx(float(portal_seed_value), roundf(float(portal_seed_value))) or int(roundf(float(portal_seed_value))) != next_world_seed:
+		if not _is_world_save_integer(portal_seed_value, next_world_seed):
 			_set_restore_report(false, "backrooms_portal_validation", "Backrooms portal state belongs to a different world seed; no world state was changed.", true)
 			return false
 		var portal_state_value: Variant = portal_envelope_value.get("state", null)
@@ -2298,7 +2294,7 @@ func serialize_world_envelope() -> Dictionary:
 			runtime_payload.is_empty()
 			or runtime_payload != session_payload.get("maze_stream_state", {})
 			or not player.global_position.is_equal_approx(saved_backrooms_position)
-			or int(session_payload.get("surface_world_seed", -1)) != world_seed
+			or not _is_world_save_integer(session_payload.get("surface_world_seed", null), world_seed)
 		):
 			return {}
 		var surface_payload: Dictionary = _serialize_surface_world_payload(
@@ -2411,7 +2407,7 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		if (
 			str(surface_value.get("location_layer", "")) != "surface"
 			or not _is_world_save_integer(surface_value.get("mine_depth", null), 0)
-			or int(session_value.get("surface_world_seed", -1)) != int(surface_seed_value)
+			or not _is_world_save_integer(session_value.get("surface_world_seed", null), int(surface_seed_value))
 		):
 			_set_world_envelope_restore_report(false, "session_validation", "Backrooms Session does not belong to the saved surface world.", true)
 			return false
@@ -2960,7 +2956,7 @@ func _vector3_to_world_save_array(value: Vector3) -> Array:
 
 
 func _is_world_save_integer(value: Variant, expected: int) -> bool:
-	return (value is int or value is float) and is_finite(float(value)) and floorf(float(value)) == float(value) and int(value) == expected
+	return (value is int or value is float) and is_finite(float(value)) and floorf(float(value)) == float(value) and float(value) == float(expected)
 
 
 
