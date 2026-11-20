@@ -5086,7 +5086,7 @@ jobs:
 
   backrooms-visual-render-smoke:
     name: Godot 4.3 software-rendered Backrooms entity smoke
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile') || startsWith(github.head_ref, 'feat/durable-world-file-persistence-current-spine')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     container:
@@ -5104,6 +5104,13 @@ jobs:
           command -v timeout
           command -v godot
           godot --version
+      - name: Import root project for rendered Backrooms persistence test
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --import --quit
+          test -f assets/textures/backrooms_wallpaper.svg.import
+          test -f assets/textures/backrooms_carpet.svg.import
       - name: Run actual MeshInstance3D construction and frame capture
         shell: bash
         env:
@@ -5118,6 +5125,20 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'Backrooms entity visual factory graphical smoke test passed.'
+      - name: Run Hound durable file round-trip with live NavigationAgent3D
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s xvfb-run -a -s '-screen 0 1280x720x24' godot --audio-driver Dummy --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_owner_runtime_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Hound durable file round-trip failed in the software-rendered runtime."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms entity owner runtime integration tests passed."
       - name: Upload rendered frame
         if: always()
         uses: actions/upload-artifact@v4
