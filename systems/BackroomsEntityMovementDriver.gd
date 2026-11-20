@@ -78,6 +78,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			"moved_count": 0,
 			"blocked_count": 0,
 			"transferred_count": 0,
+			"transfer_results": [],
 			"pending_count": 0,
 			"tick_index": _tick_index
 		}
@@ -96,6 +97,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			"moved_count": 0,
 			"blocked_count": 0,
 			"transferred_count": 0,
+			"transfer_results": [],
 			"pending_count": 0,
 			"tick_index": _tick_index
 		}
@@ -113,6 +115,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 	var moved_count: int = 0
 	var blocked_count: int = 0
 	var transferred_count: int = 0
+	var transfer_results: Array = []
 	for offset in range(move_count):
 		var record_index: int = (start_index + offset) % records.size()
 		var record: Dictionary = records[record_index]
@@ -130,6 +133,9 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			blocked_count += 1
 		if bool(result.get("transferred", false)):
 			transferred_count += 1
+			var transfer_value: Variant = result.get("transfer_result", {})
+			if transfer_value is Dictionary:
+				transfer_results.append(transfer_value.duplicate(true))
 
 	var next_index: int = (start_index + move_count) % records.size()
 	_next_entity_key = str(records[next_index].get("key", ""))
@@ -138,6 +144,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 		"moved_count": moved_count,
 		"blocked_count": blocked_count,
 		"transferred_count": transferred_count,
+		"transfer_results": transfer_results,
 		"sampled_count": move_count,
 		"pending_count": records.size() - move_count,
 		"total_count": records.size(),
