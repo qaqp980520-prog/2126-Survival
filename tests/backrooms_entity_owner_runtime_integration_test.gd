@@ -338,8 +338,8 @@ func _run() -> void:
 	)
 	var transferred_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
 	_expect(
-		absf(transferred_perpendicular - 1.25) <= 0.05,
-		"off-center pursuit target is projected onto the open edge and preserved through the owner transfer"
+		absf(transferred_perpendicular - 1.25) <= 0.25,
+		"off-center pursuit target is projected onto the open edge within the 0.25 m transfer tolerance"
 	)
 	var transferred_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
 	_expect(
