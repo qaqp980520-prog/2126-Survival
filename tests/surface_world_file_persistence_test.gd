@@ -1,6 +1,7 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const WorldStreamScript = preload("res://scripts/world.gd")
 const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
@@ -710,6 +711,13 @@ func _test_json_numeric_save_validation() -> void:
 	var stamina_payload: Variant = stamina_parser.data
 	_expect(stamina_payload is Dictionary and bool(stamina_model.call("validate_save_dict", stamina_payload)), "stamina validator accepts finite integral JSON schema numbers")
 	_expect(not bool(stamina_model.call("validate_save_dict", {"schema_version": 1.5, "current": 73.5})), "stamina validator rejects fractional schema versions")
+	_expect(not bool(stamina_model.call("validate_save_dict", {"schema_version": 1e308, "current": 73.5})), "stamina validator rejects huge finite schema numbers without integer overflow")
+	var world_stream_probe: Node = WorldStreamScript.new()
+	_expect(
+		not bool(world_stream_probe.call("restore_stream_state", {"schema_version": 1e308})),
+		"base world validator rejects huge finite schema numbers without integer overflow"
+	)
+	world_stream_probe.free()
 
 	var quick_use_model: RefCounted = QuickUseScript.new()
 	var quick_use_parser := JSON.new()
@@ -731,6 +739,16 @@ func _test_json_numeric_save_validation() -> void:
 		"slots": ["berries", "herbs", "meat", "food"],
 		"selected_slot": 1
 	})), "quick-use validator rejects fractional schema versions")
+	_expect(not bool(quick_use_model.call("validate_save_dict", {
+		"schema_version": 1e308,
+		"slots": ["berries", "herbs", "meat", "food"],
+		"selected_slot": 1
+	})), "quick-use validator rejects huge finite schema numbers without integer overflow")
+	_expect(not bool(quick_use_model.call("validate_save_dict", {
+		"schema_version": 1,
+		"slots": ["berries", "herbs", "meat", "food"],
+		"selected_slot": 1e308
+	})), "quick-use validator rejects huge finite slot numbers before integer conversion")
 
 
 func _test_world_object_json_numeric_validation() -> void:
