@@ -413,6 +413,10 @@ func _run() -> void:
 				"second hop commits the intermediate turn cell at owner revision two"
 			)
 			_expect(entity_root.get_parent() == middle_turn_root, "live Hound is reparented into the second-hop turn cell")
+			var second_hop_perpendicular: float = entity_root.position.x
+			_expect(absf(second_hop_perpendicular) <= 0.25, "second turning hop centers its north-facing doorway")
+			var second_hop_edge_coordinate: float = entity_root.position.z
+			_expect(absf(second_hop_edge_coordinate) <= safe_extent - 0.02 + 0.001, "second-hop landing remains inside the strict serialization boundary")
 			_expect(_count_identity_in_root(target_root, spawn_cell_key, entity_id) == 0, "B no longer contains the Hound after the second transfer")
 			_expect(_count_identity_in_root(middle_turn_root, spawn_cell_key, entity_id) == 1, "C contains exactly one Hound identity after the second transfer")
 			_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0, "A remains free of a duplicate after two hops")
