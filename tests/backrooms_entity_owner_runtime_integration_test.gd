@@ -115,6 +115,15 @@ func _run() -> void:
 		and second_hop_direction != -direction,
 		"selected Hound has a validated two-hop turning route through the expected first owner"
 	)
+	_expect(
+		source_cell == Vector2i(1, 0)
+		and target_cell == Vector2i(0, 0)
+		and pursuit_goal_cell == Vector2i(0, -1)
+		and direction == Vector2i(-1, 0)
+		and first_hop_direction == Vector2i(-1, 0)
+		and second_hop_direction == Vector2i(0, -1),
+		"Level 2 seed 20261118 resolves the deterministic west-then-north turning fixture"
+	)
 	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
 	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
 	_expect(entity_root != null and str(entity_root.get_meta("spawn_level_id", "")) == "Level 2", "spawn descriptor factory preserves the runtime level identity")
@@ -791,6 +800,8 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 		if not (cell_value is Vector2i):
 			continue
 		var cell: Vector2i = cell_value
+		if cell != Vector2i(1, 0):
+			continue
 		for child in cell_root.get_children():
 			if not (child is CharacterBody3D):
 				continue
@@ -803,6 +814,8 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 			var spawn_cell: Vector2i = spawn_value
 			var spawn_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
 			for direction in directions:
+				if direction != Vector2i(-1, 0):
+					continue
 				var target_cell: Vector2i = cell + direction
 				var route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, target_cell)
 				var first_path_value: Variant = route.get("cell_path", [])
@@ -816,6 +829,8 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if not (goal_cell_value is Vector2i):
 						continue
 					var goal_cell: Vector2i = goal_cell_value
+					if goal_cell != Vector2i(0, -1):
+						continue
 					if goal_cell == cell or goal_cell == target_cell:
 						continue
 					var pursuit_route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, goal_cell)
