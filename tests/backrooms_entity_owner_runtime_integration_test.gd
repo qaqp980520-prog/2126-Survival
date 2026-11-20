@@ -358,7 +358,10 @@ func _run() -> void:
 		_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "first-hop entity metadata records revision one")
 		_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0 and _count_identity_in_root(target_root, spawn_cell_key, entity_id) == 1, "first hop moves the single Hound identity from A into B")
 		var first_hop_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
-		_expect(absf(first_hop_perpendicular - 1.25) <= 0.25, "first hop preserves the off-center projected doorway alignment")
+		_expect(
+			absf(first_hop_perpendicular) <= 0.25,
+			"turning first hop centers its doorway instead of projecting a later-cell target offset"
+		)
 		var first_hop_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
 		_expect(absf(first_hop_edge_coordinate) <= safe_extent - 0.02 + 0.001, "first-hop landing remains inside the strict serialization boundary")
 		movement_driver.call("reset")
