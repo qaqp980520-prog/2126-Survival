@@ -28,6 +28,8 @@ func _run() -> void:
 	root.add_child(world)
 	await process_frame
 	await process_frame
+	_expect(bool(world.call("_is_world_save_integer", 1.0, 1)), "world envelope integer validator accepts exact finite integers")
+	_expect(not bool(world.call("_is_world_save_integer", 1e308, 1)), "world envelope integer validator rejects huge finite numbers without integer overflow")
 
 	# The HUD is assembled dynamically under its CanvasLayer; read the production
 	# controls from SurfaceWorld's owned references instead of assuming a scene path.
