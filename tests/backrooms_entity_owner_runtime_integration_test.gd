@@ -231,19 +231,36 @@ func _run() -> void:
 		_expect(str(pursuit_decision.get("state", "")) == "pursue", "Hound receives a pursuit target in the adjacent loaded cell")
 		await physics_frame
 		var movement_driver = MovementDriverScript.new()
+		var movement_records: Array = movement_driver.call("_collect_entity_records", runtime)
+		var hound_identity_key: String = spawn_cell_key + "|" + entity_id
+		var hound_record_found: bool = false
+		for movement_record in movement_records:
+			if str(movement_record.get("key", "")) == hound_identity_key:
+				hound_record_found = true
+				break
+		_expect(hound_record_found, "movement scheduler collects the selected Hound under its immutable spawn identity")
+		movement_driver.set("_next_entity_key", hound_identity_key)
 		var movement_result: Dictionary = {}
-		for _movement_attempt in range(12):
-			movement_result = movement_driver.call("tick", runtime, 0.1)
-			var current_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		var current_owner: Dictionary = {}
+		for _movement_attempt in range(3):
+			movement_result = movement_driver.call("tick", runtime, 0.11)
+			current_owner = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 			if str(current_owner.get("owner_cell_key", "")) == target_key:
 				break
 			await physics_frame
+		print(
+			"HOUND_CROSS_CELL_PERSISTENCE_DIAGNOSTIC result=", movement_result,
+			" owner=", current_owner,
+			" driver=", movement_driver.call("get_diagnostics")
+		)
 		var transfer_value: Variant = movement_result.get("transfer_result", {})
 		if transfer_value is Dictionary:
 			transfer = transfer_value
 		_expect(
 			int(movement_result.get("transferred_count", 0)) == 1 and bool(transfer.get("ok", false)),
-			"Hound pursuit driver reaches the edge and commits the production ownership transfer"
+			"Hound pursuit driver reaches the edge and commits the production ownership transfer; result=%s owner=%s" % [
+				str(movement_result), str(current_owner)
+			]
 		)
 		movement_driver.call("reset")
 	if not bool(transfer.get("ok", false)):
