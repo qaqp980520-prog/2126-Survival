@@ -34,7 +34,7 @@ The route is derived from the production deterministic maze topology and loaded-
 4. Set a pursuit target inside D.
 5. Execute the first real physics callback and require exactly one A→B transfer, owner revision 0→1, and no duplicate in A.
 6. Reset the movement scheduler, re-collect the same immutable identity under B, replan B→C→D, and execute a separate physics callback. Require exactly one B→C transfer and owner revision 1→2.
-7. Reset the scheduler again, re-collect the same identity under C, replan C→D, and execute a third independent physics callback. Require exactly one C→D transfer and owner revision 2→3.
+7. Require the second north-facing doorway to be centered within 0.25 m and its edge landing to remain inside the strict serialization boundary. Reset the scheduler again, re-collect the same identity under C, replan C→D, and execute a third independent physics callback. Require exactly one C→D transfer and owner revision 2→3.
 8. Require A, B, and C to contain no copy of the Hound and D to contain exactly one instance. Require the ownership ledger to have no pending transfer.
 9. Preserve stream unload/reload and retained-but-unloaded owner reconstruction for D.
 10. Preserve the atomic file write, primary corruption, `.bak` recovery, semantic save comparison, and fresh NavigationAgent3D factory reconstruction. Disk recovery must retain owner D and revision 3.
