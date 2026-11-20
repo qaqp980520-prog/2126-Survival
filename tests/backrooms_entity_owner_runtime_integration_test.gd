@@ -95,12 +95,17 @@ func _run() -> void:
 	var pursuit_goal_root: Node3D = runtime.call("get_cell_root", pursuit_goal_key) as Node3D
 	var pursuit_route: Dictionary = candidate.get("pursuit_route", {})
 	var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
+	var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
+	var second_hop_direction: Vector2i = Vector2i.ZERO
+	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2 and pursuit_directions_value[1] is Vector2i:
+		second_hop_direction = pursuit_directions_value[1]
 	_expect(
 		bool(pursuit_route.get("ok", false))
 		and pursuit_path_value is Array
 		and pursuit_path_value.size() == 3
 		and pursuit_path_value[1] == target_cell
-		and pursuit_path_value[2] == pursuit_goal_cell,
+		and pursuit_path_value[2] == pursuit_goal_cell
+		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1,
 		"selected Hound has a validated two-hop loaded-cell route through the expected first owner"
 	)
 	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
@@ -331,6 +336,15 @@ func _run() -> void:
 			and str(transfer.get("to_owner_cell_key", "")) == target_key,
 			"first physics tick commits only the first adjacent hop of the two-hop route"
 		)
+		var first_hop_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		_expect(entity_root.get_parent() == target_root, "first hop reparents the Hound into the intermediate cell")
+		_expect(str(first_hop_owner.get("owner_cell_key", "")) == target_key and int(first_hop_owner.get("owner_revision", -1)) == 1, "first hop commits owner revision one")
+		_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "first-hop entity metadata records revision one")
+		_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0 and _count_identity_in_root(target_root, spawn_cell_key, entity_id) == 1, "first hop moves the single Hound identity from A into B")
+		var first_hop_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
+		_expect(absf(first_hop_perpendicular - 1.25) <= 0.25, "first hop preserves the off-center projected doorway alignment")
+		var first_hop_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
+		_expect(absf(first_hop_edge_coordinate) <= safe_extent - 0.02 + 0.001, "first-hop landing remains inside the strict serialization boundary")
 		movement_driver.call("reset")
 		if bool(transfer.get("ok", false)):
 			movement_driver.set("_next_entity_key", hound_identity_key)
@@ -382,9 +396,9 @@ func _run() -> void:
 	_expect(target_root != null and entity_root.get_parent() == target_root, "live entity is reparented to the next loaded cell")
 	_expect(entity_root.get_meta("spawn_cell", null) == source_cell, "ownership transfer preserves immutable spawn-cell identity")
 	_expect(str(entity_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "entity metadata records the new owner cell")
-	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "entity metadata records the committed owner revision")
+	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 2, "entity metadata records the final two-hop owner revision")
 	var owner_record: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
-	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 1, "ownership ledger commits the same owner and revision")
+	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 2, "ownership ledger commits the final two-hop owner and revision")
 	var source_identity_keys_after: Array = source_root.get_meta("backrooms_entity_identity_keys", [])
 	var source_spawn_ids_after: Array = source_root.get_meta("backrooms_entity_spawn_ids", [])
 	var target_identity_keys_after: Array = target_root.get_meta("backrooms_entity_identity_keys", [])
@@ -401,16 +415,16 @@ func _run() -> void:
 		and absf(entity_root.position.z) <= safe_extent + 0.001,
 		"transferred entity lands inside the target cell's safe physics bounds"
 	)
-	var transferred_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
-	_expect(
-		absf(transferred_perpendicular - 1.25) <= 0.25,
-		"off-center pursuit target is projected onto the open edge within the 0.25 m transfer tolerance"
+	var final_target_local: Vector3 = target_root.to_local(
+		pursuit_goal_root.global_position
+		+ Vector3(0.0, entity_root.position.y, 0.0)
+		+ (Vector3(0.0, 0.0, 1.25) if direction.x != 0 else Vector3(1.25, 0.0, 0.0))
 	)
-	var transferred_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
-	_expect(
-		absf(transferred_edge_coordinate) <= safe_extent - 0.02 + 0.001,
-		"owner transfer lands inside the strict serialization boundary with a rounding inset"
-	)
+	var final_perpendicular: float = entity_root.position.z if second_hop_direction.x != 0 else entity_root.position.x
+	var expected_final_perpendicular: float = final_target_local.z if second_hop_direction.x != 0 else final_target_local.x
+	_expect(absf(final_perpendicular - expected_final_perpendicular) <= 0.25, "second-hop landing preserves the projected perpendicular target within the transfer tolerance")
+	var final_edge_coordinate: float = entity_root.position.x if second_hop_direction.x != 0 else entity_root.position.z
+	_expect(absf(final_edge_coordinate) <= safe_extent - 0.02 + 0.001, "second-hop landing remains inside the strict serialization boundary")
 
 	var saved_after_transfer: Dictionary = runtime.call("to_save_dict")
 	_expect(not saved_after_transfer.is_empty(), "immediate save after owner transfer accepts the migrated owner-local position")
