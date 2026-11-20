@@ -7,6 +7,7 @@ Extend the production Hound pursuit integration from one adjacent ownership tran
 ## Scope and files
 
 - Updated: `tests/backrooms_entity_owner_runtime_integration_test.gd`
+- Updated: `.github/workflows/godot-validation.yml` to include this branch in the software-rendered Backrooms entity smoke job
 - Added: `docs/BACKROOMS_HOUND_TWO_HOP_PURSUIT_DURABLE_RECOVERY_M0_1_92.md`
 - No production movement code is changed in this version; the objective is to prove that the existing route replanning and ownership transaction compose across consecutive hops.
 
@@ -45,14 +46,15 @@ Focused production integration:
 godot --headless --path . --script res://tests/backrooms_entity_owner_runtime_integration_test.gd
 ```
 
-The existing Full Compatibility Gate, SurfaceWorld File Persistence workflow and Xvfb/Mesa Backrooms render job already execute this integration test; no workflow change is needed.
+The Full Compatibility Gate and SurfaceWorld File Persistence workflow already execute this integration test. The Xvfb/Mesa job originally skipped this branch because its explicit head-ref allowlist did not include `feat/hound-two-hop-pursuit-durable-recovery`; `.github/workflows/godot-validation.yml` now includes this branch prefix so the rendered Hound round-trip is actually exercised.
 
 ## Validation status
 
 - Branch was created from exact parent PR #405 HEAD `4588131608ee31769ae9d90fab67a4a3af2a1c04`.
 - The test file update is committed on a new stacked branch.
 - Static review only at authoring time; no local Godot executable is available.
-- Exact-head GitHub Actions validation is required before this PR can leave Draft.
+- Exact-head Full Compatibility Gate and focused persistence validation are required before this PR can leave Draft.
+- The prior Xvfb/Mesa job was skipped by the branch filter; the workflow allowlist fix is committed, and the new exact-head Xvfb/Mesa run is pending.
 - No main merge; parent-first review and integration remain required.
 
 ## Limitations and next steps
