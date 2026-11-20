@@ -93,9 +93,15 @@ func validate_save_dict(data: Dictionary) -> bool:
 	var schema: Variant = data.get("schema_version")
 	var raw_slots: Variant = data.get("slots")
 	var selected: Variant = data.get("selected_slot")
-	if not (schema is int) or int(schema) != SAVE_SCHEMA_VERSION:
+	if not (schema is int or schema is float) or not is_finite(float(schema)):
 		return false
-	if not (selected is int) or int(selected) < 0 or int(selected) >= SLOT_COUNT:
+	var schema_number: float = float(schema)
+	if floorf(schema_number) != schema_number or int(schema_number) != SAVE_SCHEMA_VERSION:
+		return false
+	if not (selected is int or selected is float) or not is_finite(float(selected)):
+		return false
+	var selected_number: float = float(selected)
+	if floorf(selected_number) != selected_number or int(selected_number) < 0 or int(selected_number) >= SLOT_COUNT:
 		return false
 	if not (raw_slots is Array) or raw_slots.size() != SLOT_COUNT:
 		return false
