@@ -253,9 +253,9 @@ func _run() -> void:
 			" owner=", current_owner,
 			" driver=", movement_driver.call("get_diagnostics")
 		)
-		var transfer_value: Variant = movement_result.get("transfer_result", {})
-		if transfer_value is Dictionary:
-			transfer = transfer_value
+		var transfer_results: Array = movement_result.get("transfer_results", [])
+		if not transfer_results.is_empty() and transfer_results[0] is Dictionary:
+			transfer = transfer_results[0]
 		_expect(
 			int(movement_result.get("transferred_count", 0)) == 1 and bool(transfer.get("ok", false)),
 			"Hound pursuit driver reaches the edge and commits the production ownership transfer; result=%s owner=%s" % [
