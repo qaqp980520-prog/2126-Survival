@@ -286,7 +286,7 @@ func _run() -> void:
 		physics_tick_driver.runtime = runtime
 		physics_tick_driver.movement_driver = movement_driver
 		physics_tick_driver.max_attempts = 12
-		world_root.add_child(physics_tick_driver)
+		runtime.add_child(physics_tick_driver)
 		physics_tick_driver.set_physics_process(true)
 		for _physics_attempt in range(12):
 			if physics_tick_driver.finished:
