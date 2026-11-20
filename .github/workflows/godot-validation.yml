@@ -32,7 +32,7 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare candidate files when not yet merged
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -92,6 +92,10 @@ jobs:
           test -f systems/BackroomsMazeCellRuntime.gd
           test -f tests/backrooms_maze_cell_runtime_test.gd
           test -f tests/backrooms_entity_owner_runtime_integration_test.gd
+          test -f systems/WorldEnvelopeFileStore.gd
+          test -f tests/surface_world_file_persistence_test.gd
+          test -f tests/world_save_load_input_test.gd
+          test -f .github/workflows/world-file-persistence-validation.yml
           test -f systems/BackroomsEntityVisualFactory.gd
           test -f tests/backrooms_entity_visual_factory_test.gd
           test -f tests/backrooms_entity_visual_factory_render_smoke_test.gd
@@ -1952,6 +1956,24 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Backrooms combined world save envelope tests passed."
+
+      - name: Run production SurfaceWorld file persistence integration test
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 150s godot --headless --path . --script res://tests/surface_world_file_persistence_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "SurfaceWorld file persistence integration tests passed."
+
+      - name: Run Save/Load keyboard and touch input regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_save_load_input_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World save/load keyboard and touch input tests passed."
 
       - name: Run updated survival test hub smoke test
         shell: bash
@@ -5071,7 +5093,7 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - name: Checkout candidate
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Xvfb and Mesa software renderer
         shell: bash
         run: |
