@@ -442,6 +442,43 @@ func _run() -> void:
 	_expect(spawn_cell_identity_count == 0, "original spawn cell does not create a duplicate after owner-cell reconstruction")
 
 	var final_save: Dictionary = runtime.call("to_save_dict")
+	var runtime_records: Array = final_save.get("entity_runtime_states", [])
+	_expect(not runtime_records.is_empty(), "transferred Hound snapshot contains a validated runtime-state record")
+	if not runtime_records.is_empty():
+		var expected_level_id: String = str(final_save.get("level_id", "Level 2"))
+		var expected_world_seed: int = int(final_save.get("world_seed", 20261118))
+		var expected_cell_size: float = float(final_save.get("cell_size", 8.0))
+		var expected_spawn_version: int = int(final_save.get("spawn_algorithm_version", 1))
+		var huge_spawn_version_records: Array = runtime_records.duplicate(true)
+		huge_spawn_version_records[0]["spawn_algorithm_version"] = 1e308
+		var huge_spawn_version_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_spawn_version_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_spawn_version_result.get("ok", false)), "entity runtime validator rejects huge finite spawn versions without integer overflow")
+		var huge_patrol_records: Array = runtime_records.duplicate(true)
+		huge_patrol_records[0]["patrol_index"] = 1e308
+		var huge_patrol_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_patrol_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_patrol_result.get("ok", false)), "entity runtime validator rejects huge finite patrol indices before integer conversion")
+		var huge_brain_schema_records: Array = runtime_records.duplicate(true)
+		huge_brain_schema_records[0]["brain_state"]["schema_version"] = 1e308
+		var huge_brain_schema_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_schema_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_schema_result.get("ok", false)), "Hound brain validator rejects huge finite schema numbers without integer overflow")
+		var huge_brain_seed_records: Array = runtime_records.duplicate(true)
+		huge_brain_seed_records[0]["brain_state"]["world_seed"] = 1e308
+		var huge_brain_seed_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_seed_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_seed_result.get("ok", false)), "Hound brain validator rejects huge finite world seeds without integer overflow")
+		var huge_brain_spawn_records: Array = runtime_records.duplicate(true)
+		huge_brain_spawn_records[0]["brain_state"]["spawn_cell"] = [1e308, 0]
+		var huge_brain_spawn_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_spawn_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_spawn_result.get("ok", false)), "Hound brain validator rejects huge finite spawn coordinates without integer overflow")
 	var restored: Node3D = RuntimeScript.new() as Node3D
 	root.add_child(restored)
 	_expect(bool(restored.call("load_save_dict", final_save)), "fresh runtime reconstructs migrated ownership from the combined maze payload")
