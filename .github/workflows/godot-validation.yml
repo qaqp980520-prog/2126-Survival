@@ -87,6 +87,7 @@ jobs:
           test -f docs/BACKROOMS_LIVE_ENTITY_OWNER_TRANSFER_M0_1_73.md
           test -f docs/BACKROOMS_ENTITY_STATE_OWNERSHIP_PAIRING_M0_1_74.md
           test -f docs/BACKROOMS_CELL_LOCAL_NAVIGATION_M0_1_75.md
+          test -f docs/BACKROOMS_SURFACEWORLD_HOUND_DURABLE_ENVELOPE_ROUNDTRIP_M0_1_85.md
           test -f systems/BackroomsMazeStreamState.gd
           test -f tests/backrooms_maze_stream_state_test.gd
           test -f systems/BackroomsMazeCellRuntime.gd
@@ -94,6 +95,7 @@ jobs:
           test -f tests/backrooms_entity_owner_runtime_integration_test.gd
           test -f systems/WorldEnvelopeFileStore.gd
           test -f tests/surface_world_file_persistence_test.gd
+          test -f tests/surface_world_hound_file_roundtrip_test.gd
           test -f tests/world_save_load_input_test.gd
           test -f .github/workflows/world-file-persistence-validation.yml
           test -f systems/BackroomsEntityVisualFactory.gd
@@ -1965,6 +1967,18 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "SurfaceWorld file persistence integration tests passed."
+
+      - name: Run combined SurfaceWorld and Hound durable envelope round-trip
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_world_hound_file_roundtrip_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Combined SurfaceWorld and Hound durable envelope regression failed."
+            exit 1
+          fi
+          echo "$output" | grep -q "SurfaceWorld Hound durable envelope round-trip tests passed."
 
       - name: Run Save/Load keyboard and touch input regression
         shell: bash
