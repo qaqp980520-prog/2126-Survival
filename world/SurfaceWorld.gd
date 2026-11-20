@@ -17,6 +17,8 @@ const BackroomsEntityMovementDriverScript = preload("res://systems/BackroomsEnti
 const BackroomsLightingControllerScript = preload("res://systems/BackroomsLightingController.gd")
 const BackroomsLocationSessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const BACKROOMS_WORLD_SAVE_SCHEMA_VERSION: int = 1
+const WorldEnvelopeFileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const DEFAULT_WORLD_SAVE_PATH: String = "user://2126_survival_world.json"
 const BACKROOMS_WORLD_OFFSET: Vector3 = Vector3(0.0, 1000.0, 0.0)
 const BACKROOMS_CELL_SIZE: float = 8.0
 const BACKROOMS_STREAM_RADIUS: int = 1
@@ -45,6 +47,10 @@ var camera: Camera3D
 var hud: Label
 var interaction_prompt: Label
 var streaming_diagnostics_panel: PanelContainer
+var save_load_panel: PanelContainer
+var save_button: Button
+var load_button: Button
+var load_confirmation_dialog: ConfirmationDialog
 var touch_buttons: Dictionary = {}
 var _touch_directions: Dictionary = {}
 var _touch_jump: bool = false
@@ -73,6 +79,7 @@ var surface_sun: DirectionalLight3D
 var _is_in_backrooms: bool = false
 var _backrooms_surface_visibility_snapshot: Dictionary = {}
 var _last_world_envelope_restore_report: Dictionary = {}
+var _world_envelope_file_store: RefCounted
 var _last_backrooms_sync_position: Vector3 = Vector3.ZERO
 var _backrooms_portal_chunk_id: String = ""
 var _last_mine_grid: Vector2i = Vector2i(999999, 999999)
@@ -117,6 +124,7 @@ func _ready() -> void:
 	backrooms_perception_driver = BackroomsPerceptionDriverScript.new()
 	backrooms_entity_movement_driver = BackroomsEntityMovementDriverScript.new()
 	backrooms_lighting_controller = BackroomsLightingControllerScript.new()
+	_refresh_hud()
 
 func _process(delta: float) -> void:
 	if backrooms_portal_director == null or player == null or _is_underground or _is_in_backrooms or _surface_stream_pending:
@@ -256,6 +264,42 @@ func _build_hud() -> void:
 	streaming_diagnostics_panel.call("bind_director", director)
 	streaming_diagnostics_panel.call("bind_corner_provider", chunk_controller)
 	streaming_diagnostics_panel.call("set_open", false)
+	save_load_panel = PanelContainer.new()
+	save_load_panel.name = "SaveLoadPanel"
+	save_load_panel.anchor_left = 1.0
+	save_load_panel.anchor_right = 1.0
+	save_load_panel.anchor_top = 0.0
+	save_load_panel.anchor_bottom = 0.0
+	save_load_panel.offset_left = -214.0
+	save_load_panel.offset_right = -14.0
+	save_load_panel.offset_top = 362.0
+	save_load_panel.offset_bottom = 414.0
+	layer.add_child(save_load_panel)
+	var save_load_row := HBoxContainer.new()
+	save_load_row.add_theme_constant_override("separation", 4)
+	save_load_panel.add_child(save_load_row)
+	save_button = Button.new()
+	save_button.name = "SaveWorld"
+	save_button.text = "SAVE"
+	save_button.custom_minimum_size = Vector2(92.0, 42.0)
+	save_button.pressed.connect(_on_save_button_pressed)
+	save_load_row.add_child(save_button)
+	load_button = Button.new()
+	load_button.name = "LoadWorld"
+	load_button.text = "LOAD"
+	load_button.custom_minimum_size = Vector2(92.0, 42.0)
+	load_button.pressed.connect(_request_load_confirmation)
+	save_load_row.add_child(load_button)
+	load_confirmation_dialog = ConfirmationDialog.new()
+	load_confirmation_dialog.name = "LoadConfirmationDialog"
+	load_confirmation_dialog.title = "Load Saved World"
+	load_confirmation_dialog.dialog_text = "Load the last saved world? Unsaved progress will be replaced."
+	load_confirmation_dialog.get_ok_button().text = "Load"
+	var cancel_button: Button = load_confirmation_dialog.get_cancel_button()
+	if cancel_button != null:
+		cancel_button.text = "Cancel"
+	load_confirmation_dialog.confirmed.connect(_confirm_load_game)
+	layer.add_child(load_confirmation_dialog)
 	_refresh_hud()
 
 func _add_touch_button(parent: GridContainer, key: String, label_text: String) -> void:
@@ -555,6 +599,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed and not key_event.echo:
+			if key_event.keycode == KEY_F5:
+				save_game()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_F9:
+				_request_load_confirmation()
+				get_viewport().set_input_as_handled()
+				return
 			if key_event.keycode == KEY_F3:
 				if streaming_diagnostics_panel != null and is_instance_valid(streaming_diagnostics_panel):
 					streaming_diagnostics_panel.call("toggle_open")
@@ -2120,6 +2172,10 @@ func _refresh_hud() -> void:
 		return
 	if interaction_prompt != null:
 		interaction_prompt.text = get_interaction_prompt_text()
+	if save_button != null and is_instance_valid(save_button):
+		save_button.disabled = not _can_save_world()
+	if load_button != null and is_instance_valid(load_button):
+		load_button.disabled = not _can_load_world()
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = int(backrooms_maze_runtime.call("get_loaded_cell_count")) if _is_in_backrooms and backrooms_maze_runtime != null else (chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0)
 	var displayed_vein_count: int = 0 if _is_in_backrooms else int(status.get("saved_vein_count", 0))
@@ -2182,7 +2238,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")
+	var action_help: String = "G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use") + " · F5 save · F9 load"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, displayed_vein_count,
 		displayed_crop_count, displayed_object_count,
@@ -2505,6 +2561,120 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 
 func get_last_world_envelope_restore_report() -> Dictionary:
 	return _last_world_envelope_restore_report.duplicate(true)
+
+
+func _can_save_world() -> bool:
+	if (
+		player == null
+		or _surface_stream_pending
+		or backrooms_transition_manager == null
+		or not is_instance_valid(backrooms_transition_manager)
+		or backrooms_maze_runtime == null
+		or not is_instance_valid(backrooms_maze_runtime)
+	):
+		return false
+	var state_name: String = str(backrooms_transition_manager.call("get_state_name"))
+	if state_name == "IDLE":
+		return not _is_in_backrooms and not bool(backrooms_maze_runtime.call("is_prepared")) and not bool(backrooms_maze_runtime.call("is_active"))
+	if state_name == "IN_BACKROOMS":
+		return _is_in_backrooms and bool(backrooms_maze_runtime.call("is_prepared")) and bool(backrooms_maze_runtime.call("is_active"))
+	return false
+
+
+func _can_load_world() -> bool:
+	if (
+		_is_in_backrooms
+		or _surface_stream_pending
+		or player == null
+		or backrooms_transition_manager == null
+		or not is_instance_valid(backrooms_transition_manager)
+		or backrooms_maze_runtime == null
+		or not is_instance_valid(backrooms_maze_runtime)
+	):
+		return false
+	if str(backrooms_transition_manager.call("get_state_name")) != "IDLE":
+		return false
+	var session_payload: Dictionary = backrooms_transition_manager.call("get_session_save_dict")
+	if (
+		bool(session_payload.get("active", false))
+		or bool(backrooms_maze_runtime.call("is_prepared"))
+		or bool(backrooms_maze_runtime.call("is_active"))
+		or (backrooms_lighting_controller != null and bool(backrooms_lighting_controller.call("is_active")))
+	):
+		return false
+	return true
+
+
+func _on_save_button_pressed() -> void:
+	if not _can_save_world():
+		_world_object_action_message = "World save is unavailable while a transition or stream transaction is active."
+		_refresh_hud()
+		return
+	save_game()
+
+
+func _request_load_confirmation() -> void:
+	if not _can_load_world():
+		_world_object_action_message = "Load is available only from an idle SurfaceWorld; return from Backrooms first."
+		_refresh_hud()
+		return
+	if load_confirmation_dialog != null and is_instance_valid(load_confirmation_dialog):
+		load_confirmation_dialog.popup_centered(Vector2i(420, 180))
+
+
+func _confirm_load_game() -> void:
+	if load_confirmation_dialog != null and is_instance_valid(load_confirmation_dialog):
+		load_confirmation_dialog.hide()
+	if not _can_load_world():
+		_world_object_action_message = "World load was cancelled because the world is no longer idle."
+		_refresh_hud()
+		return
+	load_game()
+
+
+func save_game(path: String = DEFAULT_WORLD_SAVE_PATH) -> bool:
+	if not _can_save_world():
+		_world_object_action_message = "World save is unavailable while a transition or stream transaction is active."
+		_refresh_hud()
+		return false
+	if _world_envelope_file_store == null:
+		_world_envelope_file_store = WorldEnvelopeFileStoreScript.new()
+	var payload: Dictionary = serialize_world_envelope()
+	var saved: bool = bool(_world_envelope_file_store.call("write_atomically", path, payload))
+	var report: Dictionary = _world_envelope_file_store.call("get_last_report")
+	_world_object_action_message = "World saved to %s." % path if saved else "World save failed (%s)." % str(report.get("phase", "unavailable"))
+	_refresh_hud()
+	return saved
+
+
+func load_game(path: String = DEFAULT_WORLD_SAVE_PATH) -> bool:
+	if not _can_load_world():
+		_world_object_action_message = "World load requires an idle SurfaceWorld with no active transition or stream."
+		_refresh_hud()
+		return false
+	if _world_envelope_file_store == null:
+		_world_envelope_file_store = WorldEnvelopeFileStoreScript.new()
+	var loaded: bool = bool(_world_envelope_file_store.call(
+		"load_with_backup",
+		path,
+		Callable(self, "restore_world_envelope"),
+		Callable(self, "get_last_world_envelope_restore_report"),
+		int(Time.get_unix_time_from_system())
+	))
+	var report: Dictionary = _world_envelope_file_store.call("get_last_report")
+	if loaded:
+		var source: String = str(report.get("details", {}).get("source", path))
+		_world_object_action_message = "World loaded from %s." % source
+	else:
+		_world_object_action_message = "World load failed (%s)." % str(report.get("phase", "unavailable"))
+	_refresh_hud()
+	return loaded
+
+
+func get_last_world_file_report() -> Dictionary:
+	if _world_envelope_file_store == null:
+		return {}
+	return _world_envelope_file_store.call("get_last_report")
 
 
 
