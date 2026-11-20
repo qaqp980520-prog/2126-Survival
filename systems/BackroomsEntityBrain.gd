@@ -255,11 +255,11 @@ static func validate_save_dict(payload: Dictionary, expected_entity_id: String, 
 	var schema_value: Variant = payload.get("schema_version", null)
 	var behavior_value: Variant = payload.get("behavior_version", null)
 	var seed_value: Variant = payload.get("world_seed", null)
-	if not _is_integer_value(schema_value) or int(schema_value) != SAVE_SCHEMA_VERSION:
+	if not _is_integer_value(schema_value) or float(schema_value) != float(SAVE_SCHEMA_VERSION):
 		return false
-	if not _is_integer_value(behavior_value) or int(behavior_value) != BEHAVIOR_VERSION:
+	if not _is_integer_value(behavior_value) or float(behavior_value) != float(BEHAVIOR_VERSION):
 		return false
-	if not _is_integer_value(seed_value) or int(seed_value) != expected_world_seed:
+	if not _is_integer_value(seed_value) or float(seed_value) != float(expected_world_seed):
 		return false
 	if str(payload.get("entity_id", "")) != expected_entity_id or str(payload.get("level_id", "")) != expected_level_id:
 		return false
@@ -268,7 +268,7 @@ static func validate_save_dict(payload: Dictionary, expected_entity_id: String, 
 		return false
 	if not _is_integer_value(spawn_value[0]) or not _is_integer_value(spawn_value[1]):
 		return false
-	if int(spawn_value[0]) != expected_spawn_cell.x or int(spawn_value[1]) != expected_spawn_cell.y:
+	if float(spawn_value[0]) != float(expected_spawn_cell.x) or float(spawn_value[1]) != float(expected_spawn_cell.y):
 		return false
 	var state_value: Variant = payload.get("state", null)
 	var intent_value: Variant = payload.get("intent", null)
