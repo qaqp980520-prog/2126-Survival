@@ -3,6 +3,7 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const MovementDriverScript = preload("res://systems/BackroomsEntityMovementDriver.gd")
 const DISK_SAVE_PATH: String = "user://run342_backrooms_hound_file_roundtrip.json"
 const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 
@@ -215,10 +216,33 @@ func _run() -> void:
 	blocker.free()
 	await physics_frame
 
-	var transfer: Dictionary = runtime.call(
-		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	var hound_brain: Node = entity_root.get_node_or_null("AI")
+	_expect(hound_brain != null, "selected Hound exposes its production behavior brain")
+	var target_world_position: Vector3 = target_root.global_position + Vector3(0.0, entity_root.position.y, 0.0)
+	var pursuit_decision: Dictionary = hound_brain.call("evaluate_perception", {
+		"distance_to_player": 5.5,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": target_world_position
+	}, 0.2)
+	_expect(str(pursuit_decision.get("state", "")) == "pursue", "Hound receives a pursuit target in the adjacent loaded cell")
+	await physics_frame
+	var movement_driver = MovementDriverScript.new()
+	var movement_result: Dictionary = {}
+	for _movement_attempt in range(12):
+		movement_result = movement_driver.call("tick", runtime, 0.1)
+		var current_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		if str(current_owner.get("owner_cell_key", "")) == target_key:
+			break
+		await physics_frame
+	var transfer_value: Variant = movement_result.get("transfer_result", {})
+	var transfer: Dictionary = transfer_value if transfer_value is Dictionary else {}
+	_expect(
+		int(movement_result.get("transferred_count", 0)) == 1 and bool(transfer.get("ok", false)),
+		"cell-local Hound pursuit driver reaches the edge and commits the production ownership transfer"
 	)
-	_expect(bool(transfer.get("ok", false)), "valid adjacent route commits a live CharacterBody3D owner transfer")
+	movement_driver.call("reset")
 	if not bool(transfer.get("ok", false)):
 		_finish(runtime, null)
 		return
