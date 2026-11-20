@@ -2453,9 +2453,6 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 			runtime_probe.free()
 			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true, runtime_details)
 			return false
-		var canonical_session_value: Dictionary = session_value.duplicate(true)
-		canonical_session_value["maze_stream_state"] = runtime_readback.duplicate(true)
-		session_value = canonical_session_value
 		runtime_probe.free()
 	else:
 		if (
