@@ -4,7 +4,7 @@ class_name BackroomsEntityMovementDriver
 const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
 const MazeLayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
-## Bounded, cell-local locomotion for perception-driven Backrooms entities.
+## Bounded locomotion for perception-driven Backrooms entities.
 ## The owning SurfaceWorld calls tick(); entities never create their own process loop.
 ## Hound pursuit may cross one loaded cell at a time through a validated route snapshot
 ## and the runtime's transactional ownership transfer. Other movement stays cell-local.
@@ -269,9 +269,14 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 						"blocked": true,
 						"reason": str(edge_target_result.get("reason", "cross_cell_route_unavailable"))
 					}
-				target_local = edge_target_result.get("target_local", current_local)
-				cross_cell_route = edge_target_result.get("route", {})
-				cross_cell_direction = edge_target_result.get("direction", Vector2i.ZERO)
+				var edge_target_value: Variant = edge_target_result.get("target_local", null)
+				var route_value: Variant = edge_target_result.get("route", null)
+				var direction_value: Variant = edge_target_result.get("direction", null)
+				if not (edge_target_value is Vector3) or not (route_value is Dictionary) or not (direction_value is Vector2i):
+					return {"moved": false, "blocked": true, "reason": "cross_cell_edge_target_contract_invalid"}
+				target_local = edge_target_value
+				cross_cell_route = route_value
+				cross_cell_direction = direction_value
 				cross_cell_hop = true
 				stop_distance = EDGE_TARGET_DESIRED_DISTANCE
 				var transfer_before_move: Dictionary = _try_commit_cross_cell_hound_transfer(
@@ -475,6 +480,10 @@ func _build_cross_cell_hound_target(
 	var next_root_value: Variant = runtime.call("get_cell_root", next_cell_key)
 	if not (next_root_value is Node3D) or not is_instance_valid(next_root_value):
 		return {"ok": false, "reason": "cross_cell_next_owner_not_loaded"}
+	var next_root: Node3D = next_root_value as Node3D
+	var next_cell_value: Variant = next_root.get_meta("backrooms_cell", null)
+	if not (next_cell_value is Vector2i) or next_cell_value != next_cell:
+		return {"ok": false, "reason": "cross_cell_next_owner_identity_mismatch"}
 	if not bool(runtime.call("is_route_snapshot_current", route)):
 		return {"ok": false, "reason": "route_snapshot_stale"}
 	var safe_extent: float = cell_size * 0.5 - SAFE_CELL_MARGIN
@@ -557,7 +566,9 @@ func _try_commit_cross_cell_hound_transfer(
 
 func _movement_result_from_cross_cell_transfer(transfer_attempt: Dictionary) -> Dictionary:
 	var transfer_value: Variant = transfer_attempt.get("transfer_result", {})
-	var transfer_result: Dictionary = transfer_value if transfer_value is Dictionary else {}
+	var transfer_result: Dictionary = {}
+	if transfer_value is Dictionary:
+		transfer_result = transfer_value
 	if bool(transfer_attempt.get("ok", false)):
 		return {
 			"moved": true,
