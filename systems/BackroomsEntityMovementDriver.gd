@@ -287,7 +287,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 				cross_cell_hop = true
 				stop_distance = EDGE_TARGET_DESIRED_DISTANCE
 				var transfer_before_move: Dictionary = _try_commit_cross_cell_hound_transfer(
-					record, cross_cell_route, cross_cell_direction
+					record, cross_cell_route, cross_cell_direction, target_local
 				)
 				if bool(transfer_before_move.get("attempted", false)):
 					return _movement_result_from_cross_cell_transfer(transfer_before_move)
@@ -373,7 +373,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 				return {"moved": false, "blocked": true, "reason": "navigation_target_unreachable"}
 			if cross_cell_hop:
 				var transfer_on_finish: Dictionary = _try_commit_cross_cell_hound_transfer(
-					record, cross_cell_route, cross_cell_direction
+					record, cross_cell_route, cross_cell_direction, target_local
 				)
 				if bool(transfer_on_finish.get("attempted", false)):
 					return _movement_result_from_cross_cell_transfer(transfer_on_finish)
@@ -426,7 +426,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		entity_body.remove_meta("backrooms_last_collision_normal")
 	if cross_cell_hop:
 		var transfer_after_move: Dictionary = _try_commit_cross_cell_hound_transfer(
-			record, cross_cell_route, cross_cell_direction
+			record, cross_cell_route, cross_cell_direction, target_local
 		)
 		if bool(transfer_after_move.get("attempted", false)):
 			return _movement_result_from_cross_cell_transfer(transfer_after_move)
@@ -518,7 +518,8 @@ func _build_cross_cell_hound_target(
 func _try_commit_cross_cell_hound_transfer(
 	record: Dictionary,
 	route: Dictionary,
-	direction: Vector2i
+	direction: Vector2i,
+	edge_target_local: Vector3
 ) -> Dictionary:
 	var entity_root_value: Variant = record.get("entity_root", null)
 	var cell_root_value: Variant = record.get("cell_root", null)
@@ -546,9 +547,18 @@ func _try_commit_cross_cell_hound_transfer(
 	var current_local: Vector3 = cell_root.to_local(entity_root.global_position)
 	if not _is_finite_vector3(current_local):
 		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_position_invalid"}
+	if not _is_finite_vector3(edge_target_local):
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_edge_target_invalid"}
 	var edge_coordinate: float = current_local.x if direction.x != 0 else current_local.z
 	var expected_edge_coordinate: float = float(direction.x) * safe_extent if direction.x != 0 else float(direction.y) * safe_extent
 	if absf(edge_coordinate - expected_edge_coordinate) > EDGE_TRANSFER_TOLERANCE:
+		return {"attempted": false}
+	# Reaching the travel-axis boundary is not sufficient: the Hound must also
+	# finish the perpendicular edge approach, otherwise it can transfer beside
+	# the doorway and arrive in the next cell at an unrelated lateral position.
+	var perpendicular_coordinate: float = current_local.z if direction.x != 0 else current_local.x
+	var target_perpendicular_coordinate: float = edge_target_local.z if direction.x != 0 else edge_target_local.x
+	if absf(perpendicular_coordinate - target_perpendicular_coordinate) > EDGE_TRANSFER_TOLERANCE:
 		return {"attempted": false}
 	if not bool(runtime.call("is_route_snapshot_current", route)):
 		return {"attempted": true, "ok": false, "reason": "route_snapshot_stale"}
