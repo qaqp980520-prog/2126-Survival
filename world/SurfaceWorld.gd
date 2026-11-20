@@ -1692,14 +1692,16 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if target_underground:
 		if payload.has("mine_depth"):
 			var depth_value: Variant = payload.get("mine_depth")
-			if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+			if not _is_world_save_integer_in_range(depth_value, 0, UndergroundMineDirectorScript.MAX_LAYER_INDEX):
+				_set_restore_report(false, "mine_depth_validation", "Mine depth must be a finite whole number within the supported range.", true)
 				return false
-			target_depth = int(depth_value)
+			target_depth = int(roundf(float(depth_value)))
 		else:
 			target_depth = mine_director.get_layer_index(target_position) if mine_director != null else -1
 		if mine_director == null or target_depth < 0 or mine_director.get_layer_index(target_position) != target_depth:
 			return false
-	elif payload.has("mine_depth") and (not (payload.get("mine_depth") is int) or int(payload.get("mine_depth")) != 0):
+	elif payload.has("mine_depth") and not _is_world_save_integer(payload.get("mine_depth"), 0):
+		_set_restore_report(false, "mine_depth_validation", "Surface saves must use a finite whole-number mine depth of zero.", true)
 		return false
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
@@ -2428,10 +2430,28 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		runtime_probe.position = BACKROOMS_WORLD_OFFSET
 		var runtime_valid: bool = bool(runtime_probe.call("load_save_dict", runtime_value))
 		var runtime_readback: Dictionary = runtime_probe.call("to_save_dict") if runtime_valid else {}
-		runtime_probe.free()
-		if not runtime_valid or runtime_readback != session_probe.call("get_maze_stream_state"):
-			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true)
+		var session_stream_readback: Dictionary = session_probe.call("get_maze_stream_state")
+		var runtime_matches_session: bool = runtime_valid and runtime_readback == session_stream_readback
+		if not runtime_matches_session:
+			var runtime_mismatch_keys: Array[String] = []
+			for runtime_key in runtime_readback.keys():
+				if not session_stream_readback.has(runtime_key) or runtime_readback.get(runtime_key) != session_stream_readback.get(runtime_key):
+					runtime_mismatch_keys.append(str(runtime_key))
+			for session_key in session_stream_readback.keys():
+				if not runtime_readback.has(session_key) and not runtime_mismatch_keys.has(str(session_key)):
+					runtime_mismatch_keys.append(str(session_key))
+			var runtime_error: String = str(runtime_probe.get("last_error"))
+			var runtime_details: Dictionary = {
+				"runtime_valid": runtime_valid,
+				"runtime_error": runtime_error,
+				"runtime_mismatch_keys": runtime_mismatch_keys,
+				"runtime_readback_keys": runtime_readback.keys(),
+				"session_stream_keys": session_stream_readback.keys()
+			}
+			runtime_probe.free()
+			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true, runtime_details)
 			return false
+		runtime_probe.free()
 	else:
 		if (
 			bool(session_probe.call("is_active"))
