@@ -74,7 +74,7 @@ func validate_save_dict(data: Dictionary) -> bool:
 	if not (schema is int or schema is float) or not is_finite(float(schema)):
 		return false
 	var schema_number: float = float(schema)
-	if floorf(schema_number) != schema_number or int(schema_number) != SAVE_SCHEMA_VERSION:
+	if floorf(schema_number) != schema_number or schema_number != float(SAVE_SCHEMA_VERSION):
 		return false
 	if not (current is int or current is float):
 		return false
