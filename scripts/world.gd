@@ -142,7 +142,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var inventory_value: Variant = payload.get("inventory", null)
 	var has_world_objects: bool = payload.has("world_objects")
 	var world_objects_value: Variant = payload.get("world_objects", null)
-	if not (schema_value is int) or int(schema_value) != 1:
+	if (
+		not (schema_value is int or schema_value is float)
+		or not is_finite(float(schema_value))
+		or floorf(float(schema_value)) != float(schema_value)
+		or int(schema_value) != 1
+	):
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	if not (position_value is Array) or position_value.size() != 3:
