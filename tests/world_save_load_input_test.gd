@@ -37,13 +37,14 @@ func _run() -> void:
 	if save_button == null or load_button == null or dialog == null:
 		_finish()
 		return
-	_expect(not save_button.disabled and not load_button.disabled, "Save and Load controls are enabled in an idle SurfaceWorld")
+	_expect(not save_button.disabled and load_button.disabled, "Save is enabled and Load is disabled until a world file exists")
 
 	save_button.emit_signal("pressed")
 	await process_frame
 	var save_report: Dictionary = world.call("get_last_world_file_report")
 	_expect(bool(save_report.get("success", false)), "touch Save button writes the production world envelope")
 	_expect(FileAccess.file_exists(SAVE_PATH), "touch Save button creates the default user:// world file")
+	_expect(not load_button.disabled, "Load becomes available after the first successful save")
 
 	load_button.emit_signal("pressed")
 	_expect(dialog.visible, "touch Load button opens the explicit overwrite confirmation")
