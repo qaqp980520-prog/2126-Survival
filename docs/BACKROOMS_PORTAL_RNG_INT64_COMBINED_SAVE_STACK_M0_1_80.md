@@ -58,3 +58,11 @@ Historical evidence: Full Gate [#43372327505](https://github.com/qaqp980520-prog
 - PR #348 is stacked on #347 and already carries the same parser correction; after #347 is validated, reconcile the updated parent SHA into #348 and rerun #348's exact-head gate.
 - PR #383 remains a validated source branch, not a merged dependency. Its branch ancestry is not copied.
 - No main merge. main remains `65b2cabc751637729d58f64c9633f888d3c8b74c`.
+
+## Exact-head CI finding and import-order correction — 2026-11-20
+
+- First exact-head Full Gate [44651496125](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44651496125) completed with 18/19 associated workflows successful; the Full Gate failed at step #30, Backrooms portal playground integration.
+- The corrected portal-director test itself passed at step #25 and printed `BackroomsPortalDirector tests passed.` with the new captured-output guard; no signed-64 conversion errors were present in that step.
+- The unrelated downstream failure was an import-order defect: `BackroomsPortalPlayground.gd` preloads `assets/textures/backrooms_wallpaper.svg`, but the root editor invocation omitted `--import`. Godot reported no resource loaders for the SVG, the script failed to attach, and the integration test then saw a plain Node3D without `get_current_level()` and timed out. The method exists in the source; the script had failed to load first.
+- Ported the already validated root-import hardening from the #348 source: use `godot --headless --path . --editor --import --quit`, then require `backrooms_wallpaper.svg.import`, `backrooms_carpet.svg.import`, and `.godot/imported` before running scene tests.
+- New commit: pending exact-head CI. This corrects the test environment/import order; no gameplay or asset source changes.
