@@ -2175,7 +2175,7 @@ func _refresh_hud() -> void:
 	if save_button != null and is_instance_valid(save_button):
 		save_button.disabled = not _can_save_world()
 	if load_button != null and is_instance_valid(load_button):
-		load_button.disabled = not _can_load_world()
+		load_button.disabled = not _can_load_world() or not _has_world_save()
 	var status: Dictionary = get_world_session_status()
 	var active_count: int = int(backrooms_maze_runtime.call("get_loaded_cell_count")) if _is_in_backrooms and backrooms_maze_runtime != null else (chunk_controller.get_loaded_chunk_ids().size() if chunk_controller != null else 0)
 	var displayed_vein_count: int = 0 if _is_in_backrooms else int(status.get("saved_vein_count", 0))
@@ -2581,6 +2581,10 @@ func _can_save_world() -> bool:
 	return false
 
 
+func _has_world_save() -> bool:
+	return FileAccess.file_exists(DEFAULT_WORLD_SAVE_PATH) or FileAccess.file_exists(DEFAULT_WORLD_SAVE_PATH + ".bak")
+
+
 func _can_load_world() -> bool:
 	if (
 		_is_in_backrooms
@@ -2618,6 +2622,10 @@ func _request_load_confirmation() -> void:
 		_world_object_action_message = "Load is available only from an idle SurfaceWorld; return from Backrooms first."
 		_refresh_hud()
 		return
+	if not _has_world_save():
+		_world_object_action_message = "No saved world file is available yet."
+		_refresh_hud()
+		return
 	if load_confirmation_dialog != null and is_instance_valid(load_confirmation_dialog):
 		load_confirmation_dialog.popup_centered(Vector2i(420, 180))
 
@@ -2627,6 +2635,10 @@ func _confirm_load_game() -> void:
 		load_confirmation_dialog.hide()
 	if not _can_load_world():
 		_world_object_action_message = "World load was cancelled because the world is no longer idle."
+		_refresh_hud()
+		return
+	if not _has_world_save():
+		_world_object_action_message = "No saved world file is available."
 		_refresh_hud()
 		return
 	load_game()
