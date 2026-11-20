@@ -90,6 +90,9 @@ func _run() -> void:
 	var target_key: String = "%d,%d" % [target_cell.x, target_cell.y]
 	var source_key: String = "%d,%d" % [source_cell.x, source_cell.y]
 	var route: Dictionary = candidate.get("route", {})
+	var middle_turn_cell: Vector2i = Vector2i(0, -1)
+	var middle_turn_key: String = "%d,%d" % [middle_turn_cell.x, middle_turn_cell.y]
+	var middle_turn_root: Node3D = runtime.call("get_cell_root", middle_turn_key) as Node3D
 	var pursuit_goal_cell: Vector2i = candidate.get("pursuit_goal_cell", Vector2i.ZERO)
 	var pursuit_goal_key: String = "%d,%d" % [pursuit_goal_cell.x, pursuit_goal_cell.y]
 	var pursuit_goal_root: Node3D = runtime.call("get_cell_root", pursuit_goal_key) as Node3D
@@ -98,33 +101,42 @@ func _run() -> void:
 	var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
 	var first_hop_direction: Vector2i = Vector2i.ZERO
 	var second_hop_direction: Vector2i = Vector2i.ZERO
-	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2:
+	var third_hop_direction: Vector2i = Vector2i.ZERO
+	if pursuit_directions_value is Array and pursuit_directions_value.size() == 3:
 		if pursuit_directions_value[0] is Vector2i:
 			first_hop_direction = pursuit_directions_value[0]
 		if pursuit_directions_value[1] is Vector2i:
 			second_hop_direction = pursuit_directions_value[1]
+		if pursuit_directions_value[2] is Vector2i:
+			third_hop_direction = pursuit_directions_value[2]
 	_expect(
 		bool(pursuit_route.get("ok", false))
 		and pursuit_path_value is Array
-		and pursuit_path_value.size() == 3
+		and pursuit_path_value.size() == 4
 		and pursuit_path_value[1] == target_cell
-		and pursuit_path_value[2] == pursuit_goal_cell
+		and pursuit_path_value[2] == middle_turn_cell
+		and pursuit_path_value[3] == pursuit_goal_cell
 		and first_hop_direction == direction
 		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1
 		and second_hop_direction != direction
-		and second_hop_direction != -direction,
-		"selected Hound has a validated two-hop turning route through the expected first owner"
+		and second_hop_direction != -direction
+		and absi(third_hop_direction.x) + absi(third_hop_direction.y) == 1
+		and third_hop_direction != second_hop_direction
+		and third_hop_direction != -second_hop_direction,
+		"selected Hound has a validated three-hop route with two 90-degree turns"
 	)
 	_expect(
 		source_cell == Vector2i(1, 0)
 		and target_cell == Vector2i(0, 0)
-		and pursuit_goal_cell == Vector2i(0, -1)
+		and middle_turn_cell == Vector2i(0, -1)
+		and pursuit_goal_cell == Vector2i(-1, -1)
 		and direction == Vector2i(-1, 0)
 		and first_hop_direction == Vector2i(-1, 0)
-		and second_hop_direction == Vector2i(0, -1),
-		"Level 2 seed 20261118 resolves the deterministic west-then-north turning fixture"
+		and second_hop_direction == Vector2i(0, -1)
+		and third_hop_direction == Vector2i(-1, 0),
+		"Level 2 seed 20261118 resolves the deterministic west-north-west three-hop fixture"
 	)
-	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
+	_expect(middle_turn_root != null and pursuit_goal_root != null, "both loaded turn and pursuit destination roots are available")
 	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
 	_expect(entity_root != null and str(entity_root.get_meta("spawn_level_id", "")) == "Level 2", "spawn descriptor factory preserves the runtime level identity")
 	_expect(entity_root != null and int(entity_root.get_meta("spawn_world_seed", -1)) == 20261118, "spawn descriptor factory preserves the runtime world seed")
@@ -281,6 +293,8 @@ func _run() -> void:
 	var transfer: Dictionary = {}
 	var second_transfer: Dictionary = {}
 	var second_transfer_ok: bool = false
+	var third_transfer: Dictionary = {}
+	var third_transfer_ok: bool = false
 	if hound_brain != null:
 		var pursuit_staging_local: Vector3 = entity_root.position
 		if direction.x != 0:
@@ -307,7 +321,7 @@ func _run() -> void:
 			"noise_strength": 0.0,
 			"player_position": target_world_position
 		}, 0.2)
-		_expect(str(pursuit_decision.get("state", "")) == "pursue", "Hound receives a pursuit target two loaded cells away")
+		_expect(str(pursuit_decision.get("state", "")) == "pursue", "Hound receives a pursuit target three loaded cells away")
 		await physics_frame
 		var movement_driver = MovementDriverScript.new()
 		var movement_records: Array = movement_driver.call("_collect_entity_records", runtime)
@@ -350,7 +364,7 @@ func _run() -> void:
 		_expect(
 			str(transfer.get("from_owner_cell_key", "")) == source_key
 			and str(transfer.get("to_owner_cell_key", "")) == target_key,
-			"first physics tick commits only the first adjacent hop of the two-hop route"
+			"first physics tick commits only the first adjacent hop of the three-hop route"
 		)
 		var first_hop_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 		_expect(entity_root.get_parent() == target_root, "first hop reparents the Hound into the intermediate cell")
@@ -390,34 +404,74 @@ func _run() -> void:
 			_expect(second_transfer_ok, "second physics tick commits exactly one additional Hound owner transfer; result=%s owner=%s" % [str(second_movement_result), str(second_owner)])
 			_expect(
 				str(second_transfer.get("from_owner_cell_key", "")) == target_key
-				and str(second_transfer.get("to_owner_cell_key", "")) == pursuit_goal_key,
-				"second hop is replanned from the intermediate owner into the two-hop pursuit destination"
+				and str(second_transfer.get("to_owner_cell_key", "")) == middle_turn_key,
+				"second hop is replanned from B and commits the first turn into C"
 			)
 			_expect(
-				str(second_owner.get("owner_cell_key", "")) == pursuit_goal_key
+				str(second_owner.get("owner_cell_key", "")) == middle_turn_key
 				and int(second_owner.get("owner_revision", -1)) == 2,
-				"two-hop pursuit commits the final owner cell at revision two"
+				"second hop commits the intermediate turn cell at owner revision two"
 			)
-			_expect(entity_root.get_parent() == pursuit_goal_root, "live Hound is reparented into the second-hop destination cell")
-			_expect(_count_identity_in_root(target_root, spawn_cell_key, entity_id) == 0, "intermediate cell no longer contains the Hound after the second transfer")
-			_expect(_count_identity_in_root(pursuit_goal_root, spawn_cell_key, entity_id) == 1, "second-hop destination contains exactly one Hound identity")
-			_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0, "original spawn cell remains free of a duplicate after two hops")
+			_expect(entity_root.get_parent() == middle_turn_root, "live Hound is reparented into the second-hop turn cell")
+			_expect(_count_identity_in_root(target_root, spawn_cell_key, entity_id) == 0, "B no longer contains the Hound after the second transfer")
+			_expect(_count_identity_in_root(middle_turn_root, spawn_cell_key, entity_id) == 1, "C contains exactly one Hound identity after the second transfer")
+			_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0, "A remains free of a duplicate after two hops")
 			_expect(ownership_ledger != null and int(ownership_ledger.call("get_pending_transfer_count")) == 0, "second hop closes its ownership-ledger transaction")
-			print("HOUND_TWO_HOP_DIAGNOSTIC first=", transfer, " second=", second_transfer, " owner=", second_owner, " attempts=", second_physics_tick_driver.attempts)
 			movement_driver.call("reset")
 			if second_transfer_ok:
-				target_cell = pursuit_goal_cell
-				target_key = pursuit_goal_key
-				target_root = pursuit_goal_root
-	if not bool(transfer.get("ok", false)) or not second_transfer_ok:
+				movement_driver.set("_next_entity_key", hound_identity_key)
+				var third_physics_tick_driver := PhysicsMovementTickDriver.new()
+				third_physics_tick_driver.runtime = runtime
+				third_physics_tick_driver.movement_driver = movement_driver
+				third_physics_tick_driver.max_attempts = 24
+				runtime.add_child(third_physics_tick_driver)
+				third_physics_tick_driver.set_physics_process(true)
+				for _third_physics_attempt in range(24):
+					if third_physics_tick_driver.finished:
+						break
+					await physics_frame
+				var third_movement_result: Dictionary = third_physics_tick_driver.result
+				var third_transfer_results: Array = third_movement_result.get("transfer_results", [])
+				if not third_transfer_results.is_empty() and third_transfer_results[0] is Dictionary:
+					third_transfer = third_transfer_results[0]
+				third_transfer_ok = (
+					int(third_movement_result.get("transferred_count", 0)) == 1
+					and bool(third_transfer.get("ok", false))
+				)
+				var third_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+				_expect(third_physics_tick_driver.finished, "third Hound hop completes or safely times out in its own physics tick")
+				_expect(third_transfer_ok, "third physics tick commits exactly one additional Hound owner transfer; result=%s owner=%s" % [str(third_movement_result), str(third_owner)])
+				_expect(
+					str(third_transfer.get("from_owner_cell_key", "")) == middle_turn_key
+					and str(third_transfer.get("to_owner_cell_key", "")) == pursuit_goal_key,
+					"third hop is replanned from C and commits the second turn into D"
+				)
+				_expect(
+					str(third_owner.get("owner_cell_key", "")) == pursuit_goal_key
+					and int(third_owner.get("owner_revision", -1)) == 3,
+					"three-hop pursuit commits the final owner cell at revision three"
+				)
+				_expect(entity_root.get_parent() == pursuit_goal_root, "live Hound is reparented into the third-hop destination cell")
+				_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0, "A remains free of a duplicate after three hops")
+				_expect(_count_identity_in_root(target_root, spawn_cell_key, entity_id) == 0, "B remains free of a duplicate after three hops")
+				_expect(_count_identity_in_root(middle_turn_root, spawn_cell_key, entity_id) == 0, "C no longer contains the Hound after the third transfer")
+				_expect(_count_identity_in_root(pursuit_goal_root, spawn_cell_key, entity_id) == 1, "D contains exactly one Hound identity after the third transfer")
+				_expect(ownership_ledger != null and int(ownership_ledger.call("get_pending_transfer_count")) == 0, "third hop closes its ownership-ledger transaction")
+				print("HOUND_THREE_HOP_DIAGNOSTIC first=", transfer, " second=", second_transfer, " third=", third_transfer, " owner=", third_owner, " attempts=", second_physics_tick_driver.attempts, "/", third_physics_tick_driver.attempts)
+				movement_driver.call("reset")
+				if third_transfer_ok:
+					target_cell = pursuit_goal_cell
+					target_key = pursuit_goal_key
+					target_root = pursuit_goal_root
+	if not bool(transfer.get("ok", false)) or not second_transfer_ok or not third_transfer_ok:
 		_finish(runtime, null)
 		return
 	_expect(target_root != null and entity_root.get_parent() == target_root, "live entity is reparented to the next loaded cell")
 	_expect(entity_root.get_meta("spawn_cell", null) == source_cell, "ownership transfer preserves immutable spawn-cell identity")
 	_expect(str(entity_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "entity metadata records the new owner cell")
-	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 2, "entity metadata records the final two-hop owner revision")
+	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 3, "entity metadata records the final two-hop owner revision")
 	var owner_record: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
-	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 2, "ownership ledger commits the final two-hop owner and revision")
+	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 3, "ownership ledger commits the final two-hop owner and revision")
 	var source_identity_keys_after: Array = source_root.get_meta("backrooms_entity_identity_keys", [])
 	var source_spawn_ids_after: Array = source_root.get_meta("backrooms_entity_spawn_ids", [])
 	var target_identity_keys_after: Array = target_root.get_meta("backrooms_entity_identity_keys", [])
@@ -437,13 +491,13 @@ func _run() -> void:
 	var final_target_local: Vector3 = target_root.to_local(
 		pursuit_goal_root.global_position
 		+ Vector3(0.0, entity_root.position.y, 0.0)
-		+ (Vector3(0.0, 0.0, 1.25) if direction.x != 0 else Vector3(1.25, 0.0, 0.0))
+		+ (Vector3(0.0, 0.0, 1.25) if third_hop_direction.x != 0 else Vector3(1.25, 0.0, 0.0))
 	)
-	var final_perpendicular: float = entity_root.position.z if second_hop_direction.x != 0 else entity_root.position.x
-	var expected_final_perpendicular: float = final_target_local.z if second_hop_direction.x != 0 else final_target_local.x
-	_expect(absf(final_perpendicular - expected_final_perpendicular) <= 0.25, "second-hop landing preserves the projected perpendicular target within the transfer tolerance")
-	var final_edge_coordinate: float = entity_root.position.x if second_hop_direction.x != 0 else entity_root.position.z
-	_expect(absf(final_edge_coordinate) <= safe_extent - 0.02 + 0.001, "second-hop landing remains inside the strict serialization boundary")
+	var final_perpendicular: float = entity_root.position.z if third_hop_direction.x != 0 else entity_root.position.x
+	var expected_final_perpendicular: float = final_target_local.z if third_hop_direction.x != 0 else final_target_local.x
+	_expect(absf(final_perpendicular - expected_final_perpendicular) <= 0.25, "third-hop landing preserves the projected perpendicular target within the transfer tolerance")
+	var final_edge_coordinate: float = entity_root.position.x if third_hop_direction.x != 0 else entity_root.position.z
+	_expect(absf(final_edge_coordinate) <= safe_extent - 0.02 + 0.001, "third-hop landing remains inside the strict serialization boundary")
 
 	var saved_after_transfer: Dictionary = runtime.call("to_save_dict")
 	_expect(not saved_after_transfer.is_empty(), "immediate save after owner transfer accepts the migrated owner-local position")
@@ -482,7 +536,7 @@ func _run() -> void:
 				saved_owner_found = str(record.get("owner_cell_key", "")) == target_key
 	_expect(saved_owner_found, "save snapshot persists the migrated owner-cell assignment")
 
-	var far_center: Vector2i = target_cell + direction * 2
+	var far_center: Vector2i = pursuit_goal_cell + Vector2i(2, 0)
 	var far_position := Vector3(float(far_center.x) * 8.0, 0.0, float(far_center.y) * 8.0)
 	var away_result: Dictionary = runtime.call("sync_to_world_position", far_position)
 	_expect(bool(away_result.get("ok", false)), "stream can unload the owner cell while retaining its one-cell-halo ownership record")
@@ -631,7 +685,7 @@ func _run() -> void:
 	)
 	if reconstructed_root != null:
 		_expect(str(reconstructed_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "reconstructed node restores owner-cell metadata")
-		_expect(int(reconstructed_root.get_meta("backrooms_owner_revision", -1)) == 2, "reconstructed node restores two-hop owner revision")
+		_expect(int(reconstructed_root.get_meta("backrooms_owner_revision", -1)) == 3, "reconstructed node restores two-hop owner revision")
 	var spawn_root: Node3D = runtime.call("get_cell_root", spawn_cell_key) as Node3D
 	var spawn_cell_identity_count: int = _count_identity_in_root(spawn_root, spawn_cell_key, entity_id)
 	_expect(spawn_cell_identity_count == 0, "original spawn cell does not create a duplicate after owner-cell reconstruction")
@@ -721,7 +775,7 @@ func _run() -> void:
 	_expect(FileAccess.file_exists(DISK_SAVE_PATH + ".corrupt"), "malformed Hound primary is preserved as a diagnostic file")
 	var disk_owner: Dictionary = disk_restore_runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
 	_expect(
-		str(disk_owner.get("owner_cell_key", "")) == target_key and int(disk_owner.get("owner_revision", -1)) == 2,
+		str(disk_owner.get("owner_cell_key", "")) == target_key and int(disk_owner.get("owner_revision", -1)) == 3,
 		"disk recovery preserves Hound immutable spawn identity, mutable owner cell, and owner revision"
 	)
 	var disk_identity: Dictionary = _find_entity(disk_restore_runtime, spawn_cell_key, entity_id)
@@ -734,7 +788,7 @@ func _run() -> void:
 	)
 	if disk_entity != null:
 		_expect(str(disk_entity.get_meta("backrooms_owner_cell_key", "")) == target_key, "disk-recovered Hound node restores owner-cell metadata")
-		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 2, "disk-recovered Hound node restores two-hop owner revision metadata")
+		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 3, "disk-recovered Hound node restores two-hop owner revision metadata")
 		var disk_agent: NavigationAgent3D = disk_entity.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
 		_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
 		if disk_agent != null:
@@ -832,7 +886,7 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if not (goal_cell_value is Vector2i):
 						continue
 					var goal_cell: Vector2i = goal_cell_value
-					if goal_cell != Vector2i(0, -1):
+					if goal_cell != Vector2i(-1, -1):
 						continue
 					if goal_cell == cell or goal_cell == target_cell:
 						continue
@@ -842,16 +896,18 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if (
 						bool(pursuit_route.get("ok", false))
 						and pursuit_path_value is Array
-						and pursuit_path_value.size() == 3
+						and pursuit_path_value.size() == 4
 						and pursuit_path_value[1] == target_cell
-						and pursuit_path_value[2] == goal_cell
+						and pursuit_path_value[2] == Vector2i(0, -1)
+						and pursuit_path_value[3] == goal_cell
 						and pursuit_directions_value is Array
-						and pursuit_directions_value.size() == 2
+						and pursuit_directions_value.size() == 3
 						and pursuit_directions_value[0] is Vector2i
 						and pursuit_directions_value[0] == direction
 						and pursuit_directions_value[1] is Vector2i
-						and pursuit_directions_value[1] != direction
-						and pursuit_directions_value[1] != -direction
+						and pursuit_directions_value[1] == Vector2i(0, -1)
+						and pursuit_directions_value[2] is Vector2i
+						and pursuit_directions_value[2] == Vector2i(-1, 0)
 					):
 						return {
 							"entity_root": child,
