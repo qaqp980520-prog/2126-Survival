@@ -57,9 +57,11 @@ class FakeRuntime:
 			if not (child is CharacterBody3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
 				continue
 			var spawn_value: Variant = child.get_meta("spawn_cell", null)
-			if spawn_value is Vector2i and ("%d,%d" % [spawn_value.x, spawn_value.y]) == spawn_cell_key:
-				entity_root = child as CharacterBody3D
-				break
+			if spawn_value is Vector2i:
+				var spawn_cell: Vector2i = spawn_value
+				if ("%d,%d" % [spawn_cell.x, spawn_cell.y]) == spawn_cell_key:
+					entity_root = child as CharacterBody3D
+					break
 		if entity_root == null:
 			return {"ok": false, "reason": "fake_entity_unavailable"}
 		var direction_value: Variant = directions_value[0]
