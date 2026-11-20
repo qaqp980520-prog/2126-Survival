@@ -2431,7 +2431,7 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 		var runtime_valid: bool = bool(runtime_probe.call("load_save_dict", runtime_value))
 		var runtime_readback: Dictionary = runtime_probe.call("to_save_dict") if runtime_valid else {}
 		var session_stream_readback: Dictionary = session_probe.call("get_maze_stream_state")
-		var runtime_matches_session: bool = runtime_valid and runtime_readback == session_stream_readback
+		var runtime_matches_session: bool = runtime_valid and _world_save_values_equivalent(runtime_readback, session_stream_readback)
 		if not runtime_matches_session:
 			var runtime_mismatch_keys: Array[String] = []
 			for runtime_key in runtime_readback.keys():
@@ -2453,6 +2453,9 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 			runtime_probe.free()
 			_set_world_envelope_restore_report(false, "runtime_validation", "Saved maze runtime is invalid or differs from the Session stream payload.", true, runtime_details)
 			return false
+		var canonical_session_value: Dictionary = session_value.duplicate(true)
+		canonical_session_value["maze_stream_state"] = runtime_readback.duplicate(true)
+		session_value = canonical_session_value
 		runtime_probe.free()
 	else:
 		if (
@@ -2709,6 +2712,30 @@ func get_last_world_file_report() -> Dictionary:
 	if _world_envelope_file_store == null:
 		return {}
 	return _world_envelope_file_store.call("get_last_report")
+
+
+func _canonicalize_world_save_value(value: Variant) -> Variant:
+	if value is Dictionary:
+		var canonical_dictionary: Dictionary = {}
+		for key in value.keys():
+			canonical_dictionary[str(key)] = _canonicalize_world_save_value(value[key])
+		return canonical_dictionary
+	if value is Array:
+		var canonical_array: Array = []
+		for item in value:
+			canonical_array.append(_canonicalize_world_save_value(item))
+		return canonical_array
+	if value is float:
+		var number: float = float(value)
+		if is_finite(number) and floorf(number) == number and absf(number) <= 9007199254740991.0:
+			return int(number)
+	return value
+
+
+func _world_save_values_equivalent(left: Variant, right: Variant) -> bool:
+	var canonical_left: Variant = _canonicalize_world_save_value(left)
+	var canonical_right: Variant = _canonicalize_world_save_value(right)
+	return JSON.stringify(canonical_left, "", true, true) == JSON.stringify(canonical_right, "", true, true)
 
 
 
