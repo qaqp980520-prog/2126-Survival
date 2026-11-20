@@ -469,9 +469,9 @@ func _run() -> void:
 	_expect(target_root != null and entity_root.get_parent() == target_root, "live entity is reparented to the next loaded cell")
 	_expect(entity_root.get_meta("spawn_cell", null) == source_cell, "ownership transfer preserves immutable spawn-cell identity")
 	_expect(str(entity_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "entity metadata records the new owner cell")
-	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 3, "entity metadata records the final two-hop owner revision")
+	_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 3, "entity metadata records the final three-hop owner revision")
 	var owner_record: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
-	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 3, "ownership ledger commits the final two-hop owner and revision")
+	_expect(str(owner_record.get("owner_cell_key", "")) == target_key and int(owner_record.get("owner_revision", -1)) == 3, "ownership ledger commits the final three-hop owner and revision")
 	var source_identity_keys_after: Array = source_root.get_meta("backrooms_entity_identity_keys", [])
 	var source_spawn_ids_after: Array = source_root.get_meta("backrooms_entity_spawn_ids", [])
 	var target_identity_keys_after: Array = target_root.get_meta("backrooms_entity_identity_keys", [])
@@ -685,7 +685,7 @@ func _run() -> void:
 	)
 	if reconstructed_root != null:
 		_expect(str(reconstructed_root.get_meta("backrooms_owner_cell_key", "")) == target_key, "reconstructed node restores owner-cell metadata")
-		_expect(int(reconstructed_root.get_meta("backrooms_owner_revision", -1)) == 3, "reconstructed node restores two-hop owner revision")
+		_expect(int(reconstructed_root.get_meta("backrooms_owner_revision", -1)) == 3, "reconstructed node restores three-hop owner revision")
 	var spawn_root: Node3D = runtime.call("get_cell_root", spawn_cell_key) as Node3D
 	var spawn_cell_identity_count: int = _count_identity_in_root(spawn_root, spawn_cell_key, entity_id)
 	_expect(spawn_cell_identity_count == 0, "original spawn cell does not create a duplicate after owner-cell reconstruction")
@@ -788,7 +788,7 @@ func _run() -> void:
 	)
 	if disk_entity != null:
 		_expect(str(disk_entity.get_meta("backrooms_owner_cell_key", "")) == target_key, "disk-recovered Hound node restores owner-cell metadata")
-		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 3, "disk-recovered Hound node restores two-hop owner revision metadata")
+		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 3, "disk-recovered Hound node restores three-hop owner revision metadata")
 		var disk_agent: NavigationAgent3D = disk_entity.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
 		_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
 		if disk_agent != null:
