@@ -407,7 +407,14 @@ func _run() -> void:
 		var expected_backrooms_position := Vector3(float(saved_position[0]), float(saved_position[1]), float(saved_position[2]))
 		_expect(restored_player.global_position.is_equal_approx(expected_backrooms_position), "file round-trip restores the exact Backrooms player position")
 	_expect(restored_manager.call("get_session_save_dict") == canonical_session_value, "file round-trip restores the canonical active LocationSession")
-	_expect(restored_runtime.call("to_save_dict") == canonical_runtime_value, "file round-trip restores the canonical maze runtime stream state")
+	var restored_runtime_snapshot: Dictionary = restored_runtime.call("to_save_dict")
+	var runtime_snapshot_difference: String = _first_save_difference(restored_runtime_snapshot, canonical_runtime_value)
+	if not runtime_snapshot_difference.is_empty():
+		print("DEBUG: canonical maze runtime snapshot differs at ", runtime_snapshot_difference)
+	_expect(
+		runtime_snapshot_difference.is_empty(),
+		"file round-trip restores the canonical maze runtime stream state after JSON numeric canonicalization"
+	)
 	var return_result: Dictionary = restored_world.call("return_from_backrooms")
 	_expect(bool(return_result.get("ok", false)), "file-restored Backrooms Session can return to SurfaceWorld")
 	var saved_session: Dictionary = backrooms_payload.get("backrooms_session", {})
@@ -832,6 +839,34 @@ func _cleanup_save_paths() -> void:
 		DirAccess.remove_absolute(production_nested_slot_directory)
 	if DirAccess.dir_exists_absolute(production_nested_root_directory):
 		DirAccess.remove_absolute(production_nested_root_directory)
+
+
+static func _first_save_difference(left: Variant, right: Variant, path: String = "root") -> String:
+	if left is Dictionary:
+		if not (right is Dictionary):
+			return path + ": dictionary type mismatch"
+		if left.size() != right.size():
+			return path + ": dictionary size mismatch"
+		for key in left.keys():
+			if not right.has(key):
+				return path + "." + str(key) + ": missing right-hand key"
+			var nested: String = _first_save_difference(left[key], right[key], path + "." + str(key))
+			if not nested.is_empty():
+				return nested
+		return ""
+	if left is Array:
+		if not (right is Array):
+			return path + ": array type mismatch"
+		if left.size() != right.size():
+			return path + ": array size mismatch"
+		for index in range(left.size()):
+			var nested: String = _first_save_difference(left[index], right[index], path + "[" + str(index) + "]")
+			if not nested.is_empty():
+				return nested
+		return ""
+	if (left is int or left is float) and (right is int or right is float):
+		return "" if float(left) == float(right) else path + ": numeric value mismatch"
+	return "" if left == right else path + ": value mismatch (types %d/%d)" % [typeof(left), typeof(right)]
 
 
 func _expect(condition: bool, message: String) -> void:
