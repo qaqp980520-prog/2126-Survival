@@ -29,10 +29,19 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 
-	var save_button: Button = world.get_node_or_null("HUD/SaveLoadPanel/SaveWorld") as Button
-	var load_button: Button = world.get_node_or_null("HUD/SaveLoadPanel/LoadWorld") as Button
-	var dialog: ConfirmationDialog = world.get_node_or_null("HUD/LoadConfirmationDialog") as ConfirmationDialog
+	# The HUD is assembled dynamically under its CanvasLayer; read the production
+	# controls from SurfaceWorld's owned references instead of assuming a scene path.
+	var save_button: Button = world.get("save_button") as Button
+	var load_button: Button = world.get("load_button") as Button
+	var dialog: ConfirmationDialog = world.get("load_confirmation_dialog") as ConfirmationDialog
 	_expect(save_button != null and load_button != null, "production HUD exposes touch Save and Load buttons")
+	if save_button != null and load_button != null:
+		_expect(save_button.name == "SaveWorld" and load_button.name == "LoadWorld", "touch Save/Load controls retain their stable node names")
+		_expect(
+			save_button.get_signal_connection_list("pressed").size() > 0
+			and load_button.get_signal_connection_list("pressed").size() > 0,
+			"touch Save/Load controls are connected to their production handlers"
+		)
 	_expect(dialog != null, "production HUD exposes a Load confirmation dialog")
 	if save_button == null or load_button == null or dialog == null:
 		_finish()
