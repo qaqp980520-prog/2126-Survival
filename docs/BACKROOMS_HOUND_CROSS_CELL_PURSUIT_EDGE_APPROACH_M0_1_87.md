@@ -22,6 +22,7 @@ Enable a Level 2 Hound to pursue a target in another currently loaded Backrooms 
 - `NavigationAgent3D.target_desired_distance` is 0.05 m in edge-precision mode. That mode accepts only 0.05–0.1 m. Ordinary movement retains the existing 0.5 m minimum.
 - A transfer is attempted only within the runtime's 0.25 m edge tolerance. `transfer_entity_to_next_cell()` remains the sole authority that reparents the CharacterBody3D and commits the Ownership Ledger.
 - At most one hop is committed per entity per movement tick. The next tick collects the entity under its new owner cell and replans. A stale route fails closed before movement or transfer.
+- `BackroomsEntityMovementDriver.tick()` returns `transferred_count` and a `transfer_results` array so callers can reconcile the exact committed owner transaction without re-reading an unrelated entity's result.
 - The runtime's existing transfer transaction still validates immutable spawn identity, owner revision, source/target identity arrays, target physics handoff, and rollback.
 
 ## Dependencies
@@ -56,7 +57,7 @@ All three tests are already registered in `.github/workflows/godot-validation.ym
 - A stale route snapshot causes no movement and no transfer request.
 - Hound approaches the first edge before the 0.25 m transfer precondition is satisfied.
 - The fake-runtime movement test verifies exactly one first-hop request and preserves the immutable spawn key.
-- The production owner-runtime integration now asks the movement driver to initiate the real transactional transfer, then retains the existing owner revision, source/target identity-array, rollback and durable file round-trip assertions.
+- The production owner-runtime integration now asks the movement driver to initiate the real transactional transfer, reads the exact transaction from `transfer_results`, then retains the existing owner revision, source/target identity-array, rollback and durable file round-trip assertions.
 
 ## Validation status
 
