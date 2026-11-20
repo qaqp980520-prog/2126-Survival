@@ -200,9 +200,12 @@ func _run() -> void:
 	if restored_world == null:
 		_finish(1)
 		return
-	restored_world.set("world_seed", WORLD_SEED)
 	root.add_child(restored_world)
 	await process_frame
+	_expect(
+		int(restored_world.get("world_seed")) != WORLD_SEED,
+		"fresh production SurfaceWorld starts from a different default seed before durable restore"
+	)
 	var loaded: bool = bool(restored_world.call("load_game", SAVE_PATH))
 	if not loaded:
 		print("DEBUG: combined Hound recovery file report = ", restored_world.call("get_last_world_file_report"), " envelope = ", restored_world.call("get_last_world_envelope_restore_report"), " surface = ", restored_world.call("get_last_restore_report"))
