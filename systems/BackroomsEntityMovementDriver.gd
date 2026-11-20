@@ -2,16 +2,21 @@ extends RefCounted
 class_name BackroomsEntityMovementDriver
 
 const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
+const MazeLayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 ## Bounded, cell-local locomotion for perception-driven Backrooms entities.
 ## The owning SurfaceWorld calls tick(); entities never create their own process loop.
-## Movement is constrained to the entity's owning cell until roaming-entity persistence
-## and cross-cell ownership migration are implemented.
+## Hound pursuit may cross one loaded cell at a time through a validated route snapshot
+## and the runtime's transactional ownership transfer. Other movement stays cell-local.
 const MOVEMENT_INTERVAL_SECONDS: float = 0.1
 const MAX_ENTITY_MOVES_PER_TICK: int = 12
 const MAX_FRAME_DELTA_SECONDS: float = 0.5
 const MAX_CATCHUP_SECONDS: float = 0.25
 const SAFE_CELL_MARGIN: float = 0.65
+const EDGE_APPROACH_TARGET_INSET: float = 0.05
+const EDGE_PERPENDICULAR_INSET: float = 0.1
+const EDGE_TARGET_DESIRED_DISTANCE: float = 0.05
+const EDGE_TRANSFER_TOLERANCE: float = 0.25
 const COLLISION_SAFE_MARGIN: float = 0.02
 const PATROL_RADIUS: float = 1.45
 const MOVABLE_ENTITY_IDS := [
@@ -72,6 +77,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			"ok": true,
 			"moved_count": 0,
 			"blocked_count": 0,
+			"transferred_count": 0,
 			"pending_count": 0,
 			"tick_index": _tick_index
 		}
@@ -89,6 +95,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			"ok": true,
 			"moved_count": 0,
 			"blocked_count": 0,
+			"transferred_count": 0,
 			"pending_count": 0,
 			"tick_index": _tick_index
 		}
@@ -105,6 +112,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 	var move_count: int = mini(MAX_ENTITY_MOVES_PER_TICK, records.size())
 	var moved_count: int = 0
 	var blocked_count: int = 0
+	var transferred_count: int = 0
 	for offset in range(move_count):
 		var record_index: int = (start_index + offset) % records.size()
 		var record: Dictionary = records[record_index]
@@ -120,6 +128,8 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 			moved_count += 1
 		if bool(result.get("blocked", false)):
 			blocked_count += 1
+		if bool(result.get("transferred", false)):
+			transferred_count += 1
 
 	var next_index: int = (start_index + move_count) % records.size()
 	_next_entity_key = str(records[next_index].get("key", ""))
@@ -127,6 +137,7 @@ func tick(runtime: Node, delta_seconds: float) -> Dictionary:
 		"ok": true,
 		"moved_count": moved_count,
 		"blocked_count": blocked_count,
+		"transferred_count": transferred_count,
 		"sampled_count": move_count,
 		"pending_count": records.size() - move_count,
 		"total_count": records.size(),
@@ -172,7 +183,8 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 				"entity_id": entity_id,
 				"entity_root": entity_root,
 				"cell_root": cell_root,
-				"brain": brain
+				"brain": brain,
+				"runtime": runtime
 			})
 	records.sort_custom(
 		func(left: Dictionary, right: Dictionary) -> bool:
@@ -224,6 +236,9 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 	var speed: float = float(SPEED_BY_ENTITY.get(entity_id, 0.0))
 	if speed <= 0.0:
 		return {"moved": false, "blocked": true, "reason": "entity_speed_unavailable"}
+	var cross_cell_route: Dictionary = {}
+	var cross_cell_direction: Vector2i = Vector2i.ZERO
+	var cross_cell_hop: bool = false
 
 	match state_name:
 		"approach", "pursue", "investigate", "observe":
@@ -233,18 +248,50 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 			if not (target_value is Vector3) or not _is_finite_vector3(target_value):
 				return {"moved": false, "blocked": true, "reason": "target_position_invalid"}
 			target_local = cell_root.to_local(target_value)
-			if not _is_inside_cell(target_local, cell_size * 0.5 - 0.1):
-				return {"moved": false, "blocked": true, "reason": "target_outside_owning_cell"}
-			match state_name:
-				"approach":
-					stop_distance = 2.0
-				"pursue":
-					stop_distance = 1.1
-				"investigate":
-					stop_distance = 1.35
-				"observe":
-					stop_distance = 5.0
-			target_local.y = current_local.y
+			var current_cell_value: Variant = cell_root.get_meta("backrooms_cell", null)
+			var target_cell_result: Dictionary = MazeLayoutScript.try_cell_for_position(target_value, cell_size)
+			if not (current_cell_value is Vector2i) or not bool(target_cell_result.get("ok", false)):
+				return {"moved": false, "blocked": true, "reason": "cross_cell_endpoint_invalid"}
+			var current_cell: Vector2i = current_cell_value
+			var target_cell_value: Variant = target_cell_result.get("cell", null)
+			if not (target_cell_value is Vector2i):
+				return {"moved": false, "blocked": true, "reason": "cross_cell_target_cell_invalid"}
+			var target_cell: Vector2i = target_cell_value
+			if target_cell != current_cell:
+				if entity_id != "hound" or state_name != "pursue":
+					return {"moved": false, "blocked": true, "reason": "cross_cell_target_not_supported"}
+				var edge_target_result: Dictionary = _build_cross_cell_hound_target(
+					record, current_cell, target_cell, current_local, target_local, cell_size
+				)
+				if not bool(edge_target_result.get("ok", false)):
+					return {
+						"moved": false,
+						"blocked": true,
+						"reason": str(edge_target_result.get("reason", "cross_cell_route_unavailable"))
+					}
+				target_local = edge_target_result.get("target_local", current_local)
+				cross_cell_route = edge_target_result.get("route", {})
+				cross_cell_direction = edge_target_result.get("direction", Vector2i.ZERO)
+				cross_cell_hop = true
+				stop_distance = EDGE_TARGET_DESIRED_DISTANCE
+				var transfer_before_move: Dictionary = _try_commit_cross_cell_hound_transfer(
+					record, cross_cell_route, cross_cell_direction
+				)
+				if bool(transfer_before_move.get("attempted", false)):
+					return _movement_result_from_cross_cell_transfer(transfer_before_move)
+			else:
+				if not _is_inside_cell(target_local, cell_size * 0.5 - 0.1):
+					return {"moved": false, "blocked": true, "reason": "target_outside_owning_cell"}
+				match state_name:
+					"approach":
+						stop_distance = 2.0
+					"pursue":
+						stop_distance = 1.1
+					"investigate":
+						stop_distance = 1.35
+					"observe":
+						stop_distance = 5.0
+				target_local.y = current_local.y
 		"avoid", "retreat":
 			if not bool(snapshot.get("has_target_position", false)):
 				return {"moved": false, "blocked": false, "reason": "avoidance_target_unavailable"}
@@ -298,7 +345,7 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		navigation_target_local.y = NavigationFactoryScript.NAVIGATION_SURFACE_Y
 		var navigation_target_world: Vector3 = cell_root.to_global(navigation_target_local)
 		if not NavigationFactoryScript.set_agent_target(
-			navigation_agent, navigation_target_world, stop_distance
+			navigation_agent, navigation_target_world, stop_distance, cross_cell_hop
 		):
 			return {"moved": false, "blocked": true, "reason": "navigation_target_rejected"}
 		var navigation_result: Dictionary = NavigationFactoryScript.get_next_waypoint(navigation_agent)
@@ -312,6 +359,13 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		if bool(navigation_result.get("finished", false)):
 			if not bool(navigation_result.get("target_reachable", false)):
 				return {"moved": false, "blocked": true, "reason": "navigation_target_unreachable"}
+			if cross_cell_hop:
+				var transfer_on_finish: Dictionary = _try_commit_cross_cell_hound_transfer(
+					record, cross_cell_route, cross_cell_direction
+				)
+				if bool(transfer_on_finish.get("attempted", false)):
+					return _movement_result_from_cross_cell_transfer(transfer_on_finish)
+				return {"moved": false, "blocked": true, "reason": "edge_approach_finished_before_transfer_tolerance"}
 			if state_name == "patrol":
 				_advance_patrol(entity_key, entity_root)
 			return {"moved": false, "blocked": false, "reason": "within_stop_distance"}
@@ -358,7 +412,167 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		return {"moved": did_move, "blocked": true, "reason": "world_collision"}
 	if entity_body.has_meta("backrooms_last_collision_normal"):
 		entity_body.remove_meta("backrooms_last_collision_normal")
+	if cross_cell_hop:
+		var transfer_after_move: Dictionary = _try_commit_cross_cell_hound_transfer(
+			record, cross_cell_route, cross_cell_direction
+		)
+		if bool(transfer_after_move.get("attempted", false)):
+			return _movement_result_from_cross_cell_transfer(transfer_after_move)
 	return {"moved": did_move, "blocked": false, "reason": "moved"}
+
+func _build_cross_cell_hound_target(
+	record: Dictionary,
+	current_cell: Vector2i,
+	target_cell: Vector2i,
+	current_local: Vector3,
+	target_local: Vector3,
+	cell_size: float
+) -> Dictionary:
+	var runtime_value: Variant = record.get("runtime", null)
+	if not (runtime_value is Node) or not is_instance_valid(runtime_value):
+		return {"ok": false, "reason": "cross_cell_runtime_unavailable"}
+	var runtime: Node = runtime_value as Node
+	if (
+		not runtime.has_method("plan_route_between_loaded_cells")
+		or not runtime.has_method("is_route_snapshot_current")
+		or not runtime.has_method("get_cell_root")
+		or not runtime.has_method("transfer_entity_to_next_cell")
+	):
+		return {"ok": false, "reason": "cross_cell_runtime_contract_unavailable"}
+	var route_value: Variant = runtime.call(
+		"plan_route_between_loaded_cells", current_cell, target_cell
+	)
+	if not (route_value is Dictionary):
+		return {"ok": false, "reason": "cross_cell_route_invalid"}
+	var route: Dictionary = route_value
+	if not bool(route.get("ok", false)):
+		return {"ok": false, "reason": str(route.get("reason", "cross_cell_route_unavailable"))}
+	var cell_keys_value: Variant = route.get("cell_keys", null)
+	var directions_value: Variant = route.get("edge_directions", null)
+	if (
+		not (cell_keys_value is Array)
+		or not (directions_value is Array)
+		or cell_keys_value.size() < 2
+		or directions_value.size() != cell_keys_value.size() - 1
+	):
+		return {"ok": false, "reason": "cross_cell_route_first_hop_invalid"}
+	if (
+		route.get("start_cell", null) != current_cell
+		or route.get("goal_cell", null) != target_cell
+		or str(cell_keys_value[0]) != str(record.get("cell_key", ""))
+	):
+		return {"ok": false, "reason": "cross_cell_route_endpoint_mismatch"}
+	var direction_value: Variant = directions_value[0]
+	if not (direction_value is Vector2i):
+		return {"ok": false, "reason": "cross_cell_route_direction_invalid"}
+	var direction: Vector2i = direction_value
+	if absi(direction.x) + absi(direction.y) != 1:
+		return {"ok": false, "reason": "cross_cell_route_direction_invalid"}
+	var next_cell: Vector2i = current_cell + direction
+	var next_cell_key: String = "%d,%d" % [next_cell.x, next_cell.y]
+	if str(cell_keys_value[1]) != next_cell_key:
+		return {"ok": false, "reason": "cross_cell_route_first_hop_mismatch"}
+	var next_root_value: Variant = runtime.call("get_cell_root", next_cell_key)
+	if not (next_root_value is Node3D) or not is_instance_valid(next_root_value):
+		return {"ok": false, "reason": "cross_cell_next_owner_not_loaded"}
+	if not bool(runtime.call("is_route_snapshot_current", route)):
+		return {"ok": false, "reason": "route_snapshot_stale"}
+	var safe_extent: float = cell_size * 0.5 - SAFE_CELL_MARGIN
+	var perpendicular_limit: float = safe_extent - EDGE_PERPENDICULAR_INSET
+	var edge_target: float = safe_extent - EDGE_APPROACH_TARGET_INSET
+	if not is_finite(safe_extent) or perpendicular_limit <= 0.1 or edge_target <= 0.1:
+		return {"ok": false, "reason": "cross_cell_edge_bounds_invalid"}
+	var next_target: Vector3 = current_local
+	if direction.x != 0:
+		next_target.x = float(direction.x) * edge_target
+		next_target.z = clampf(target_local.z, -perpendicular_limit, perpendicular_limit)
+	else:
+		next_target.z = float(direction.y) * edge_target
+		next_target.x = clampf(target_local.x, -perpendicular_limit, perpendicular_limit)
+	next_target.y = current_local.y
+	if not _is_finite_vector3(next_target):
+		return {"ok": false, "reason": "cross_cell_edge_target_invalid"}
+	return {
+		"ok": true,
+		"target_local": next_target,
+		"route": route.duplicate(true),
+		"direction": direction
+	}
+
+func _try_commit_cross_cell_hound_transfer(
+	record: Dictionary,
+	route: Dictionary,
+	direction: Vector2i
+) -> Dictionary:
+	var entity_root_value: Variant = record.get("entity_root", null)
+	var cell_root_value: Variant = record.get("cell_root", null)
+	var runtime_value: Variant = record.get("runtime", null)
+	if (
+		not (entity_root_value is CharacterBody3D)
+		or not is_instance_valid(entity_root_value)
+		or not (cell_root_value is Node3D)
+		or not is_instance_valid(cell_root_value)
+		or not (runtime_value is Node)
+		or not is_instance_valid(runtime_value)
+	):
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_context_unavailable"}
+	var runtime: Node = runtime_value as Node
+	if not runtime.has_method("is_route_snapshot_current") or not runtime.has_method("transfer_entity_to_next_cell"):
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_contract_unavailable"}
+	if absi(direction.x) + absi(direction.y) != 1:
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_direction_invalid"}
+	var entity_root: CharacterBody3D = entity_root_value as CharacterBody3D
+	var cell_root: Node3D = cell_root_value as Node3D
+	var cell_size: float = float(cell_root.get_meta("backrooms_cell_size", 0.0))
+	if not is_finite(cell_size) or cell_size <= SAFE_CELL_MARGIN * 2.0:
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_cell_size_invalid"}
+	var safe_extent: float = cell_size * 0.5 - SAFE_CELL_MARGIN
+	var current_local: Vector3 = cell_root.to_local(entity_root.global_position)
+	if not _is_finite_vector3(current_local):
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_position_invalid"}
+	var edge_coordinate: float = current_local.x if direction.x != 0 else current_local.z
+	var expected_edge_coordinate: float = float(direction.x) * safe_extent if direction.x != 0 else float(direction.y) * safe_extent
+	if absf(edge_coordinate - expected_edge_coordinate) > EDGE_TRANSFER_TOLERANCE:
+		return {"attempted": false}
+	if not bool(runtime.call("is_route_snapshot_current", route)):
+		return {"attempted": true, "ok": false, "reason": "route_snapshot_stale"}
+	var spawn_cell_key: String = str(record.get("spawn_cell_key", ""))
+	var entity_id: String = str(record.get("entity_id", ""))
+	if spawn_cell_key.is_empty() or entity_id.is_empty():
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_identity_invalid"}
+	var transfer_value: Variant = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	if not (transfer_value is Dictionary):
+		return {"attempted": true, "ok": false, "reason": "cross_cell_transfer_result_invalid"}
+	var transfer_result: Dictionary = transfer_value
+	if not bool(transfer_result.get("ok", false)):
+		return {
+			"attempted": true,
+			"ok": false,
+			"reason": str(transfer_result.get("reason", "cross_cell_transfer_rejected")),
+			"transfer_result": transfer_result
+		}
+	return {"attempted": true, "ok": true, "transfer_result": transfer_result}
+
+func _movement_result_from_cross_cell_transfer(transfer_attempt: Dictionary) -> Dictionary:
+	var transfer_value: Variant = transfer_attempt.get("transfer_result", {})
+	var transfer_result: Dictionary = transfer_value if transfer_value is Dictionary else {}
+	if bool(transfer_attempt.get("ok", false)):
+		return {
+			"moved": true,
+			"blocked": false,
+			"transferred": true,
+			"reason": "owner_transfer_committed",
+			"transfer_result": transfer_result
+		}
+	return {
+		"moved": false,
+		"blocked": true,
+		"transferred": false,
+		"reason": str(transfer_attempt.get("reason", "cross_cell_transfer_rejected")),
+		"transfer_result": transfer_result
+	}
 
 func _get_patrol_target(
 	entity_root: Node3D,
