@@ -200,6 +200,7 @@ func _run() -> void:
 	if restored_world == null:
 		_finish(1)
 		return
+	restored_world.set("world_seed", WORLD_SEED)
 	root.add_child(restored_world)
 	await process_frame
 	var loaded: bool = bool(restored_world.call("load_game", SAVE_PATH))
