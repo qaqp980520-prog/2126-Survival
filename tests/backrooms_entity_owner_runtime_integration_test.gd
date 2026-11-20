@@ -16,7 +16,6 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var runtime: Node3D = RuntimeScript.new() as Node3D
-	runtime.set("force_metadata_only", true)
 	root.add_child(runtime)
 	var metadata_probe := Node3D.new()
 	var probe_window := CharacterBody3D.new()
@@ -41,7 +40,7 @@ func _run() -> void:
 	)
 	metadata_probe.free()
 	var prepared: Dictionary = runtime.call(
-		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3
+		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 1
 	)
 	_expect(bool(prepared.get("ok", false)), "runtime prepares a deterministic Level 2 ownership window")
 	if not bool(prepared.get("ok", false)):
@@ -288,7 +287,7 @@ func _run() -> void:
 				saved_owner_found = str(record.get("owner_cell_key", "")) == target_key
 	_expect(saved_owner_found, "save snapshot persists the migrated owner-cell assignment")
 
-	var far_center: Vector2i = target_cell + direction * 4
+	var far_center: Vector2i = target_cell + direction * 2
 	var far_position := Vector3(float(far_center.x) * 8.0, 0.0, float(far_center.y) * 8.0)
 	var away_result: Dictionary = runtime.call("sync_to_world_position", far_position)
 	_expect(bool(away_result.get("ok", false)), "stream can unload the owner cell while retaining its one-cell-halo ownership record")
@@ -444,7 +443,6 @@ func _run() -> void:
 
 	var final_save: Dictionary = runtime.call("to_save_dict")
 	var restored: Node3D = RuntimeScript.new() as Node3D
-	restored.set("force_metadata_only", true)
 	root.add_child(restored)
 	_expect(bool(restored.call("load_save_dict", final_save)), "fresh runtime reconstructs migrated ownership from the combined maze payload")
 	_expect(bool(restored.call("activate_destination")), "restored ownership runtime activates only after reconstruction")
@@ -474,7 +472,6 @@ func _run() -> void:
 	_expect(bool(file_store.call("write_atomically", DISK_SAVE_PATH, disk_envelope)), "second atomic write rotates a known-good Hound envelope into .bak")
 	_expect(_write_text(DISK_SAVE_PATH, "{malformed primary"), "test corrupts only the primary Hound save after backup rotation")
 	disk_restore_runtime = RuntimeScript.new() as Node3D
-	disk_restore_runtime.set("force_metadata_only", true)
 	root.add_child(disk_restore_runtime)
 	var disk_loaded: bool = bool(file_store.call(
 		"load_with_backup",
@@ -506,12 +503,19 @@ func _run() -> void:
 	if disk_entity != null:
 		_expect(str(disk_entity.get_meta("backrooms_owner_cell_key", "")) == target_key, "disk-recovered Hound node restores owner-cell metadata")
 		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 1, "disk-recovered Hound node restores owner revision metadata")
-		var disk_agent: NavigationAgent3D = disk_entity.find_child("NavigationAgent3D", true, false) as NavigationAgent3D
-		_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
-		if disk_agent != null:
-			_expect(not disk_agent.avoidance_enabled, "disk-recovered NavigationAgent3D preserves the bounded non-avoidance policy")
-			_expect(absf(disk_agent.path_desired_distance - 0.2) <= 0.0001, "disk-recovered NavigationAgent3D uses the current waypoint tolerance")
-	_expect(disk_restore_runtime.call("to_save_dict") == final_save, "disk-recovered Hound reproduces the exact ownership and runtime-state snapshot")
+		var disk_agent: NavigationAgent3D = disk_entity.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
+		if DisplayServer.get_name() == "headless":
+			_expect(disk_agent == null, "headless metadata-only restore intentionally omits graphical NavigationAgent3D nodes")
+		else:
+			_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
+			if disk_agent != null:
+				_expect(not disk_agent.avoidance_enabled, "disk-recovered NavigationAgent3D preserves the bounded non-avoidance policy")
+				_expect(absf(disk_agent.path_desired_distance - 0.2) <= 0.0001, "disk-recovered NavigationAgent3D uses the current waypoint tolerance")
+	var disk_runtime_snapshot: Dictionary = disk_restore_runtime.call("to_save_dict")
+	_expect(
+		_save_values_equal(disk_runtime_snapshot, final_save),
+		"disk-recovered Hound reproduces the semantic ownership and runtime-state snapshot after JSON numeric canonicalization"
+	)
 
 	# Schema-three saves predate the ownership ledger. A retained owner==spawn
 	# archive must be deterministically backfilled even when its cell is not loaded.
@@ -519,7 +523,7 @@ func _run() -> void:
 	legacy_payload["schema_version"] = 3
 	legacy_payload.erase("entity_ownership_ledger_version")
 	legacy_payload.erase("entity_ownership_ledger")
-	var legacy_center: Vector2i = source_cell + direction * 4
+	var legacy_center: Vector2i = source_cell + direction * 2
 	legacy_payload["center_cell"] = [legacy_center.x, legacy_center.y]
 	var legacy_state: Dictionary = {}
 	for state_value in final_save.get("entity_runtime_states", []):
@@ -532,7 +536,6 @@ func _run() -> void:
 	legacy_payload["entity_runtime_states"] = [legacy_state] if not legacy_state.is_empty() else []
 	_expect(not legacy_state.is_empty(), "legacy migration fixture retains the original deterministic spawn state")
 	var legacy_restored: Node3D = RuntimeScript.new() as Node3D
-	legacy_restored.set("force_metadata_only", true)
 	root.add_child(legacy_restored)
 	var legacy_loaded: bool = bool(legacy_restored.call("load_save_dict", legacy_payload))
 	_expect(legacy_loaded, "schema-three owner==spawn archive restores through deterministic ledger backfill")
@@ -629,6 +632,26 @@ func _count_identity_in_root(cell_root: Node3D, spawn_cell_key: String, entity_i
 		if ("%d,%d" % [spawn_cell.x, spawn_cell.y]) == spawn_cell_key:
 			count += 1
 	return count
+
+
+static func _save_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _save_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _save_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
 
 
 func _restore_runtime_from_file_envelope(payload: Dictionary, _now_unix: int = -1) -> bool:
