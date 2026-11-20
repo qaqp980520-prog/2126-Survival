@@ -356,7 +356,7 @@ func _assert_cross_cell_target_fails_closed() -> void:
 	var start_position: Vector3 = entity_root.global_position
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
-	_expect(int(result.get("blocked_count", 0)) == 1, "cross-cell movement is rejected until roaming ownership is implemented")
+	_expect(int(result.get("blocked_count", 0)) == 1, "cross-cell Hound pursuit fails closed when no loaded-cell route is available")
 	_expect(entity_root.global_position.is_equal_approx(start_position), "entity never crosses an unloaded or unowned cell boundary")
 	driver.call("reset")
 	world_root.free()
@@ -369,12 +369,13 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	world_root.add_child(runtime)
 	var source_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
 	_add_cell(runtime, "1,0", Vector2i(1, 0))
+	_add_cell(runtime, "2,0", Vector2i(2, 0))
 	runtime.route_snapshot = {
 		"ok": true,
 		"start_cell": Vector2i.ZERO,
-		"goal_cell": Vector2i(1, 0),
-		"cell_keys": ["0,0", "1,0"],
-		"edge_directions": [Vector2i(1, 0)]
+		"goal_cell": Vector2i(2, 0),
+		"cell_keys": ["0,0", "1,0", "2,0"],
+		"edge_directions": [Vector2i(1, 0), Vector2i(1, 0)]
 	}
 	runtime.transfer_succeeds = true
 	var entity: Dictionary = _add_entity(
@@ -383,13 +384,13 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	var brain: Node = entity["brain"] as Node
 	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
 	var decision: Dictionary = brain.call("evaluate_perception", {
-		"distance_to_player": 5.5,
+		"distance_to_player": 13.5,
 		"has_line_of_sight": true,
 		"player_looking_at_entity": false,
 		"noise_strength": 0.0,
-		"player_position": Vector3(8.0, 0.55, 0.0)
+		"player_position": Vector3(16.0, 0.55, 0.0)
 	}, 0.2)
-	_expect(str(decision.get("state", "")) == "pursue", "visible Hound target in the adjacent loaded cell produces a pursue intent")
+	_expect(str(decision.get("state", "")) == "pursue", "visible Hound target two loaded cells away produces a pursue intent")
 	await physics_frame
 	var driver = MovementDriverScript.new()
 	var start_position: Vector3 = entity_root.global_position
@@ -421,7 +422,16 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	_expect(runtime.transfer_calls == 1, "one movement tick can commit at most the current route's first hop")
 	_expect(str(runtime.last_transfer.get("spawn_cell_key", "")) == "0,0", "cross-cell handoff retains the immutable spawn-cell identity")
 	_expect(str(runtime.last_transfer.get("entity_id", "")) == "hound", "cross-cell handoff identifies the Hound entity")
-	_expect(runtime.last_transfer.get("cell_keys", []) == ["0,0", "1,0"], "cross-cell handoff uses the validated first route hop")
+	_expect(
+		runtime.last_transfer.get("cell_keys", []) == ["0,0", "1,0", "2,0"],
+		"cross-cell handoff retains the complete validated multi-cell route snapshot"
+	)
+	_expect(
+		str(transfer_results[0].get("from_owner_cell_key", "")) == "0,0"
+		and str(transfer_results[0].get("to_owner_cell_key", "")) == "1,0"
+		and int(transfer_results[0].get("owner_revision", -1)) == 1,
+		"a target two cells away still commits only the first hop to the adjacent owner cell"
+	)
 	_expect(float(runtime.last_transfer.get("edge_error", 1.0)) <= 0.25, "precision approach reaches the runtime's 0.25 m transfer boundary")
 	driver.call("reset")
 	world_root.free()
