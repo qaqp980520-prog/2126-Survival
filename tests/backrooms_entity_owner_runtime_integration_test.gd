@@ -96,18 +96,24 @@ func _run() -> void:
 	var pursuit_route: Dictionary = candidate.get("pursuit_route", {})
 	var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
 	var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
+	var first_hop_direction: Vector2i = Vector2i.ZERO
 	var second_hop_direction: Vector2i = Vector2i.ZERO
-	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2 and pursuit_directions_value[1] is Vector2i:
-		second_hop_direction = pursuit_directions_value[1]
+	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2:
+		if pursuit_directions_value[0] is Vector2i:
+			first_hop_direction = pursuit_directions_value[0]
+		if pursuit_directions_value[1] is Vector2i:
+			second_hop_direction = pursuit_directions_value[1]
 	_expect(
 		bool(pursuit_route.get("ok", false))
 		and pursuit_path_value is Array
 		and pursuit_path_value.size() == 3
 		and pursuit_path_value[1] == target_cell
 		and pursuit_path_value[2] == pursuit_goal_cell
+		and first_hop_direction == direction
 		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1
-		and second_hop_direction == direction,
-		"selected Hound has a validated two-hop loaded-cell route through the expected first owner"
+		and second_hop_direction != direction
+		and second_hop_direction != -direction,
+		"selected Hound has a validated two-hop turning route through the expected first owner"
 	)
 	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
 	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
@@ -810,16 +816,24 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if not (goal_cell_value is Vector2i):
 						continue
 					var goal_cell: Vector2i = goal_cell_value
-					if goal_cell != cell + direction * 2:
+					if goal_cell == cell or goal_cell == target_cell:
 						continue
 					var pursuit_route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, goal_cell)
 					var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
+					var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
 					if (
 						bool(pursuit_route.get("ok", false))
 						and pursuit_path_value is Array
 						and pursuit_path_value.size() == 3
 						and pursuit_path_value[1] == target_cell
 						and pursuit_path_value[2] == goal_cell
+						and pursuit_directions_value is Array
+						and pursuit_directions_value.size() == 2
+						and pursuit_directions_value[0] is Vector2i
+						and pursuit_directions_value[0] == direction
+						and pursuit_directions_value[1] is Vector2i
+						and pursuit_directions_value[1] != direction
+						and pursuit_directions_value[1] != -direction
 					):
 						return {
 							"entity_root": child,
