@@ -146,7 +146,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	var schema_number: float = float(schema_value)
-	if floorf(schema_number) != schema_number or int(schema_number) != 1:
+	if floorf(schema_number) != schema_number or schema_number != 1.0:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	if not (position_value is Array) or position_value.size() != 3:
