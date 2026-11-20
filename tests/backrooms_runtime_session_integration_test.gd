@@ -4,6 +4,8 @@ const DirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
 const ManagerScript = preload("res://systems/BackroomsTransitionManager.gd")
 const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
+const MazeStreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
+const MazeLayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
 
 class MutatingRejectRuntimeSession extends RefCounted:
 	var active: bool = false
@@ -156,7 +158,31 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	var parsed: Variant = JSON.parse_string(JSON.stringify(saved_session))
 	assert(parsed is Dictionary)
 	var restored_session = SessionScript.new()
-	assert(bool(restored_session.call("load_save_dict", parsed)))
+	var restored_load_ok: bool = bool(restored_session.call("load_save_dict", parsed))
+	if not restored_load_ok:
+		var stream_payload: Dictionary = parsed.get("maze_stream_state", {})
+		var stream_probe = MazeStreamStateScript.new()
+		var stream_probe_ok: bool = bool(stream_probe.call("load_save_dict", stream_payload))
+		var position_value: Array = parsed.get("backrooms_position", [])
+		var cell_size_value: float = float(stream_payload.get("cell_size", 0.0))
+		var mapping: Dictionary = {}
+		if position_value.size() == 3 and cell_size_value > 0.0:
+			mapping = MazeLayoutScript.try_cell_for_position(
+				Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2])),
+				cell_size_value
+			)
+		var state_records_value: Variant = stream_payload.get("entity_runtime_states", [])
+		var ownership_value: Variant = stream_payload.get("entity_ownership_ledger", {})
+		print(
+			"Backrooms session load diagnostic: session_error=", restored_session.call("get_last_load_error"),
+			" stream_ok=", stream_probe_ok,
+			" stream_error=", stream_probe.get("last_load_error"),
+			" saved_center=", stream_payload.get("center_cell", []),
+			" mapped_center=", mapping.get("cell", null),
+			" entity_state_count=", state_records_value.size() if state_records_value is Array else -1,
+			" ownership_keys=", ownership_value.keys() if ownership_value is Dictionary else []
+		)
+	assert(restored_load_ok, "Session JSON round-trip must accept the current canonical maze stream.")
 	var restored_save_dict: Dictionary = restored_session.call("to_save_dict")
 	assert(
 		_json_values_equal(restored_save_dict, saved_session),
@@ -169,12 +195,19 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	legacy_nested_stream.erase("entity_spawn_algorithm_version")
 	legacy_nested_stream.erase("entity_runtime_state_version")
 	legacy_nested_stream.erase("entity_runtime_states")
+	legacy_nested_stream.erase("entity_ownership_ledger_version")
+	legacy_nested_stream.erase("entity_ownership_ledger")
+	assert(
+		not legacy_nested_stream.has("entity_ownership_ledger_version")
+		and not legacy_nested_stream.has("entity_ownership_ledger"),
+		"legacy schema-one fixture omits schema-four ownership fields"
+	)
 	legacy_nested_payload["maze_stream_state"] = legacy_nested_stream
 	var legacy_nested_manager = ManagerScript.new()
 	assert(bool(legacy_nested_manager.call("restore_session_for_world_load", legacy_nested_payload)), "Production world-load manager accepts a validated legacy schema-one nested maze stream.")
 	var legacy_nested_session = legacy_nested_manager.get_session()
 	var canonical_legacy_stream: Dictionary = legacy_nested_session.call("get_maze_stream_state")
-	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 3, "Session canonicalizes the legacy nested maze stream to schema three.")
+	assert(int(canonical_legacy_stream.get("schema_version", -1)) == 4, "Session canonicalizes the legacy nested maze stream to schema four.")
 	assert(int(canonical_legacy_stream.get("entity_spawn_algorithm_version", -1)) == 1, "Session preserves the legacy spawn algorithm version during canonicalization.")
 	assert(canonical_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy migration starts with an empty mobile-entity cache.")
 	var legacy_nested_runtime = RuntimeScript.new()
@@ -183,7 +216,7 @@ func _test_runtime_entry_sync_save_and_return() -> void:
 	assert(bool(legacy_nested_manager.call("restore_runtime_from_session", legacy_nested_runtime)), "Production runtime restores a legacy nested maze stream through Session.")
 	var restored_legacy_stream: Dictionary = legacy_nested_runtime.call("to_save_dict")
 	var migrated_legacy_stream: Dictionary = legacy_nested_manager.get_session().call("get_maze_stream_state")
-	assert(_json_values_equal(restored_legacy_stream, migrated_legacy_stream), "Legacy Session and restored runtime converge on the same schema-three snapshot.")
+	assert(_json_values_equal(restored_legacy_stream, migrated_legacy_stream), "Legacy Session and restored runtime converge on the same schema-four snapshot.")
 	assert(not migrated_legacy_stream.get("entity_runtime_states", []).is_empty(), "Legacy restore materializes deterministic default mobile-entity snapshots into Session.")
 	legacy_nested_runtime.queue_free()
 

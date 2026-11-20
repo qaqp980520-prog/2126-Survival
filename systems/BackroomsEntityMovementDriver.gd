@@ -157,9 +157,16 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 			var brain: Node = entity_root.get_node_or_null("AI")
 			if brain == null or not brain.has_method("get_behavior_snapshot"):
 				continue
+			var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell", null)
+			if not (spawn_cell_value is Vector2i):
+				continue
+			var spawn_cell: Vector2i = spawn_cell_value
+			var spawn_cell_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+			var identity_key: String = spawn_cell_key + "|" + entity_id
 			records.append({
-				"key": cell_key + "|" + entity_id,
+				"key": identity_key,
 				"cell_key": cell_key,
+				"spawn_cell_key": spawn_cell_key,
 				"entity_id": entity_id,
 				"entity_root": entity_root,
 				"cell_root": cell_root,

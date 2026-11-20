@@ -58,7 +58,7 @@ func _run() -> void:
 	_expect(runtime.call("get_cell_root", "2,0") != null, "newly required edge cells are attached after commit")
 
 	var saved: Dictionary = runtime.call("to_save_dict")
-	_expect(int(saved.get("schema_version", -1)) == 3, "runtime writes the entity-runtime persistence schema")
+	_expect(int(saved.get("schema_version", -1)) == 4, "runtime writes the entity ownership persistence schema")
 	_expect(int(saved.get("entity_runtime_state_version", -1)) == 2, "runtime save declares the owner/spawn identity codec version")
 	_expect(saved.get("entity_runtime_states", null) is Array, "runtime save includes a validated entity-state array")
 	_expect(int(saved.get("layout_algorithm_version", -1)) == 1, "runtime save is bound to the explicit maze algorithm version")
@@ -78,23 +78,69 @@ func _run() -> void:
 	legacy_payload.erase("entity_spawn_algorithm_version")
 	legacy_payload.erase("entity_runtime_state_version")
 	legacy_payload.erase("entity_runtime_states")
+	legacy_payload.erase("entity_ownership_ledger_version")
+	legacy_payload.erase("entity_ownership_ledger")
 	var legacy_restored: Variant = RuntimeScript.new()
 	legacy_restored.force_metadata_only = true
 	root.add_child(legacy_restored)
 	_expect(bool(legacy_restored.call("load_save_dict", legacy_payload)), "legacy schema-one maze saves migrate using spawn algorithm version one")
 	var migrated_save: Dictionary = legacy_restored.call("to_save_dict")
-	_expect(int(migrated_save.get("schema_version", -1)) == 3 and int(migrated_save.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "legacy restore writes the current schema-three spawn/runtime versions on the next save")
+	_expect(int(migrated_save.get("schema_version", -1)) == 4 and int(migrated_save.get("entity_spawn_algorithm_version", -1)) == EntityDirectorScript.SPAWN_ALGORITHM_VERSION, "legacy restore writes the current schema-four ownership/runtime versions on the next save")
 	legacy_restored.queue_free()
 	var legacy_v2_payload: Dictionary = saved.duplicate(true)
 	legacy_v2_payload["schema_version"] = 2
 	legacy_v2_payload.erase("entity_runtime_state_version")
 	legacy_v2_payload.erase("entity_runtime_states")
+	legacy_v2_payload.erase("entity_ownership_ledger_version")
+	legacy_v2_payload.erase("entity_ownership_ledger")
 	var legacy_v2_restored: Variant = RuntimeScript.new()
 	legacy_v2_restored.force_metadata_only = true
 	root.add_child(legacy_v2_restored)
 	_expect(bool(legacy_v2_restored.call("load_save_dict", legacy_v2_payload)), "legacy schema-two saves migrate without losing deterministic spawn compatibility")
-	_expect(int(legacy_v2_restored.call("to_save_dict").get("schema_version", -1)) == 3, "legacy schema-two restore writes the new runtime-state schema")
+	_expect(int(legacy_v2_restored.call("to_save_dict").get("schema_version", -1)) == 4, "legacy schema-two restore writes the new ownership/runtime schema")
 	legacy_v2_restored.queue_free()
+	var legacy_v3_source: Variant = RuntimeScript.new()
+	legacy_v3_source.force_metadata_only = true
+	root.add_child(legacy_v3_source)
+	var legacy_v3_source_prepared: Dictionary = legacy_v3_source.call(
+		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3
+	)
+	_expect(bool(legacy_v3_source_prepared.get("ok", false)), "Level 2 legacy migration fixture prepares with deterministic mobile spawns")
+	var legacy_v3_source_save: Dictionary = legacy_v3_source.call("to_save_dict")
+	var legacy_v3_source_ledger: RefCounted = legacy_v3_source.get("ownership_ledger") as RefCounted
+	var legacy_v3_expected_records: Array = legacy_v3_source_ledger.call("get_records") if legacy_v3_source_ledger != null else []
+	_expect(legacy_v3_expected_records.size() > 0, "Level 2 legacy migration fixture contains mobile ownership records")
+	var legacy_v3_expected_keys: Dictionary = {}
+	for expected_record_value in legacy_v3_expected_records:
+		if expected_record_value is Dictionary:
+			var expected_record: Dictionary = expected_record_value
+			var expected_key: String = str(expected_record.get("spawn_cell_key", "")) + "|" + str(expected_record.get("entity_id", ""))
+			legacy_v3_expected_keys[expected_key] = true
+	var legacy_v3_payload: Dictionary = legacy_v3_source_save.duplicate(true)
+	legacy_v3_payload["schema_version"] = 3
+	legacy_v3_payload.erase("entity_ownership_ledger_version")
+	legacy_v3_payload.erase("entity_ownership_ledger")
+	var legacy_v3_restored: Variant = RuntimeScript.new()
+	legacy_v3_restored.force_metadata_only = true
+	root.add_child(legacy_v3_restored)
+	_expect(bool(legacy_v3_restored.call("load_save_dict", legacy_v3_payload)), "legacy schema-three runtime saves rebuild default ownership records")
+	var legacy_v3_migrated: Dictionary = legacy_v3_restored.call("to_save_dict")
+	_expect(int(legacy_v3_migrated.get("schema_version", -1)) == 4, "legacy schema-three runtime saves migrate to schema four")
+	var legacy_v3_saved_ledger: Dictionary = legacy_v3_migrated.get("entity_ownership_ledger", {})
+	var legacy_v3_saved_records: Array = legacy_v3_saved_ledger.get("records", [])
+	var legacy_v3_migrated_keys: Dictionary = {}
+	for migrated_record_value in legacy_v3_saved_records:
+		if migrated_record_value is Dictionary:
+			var migrated_record: Dictionary = migrated_record_value
+			var migrated_key: String = str(migrated_record.get("spawn_cell_key", "")) + "|" + str(migrated_record.get("entity_id", ""))
+			legacy_v3_migrated_keys[migrated_key] = true
+	_expect(
+		legacy_v3_saved_records.size() == legacy_v3_expected_records.size()
+		and legacy_v3_migrated_keys == legacy_v3_expected_keys,
+		"legacy schema-three migration materializes every deterministic mobile ownership record"
+	)
+	legacy_v3_restored.queue_free()
+	legacy_v3_source.queue_free()
 	var legacy_state_v1_payload: Dictionary = saved.duplicate(true)
 	legacy_state_v1_payload["entity_runtime_state_version"] = 1
 	var legacy_state_v1_records: Array = []
@@ -209,7 +255,7 @@ func _assert_entity_runtime_state_round_trip() -> void:
 	brain.call("evaluate_perception", perception, 0.75)
 	selected_root.set_meta("backrooms_patrol_index", 3)
 	var saved: Dictionary = runtime.call("to_save_dict")
-	_expect(int(saved.get("schema_version", -1)) == 3, "entity runtime save uses schema three")
+	_expect(int(saved.get("schema_version", -1)) == 4, "entity runtime save uses schema four")
 	var target_record: Dictionary = {}
 	for record_value in saved.get("entity_runtime_states", []):
 		if record_value is Dictionary:
@@ -299,10 +345,27 @@ func _assert_entity_runtime_state_round_trip() -> void:
 		restore_probe.force_metadata_only = true
 		root.add_child(restore_probe)
 		var shared_owner_records: Array = [migrated_record, second_owner_record]
+		var shared_owner_ledger_records: Array = [
+			{
+				"spawn_cell_key": str(migrated_record.get("spawn_cell_key", "")),
+				"entity_id": str(migrated_record.get("entity_id", "")),
+				"owner_cell_key": str(migrated_record.get("cell_key", "")),
+				"spawn_algorithm_version": EntityDirectorScript.SPAWN_ALGORITHM_VERSION,
+				"owner_revision": 1
+			},
+			{
+				"spawn_cell_key": str(second_owner_record.get("spawn_cell_key", "")),
+				"entity_id": str(second_owner_record.get("entity_id", "")),
+				"owner_cell_key": str(second_owner_record.get("cell_key", "")),
+				"spawn_algorithm_version": EntityDirectorScript.SPAWN_ALGORITHM_VERSION,
+				"owner_revision": 2
+			}
+		]
 		var synthetic_restore_ok: bool = bool(restore_probe.call(
 			"_restore_entity_runtime_states",
 			{str(migrated_record.get("cell_key", "")): synthetic_owner_root},
-			shared_owner_records
+			shared_owner_records,
+			shared_owner_ledger_records
 		))
 		_expect(synthetic_restore_ok, "runtime restores two same-type migrated entities under one owner cell by immutable spawn identity")
 		_expect(first_migrated_root.position.is_equal_approx(saved_local_position), "first migrated entity restores its owner-local position")

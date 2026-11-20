@@ -11,7 +11,14 @@ const LightingProfileScript = preload("res://systems/BackroomsLightingProfile.gd
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const CellRoutePlannerScript = preload("res://systems/BackroomsCellRoutePlanner.gd")
+const OwnershipLedgerScript = preload("res://systems/BackroomsEntityOwnershipLedger.gd")
 const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
+
+const ENTITY_SAFE_CELL_MARGIN: float = 0.65
+const ENTITY_COLLISION_SAFE_MARGIN: float = 0.02
+const ENTITY_TRANSFER_EDGE_TOLERANCE: float = 0.25
+const ENTITY_TRANSFER_PERPENDICULAR_TOLERANCE: float = 0.001
+const ENTITY_TRANSFER_ENTRY_INSET: float = 0.02
 
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
@@ -19,6 +26,7 @@ const WALL_HEIGHT: float = 3.2
 const WORLD_GEOMETRY_LAYER: int = 1
 
 var stream_state: RefCounted = StreamStateScript.new()
+var ownership_ledger: RefCounted = OwnershipLedgerScript.new()
 var cell_roots: Dictionary = {}
 var prepared: bool = false
 var active: bool = false
@@ -53,7 +61,15 @@ func prepare_destination(
 	if not (plan_value is Dictionary) or not bool(plan_value.get("ok", false)):
 		return _failure(str(plan_value.get("reason", "initial_window_plan_rejected")) if plan_value is Dictionary else "initial_window_plan_invalid")
 	var plan: Dictionary = plan_value
-	var staged_result: Dictionary = _stage_cell_roots(candidate, plan)
+	var expected_generation: int = int(candidate.call("get_generation")) + 1
+	var ownership_setup: Dictionary = _create_ownership_ledger(
+		candidate, plan, expected_generation, int(candidate.call("get_configuration_revision")), {}
+	)
+	if not bool(ownership_setup.get("ok", false)):
+		return _failure(str(ownership_setup.get("reason", "ownership_ledger_prepare_failed")))
+	var candidate_ledger: RefCounted = ownership_setup.get("ledger") as RefCounted
+	var ownership_records: Array = candidate_ledger.call("get_records")
+	var staged_result: Dictionary = _stage_cell_roots(candidate, plan, ownership_records, [])
 	if not bool(staged_result.get("ok", false)):
 		return _failure(str(staged_result.get("reason", "cell_staging_failed")))
 	var staged_roots: Dictionary = staged_result.get("roots", {})
@@ -61,8 +77,12 @@ func prepare_destination(
 	if not bool(candidate.call("commit_window", plan, staged_keys)):
 		_dispose_staged_roots(staged_roots)
 		return _failure("initial_stream_commit_rejected")
+	if not bool(candidate.call("set_entity_ownership_ledger_state", ownership_setup.get("save", {}))):
+		_dispose_staged_roots(staged_roots)
+		return _failure("initial_ownership_ledger_save_state_rejected")
 	_replace_all_cell_roots(staged_roots)
 	stream_state = candidate
+	ownership_ledger = candidate_ledger
 	prepared = true
 	active = false
 	visible = false
@@ -99,17 +119,41 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		return _failure(str(state_collection.get("reason", "entity_runtime_state_capture_failed")))
 	if not bool(candidate.call("set_entity_runtime_states", state_collection.get("records", []))):
 		return _failure("entity_runtime_state_validation_failed")
-	var staged_result: Dictionary = _stage_cell_roots(candidate, plan)
+	var expected_generation: int = int(candidate.call("get_generation")) + 1
+	var current_ownership_save: Dictionary = _get_ownership_ledger_save(stream_state, ownership_ledger)
+	if current_ownership_save.is_empty():
+		return _failure("current_ownership_ledger_snapshot_invalid")
+	var ownership_setup: Dictionary = _create_ownership_ledger(
+		candidate, plan, expected_generation, int(candidate.call("get_configuration_revision")), current_ownership_save
+	)
+	if not bool(ownership_setup.get("ok", false)):
+		return _failure(str(ownership_setup.get("reason", "ownership_ledger_window_update_failed")))
+	var candidate_ledger: RefCounted = ownership_setup.get("ledger") as RefCounted
+	var ownership_records: Array = candidate_ledger.call("get_records")
+	var entity_state_records: Array = candidate.call("get_entity_runtime_states")
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		entity_state_records,
+		ownership_records
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		return _failure(
+			"entity_state_ownership_pair_invalid:"
+			+ str(pairing_validation.get("reason", "unknown"))
+		)
+	var staged_result: Dictionary = _stage_cell_roots(candidate, plan, ownership_records, entity_state_records)
 	if not bool(staged_result.get("ok", false)):
 		return _failure(str(staged_result.get("reason", "cell_staging_failed")))
 	var staged_roots: Dictionary = staged_result.get("roots", {})
-	if not _restore_entity_runtime_states(staged_roots, candidate.call("get_entity_runtime_states")):
+	if not _restore_entity_runtime_states(staged_roots, entity_state_records, ownership_records):
 		_dispose_staged_roots(staged_roots)
 		return _failure("staged_entity_runtime_state_restore_failed")
 	var staged_keys: Array = plan.get("load_cell_keys", [])
 	if not bool(candidate.call("commit_window", plan, staged_keys)):
 		_dispose_staged_roots(staged_roots)
 		return _failure("stream_commit_rejected")
+	if not bool(candidate.call("set_entity_ownership_ledger_state", ownership_setup.get("save", {}))):
+		_dispose_staged_roots(staged_roots)
+		return _failure("stream_ownership_ledger_state_rejected")
 	for key_value in staged_roots.keys():
 		var key: String = str(key_value)
 		var cell_root: Node3D = staged_roots[key] as Node3D
@@ -118,6 +162,7 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 	for key_value in plan.get("unload_cell_keys", []):
 		_retire_cell_root(str(key_value))
 	stream_state = candidate
+	ownership_ledger = candidate_ledger
 	_set_collision_enabled(active)
 	return {
 		"ok": true,
@@ -127,7 +172,9 @@ func sync_to_world_position(world_position: Vector3) -> Dictionary:
 		"load_count": staged_roots.size(),
 		"keep_count": plan.get("keep_cell_keys", []).size(),
 		"unload_count": plan.get("unload_cell_keys", []).size(),
-		"retained_entity_state_count": stream_state.call("get_entity_runtime_states").size()
+		"retained_entity_state_count": stream_state.call("get_entity_runtime_states").size(),
+		"ownership_record_count": ownership_ledger.call("get_records").size(),
+		"evicted_ownership_record_count": int(ownership_setup.get("evicted_count", 0))
 	}
 
 func activate_destination() -> bool:
@@ -147,6 +194,7 @@ func deactivate_destination() -> bool:
 	for key_value in cell_roots.keys().duplicate():
 		_retire_cell_root(str(key_value))
 	stream_state = StreamStateScript.new()
+	ownership_ledger = OwnershipLedgerScript.new()
 	prepared = false
 	return true
 
@@ -160,11 +208,44 @@ func to_save_dict() -> Dictionary:
 	if not bool(state_collection.get("ok", false)):
 		last_error = str(state_collection.get("reason", "entity_runtime_state_capture_failed"))
 		return {}
-	if not bool(stream_state.call("set_entity_runtime_states", state_collection.get("records", []))):
+	var ownership_save: Dictionary = _get_ownership_ledger_save(stream_state, ownership_ledger)
+	if ownership_save.is_empty():
+		last_error = "entity_ownership_ledger_snapshot_invalid"
+		return {}
+	var ownership_records_value: Variant = ownership_save.get("records", null)
+	if not (ownership_records_value is Array):
+		last_error = "entity_ownership_ledger_records_invalid"
+		return {}
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		state_collection.get("records", []),
+		ownership_records_value
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		last_error = "entity_state_ownership_pair_invalid:" + str(pairing_validation.get("reason", "unknown"))
+		return {}
+
+	# Build the save snapshot on a detached clone. A failed pairing or setter must not
+	# partially replace the live stream state's previously committed archive.
+	var candidate_state: RefCounted = stream_state.call("clone_for_transaction") as RefCounted
+	if candidate_state == null:
+		last_error = "entity_save_candidate_unavailable"
+		return {}
+	if not bool(candidate_state.call("set_entity_runtime_states", state_collection.get("records", []))):
 		last_error = "entity_runtime_state_validation_failed"
 		return {}
+	if not bool(candidate_state.call("set_entity_ownership_ledger_state", ownership_save)):
+		last_error = "entity_ownership_ledger_state_rejected"
+		return {}
+	var snapshot_value: Variant = candidate_state.call("to_save_dict")
+	if not (snapshot_value is Dictionary):
+		last_error = "entity_save_snapshot_invalid"
+		return {}
+	var snapshot: Dictionary = snapshot_value
+	if snapshot.is_empty():
+		last_error = "entity_save_snapshot_invalid"
+		return {}
 	last_error = ""
-	return stream_state.call("to_save_dict")
+	return snapshot
 
 ## Restore into a detached candidate state and candidate roots. Existing live roots/state
 ## are replaced only after the entire candidate window has staged and committed.
@@ -179,23 +260,47 @@ func load_save_dict(payload: Dictionary) -> bool:
 	if not (plan_value is Dictionary) or not bool(plan_value.get("ok", false)):
 		return _reject("restore_window_plan_rejected")
 	var plan: Dictionary = plan_value
-	var staged_result: Dictionary = _stage_cell_roots(candidate, plan)
+	var expected_generation: int = int(candidate.call("get_generation")) + 1
+	var saved_ownership_state: Dictionary = candidate.call("get_entity_ownership_ledger_state")
+	var ownership_setup: Dictionary = _create_ownership_ledger(
+		candidate, plan, expected_generation, int(candidate.call("get_configuration_revision")), saved_ownership_state
+	)
+	if not bool(ownership_setup.get("ok", false)):
+		return _reject(str(ownership_setup.get("reason", "restore_ownership_ledger_failed")))
+	var candidate_ledger: RefCounted = ownership_setup.get("ledger") as RefCounted
+	var ownership_records: Array = candidate_ledger.call("get_records")
+	var entity_state_records: Array = candidate.call("get_entity_runtime_states")
+	var pairing_validation: Dictionary = _validate_entity_state_ownership_pair(
+		entity_state_records,
+		ownership_records
+	)
+	if not bool(pairing_validation.get("ok", false)):
+		return _reject(
+			"restore_entity_state_ownership_pair_invalid:"
+			+ str(pairing_validation.get("reason", "unknown"))
+			)
+	var staged_result: Dictionary = _stage_cell_roots(candidate, plan, ownership_records, entity_state_records)
 	if not bool(staged_result.get("ok", false)):
 		return _reject(str(staged_result.get("reason", "restore_cell_staging_failed")))
 	var staged_roots: Dictionary = staged_result.get("roots", {})
-	if not _restore_entity_runtime_states(staged_roots, candidate.call("get_entity_runtime_states")):
+	if not _restore_entity_runtime_states(staged_roots, entity_state_records, ownership_records):
 		_dispose_staged_roots(staged_roots)
 		return _reject("restore_entity_runtime_state_failed")
 	if not bool(candidate.call("commit_window", plan, plan.get("load_cell_keys", []))):
 		_dispose_staged_roots(staged_roots)
 		return _reject("restore_stream_commit_rejected")
+	if not bool(candidate.call("set_entity_ownership_ledger_state", ownership_setup.get("save", {}))):
+		_dispose_staged_roots(staged_roots)
+		return _reject("restore_ownership_ledger_state_rejected")
 	_replace_all_cell_roots(staged_roots)
 	stream_state = candidate
+	ownership_ledger = candidate_ledger
 	prepared = true
 	active = false
 	visible = false
 	_set_collision_enabled(false)
 	return true
+
 
 func get_loaded_cell_count() -> int:
 	return int(stream_state.call("get_loaded_cell_count"))
@@ -325,7 +430,8 @@ func submit_entity_perception(
 	cell_key: String,
 	requested_entity_id: String,
 	perception: Dictionary,
-	delta_seconds: float = 0.0
+	delta_seconds: float = 0.0,
+	requested_spawn_cell_key: String = ""
 ) -> Dictionary:
 	if not active:
 		return {"ok": false, "reason": "destination_not_active"}
@@ -335,12 +441,23 @@ func submit_entity_perception(
 	if cell_root == null:
 		return {"ok": false, "reason": "cell_not_loaded"}
 	var entity_root: Node3D = null
+	var matching_count: int = 0
 	for child in cell_root.get_children():
-		if child is Node3D and child.get_meta("backrooms_entity_id", "") == requested_entity_id:
-			entity_root = child as Node3D
-			break
-	if entity_root == null:
+		if not (child is Node3D) or child.get_meta("backrooms_entity_id", "") != requested_entity_id:
+			continue
+		var spawn_cell_value: Variant = child.get_meta("spawn_cell", null)
+		if not (spawn_cell_value is Vector2i):
+			return {"ok": false, "reason": "entity_spawn_identity_invalid"}
+		var spawn_cell: Vector2i = spawn_cell_value
+		var candidate_spawn_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+		if not requested_spawn_cell_key.is_empty() and candidate_spawn_key != requested_spawn_cell_key:
+			continue
+		entity_root = child as Node3D
+		matching_count += 1
+	if matching_count <= 0 or entity_root == null:
 		return {"ok": false, "reason": "entity_not_loaded"}
+	if matching_count > 1:
+		return {"ok": false, "reason": "entity_identity_ambiguous"}
 	var brain: Node = entity_root.get_node_or_null("AI")
 	if brain == null or not brain.has_method("evaluate_perception"):
 		return {"ok": false, "reason": "entity_brain_unavailable"}
@@ -366,7 +483,12 @@ func set_cell_builder_for_testing(builder: Callable) -> void:
 func clear_cell_builder_for_testing() -> void:
 	_cell_builder_override = Callable()
 
-func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
+func _stage_cell_roots(
+	candidate: RefCounted,
+	plan: Dictionary,
+	ownership_records: Array = [],
+	entity_state_records: Array = []
+) -> Dictionary:
 	var descriptors_value: Variant = plan.get("cell_descriptors", [])
 	if not (descriptors_value is Array):
 		return {"ok": false, "reason": "cell_descriptors_invalid"}
@@ -387,7 +509,9 @@ func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
 		var root_value: Variant = _build_cell_root(
 			descriptors_by_key[key],
 			float(candidate.get("cell_size")),
-			int(candidate.get("entity_spawn_algorithm_version"))
+			int(candidate.get("entity_spawn_algorithm_version")),
+			ownership_records,
+			entity_state_records
 		)
 		if not (root_value is Node3D) or root_value.get_parent() != null:
 			if root_value is Node3D and is_instance_valid(root_value):
@@ -397,7 +521,13 @@ func _stage_cell_roots(candidate: RefCounted, plan: Dictionary) -> Dictionary:
 		staged_roots[key] = root_value
 	return {"ok": true, "roots": staged_roots}
 
-func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_version: int) -> Node3D:
+func _build_cell_root(
+	descriptor: Dictionary,
+	cell_size: float,
+	spawn_algorithm_version: int,
+	ownership_records: Array,
+	entity_state_records: Array
+) -> Node3D:
 	if not EntityDirectorScript.is_spawn_algorithm_version_supported(spawn_algorithm_version):
 		return null
 	if int(descriptor.get("entity_spawn_algorithm_version", 0)) != spawn_algorithm_version:
@@ -440,7 +570,9 @@ func _build_cell_root(descriptor: Dictionary, cell_size: float, spawn_algorithm_
 		int(descriptor.get("world_seed", 0)),
 		cell_size,
 		edges_value,
-		spawn_algorithm_version
+		spawn_algorithm_version,
+		ownership_records,
+		entity_state_records
 	):
 		root.free()
 		return null
@@ -456,74 +588,173 @@ func _build_cell_entity_roots(
 	world_seed: int,
 	cell_size: float,
 	open_edges: Dictionary,
-	spawn_algorithm_version: int
+	spawn_algorithm_version: int,
+	ownership_records: Array,
+	entity_state_records: Array
 ) -> bool:
+	var owner_cell_key: String = str(cell_root.get_meta("backrooms_cell_key", ""))
+	var ownership_by_key: Dictionary = {}
+	for record_value in ownership_records:
+		if not (record_value is Dictionary):
+			return false
+		var record: Dictionary = record_value
+		var identity_key: String = OwnershipLedgerScript.get_state_key(
+			str(record.get("spawn_cell_key", "")), str(record.get("entity_id", ""))
+		)
+		if identity_key.is_empty() or ownership_by_key.has(identity_key):
+			return false
+		ownership_by_key[identity_key] = record
+	var state_by_key: Dictionary = {}
+	for state_value in entity_state_records:
+		if not (state_value is Dictionary):
+			return false
+		var state_record: Dictionary = state_value
+		var state_key: String = EntityRuntimeStateScript.get_state_key(state_record)
+		if state_key.is_empty() or state_by_key.has(state_key):
+			return false
+		state_by_key[state_key] = state_record
 	var descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(
-		level_id,
-		cell,
-		cell_size,
-		open_edges,
-		spawn_algorithm_version
+		level_id, cell, cell_size, open_edges, spawn_algorithm_version
 	)
 	var allowed_entities: Array[String] = EntityDirectorScript.get_allowed_entities(level_id)
 	var seen: Dictionary = {}
 	var spawn_ids: Array[String] = []
+	var identity_keys: Array[String] = []
+	var spawn_cell_key: String = "%d,%d" % [cell.x, cell.y]
 	for descriptor in descriptors:
 		var entity_id: String = str(descriptor.get("entity_id", ""))
 		var descriptor_cell: Variant = descriptor.get("cell", null)
-		var position_value: Variant = descriptor.get("local_position", null)
-		var wall_value: Variant = descriptor.get("wall_direction", null)
-		if entity_id.is_empty() or seen.has(entity_id) or not allowed_entities.has(entity_id):
+		if entity_id.is_empty() or not allowed_entities.has(entity_id):
 			return false
 		if int(descriptor.get("spawn_algorithm_version", 0)) != spawn_algorithm_version:
 			return false
 		if not (descriptor_cell is Vector2i) or descriptor_cell != cell:
 			return false
-		if not (position_value is Vector3) or not (wall_value is Vector2i):
+		var identity_key: String = OwnershipLedgerScript.get_state_key(spawn_cell_key, entity_id)
+		if seen.has(identity_key):
 			return false
-		var local_position: Vector3 = position_value
-		var wall_direction: Vector2i = wall_value
-		if not _is_finite_vector3(local_position):
+		seen[identity_key] = true
+		var owner_record: Dictionary = ownership_by_key.get(identity_key, {})
+		var actual_owner_key: String = str(owner_record.get("owner_cell_key", spawn_cell_key))
+		if actual_owner_key != owner_cell_key:
+			continue
+		var initial_position_value: Variant = descriptor.get("local_position", null)
+		if not (initial_position_value is Vector3):
 			return false
-		if absf(local_position.x) > cell_size * 0.5 or absf(local_position.z) > cell_size * 0.5:
+		var entity_root: CharacterBody3D = _create_entity_root_from_descriptor(
+			descriptor, owner_cell_key, initial_position_value,
+			int(owner_record.get("owner_revision", 0)), level_id, world_seed
+		)
+		if entity_root == null:
 			return false
-		if entity_id == "window" and wall_direction == Vector2i.ZERO:
-			return false
-		if entity_id != "window" and wall_direction != Vector2i.ZERO:
-			return false
-		var entity_root := CharacterBody3D.new()
-		entity_root.name = "Entity_" + entity_id
-		entity_root.position = local_position
-		entity_root.set_meta("backrooms_entity_id", entity_id)
-		entity_root.set_meta("spawn_cell", cell)
-		entity_root.set_meta("spawn_world_seed", world_seed)
-		entity_root.set_meta("spawn_level_id", level_id)
-		entity_root.set_meta("spawn_algorithm_version", spawn_algorithm_version)
-		entity_root.set_meta("backrooms_wall_direction", wall_direction)
-		entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
-		if not CollisionFactoryScript.attach_collision(entity_root, entity_id, active):
-			entity_root.free()
-			return false
-		if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
-			entity_root.free()
-			return false
-		var brain: Node = EntityBrainScript.new()
-		brain.name = "AI"
-		if not bool(brain.call("configure", entity_id, level_id, cell, world_seed)):
-			brain.free()
-			entity_root.free()
-			return false
-		entity_root.set_meta("backrooms_entity_behavior_version", EntityBrainScript.BEHAVIOR_VERSION)
-		entity_root.add_child(brain)
 		cell_root.add_child(entity_root)
-		seen[entity_id] = true
 		spawn_ids.append(entity_id)
+		identity_keys.append(identity_key)
+	for record_value in ownership_records:
+		var record: Dictionary = record_value
+		var actual_owner_key: String = str(record.get("owner_cell_key", ""))
+		var original_spawn_key: String = str(record.get("spawn_cell_key", ""))
+		if actual_owner_key != owner_cell_key or original_spawn_key == owner_cell_key:
+			continue
+		var entity_id: String = str(record.get("entity_id", ""))
+		var identity_key: String = OwnershipLedgerScript.get_state_key(original_spawn_key, entity_id)
+		if seen.has(identity_key) or not state_by_key.has(identity_key):
+			return false
+		var spawn_parse: Dictionary = EntityRuntimeStateScript.parse_cell_key(original_spawn_key)
+		if not bool(spawn_parse.get("ok", false)):
+			return false
+		var spawn_cell: Vector2i = spawn_parse["cell"]
+		var spawn_edges := {
+			"north": LayoutScript.edge_is_open(spawn_cell, Vector2i(0, -1), world_seed),
+			"east": LayoutScript.edge_is_open(spawn_cell, Vector2i(1, 0), world_seed),
+			"south": LayoutScript.edge_is_open(spawn_cell, Vector2i(0, 1), world_seed),
+			"west": LayoutScript.edge_is_open(spawn_cell, Vector2i(-1, 0), world_seed)
+		}
+		var spawn_descriptor: Dictionary = _find_spawn_descriptor(
+			level_id, spawn_cell, cell_size, spawn_edges, spawn_algorithm_version, entity_id
+		)
+		if spawn_descriptor.is_empty():
+			return false
+		var migrated_root: CharacterBody3D = _create_entity_root_from_descriptor(
+			spawn_descriptor, owner_cell_key, Vector3.ZERO,
+			int(record.get("owner_revision", 0)), level_id, world_seed
+		)
+		if migrated_root == null:
+			return false
+		cell_root.add_child(migrated_root)
+		seen[identity_key] = true
+		spawn_ids.append(entity_id)
+		identity_keys.append(identity_key)
 	cell_root.set_meta("backrooms_entity_spawn_ids", spawn_ids.duplicate())
-	cell_root.set_meta(
-		"backrooms_entity_spawn_algorithm_version",
-		spawn_algorithm_version
-	)
+	cell_root.set_meta("backrooms_entity_identity_keys", identity_keys.duplicate())
+	cell_root.set_meta("backrooms_entity_spawn_algorithm_version", spawn_algorithm_version)
 	return true
+
+func _create_entity_root_from_descriptor(
+	descriptor: Dictionary,
+	owner_cell_key: String,
+	initial_position: Vector3,
+	owner_revision: int,
+	level_id: String,
+	world_seed: int
+) -> CharacterBody3D:
+	var entity_id: String = str(descriptor.get("entity_id", ""))
+	var spawn_cell_value: Variant = descriptor.get("cell", null)
+	var wall_value: Variant = descriptor.get("wall_direction", null)
+	var spawn_version: int = int(descriptor.get("spawn_algorithm_version", 0))
+	if (
+		entity_id.is_empty()
+		or not (spawn_cell_value is Vector2i)
+		or not (wall_value is Vector2i)
+		or not _is_finite_vector3(initial_position)
+		or world_seed < 0
+		or not EntityDirectorScript.is_spawn_algorithm_version_supported(spawn_version)
+	):
+		return null
+	var spawn_cell: Vector2i = spawn_cell_value
+	var entity_root := CharacterBody3D.new()
+	entity_root.name = "Entity_" + entity_id + "_" + str(spawn_cell.x) + "_" + str(spawn_cell.y)
+	entity_root.position = initial_position
+	entity_root.set_meta("backrooms_entity_id", entity_id)
+	entity_root.set_meta("spawn_cell", spawn_cell)
+	entity_root.set_meta("spawn_world_seed", world_seed)
+	entity_root.set_meta("spawn_level_id", level_id)
+	entity_root.set_meta("spawn_algorithm_version", spawn_version)
+	entity_root.set_meta("backrooms_owner_cell_key", owner_cell_key)
+	entity_root.set_meta("backrooms_owner_revision", owner_revision)
+	entity_root.set_meta("backrooms_wall_direction", wall_value)
+	entity_root.set_meta("backrooms_entity_visual_state", "not_attached")
+	if not CollisionFactoryScript.attach_collision(entity_root, entity_id, active):
+		entity_root.free()
+		return null
+	if not _is_metadata_only() and not VisualFactoryScript.attach_visuals(entity_root):
+		entity_root.free()
+		return null
+	var brain: Node = EntityBrainScript.new()
+	brain.name = "AI"
+	if not bool(brain.call("configure", entity_id, level_id, spawn_cell, world_seed)):
+		brain.free()
+		entity_root.free()
+		return null
+	entity_root.set_meta("backrooms_entity_behavior_version", EntityBrainScript.BEHAVIOR_VERSION)
+	entity_root.add_child(brain)
+	return entity_root
+
+func _find_spawn_descriptor(
+	level_id: String,
+	spawn_cell: Vector2i,
+	cell_size: float,
+	open_edges: Dictionary,
+	spawn_algorithm_version: int,
+	entity_id: String
+) -> Dictionary:
+	var descriptors: Array[Dictionary] = EntityDirectorScript.get_cell_spawn_descriptors(
+		level_id, spawn_cell, cell_size, open_edges, spawn_algorithm_version
+	)
+	for descriptor in descriptors:
+		if str(descriptor.get("entity_id", "")) == entity_id:
+			return descriptor.duplicate(true)
+	return {}
 
 func _build_cell_geometry(
 	root: Node3D,
@@ -678,7 +909,72 @@ func _collect_entity_runtime_states(state: RefCounted, requested_center: Vector2
 		int(state.get("entity_spawn_algorithm_version"))
 	)
 
-func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) -> bool:
+func _validate_entity_state_ownership_pair(
+	runtime_records: Array,
+	ownership_records: Array
+) -> Dictionary:
+	var states_by_key: Dictionary = {}
+	for record_value in runtime_records:
+		if not (record_value is Dictionary):
+			return {"ok": false, "reason": "runtime_state_record_invalid"}
+		var record: Dictionary = record_value
+		var key: String = EntityRuntimeStateScript.get_state_key(record)
+		if key.is_empty() or states_by_key.has(key):
+			return {"ok": false, "reason": "runtime_state_identity_duplicate_or_invalid"}
+		var owner_cell_value: Variant = record.get("cell_key", null)
+		if not (owner_cell_value is String) or not bool(
+			EntityRuntimeStateScript.parse_cell_key(str(owner_cell_value)).get("ok", false)
+		):
+			return {"ok": false, "reason": "runtime_state_owner_cell_invalid"}
+		states_by_key[key] = record
+
+	var owners_by_key: Dictionary = {}
+	for ownership_value in ownership_records:
+		if not (ownership_value is Dictionary):
+			return {"ok": false, "reason": "ownership_record_invalid"}
+		var ownership_record: Dictionary = ownership_value
+		var spawn_cell_value: Variant = ownership_record.get("spawn_cell_key", null)
+		var owner_cell_value: Variant = ownership_record.get("owner_cell_key", null)
+		var entity_id_value: Variant = ownership_record.get("entity_id", null)
+		if not (spawn_cell_value is String) or not (owner_cell_value is String) or not (entity_id_value is String):
+			return {"ok": false, "reason": "ownership_identity_invalid"}
+		var key: String = OwnershipLedgerScript.get_state_key(
+			str(spawn_cell_value),
+			str(entity_id_value)
+		)
+		if key.is_empty() or owners_by_key.has(key):
+			return {"ok": false, "reason": "ownership_identity_duplicate_or_invalid"}
+		if not bool(EntityRuntimeStateScript.parse_cell_key(str(spawn_cell_value)).get("ok", false)):
+			return {"ok": false, "reason": "ownership_spawn_cell_invalid"}
+		if not bool(EntityRuntimeStateScript.parse_cell_key(str(owner_cell_value)).get("ok", false)):
+			return {"ok": false, "reason": "ownership_owner_cell_invalid"}
+		owners_by_key[key] = ownership_record
+
+	for key_value in states_by_key.keys():
+		var key: String = str(key_value)
+		if not owners_by_key.has(key):
+			return {"ok": false, "reason": "runtime_state_ownership_record_missing"}
+		var state_record: Dictionary = states_by_key[key]
+		var ownership_record: Dictionary = owners_by_key[key]
+		if str(state_record.get("cell_key", "")) != str(ownership_record.get("owner_cell_key", "")):
+			return {"ok": false, "reason": "runtime_state_owner_cell_mismatch"}
+
+	for key_value in owners_by_key.keys():
+		var key: String = str(key_value)
+		var ownership_record: Dictionary = owners_by_key[key]
+		var spawn_cell_key: String = str(ownership_record.get("spawn_cell_key", ""))
+		var owner_cell_key: String = str(ownership_record.get("owner_cell_key", ""))
+		if owner_cell_key != spawn_cell_key and not states_by_key.has(key):
+			return {"ok": false, "reason": "migrated_runtime_state_missing"}
+
+	return {
+		"ok": true,
+		"runtime_state_count": states_by_key.size(),
+		"ownership_record_count": owners_by_key.size()
+	}
+
+
+func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array, ownership_records: Array = []) -> bool:
 	var by_key: Dictionary = {}
 	for record_value in records:
 		if not (record_value is Dictionary):
@@ -688,6 +984,18 @@ func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) ->
 		if key.is_empty() or by_key.has(key):
 			return false
 		by_key[key] = record
+	var ownership_by_key: Dictionary = {}
+	for ownership_value in ownership_records:
+		if not (ownership_value is Dictionary):
+			return false
+		var ownership_record: Dictionary = ownership_value
+		var ownership_key: String = OwnershipLedgerScript.get_state_key(
+			str(ownership_record.get("spawn_cell_key", "")),
+			str(ownership_record.get("entity_id", ""))
+		)
+		if ownership_key.is_empty() or ownership_by_key.has(ownership_key):
+			return false
+		ownership_by_key[ownership_key] = ownership_record
 	var restored_keys: Dictionary = {}
 	var live_identity_keys: Dictionary = {}
 	for cell_key_value in staged_roots.keys():
@@ -713,15 +1021,27 @@ func _restore_entity_runtime_states(staged_roots: Dictionary, records: Array) ->
 			if key.is_empty() or live_identity_keys.has(key):
 				return false
 			live_identity_keys[key] = true
+			if not ownership_by_key.has(key):
+				return false
+			var ownership_record: Dictionary = ownership_by_key[key]
+			if str(ownership_record.get("owner_cell_key", "")) != cell_key:
+				return false
+			child.set_meta("backrooms_owner_cell_key", cell_key)
+			child.set_meta("backrooms_owner_revision", int(ownership_record.get("owner_revision", 0)))
 			if not by_key.has(key):
 				continue
 			if not EntityRuntimeStateScript.restore_entity_state(cell_root as Node3D, child as CharacterBody3D, by_key[key]):
 				return false
 			restored_keys[key] = true
+	for ownership_key_value in ownership_by_key.keys():
+		var ownership_record: Dictionary = ownership_by_key[ownership_key_value]
+		var owner_cell_key: String = str(ownership_record.get("owner_cell_key", ""))
+		if staged_roots.has(owner_cell_key) and not live_identity_keys.has(str(ownership_key_value)):
+			return false
 	for key_value in by_key.keys():
 		var record: Dictionary = by_key[key_value]
-		var cell_key: String = str(record.get("cell_key", ""))
-		if staged_roots.has(cell_key) and not restored_keys.has(key_value):
+		var owner_cell_key: String = str(record.get("cell_key", ""))
+		if staged_roots.has(owner_cell_key) and not restored_keys.has(key_value):
 			return false
 	return true
 
@@ -751,6 +1071,375 @@ func _dispose_staged_roots(staged_roots: Dictionary) -> void:
 			if root_value.get_parent() != null:
 				root_value.get_parent().remove_child(root_value)
 			root_value.free()
+
+func _get_retained_owner_cell_keys(center: Vector2i, stream_radius: int) -> Array[String]:
+	var maximum: int = LayoutScript.MAX_ABS_CELL_COORD
+	var minimum_x: int = maxi(-maximum, center.x - stream_radius - 1)
+	var maximum_x: int = mini(maximum, center.x + stream_radius + 1)
+	var minimum_z: int = maxi(-maximum, center.y - stream_radius - 1)
+	var maximum_z: int = mini(maximum, center.y + stream_radius + 1)
+	var keys: Array[String] = []
+	for z in range(minimum_z, maximum_z + 1):
+		for x in range(minimum_x, maximum_x + 1):
+			keys.append("%d,%d" % [x, z])
+	return keys
+
+func _get_ownership_ledger_save(state: RefCounted, ledger: RefCounted) -> Dictionary:
+	if state == null or ledger == null or not bool(ledger.get("configured")):
+		return {}
+	var retained: Array[String] = _get_retained_owner_cell_keys(
+		state.call("get_center_cell"),
+		int(state.get("stream_radius"))
+	)
+	return ledger.call(
+		"to_save_dict",
+		retained,
+		int(state.call("get_generation")),
+		int(state.call("get_configuration_revision"))
+	)
+
+func _create_ownership_ledger(
+	state: RefCounted,
+	plan: Dictionary,
+	expected_stream_generation: int,
+	expected_configuration_revision: int,
+	saved_payload: Dictionary
+) -> Dictionary:
+	if state == null or not bool(state.get("configured")):
+		return {"ok": false, "reason": "ownership_stream_state_unconfigured"}
+	var loaded_value: Variant = plan.get("desired_cell_keys", null)
+	var center_value: Variant = plan.get("center_cell", null)
+	if not (loaded_value is Array) or not (center_value is Vector2i):
+		return {"ok": false, "reason": "ownership_window_plan_invalid"}
+	var retained: Array[String] = _get_retained_owner_cell_keys(center_value, int(state.get("stream_radius")))
+	var retained_lookup: Dictionary = {}
+	for key in retained:
+		retained_lookup[key] = true
+	var ledger: RefCounted = OwnershipLedgerScript.new()
+	if not bool(ledger.call(
+		"configure",
+		str(state.get("level_id")),
+		int(state.get("world_seed")),
+		float(state.get("cell_size")),
+		int(state.get("entity_spawn_algorithm_version")),
+		expected_stream_generation,
+		expected_configuration_revision,
+		loaded_value
+	)):
+		return {"ok": false, "reason": "ownership_ledger_configuration_rejected"}
+	var evicted_count: int = 0
+	if not saved_payload.is_empty():
+		var payload: Dictionary = saved_payload.duplicate(true)
+		var records_value: Variant = payload.get("records", null)
+		if not (records_value is Array):
+			return {"ok": false, "reason": "ownership_ledger_records_invalid"}
+		var filtered_records: Array = []
+		for record_value in records_value:
+			if not (record_value is Dictionary):
+				return {"ok": false, "reason": "ownership_ledger_record_invalid"}
+			var record: Dictionary = record_value
+			var owner_cell_key: String = str(record.get("owner_cell_key", ""))
+			if not bool(EntityRuntimeStateScript.parse_cell_key(owner_cell_key).get("ok", false)):
+				return {"ok": false, "reason": "ownership_ledger_owner_cell_invalid"}
+			if retained_lookup.has(owner_cell_key):
+				filtered_records.append(record.duplicate(true))
+			else:
+				evicted_count += 1
+		payload["records"] = filtered_records
+		if not bool(ledger.call(
+			"load_save_dict", payload, retained,
+			expected_stream_generation, expected_configuration_revision
+		)):
+			return {"ok": false, "reason": "ownership_ledger_restore_rejected"}
+	var registration: Dictionary = ledger.call("register_deterministic_spawns")
+	if not bool(registration.get("ok", false)):
+		return {"ok": false, "reason": str(registration.get("reason", "ownership_spawn_registration_failed"))}
+
+	# Legacy schema-three archives had deterministic spawn state but no ownership ledger.
+	# When the ownership payload is absent or empty, only deterministic owner==spawn
+	# records can be reconstructed. A migrated owner is never inferred from state alone.
+	if saved_payload.is_empty():
+		var archived_states_value: Variant = state.call("get_entity_runtime_states")
+		if not (archived_states_value is Array):
+			return {"ok": false, "reason": "ownership_archive_runtime_states_invalid"}
+		for archived_value in archived_states_value:
+			if not (archived_value is Dictionary):
+				return {"ok": false, "reason": "ownership_archive_runtime_record_invalid"}
+			var archived_record: Dictionary = archived_value
+			var archived_cell_key: String = str(archived_record.get("cell_key", ""))
+			var archived_spawn_key: String = str(archived_record.get("spawn_cell_key", archived_cell_key))
+			var archived_entity_id: String = str(archived_record.get("entity_id", ""))
+			if archived_cell_key != archived_spawn_key or not retained_lookup.has(archived_cell_key):
+				continue
+			var existing_archived_record: Dictionary = ledger.call(
+				"get_record", archived_spawn_key, archived_entity_id
+			)
+			if not existing_archived_record.is_empty():
+				continue
+			var backfill: Dictionary = ledger.call(
+				"register_deterministic_spawn_identity",
+				archived_spawn_key,
+				archived_entity_id
+			)
+			if not bool(backfill.get("ok", false)):
+				return {"ok": false, "reason": str(backfill.get("reason", "ownership_archive_spawn_backfill_failed"))}
+
+	var pruning: Dictionary = ledger.call(
+		"prune_to_retained_owner_cells", retained,
+		expected_stream_generation, expected_configuration_revision
+	)
+	if not bool(pruning.get("ok", false)):
+		return {"ok": false, "reason": str(pruning.get("reason", "ownership_pruning_failed"))}
+	var save_value: Dictionary = ledger.call(
+		"to_save_dict", retained,
+		expected_stream_generation, expected_configuration_revision
+	)
+	if save_value.is_empty():
+		return {"ok": false, "reason": "ownership_ledger_snapshot_invalid"}
+	return {
+		"ok": true,
+		"ledger": ledger,
+		"save": save_value,
+		"evicted_count": evicted_count + int(pruning.get("removed_count", 0))
+	}
+
+func transfer_entity_to_next_cell(
+	spawn_cell_key: String,
+	entity_id: String,
+	route_snapshot: Dictionary
+) -> Dictionary:
+	if not active or ownership_ledger == null or not bool(ownership_ledger.get("configured")):
+		return {"ok": false, "reason": "ownership_runtime_inactive"}
+	if not is_route_snapshot_current(route_snapshot):
+		return {"ok": false, "reason": "route_snapshot_stale"}
+	var keys_value: Variant = route_snapshot.get("cell_keys", null)
+	var directions_value: Variant = route_snapshot.get("edge_directions", null)
+	if not (keys_value is Array) or keys_value.size() < 2 or not (directions_value is Array) or directions_value.is_empty():
+		return {"ok": false, "reason": "route_first_hop_invalid"}
+	var from_owner_key: String = str(keys_value[0])
+	var to_owner_key: String = str(keys_value[1])
+	var direction_value: Variant = directions_value[0]
+	if not (direction_value is Vector2i):
+		return {"ok": false, "reason": "route_direction_invalid"}
+	var direction: Vector2i = direction_value
+	var owner_record: Dictionary = ownership_ledger.call("get_record", spawn_cell_key, entity_id)
+	if owner_record.is_empty() or str(owner_record.get("owner_cell_key", "")) != from_owner_key:
+		return {"ok": false, "reason": "entity_owner_record_mismatch"}
+	var owner_revision: int = int(owner_record.get("owner_revision", -1))
+	if owner_revision < 0:
+		return {"ok": false, "reason": "entity_owner_revision_invalid"}
+	var source_root: Node3D = get_cell_root(from_owner_key)
+	var target_root: Node3D = get_cell_root(to_owner_key)
+	if source_root == null or target_root == null:
+		return {"ok": false, "reason": "transfer_cell_root_unavailable"}
+	if (
+		str(source_root.get_meta("backrooms_cell_key", "")) != from_owner_key
+		or str(target_root.get_meta("backrooms_cell_key", "")) != to_owner_key
+	):
+		return {"ok": false, "reason": "transfer_cell_root_identity_mismatch"}
+	if not _validate_cell_entity_identity_metadata(source_root) or not _validate_cell_entity_identity_metadata(target_root):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
+	var entity_root: CharacterBody3D = null
+	for child in source_root.get_children():
+		if not (child is CharacterBody3D) or str(child.get_meta("backrooms_entity_id", "")) != entity_id:
+			continue
+		var spawn_value: Variant = child.get_meta("spawn_cell", null)
+		if not (spawn_value is Vector2i):
+			return {"ok": false, "reason": "transfer_entity_spawn_identity_invalid"}
+		var spawn_cell: Vector2i = spawn_value
+		if ("%d,%d" % [spawn_cell.x, spawn_cell.y]) == spawn_cell_key:
+			if entity_root != null:
+				return {"ok": false, "reason": "transfer_entity_identity_ambiguous"}
+			entity_root = child as CharacterBody3D
+	if entity_root == null or entity_root.get_parent() != source_root:
+		return {"ok": false, "reason": "transfer_entity_not_owned_by_source"}
+	if str(entity_root.get_meta("backrooms_owner_cell_key", "")) != from_owner_key:
+		return {"ok": false, "reason": "transfer_entity_owner_metadata_mismatch"}
+	if int(entity_root.get_meta("backrooms_owner_revision", -1)) != owner_revision:
+		return {"ok": false, "reason": "transfer_entity_owner_revision_mismatch"}
+	var spawn_parse: Dictionary = EntityRuntimeStateScript.parse_cell_key(spawn_cell_key)
+	if not bool(spawn_parse.get("ok", false)):
+		return {"ok": false, "reason": "transfer_entity_spawn_key_invalid"}
+	if (
+		str(entity_root.get_meta("spawn_level_id", "")) != str(stream_state.get("level_id"))
+		or int(entity_root.get_meta("spawn_world_seed", -1)) != int(stream_state.get("world_seed"))
+		or int(entity_root.get_meta("spawn_algorithm_version", 0)) != int(stream_state.get("entity_spawn_algorithm_version"))
+	):
+		return {"ok": false, "reason": "transfer_entity_spawn_metadata_mismatch"}
+	var identity_key: String = OwnershipLedgerScript.get_state_key(spawn_cell_key, entity_id)
+	var source_identity_keys_value: Variant = source_root.get_meta("backrooms_entity_identity_keys", null)
+	var source_spawn_ids_value: Variant = source_root.get_meta("backrooms_entity_spawn_ids", null)
+	var target_identity_keys_value: Variant = target_root.get_meta("backrooms_entity_identity_keys", null)
+	var target_spawn_ids_value: Variant = target_root.get_meta("backrooms_entity_spawn_ids", null)
+	if (
+		not (source_identity_keys_value is Array)
+		or not (source_spawn_ids_value is Array)
+		or not (target_identity_keys_value is Array)
+		or not (target_spawn_ids_value is Array)
+		or source_identity_keys_value.size() != source_spawn_ids_value.size()
+		or target_identity_keys_value.size() != target_spawn_ids_value.size()
+	):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
+	var source_identity_index: int = source_identity_keys_value.find(identity_key)
+	if (
+		source_identity_index < 0
+		or source_identity_index >= source_spawn_ids_value.size()
+		or str(source_spawn_ids_value[source_identity_index]) != entity_id
+		or target_identity_keys_value.has(identity_key)
+	):
+		return {"ok": false, "reason": "transfer_cell_identity_metadata_invalid"}
+	var source_cell_size: float = float(source_root.get_meta("backrooms_cell_size", 0.0))
+	var target_cell_size: float = float(target_root.get_meta("backrooms_cell_size", 0.0))
+	var configured_cell_size: float = float(stream_state.get("cell_size"))
+	if (
+		not is_finite(source_cell_size)
+		or not is_finite(target_cell_size)
+		or not is_finite(configured_cell_size)
+		or source_cell_size <= ENTITY_SAFE_CELL_MARGIN * 2.0
+		or not is_equal_approx(source_cell_size, target_cell_size)
+		or not is_equal_approx(source_cell_size, configured_cell_size)
+	):
+		return {"ok": false, "reason": "transfer_cell_size_invalid"}
+	var safe_extent: float = source_cell_size * 0.5 - ENTITY_SAFE_CELL_MARGIN
+	# Keep the destination center slightly inside the strict save boundary. Reparenting
+	# between cell roots can introduce tiny global/local float rounding at the exact edge.
+	var transfer_inset: float = minf(ENTITY_TRANSFER_ENTRY_INSET, safe_extent * 0.1)
+	var transfer_extent: float = safe_extent - transfer_inset
+	var source_local: Vector3 = source_root.to_local(entity_root.global_position)
+	if not _is_finite_vector3(source_local):
+		return {"ok": false, "reason": "transfer_entity_position_invalid"}
+	var perpendicular_coordinate: float = source_local.z if direction.x != 0 else source_local.x
+	if (
+		absf(perpendicular_coordinate) > safe_extent + ENTITY_TRANSFER_PERPENDICULAR_TOLERANCE
+		or source_local.y < EntityRuntimeStateScript.MIN_LOCAL_Y
+		or source_local.y > EntityRuntimeStateScript.MAX_LOCAL_Y
+	):
+		return {"ok": false, "reason": "transfer_entity_position_out_of_bounds"}
+	var edge_coordinate: float = source_local.x if direction.x != 0 else source_local.z
+	var expected_edge_coordinate: float = float(direction.x) * safe_extent if direction.x != 0 else float(direction.y) * safe_extent
+	if absf(edge_coordinate - expected_edge_coordinate) > ENTITY_TRANSFER_EDGE_TOLERANCE:
+		return {"ok": false, "reason": "transfer_entity_not_at_cell_edge"}
+	var transfer_setup: Dictionary = ownership_ledger.call(
+		"plan_transfer", spawn_cell_key, entity_id, to_owner_key, route_snapshot
+	)
+	if not bool(transfer_setup.get("ok", false)):
+		return {"ok": false, "reason": str(transfer_setup.get("reason", "transfer_plan_rejected"))}
+	var plan: Dictionary = transfer_setup.get("plan", {})
+	var previous_transform: Transform3D = entity_root.global_transform
+	var previous_owner_key: String = str(entity_root.get_meta("backrooms_owner_cell_key", from_owner_key))
+	var previous_owner_revision: int = int(entity_root.get_meta("backrooms_owner_revision", owner_revision))
+	entity_root.reparent(target_root, true)
+	if entity_root.get_parent() != target_root:
+		ownership_ledger.call("rollback_transfer", plan)
+		return {"ok": false, "reason": "transfer_reparent_failed"}
+	var target_local: Vector3 = target_root.to_local(entity_root.global_position)
+	if direction.x != 0:
+		target_local.x = -float(direction.x) * transfer_extent
+	else:
+		target_local.z = -float(direction.y) * transfer_extent
+	target_local.x = clampf(target_local.x, -safe_extent, safe_extent)
+	target_local.z = clampf(target_local.z, -safe_extent, safe_extent)
+	var desired_world_position: Vector3 = target_root.to_global(target_local)
+	var motion: Vector3 = desired_world_position - entity_root.global_position
+	var collision: KinematicCollision3D = entity_root.move_and_collide(
+		motion, false, ENTITY_COLLISION_SAFE_MARGIN, false
+	)
+	if collision != null or entity_root.global_position.distance_to(desired_world_position) > 0.05:
+		entity_root.reparent(source_root, true)
+		entity_root.global_transform = previous_transform
+		entity_root.set_meta("backrooms_owner_cell_key", previous_owner_key)
+		entity_root.set_meta("backrooms_owner_revision", previous_owner_revision)
+		ownership_ledger.call("rollback_transfer", plan)
+		return {"ok": false, "reason": "transfer_physics_handoff_blocked"}
+	var commit: Dictionary = ownership_ledger.call("commit_transfer", plan)
+	if not bool(commit.get("ok", false)):
+		entity_root.reparent(source_root, true)
+		entity_root.global_transform = previous_transform
+		entity_root.set_meta("backrooms_owner_cell_key", previous_owner_key)
+		entity_root.set_meta("backrooms_owner_revision", previous_owner_revision)
+		ownership_ledger.call("rollback_transfer", plan)
+		return {"ok": false, "reason": str(commit.get("reason", "transfer_commit_rejected"))}
+	var committed_record: Dictionary = commit.get("record", {})
+	var source_identity_keys: Array = source_identity_keys_value.duplicate()
+	var source_spawn_ids: Array = source_spawn_ids_value.duplicate()
+	var target_identity_keys: Array = target_identity_keys_value.duplicate()
+	var target_spawn_ids: Array = target_spawn_ids_value.duplicate()
+	source_identity_keys.remove_at(source_identity_index)
+	source_spawn_ids.remove_at(source_identity_index)
+	target_identity_keys.append(identity_key)
+	target_spawn_ids.append(entity_id)
+	source_root.set_meta("backrooms_entity_identity_keys", source_identity_keys)
+	source_root.set_meta("backrooms_entity_spawn_ids", source_spawn_ids)
+	target_root.set_meta("backrooms_entity_identity_keys", target_identity_keys)
+	target_root.set_meta("backrooms_entity_spawn_ids", target_spawn_ids)
+	entity_root.set_meta("backrooms_owner_cell_key", to_owner_key)
+	entity_root.set_meta("backrooms_owner_revision", int(committed_record.get("owner_revision", 0)))
+	return {
+		"ok": true,
+		"spawn_cell_key": spawn_cell_key,
+		"entity_id": entity_id,
+		"from_owner_cell_key": from_owner_key,
+		"to_owner_cell_key": to_owner_key,
+		"owner_revision": int(committed_record.get("owner_revision", 0)),
+		"position": entity_root.global_position
+	}
+
+func _validate_cell_entity_identity_metadata(cell_root: Node3D) -> bool:
+	if cell_root == null or not is_instance_valid(cell_root):
+		return false
+	var identity_keys_value: Variant = cell_root.get_meta("backrooms_entity_identity_keys", null)
+	var spawn_ids_value: Variant = cell_root.get_meta("backrooms_entity_spawn_ids", null)
+	if (
+		not (identity_keys_value is Array)
+		or not (spawn_ids_value is Array)
+		or identity_keys_value.size() != spawn_ids_value.size()
+	):
+		return false
+	var live_identity_by_key: Dictionary = {}
+	for child in cell_root.get_children():
+		if not (child is CharacterBody3D) or not child.has_meta("backrooms_entity_id"):
+			continue
+		var live_entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
+		var live_spawn_value: Variant = child.get_meta("spawn_cell", null)
+		if not (live_spawn_value is Vector2i) or not EntityBrainScript.SUPPORTED_ENTITY_IDS.has(live_entity_id):
+			return false
+		var live_spawn_cell: Vector2i = live_spawn_value
+		var live_key: String = OwnershipLedgerScript.get_state_key(
+			"%d,%d" % [live_spawn_cell.x, live_spawn_cell.y], live_entity_id
+		)
+		if live_key.is_empty() or live_identity_by_key.has(live_key):
+			return false
+		live_identity_by_key[live_key] = live_entity_id
+	if live_identity_by_key.size() != identity_keys_value.size():
+		return false
+	var seen: Dictionary = {}
+	for index in range(identity_keys_value.size()):
+		var identity_value: Variant = identity_keys_value[index]
+		var spawn_id_value: Variant = spawn_ids_value[index]
+		if not (identity_value is String) or not (spawn_id_value is String):
+			return false
+		var identity_key: String = str(identity_value)
+		var spawn_id: String = str(spawn_id_value)
+		var parts: PackedStringArray = identity_key.split("|", false)
+		if (
+			identity_key.is_empty()
+			or not EntityBrainScript.SUPPORTED_ENTITY_IDS.has(spawn_id)
+			or parts.size() != 2
+			or identity_key != parts[0] + "|" + parts[1]
+			or parts[1] != spawn_id
+			or not bool(EntityRuntimeStateScript.parse_cell_key(parts[0]).get("ok", false))
+			or seen.has(identity_key)
+			or not live_identity_by_key.has(identity_key)
+			or str(live_identity_by_key.get(identity_key, "")) != spawn_id
+		):
+			return false
+		seen[identity_key] = true
+	return true
+
+func get_entity_owner_record(spawn_cell_key: String, entity_id: String) -> Dictionary:
+	if ownership_ledger == null or not bool(ownership_ledger.get("configured")):
+		return {}
+	return ownership_ledger.call("get_record", spawn_cell_key, entity_id)
 
 func _failure(reason: String) -> Dictionary:
 	last_error = reason

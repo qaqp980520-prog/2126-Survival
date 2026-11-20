@@ -115,7 +115,8 @@ func tick(
 			str(record.get("cell_key", "")),
 			str(record.get("entity_id", "")),
 			perception,
-			sample_delta
+			sample_delta,
+			str(record.get("spawn_cell_key", ""))
 		)
 		if result_value is Dictionary and bool(result_value.get("ok", false)):
 			accepted_count += 1
@@ -156,9 +157,20 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 			var entity_id: String = str(entity_root.get_meta("backrooms_entity_id", ""))
 			if entity_id.is_empty() or entity_root.get_node_or_null("AI") == null:
 				continue
+			# Godot logs an error when get_meta() is called for an absent key, even
+			# with a fallback. Ignore incomplete test/staging nodes before reading it.
+			if not entity_root.has_meta("spawn_cell"):
+				continue
+			var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell")
+			if not (spawn_cell_value is Vector2i):
+				continue
+			var spawn_cell: Vector2i = spawn_cell_value
+			var spawn_cell_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
+			var identity_key: String = spawn_cell_key + "|" + entity_id
 			records.append({
-				"key": cell_key + "|" + entity_id,
+				"key": identity_key,
 				"cell_key": cell_key,
+				"spawn_cell_key": spawn_cell_key,
 				"entity_id": entity_id,
 				"entity_root": entity_root,
 				"cell_root": cell_root

@@ -274,6 +274,38 @@ func rollback_transfer(plan: Dictionary) -> bool:
 	_pending_transfers.erase(key)
 	return true
 
+## Register one deterministic immutable spawn identity, including an archived
+## owner==spawn record whose cell is retained but not currently loaded. This migrates
+## pre-ledger schema-three runtime snapshots without inventing a moved owner.
+func register_deterministic_spawn_identity(spawn_cell_key: String, entity_id: String) -> Dictionary:
+	if not configured:
+		return _failure("ledger_not_configured")
+	if not MOBILE_ENTITY_IDS.has(entity_id):
+		return _failure("entity_not_mobile")
+	var spawn_parse: Dictionary = parse_cell_key(spawn_cell_key)
+	if not bool(spawn_parse.get("ok", false)):
+		return _failure("spawn_cell_key_invalid")
+	if not _is_deterministic_spawn(spawn_parse["cell"], entity_id):
+		return _failure("spawn_identity_not_deterministic")
+	var key: String = get_state_key(spawn_cell_key, entity_id)
+	if _records.has(key):
+		var existing: Dictionary = _records[key]
+		if str(existing.get("spawn_cell_key", "")) != spawn_cell_key:
+			return _failure("spawn_identity_collision")
+		return {"ok": true, "registered": false, "record": existing.duplicate(true)}
+	if _records.size() >= MAX_RECORDS:
+		return _failure("ownership_record_limit_exceeded")
+	var record := {
+		"spawn_cell_key": spawn_cell_key,
+		"entity_id": entity_id,
+		"owner_cell_key": spawn_cell_key,
+		"spawn_algorithm_version": spawn_algorithm_version,
+		"owner_revision": 0
+	}
+	_records[key] = record
+	return {"ok": true, "registered": true, "record": record.duplicate(true)}
+
+
 func get_record(spawn_cell_key: String, entity_id: String) -> Dictionary:
 	if not configured:
 		return {}
@@ -335,21 +367,21 @@ func load_save_dict(
 	if not bool(retained_result.get("ok", false)):
 		return false
 	var retained_keys: Dictionary = retained_result.get("keys", {})
-	var schema_value: Variant = payload.get("schema_version", null)
+	var schema_result: Dictionary = _read_integer(payload.get("schema_version", null), SCHEMA_VERSION, SCHEMA_VERSION)
 	var level_value: Variant = payload.get("level_id", null)
-	var seed_value: Variant = payload.get("world_seed", null)
+	var seed_result: Dictionary = _read_integer(payload.get("world_seed", null), 0, MAX_WORLD_SEED)
 	var size_value: Variant = payload.get("cell_size", null)
-	var spawn_version_value: Variant = payload.get("spawn_algorithm_version", null)
+	var spawn_version_result: Dictionary = _read_integer(payload.get("spawn_algorithm_version", null), 1, MAX_WORLD_SEED)
 	var records_value: Variant = payload.get("records", null)
-	if not (schema_value is int) or int(schema_value) != SCHEMA_VERSION:
+	if not bool(schema_result.get("ok", false)):
 		return false
 	if not (level_value is String) or str(level_value) != level_id:
 		return false
-	if not (seed_value is int) or int(seed_value) != world_seed:
+	if not bool(seed_result.get("ok", false)) or int(seed_result.get("value", -1)) != world_seed:
 		return false
 	if not (size_value is int or size_value is float) or not is_finite(float(size_value)) or not is_equal_approx(float(size_value), cell_size):
 		return false
-	if not (spawn_version_value is int) or int(spawn_version_value) != spawn_algorithm_version:
+	if not bool(spawn_version_result.get("ok", false)) or int(spawn_version_result.get("value", -1)) != spawn_algorithm_version:
 		return false
 	if not (records_value is Array):
 		return false
@@ -364,15 +396,15 @@ func load_save_dict(
 		var spawn_key_value: Variant = record.get("spawn_cell_key", null)
 		var owner_key_value: Variant = record.get("owner_cell_key", null)
 		var entity_value: Variant = record.get("entity_id", null)
-		var version_value: Variant = record.get("spawn_algorithm_version", null)
-		var revision_value: Variant = record.get("owner_revision", null)
+		var version_result: Dictionary = _read_integer(record.get("spawn_algorithm_version", null), 1, MAX_WORLD_SEED)
+		var revision_result: Dictionary = _read_integer(record.get("owner_revision", null), 0, MAX_OWNER_REVISION)
 		if not (spawn_key_value is String) or not (owner_key_value is String) or not (entity_value is String):
 			return false
 		if not MOBILE_ENTITY_IDS.has(str(entity_value)):
 			return false
-		if not (version_value is int) or int(version_value) != spawn_algorithm_version:
+		if not bool(version_result.get("ok", false)) or int(version_result.get("value", -1)) != spawn_algorithm_version:
 			return false
-		if not (revision_value is int) or int(revision_value) < 0 or int(revision_value) > MAX_OWNER_REVISION:
+		if not bool(revision_result.get("ok", false)):
 			return false
 		var spawn_parse: Dictionary = parse_cell_key(str(spawn_key_value))
 		var owner_parse: Dictionary = parse_cell_key(str(owner_key_value))
@@ -389,8 +421,8 @@ func load_save_dict(
 			"spawn_cell_key": str(spawn_key_value),
 			"entity_id": str(entity_value),
 			"owner_cell_key": str(owner_key_value),
-			"spawn_algorithm_version": spawn_algorithm_version,
-			"owner_revision": int(revision_value)
+			"spawn_algorithm_version": int(version_result.get("value", spawn_algorithm_version)),
+			"owner_revision": int(revision_result.get("value", 0))
 		}
 	_records = candidate
 	_pending_transfers.clear()
@@ -600,6 +632,24 @@ func _sorted_keys(dictionary: Dictionary) -> Array[String]:
 		result.append(str(key_value))
 	result.sort()
 	return result
+
+static func _read_integer(value: Variant, minimum: int, maximum: int) -> Dictionary:
+	var parsed: int
+	if value is int:
+		parsed = int(value)
+	elif value is float:
+		var numeric: float = float(value)
+		if not is_finite(numeric) or floor(numeric) != numeric:
+			return {"ok": false}
+		# Check bounds before int() so huge finite floats cannot overflow conversion.
+		if numeric < float(minimum) or numeric > float(maximum):
+			return {"ok": false}
+		parsed = int(numeric)
+	else:
+		return {"ok": false}
+	if parsed < minimum or parsed > maximum:
+		return {"ok": false}
+	return {"ok": true, "value": parsed}
 
 func _failure(reason: String) -> Dictionary:
 	return {"ok": false, "reason": reason}

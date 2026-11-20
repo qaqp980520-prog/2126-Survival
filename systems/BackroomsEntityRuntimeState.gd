@@ -54,6 +54,9 @@ static func capture_cell_states(cell_root: Node3D) -> Dictionary:
 		if not (child is CharacterBody3D) or not child.has_meta("backrooms_entity_id"):
 			continue
 		var entity_root: CharacterBody3D = child as CharacterBody3D
+		var owner_cell_key: String = str(entity_root.get_meta("backrooms_owner_cell_key", cell_key))
+		if owner_cell_key != cell_key:
+			return {"ok": false, "reason": "entity_owner_cell_metadata_mismatch"}
 		var entity_id: String = str(entity_root.get_meta("backrooms_entity_id", ""))
 		if not MOBILE_ENTITY_IDS.has(entity_id):
 			continue
@@ -206,6 +209,7 @@ static func restore_entity_state(cell_root: Node3D, entity_root: CharacterBody3D
 	if not (brain_state is Dictionary) or not bool(brain.call("load_save_dict", brain_state)):
 		return false
 	entity_root.position = position_result["value"]
+	entity_root.set_meta("backrooms_owner_cell_key", cell_key)
 	entity_root.set_meta("backrooms_patrol_index", int(record.get("patrol_index", 0)))
 	return true
 
