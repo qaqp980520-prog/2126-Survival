@@ -5,6 +5,7 @@ on:
     paths:
       - 'systems/WorldEnvelopeFileStore.gd'
       - 'world/SurfaceWorld.gd'
+      - 'world/SurfaceWorld.tscn'
       - 'scripts/world.gd'
       - 'tests/surface_world_file_persistence_test.gd'
       - 'tests/backrooms_entity_owner_runtime_integration_test.gd'
@@ -12,7 +13,6 @@ on:
       - 'systems/BackroomsEntityOwnershipLedger.gd'
       - 'systems/BackroomsEntityRuntimeState.gd'
       - 'systems/BackroomsCellNavigationFactory.gd'
-      - 'tests/backrooms_entity_owner_runtime_integration_test.gd'
       - 'systems/BackroomsPortalDirector.gd'
       - 'tests/backrooms_portal_director_test.gd'
       - 'systems/BackroomsTransitionManager.gd'
