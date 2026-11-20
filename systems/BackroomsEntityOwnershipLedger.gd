@@ -274,6 +274,38 @@ func rollback_transfer(plan: Dictionary) -> bool:
 	_pending_transfers.erase(key)
 	return true
 
+## Register one deterministic immutable spawn identity, including an archived
+## owner==spawn record whose cell is retained but not currently loaded. This migrates
+## pre-ledger schema-three runtime snapshots without inventing a moved owner.
+func register_deterministic_spawn_identity(spawn_cell_key: String, entity_id: String) -> Dictionary:
+	if not configured:
+		return _failure("ledger_not_configured")
+	if not MOBILE_ENTITY_IDS.has(entity_id):
+		return _failure("entity_not_mobile")
+	var spawn_parse: Dictionary = parse_cell_key(spawn_cell_key)
+	if not bool(spawn_parse.get("ok", false)):
+		return _failure("spawn_cell_key_invalid")
+	if not _is_deterministic_spawn(spawn_parse["cell"], entity_id):
+		return _failure("spawn_identity_not_deterministic")
+	var key: String = get_state_key(spawn_cell_key, entity_id)
+	if _records.has(key):
+		var existing: Dictionary = _records[key]
+		if str(existing.get("spawn_cell_key", "")) != spawn_cell_key:
+			return _failure("spawn_identity_collision")
+		return {"ok": true, "registered": false, "record": existing.duplicate(true)}
+	if _records.size() >= MAX_RECORDS:
+		return _failure("ownership_record_limit_exceeded")
+	var record := {
+		"spawn_cell_key": spawn_cell_key,
+		"entity_id": entity_id,
+		"owner_cell_key": spawn_cell_key,
+		"spawn_algorithm_version": spawn_algorithm_version,
+		"owner_revision": 0
+	}
+	_records[key] = record
+	return {"ok": true, "registered": true, "record": record.duplicate(true)}
+
+
 func get_record(spawn_cell_key: String, entity_id: String) -> Dictionary:
 	if not configured:
 		return {}
