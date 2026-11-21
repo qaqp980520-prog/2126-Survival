@@ -66,3 +66,15 @@ This is a cell-local navigation layer only. It does not change the loaded-cell r
 - This documentation-only update is intended to trigger a fresh exact-head CI matrix against the new parent. Prior #402 CI validates the old base only and must not be reused as new-base evidence.
 - PR #402 remains Draft until the new exact-head Full Compatibility Gate, focused workflows, and complete logs pass.
 - No NavigationAgent3D production behavior changed in this addendum. Local Godot executable remains unavailable; no local runtime pass is claimed.
+
+
+## Exact parent merge synchronization — 2026-11-21
+
+- Live comparison before synchronization exposed a real ancestry gap: this PR branch was 9 commits ahead / 2 behind its retargeted PR #400 base; merge base was the old PR #401 HEAD `72b194557549ee4569f2992a537d6fd742fa975d`. The PR base field already named #400, but the child Git history had not absorbed the two parent-side commits.
+- Validated parent PR #400 exact HEAD: `e142854471526923342e685bc86010344acddcaa`; Full Compatibility Gate run [44760499038](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44760499038), job `136371493256`: 570/570 steps successful, 0 failed, 0 skipped. The separate Xvfb/Mesa job was skipped by the branch-prefix allowlist and is not claimed as a parent-side rendered pass.
+- Parent-only delta from the merge base was one documentation file, `docs/BACKROOMS_LIVE_ENTITY_OWNER_TRANSFER_M0_1_73.md` (11 additions, 1 deletion); it did not overlap any of the eight NavigationAgent3D child files.
+- Created safety ref `backup/pr402-before-parent-sync-2026-11-21` at the previous child HEAD `a1312fdc246578105cfd2d7f461b4741b86f3966`.
+- Integrated the exact parent into the existing child branch with merge commit `427862db9dfcfc1dee2d5d6cff9838596ed4b126`; first parent is the prior child HEAD `a1312fdc246578105cfd2d7f461b4741b86f3966`, second parent is validated PR #400 HEAD `e142854471526923342e685bc86010344acddcaa`.
+- New live compare: 10 commits ahead / 0 behind; merge base equals the exact PR #400 HEAD. The eight-file NavigationAgent3D diff is unchanged.
+- PR #402 remains Open / Draft / Unmerged. Historical green checks on the old head are not reused. A fresh exact-head Godot 4.3 Full Compatibility Gate and focused workflow matrix must pass, followed by complete log review, before marking Ready for Review.
+- No production source beyond the existing eight child files was changed by this synchronization; no main merge and no `daily_games/` changes. Local Godot is unavailable, so no local runtime pass is claimed.
