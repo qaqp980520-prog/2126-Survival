@@ -169,3 +169,13 @@ Correction:
 - Vertical Y remains strictly bounded by the runtime-state codec constants.
 
 The horizontal regression uses a +0.25 perpendicular offset and now must be rejected before ledger planning; the vertical regression remains unchanged. The failed exact-head Full Gate is recorded as a real regression and is not treated as a pass.
+
+## Follow-up integration — M0.1.74 state/ownership pairing child
+
+- PR #401 was merged into this PR's feature branch `integration/backrooms-entity-live-owner-transfer-2026-11-18`, not into `main`.
+- Merge commit: `e196fb27498f7cd5c3cbcc4af3feb1474775d03b`.
+- The merged child adds the runtime-state / ownership-ledger pairing invariant, detached save candidate, restore/stream-shift validation, and schema-three owner==spawn-only deterministic backfill.
+- PR #401 is now Closed / Merged. PR #400 remains Open / Draft / Unmerged at the new head pending exact-head revalidation.
+- Earlier CI evidence is not transferable to the merge commit: PR #400's 570/570 Full Gate was on `ee95a31e324a36a58d266387d7865233f7d0ba7c`; PR #401's 570-step Full Gate was on `72b194557549ee4569f2992a537d6fd742fa975d`. The merged head requires a fresh Full Compatibility Gate and focused workflow run.
+- No main change, no main merge, and no `daily_games/` change.
+- Next: trigger exact-head CI on the updated PR #400 branch, audit complete logs, then retarget the next stacked child only after the merged parent is validated.
