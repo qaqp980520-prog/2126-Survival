@@ -54,3 +54,16 @@ Port the validated durable JSON file-store implementation from historical PR #34
 - This documentation-only parent record is added to trigger a fresh PR #404 exact-head validation matrix against the current #402 parent. No production code behavior is changed by this commit.
 - Keep PR #404 Draft until its new exact-head Full Compatibility Gate, focused persistence workflow, software-rendered Hound workflow (if selected by branch conditions), all other associated workflows, and complete logs are checked. No main merge.
 - Local authoring environment has no Godot executable. CI is the Godot 4.3 runtime source; no physical iPhone/iPad or hardware-GPU test is claimed.
+
+
+## Exact parent synchronization with PR #402 — 2026-11-21
+
+- Parent PR #402 is now Ready for Review at exact HEAD `edc25a88e4b1c3886eefdf9b0915803b068a45ee`; its Full Compatibility Gate passed 571/571 and all 19 PR-triggered workflows passed. Its software-rendered visual-factory job was skipped by branch-prefix allowlist; no Xvfb/Mesa pass is claimed for #402.
+- Before sync, #404 HEAD `d9ff32a8604eb60c0966e3385a12ca7c191d7dff` was 49 ahead / 4 behind the new #402 base; merge base was the old #402 HEAD `a1312fdc246578105cfd2d7f461b4741b86f3966`.
+- Parent-only delta from the old shared base was two docs: `docs/BACKROOMS_CELL_LOCAL_NAVIGATION_M0_1_75.md` and `docs/BACKROOMS_LIVE_ENTITY_OWNER_TRANSFER_M0_1_73.md`. Neither path overlapped the 21-file #404 child diff.
+- Safety branch: `backup/pr404-before-parent-sync-2026-11-21` at old #404 HEAD `d9ff32a8604eb60c0966e3385a12ca7c191d7dff`.
+- Merge commit: `9731b3ad4dd482f8b21e99f371e13f8dfad92874`; first parent old #404 child, second parent exact #402 parent `edc25a88e4b1c3886eefdf9b0915803b068a45ee`.
+- Recursive tree audit: all 21 original #404 child-file blobs are unchanged; both parent docs are present and match the parent tree. New compare is 50 ahead / 0 behind; merge base equals exact #402 HEAD; PR diff remains 21 files.
+- PR #404 remains Draft until its new exact-head Godot 4.3 workflow matrix and Full Compatibility Gate pass and complete logs are audited.
+- Issue [#411](https://github.com/qaqp980520-prog/2126-Survival/issues/411) is a non-blocking future enhancement for interior obstacles; current production cells contain only perimeter walls and the inset rectangular navmesh matches the present cell topology.
+- No main merge and no `daily_games/` changes. Local Godot executable unavailable; no local runtime pass is claimed.
