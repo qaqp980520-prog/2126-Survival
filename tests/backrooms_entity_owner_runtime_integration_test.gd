@@ -3,8 +3,34 @@ extends SceneTree
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const MovementDriverScript = preload("res://systems/BackroomsEntityMovementDriver.gd")
 const DISK_SAVE_PATH: String = "user://run342_backrooms_hound_file_roundtrip.json"
 const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
+
+class PhysicsMovementTickDriver:
+	extends Node
+
+	var runtime: Node
+	var movement_driver: RefCounted
+	var result: Dictionary = {}
+	var attempts: int = 0
+	var max_attempts: int = 12
+	var finished: bool = false
+
+	func _physics_process(_delta: float) -> void:
+		if finished:
+			return
+		attempts += 1
+		if runtime == null or movement_driver == null:
+			result = {"ok": false, "reason": "physics_driver_dependency_missing"}
+			finished = true
+			set_physics_process(false)
+			return
+		result = movement_driver.call("tick", runtime, 0.11)
+		if int(result.get("transferred_count", 0)) > 0 or attempts >= max_attempts:
+			finished = true
+			set_physics_process(false)
+
 
 var failures: Array[String] = []
 var disk_restore_runtime: Node3D
@@ -215,10 +241,76 @@ func _run() -> void:
 	blocker.free()
 	await physics_frame
 
-	var transfer: Dictionary = runtime.call(
-		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
-	)
-	_expect(bool(transfer.get("ok", false)), "valid adjacent route commits a live CharacterBody3D owner transfer")
+	var hound_brain: Node = entity_root.get_node_or_null("AI")
+	_expect(hound_brain != null, "selected Hound exposes its production behavior brain")
+	var transfer: Dictionary = {}
+	if hound_brain != null:
+		var pursuit_staging_local: Vector3 = entity_root.position
+		if direction.x != 0:
+			pursuit_staging_local.x = float(direction.x) * 2.5
+			pursuit_staging_local.z = 1.0
+		else:
+			pursuit_staging_local.z = float(direction.y) * 2.5
+			pursuit_staging_local.x = 1.0
+		entity_root.position = pursuit_staging_local
+		var perpendicular_target_offset := Vector3.ZERO
+		if direction.x != 0:
+			perpendicular_target_offset.z = 1.25
+		else:
+			perpendicular_target_offset.x = 1.25
+		var target_world_position: Vector3 = (
+			target_root.global_position
+			+ Vector3(0.0, entity_root.position.y, 0.0)
+			+ perpendicular_target_offset
+		)
+		var pursuit_decision: Dictionary = hound_brain.call("evaluate_perception", {
+			"distance_to_player": entity_root.global_position.distance_to(target_world_position),
+			"has_line_of_sight": true,
+			"player_looking_at_entity": false,
+			"noise_strength": 0.0,
+			"player_position": target_world_position
+		}, 0.2)
+		_expect(str(pursuit_decision.get("state", "")) == "pursue", "Hound receives a pursuit target in the adjacent loaded cell")
+		await physics_frame
+		var movement_driver = MovementDriverScript.new()
+		var movement_records: Array = movement_driver.call("_collect_entity_records", runtime)
+		var hound_identity_key: String = spawn_cell_key + "|" + entity_id
+		var hound_record_found: bool = false
+		for movement_record in movement_records:
+			if str(movement_record.get("key", "")) == hound_identity_key:
+				hound_record_found = true
+				break
+		_expect(hound_record_found, "movement scheduler collects the selected Hound under its immutable spawn identity")
+		movement_driver.set("_next_entity_key", hound_identity_key)
+		var physics_tick_driver := PhysicsMovementTickDriver.new()
+		physics_tick_driver.runtime = runtime
+		physics_tick_driver.movement_driver = movement_driver
+		physics_tick_driver.max_attempts = 12
+		runtime.add_child(physics_tick_driver)
+		physics_tick_driver.set_physics_process(true)
+		for _physics_attempt in range(12):
+			if physics_tick_driver.finished:
+				break
+			await physics_frame
+		var movement_result: Dictionary = physics_tick_driver.result
+		var current_owner: Dictionary = runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+		_expect(physics_tick_driver.finished, "movement driver completes or safely times out inside an actual physics callback")
+		print(
+			"HOUND_CROSS_CELL_PERSISTENCE_DIAGNOSTIC result=", movement_result,
+			" owner=", current_owner,
+			" physics_attempts=", physics_tick_driver.attempts,
+			" driver=", movement_driver.call("get_diagnostics")
+		)
+		var transfer_results: Array = movement_result.get("transfer_results", [])
+		if not transfer_results.is_empty() and transfer_results[0] is Dictionary:
+			transfer = transfer_results[0]
+		_expect(
+			int(movement_result.get("transferred_count", 0)) == 1 and bool(transfer.get("ok", false)),
+			"Hound pursuit driver reaches the edge and commits the production ownership transfer; result=%s owner=%s" % [
+				str(movement_result), str(current_owner)
+			]
+		)
+		movement_driver.call("reset")
 	if not bool(transfer.get("ok", false)):
 		_finish(runtime, null)
 		return
@@ -243,6 +335,11 @@ func _run() -> void:
 		absf(entity_root.position.x) <= safe_extent + 0.001
 		and absf(entity_root.position.z) <= safe_extent + 0.001,
 		"transferred entity lands inside the target cell's safe physics bounds"
+	)
+	var transferred_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
+	_expect(
+		absf(transferred_perpendicular - 1.25) <= 0.25,
+		"off-center pursuit target is projected onto the open edge within the 0.25 m transfer tolerance"
 	)
 	var transferred_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
 	_expect(

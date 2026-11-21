@@ -65,6 +65,30 @@ func _run() -> void:
 		var path_result: Dictionary = NavigationFactoryScript.get_next_waypoint(agent)
 		_expect(bool(path_result.get("ok", false)), "headless NavigationServer returns a live cell-local path")
 		_expect(int(path_result.get("path_point_count", 0)) >= 2, "live path contains a start and destination point")
+		_expect(
+			absf(agent.target_desired_distance - NavigationFactoryScript.MIN_TARGET_DESIRED_DISTANCE) <= 0.0001,
+			"ordinary pursuit retains the 0.5 m minimum target distance"
+		)
+		_expect(
+			NavigationFactoryScript.set_agent_target(agent, target, 0.05, true),
+			"edge-precision navigation accepts a 0.05 m transfer target"
+		)
+		_expect(
+			absf(agent.target_desired_distance - 0.05) <= 0.0001,
+			"edge-precision navigation applies the narrow 0.05 m target distance"
+		)
+		_expect(
+			not NavigationFactoryScript.set_agent_target(agent, target, 0.2, true),
+			"edge-precision mode rejects a loose target distance above 0.1 m"
+		)
+		_expect(
+			NavigationFactoryScript.set_agent_target(agent, target, 0.05),
+			"ordinary navigation can leave edge-precision mode"
+		)
+		_expect(
+			absf(agent.target_desired_distance - NavigationFactoryScript.MIN_TARGET_DESIRED_DISTANCE) <= 0.0001,
+			"leaving edge-precision mode restores the ordinary 0.5 m minimum"
+		)
 	_expect(not NavigationFactoryScript.set_agent_target(agent, Vector3(NAN, 0.0, 0.0), 0.5), "navigation rejects a non-finite target")
 	_expect(NavigationFactoryScript.set_region_enabled(world_root, false), "cell navigation region can be disabled during runtime deactivation")
 	_expect(not region.enabled, "disabled cell region leaves the navigation map")
