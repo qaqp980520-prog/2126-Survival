@@ -63,3 +63,35 @@ The Full Compatibility Gate and SurfaceWorld File Persistence workflow already e
 - No physical iPhone/iPad or hardware-GPU validation is claimed.
 - If the deterministic fixture cannot find a two-hop path, the test must fail explicitly rather than silently fall back to a one-hop scenario.
 - Next: run exact-head Full Compatibility Gate, focused file persistence and Xvfb/Mesa jobs; audit complete logs; only then mark the PR Ready for Review.
+
+## Parent integration and exact-head validation refresh — 2026-11-21
+
+### Current Git ancestry
+
+- Parent PR #405 exact validated HEAD: `1aacd7e2ef05ebc325e0f4dd2b2e363e9e667d40` on `feat/hound-cross-cell-pursuit-edge-approach-2026-11-20`.
+- This child branch now contains that parent through merge commit `2e6bf23fdf28ce3e6358b3770b125240f3e493b4`.
+- Merge parents: first prior child HEAD `9da4693389ff8e7022d3beb4b38e20ad176d4e95`; second validated parent #405 HEAD `1aacd7e2ef05ebc325e0f4dd2b2e363e9e667d40`.
+- Compare against parent: 9 ahead / 0 behind; merge base equals parent HEAD.
+- Current PR base branch: `feat/hound-cross-cell-pursuit-edge-approach-2026-11-20`; current child head branch: `feat/hound-two-hop-pursuit-durable-recovery-2026-11-20`.
+
+### Exact-head evidence on merge commit 2e6bf23f
+
+- Exact-head workflow matrix: 20/20 completed successfully.
+- Full Compatibility Gate [44858698895](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44858698895), job `136706825151`: 574/574 listed job steps succeeded.
+- Full log: 7,975,149 characters / 87,185 lines / 80,420 timestamped PASS assertions / 26 unsuppressed warnings; timestamp-anchored audit found 0 actual Godot SCRIPT ERROR, ERROR, Parse Error, FAIL, ObjectDB leak, or Orphan StringName diagnostics.
+- Focused File Persistence [44858698889](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44858698889): 13/13 / 190 PASS / 0 actual Godot diagnostics.
+- Xvfb/Mesa Hound smoke in [44858698895](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44858698895), job `136706825328`: 11/11 / 526 PASS / 0 actual Godot diagnostics.
+- Two-hop Hound diagnostic: spawn owner `1,0` → `0,0` at revision 1 → `-1,0` at revision 2; the second hop completed in 16 physics attempts. Disk backup recovery preserved owner revision 2 and reconstructed one Hound under the committed owner cell.
+- Backup-recovered Hound receives a fresh NavigationAgent3D from the current cell factory; avoidance remains disabled and waypoint tolerance is 0.2.
+- Schema 3 compatibility fixture removes ownership-ledger fields and moves the stream center so the spawn cell is unloaded. It verifies deterministic owner==spawn backfill only, archive retention while unloaded, and exactly-one reconstruction when the spawn cell streams back. It does not guess a migrated owner for a legacy entity that had already moved.
+
+### Documentation-only follow-up commit
+
+This section is committed separately after the merge commit. The documentation commit changes no production runtime code or tests. The exact-head CI above validates merge commit `2e6bf23f`, not the subsequent documentation commit. The new documentation HEAD must run a fresh exact-head workflow matrix and full-log audit before PR #406 can become Ready for Review.
+
+### Limits and next gate
+
+- PR #406 remains Draft until the post-documentation exact-head Full Gate, focused persistence, Xvfb/Mesa and all workflow runs pass.
+- Local Godot executable unavailable; exact runtime validation uses GitHub Actions Godot 4.3.
+- Xvfb/Mesa is software rendering, not physical iPhone/iPad or hardware-GPU validation.
+- No main merge. Independent review remains 0 submissions / 0 inline threads on the current PR stack.

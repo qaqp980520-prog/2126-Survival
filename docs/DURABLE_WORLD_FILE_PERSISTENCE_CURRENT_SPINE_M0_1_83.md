@@ -44,3 +44,13 @@ Port the validated durable JSON file-store implementation from historical PR #34
 - No physical iPhone/iPad device test or GPU rendering validation is claimed.
 - Hound disk test exercises the actual Backrooms runtime snapshot through the production atomic file store; the separate production SurfaceWorld persistence test covers the combined SurfaceWorld envelope API.
 - Navigation paths are not serialized. NavigationAgent3D is recreated by the current cell factory after runtime restore; movement targets are recalculated by the central movement driver.
+
+
+## Parent retarget revalidation — 2026-11-21
+
+- Parent PR #402 exact HEAD advanced from `1eb70d3c96966237f627e560b45f1e00b3d8259d` to `a1312fdc246578105cfd2d7f461b4741b86f3966` after its documentation-only parent-retarget commit. The PR #402 branch is `integration/backrooms-cell-local-navigation-2026-11-19`; the current branch comparison confirms this exact tip.
+- PR #402 exact-head validation on `a1312fdc246578105cfd2d7f461b4741b86f3966` is complete: 19/19 PR-triggered workflows succeeded; Full Gate [44833102893](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/44833102893) has 571/571 job step records successful. The full log was audited: 7,948,890 characters / 86,933 lines / 80,231 PASS assertions / 26 classified Godot warnings, with no actual Godot error/parse/failure/leak diagnostics.
+- The branch comparison for this PR now uses base tip `a1312fdc246578105cfd2d7f461b4741b86f3966`; previous #404 exact-head CI on `65b190367cede5e115255f92eaa01d9d82203ca8` was run against the earlier parent tip `1eb70d3c96966237f627e560b45f1e00b3d8259d` and is not reused as exact-new-base evidence.
+- This documentation-only parent record is added to trigger a fresh PR #404 exact-head validation matrix against the current #402 parent. No production code behavior is changed by this commit.
+- Keep PR #404 Draft until its new exact-head Full Compatibility Gate, focused persistence workflow, software-rendered Hound workflow (if selected by branch conditions), all other associated workflows, and complete logs are checked. No main merge.
+- Local authoring environment has no Godot executable. CI is the Godot 4.3 runtime source; no physical iPhone/iPad or hardware-GPU test is claimed.
