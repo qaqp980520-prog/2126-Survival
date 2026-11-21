@@ -96,18 +96,33 @@ func _run() -> void:
 	var pursuit_route: Dictionary = candidate.get("pursuit_route", {})
 	var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
 	var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
+	var first_hop_direction: Vector2i = Vector2i.ZERO
 	var second_hop_direction: Vector2i = Vector2i.ZERO
-	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2 and pursuit_directions_value[1] is Vector2i:
-		second_hop_direction = pursuit_directions_value[1]
+	if pursuit_directions_value is Array and pursuit_directions_value.size() == 2:
+		if pursuit_directions_value[0] is Vector2i:
+			first_hop_direction = pursuit_directions_value[0]
+		if pursuit_directions_value[1] is Vector2i:
+			second_hop_direction = pursuit_directions_value[1]
 	_expect(
 		bool(pursuit_route.get("ok", false))
 		and pursuit_path_value is Array
 		and pursuit_path_value.size() == 3
 		and pursuit_path_value[1] == target_cell
 		and pursuit_path_value[2] == pursuit_goal_cell
+		and first_hop_direction == direction
 		and absi(second_hop_direction.x) + absi(second_hop_direction.y) == 1
-		and second_hop_direction == direction,
-		"selected Hound has a validated two-hop loaded-cell route through the expected first owner"
+		and second_hop_direction != direction
+		and second_hop_direction != -direction,
+		"selected Hound has a validated two-hop turning route through the expected first owner"
+	)
+	_expect(
+		source_cell == Vector2i(1, 0)
+		and target_cell == Vector2i(0, 0)
+		and pursuit_goal_cell == Vector2i(0, -1)
+		and direction == Vector2i(-1, 0)
+		and first_hop_direction == Vector2i(-1, 0)
+		and second_hop_direction == Vector2i(0, -1),
+		"Level 2 seed 20261118 resolves the deterministic west-then-north turning fixture"
 	)
 	_expect(pursuit_goal_root != null, "two-hop pursuit destination root is loaded")
 	_expect(entity_root != null and source_root != null and not spawn_cell_key.is_empty(), "selected entity preserves its immutable spawn identity")
@@ -343,7 +358,10 @@ func _run() -> void:
 		_expect(int(entity_root.get_meta("backrooms_owner_revision", -1)) == 1, "first-hop entity metadata records revision one")
 		_expect(_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 0 and _count_identity_in_root(target_root, spawn_cell_key, entity_id) == 1, "first hop moves the single Hound identity from A into B")
 		var first_hop_perpendicular: float = entity_root.position.z if direction.x != 0 else entity_root.position.x
-		_expect(absf(first_hop_perpendicular - 1.25) <= 0.25, "first hop preserves the off-center projected doorway alignment")
+		_expect(
+			absf(first_hop_perpendicular) <= 0.25,
+			"turning first hop centers its doorway instead of projecting a later-cell target offset"
+		)
 		var first_hop_edge_coordinate: float = entity_root.position.x if direction.x != 0 else entity_root.position.z
 		_expect(absf(first_hop_edge_coordinate) <= safe_extent - 0.02 + 0.001, "first-hop landing remains inside the strict serialization boundary")
 		movement_driver.call("reset")
@@ -785,6 +803,8 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 		if not (cell_value is Vector2i):
 			continue
 		var cell: Vector2i = cell_value
+		if cell != Vector2i(1, 0):
+			continue
 		for child in cell_root.get_children():
 			if not (child is CharacterBody3D):
 				continue
@@ -797,6 +817,8 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 			var spawn_cell: Vector2i = spawn_value
 			var spawn_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
 			for direction in directions:
+				if direction != Vector2i(-1, 0):
+					continue
 				var target_cell: Vector2i = cell + direction
 				var route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, target_cell)
 				var first_path_value: Variant = route.get("cell_path", [])
@@ -810,16 +832,26 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 					if not (goal_cell_value is Vector2i):
 						continue
 					var goal_cell: Vector2i = goal_cell_value
-					if goal_cell != cell + direction * 2:
+					if goal_cell != Vector2i(0, -1):
+						continue
+					if goal_cell == cell or goal_cell == target_cell:
 						continue
 					var pursuit_route: Dictionary = runtime.call("plan_route_between_loaded_cells", cell, goal_cell)
 					var pursuit_path_value: Variant = pursuit_route.get("cell_path", [])
+					var pursuit_directions_value: Variant = pursuit_route.get("edge_directions", [])
 					if (
 						bool(pursuit_route.get("ok", false))
 						and pursuit_path_value is Array
 						and pursuit_path_value.size() == 3
 						and pursuit_path_value[1] == target_cell
 						and pursuit_path_value[2] == goal_cell
+						and pursuit_directions_value is Array
+						and pursuit_directions_value.size() == 2
+						and pursuit_directions_value[0] is Vector2i
+						and pursuit_directions_value[0] == direction
+						and pursuit_directions_value[1] is Vector2i
+						and pursuit_directions_value[1] != direction
+						and pursuit_directions_value[1] != -direction
 					):
 						return {
 							"entity_root": child,

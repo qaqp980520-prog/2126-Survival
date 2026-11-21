@@ -498,13 +498,30 @@ func _build_cross_cell_hound_target(
 	var edge_target: float = safe_extent - EDGE_APPROACH_TARGET_INSET
 	if not is_finite(safe_extent) or perpendicular_limit <= 0.1 or edge_target <= 0.1:
 		return {"ok": false, "reason": "cross_cell_edge_bounds_invalid"}
+	# The final target's lateral coordinate is only a valid projection onto
+	# this edge while the remaining route stays collinear. Once the route turns,
+	# that coordinate includes a later cell offset and would aim beside this
+	# doorway. Center the current edge until the remaining route is straight.
+	var preserve_target_perpendicular: bool = true
+	for route_index in range(1, directions_value.size()):
+		var route_direction_value: Variant = directions_value[route_index]
+		if not (route_direction_value is Vector2i):
+			return {"ok": false, "reason": "cross_cell_route_direction_invalid"}
+		var route_direction: Vector2i = route_direction_value
+		if absi(route_direction.x) + absi(route_direction.y) != 1:
+			return {"ok": false, "reason": "cross_cell_route_direction_invalid"}
+		if route_direction != direction:
+			preserve_target_perpendicular = false
+	var target_perpendicular: float = target_local.z if direction.x != 0 else target_local.x
+	if not preserve_target_perpendicular:
+		target_perpendicular = 0.0
 	var next_target: Vector3 = current_local
 	if direction.x != 0:
 		next_target.x = float(direction.x) * edge_target
-		next_target.z = clampf(target_local.z, -perpendicular_limit, perpendicular_limit)
+		next_target.z = clampf(target_perpendicular, -perpendicular_limit, perpendicular_limit)
 	else:
 		next_target.z = float(direction.y) * edge_target
-		next_target.x = clampf(target_local.x, -perpendicular_limit, perpendicular_limit)
+		next_target.x = clampf(target_perpendicular, -perpendicular_limit, perpendicular_limit)
 	next_target.y = current_local.y
 	if not _is_finite_vector3(next_target):
 		return {"ok": false, "reason": "cross_cell_edge_target_invalid"}

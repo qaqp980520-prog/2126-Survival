@@ -103,6 +103,7 @@ func _run() -> void:
 	await _assert_cross_cell_target_fails_closed()
 	await _assert_hound_waits_for_perpendicular_edge_alignment()
 	await _assert_hound_cross_cell_pursuit_uses_precision_edge()
+	_assert_straight_route_preserves_offcenter_projection()
 	await _assert_avoidance_moves_away_from_player()
 	await _assert_duller_retreat_moves_away_from_player()
 	await _assert_patrol_moves_within_cell()
@@ -457,6 +458,7 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 		agent != null and absf(agent.target_desired_distance - 0.05) <= 0.0001,
 		"cross-cell edge approach uses the dedicated 0.05 m NavigationAgent target tolerance"
 	)
+
 	await physics_frame
 	var second_move: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(second_move.get("transferred_count", 0)) == 1, "Hound commits exactly one ownership hop after reaching the edge")
@@ -484,6 +486,42 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	driver.call("reset")
 	world_root.free()
 	await physics_frame
+
+
+func _assert_straight_route_preserves_offcenter_projection() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	_add_cell(runtime, "0,0", Vector2i.ZERO)
+	_add_cell(runtime, "1,0", Vector2i(1, 0))
+	_add_cell(runtime, "2,0", Vector2i(2, 0))
+	runtime.route_snapshot = {
+		"ok": true,
+		"start_cell": Vector2i.ZERO,
+		"goal_cell": Vector2i(2, 0),
+		"cell_keys": ["0,0", "1,0", "2,0"],
+		"edge_directions": [Vector2i(1, 0), Vector2i(1, 0)]
+	}
+	var driver = MovementDriverScript.new()
+	var result: Dictionary = driver.call(
+		"_build_cross_cell_hound_target",
+		{"runtime": runtime, "cell_key": "0,0"},
+		Vector2i.ZERO,
+		Vector2i(2, 0),
+		Vector3(2.5, 0.55, 0.0),
+		Vector3(16.0, 0.55, 1.25),
+		8.0
+	)
+	_expect(bool(result.get("ok", false)), "collinear two-hop route produces a valid first-edge target")
+	var target_value: Variant = result.get("target_local", null)
+	_expect(target_value is Vector3, "collinear two-hop route returns a Vector3 edge target")
+	if target_value is Vector3:
+		_expect(
+			absf((target_value as Vector3).z - 1.25) <= 0.001,
+			"collinear two-hop route preserves the non-zero perpendicular target projection"
+		)
+	world_root.free()
 
 func _assert_avoidance_moves_away_from_player() -> void:
 	var world_root := Node3D.new()
