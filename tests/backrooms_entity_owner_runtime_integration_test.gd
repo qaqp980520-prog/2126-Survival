@@ -810,7 +810,8 @@ func _run() -> void:
 	legacy_payload["schema_version"] = 3
 	legacy_payload.erase("entity_ownership_ledger_version")
 	legacy_payload.erase("entity_ownership_ledger")
-	# Center at C so the original spawn cell A is unloaded but remains in the retention halo.
+	# Move the stream center two cells west of immutable spawn cell A so it is unloaded
+	# from the 3x3 window while remaining inside the retention halo.
 	var legacy_center: Vector2i = source_cell + direction * 2
 	legacy_payload["center_cell"] = [legacy_center.x, legacy_center.y]
 	var legacy_state: Dictionary = {}

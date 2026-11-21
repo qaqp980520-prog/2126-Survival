@@ -56,3 +56,13 @@ This is a cell-local navigation layer only. It does not change the loaded-cell r
 - No cross-cell NavigationAgent3D links or autonomous multi-hop pursuit.
 - No dynamic obstacle baking, avoidance, combat, animation or audio.
 - Next: integrate NavigationAgent3D with the existing loaded-cell route snapshot and one-hop owner transfer, then add an end-to-end Hound pursuit regression across at least two loaded cells.
+
+
+## Parent integration retarget — 2026-11-21
+
+- PR #402 has been retargeted from the closed/merged PR #401 head branch to the validated PR #400 feature branch `integration/backrooms-entity-live-owner-transfer-2026-11-18`.
+- New parent exact HEAD: `e142854471526923342e685bc86010344acddcaa`; PR #400 Full Gate completed 570/570 step records and all 19/19 associated workflows succeeded. Complete log audit found no actual Godot diagnostics; 26 existing warnings remain classified.
+- PR #402 implementation head before this documentation-only update: `1eb70d3c96966237f627e560b45f1e00b3d8259d`. The retargeted comparison contains the intended eight NavigationAgent3D files; compare reports 8 head commits, with PR #400's two parent-side commits relative to the common merge base.
+- This documentation-only update is intended to trigger a fresh exact-head CI matrix against the new parent. Prior #402 CI validates the old base only and must not be reused as new-base evidence.
+- PR #402 remains Draft until the new exact-head Full Compatibility Gate, focused workflows, and complete logs pass.
+- No NavigationAgent3D production behavior changed in this addendum. Local Godot executable remains unavailable; no local runtime pass is claimed.
