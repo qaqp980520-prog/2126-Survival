@@ -145,7 +145,7 @@ static func validate_records(
 			return {"ok": false, "reason": "entity_runtime_duplicate"}
 		seen[key] = true
 		var record_spawn_version: Variant = raw.get("spawn_algorithm_version", null)
-		if not _is_integer_value(record_spawn_version) or int(record_spawn_version) != spawn_algorithm_version:
+		if not _is_integer_value(record_spawn_version) or float(record_spawn_version) != float(spawn_algorithm_version):
 			return {"ok": false, "reason": "entity_runtime_spawn_version_mismatch"}
 		var open_edges := {
 			"north": LayoutScript.edge_is_open(spawn_cell, Vector2i(0, -1), world_seed),
@@ -172,7 +172,7 @@ static func validate_records(
 		if not (brain_value is Dictionary) or not BrainScript.validate_save_dict(brain_value, entity_id, level_id, spawn_cell, world_seed):
 			return {"ok": false, "reason": "entity_runtime_brain_state_invalid"}
 		var patrol_value: Variant = raw.get("patrol_index", null)
-		if not _is_integer_value(patrol_value) or int(patrol_value) < 0 or int(patrol_value) > 3:
+		if not _is_integer_value(patrol_value) or float(patrol_value) < 0.0 or float(patrol_value) > 3.0:
 			return {"ok": false, "reason": "entity_runtime_patrol_index_invalid"}
 		normalized.append({
 			"cell_key": cell_key,

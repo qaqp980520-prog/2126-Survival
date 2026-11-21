@@ -84,6 +84,12 @@ class FailAfterCommitActivationTransitionManager extends RefCounted:
 	func _init(inner_manager: RefCounted) -> void:
 		delegate = inner_manager
 
+	func get_state_name() -> String:
+		return str(delegate.call("get_state_name"))
+
+	func get_session_save_dict() -> Dictionary:
+		return delegate.call("get_session_save_dict")
+
 	func prepare_portal_entry_with_runtime(
 		director: RefCounted,
 		runtime: Object,
@@ -513,6 +519,8 @@ func _run() -> void:
 			var failing_activation_manager := FailAfterCommitActivationTransitionManager.new(original_transition_manager)
 			world.backrooms_transition_manager = failing_activation_manager
 			var failed_activation_entry: Dictionary = world.call("enter_backrooms_from_portal", handoff_portal_id)
+			_expect(bool(world.call("_can_save_world")), "failed handoff preserves Save availability through the transition-manager decorator")
+			_expect(bool(world.call("_can_load_world")), "failed handoff preserves Load availability through the transition-manager decorator")
 			world.backrooms_transition_manager = original_transition_manager
 			_expect(failing_activation_manager.activation_failure_injected, "production handoff failure injection deactivates the staged runtime after Portal and Session commit")
 			_expect(not bool(failed_activation_entry.get("ok", false)) and str(failed_activation_entry.get("reason", "")) == "maze_runtime_activation_failed", "SurfaceWorld reports a post-commit maze activation failure")

@@ -2,9 +2,13 @@ extends SceneTree
 
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
+const FileStoreScript = preload("res://systems/WorldEnvelopeFileStore.gd")
+const DISK_SAVE_PATH: String = "user://run342_backrooms_hound_file_roundtrip.json"
 const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 
 var failures: Array[String] = []
+var disk_restore_runtime: Node3D
+var disk_restore_report: Dictionary = {}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -12,7 +16,6 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var runtime: Node3D = RuntimeScript.new() as Node3D
-	runtime.set("force_metadata_only", true)
 	root.add_child(runtime)
 	var metadata_probe := Node3D.new()
 	var probe_window := CharacterBody3D.new()
@@ -37,7 +40,7 @@ func _run() -> void:
 	)
 	metadata_probe.free()
 	var prepared: Dictionary = runtime.call(
-		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 3
+		"prepare_destination", "Level 2", 20261118, Vector3.ZERO, 8.0, 1
 	)
 	_expect(bool(prepared.get("ok", false)), "runtime prepares a deterministic Level 2 ownership window")
 	if not bool(prepared.get("ok", false)):
@@ -54,6 +57,7 @@ func _run() -> void:
 	var source_root: Node3D = candidate.get("source_root") as Node3D
 	var spawn_cell_key: String = str(candidate.get("spawn_cell_key", ""))
 	var entity_id: String = str(candidate.get("entity_id", ""))
+	_expect(entity_id == "hound", "Level 2 transfer fixture selects the Hound for durable file-persistence coverage")
 	var source_cell: Vector2i = candidate.get("source_cell", Vector2i.ZERO)
 	var target_cell: Vector2i = candidate.get("target_cell", Vector2i.ZERO)
 	var direction: Vector2i = candidate.get("direction", Vector2i.ZERO)
@@ -283,7 +287,7 @@ func _run() -> void:
 				saved_owner_found = str(record.get("owner_cell_key", "")) == target_key
 	_expect(saved_owner_found, "save snapshot persists the migrated owner-cell assignment")
 
-	var far_center: Vector2i = target_cell + direction * 4
+	var far_center: Vector2i = target_cell + direction * 2
 	var far_position := Vector3(float(far_center.x) * 8.0, 0.0, float(far_center.y) * 8.0)
 	var away_result: Dictionary = runtime.call("sync_to_world_position", far_position)
 	_expect(bool(away_result.get("ok", false)), "stream can unload the owner cell while retaining its one-cell-halo ownership record")
@@ -438,8 +442,44 @@ func _run() -> void:
 	_expect(spawn_cell_identity_count == 0, "original spawn cell does not create a duplicate after owner-cell reconstruction")
 
 	var final_save: Dictionary = runtime.call("to_save_dict")
+	var runtime_records: Array = final_save.get("entity_runtime_states", [])
+	_expect(not runtime_records.is_empty(), "transferred Hound snapshot contains a validated runtime-state record")
+	if not runtime_records.is_empty():
+		var expected_level_id: String = str(final_save.get("level_id", "Level 2"))
+		var expected_world_seed: int = int(final_save.get("world_seed", 20261118))
+		var expected_cell_size: float = float(final_save.get("cell_size", 8.0))
+		var expected_spawn_version: int = int(final_save.get("entity_spawn_algorithm_version", 1))
+		var huge_spawn_version_records: Array = runtime_records.duplicate(true)
+		huge_spawn_version_records[0]["spawn_algorithm_version"] = 1e308
+		var huge_spawn_version_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_spawn_version_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_spawn_version_result.get("ok", false)), "entity runtime validator rejects huge finite spawn versions without integer overflow")
+		var huge_patrol_records: Array = runtime_records.duplicate(true)
+		huge_patrol_records[0]["patrol_index"] = 1e308
+		var huge_patrol_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_patrol_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_patrol_result.get("ok", false)), "entity runtime validator rejects huge finite patrol indices before integer conversion")
+		var huge_brain_schema_records: Array = runtime_records.duplicate(true)
+		huge_brain_schema_records[0]["brain_state"]["schema_version"] = 1e308
+		var huge_brain_schema_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_schema_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_schema_result.get("ok", false)), "Hound brain validator rejects huge finite schema numbers without integer overflow")
+		var huge_brain_seed_records: Array = runtime_records.duplicate(true)
+		huge_brain_seed_records[0]["brain_state"]["world_seed"] = 1e308
+		var huge_brain_seed_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_seed_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_seed_result.get("ok", false)), "Hound brain validator rejects huge finite world seeds without integer overflow")
+		var huge_brain_spawn_records: Array = runtime_records.duplicate(true)
+		huge_brain_spawn_records[0]["brain_state"]["spawn_cell"] = [1e308, 0]
+		var huge_brain_spawn_result: Dictionary = EntityRuntimeStateScript.validate_records(
+			huge_brain_spawn_records, expected_level_id, expected_world_seed, expected_cell_size, expected_spawn_version
+		)
+		_expect(not bool(huge_brain_spawn_result.get("ok", false)), "Hound brain validator rejects huge finite spawn coordinates without integer overflow")
 	var restored: Node3D = RuntimeScript.new() as Node3D
-	restored.set("force_metadata_only", true)
 	root.add_child(restored)
 	_expect(bool(restored.call("load_save_dict", final_save)), "fresh runtime reconstructs migrated ownership from the combined maze payload")
 	_expect(bool(restored.call("activate_destination")), "restored ownership runtime activates only after reconstruction")
@@ -457,13 +497,67 @@ func _run() -> void:
 	)
 	_expect(restored.call("to_save_dict") == final_save, "restored ownership runtime reproduces the exact saved maze and ledger snapshot")
 
+	# Persist the transferred Hound snapshot through the same atomic file store used by
+	# SurfaceWorld. Corrupt the primary after rotating a known-good backup, then recover.
+	var file_store: RefCounted = FileStoreScript.new()
+	var disk_envelope: Dictionary = {
+		"schema_version": 1,
+		"active_location": "backrooms",
+		"backrooms_runtime": final_save.duplicate(true)
+	}
+	_expect(bool(file_store.call("write_atomically", DISK_SAVE_PATH, disk_envelope)), "atomic file store writes the Hound owner-ledger/runtime-state envelope")
+	_expect(bool(file_store.call("write_atomically", DISK_SAVE_PATH, disk_envelope)), "second atomic write rotates a known-good Hound envelope into .bak")
+	_expect(_write_text(DISK_SAVE_PATH, "{malformed primary"), "test corrupts only the primary Hound save after backup rotation")
+	disk_restore_runtime = RuntimeScript.new() as Node3D
+	root.add_child(disk_restore_runtime)
+	var disk_loaded: bool = bool(file_store.call(
+		"load_with_backup",
+		DISK_SAVE_PATH,
+		Callable(self, "_restore_runtime_from_file_envelope"),
+		Callable(self, "_get_disk_restore_report"),
+		int(Time.get_unix_time_from_system())
+	))
+	_expect(disk_loaded, "corrupt Hound primary recovers from the atomic .bak file")
+	var disk_report: Dictionary = file_store.call("get_last_report")
+	_expect(str(disk_report.get("phase", "")) == "backup_restored", "Hound backup recovery reports the backup restore phase")
+	var disk_details: Dictionary = disk_report.get("details", {})
+	_expect(str(disk_details.get("source", "")) == DISK_SAVE_PATH + ".bak", "Hound recovery identifies the exact backup source")
+	_expect(bool(disk_details.get("primary_repaired", false)), "Hound backup recovery repairs the primary after preserving corruption")
+	_expect(FileAccess.file_exists(DISK_SAVE_PATH + ".corrupt"), "malformed Hound primary is preserved as a diagnostic file")
+	var disk_owner: Dictionary = disk_restore_runtime.call("get_entity_owner_record", spawn_cell_key, entity_id)
+	_expect(
+		str(disk_owner.get("owner_cell_key", "")) == target_key and int(disk_owner.get("owner_revision", -1)) == 1,
+		"disk recovery preserves Hound immutable spawn identity, mutable owner cell, and owner revision"
+	)
+	var disk_identity: Dictionary = _find_entity(disk_restore_runtime, spawn_cell_key, entity_id)
+	_expect(int(disk_identity.get("count", 0)) == 1, "disk recovery reconstructs exactly one Hound for the immutable spawn identity")
+	var disk_entity: CharacterBody3D = disk_identity.get("entity_root") as CharacterBody3D
+	var disk_owner_root: Node3D = disk_restore_runtime.call("get_cell_root", target_key) as Node3D
+	_expect(
+		disk_entity != null and disk_owner_root != null and disk_entity.get_parent() == disk_owner_root,
+		"disk-recovered Hound is attached under the committed owner cell"
+	)
+	if disk_entity != null:
+		_expect(str(disk_entity.get_meta("backrooms_owner_cell_key", "")) == target_key, "disk-recovered Hound node restores owner-cell metadata")
+		_expect(int(disk_entity.get_meta("backrooms_owner_revision", -1)) == 1, "disk-recovered Hound node restores owner revision metadata")
+		var disk_agent: NavigationAgent3D = disk_entity.get_node_or_null("NavigationAnchor/NavigationAgent") as NavigationAgent3D
+		_expect(disk_agent != null, "disk-recovered Hound receives a fresh NavigationAgent3D from the current cell factory")
+		if disk_agent != null:
+			_expect(not disk_agent.avoidance_enabled, "disk-recovered NavigationAgent3D preserves the bounded non-avoidance policy")
+			_expect(absf(disk_agent.path_desired_distance - 0.2) <= 0.0001, "disk-recovered NavigationAgent3D uses the current waypoint tolerance")
+	var disk_runtime_snapshot: Dictionary = disk_restore_runtime.call("to_save_dict")
+	_expect(
+		_save_values_equal(disk_runtime_snapshot, final_save),
+		"disk-recovered Hound reproduces the semantic ownership and runtime-state snapshot after JSON numeric canonicalization"
+	)
+
 	# Schema-three saves predate the ownership ledger. A retained owner==spawn
 	# archive must be deterministically backfilled even when its cell is not loaded.
 	var legacy_payload: Dictionary = final_save.duplicate(true)
 	legacy_payload["schema_version"] = 3
 	legacy_payload.erase("entity_ownership_ledger_version")
 	legacy_payload.erase("entity_ownership_ledger")
-	var legacy_center: Vector2i = source_cell + direction * 4
+	var legacy_center: Vector2i = source_cell + direction * 2
 	legacy_payload["center_cell"] = [legacy_center.x, legacy_center.y]
 	var legacy_state: Dictionary = {}
 	for state_value in final_save.get("entity_runtime_states", []):
@@ -476,7 +570,6 @@ func _run() -> void:
 	legacy_payload["entity_runtime_states"] = [legacy_state] if not legacy_state.is_empty() else []
 	_expect(not legacy_state.is_empty(), "legacy migration fixture retains the original deterministic spawn state")
 	var legacy_restored: Node3D = RuntimeScript.new() as Node3D
-	legacy_restored.set("force_metadata_only", true)
 	root.add_child(legacy_restored)
 	var legacy_loaded: bool = bool(legacy_restored.call("load_save_dict", legacy_payload))
 	_expect(legacy_loaded, "schema-three owner==spawn archive restores through deterministic ledger backfill")
@@ -514,7 +607,7 @@ func _find_transfer_candidate(runtime: Node) -> Dictionary:
 			if not (child is CharacterBody3D):
 				continue
 			var entity_id: String = str(child.get_meta("backrooms_entity_id", ""))
-			if not MOBILE_ENTITY_IDS.has(entity_id):
+			if entity_id != "hound":
 				continue
 			var spawn_value: Variant = child.get_meta("spawn_cell", null)
 			if not (spawn_value is Vector2i):
@@ -575,6 +668,57 @@ func _count_identity_in_root(cell_root: Node3D, spawn_cell_key: String, entity_i
 	return count
 
 
+static func _save_values_equal(left: Variant, right: Variant) -> bool:
+	if left is Dictionary:
+		if not (right is Dictionary) or left.size() != right.size():
+			return false
+		for key in left.keys():
+			if not right.has(key) or not _save_values_equal(left[key], right[key]):
+				return false
+		return true
+	if left is Array:
+		if not (right is Array) or left.size() != right.size():
+			return false
+		for index in range(left.size()):
+			if not _save_values_equal(left[index], right[index]):
+				return false
+		return true
+	if (left is int or left is float) and (right is int or right is float):
+		return float(left) == float(right)
+	return left == right
+
+
+func _restore_runtime_from_file_envelope(payload: Dictionary, _now_unix: int = -1) -> bool:
+	disk_restore_report = {"success": false, "phase": "validation", "rollback_complete": true}
+	if disk_restore_runtime == null or not (payload.get("backrooms_runtime", null) is Dictionary):
+		return false
+	var runtime_payload: Dictionary = payload.get("backrooms_runtime", {})
+	var restored_ok: bool = bool(disk_restore_runtime.call("load_save_dict", runtime_payload))
+	if restored_ok:
+		restored_ok = bool(disk_restore_runtime.call("activate_destination"))
+	disk_restore_report = {
+		"success": restored_ok,
+		"phase": "complete" if restored_ok else "runtime_restore",
+		"rollback_complete": true
+	}
+	return restored_ok
+
+
+func _get_disk_restore_report() -> Dictionary:
+	return disk_restore_report.duplicate(true)
+
+
+func _write_text(path: String, value: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(value)
+	file.flush()
+	var write_error: Error = file.get_error()
+	file.close()
+	return write_error == OK
+
+
 func _expect(condition: bool, message: String) -> void:
 	if condition:
 		return
@@ -585,8 +729,15 @@ func _expect(condition: bool, message: String) -> void:
 func _finish(runtime: Node3D, restored: Node3D) -> void:
 	if restored != null:
 		restored.queue_free()
+	if disk_restore_runtime != null:
+		disk_restore_runtime.queue_free()
 	if runtime != null:
 		runtime.queue_free()
+	for suffix in ["", ".tmp", ".bak", ".corrupt"]:
+		var path: String = DISK_SAVE_PATH + suffix
+		var absolute: String = ProjectSettings.globalize_path(path)
+		if FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute):
+			DirAccess.remove_absolute(absolute)
 	await process_frame
 	if failures.is_empty():
 		print("Backrooms entity owner runtime integration tests passed.")
