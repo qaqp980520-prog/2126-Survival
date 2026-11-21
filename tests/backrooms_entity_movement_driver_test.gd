@@ -431,12 +431,15 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	)
 	var brain: Node = entity["brain"] as Node
 	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
+	# Keep this two-hop fixture collinear but off-center so the straight-route
+	# branch must preserve the final target's perpendicular projection.
+	var target_position := Vector3(16.0, 0.55, 1.25)
 	var decision: Dictionary = brain.call("evaluate_perception", {
-		"distance_to_player": 13.5,
+		"distance_to_player": entity_root.global_position.distance_to(target_position),
 		"has_line_of_sight": true,
 		"player_looking_at_entity": false,
 		"noise_strength": 0.0,
-		"player_position": Vector3(16.0, 0.55, 0.0)
+		"player_position": target_position
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "pursue", "visible Hound target two loaded cells away produces a pursue intent")
 	await physics_frame
@@ -456,6 +459,11 @@ func _assert_hound_cross_cell_pursuit_uses_precision_edge() -> void:
 	_expect(
 		agent != null and absf(agent.target_desired_distance - 0.05) <= 0.0001,
 		"cross-cell edge approach uses the dedicated 0.05 m NavigationAgent target tolerance"
+	)
+	var straight_edge_target_local: Vector3 = source_root.to_local(agent.target_position) if agent != null else Vector3.ZERO
+	_expect(
+		agent != null and absf(straight_edge_target_local.z - 1.25) <= 0.001,
+		"collinear two-hop Hound route preserves the non-zero perpendicular target projection at the first doorway"
 	)
 	await physics_frame
 	var second_move: Dictionary = driver.call("tick", runtime, 0.1)
