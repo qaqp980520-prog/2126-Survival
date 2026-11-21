@@ -90,3 +90,14 @@ The existing Full Compatibility Gate and SurfaceWorld File Persistence workflow 
 - It does not claim arbitrary routes, more than three hops, unbounded pursuit, dynamic stream-window expansion during pursuit, or arbitrary multi-turn navigation.
 - No physical iPhone/iPad, hardware-GPU, or device-performance validation is claimed.
 - Preserve parent-first review and integration. Do not merge this child before PR #407 and all ancestors are independently reviewed and safely integrated.
+
+
+## Parent integration and exact-head revalidation — 2026-11-21
+
+- Validated parent PR #407 exact HEAD: `b5e39de888927af417d231ec9a7937b21eb28b89`; PR #407 is Open / Ready for Review / Mergeable / Unmerged after 2/2 exact-head workflow runs succeeded, Full Gate 574/574, focused persistence 13/13 and Xvfb/Mesa 11/11.
+- This child branch includes the parent through merge commit `33ddb8310ab4f343a2e7eb369b4864a669b5c89a`; first parent prior #409 HEAD `fac66a7ae119a8023e589fc0687d29ab9a575dc4`, second parent #407 HEAD `b5e39de888927af417d231ec9a7937b21eb28b89`.
+- Parent delta from merge base `f56285351c6ca2d50010a5edb641dc3009740267` was three documentation files only. Child diff remains this M0.1.94 document and `tests/backrooms_entity_owner_runtime_integration_test.gd`.
+- Corrected the Schema 3 fixture comment to describe the actual formula `source_cell + direction * 2`: the stream center moves two cells west of spawn A so A is outside the 3×3 loaded window but remains within the retention halo. Migration behavior is unchanged; only the comment was corrected.
+- New exact-head compare against the live parent branch: 6 ahead / 0 behind, merge base equals `b5e39de888927af417d231ec9a7937b21eb28b89`.
+- Exact-head GitHub Actions workflows are pending. Previous 4/4 successful workflows on `fac66a7a` validate only the old parent and are not reused. Keep PR #409 Draft until Full Gate, focused persistence, Xvfb/Mesa and complete log audit pass.
+- No main merge; no physical iPhone/iPad or hardware-GPU validation is claimed. Local Godot executable unavailable; runtime evidence must come from GitHub Actions Godot 4.3.
