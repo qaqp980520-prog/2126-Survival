@@ -5,6 +5,7 @@ const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const EntityRuntimeStateScript = preload("res://systems/BackroomsEntityRuntimeState.gd")
 const LayoutScript = preload("res://systems/BackroomsMazeLayout.gd")
+const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
 
 var failures: Array[String] = []
 
@@ -27,6 +28,9 @@ func _run() -> void:
 	var origin_root: Node3D = runtime.call("get_cell_root", "0,0") as Node3D
 	_expect(origin_root != null, "initial window owns the origin cell root")
 	if origin_root != null:
+		var origin_navigation := origin_root.get_node_or_null("CellNavigation") as NavigationRegion3D
+		_expect(origin_navigation != null, "prepared cell owns a NavigationRegion3D")
+		_expect(origin_navigation != null and not origin_navigation.enabled, "prepared cell navigation remains disabled before activation")
 		_expect(origin_root.has_meta("backrooms_cell_key"), "cell root exposes its stable key as metadata")
 		_expect(origin_root.get_meta("backrooms_level_id") == "Level 1", "cell root preserves its level identity")
 		_expect(origin_root.get_meta("backrooms_layout_algorithm_version") == 1, "cell root records the topology algorithm version")
@@ -499,7 +503,12 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			var empty_result: Dictionary = spawn_runtime.call("prepare_destination", level_id, world_seed, Vector3.ZERO, 8.0, 0)
 			var empty_root: Node3D = spawn_runtime.call("get_cell_root", "0,0") as Node3D
 			_expect(bool(empty_result.get("ok", false)), "Level 0 production runtime prepares without entity candidates")
-			_expect(empty_root != null and empty_root.get_children().is_empty(), "Level 0 production cells remain entity-free")
+			var empty_entity_count: int = 0
+			if empty_root != null:
+				for empty_child in empty_root.get_children():
+					if empty_child is CharacterBody3D:
+						empty_entity_count += 1
+			_expect(empty_root != null and empty_entity_count == 0, "Level 0 production cells remain entity-free while retaining navigation metadata")
 			if empty_root != null:
 				_expect(empty_root.get_meta("backrooms_entity_spawn_ids", []).is_empty(), "Level 0 records an empty spawn descriptor list")
 			continue
@@ -522,15 +531,19 @@ func _production_entity_spawn_contract_is_valid() -> void:
 			var collision_shape: CollisionShape3D = found_root.get_node_or_null("EntityCollision") as CollisionShape3D
 			var mobile_entity_ids: Array[String] = ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 			var expects_mobile_collision: bool = mobile_entity_ids.has(entity_id)
+			var navigation_anchor := found_root.get_node_or_null("NavigationAnchor") as Node3D
+			var navigation_agent := NavigationFactoryScript.get_agent(found_root)
 			_expect(found_root is CharacterBody3D, "%s production root is a CharacterBody3D" % entity_id)
 			_expect(brain != null, "%s metadata-only production root owns a logic controller" % entity_id)
 			_expect(found_root.get_node_or_null("Visuals") == null, "%s metadata-only production root remains renderer-independent" % entity_id)
 			if expects_mobile_collision:
 				_expect(collision_shape != null and collision_shape.shape != null, "%s metadata-only root retains its physics collision proxy" % entity_id)
 				_expect(collision_shape != null and collision_shape.disabled, "%s prepared destination keeps entity collision disabled" % entity_id)
-				_expect(found_root.get_children().size() == 2, "%s metadata-only root contains AI and collision nodes only" % entity_id)
+				_expect(navigation_anchor != null and navigation_agent != null, "%s mobile metadata-only root owns a floor-aligned NavigationAgent3D anchor" % entity_id)
+				_expect(found_root.get_children().size() == 3, "%s metadata-only root contains AI, collision and navigation nodes" % entity_id)
 			else:
 				_expect(collision_shape == null, "%s anchored root has no mobile collision shape" % entity_id)
+				_expect(navigation_agent == null, "%s anchored root does not receive a NavigationAgent3D" % entity_id)
 				_expect(found_root.get_children().size() == 1, "%s anchored metadata-only root contains only its AI controller" % entity_id)
 			_expect(
 				int(found_root.get_meta("backrooms_entity_behavior_version", 0)) == BrainScript.BEHAVIOR_VERSION,
@@ -557,6 +570,9 @@ func _production_entity_spawn_contract_is_valid() -> void:
 		_expect(activation_shape != null and activation_shape.disabled, "prepared mobile entity collision shape remains disabled")
 		_expect(activation_root.collision_layer == 0 and activation_root.collision_mask == 0, "prepared mobile entity remains outside the physics collision world")
 		_expect(bool(spawn_runtime.call("activate_destination")), "metadata-only runtime activates for collision lifecycle verification")
+		var activation_cell_root := activation_root.get_parent() as Node3D
+		var activation_navigation := activation_cell_root.get_node_or_null("CellNavigation") as NavigationRegion3D if activation_cell_root != null else null
+		_expect(activation_navigation != null and activation_navigation.enabled, "runtime activation enables the owning cell navigation region")
 		_expect(activation_shape != null and not activation_shape.disabled, "runtime activation enables the entity collision shape")
 		_expect(activation_root.collision_layer == 4 and activation_root.collision_mask == 1, "runtime activation restores the entity collision layer and mask")
 		_expect(bool(spawn_runtime.call("deactivate_destination")), "metadata-only runtime deactivates after collision lifecycle verification")

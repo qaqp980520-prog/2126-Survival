@@ -1,6 +1,8 @@
 extends RefCounted
 class_name BackroomsEntityMovementDriver
 
+const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
+
 ## Bounded, cell-local locomotion for perception-driven Backrooms entities.
 ## The owning SurfaceWorld calls tick(); entities never create their own process loop.
 ## Movement is constrained to the entity's owning cell until roaming-entity persistence
@@ -264,24 +266,74 @@ func _move_entity(record: Dictionary, delta_seconds: float) -> Dictionary:
 		_:
 			return {"moved": false, "blocked": false, "reason": "state_is_stationary"}
 
-	var current_horizontal := Vector2(current_local.x, current_local.z)
-	var target_horizontal := Vector2(target_local.x, target_local.z)
-	var offset: Vector2 = target_horizontal - current_horizontal
-	var distance: float = offset.length()
-	if distance <= stop_distance + 0.0001:
-		if state_name in ["patrol", "fly_patrol"]:
-			_advance_patrol(entity_key, entity_root)
-		return {"moved": false, "blocked": false, "reason": "within_stop_distance"}
-	var travel_distance: float = minf(speed * maxf(delta_seconds, 0.0), maxf(0.0, distance - stop_distance))
-	if travel_distance <= 0.0001:
-		return {"moved": false, "blocked": false, "reason": "movement_below_epsilon"}
-	var direction: Vector2 = offset / distance
 	var next_local := current_local
-	next_local.x = clampf(current_local.x + direction.x * travel_distance, -half_extent, half_extent)
-	next_local.z = clampf(current_local.z + direction.y * travel_distance, -half_extent, half_extent)
 	if state_name == "fly_patrol":
+		var current_horizontal := Vector2(current_local.x, current_local.z)
+		var target_horizontal := Vector2(target_local.x, target_local.z)
+		var fly_offset: Vector2 = target_horizontal - current_horizontal
+		var fly_distance: float = fly_offset.length()
+		if fly_distance <= stop_distance + 0.0001:
+			_advance_patrol(entity_key, entity_root)
+			return {"moved": false, "blocked": false, "reason": "within_stop_distance"}
+		var fly_travel_distance: float = minf(
+			speed * maxf(delta_seconds, 0.0),
+			maxf(0.0, fly_distance - stop_distance)
+		)
+		if fly_travel_distance <= 0.0001:
+			return {"moved": false, "blocked": false, "reason": "movement_below_epsilon"}
+		var fly_direction: Vector2 = fly_offset / fly_distance
+		next_local.x = clampf(current_local.x + fly_direction.x * fly_travel_distance, -half_extent, half_extent)
+		next_local.z = clampf(current_local.z + fly_direction.y * fly_travel_distance, -half_extent, half_extent)
 		var vertical_offset: float = target_local.y - current_local.y
-		next_local.y = current_local.y + clampf(vertical_offset, -speed * delta_seconds, speed * delta_seconds)
+		next_local.y = current_local.y + clampf(
+			vertical_offset,
+			-speed * maxf(delta_seconds, 0.0),
+			speed * maxf(delta_seconds, 0.0)
+		)
+	else:
+		var navigation_agent := NavigationFactoryScript.get_agent(entity_body)
+		if navigation_agent == null:
+			return {"moved": false, "blocked": true, "reason": "navigation_agent_unavailable"}
+		var navigation_target_local: Vector3 = target_local
+		navigation_target_local.y = NavigationFactoryScript.NAVIGATION_SURFACE_Y
+		var navigation_target_world: Vector3 = cell_root.to_global(navigation_target_local)
+		if not NavigationFactoryScript.set_agent_target(
+			navigation_agent, navigation_target_world, stop_distance
+		):
+			return {"moved": false, "blocked": true, "reason": "navigation_target_rejected"}
+		var navigation_result: Dictionary = NavigationFactoryScript.get_next_waypoint(navigation_agent)
+		if not bool(navigation_result.get("ok", false)):
+			var navigation_reason: String = str(navigation_result.get("reason", "navigation_unavailable"))
+			return {
+				"moved": false,
+				"blocked": navigation_reason != "navigation_path_unavailable",
+				"reason": navigation_reason
+			}
+		if bool(navigation_result.get("finished", false)):
+			if not bool(navigation_result.get("target_reachable", false)):
+				return {"moved": false, "blocked": true, "reason": "navigation_target_unreachable"}
+			if state_name == "patrol":
+				_advance_patrol(entity_key, entity_root)
+			return {"moved": false, "blocked": false, "reason": "within_stop_distance"}
+		var waypoint_value: Variant = navigation_result.get("next_path_position", null)
+		if not (waypoint_value is Vector3) or not _is_finite_vector3(waypoint_value):
+			return {"moved": false, "blocked": true, "reason": "navigation_waypoint_invalid"}
+		var waypoint_local: Vector3 = cell_root.to_local(waypoint_value)
+		var waypoint_offset := Vector2(
+			waypoint_local.x - current_local.x,
+			waypoint_local.z - current_local.z
+		)
+		var waypoint_distance: float = waypoint_offset.length()
+		if waypoint_distance <= 0.0001:
+			return {"moved": false, "blocked": false, "reason": "navigation_waypoint_pending"}
+		var waypoint_travel_distance: float = minf(
+			speed * maxf(delta_seconds, 0.0),
+			waypoint_distance
+		)
+		var waypoint_direction: Vector2 = waypoint_offset / waypoint_distance
+		next_local.x = current_local.x + waypoint_direction.x * waypoint_travel_distance
+		next_local.z = current_local.z + waypoint_direction.y * waypoint_travel_distance
+		next_local.y = current_local.y
 	var previous_world_position: Vector3 = entity_body.global_position
 	var desired_world_position: Vector3 = cell_root.to_global(next_local)
 	var motion: Vector3 = desired_world_position - previous_world_position

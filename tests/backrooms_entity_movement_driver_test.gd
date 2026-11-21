@@ -3,6 +3,7 @@ extends SceneTree
 const BrainScript = preload("res://systems/BackroomsEntityBrain.gd")
 const MovementDriverScript = preload("res://systems/BackroomsEntityMovementDriver.gd")
 const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
+const NavigationFactoryScript = preload("res://systems/BackroomsCellNavigationFactory.gd")
 
 class FakeRuntime:
 	extends Node
@@ -31,6 +32,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await _assert_same_cell_pursuit_moves_toward_player()
 	await _assert_wall_collision_blocks_pursuit()
+	await _assert_navigation_agent_routes_around_obstacle()
 	await _assert_smiler_approach_uses_unseen_player_target()
 	await _assert_cross_cell_target_fails_closed()
 	await _assert_avoidance_moves_away_from_player()
@@ -66,7 +68,7 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 		"player_position": Vector3(3.0, 0.0, 0.0)
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "pursue", "visible nearby Hound receives a pursue movement intent")
-	await process_frame
+	await physics_frame
 	var start_position: Vector3 = entity_root.global_position
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -75,7 +77,7 @@ func _assert_same_cell_pursuit_moves_toward_player() -> void:
 	_expect(str(entity_root.get_meta("backrooms_movement_mode", "")) == "cell_local_physics_v1", "movement mode is explicitly marked as cell-local physics collision")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_wall_collision_blocks_pursuit() -> void:
 	var world_root := Node3D.new()
@@ -117,7 +119,126 @@ func _assert_wall_collision_blocks_pursuit() -> void:
 	_expect(local_position.x < 0.75, "Hound collision proxy cannot pass through the wall")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
+
+func _assert_navigation_agent_routes_around_obstacle() -> void:
+	var world_root := Node3D.new()
+	root.add_child(world_root)
+	var runtime := FakeRuntime.new()
+	world_root.add_child(runtime)
+	var cell_root: Node3D = _add_cell(runtime, "0,0", Vector2i.ZERO)
+	var navigation_region := cell_root.get_node_or_null("CellNavigation") as NavigationRegion3D
+	_expect(navigation_region != null, "cell-local navigation region exists for the obstacle fixture")
+	if navigation_region == null:
+		world_root.free()
+		await physics_frame
+		return
+	navigation_region.navigation_mesh = _make_wall_detour_navigation_mesh()
+	var wall := StaticBody3D.new()
+	wall.name = "NavigationDetourWall"
+	wall.collision_layer = 1
+	wall.collision_mask = 0
+	wall.position = Vector3(1.0, 1.0, 0.0)
+	var wall_shape := CollisionShape3D.new()
+	var wall_box := BoxShape3D.new()
+	wall_box.size = Vector3(0.2, 2.0, 4.0)
+	wall_shape.shape = wall_box
+	wall.add_child(wall_shape)
+	cell_root.add_child(wall)
+	var entity: Dictionary = _add_entity(cell_root, "hound", "Level 2", Vector2i.ZERO, 20261118, Vector3(0.0, 0.55, 0.0))
+	var brain: Node = entity["brain"] as Node
+	var entity_root: CharacterBody3D = entity["root"] as CharacterBody3D
+	brain.call("evaluate_perception", {
+		"distance_to_player": 3.0,
+		"has_line_of_sight": true,
+		"player_looking_at_entity": false,
+		"noise_strength": 0.0,
+		"player_position": Vector3(3.0, 0.55, 0.0)
+	}, 0.2)
+	await physics_frame
+	var agent := NavigationFactoryScript.get_agent(entity_root)
+	_expect(agent != null, "Hound exposes its NavigationAgent3D")
+	if agent == null:
+		world_root.free()
+		await physics_frame
+		return
+	var target_world := Vector3(3.0, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 0.0)
+	_expect(
+		NavigationFactoryScript.set_agent_target(agent, target_world, 1.1),
+		"NavigationAgent3D accepts a same-cell target"
+	)
+	await physics_frame
+	var navigation_result: Dictionary = NavigationFactoryScript.get_next_waypoint(agent)
+	_expect(bool(navigation_result.get("ok", false)), "NavigationAgent3D produces a path around the wall cut-out")
+	var path: PackedVector3Array = agent.get_current_navigation_path()
+	var detour_found: bool = false
+	for point in path:
+		if absf(point.z) > 2.2:
+			detour_found = true
+	_expect(path.size() >= 3 and detour_found, "navigation path contains an intermediate waypoint outside the inflated wall bounds")
+	print("Navigation detour path points: %s" % str(path))
+	var driver = MovementDriverScript.new()
+	var blocked_total: int = 0
+	var blocked_events: Array[String] = []
+	for tick_index in range(40):
+		var before_position: Vector3 = entity_root.global_position
+		var movement_result: Dictionary = driver.call("tick", runtime, 0.1)
+		var tick_blocked: int = int(movement_result.get("blocked_count", 0))
+		blocked_total += tick_blocked
+		if tick_blocked > 0:
+			var normal_value: Variant = entity_root.get_meta("backrooms_last_collision_normal") if entity_root.has_meta("backrooms_last_collision_normal") else Vector3.ZERO
+			blocked_events.append(
+				"tick=%d before=%s after=%s normal=%s" % [
+					tick_index,
+					str(before_position),
+					str(entity_root.global_position),
+					str(normal_value)
+				]
+			)
+		await physics_frame
+	var final_local: Vector3 = cell_root.to_local(entity_root.global_position)
+	print("Navigation detour diagnostic: blocked=%d final=%s events=%s" % [blocked_total, str(final_local), str(blocked_events)])
+	_expect(
+		blocked_total == 0,
+		"NavigationAgent3D detour avoids physical wall collisions (blocked=%d)" % blocked_total
+	)
+	_expect(
+		final_local.x > 1.5 and absf(final_local.z) < 1.0,
+		"Hound reaches the far side of the wall and returns toward the target corridor"
+	)
+	driver.call("reset")
+	world_root.free()
+	await physics_frame
+
+func _make_wall_detour_navigation_mesh() -> NavigationMesh:
+	var navigation_mesh := NavigationMesh.new()
+	navigation_mesh.vertices = PackedVector3Array([
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -3.35),
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, -2.55),
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 2.55),
+		Vector3(-3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
+		Vector3(0.45, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
+		Vector3(1.55, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35),
+		Vector3(3.35, NavigationFactoryScript.NAVIGATION_SURFACE_Y, 3.35)
+	])
+	navigation_mesh.add_polygon(PackedInt32Array([4, 5, 1, 0]))
+	navigation_mesh.add_polygon(PackedInt32Array([8, 9, 5, 4]))
+	navigation_mesh.add_polygon(PackedInt32Array([12, 13, 9, 8]))
+	navigation_mesh.add_polygon(PackedInt32Array([5, 6, 2, 1]))
+	navigation_mesh.add_polygon(PackedInt32Array([13, 14, 10, 9]))
+	navigation_mesh.add_polygon(PackedInt32Array([6, 7, 3, 2]))
+	navigation_mesh.add_polygon(PackedInt32Array([10, 11, 7, 6]))
+	navigation_mesh.add_polygon(PackedInt32Array([14, 15, 11, 10]))
+	return navigation_mesh
 
 func _assert_smiler_approach_uses_unseen_player_target() -> void:
 	var world_root := Node3D.new()
@@ -138,7 +259,7 @@ func _assert_smiler_approach_uses_unseen_player_target() -> void:
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "approach", "dark unseen Smiler receives an approach intent")
 	_expect(bool(decision.get("has_target_position", false)), "unseen Smiler retains the current player position as its target")
-	await process_frame
+	await physics_frame
 	var start_x: float = entity_root.global_position.x
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -146,7 +267,7 @@ func _assert_smiler_approach_uses_unseen_player_target() -> void:
 	_expect(entity_root.global_position.x > start_x, "Smiler approaches the unseen player while its cell is dark")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_cross_cell_target_fails_closed() -> void:
 	var world_root := Node3D.new()
@@ -164,7 +285,7 @@ func _assert_cross_cell_target_fails_closed() -> void:
 		"noise_strength": 0.0,
 		"player_position": Vector3(8.0, 0.0, 0.0)
 	}, 0.2)
-	await process_frame
+	await physics_frame
 	var start_position: Vector3 = entity_root.global_position
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -172,7 +293,7 @@ func _assert_cross_cell_target_fails_closed() -> void:
 	_expect(entity_root.global_position.is_equal_approx(start_position), "entity never crosses an unloaded or unowned cell boundary")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_avoidance_moves_away_from_player() -> void:
 	var world_root := Node3D.new()
@@ -192,7 +313,7 @@ func _assert_avoidance_moves_away_from_player() -> void:
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "avoid", "Faceling avoidance state retains the player position without line of sight")
 	_expect(bool(decision.get("has_target_position", false)), "avoidance decision exposes a valid movement target")
-	await process_frame
+	await physics_frame
 	var start_x: float = entity_root.global_position.x
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -200,7 +321,7 @@ func _assert_avoidance_moves_away_from_player() -> void:
 	_expect(entity_root.global_position.x < start_x, "Faceling moves away from the nearby player")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_duller_retreat_moves_away_from_player() -> void:
 	var world_root := Node3D.new()
@@ -219,7 +340,7 @@ func _assert_duller_retreat_moves_away_from_player() -> void:
 		"player_position": Vector3(2.5, 0.0, 0.0)
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "retreat", "Duller enters retreat without line of sight")
-	await process_frame
+	await physics_frame
 	var start_x: float = entity_root.global_position.x
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -227,7 +348,7 @@ func _assert_duller_retreat_moves_away_from_player() -> void:
 	_expect(entity_root.global_position.x < start_x, "Duller withdraws from the nearby player")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_patrol_moves_within_cell() -> void:
 	var world_root := Node3D.new()
@@ -244,7 +365,7 @@ func _assert_patrol_moves_within_cell() -> void:
 		"noise_strength": 0.0
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "patrol", "Hound selects patrol when no player or sound signal is available")
-	await process_frame
+	await physics_frame
 	var start_position: Vector3 = entity_root.global_position
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -254,7 +375,7 @@ func _assert_patrol_moves_within_cell() -> void:
 	_expect(absf(local_position.x) <= 3.35 and absf(local_position.z) <= 3.35, "patrol remains inside the safe owning-cell bounds")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_patrol_index_metadata_is_authoritative() -> void:
 	var world_root := Node3D.new()
@@ -272,7 +393,7 @@ func _assert_patrol_index_metadata_is_authoritative() -> void:
 	_expect(int(entity_root.get_meta("backrooms_patrol_index", -1)) == 3, "patrol metadata remains the authoritative persisted waypoint")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 
 func _assert_deathmoth_aerial_patrol_changes_height() -> void:
@@ -290,7 +411,7 @@ func _assert_deathmoth_aerial_patrol_changes_height() -> void:
 		"noise_strength": 0.0
 	}, 0.2)
 	_expect(str(decision.get("state", "")) == "fly_patrol", "Deathmoth selects aerial patrol without a player signal")
-	await process_frame
+	await physics_frame
 	var start_y: float = entity_root.global_position.y
 	var driver = MovementDriverScript.new()
 	var result: Dictionary = driver.call("tick", runtime, 0.1)
@@ -298,7 +419,7 @@ func _assert_deathmoth_aerial_patrol_changes_height() -> void:
 	_expect(entity_root.global_position.y > start_y, "Deathmoth changes altitude during its aerial patrol")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_anchored_entities_remain_stationary() -> void:
 	var world_root := Node3D.new()
@@ -323,7 +444,7 @@ func _assert_anchored_entities_remain_stationary() -> void:
 		"noise_strength": 0.0,
 		"player_position": Vector3(1.0, 0.0, 0.0)
 	}, 0.2)
-	await process_frame
+	await physics_frame
 	var window_start: Vector3 = window_root.global_position
 	var clump_start: Vector3 = clump_root.global_position
 	var driver = MovementDriverScript.new()
@@ -333,7 +454,7 @@ func _assert_anchored_entities_remain_stationary() -> void:
 	_expect(clump_root.global_position.is_equal_approx(clump_start), "Clump remains anchored in its cell")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_round_robin_movement_budget() -> void:
 	var world_root := Node3D.new()
@@ -351,7 +472,7 @@ func _assert_round_robin_movement_budget() -> void:
 			"has_line_of_sight": false,
 			"noise_strength": 0.0
 		}, 0.2)
-	await process_frame
+	await physics_frame
 	var driver = MovementDriverScript.new()
 	var first: Dictionary = driver.call("tick", runtime, 0.1)
 	_expect(int(first.get("sampled_count", 0)) == 12, "one movement tick never exceeds the 12-entity work budget")
@@ -378,7 +499,7 @@ func _assert_round_robin_movement_budget() -> void:
 		)
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _assert_invalid_and_inactive_runtime_rejection() -> void:
 	var world_root := Node3D.new()
@@ -395,7 +516,7 @@ func _assert_invalid_and_inactive_runtime_rejection() -> void:
 	_expect(not bool(inactive.get("ok", true)) and str(inactive.get("reason", "")) == "runtime_inactive", "inactive Backrooms Runtime is rejected and movement state resets")
 	driver.call("reset")
 	world_root.free()
-	await process_frame
+	await physics_frame
 
 func _add_cell(runtime: FakeRuntime, cell_key: String, cell: Vector2i) -> Node3D:
 	var cell_root := Node3D.new()
@@ -404,6 +525,11 @@ func _add_cell(runtime: FakeRuntime, cell_key: String, cell: Vector2i) -> Node3D
 	cell_root.set_meta("backrooms_cell", cell)
 	cell_root.set_meta("backrooms_cell_size", 8.0)
 	cell_root.set_meta("backrooms_cell_key", cell_key)
+	var navigation_region: NavigationRegion3D = NavigationFactoryScript.create_cell_region(8.0)
+	_expect(navigation_region != null, "fake runtime cell creates its navigation region")
+	if navigation_region != null:
+		navigation_region.enabled = true
+		cell_root.add_child(navigation_region)
 	runtime.add_child(cell_root)
 	runtime.cell_roots[cell_key] = cell_root
 	return cell_root
@@ -426,6 +552,11 @@ func _add_entity(
 		CollisionFactoryScript.attach_collision(entity_root, entity_id, true),
 		"%s collision proxy configures for its allowed level" % entity_id
 	)
+	if NavigationFactoryScript.is_mobile_entity(entity_id):
+		_expect(
+			NavigationFactoryScript.attach_agent(entity_root, entity_id),
+			"%s receives a NavigationAgent3D" % entity_id
+		)
 	cell_root.add_child(entity_root)
 	var brain: Node = BrainScript.new()
 	brain.name = "AI"
