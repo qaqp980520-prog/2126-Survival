@@ -5100,7 +5100,7 @@ jobs:
 
   backrooms-visual-render-smoke:
     name: Godot 4.3 software-rendered Backrooms entity smoke
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile') || startsWith(github.head_ref, 'feat/durable-world-file-persistence-current-spine') || startsWith(github.head_ref, 'feat/hound-cross-cell-pursuit-edge-approach')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile') || startsWith(github.head_ref, 'feat/durable-world-file-persistence-current-spine') || startsWith(github.head_ref, 'feat/hound-cross-cell-pursuit-edge-approach') || startsWith(github.head_ref, 'feat/hound-two-hop-pursuit-durable-recovery')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     container:
