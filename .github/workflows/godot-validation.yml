@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test GitHub Actions security policy guard
+        run: bash .github/scripts/test-workflow-security.sh
       - name: Enforce GitHub Actions security policy
         run: bash .github/scripts/validate-workflow-security.sh
       - name: Prepare candidate files when not yet merged
