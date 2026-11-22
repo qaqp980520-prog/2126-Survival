@@ -36,11 +36,13 @@ has_pull_request_path() {
       line=$0
       sub(/^[[:space:]]*-[[:space:]]*/, "", line)
       sub(/[[:space:]]+#.*$/, "", line)
-      gsub(/^["\047]/, "", line)
-      gsub(/["\047]$/, "", line)
+      if (line ~ /^"/ && line ~ /\\/) escaped_pattern=1
+      gsub(/^[\"\\047]/, "", line)
+      gsub(/[\"\\047]$/, "", line)
+      if (line ~ /^!/) excluded_pattern=1
       if (line == wanted_path) found=1
     }
-    END { exit !(pr_blocks == 1 && paths_blocks == 1 && found) }
+    END { exit !(pr_blocks == 1 && paths_blocks == 1 && found && !excluded_pattern && !escaped_pattern) }
   ' "$file"
 }
 
@@ -92,13 +94,13 @@ for file in "${workflow_files[@]}"; do
 
   if [[ "$file" == */godot-validation.yml ]]; then
     if ! has_pull_request_path "$file" ".github/workflows/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/workflows/**"
+      fail "$file" "Full Gate pull_request.paths must include .github/workflows/** without negative or escaped patterns"
     fi
     if ! has_pull_request_path "$file" ".github/scripts/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/scripts/**"
+      fail "$file" "Full Gate pull_request.paths must include .github/scripts/** without negative or escaped patterns"
     fi
     if ! has_pull_request_path "$file" ".github/actions/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/actions/**"
+      fail "$file" "Full Gate pull_request.paths must include .github/actions/** without negative or escaped patterns"
     fi
   fi
 
