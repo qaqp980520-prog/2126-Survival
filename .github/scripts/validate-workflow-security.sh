@@ -18,7 +18,7 @@ action_count=0
 errors=0
 
 fail() {
-  printf 'ERROR: %s: %s\\n' "$1" "$2" >&2
+  printf 'ERROR: %s: %s\n' "$1" "$2" >&2
   errors=$((errors + 1))
 }
 
@@ -36,8 +36,8 @@ has_pull_request_path() {
       line=$0
       sub(/^[[:space:]]*-[[:space:]]*/, "", line)
       sub(/[[:space:]]+#.*$/, "", line)
-      gsub(/^["\\047]/, "", line)
-      gsub(/["\\047]$/, "", line)
+      gsub(/^["\047]/, "", line)
+      gsub(/["\047]$/, "", line)
       if (line == wanted_path) found=1
     }
     END { exit !found }
@@ -92,12 +92,12 @@ for file in "${workflow_files[@]}"; do
         fi
         ;;
     esac
-  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p' "$file")
+  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p' "$file")
 done
 
 if [[ $errors -ne 0 ]]; then
-  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\\n' "$workflow_count" "$action_count" "$errors" >&2
+  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\n' "$workflow_count" "$action_count" "$errors" >&2
   exit 1
 fi
 
-printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\\n' "$workflow_count" "$action_count"
+printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\n' "$workflow_count" "$action_count"
