@@ -378,6 +378,8 @@ name: root gate
 permissions:
   contents: read
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - '.github/workflows/**'
@@ -751,8 +753,120 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
+mkdir -p "$tmpdir/trigger_pull_request_branches_filter"
+cat > "$tmpdir/trigger_pull_request_branches_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_pull_request_branches_ignore_filter"
+cat > "$tmpdir/trigger_pull_request_branches_ignore_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    branches-ignore:
+      - 'integration/**'
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_pull_request_types_filter"
+cat > "$tmpdir/trigger_pull_request_types_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    types: [opened]
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_pull_request_paths_ignore_filter"
+cat > "$tmpdir/trigger_pull_request_paths_ignore_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+    paths-ignore:
+      - 'docs/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_pull_request_merge_key_branch_filter"
+cat > "$tmpdir/trigger_pull_request_merge_key_branch_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  push: &pr_config
+    branches: [main]
+  pull_request:
+    <<: *pr_config
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_pull_request_padded_branches_filter"
+cat > "$tmpdir/trigger_pull_request_padded_branches_filter/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    branches : [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+      - '.github/actions/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path trigger_pull_request_branches_filter trigger_pull_request_branches_ignore_filter trigger_pull_request_types_filter trigger_pull_request_paths_ignore_filter trigger_pull_request_merge_key_branch_filter trigger_pull_request_padded_branches_filter scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 52 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 58 negative fixtures.\n'
