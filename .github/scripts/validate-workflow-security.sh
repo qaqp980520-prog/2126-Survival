@@ -28,9 +28,9 @@ has_pull_request_path() {
   awk -v wanted_path="$wanted_path" '
     /^on:[[:space:]]*(#.*)?$/ { in_on=1; in_pr=0; in_paths=0; next }
     /^[^[:space:]#]/ { in_on=0; in_pr=0; in_paths=0 }
-    in_on && /^  pull_request:[[:space:]]*(#.*)?$/ { in_pr=1; in_paths=0; next }
+    in_on && /^  pull_request:[[:space:]]*(#.*)?$/ { pr_blocks++; in_pr=1; in_paths=0; next }
     in_on && /^  [^[:space:]#][^:]*:/ { in_pr=0; in_paths=0 }
-    in_pr && /^    paths:[[:space:]]*(#.*)?$/ { in_paths=1; next }
+    in_pr && /^    paths:[[:space:]]*(#.*)?$/ { paths_blocks++; in_paths=1; next }
     in_pr && /^    [^[:space:]#][^:]*:/ { in_paths=0 }
     in_paths {
       line=$0
@@ -40,7 +40,7 @@ has_pull_request_path() {
       gsub(/["\047]$/, "", line)
       if (line == wanted_path) found=1
     }
-    END { exit !found }
+    END { exit !(pr_blocks == 1 && paths_blocks == 1 && found) }
   ' "$file"
 }
 
