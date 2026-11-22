@@ -82,6 +82,24 @@ jobs:
   test:
     steps:
       - uses: ./.github/actions/unreviewed'
+write_fixture flow_style_action 'name: flow style
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - { name: Checkout, uses: actions/checkout@v4 }'
+write_fixture quoted_uses_action 'name: quoted uses
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - 'uses': actions/checkout@v4'
 write_fixture extra_permission 'name: extra
 permissions:
   contents: read
@@ -194,8 +212,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 11 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 13 negative fixtures.\n'
