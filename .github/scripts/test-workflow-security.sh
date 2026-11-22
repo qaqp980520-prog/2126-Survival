@@ -473,8 +473,98 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
+
+write_fixture scalar_workflow_run_event 'name: scalar workflow_run event
+permissions:
+  contents: read
+on: workflow_run
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture scalar_pull_request_target_event 'name: scalar pull_request_target event
+permissions:
+  contents: read
+on: pull_request_target
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture flow_sequence_workflow_run_event 'name: flow sequence workflow_run event
+permissions:
+  contents: read
+on: [push, workflow_run]
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture flow_sequence_pull_request_target_event 'name: flow sequence pull_request_target event
+permissions:
+  contents: read
+on: [pull_request_target]
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture block_sequence_workflow_run_event 'name: block sequence workflow_run event
+permissions:
+  contents: read
+on:
+  - workflow_run
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture block_sequence_pull_request_target_event 'name: block sequence pull_request_target event
+permissions:
+  contents: read
+on:
+  - pull_request_target
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture nonempty_pull_request_target_value 'name: nonempty pull_request_target value
+permissions:
+  contents: read
+on:
+  pull_request_target: [opened]
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture nonempty_workflow_run_value 'name: nonempty workflow_run value
+permissions:
+  contents: read
+on:
+  workflow_run: [completed]
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+write_fixture duplicate_on_mapping 'name: duplicate on mapping
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+on:
+  push:
+'
+
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 33 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 42 negative fixtures.\n'
