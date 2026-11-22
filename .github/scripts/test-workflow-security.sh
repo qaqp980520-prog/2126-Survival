@@ -29,6 +29,12 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
 bash "$validator" "$tmpdir/good" >/dev/null
 
+write_fixture_from_stdin() {
+  local name="$1"
+  mkdir -p "$tmpdir/$name"
+  cat > "$tmpdir/$name/workflow.yml"
+}
+
 expect_rejected() {
   local name="$1"
   if bash "$validator" "$tmpdir/$name" >/dev/null 2>&1; then
@@ -91,7 +97,8 @@ jobs:
   test:
     steps:
       - { name: Checkout, uses: actions/checkout@v4 }'
-write_fixture quoted_uses_action 'name: quoted uses
+write_fixture_from_stdin quoted_uses_action <<'EOF'
+name: quoted uses
 permissions:
   contents: read
 on:
@@ -99,7 +106,213 @@ on:
 jobs:
   test:
     steps:
-      - 'uses': actions/checkout@v4'
+      - 'uses': actions/checkout@v4
+EOF
+
+write_fixture_from_stdin escaped_quoted_uses_action <<'EOF'
+name: escaped quoted uses
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - "\u0075ses": actions/checkout@v4
+EOF
+
+write_fixture_from_stdin quoted_permissions_action <<'EOF'
+name: quoted duplicate permissions
+permissions:
+  contents: read
+"permissions": write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin spaced_uses_action <<'EOF'
+name: whitespace before uses colon
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses : actions/checkout@v4
+EOF
+
+write_fixture_from_stdin spaced_permissions_action <<'EOF'
+name: whitespace before permissions colon
+permissions:
+  contents: read
+permissions : write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin explicit_uses_action <<'EOF'
+name: explicit uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - ? uses
+        : actions/checkout@v4
+EOF
+
+write_fixture_from_stdin tagged_uses_action <<'EOF'
+name: tagged uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - !!str uses: actions/checkout@v4
+EOF
+
+write_fixture_from_stdin anchored_uses_action <<'EOF'
+name: anchored uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - &uses_key uses: actions/checkout@v4
+EOF
+
+write_fixture_from_stdin alias_uses_action <<'EOF'
+name: aliased uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses_key: &u uses
+      - *u: actions/checkout@v4
+EOF
+
+write_fixture_from_stdin flow_spaced_uses_action <<'EOF'
+name: flow style spaced uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - { uses : actions/checkout@v4 }
+EOF
+
+write_fixture_from_stdin flow_escaped_uses_action <<'EOF'
+name: flow style escaped uses key
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - { "\u0075ses": actions/checkout@v4 }
+EOF
+
+write_fixture_from_stdin spaced_pull_request_target_action <<'EOF'
+name: whitespace before dangerous trigger colon
+permissions:
+  contents: read
+on:
+  pull_request:
+  pull_request_target : 
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin spaced_workflow_run_action <<'EOF'
+name: whitespace before workflow_run colon
+permissions:
+  contents: read
+on:
+  pull_request:
+  workflow_run : 
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin alias_permissions_action <<'EOF'
+name: aliased permissions key
+permissions:
+  contents: read
+permissions_key: &p permissions
+*p: write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin explicit_permissions_action <<'EOF'
+name: explicit permissions key
+permissions:
+  contents: read
+? permissions
+: write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin tagged_permissions_action <<'EOF'
+name: tagged permissions key
+permissions:
+  contents: read
+!!str permissions: write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+write_fixture_from_stdin anchored_permissions_action <<'EOF'
+name: anchored permissions key
+permissions:
+  contents: read
+&permissions_key permissions: write-all
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
 write_fixture extra_permission 'name: extra
 permissions:
   contents: read
@@ -212,8 +425,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 13 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 29 negative fixtures.\n'
