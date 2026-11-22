@@ -1,5 +1,8 @@
 name: Run 92 focused Godot validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
