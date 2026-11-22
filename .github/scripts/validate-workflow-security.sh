@@ -48,6 +48,18 @@ has_pull_request_path() {
   ' "$file"
 }
 
+has_pull_request_narrowing_filter() {
+  local file="$1"
+  awk '
+    /^on:[[:space:]]*(#.*)?$/ { in_on=1; in_pr=0; next }
+    /^[^[:space:]#]/ { in_on=0; in_pr=0 }
+    in_on && /^  pull_request:[[:space:]]*(#.*)?$/ { in_pr=1; next }
+    in_on && /^  [^[:space:]#][^:]*:/ { in_pr=0 }
+    in_pr && /^    (branches|branches-ignore|types|paths-ignore):/ { found=1 }
+    END { exit !found }
+  ' "$file"
+}
+
 for file in "${workflow_files[@]}"; do
   workflow_count=$((workflow_count + 1))
 
@@ -85,6 +97,11 @@ for file in "${workflow_files[@]}"; do
     fail "$file" "on must be exactly one non-empty block-style event mapping; scalar, flow-sequence, block-sequence, or duplicate forms are unsupported"
   fi
 
+  if grep -Eq '^[[:space:]]*(-[[:space:]]*)?<<[[:space:]]*:' "$file" ||
+     grep -Eq '[,{][[:space:]]*<<[[:space:]]*:' "$file"; then
+    fail "$file" "YAML merge keys are unsupported; they can import unreviewed workflow event filters"
+  fi
+
   if grep -Eq '^[[:space:]]*(pull_request_target|workflow_run)[[:space:]]*:' "$file"; then
     fail "$file" "high-risk trigger requires a separate security review, regardless of its value form"
   fi
@@ -104,6 +121,9 @@ for file in "${workflow_files[@]}"; do
     if ! has_pull_request_path "$file" ".github/actions/**"; then
       fail "$file" "Full Gate pull_request.paths must include .github/actions/** without negative, tagged, anchored, aliased, or escaped patterns"
     fi
+    if has_pull_request_narrowing_filter "$file"; then
+      fail "$file" "Full Gate pull_request must not narrow target branches or event activity types, or use paths-ignore"
+    fi
   fi
 
   if grep -Eq '[,{][[:space:]]*uses:[[:space:]]*' "$file" ||
@@ -118,8 +138,8 @@ for file in "${workflow_files[@]}"; do
     /[,{][[:space:]]*["\047][^"\047]+["\047][[:space:]]*:/ { found=1 }
     /^[[:space:]]*(-[[:space:]]*)?\?[[:space:]]*($|[^[:space:]#])/ { found=1 }
     /[,{][[:space:]]*\?[[:space:]]/ { found=1 }
-    /^[[:space:]]*(-[[:space:]]*)?(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore)[[:space:]]+:/ { found=1 }
-    /[,{][[:space:]]*(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore)[[:space:]]+:/ { found=1 }
+    /^[[:space:]]*(-[[:space:]]*)?(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore|branches|branches-ignore|types)[[:space:]]+:/ { found=1 }
+    /[,{][[:space:]]*(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore|branches|branches-ignore|types)[[:space:]]+:/ { found=1 }
     /^[[:space:]]*(-[[:space:]]*)?\*[[:alnum:]_-]+[[:space:]]*:/ { found=1 }
     /[,{][[:space:]]*\*[[:alnum:]_-]+[[:space:]]*:/ { found=1 }
     /^[[:space:]]*(-[[:space:]]*)?(&[^[:space:]]+|![^[:space:]]+)[[:space:]]+[^:]+:/ { found=1 }
