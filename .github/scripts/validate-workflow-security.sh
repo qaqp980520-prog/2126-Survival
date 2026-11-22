@@ -37,10 +37,11 @@ has_pull_request_path() {
       sub(/^[[:space:]]*-[[:space:]]*/, "", line)
       sub(/^[[:space:]]*/, "", line)
       sub(/[[:space:]]+#.*$/, "", line)
+      if (line ~ /^[!&*]/ || line ~ /^[|>]/) unsafe_pattern=1
       if (line ~ /\\/) unsafe_pattern=1
       gsub(/^[\"\\047]/, "", line)
       gsub(/[\"\\047]$/, "", line)
-      if (line ~ /^[!&*]/) unsafe_pattern=1
+      if (line ~ /^!/) unsafe_pattern=1
       if (line == wanted_path) found=1
     }
     END { exit !(pr_blocks == 1 && paths_blocks == 1 && found && !unsafe_pattern) }
