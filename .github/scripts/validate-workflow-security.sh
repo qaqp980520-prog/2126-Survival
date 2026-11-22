@@ -50,6 +50,15 @@ for file in "${workflow_files[@]}"; do
     fail "$file" "high-risk trigger requires a separate security review"
   fi
 
+  if [[ "$file" == */godot-validation.yml ]]; then
+    if ! grep -Fq ".github/workflows/**" "$file"; then
+      fail "$file" "Full Gate pull_request paths must include .github/workflows/**"
+    fi
+    if ! grep -Fq ".github/scripts/**" "$file"; then
+      fail "$file" "Full Gate pull_request paths must include .github/scripts/**"
+    fi
+  fi
+
   while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
     action_count=$((action_count + 1))

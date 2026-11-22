@@ -85,8 +85,40 @@ jobs:
     steps:
       - run: echo ok'
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger extra_permission; do
+mkdir -p "$tmpdir/trigger_coverage"
+cat > "$tmpdir/trigger_coverage/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+bash "$validator" "$tmpdir/trigger_coverage" >/dev/null
+
+mkdir -p "$tmpdir/trigger_missing"
+cat > "$tmpdir/trigger_missing/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger extra_permission trigger_missing; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 1 positive and 5 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 6 negative fixtures.\n'
