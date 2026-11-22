@@ -112,15 +112,22 @@ for file in "${workflow_files[@]}"; do
   fi
 
   if [[ "$file" == */godot-validation.yml ]]; then
-    if ! has_pull_request_path "$file" ".github/workflows/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/workflows/** without negative, tagged, anchored, aliased, or escaped patterns"
-    fi
-    if ! has_pull_request_path "$file" ".github/scripts/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/scripts/** without negative, tagged, anchored, aliased, or escaped patterns"
-    fi
-    if ! has_pull_request_path "$file" ".github/actions/**"; then
-      fail "$file" "Full Gate pull_request.paths must include .github/actions/** without negative, tagged, anchored, aliased, or escaped patterns"
-    fi
+    for required_path in \
+      ".github/workflows/**" \
+      ".github/scripts/**" \
+      ".github/actions/**" \
+      "systems/**" \
+      "scripts/**" \
+      "world/**" \
+      "tests/**" \
+      "daily_games/**" \
+      "prototypes/**" \
+      "assets/**" \
+      "project.godot"; do
+      if ! has_pull_request_path "$file" "$required_path"; then
+        fail "$file" "Full Gate pull_request.paths must include $required_path without negative, tagged, anchored, aliased, or escaped patterns"
+      fi
+    done
     if has_pull_request_narrowing_filter "$file"; then
       fail "$file" "Full Gate pull_request must not narrow target branches or event activity types, or use paths-ignore"
     fi

@@ -16,6 +16,7 @@ on:
       - 'tests/**'
       - 'daily_games/**'
       - 'prototypes/**'
+      - 'assets/**'
       - 'project.godot'
       - 'PROJECT_INDEX.md'
       - 'docs/**'
