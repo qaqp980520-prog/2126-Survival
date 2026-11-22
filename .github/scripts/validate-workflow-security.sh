@@ -18,8 +18,30 @@ action_count=0
 errors=0
 
 fail() {
-  printf 'ERROR: %s: %s\n' "$1" "$2" >&2
+  printf 'ERROR: %s: %s\\n' "$1" "$2" >&2
   errors=$((errors + 1))
+}
+
+has_pull_request_path() {
+  local file="$1"
+  local wanted_path="$2"
+  awk -v wanted_path="$wanted_path" '
+    /^on:[[:space:]]*(#.*)?$/ { in_on=1; in_pr=0; in_paths=0; next }
+    /^[^[:space:]#]/ { in_on=0; in_pr=0; in_paths=0 }
+    in_on && /^  pull_request:[[:space:]]*(#.*)?$/ { in_pr=1; in_paths=0; next }
+    in_on && /^  [^[:space:]#][^:]*:/ { in_pr=0; in_paths=0 }
+    in_pr && /^    paths:[[:space:]]*(#.*)?$/ { in_paths=1; next }
+    in_pr && /^    [^[:space:]#][^:]*:/ { in_paths=0 }
+    in_paths {
+      line=$0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      sub(/[[:space:]]+#.*$/, "", line)
+      gsub(/^["\\047]/, "", line)
+      gsub(/["\\047]$/, "", line)
+      if (line == wanted_path) found=1
+    }
+    END { exit !found }
+  ' "$file"
 }
 
 for file in "${workflow_files[@]}"; do
@@ -51,11 +73,11 @@ for file in "${workflow_files[@]}"; do
   fi
 
   if [[ "$file" == */godot-validation.yml ]]; then
-    if ! grep -Fq ".github/workflows/**" "$file"; then
-      fail "$file" "Full Gate pull_request paths must include .github/workflows/**"
+    if ! has_pull_request_path "$file" ".github/workflows/**"; then
+      fail "$file" "Full Gate pull_request.paths must include .github/workflows/**"
     fi
-    if ! grep -Fq ".github/scripts/**" "$file"; then
-      fail "$file" "Full Gate pull_request paths must include .github/scripts/**"
+    if ! has_pull_request_path "$file" ".github/scripts/**"; then
+      fail "$file" "Full Gate pull_request.paths must include .github/scripts/**"
     fi
   fi
 
@@ -70,12 +92,12 @@ for file in "${workflow_files[@]}"; do
         fi
         ;;
     esac
-  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p' "$file")
+  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p' "$file")
 done
 
 if [[ $errors -ne 0 ]]; then
-  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\n' "$workflow_count" "$action_count" "$errors" >&2
+  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\\n' "$workflow_count" "$action_count" "$errors" >&2
   exit 1
 fi
 
-printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\n' "$workflow_count" "$action_count"
+printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\\n' "$workflow_count" "$action_count"
