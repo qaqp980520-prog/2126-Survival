@@ -26,8 +26,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-      - uses: ./.github/actions/local'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
 bash "$validator" "$tmpdir/good" >/dev/null
 
 expect_rejected() {
@@ -74,6 +73,15 @@ jobs:
   test:
     steps:
       - run: echo ok'
+write_fixture local_action 'name: local action
+permissions:
+  contents: read
+on:
+  pull_request:
+jobs:
+  test:
+    steps:
+      - uses: ./.github/actions/unreviewed'
 write_fixture extra_permission 'name: extra
 permissions:
   contents: read
@@ -95,6 +103,7 @@ on:
     paths:
       - '.github/workflows/**'
       - '.github/scripts/**'
+      - '.github/actions/**'
 jobs:
   test:
     steps:
@@ -111,6 +120,22 @@ on:
   pull_request:
     paths:
       - '.github/workflows/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_missing_actions"
+cat > "$tmpdir/trigger_missing_actions/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
 jobs:
   test:
     steps:
@@ -169,8 +194,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger extra_permission trigger_missing trigger_push_only trigger_comment_only trigger_paths_ignore; do
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 9 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 11 negative fixtures.\n'
