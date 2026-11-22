@@ -887,6 +887,8 @@ required_trigger_paths=(
   "prototypes/**"
   "assets/**"
   "project.godot"
+  "PROJECT_INDEX.md"
+  "docs/**"
 )
 missing_path_index=0
 for omitted_path in "${required_trigger_paths[@]}"; do
@@ -922,4 +924,4 @@ for fixture in missing_permissions nested_permissions floating_action dangerous_
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 69 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 71 negative fixtures.\n'
