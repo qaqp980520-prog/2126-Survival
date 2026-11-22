@@ -123,7 +123,9 @@ for file in "${workflow_files[@]}"; do
       "daily_games/**" \
       "prototypes/**" \
       "assets/**" \
-      "project.godot"; do
+      "project.godot" \
+      "PROJECT_INDEX.md" \
+      "docs/**"; do
       if ! has_pull_request_path "$file" "$required_path"; then
         fail "$file" "Full Gate pull_request.paths must include $required_path without negative, tagged, anchored, aliased, or escaped patterns"
       fi
