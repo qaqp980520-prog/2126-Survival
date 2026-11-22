@@ -90,6 +90,23 @@ for file in "${workflow_files[@]}"; do
     fail "$file" "flow-style or quoted uses keys are unsupported; use block-style unquoted uses keys so action pinning can be audited"
   fi
 
+
+  if awk '
+    /^[[:space:]]*(-[[:space:]]*)?["\047][^"\047]+["\047][[:space:]]*:/ { found=1 }
+    /[,{][[:space:]]*["\047][^"\047]+["\047][[:space:]]*:/ { found=1 }
+    /^[[:space:]]*(-[[:space:]]*)?\?[[:space:]]*($|[^[:space:]#])/ { found=1 }
+    /[,{][[:space:]]*\?[[:space:]]/ { found=1 }
+    /^[[:space:]]*(-[[:space:]]*)?(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore)[[:space:]]+:/ { found=1 }
+    /[,{][[:space:]]*(uses|permissions|pull_request_target|workflow_run|on|pull_request|paths|paths-ignore)[[:space:]]+:/ { found=1 }
+    /^[[:space:]]*(-[[:space:]]*)?\*[[:alnum:]_-]+[[:space:]]*:/ { found=1 }
+    /[,{][[:space:]]*\*[[:alnum:]_-]+[[:space:]]*:/ { found=1 }
+    /^[[:space:]]*(-[[:space:]]*)?(&[^[:space:]]+|![^[:space:]]+)[[:space:]]+[^:]+:/ { found=1 }
+    /[,{][[:space:]]*(&[^[:space:]]+|![^[:space:]]+)[[:space:]]+[^:]+:/ { found=1 }
+    END { exit !found }
+  ' "$file"; then
+    fail "$file" "quoted, explicit, padded, tagged, anchored, or alias mapping keys are unsupported; use plain block-style keys so workflow security policy can be audited"
+  fi
+
   while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
     action_count=$((action_count + 1))
