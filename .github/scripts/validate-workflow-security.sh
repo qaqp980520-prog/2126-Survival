@@ -84,6 +84,12 @@ for file in "${workflow_files[@]}"; do
     fi
   fi
 
+  if grep -Eq '[,{][[:space:]]*uses:[[:space:]]*' "$file" ||
+     grep -Eq "^[[:space:]]*(-[[:space:]]*)?['\"]uses['\"][[:space:]]*:" "$file" ||
+     grep -Eq "[,{][[:space:]]*['\"]uses['\"][[:space:]]*:" "$file"; then
+    fail "$file" "flow-style or quoted uses keys are unsupported; use block-style unquoted uses keys so action pinning can be audited"
+  fi
+
   while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
     action_count=$((action_count + 1))
