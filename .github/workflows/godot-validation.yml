@@ -1,5 +1,8 @@
 name: Godot headless validation
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -5155,7 +5158,7 @@ jobs:
           echo "$output" | grep -q "Backrooms entity owner runtime integration tests passed."
       - name: Upload rendered frame
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: backrooms-visual-factory-render-smoke
           path: /tmp/backrooms-visual-factory-render-smoke.png
