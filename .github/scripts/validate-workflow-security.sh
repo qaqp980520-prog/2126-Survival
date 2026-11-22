@@ -7,7 +7,7 @@ if [[ ! -d "$workflow_dir" ]]; then
   exit 1
 fi
 
-mapfile -t workflow_files < <(find "$workflow_dir" -maxdepth 1 -type f \\( -name '*.yml' -o -name '*.yaml' \\) -print | sort)
+mapfile -t workflow_files < <(find "$workflow_dir" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print | sort)
 if [[ ${#workflow_files[@]} -eq 0 ]]; then
   echo "ERROR: no workflow YAML files found in $workflow_dir" >&2
   exit 1
@@ -18,7 +18,7 @@ action_count=0
 errors=0
 
 fail() {
-  printf 'ERROR: %s: %s\\n' "$1" "$2" >&2
+  printf 'ERROR: %s: %s\n' "$1" "$2" >&2
   errors=$((errors + 1))
 }
 
@@ -61,12 +61,12 @@ for file in "${workflow_files[@]}"; do
         fi
         ;;
     esac
-  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\\1/p' "$file")
+  done < <(sed -nE 's/^[[:space:]]*-[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p; s/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/p' "$file")
 done
 
 if [[ $errors -ne 0 ]]; then
-  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\\n' "$workflow_count" "$action_count" "$errors" >&2
+  printf 'Workflow security policy FAILED: %d workflows, %d action references, %d violations.\n' "$workflow_count" "$action_count" "$errors" >&2
   exit 1
 fi
 
-printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\\n' "$workflow_count" "$action_count"
+printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\n' "$workflow_count" "$action_count"
