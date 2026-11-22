@@ -26,7 +26,7 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       - uses: ./.github/actions/local'
 bash "$validator" "$tmpdir/good" >/dev/null
 
@@ -117,8 +117,60 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger extra_permission trigger_missing; do
+mkdir -p "$tmpdir/trigger_push_only"
+cat > "$tmpdir/trigger_push_only/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+  pull_request:
+    paths:
+      - 'systems/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_comment_only"
+cat > "$tmpdir/trigger_comment_only/godot-validation.yml" <<'EOF'
+name: root gate
+# .github/workflows/**
+# .github/scripts/**
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - 'systems/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+mkdir -p "$tmpdir/trigger_paths_ignore"
+cat > "$tmpdir/trigger_paths_ignore/godot-validation.yml" <<'EOF'
+name: root gate
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths-ignore:
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+EOF
+
+for fixture in missing_permissions nested_permissions floating_action dangerous_trigger extra_permission trigger_missing trigger_push_only trigger_comment_only trigger_paths_ignore; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 6 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 9 negative fixtures.\n'
