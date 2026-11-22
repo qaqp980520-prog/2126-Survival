@@ -21,6 +21,7 @@ on:
       - 'docs/**'
       - '.github/workflows/**'
       - '.github/scripts/**'
+      - '.github/actions/**'
   workflow_dispatch:
 
 concurrency:
