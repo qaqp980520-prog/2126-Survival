@@ -79,13 +79,18 @@ for file in "${workflow_files[@]}"; do
     if ! has_pull_request_path "$file" ".github/scripts/**"; then
       fail "$file" "Full Gate pull_request.paths must include .github/scripts/**"
     fi
+    if ! has_pull_request_path "$file" ".github/actions/**"; then
+      fail "$file" "Full Gate pull_request.paths must include .github/actions/**"
+    fi
   fi
 
   while IFS= read -r ref; do
     [[ -z "$ref" ]] && continue
     action_count=$((action_count + 1))
     case "$ref" in
-      ./*) ;;
+      ./*)
+        fail "$file" "local action reference is not allowed until composite action manifests are recursively audited: $ref"
+        ;;
       *)
         if [[ ! "$ref" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$ ]]; then
           fail "$file" "external action is not pinned to a full 40-character SHA: $ref"
