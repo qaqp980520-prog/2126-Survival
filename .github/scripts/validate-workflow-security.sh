@@ -134,14 +134,6 @@ if [[ $errors -ne 0 ]]; then
 fi
 
 printf 'Workflow security policy PASSED: %d workflows, %d action references; all use contents: read, no job-level overrides, all external actions SHA-pinned, no pull_request_target/workflow_run triggers.\n' "$workflow_count" "$action_count"
- "$file"; then
-    fail "$file" "high-risk trigger requires a separate security review"
-  fi
-
-  if grep -Eq '^[[:space:]]*(permissions|on|pull_request_target|workflow_run)[[:space:]]*:[[:space:]]*\{' "$file" ||
-     grep -Eq '[,{][[:space:]]*(permissions|on|pull_request_target|workflow_run)[[:space:]]*:' "$file"; then
-    fail "$file" "flow-style security-sensitive mappings are unsupported; use plain block-style mappings"
-  fi
 
   if [[ "$file" == */godot-validation.yml ]]; then
     if ! has_pull_request_path "$file" ".github/workflows/**"; then
