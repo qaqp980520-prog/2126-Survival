@@ -1,5 +1,8 @@
 name: KROLL Magnetic Pinball validation
 
+permissions:
+  contents: read
+
 on:
   push:
     paths:

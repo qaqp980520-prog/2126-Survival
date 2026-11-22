@@ -1,5 +1,8 @@
 name: Run 24 Frequency Lock and mineral regeneration validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:

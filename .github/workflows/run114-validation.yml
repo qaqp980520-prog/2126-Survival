@@ -1,5 +1,8 @@
 name: Run 114 focused validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:

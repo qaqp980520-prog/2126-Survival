@@ -1,5 +1,8 @@
 name: Mineral Grid Streaming Lifecycle Validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:

@@ -1,5 +1,8 @@
 name: Run 45 targeted Godot validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:

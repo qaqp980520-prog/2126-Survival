@@ -1,5 +1,8 @@
 name: Godot headless validation
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
