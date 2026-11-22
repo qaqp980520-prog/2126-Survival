@@ -68,8 +68,21 @@ for file in "${workflow_files[@]}"; do
     fail "$file" "permissions must contain only contents: read"
   fi
 
-  if grep -Eq '^[[:space:]]*(pull_request_target|workflow_run):[[:space:]]*$' "$file"; then
-    fail "$file" "high-risk trigger requires a separate security review"
+  if ! awk '
+    /^on:[[:space:]]*(#.*)?$/ { blocks++; in_on=1; saw_child=0; next }
+    /^[^[:space:]#]/ { in_on=0 }
+    in_on && /^[[:space:]]*($|#)/ { next }
+    in_on && !saw_child {
+      saw_child=1
+      if ($0 ~ /^[[:space:]]*-/) event_sequence=1
+    }
+    END { exit !(blocks == 1 && saw_child && !event_sequence) }
+  ' "$file"; then
+    fail "$file" "on must be exactly one non-empty block-style event mapping; scalar, flow-sequence, block-sequence, or duplicate forms are unsupported"
+  fi
+
+  if grep -Eq '^[[:space:]]*(pull_request_target|workflow_run)[[:space:]]*:' "$file"; then
+    fail "$file" "high-risk trigger requires a separate security review, regardless of its value form"
   fi
 
   if grep -Eq '^[[:space:]]*(permissions|on|pull_request_target|workflow_run)[[:space:]]*:[[:space:]]*\{' "$file" ||
