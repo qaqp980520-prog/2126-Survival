@@ -2,8 +2,8 @@
 set -euo pipefail
 
 validator=".github/scripts/validate-workflow-security.sh"
-if [[ ! -x "$validator" ]]; then
-  echo "ERROR: validator is missing or not executable: $validator" >&2
+if [[ ! -f "$validator" ]]; then
+  echo "ERROR: validator file is missing: $validator" >&2
   exit 1
 fi
 
@@ -28,11 +28,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       - uses: ./.github/actions/local'
-"$validator" "$tmpdir/good" >/dev/null
+bash "$validator" "$tmpdir/good" >/dev/null
 
 expect_rejected() {
   local name="$1"
-  if "$validator" "$tmpdir/$name" >/dev/null 2>&1; then
+  if bash "$validator" "$tmpdir/$name" >/dev/null 2>&1; then
     echo "ERROR: security guard accepted invalid fixture: $name" >&2
     exit 1
   fi
