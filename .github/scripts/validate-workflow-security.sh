@@ -35,6 +35,7 @@ has_pull_request_path() {
     in_paths {
       line=$0
       sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      sub(/^[[:space:]]*/, "", line)
       sub(/[[:space:]]+#.*$/, "", line)
       if (line ~ /^"/ && line ~ /\\/) unsafe_pattern=1
       gsub(/^[\"\\047]/, "", line)
