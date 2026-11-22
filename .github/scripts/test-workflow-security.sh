@@ -393,6 +393,8 @@ on:
       - 'prototypes/**'
       - 'assets/**'
       - 'project.godot'
+      - '.gitignore'
+      - 'README.md'
       - 'PROJECT_INDEX.md'
       - 'docs/**'
       - '**/README.md'
@@ -887,6 +889,8 @@ required_trigger_paths=(
   "prototypes/**"
   "assets/**"
   "project.godot"
+  ".gitignore"
+  "README.md"
   "PROJECT_INDEX.md"
   "docs/**"
 )
@@ -924,4 +928,4 @@ for fixture in missing_permissions nested_permissions floating_action dangerous_
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 71 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: 2 positive and 73 negative fixtures.\n'

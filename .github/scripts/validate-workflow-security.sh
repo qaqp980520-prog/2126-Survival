@@ -124,6 +124,8 @@ for file in "${workflow_files[@]}"; do
       "prototypes/**" \
       "assets/**" \
       "project.godot" \
+      ".gitignore" \
+      "README.md" \
       "PROJECT_INDEX.md" \
       "docs/**"; do
       if ! has_pull_request_path "$file" "$required_path"; then

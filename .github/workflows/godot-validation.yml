@@ -19,6 +19,8 @@ on:
       - 'assets/**'
       - 'project.godot'
       - 'PROJECT_INDEX.md'
+      - 'README.md'
+      - '.gitignore'
       - 'docs/**'
       - '.github/workflows/**'
       - '.github/scripts/**'
