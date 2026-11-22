@@ -383,6 +383,7 @@ on:
       - '.github/workflows/**'
       - '.github/scripts/**'
       - '.github/actions/**'
+      - '**/README.md'
 jobs:
   test:
     steps:
