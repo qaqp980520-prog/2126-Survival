@@ -68,7 +68,15 @@ for file in "${workflow_files[@]}"; do
     fail "$file" "permissions must contain only contents: read"
   fi
 
-  if grep -Eq '^[[:space:]]*(pull_request_target|workflow_run):[[:space:]]*
+  if grep -Eq '^[[:space:]]*(pull_request_target|workflow_run):[[:space:]]*$' "$file"; then
+    fail "$file" "high-risk trigger requires a separate security review"
+  fi
+
+  if grep -Eq '^[[:space:]]*(permissions|on|pull_request_target|workflow_run)[[:space:]]*:[[:space:]]*\{' "$file" ||
+     grep -Eq '[,{][[:space:]]*(permissions|on|pull_request_target|workflow_run)[[:space:]]*:' "$file"; then
+    fail "$file" "flow-style security-sensitive mappings are unsupported; use plain block-style mappings"
+  fi
+
   if [[ "$file" == */godot-validation.yml ]]; then
     if ! has_pull_request_path "$file" ".github/workflows/**"; then
       fail "$file" "Full Gate pull_request.paths must include .github/workflows/**"
