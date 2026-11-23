@@ -119,7 +119,7 @@ func _measure_scoped_snapshots(registry: Node, target_ids: Array[String]) -> Dic
 func _median_usec(samples: Array[int]) -> int:
 	var ordered: Array[int] = samples.duplicate()
 	ordered.sort()
-	return ordered[ordered.size() / 2] if not ordered.is_empty() else 0
+	return ordered[int(ordered.size() / 2)] if not ordered.is_empty() else 0
 
 func _expect(condition: bool, description: String) -> void:
 	if condition:
