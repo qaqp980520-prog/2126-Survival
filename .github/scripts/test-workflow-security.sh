@@ -946,7 +946,33 @@ mkdir -p "$tmpdir/candidate_fetch_missing_pin"
 cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_missing_pin/godot-validation.yml"
 sed -i '/fetch_pinned_candidate "feature\/daily-kroll-signal-sweep-2026-10-25"/d' "$tmpdir/candidate_fetch_missing_pin/godot-validation.yml"
 
-for fixture in candidate_fetch_unpinned candidate_fetch_sha_mismatch candidate_fetch_missing_pin missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path trigger_pull_request_branches_filter trigger_pull_request_branches_ignore_filter trigger_pull_request_types_filter trigger_pull_request_paths_ignore_filter trigger_pull_request_merge_key_branch_filter trigger_pull_request_padded_branches_filter scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
+
+mkdir -p "$tmpdir/candidate_fetch_commented_compare"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_commented_compare/godot-validation.yml"
+sed -i 's|if \[\[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" \]\]; then|if false; then # if [[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" ]]; then|' "$tmpdir/candidate_fetch_commented_compare/godot-validation.yml"
+
+mkdir -p "$tmpdir/candidate_fetch_pin_comment_decoy"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_pin_comment_decoy/godot-validation.yml"
+sed -i 's|fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"|fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "0000000000000000000000000000000000000000"|' "$tmpdir/candidate_fetch_pin_comment_decoy/godot-validation.yml"
+sed -i '/fetch_pinned_candidate "feature\/daily-kroll-signal-sweep-2026-10-25" "0000000000000000000000000000000000000000"/a\            # fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"' "$tmpdir/candidate_fetch_pin_comment_decoy/godot-validation.yml"
+
+mkdir -p "$tmpdir/candidate_fetch_duplicate_helper"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_duplicate_helper/godot-validation.yml"
+awk '
+  { print }
+  $0 == "          }" && !inserted {
+    print "          fetch_pinned_candidate() {"
+    print "            local branch=\"$1\""
+    print "            local expected_sha=\"$2\""
+    print "            FETCHED_CANDIDATE_SHA=\"$expected_sha\""
+    print "          }"
+    inserted=1
+  }
+  END { if (!inserted) exit 1 }
+' "$tmpdir/candidate_fetch_duplicate_helper/godot-validation.yml" > "$tmpdir/candidate_fetch_duplicate_helper/workflow.tmp"
+mv "$tmpdir/candidate_fetch_duplicate_helper/workflow.tmp" "$tmpdir/candidate_fetch_duplicate_helper/godot-validation.yml"
+
+for fixture in candidate_fetch_unpinned candidate_fetch_sha_mismatch candidate_fetch_missing_pin candidate_fetch_commented_compare candidate_fetch_pin_comment_decoy candidate_fetch_duplicate_helper missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path trigger_pull_request_branches_filter trigger_pull_request_branches_ignore_filter trigger_pull_request_types_filter trigger_pull_request_paths_ignore_filter trigger_pull_request_merge_key_branch_filter trigger_pull_request_padded_branches_filter scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
   expect_rejected "$fixture"
 done
 

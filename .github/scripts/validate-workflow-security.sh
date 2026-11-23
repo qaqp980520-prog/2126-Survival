@@ -66,22 +66,78 @@ validate_pinned_candidate_fetches() {
   local fetch_count
   local call_count
   local checkout_count
-  fetch_count="$(grep -Ec 'git[[:space:]]+fetch' "$file" || true)"
-  if [[ "$fetch_count" -eq 0 ]]; then
-    return
-  fi
+  fetch_count="$(awk '
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (line ~ /^#/) next
+      if (line ~ /^git[[:space:]]+fetch([[:space:]]|$)/) count++
+    }
+    END { print count+0 }
+  ' "$file")"
   if [[ "$fetch_count" -ne 1 ]]; then
-    fail "$file" "candidate sources must use exactly one shared pinned git-fetch helper"
+    fail "$file" "candidate imports must contain exactly one active git fetch command"
   fi
-  if ! grep -Fq 'git fetch --no-tags origin "$branch"' "$file"; then
-    fail "$file" "candidate source fetch must use the reviewed branch-ref helper"
+  if ! awk '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    {
+      line=trim($0)
+      if (line ~ /^#/) next
+      sub(/[[:space:]]+#.*$/, "", line)
+      line=trim(line)
+      if (line ~ /^(function[[:space:]]+)?fetch_pinned_candidate([[:space:]]*\(\))?[[:space:]]*\{[[:space:]]*$/) {
+        definitions++
+        if (in_helper) nested=1
+        in_helper=1
+        next
+      }
+      if (in_helper) {
+        if (line == "git fetch --no-tags origin \"$branch\"") helper_fetch++
+        if (line == "FETCHED_CANDIDATE_SHA=\"$(git rev-parse FETCH_HEAD)\"") resolve++
+        if (line == "if [[ \"$FETCHED_CANDIDATE_SHA\" != \"$expected_sha\" ]]; then") {
+          compare++
+          in_compare=1
+          next
+        }
+        if (in_compare && line == "exit 1") compare_exit++
+        if (in_compare && line == "fi") {
+          compare_close++
+          in_compare=0
+          next
+        }
+        if (line == "}") {
+          closes++
+          in_helper=0
+          next
+        }
+      }
+    }
+    END {
+      exit !(definitions == 1 && closes == 1 && !in_helper && !nested &&
+             helper_fetch == 1 && resolve == 1 && compare == 1 &&
+             compare_exit == 1 && compare_close == 1 && !in_compare)
+    }
+  ' "$file"; then
+    fail "$file" "candidate fetch helper must be defined once and actively fetch, resolve, compare, and fail on a mismatched SHA"
   fi
-  if ! grep -Fq 'FETCHED_CANDIDATE_SHA="$(git rev-parse FETCH_HEAD)"' "$file" || \
-     ! grep -Fq 'if [[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" ]]; then' "$file"; then
-    fail "$file" "candidate source fetch must compare FETCH_HEAD with its expected full commit SHA"
-  fi
-  call_count="$(grep -Ec '^[[:space:]]*fetch_pinned_candidate "' "$file" || true)"
-  checkout_count="$(grep -Fc 'git checkout "$FETCHED_CANDIDATE_SHA" --' "$file" || true)"
+  call_count="$(awk '
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (line ~ /^#/) next
+      if (line ~ /^fetch_pinned_candidate[[:space:]]+"/) count++
+    }
+    END { print count+0 }
+  ' "$file")"
+  checkout_count="$(awk '
+    {
+      line=$0
+      sub(/^[[:space:]]*/, "", line)
+      if (line ~ /^#/) next
+      if (line ~ /^git checkout \"\$FETCHED_CANDIDATE_SHA\" -- /) count++
+    }
+    END { print count+0 }
+  ' "$file")"
   if [[ "$call_count" -ne 4 || "$checkout_count" -ne 4 ]]; then
     fail "$file" "all four candidate source imports must use the pinned SHA returned by fetch_pinned_candidate"
   fi
@@ -97,8 +153,18 @@ validate_pinned_candidate_fetches() {
   for pin in "${pins[@]}"; do
     candidate_branch="${pin% *}"
     expected_sha="${pin##* }"
-    if ! grep -Fq "fetch_pinned_candidate \"$candidate_branch\" \"$expected_sha\"" "$file"; then
-      fail "$file" "candidate source $candidate_branch must be pinned to reviewed commit $expected_sha"
+    if ! awk -v expected="fetch_pinned_candidate \"$candidate_branch\" \"$expected_sha\"" '
+      {
+        line=$0
+        sub(/^[[:space:]]*/, "", line)
+        if (line ~ /^#/) next
+        sub(/[[:space:]]+#.*$/, "", line)
+        sub(/[[:space:]]*$/, "", line)
+        if (line == expected) count++
+      }
+      END { exit !(count == 1) }
+    ' "$file"; then
+      fail "$file" "candidate source $candidate_branch must have exactly one active pin to reviewed commit $expected_sha"
     fi
   done
 }
