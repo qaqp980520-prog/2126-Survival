@@ -7,6 +7,8 @@ on:
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
+      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
+      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
       - "tests/mineral_grid_streaming_position_validation_test.gd"
       - "tests/mineral_grid_streaming_async_test.gd"
       - "docs/MINERAL_GRID_TERRAIN_RUNTIME_BOUNDS_RECONCILIATION_M0_3_8.md"
@@ -19,6 +21,8 @@ on:
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
+      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
+      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
       - "tests/mineral_grid_streaming_position_validation_test.gd"
       - "tests/mineral_grid_streaming_async_test.gd"
       - "docs/MINERAL_GRID_TERRAIN_RUNTIME_BOUNDS_RECONCILIATION_M0_3_8.md"
@@ -53,11 +57,17 @@ jobs:
           test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
           test -f tests/mineral_grid_streaming_async_registration_contract_test.gd
+          test -f docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md
+          test -f docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md
+          test -f docs/MINERAL_GRID_TERRAIN_RUNTIME_BOUNDS_RECONCILIATION_M0_3_8.md
           test -f tests/mineral_grid_streaming_position_validation_test.gd
           test -f tests/mineral_grid_streaming_async_test.gd
           grep -Fq 'MIN_CHUNK_SIZE: float = 1.0' systems/MineralGridStreamingDirector.gd
           grep -Fq 'MAX_CHUNK_SIZE: float = 4096.0' systems/MineralGridStreamingDirector.gd
           grep -Fq 'MAX_LOAD_RADIUS: int = 8' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
           grep -Fq 'func _is_valid_grid_configuration' systems/MineralGridStreamingDirector.gd
           grep -Fq 'chunk_size_x >= MIN_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
           grep -Fq 'chunk_size_z >= MIN_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
