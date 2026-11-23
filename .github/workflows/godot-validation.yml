@@ -70,6 +70,8 @@ jobs:
           test -f daily_games/KROLL_Hydroponics_Shift/tests/game_smoke_test.gd
           test -f systems/MineralChunkController.gd
           test -f tests/mineral_chunk_controller_test.gd
+          test -f tests/world_object_registry_snapshot_benchmark.gd
+          test -f docs/WORLD_OBJECT_REGISTRY_SNAPSHOT_COST_BENCHMARK_M0_3_11.md
           test -f systems/MineralGridStreamingDirector.gd
           test -f tests/mineral_grid_streaming_director_test.gd
           test -f tests/backrooms_player_input_test.gd
@@ -405,6 +407,16 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q 'Mineral chunk controller integration tests passed.'
+
+      - name: Run WorldObjectStateRegistry snapshot cost benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/world_object_registry_snapshot_benchmark.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q 'WORLD_OBJECT_REGISTRY_BENCHMARK_JSON:'
+          echo "$output" | grep -q 'World object registry snapshot cost benchmark passed.'
 
       - name: Run Backrooms player input regression test
         shell: bash
