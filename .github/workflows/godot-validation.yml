@@ -16,8 +16,11 @@ on:
       - 'tests/**'
       - 'daily_games/**'
       - 'prototypes/**'
+      - 'assets/**'
       - 'project.godot'
       - 'PROJECT_INDEX.md'
+      - 'README.md'
+      - '.gitignore'
       - 'docs/**'
       - '.github/workflows/**'
       - '.github/scripts/**'
@@ -42,24 +45,40 @@ jobs:
         run: bash .github/scripts/test-workflow-security.sh
       - name: Enforce GitHub Actions security policy
         run: bash .github/scripts/validate-workflow-security.sh
-      - name: Prepare candidate files when not yet merged
+      - name: Prepare candidate files from pinned commits
+        shell: bash
         run: |
+          set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          FETCHED_CANDIDATE_SHA=""
+          fetch_pinned_candidate() {
+            local branch="$1"
+            local expected_sha="$2"
+            git fetch --no-tags origin "$branch"
+            FETCHED_CANDIDATE_SHA="$(git rev-parse FETCH_HEAD)"
+            if [[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" ]]; then
+              echo "Candidate source branch moved: $branch"
+              echo "Expected: $expected_sha"
+              echo "Fetched:  $FETCHED_CANDIDATE_SHA"
+              echo "Update the reviewed candidate SHA in this workflow and the security validator."
+              exit 1
+            fi
+          }
           if [ ! -f daily_games/KROLL_Signal_Sweep/project.godot ]; then
-            git fetch origin feature/daily-kroll-signal-sweep-2026-10-25
-            git checkout FETCH_HEAD -- daily_games/KROLL_Signal_Sweep
+            fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"
+            git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Signal_Sweep
           fi
           if [ ! -f systems/SurvivalInventory.gd ] || [ ! -f tests/inventory_save_validation.gd ]; then
-            git fetch origin fix/inventory-save-validation-2026-10-25
-            git checkout FETCH_HEAD -- systems/SurvivalInventory.gd tests/inventory_save_validation.gd
+            fetch_pinned_candidate "fix/inventory-save-validation-2026-10-25" "2d39e18e8b90d9b90cd8a65ebfb6b76d375ae5cb"
+            git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventory.gd tests/inventory_save_validation.gd
           fi
           if [ ! -f systems/SurvivalInventorySaveAdapter.gd ] || [ ! -f tests/inventory_save_adapter.gd ]; then
-            git fetch origin feature/m1-3-inventory-save-adapter-2026-10-25
-            git checkout FETCH_HEAD -- systems/SurvivalInventorySaveAdapter.gd tests/inventory_save_adapter.gd
+            fetch_pinned_candidate "feature/m1-3-inventory-save-adapter-2026-10-25" "300d4cc826fc02423e365c8199460de9afa5ceb5"
+            git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventorySaveAdapter.gd tests/inventory_save_adapter.gd
           fi
           if [ ! -f daily_games/KROLL_Orbital_Convoy/project.godot ] || [ ! -f systems/BackroomsPortalDirector.gd ] || [ ! -f tests/backrooms_portal_director_test.gd ]; then
-            git fetch origin feature/kroll-orbital-convoy-backrooms-portals-2026-10-26
-            git checkout FETCH_HEAD -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd tests/backrooms_portal_scene_test.gd systems/BackroomsPortalVisual.gd systems/BackroomsPortalVisual.tscn docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md
+            fetch_pinned_candidate "feature/kroll-orbital-convoy-backrooms-portals-2026-10-26" "c9833cafa00f6865c34752449cfe09ed17f04d65"
+            git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd tests/backrooms_portal_scene_test.gd systems/BackroomsPortalVisual.gd systems/BackroomsPortalVisual.tscn docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md
           fi
       - name: Print engine version and verify test inputs
         run: |
