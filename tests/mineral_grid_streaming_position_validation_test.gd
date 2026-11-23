@@ -89,6 +89,18 @@ func _run_tests() -> void:
 	_check(str(oversized_depth_report.get("phase", "")) == "recovery_validation" and str(oversized_depth_report.get("message", "")).contains("between 1 and 4096"), "Oversized-depth recovery reports the supported dimension range.")
 	_check(director.get_managed_chunk_ids() == managed_before and PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected oversized depth preserves both ownership maps.")
 
+	director.chunk_size_z = INF
+	_check(not bool(director.recover_to_world_position(Vector3(15.0, 0.0, 15.0), 1014)), "Recovery rejects an infinite chunk depth before ownership reconciliation.")
+	var infinite_depth_report: Dictionary = director.get_last_sync_report()
+	_check(str(infinite_depth_report.get("phase", "")) == "recovery_validation" and str(infinite_depth_report.get("message", "")).contains("between 1 and 4096"), "Infinite-depth recovery reports the supported dimension range.")
+	_check(director.get_managed_chunk_ids() == managed_before and PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected infinite depth preserves both ownership maps.")
+
+	director.chunk_size_z = -10.0
+	_check(not bool(director.call("_is_safe_grid_position", Vector3(15.0, 0.0, 15.0))), "Shared configuration guard rejects a negative chunk depth.")
+	_check(director.get_grid_coordinate(Vector3(15.0, 0.0, 15.0)) == Vector2i.ZERO, "Coordinate helper rejects a negative chunk depth.")
+	_check(not bool(director.recover_to_world_position(Vector3(15.0, 0.0, 15.0), 1014)), "Recovery rejects a negative chunk depth before ownership reconciliation.")
+	_check(director.get_managed_chunk_ids() == managed_before and PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected negative depth preserves both ownership maps.")
+
 	director.chunk_size_x = original_chunk_size_x
 	director.chunk_size_z = original_chunk_size_z
 	director.load_radius = 8
