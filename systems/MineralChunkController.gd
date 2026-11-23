@@ -164,7 +164,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
 		return false
-	var adjacency_result: Dictionary = _request_terrain_adjacency_rebind(chunk_id, world_objects)
+	var adjacency_result: Dictionary = _request_current_terrain_adjacency_rebind(chunk_id, world_objects)
 	if not bool(adjacency_result.get("ok", false)):
 		remove_child(chunk_root)
 		if not world_objects.is_empty():
@@ -175,7 +175,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
-		_request_terrain_adjacency_rebind()
+		_request_current_terrain_adjacency_rebind()
 		return false
 	if not veins.is_empty() and not bool(adapter.load_chunk(chunk_id, veins, now_unix)):
 		# A failed registration must not consume the caller's scene. Detach it so the
@@ -191,7 +191,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 				var plot_node: Node = plot_value as Node
 				if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
 					plot_node.call("refresh")
-		_request_terrain_adjacency_rebind()
+		_request_current_terrain_adjacency_rebind()
 		return false
 
 	_chunk_roots[chunk_id] = chunk_root
@@ -246,7 +246,7 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	remove_child(chunk_root)
 	if not chunk_root.is_queued_for_deletion():
 		chunk_root.queue_free()
-	var adjacency_result: Dictionary = _request_terrain_adjacency_rebind()
+	var adjacency_result: Dictionary = _request_current_terrain_adjacency_rebind()
 	if not bool(adjacency_result.get("ok", false)):
 		push_error("Terrain adjacency rebuild failed after chunk unload: %s" % str(adjacency_result.get("error", "unknown")))
 	return true
@@ -530,18 +530,30 @@ func set_terrain_adjacency_profiling_enabled(enabled: bool) -> void:
 func get_last_terrain_adjacency_profile() -> Dictionary:
 	return _last_terrain_adjacency_profile.duplicate(true)
 
-func _request_terrain_adjacency_rebind(candidate_chunk_id: String = "", candidate_objects: Dictionary = {}) -> Dictionary:
+func _request_terrain_adjacency_rebind(
+	patches: Array[Node3D],
+	candidate_chunk_id: String = "",
+	candidate_objects: Dictionary = {}
+) -> Dictionary:
 	if _terrain_adjacency_batch_depth > 0:
 		_terrain_adjacency_batch_dirty = true
 		return {"ok": true, "deferred": true}
-	return _rebind_terrain_patches(_collect_loaded_terrain_patches(), candidate_chunk_id, candidate_objects)
+	return _rebind_terrain_patches(patches, candidate_chunk_id, candidate_objects)
+
+func _request_current_terrain_adjacency_rebind(candidate_chunk_id: String = "", candidate_objects: Dictionary = {}) -> Dictionary:
+	if _terrain_adjacency_batch_depth > 0:
+		return _request_terrain_adjacency_rebind([], candidate_chunk_id, candidate_objects)
+	var patches: Array[Node3D] = _collect_loaded_terrain_patches()
+	if not candidate_objects.is_empty():
+		patches.append_array(_collect_terrain_patches(candidate_objects))
+	return _request_terrain_adjacency_rebind(patches, candidate_chunk_id, candidate_objects)
 
 func refresh_terrain_adjacency() -> bool:
-	var result: Dictionary = _request_terrain_adjacency_rebind()
+	var result: Dictionary = _request_current_terrain_adjacency_rebind()
 	return bool(result.get("ok", false))
 
 func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
-	var result: Dictionary = _request_terrain_adjacency_rebind()
+	var result: Dictionary = _request_current_terrain_adjacency_rebind()
 	if not bool(result.get("ok", false)):
 		push_error("Terrain transition descriptor rebuild failed after terrain edit: %s" % str(result.get("error", "unknown")))
 
