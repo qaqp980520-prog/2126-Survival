@@ -171,7 +171,7 @@ func _test_playground_async_requests() -> void:
     var failed_report: Dictionary = await _wait_for_request(director, failed_request)
     _expect(failed_request > 0 and not bool(failed_report.get("success", true)) and str(failed_report.get("phase", "")) == "load_factory", "invalid staged root rejects the async request before commit")
     _expect(controller.call("get_loaded_chunk_ids") == original_ids, "staging failure preserves the original active chunk IDs")
-    _expect(controller.call("get_chunk_root", "surface/chunk_0_0") == original_root, "staging failure preserves the original live chunk root")
+    _expect(controller.call("get_chunk_root", original_root_id) == original_root, "staging failure preserves the original live chunk root")
     _expect(bool(failed_report.get("rollback_complete", false)), "staging failure reports a complete no-mutation rollback")
 
     director.set("chunk_factory", original_factory)
