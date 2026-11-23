@@ -688,6 +688,11 @@ func _emit_metrics(
 	profile_valid = profile_valid and int(adjacency_profile.get("collider_reactivated_edge_count", -1)) <= int(adjacency_profile.get("collider_reused_edge_count", -2))
 	profile_valid = profile_valid and int(adjacency_profile.get("collider_reused_corner_cap_count", -1)) + int(adjacency_profile.get("collider_staged_corner_cap_count", -1)) == int(adjacency_profile.get("corner_cap_count", -2))
 	profile_valid = profile_valid and int(adjacency_profile.get("batch_total_usec", 0)) >= int(adjacency_profile.get("collect_loaded_patches_usec", 0)) + int(adjacency_profile.get("controller_rebind_total_usec", 0))
+	var batched_phase: bool = phase == "expand_stage_commit" or phase == "boundary_cross_east" or phase == "contract_unload" or phase.begins_with("boundary_cross_repeat_")
+	var deferred_collection_count: int = int(adjacency_profile.get("deferred_collection_count", -1))
+	if batched_phase:
+		profile_valid = profile_valid and deferred_collection_count == 0
+		_expect(deferred_collection_count == 0, "radius %d %s defers loaded-patch collection until the single batch rebuild" % [radius, phase])
 	_expect(profile_valid, "radius %d %s records valid non-negative phase timings with consistent totals" % [radius, phase])
 	var record := {
 		"phase": phase,
@@ -703,6 +708,7 @@ func _emit_metrics(
 		"terrain_adjacency_batch_ms": adjacency_batch_ms,
 		"async_other_ms": async_other_ms,
 		"terrain_adjacency_profile_usec": adjacency_profile,
+		"deferred_adjacency_collection_count": deferred_collection_count,
 		"reused_transition_edge_count": int(adjacency_profile.get("collider_reused_edge_count", 0)),
 		"reactivated_transition_edge_count": int(adjacency_profile.get("collider_reactivated_edge_count", 0)),
 		"staged_transition_edge_count": int(adjacency_profile.get("collider_staged_edge_count", 0)),
