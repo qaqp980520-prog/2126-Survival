@@ -141,6 +141,34 @@ validate_pinned_candidate_fetches() {
   if [[ "$call_count" -ne 4 || "$checkout_count" -ne 4 ]]; then
     fail "$file" "all four candidate source imports must use the pinned SHA returned by fetch_pinned_candidate"
   fi
+  local -a candidate_calls=(
+    'fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"'
+    'fetch_pinned_candidate "fix/inventory-save-validation-2026-10-25" "2d39e18e8b90d9b90cd8a65ebfb6b76d375ae5cb"'
+    'fetch_pinned_candidate "feature/m1-3-inventory-save-adapter-2026-10-25" "300d4cc826fc02423e365c8199460de9afa5ceb5"'
+    'fetch_pinned_candidate "feature/kroll-orbital-convoy-backrooms-portals-2026-10-26" "c9833cafa00f6865c34752449cfe09ed17f04d65"'
+  )
+  local -a candidate_checkouts=(
+    'git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Signal_Sweep'
+    'git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventory.gd tests/inventory_save_validation.gd'
+    'git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventorySaveAdapter.gd tests/inventory_save_adapter.gd'
+    'git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd tests/backrooms_portal_scene_test.gd systems/BackroomsPortalVisual.gd systems/BackroomsPortalVisual.tscn docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md'
+  )
+  local i
+  for i in "${!candidate_calls[@]}"; do
+    if ! awk -v expected_call="${candidate_calls[$i]}" -v expected_checkout="${candidate_checkouts[$i]}" '
+      function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+      {
+        line=trim($0)
+        if (line != expected_call) next
+        matches++
+        if (getline <= 0) { bad=1; next }
+        if (trim($0) != expected_checkout) bad=1
+      }
+      END { exit !(matches == 1 && !bad) }
+    ' "$file"; then
+      fail "$file" "candidate import call $((i + 1)) must be followed immediately by its matching SHA-based checkout"
+    fi
+  done
   local pins=(
     "feature/daily-kroll-signal-sweep-2026-10-25 e0953f6bcc58e764f172d85b96e2b66d73bdb859"
     "fix/inventory-save-validation-2026-10-25 2d39e18e8b90d9b90cd8a65ebfb6b76d375ae5cb"
