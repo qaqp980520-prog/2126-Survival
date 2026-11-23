@@ -7,8 +7,9 @@ on:
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
-      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
-      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - "tests/mineral_grid_streaming_position_validation_test.gd"
+      - "tests/mineral_grid_streaming_async_test.gd"
+      - "docs/MINERAL_GRID_TERRAIN_RUNTIME_BOUNDS_RECONCILIATION_M0_3_8.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
   push:
@@ -18,10 +19,19 @@ on:
       - "tests/helpers/FakeMineralChunkController.gd"
       - "tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd"
       - "tests/mineral_grid_streaming_async_registration_contract_test.gd"
-      - "docs/MINERAL_GRID_ASYNC_REGISTRATION_RESULT_CONTRACT_M0_3.md"
-      - "docs/MINERAL_GRID_STREAMING_SYNC_REGISTRATION_LIFECYCLE_GUARD_M0_1.md"
+      - "tests/mineral_grid_streaming_position_validation_test.gd"
+      - "tests/mineral_grid_streaming_async_test.gd"
+      - "docs/MINERAL_GRID_TERRAIN_RUNTIME_BOUNDS_RECONCILIATION_M0_3_8.md"
       - ".github/workflows/mineral-grid-streaming-lifecycle-validation.yml"
       - ".github/workflows/godot-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mineral-grid-lifecycle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -32,7 +42,7 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify Godot version and lifecycle inputs
         shell: bash
         run: |
@@ -43,15 +53,25 @@ jobs:
           test -f tests/helpers/FakeMineralChunkController.gd
           test -f tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd
           test -f tests/mineral_grid_streaming_async_registration_contract_test.gd
-          grep -Fq 'controller_ready_after_load' systems/MineralGridStreamingDirector.gd
-          grep -Fq 'candidate_loaded' systems/MineralGridStreamingDirector.gd
-          grep -Fq 'or not candidate_loaded' systems/MineralGridStreamingDirector.gd
+          test -f tests/mineral_grid_streaming_position_validation_test.gd
+          test -f tests/mineral_grid_streaming_async_test.gd
+          grep -Fq 'MIN_CHUNK_SIZE: float = 1.0' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'MAX_CHUNK_SIZE: float = 4096.0' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'MAX_LOAD_RADIUS: int = 8' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'func _is_valid_grid_configuration' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_size_x >= MIN_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_size_z >= MIN_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_size_x <= MAX_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'chunk_size_z <= MAX_CHUNK_SIZE' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'load_radius >= 0' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'load_radius <= MAX_LOAD_RADIUS' systems/MineralGridStreamingDirector.gd
+          grep -Fq 'Only a fully validated synchronous request may supersede' systems/MineralGridStreamingDirector.gd
       - name: Import and parse root project
         run: godot --headless --path . --editor --quit
       - name: Run synchronous mineral chunk registration lifecycle regression
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_sync_registration_lifecycle_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
@@ -59,11 +79,27 @@ jobs:
       - name: Run async mineral chunk registration result contract regression
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_async_registration_contract_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Mineral grid async registration result contract tests passed."
+      - name: Run runtime grid configuration boundary regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/mineral_grid_streaming_position_validation_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid streaming position validation tests passed."
+      - name: Run bounded async mineral streaming regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/mineral_grid_streaming_async_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Mineral grid bounded async streaming tests passed."
       - name: Checkout cleanup
         if: always()
         shell: bash
@@ -74,4 +110,4 @@ jobs:
           test -z "$(git status --porcelain)"
       - name: Complete job
         if: always()
-        run: echo "Mineral grid lifecycle validation complete."
+        run: echo "Mineral Grid lifecycle validation complete."
