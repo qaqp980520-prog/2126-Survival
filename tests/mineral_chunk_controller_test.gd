@@ -16,6 +16,49 @@ class FakeCornerManager extends Node3D:
 	func get_blocked_corner_reports() -> Array[Dictionary]:
 		return reports.duplicate(true)
 
+class InstrumentedObjectRegistry:
+	extends "res://systems/WorldObjectStateRegistry.gd"
+	var full_snapshot_calls: int = 0
+	var set_calls: int = 0
+	var fail_after_set_calls: int = -1
+
+	func to_save_dict() -> Dictionary:
+		full_snapshot_calls += 1
+		return super.to_save_dict()
+
+	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
+		set_calls += 1
+		if fail_after_set_calls >= 0 and set_calls > fail_after_set_calls:
+			return false
+		return super.set_object_state(stable_id, chunk_id, state)
+
+class LegacyObjectRegistry extends Node:
+	var _records: Dictionary = {}
+
+	func get_object_state(stable_id: String) -> Dictionary:
+		if not _records.has(stable_id):
+			return {}
+		return _records[stable_id].duplicate(true)
+
+	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
+		_records[stable_id] = {"chunk_id": chunk_id, "state": state.duplicate(true)}
+		return true
+
+	func to_save_dict() -> Dictionary:
+		return {"schema_version": 1, "objects": _records.duplicate(true)}
+
+	func validate_save_dict(data: Dictionary) -> bool:
+		var records: Variant = data.get("objects", null)
+		return int(data.get("schema_version", -1)) == 1 and records is Dictionary
+
+	func restore_save_dict(data: Dictionary) -> bool:
+		if not validate_save_dict(data):
+			return false
+		var records: Dictionary = data.get("objects", {})
+		_records = records.duplicate(true)
+		return true
+
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -33,6 +76,8 @@ func _run_tests() -> void:
 	await _test_stateful_object_survives_unload_reload()
 	await process_frame
 	await _test_failed_object_state_application_is_atomic()
+	await process_frame
+	await _test_chunk_scoped_object_registry_rollback()
 	await process_frame
 	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
 	await process_frame
@@ -258,6 +303,85 @@ func _test_failed_object_state_application_is_atomic() -> void:
 	mineral_registry.queue_free()
 	await process_frame
 
+func _test_chunk_scoped_object_registry_rollback() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var registry: Node = InstrumentedObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(registry))
+	var chunk_id := "earth/scoped-rollback"
+	var unrelated_id := "earth/unloaded/object/SalvageCrate"
+	var unrelated_state := {"opened": true, "loot_remaining": 1}
+	assert(registry.call("set_object_state", unrelated_id, "earth/unloaded", unrelated_state))
+	registry.set("set_calls", 0)
+	registry.set("fail_after_set_calls", 1)
+	var incoming: Node3D = _new_two_stateful_chunk()
+	assert(not controller.load_chunk(chunk_id, incoming, now), "A failure after the first default record must reject the whole chunk")
+	assert(incoming.get_parent() == null, "A failed scoped rollback leaves the caller-owned root detached")
+	var first_id := chunk_id + "/object/ChunkRoot/SalvageCrate"
+	var second_id := chunk_id + "/object/ChunkRoot/SalvageCrate_Second"
+	assert(registry.call("get_object_state", first_id).is_empty(), "Scoped rollback removes the first newly-created record")
+	assert(registry.call("get_object_state", second_id).is_empty(), "Scoped rollback leaves the rejected second record absent")
+	assert(registry.call("get_object_state", unrelated_id).get("state", {}) == unrelated_state, "Scoped rollback preserves an unrelated unloaded-chunk record")
+	assert(int(registry.get("full_snapshot_calls")) == 0, "Chunk load rollback never copies the full object registry")
+	assert(int(registry.get("set_calls")) == 2, "The test reaches the failure after exactly one successful scoped record write")
+	incoming.free()
+	controller.queue_free()
+	registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+	var successful_mineral_registry: Node = Registry.new()
+	var successful_registry: Node = InstrumentedObjectRegistry.new()
+	var successful_controller: Node3D = Controller.new()
+	root.add_child(successful_mineral_registry)
+	root.add_child(successful_registry)
+	root.add_child(successful_controller)
+	await process_frame
+	assert(successful_controller.bind_registry(successful_mineral_registry))
+	assert(successful_controller.bind_object_state_registry(successful_registry))
+	var successful_chunk_id := "earth/scoped-success"
+	var chunk: Node3D = _new_stateful_chunk()
+	assert(successful_controller.load_chunk(successful_chunk_id, chunk, now))
+	assert(int(successful_registry.get("full_snapshot_calls")) == 0, "Successful chunk load uses only the chunk-scoped snapshot")
+	assert(successful_controller.capture_loaded_world_object_states(), "World save capture succeeds with scoped record snapshots")
+	assert(int(successful_registry.get("full_snapshot_calls")) == 0, "Loaded-state capture avoids a full-registry snapshot")
+	assert(successful_controller.unload_chunk(successful_chunk_id, now), "Chunk unload succeeds with scoped record snapshots")
+	assert(int(successful_registry.get("full_snapshot_calls")) == 0, "Chunk unload avoids a full-registry snapshot")
+	successful_controller.queue_free()
+	successful_registry.queue_free()
+	successful_mineral_registry.queue_free()
+	await process_frame
+
+	var legacy_registry: Node = LegacyObjectRegistry.new()
+	var legacy_controller: Node3D = Controller.new()
+	root.add_child(legacy_registry)
+	root.add_child(legacy_controller)
+	await process_frame
+	assert(legacy_controller.bind_object_state_registry(legacy_registry))
+	var legacy_target := "earth/legacy/object/SalvageCrate"
+	var legacy_unrelated := "earth/legacy-unloaded/object/SalvageCrate"
+	var legacy_target_state := {"opened": false, "loot_remaining": 2}
+	var legacy_unrelated_state := {"opened": true, "loot_remaining": 1}
+	assert(legacy_registry.call("set_object_state", legacy_target, "earth/legacy", legacy_target_state))
+	assert(legacy_registry.call("set_object_state", legacy_unrelated, "earth/legacy-unloaded", legacy_unrelated_state))
+	var legacy_ids: Array[String] = [legacy_target]
+	var legacy_snapshot: Dictionary = legacy_controller.call("_capture_world_object_registry_snapshot", legacy_ids)
+	assert(str(legacy_snapshot.get("mode", "")) == "full", "Older registries without forget_object_state use the full-save fallback")
+	assert(legacy_registry.call("set_object_state", legacy_target, "earth/legacy", {"opened": true, "loot_remaining": 1}))
+	assert(legacy_registry.call("set_object_state", legacy_unrelated, "earth/legacy-unloaded", {"opened": false, "loot_remaining": 2}))
+	assert(legacy_controller.call("_restore_world_object_registry_snapshot", legacy_snapshot), "Legacy full-snapshot fallback restores successfully")
+	assert(legacy_registry.call("get_object_state", legacy_target).get("state", {}) == legacy_target_state, "Legacy fallback restores the target record")
+	assert(legacy_registry.call("get_object_state", legacy_unrelated).get("state", {}) == legacy_unrelated_state, "Legacy fallback preserves its historical whole-registry semantics")
+	legacy_controller.queue_free()
+	legacy_registry.queue_free()
+	await process_frame
+
 func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var mineral_registry: Node = Registry.new()
@@ -389,6 +513,17 @@ func _new_stateful_chunk() -> Node3D:
 	var crate: Node3D = StatefulProp.new()
 	crate.name = "SalvageCrate"
 	chunk.add_child(crate)
+	return chunk
+
+func _new_two_stateful_chunk() -> Node3D:
+	var chunk := Node3D.new()
+	chunk.name = "ChunkRoot"
+	var first: Node3D = StatefulProp.new()
+	first.name = "SalvageCrate"
+	chunk.add_child(first)
+	var second: Node3D = StatefulProp.new()
+	second.name = "SalvageCrate_Second"
+	chunk.add_child(second)
 	return chunk
 
 func _new_mineral_chunk(units: int, regen_time: int) -> Node3D:
