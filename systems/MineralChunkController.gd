@@ -144,8 +144,11 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	var object_registry_snapshot: Dictionary = {}
 	var initial_object_states: Dictionary = {}
 	if not world_objects.is_empty():
-		object_registry_snapshot = object_state_registry.call("to_save_dict")
-		if not object_registry_snapshot.has("schema_version") or not object_registry_snapshot.has("objects"):
+		var object_stable_ids: Array[String] = []
+		for local_path in world_objects.keys():
+			object_stable_ids.append(_make_world_object_stable_id(chunk_id, str(local_path)))
+		object_registry_snapshot = _capture_world_object_registry_snapshot(object_stable_ids)
+		if not _is_valid_world_object_registry_snapshot(object_registry_snapshot):
 			if not crop_snapshot.is_empty():
 				crop_controller.call("restore_save_dict", crop_snapshot)
 				for plot_value in crops.values():
@@ -222,21 +225,26 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	if not _chunk_objects.get(chunk_id, {}).is_empty():
 		if object_state_registry == null:
 			return false
-		object_snapshot = object_state_registry.call("to_save_dict")
-		if not object_snapshot.has("schema_version") or not object_snapshot.has("objects"):
+		var object_stable_ids: Array[String] = []
+		for stable_id in _chunk_objects[chunk_id].keys():
+			object_stable_ids.append(str(stable_id))
+		object_snapshot = _capture_world_object_registry_snapshot(object_stable_ids)
+		if not _is_valid_world_object_registry_snapshot(object_snapshot):
 			return false
 		for stable_id in _chunk_objects[chunk_id].keys():
 			var object_node: Node = _chunk_objects[chunk_id][stable_id] as Node
 			if not is_instance_valid(object_node) or not object_node.has_method("get_world_object_state"):
-				object_state_registry.call("restore_save_dict", object_snapshot)
+				if not _restore_world_object_registry_snapshot(object_snapshot):
+					push_error("Failed to restore scoped world-object records after unload preflight failure.")
 				return false
 			var object_state: Variant = object_node.call("get_world_object_state")
 			if not (object_state is Dictionary) or (object_node.has_method("validate_world_object_state") and not bool(object_node.call("validate_world_object_state", object_state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
-				object_state_registry.call("restore_save_dict", object_snapshot)
+				if not _restore_world_object_registry_snapshot(object_snapshot):
+					push_error("Failed to restore scoped world-object records after unload state failure.")
 				return false
 	if not veins.is_empty() and not bool(adapter.unload_chunk(chunk_id, now_unix)):
-		if not object_snapshot.is_empty():
-			object_state_registry.call("restore_save_dict", object_snapshot)
+		if not object_snapshot.is_empty() and not _restore_world_object_registry_snapshot(object_snapshot):
+			push_error("Failed to restore scoped world-object records after mineral unload rollback.")
 		return false
 
 	_chunk_roots.erase(chunk_id)
@@ -324,27 +332,28 @@ func get_loaded_world_state_nodes() -> Array[Node3D]:
 
 ## Persist the live state of every loaded stateful object before a world save is serialized.
 func capture_loaded_world_object_states() -> bool:
-	var has_stateful_objects: bool = false
+	var stable_ids: Array[String] = []
 	for chunk_objects in _chunk_objects.values():
-		if not chunk_objects.is_empty():
-			has_stateful_objects = true
-			break
-	if not has_stateful_objects:
+		for stable_id in chunk_objects.keys():
+			stable_ids.append(str(stable_id))
+	if stable_ids.is_empty():
 		return true
 	if object_state_registry == null:
 		return false
-	var snapshot: Dictionary = object_state_registry.call("to_save_dict")
-	if not snapshot.has("schema_version") or not snapshot.has("objects"):
+	var snapshot: Dictionary = _capture_world_object_registry_snapshot(stable_ids)
+	if not _is_valid_world_object_registry_snapshot(snapshot):
 		return false
 	for chunk_id in _chunk_objects.keys():
 		for stable_id in _chunk_objects[chunk_id].keys():
 			var node: Node = _chunk_objects[chunk_id][stable_id] as Node
 			if not is_instance_valid(node) or not node.has_method("get_world_object_state"):
-				object_state_registry.call("restore_save_dict", snapshot)
+				if not _restore_world_object_registry_snapshot(snapshot):
+					push_error("Failed to restore scoped world-object records after capture preflight failure.")
 				return false
 			var state: Variant = node.call("get_world_object_state")
 			if not (state is Dictionary) or (node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), str(chunk_id), state)):
-				object_state_registry.call("restore_save_dict", snapshot)
+				if not _restore_world_object_registry_snapshot(snapshot):
+					push_error("Failed to restore scoped world-object records after capture state failure.")
 				return false
 	return true
 
@@ -688,6 +697,91 @@ func _collect_world_state_nodes(node: Node, path_prefix: String, output: Diction
 			return false
 	return true
 
+## Captures only the stable IDs touched by one chunk transaction when the registry
+## supports deletion. Older registry implementations retain the full-save fallback.
+func _capture_world_object_registry_snapshot(stable_ids: Array[String]) -> Dictionary:
+	if object_state_registry == null:
+		return {}
+	if object_state_registry.has_method("get_object_state") and object_state_registry.has_method("set_object_state") and object_state_registry.has_method("forget_object_state"):
+		var records: Dictionary = _capture_world_object_registry_records(stable_ids)
+		if records.size() != stable_ids.size():
+			return {}
+		return {"mode": "records", "records": records}
+	var full_snapshot: Dictionary = object_state_registry.call("to_save_dict")
+	if not full_snapshot.has("schema_version") or not full_snapshot.has("objects"):
+		return {}
+	return {"mode": "full", "payload": full_snapshot}
+
+func _capture_world_object_registry_records(stable_ids: Array[String]) -> Dictionary:
+	var records: Dictionary = {}
+	for stable_id in stable_ids:
+		if records.has(stable_id):
+			continue
+		var record: Variant = object_state_registry.call("get_object_state", stable_id)
+		if not (record is Dictionary):
+			return {}
+		records[stable_id] = {"present": not record.is_empty(), "record": record}
+	return records
+
+func _is_valid_world_object_registry_snapshot(snapshot: Dictionary) -> bool:
+	var mode: String = str(snapshot.get("mode", ""))
+	if mode == "full":
+		var payload: Variant = snapshot.get("payload", null)
+		return payload is Dictionary and payload.has("schema_version") and payload.has("objects")
+	if mode != "records" or object_state_registry == null:
+		return false
+	if not object_state_registry.has_method("get_object_state") or not object_state_registry.has_method("set_object_state") or not object_state_registry.has_method("forget_object_state"):
+		return false
+	var records: Variant = snapshot.get("records", null)
+	if not (records is Dictionary):
+		return false
+	for stable_id in records.keys():
+		if not (stable_id is String) or not (records[stable_id] is Dictionary):
+			return false
+		var entry: Dictionary = records[stable_id]
+		if not entry.has("present") or typeof(entry.get("present")) != TYPE_BOOL:
+			return false
+		if bool(entry.get("present", false)):
+			var record: Variant = entry.get("record", null)
+			if not (record is Dictionary) or not (record.get("chunk_id", null) is String) or not (record.get("state", null) is Dictionary):
+				return false
+	return true
+
+func _apply_world_object_registry_records(records: Dictionary) -> bool:
+	for stable_id in records.keys():
+		var current_record: Variant = object_state_registry.call("get_object_state", str(stable_id))
+		if not (current_record is Dictionary):
+			return false
+		if not current_record.is_empty() and not bool(object_state_registry.call("forget_object_state", str(stable_id))):
+			return false
+	for stable_id in records.keys():
+		var entry: Dictionary = records[stable_id]
+		if not bool(entry.get("present", false)):
+			continue
+		var record: Dictionary = entry.get("record", {})
+		if not bool(object_state_registry.call("set_object_state", str(stable_id), str(record.get("chunk_id", "")), record.get("state", {}))):
+			return false
+	return true
+
+func _restore_world_object_registry_snapshot(snapshot: Dictionary) -> bool:
+	if not _is_valid_world_object_registry_snapshot(snapshot):
+		return false
+	var mode: String = str(snapshot.get("mode", ""))
+	if mode == "full":
+		return bool(object_state_registry.call("restore_save_dict", snapshot.get("payload", {})))
+	var target_records: Dictionary = snapshot.get("records", {})
+	var stable_ids: Array[String] = []
+	for stable_id in target_records.keys():
+		stable_ids.append(str(stable_id))
+	var current_records: Dictionary = _capture_world_object_registry_records(stable_ids)
+	if current_records.size() != target_records.size():
+		return false
+	if _apply_world_object_registry_records(target_records):
+		return true
+	if not _apply_world_object_registry_records(current_records):
+		push_error("Failed to restore the current world-object records after a scoped rollback error.")
+	return false
+
 func _restore_world_object_nodes(chunk_id: String, objects: Dictionary, registry_snapshot: Dictionary, initial_states: Dictionary) -> bool:
 	var defaults: Dictionary = {}
 	for local_path in objects.keys():
@@ -717,7 +811,7 @@ func _restore_world_object_nodes(chunk_id: String, objects: Dictionary, registry
 func _rollback_world_object_restore(initial_states: Dictionary, registry_snapshot: Dictionary) -> void:
 	_restore_live_world_object_snapshot(initial_states)
 	if object_state_registry != null and not registry_snapshot.is_empty():
-		if not bool(object_state_registry.call("restore_save_dict", registry_snapshot)):
+		if not _restore_world_object_registry_snapshot(registry_snapshot):
 			push_error("Failed to restore world-object registry snapshot after chunk object-state failure.")
 
 func _make_world_object_stable_id(chunk_id: String, local_path: String) -> String:
