@@ -60,7 +60,7 @@ godot --headless --path . --script res://tests/mineral_grid_streaming_async_test
 - Verify invalid sync validation does not cancel a valid in-flight async request.
 - Verify invalid async validation neither cancels the active request nor consumes a request ID.
 - Verify a valid in-flight request still completes after rejected radius and dimension attempts.
-- Preserve the existing maximum-radius 17×17 async transaction and 289→1 contraction coverage.
+- Add a maximum-radius 17×17 async expansion and 289→1 contraction regression, asserting 289 committed chunks, 280 staged additions and 288 stale unloads.
 
 ## Validation status and limitations
 
