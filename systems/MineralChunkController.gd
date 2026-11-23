@@ -541,7 +541,7 @@ func refresh_terrain_adjacency() -> bool:
 	return bool(result.get("ok", false))
 
 func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
-	var result: Dictionary = _request_terrain_adjacency_rebind(_collect_loaded_terrain_patches())
+	var result: Dictionary = _request_terrain_adjacency_rebind()
 	if not bool(result.get("ok", false)):
 		push_error("Terrain transition descriptor rebuild failed after terrain edit: %s" % str(result.get("error", "unknown")))
 
