@@ -63,3 +63,24 @@ The script emits a `WORLD_OBJECT_REGISTRY_BENCHMARK_JSON:` line containing the m
 2. Inspect the JSON marker and ensure all deterministic assertions pass.
 3. Retain the timing values as a reproducible API microbenchmark baseline, not as player-facing frame-time evidence.
 4. Keep the PR stacked on #419; obtain independent review before parent-first integration.
+
+## Final exact-head validation — 2026-11-23
+
+- Candidate HEAD: `a7b80be50cf7c922b03aa1f34026b472fa4f67ce`; parent PR #419 exact HEAD: `853c541912496a7f3d99faaa4b2b1bb013e632ff`; compare 4 ahead / 0 behind.
+- All 19/19 PR-triggered workflow runs succeeded.
+- Godot 4.3 Full Compatibility Gate [45208355851](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45208355851): 554/554 job steps successful, 0 failed, 0 skipped.
+- The benchmark step emitted:
+  - Full snapshot median: 410,903 µs per 577 transactions.
+  - Scoped snapshot median: 1,456 µs per 577 transactions.
+  - Top-level object records copied per sample: 166,753 full versus 577 scoped (289× deterministic count reduction).
+- Mineral Grid Streaming Lifecycle [45208356072](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45208356072): 14/14 successful steps.
+- Full Gate log audit: 7,742,928 characters / 84,713 lines / 78,359 PASS matches / 23 retained warnings; 0 actual Script/Parse/Runtime/FAIL diagnostics, 0 ObjectDB leaks, 0 Orphan StringName diagnostics.
+- The 23 warnings remain: 19 filled draw_rect width notices, 1 nested-project notice, 1 stale-unload rollback warning, and 2 synchronous-registration rollback warnings. None is claimed fixed.
+- Timings are runner-specific and informational. The benchmark isolates production registry snapshot API calls; it is not a controller end-to-end, Run 392 lifecycle replay, full nested-allocation count, GPU, or FPS measurement. No gameplay performance improvement is claimed.
+- No local Godot executable, GPU, or target-device pass is claimed.
+
+## Review and integration status
+
+- Child PR [#420](https://github.com/qaqp980520-prog/2126-Survival/pull/420) is Open / Ready for Review / Mergeable / Unmerged.
+- Independent review submissions: 0; inline review threads: 0.
+- Keep PR #420 stacked on #419; integrate only after independent review and parent-first validation. No merge to main.
