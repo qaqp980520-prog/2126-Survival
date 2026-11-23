@@ -60,6 +60,49 @@ has_pull_request_narrowing_filter() {
   ' "$file"
 }
 
+
+validate_pinned_candidate_fetches() {
+  local file="$1"
+  local fetch_count
+  local call_count
+  local checkout_count
+  fetch_count="$(grep -Ec 'git[[:space:]]+fetch' "$file" || true)"
+  if [[ "$fetch_count" -eq 0 ]]; then
+    return
+  fi
+  if [[ "$fetch_count" -ne 1 ]]; then
+    fail "$file" "candidate sources must use exactly one shared pinned git-fetch helper"
+  fi
+  if ! grep -Fq 'git fetch --no-tags origin "$branch"' "$file"; then
+    fail "$file" "candidate source fetch must use the reviewed branch-ref helper"
+  fi
+  if ! grep -Fq 'FETCHED_CANDIDATE_SHA="$(git rev-parse FETCH_HEAD)"' "$file" || \
+     ! grep -Fq 'if [[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" ]]; then' "$file"; then
+    fail "$file" "candidate source fetch must compare FETCH_HEAD with its expected full commit SHA"
+  fi
+  call_count="$(grep -Ec '^[[:space:]]*fetch_pinned_candidate "' "$file" || true)"
+  checkout_count="$(grep -Fc 'git checkout "$FETCHED_CANDIDATE_SHA" --' "$file" || true)"
+  if [[ "$call_count" -ne 4 || "$checkout_count" -ne 4 ]]; then
+    fail "$file" "all four candidate source imports must use the pinned SHA returned by fetch_pinned_candidate"
+  fi
+  local pins=(
+    "feature/daily-kroll-signal-sweep-2026-10-25 e0953f6bcc58e764f172d85b96e2b66d73bdb859"
+    "fix/inventory-save-validation-2026-10-25 2d39e18e8b90d9b90cd8a65ebfb6b76d375ae5cb"
+    "feature/m1-3-inventory-save-adapter-2026-10-25 300d4cc826fc02423e365c8199460de9afa5ceb5"
+    "feature/kroll-orbital-convoy-backrooms-portals-2026-10-26 c9833cafa00f6865c34752449cfe09ed17f04d65"
+  )
+  local pin
+  local candidate_branch
+  local expected_sha
+  for pin in "${pins[@]}"; do
+    candidate_branch="${pin% *}"
+    expected_sha="${pin##* }"
+    if ! grep -Fq "fetch_pinned_candidate \"$candidate_branch\" \"$expected_sha\"" "$file"; then
+      fail "$file" "candidate source $candidate_branch must be pinned to reviewed commit $expected_sha"
+    fi
+  done
+}
+
 for file in "${workflow_files[@]}"; do
   workflow_count=$((workflow_count + 1))
 
@@ -135,6 +178,7 @@ for file in "${workflow_files[@]}"; do
     if has_pull_request_narrowing_filter "$file"; then
       fail "$file" "Full Gate pull_request must not narrow target branches or event activity types, or use paths-ignore"
     fi
+    validate_pinned_candidate_fetches "$file"
   fi
 
   if grep -Eq '[,{][[:space:]]*uses:[[:space:]]*' "$file" ||
