@@ -28,6 +28,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
 bash "$validator" "$tmpdir/good" >/dev/null
+positive_count=1
+negative_count=0
 
 write_fixture_from_stdin() {
   local name="$1"
@@ -41,6 +43,7 @@ expect_rejected() {
     echo "ERROR: security guard accepted invalid fixture: $name" >&2
     exit 1
   fi
+  negative_count=$((negative_count + 1))
 }
 
 write_fixture missing_permissions 'name: missing
@@ -404,6 +407,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 EOF
 bash "$validator" "$tmpdir/trigger_coverage" >/dev/null
+positive_count=$((positive_count + 1))
 
 mkdir -p "$tmpdir/trigger_missing"
 cat > "$tmpdir/trigger_missing/godot-validation.yml" <<'EOF'
@@ -924,8 +928,26 @@ EOF
   expect_rejected "$fixture_name"
 done
 
-for fixture in missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path trigger_pull_request_branches_filter trigger_pull_request_branches_ignore_filter trigger_pull_request_types_filter trigger_pull_request_paths_ignore_filter trigger_pull_request_merge_key_branch_filter trigger_pull_request_padded_branches_filter scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
+
+mkdir -p "$tmpdir/candidate_fetch_pinned"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_pinned/godot-validation.yml"
+bash "$validator" "$tmpdir/candidate_fetch_pinned" >/dev/null
+positive_count=$((positive_count + 1))
+
+mkdir -p "$tmpdir/candidate_fetch_unpinned"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_unpinned/godot-validation.yml"
+sed -i 's|fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"|git fetch origin feature/daily-kroll-signal-sweep-2026-10-25|' "$tmpdir/candidate_fetch_unpinned/godot-validation.yml"
+
+mkdir -p "$tmpdir/candidate_fetch_sha_mismatch"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_sha_mismatch/godot-validation.yml"
+sed -i 's|e0953f6bcc58e764f172d85b96e2b66d73bdb859|0000000000000000000000000000000000000000|' "$tmpdir/candidate_fetch_sha_mismatch/godot-validation.yml"
+
+mkdir -p "$tmpdir/candidate_fetch_missing_pin"
+cp .github/workflows/godot-validation.yml "$tmpdir/candidate_fetch_missing_pin/godot-validation.yml"
+sed -i '/fetch_pinned_candidate "feature\/daily-kroll-signal-sweep-2026-10-25"/d' "$tmpdir/candidate_fetch_missing_pin/godot-validation.yml"
+
+for fixture in candidate_fetch_unpinned candidate_fetch_sha_mismatch candidate_fetch_missing_pin missing_permissions nested_permissions floating_action dangerous_trigger local_action flow_style_action quoted_uses_action escaped_quoted_uses_action quoted_permissions_action spaced_uses_action spaced_permissions_action explicit_uses_action tagged_uses_action anchored_uses_action alias_uses_action flow_spaced_uses_action flow_escaped_uses_action spaced_pull_request_target_action spaced_workflow_run_action alias_permissions_action explicit_permissions_action tagged_permissions_action anchored_permissions_action flow_on_pull_request_target_action block_flow_pull_request_target_action flow_on_workflow_run_action flow_permissions_duplicate_action extra_permission trigger_missing trigger_missing_actions trigger_push_only trigger_comment_only trigger_paths_ignore trigger_duplicate_pull_request trigger_duplicate_paths trigger_negative_all_paths trigger_negative_workflow_path trigger_escaped_negative_workflow_path trigger_anchored_negative_path trigger_aliased_negative_path trigger_tagged_negative_path trigger_block_scalar_negative_path trigger_continued_escaped_negative_path trigger_pull_request_branches_filter trigger_pull_request_branches_ignore_filter trigger_pull_request_types_filter trigger_pull_request_paths_ignore_filter trigger_pull_request_merge_key_branch_filter trigger_pull_request_padded_branches_filter scalar_workflow_run_event scalar_pull_request_target_event flow_sequence_workflow_run_event flow_sequence_pull_request_target_event block_sequence_workflow_run_event block_sequence_pull_request_target_event nonempty_pull_request_target_value nonempty_workflow_run_value duplicate_on_mapping; do
   expect_rejected "$fixture"
 done
 
-printf 'Workflow security guard self-tests passed: 2 positive and 73 negative fixtures.\n'
+printf 'Workflow security guard self-tests passed: %d positive and %d negative fixtures.\n' "$positive_count" "$negative_count"
