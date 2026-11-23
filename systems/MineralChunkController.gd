@@ -727,7 +727,9 @@ func _is_valid_world_object_registry_snapshot(snapshot: Dictionary) -> bool:
 	var mode: String = str(snapshot.get("mode", ""))
 	if mode == "full":
 		var payload: Variant = snapshot.get("payload", null)
-		return payload is Dictionary and payload.has("schema_version") and payload.has("objects")
+		if not (payload is Dictionary):
+			return false
+		return payload.has("schema_version") and payload.has("objects")
 	if mode != "records" or object_state_registry == null:
 		return false
 	if not object_state_registry.has_method("get_object_state") or not object_state_registry.has_method("set_object_state") or not object_state_registry.has_method("forget_object_state"):
