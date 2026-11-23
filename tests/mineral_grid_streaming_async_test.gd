@@ -97,6 +97,73 @@ func _test_playground_async_requests() -> void:
     var original_ids: PackedStringArray = controller.call("get_loaded_chunk_ids")
     var original_root: Node3D = controller.call("get_chunk_root", "surface/chunk_0_0") as Node3D
     _expect(original_ids.size() == 9 and original_root != null, "playground starts with a valid 3x3 active window")
+
+    var original_radius: int = int(director.get("load_radius"))
+    var next_request_before_validation: int = int(director.get("_next_async_request_id"))
+    director.set("load_radius", 9)
+    var excessive_radius_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time, 1))
+    _expect(excessive_radius_request == -1, "Async request rejects a runtime radius above the Inspector maximum")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "Rejected excessive-radius request does not create an active request")
+    _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected excessive-radius request does not consume a request ID")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected excessive-radius request leaves the active window unchanged")
+    director.set("load_radius", -1)
+    var negative_radius_request: int = int(director.call("request_sync_to_world_position_async", Vector3(35.0, 0.0, 35.0), _test_time, 1))
+    _expect(negative_radius_request == -1, "Async request rejects a negative runtime radius")
+    _expect(int(director.call("get_active_async_request_id")) == -1, "Rejected negative-radius request does not create an active request")
+    _expect(int(director.get("_next_async_request_id")) == next_request_before_validation, "Rejected negative-radius request does not consume a request ID")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Rejected negative-radius request leaves the active window unchanged")
+    director.set("load_radius", original_radius)
+
+    var validation_guard_request: int = int(director.call("request_sync_to_world_position_async", Vector3(15.0, 0.0, 5.0), _test_time + 1, 1))
+    var validation_guard_staged: bool = await _wait_for_staged_root_count(director, validation_guard_request, 1)
+    _expect(validation_guard_request > 0 and validation_guard_staged, "Valid async request stages a root before invalid sync validation")
+    director.set("load_radius", 9)
+    var invalid_sync_during_async: bool = bool(director.call("sync_to_world_position", Vector3(25.0, 0.0, 25.0), _test_time + 2))
+    _expect(not invalid_sync_during_async, "Sync rejects an excessive radius while another async request is active")
+    _expect(int(director.call("get_active_async_request_id")) == validation_guard_request, "Invalid sync validation does not cancel the valid in-flight request")
+    _expect(controller.call("get_loaded_chunk_ids") == original_ids, "Invalid sync validation leaves the committed chunk window unchanged")
+    var next_request_before_invalid_async: int = int(director.get("_next_async_request_id"))
+    var invalid_async_during_active: int = int(director.call("request_sync_to_world_position_async", Vector3(45.0, 0.0, 45.0), _test_time + 3, 1))
+    _expect(invalid_async_during_active == -1, "Async request rejects an excessive radius while another request is active")
+    _expect(int(director.call("get_active_async_request_id")) == validation_guard_request, "Invalid async validation preserves the active request")
+    _expect(int(director.get("_next_async_request_id")) == next_request_before_invalid_async, "Invalid async validation does not consume a request ID")
+    director.set("load_radius", original_radius)
+    var validation_guard_report: Dictionary = await _wait_for_request(director, validation_guard_request)
+    _expect(bool(validation_guard_report.get("success", false)) and str(validation_guard_report.get("phase", "")) == "complete", "Valid async request completes after invalid radius validation is rejected")
+    original_ids = controller.call("get_loaded_chunk_ids")
+    var original_root_id: String = str(original_ids[0]) if not original_ids.is_empty() else ""
+    original_root = controller.call("get_chunk_root", original_root_id) as Node3D
+    _expect(original_root != null, "Post-radius-validation baseline retains a live chunk root")
+
+    var original_chunk_size_z: float = float(director.get("chunk_size_z"))
+    var dimension_guard_request: int = int(director.call("request_sync_to_world_position_async", Vector3(95.0, 0.0, 65.0), _test_time + 4, 1))
+    _expect(dimension_guard_request > 0, "Valid async request is accepted before invalid dimension checks")
+    if dimension_guard_request > 0:
+        var dimension_guard_staged: bool = await _wait_for_staged_root_count(director, dimension_guard_request, 1)
+        _expect(dimension_guard_staged, "Dimension-guard request stages a root before invalid configuration is submitted")
+        if dimension_guard_staged:
+            var dimension_ids_before: PackedStringArray = controller.call("get_loaded_chunk_ids")
+            director.set("chunk_size_z", 0.0)
+            var invalid_dimension_sync: bool = bool(director.call("sync_to_world_position", Vector3(105.0, 0.0, 75.0), _test_time + 5))
+            _expect(not invalid_dimension_sync, "Sync rejects zero chunk depth while another async request is active")
+            _expect(int(director.call("get_active_async_request_id")) == dimension_guard_request, "Invalid dimension sync does not cancel the valid in-flight request")
+            _expect(controller.call("get_loaded_chunk_ids") == dimension_ids_before, "Invalid dimension sync leaves committed chunk IDs unchanged")
+            var next_request_before_invalid_dimension_async: int = int(director.get("_next_async_request_id"))
+            var invalid_dimension_async: int = int(director.call("request_sync_to_world_position_async", Vector3(115.0, 0.0, 85.0), _test_time + 6, 1))
+            _expect(invalid_dimension_async == -1, "Async request rejects zero chunk depth")
+            _expect(int(director.call("get_active_async_request_id")) == dimension_guard_request, "Invalid dimension async validation preserves the active request")
+            _expect(int(director.get("_next_async_request_id")) == next_request_before_invalid_dimension_async, "Invalid dimension async validation does not consume a request ID")
+            _expect(controller.call("get_loaded_chunk_ids") == dimension_ids_before, "Invalid dimension async validation leaves committed chunk IDs unchanged")
+            director.set("chunk_size_z", original_chunk_size_z)
+        else:
+            director.call("cancel_async_sync_request", dimension_guard_request)
+        var dimension_guard_report: Dictionary = await _wait_for_request(director, dimension_guard_request)
+        _expect(bool(dimension_guard_report.get("success", false)) and str(dimension_guard_report.get("phase", "")) == "complete", "Valid async request completes after invalid dimension validation is rejected")
+    original_ids = controller.call("get_loaded_chunk_ids")
+    original_root_id = str(original_ids[0]) if not original_ids.is_empty() else ""
+    original_root = controller.call("get_chunk_root", original_root_id) as Node3D
+    _expect(original_root != null, "Post-dimension-validation baseline captures a live root")
+
     var original_factory: Callable = director.get("chunk_factory")
     _delegate_factory = original_factory
     director.set("chunk_factory", Callable(self, "_make_fault_injected_chunk"))
