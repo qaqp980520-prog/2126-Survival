@@ -352,8 +352,8 @@ func _test_chunk_scoped_object_registry_rollback() -> void:
 	assert(int(successful_registry.get("full_snapshot_calls")) == 0, "Successful chunk load uses only the chunk-scoped snapshot")
 	var first_prop: Node = chunk.get_node("SalvageCrate")
 	var second_prop: Node = chunk.get_node("SalvageCrate_Second")
-	var success_success_first_id := successful_chunk_id + "/object/ChunkRoot/SalvageCrate"
-	var success_success_second_id := successful_chunk_id + "/object/ChunkRoot/SalvageCrate_Second"
+	var success_first_id := successful_chunk_id + "/object/ChunkRoot/SalvageCrate"
+	var success_second_id := successful_chunk_id + "/object/ChunkRoot/SalvageCrate_Second"
 	var first_record_before_capture: Dictionary = successful_registry.call("get_object_state", success_first_id)
 	var second_record_before_capture: Dictionary = successful_registry.call("get_object_state", success_second_id)
 	assert(bool(first_prop.call("interact")), "The first loaded stateful prop changes before capture")
