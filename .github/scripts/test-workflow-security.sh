@@ -405,6 +405,25 @@ jobs:
   test:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Prepare candidate files from pinned commits
+        run: |
+          fetch_pinned_candidate() {
+            local branch="$1"
+            local expected_sha="$2"
+            git fetch --no-tags origin "$branch"
+            FETCHED_CANDIDATE_SHA="$(git rev-parse FETCH_HEAD)"
+            if [[ "$FETCHED_CANDIDATE_SHA" != "$expected_sha" ]]; then
+              exit 1
+            fi
+          }
+          fetch_pinned_candidate "feature/daily-kroll-signal-sweep-2026-10-25" "e0953f6bcc58e764f172d85b96e2b66d73bdb859"
+          git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Signal_Sweep
+          fetch_pinned_candidate "fix/inventory-save-validation-2026-10-25" "2d39e18e8b90d9b90cd8a65ebfb6b76d375ae5cb"
+          git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventory.gd tests/inventory_save_validation.gd
+          fetch_pinned_candidate "feature/m1-3-inventory-save-adapter-2026-10-25" "300d4cc826fc02423e365c8199460de9afa5ceb5"
+          git checkout "$FETCHED_CANDIDATE_SHA" -- systems/SurvivalInventorySaveAdapter.gd tests/inventory_save_adapter.gd
+          fetch_pinned_candidate "feature/kroll-orbital-convoy-backrooms-portals-2026-10-26" "c9833cafa00f6865c34752449cfe09ed17f04d65"
+          git checkout "$FETCHED_CANDIDATE_SHA" -- daily_games/KROLL_Orbital_Convoy systems/BackroomsPortalDirector.gd tests/backrooms_portal_director_test.gd tests/backrooms_portal_scene_test.gd systems/BackroomsPortalVisual.gd systems/BackroomsPortalVisual.tscn docs/BACKROOMS_RANDOM_PORTAL_DIRECTOR_M0_1.md
 EOF
 bash "$validator" "$tmpdir/trigger_coverage" >/dev/null
 positive_count=$((positive_count + 1))
