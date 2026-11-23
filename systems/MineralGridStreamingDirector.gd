@@ -10,7 +10,9 @@ signal async_sync_completed(request_id: int, report: Dictionary)
 
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const MAX_SAFE_GRID_COORDINATE: float = 1000000000.0
-# Keep runtime assignments within the same bound exposed by the Inspector.
+# Keep runtime assignments within the same bounds exposed by the Inspector.
+const MIN_CHUNK_SIZE: float = 1.0
+const MAX_CHUNK_SIZE: float = 4096.0
 const MAX_LOAD_RADIUS: int = 8
 const MAX_ASYNC_DIAGNOSTIC_HISTORY: int = 32
 
@@ -833,14 +835,16 @@ func _is_valid_grid_configuration() -> bool:
 	return (
 		is_finite(chunk_size_x)
 		and is_finite(chunk_size_z)
-		and chunk_size_x > 0.0
-		and chunk_size_z > 0.0
+		and chunk_size_x >= MIN_CHUNK_SIZE
+		and chunk_size_z >= MIN_CHUNK_SIZE
+		and chunk_size_x <= MAX_CHUNK_SIZE
+		and chunk_size_z <= MAX_CHUNK_SIZE
 		and load_radius >= 0
 		and load_radius <= MAX_LOAD_RADIUS
 	)
 
 func _grid_configuration_error_message() -> String:
-	return "Chunk dimensions must be finite and positive; load radius must be between 0 and %d." % MAX_LOAD_RADIUS
+	return "Chunk dimensions must be finite and between %d and %d; load radius must be between 0 and %d." % [int(MIN_CHUNK_SIZE), int(MAX_CHUNK_SIZE), MAX_LOAD_RADIUS]
 
 func _is_safe_grid_position(world_position: Vector3) -> bool:
 	if not _is_finite_world_position(world_position):
