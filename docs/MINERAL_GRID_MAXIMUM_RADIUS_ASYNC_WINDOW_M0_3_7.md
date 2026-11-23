@@ -51,3 +51,11 @@ No new workflow file or external dependency is required.
 ## Next step
 
 Run the exact-head Mineral Grid focused gate and complete Godot 4.3 gate. If the 289→1 lifecycle test fails, inspect the async commit/unload transaction and fix this same branch before review.
+
+## Run 389 — parent-current exact-merge revalidation checkpoint — 2026-11-23
+
+- Parent PR #276 was revalidated against current main and its head advanced from `e15765ead6c48940a8fb40a5071bf6203a2cf276` to `a8c0fca26b74f7256bc40fded25ccfb0b9a6f721` with a documentation-only checkpoint commit. Current main remains `65b2cabc751637729d58f64c9633f888d3c8b74c`.
+- This child branch still contains the prior parent head as its merge base. Live compare now reports 13 commits ahead / 1 behind the updated parent. The only newly introduced parent commit changes the M0.3.4 version document; no runtime/test file conflict is reported by the compare endpoint.
+- Recovery branch `backup/pr277-before-parent-current-main-revalidation-2026-11-23-run389` preserves the child head before this checkpoint.
+- This documentation-only update triggers a fresh child PR validation against the updated #276 parent merge ref. Exact-head Full Godot 4.3, Mineral Grid focused, and streaming regression results are pending; the November 6 runs validate only the prior base and must not be reused as current-parent evidence.
+- PR #277 remains Draft and stacked on #276. Do not merge directly to main; after current-parent CI passes, integrate #277 into #276 and rerun the parent's exact-head matrix.
