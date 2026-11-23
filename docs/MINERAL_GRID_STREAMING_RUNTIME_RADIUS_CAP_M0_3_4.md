@@ -73,3 +73,13 @@ The cap bounds one Director window to at most 289 coordinates. It does not impos
 - Recovery now reports a specific `recovery_validation` message for an invalid radius before reconciling the controller's actual IDs into the Director map.
 - Add lower- and upper-bound regression coverage for radii -1 and 9 across sync, recovery, coordinate validation and async request creation.
 - Exact-head Godot 4.3 CI must pass for the resulting commit; the prior head's 10/10 matrix is historical evidence only.
+
+
+## Run 389 — current-main exact-merge validation checkpoint — 2026-11-23
+
+- Reconciled the parent PR branch against the live repository main before any integration. Main is `65b2cabc751637729d58f64c9633f888d3c8b74c`; this branch head before the checkpoint was `e15765ead6c48940a8fb40a5071bf6203a2cf276`.
+- The branch's original recorded base was `fbf2b8a971cd5ff04946b0e0316da6576c685b5e`. Live compare reports main is 14 commits ahead of that base and the feature branch is 7 commits ahead / 14 behind current main. The five-file feature diff remains limited to the Mineral Grid workflow, this version document, `systems/MineralGridStreamingDirector.gd`, and the two focused tests.
+- The 14 mainline commits were checked against the parent PR's changed-path list; no overlapping changed paths were reported by the commit comparison. No production code was rebased, overwritten, or merged into main.
+- A recovery branch `backup/pr276-before-current-main-revalidation-2026-11-23-run389` preserves the pre-checkpoint parent head.
+- PR #276 was returned to Draft before revalidation. This documentation-only commit is intended to trigger a fresh PR validation against the current main merge ref. Exact-head Full Godot 4.3 and focused Mineral Grid results are pending; previous November 6 runs are historical and do not validate this new head.
+- The stacked child PR #277 remains based on this parent branch; its base/head relationship and fresh CI must be checked after this parent update. Do not merge either PR to main until current-head tests and independent review are complete.
