@@ -24,6 +24,7 @@ const ENTITY_TRANSFER_ENTRY_INSET: float = 0.02
 const FLOOR_THICKNESS: float = 0.2
 const WALL_THICKNESS: float = 0.18
 const WALL_HEIGHT: float = 3.2
+const CEILING_THICKNESS: float = 0.18
 const WORLD_GEOMETRY_LAYER: int = 1
 
 var stream_state: RefCounted = StreamStateScript.new()
@@ -37,6 +38,7 @@ var last_error: String = ""
 var _cell_builder_override: Callable = Callable()
 var _floor_material: StandardMaterial3D
 var _wall_material: StandardMaterial3D
+var _ceiling_material: StandardMaterial3D
 
 func _ready() -> void:
 	visible = false
@@ -781,6 +783,17 @@ func _build_cell_geometry(
 	floor_mesh.material_override = _get_floor_material()
 	root.add_child(floor_mesh)
 
+	# Every production cell is an enclosed room. The ceiling underside aligns
+	# exactly with the wall tops, keeping the deterministic ceiling light inside.
+	var ceiling_mesh := MeshInstance3D.new()
+	ceiling_mesh.name = "Ceiling"
+	var ceiling_box := BoxMesh.new()
+	ceiling_box.size = Vector3(cell_size, CEILING_THICKNESS, cell_size)
+	ceiling_mesh.mesh = ceiling_box
+	ceiling_mesh.position = Vector3(0.0, WALL_HEIGHT + CEILING_THICKNESS * 0.5, 0.0)
+	ceiling_mesh.material_override = _get_ceiling_material()
+	root.add_child(ceiling_mesh)
+
 	if bool(lighting_descriptor.get("enabled", false)):
 		var ceiling_light := OmniLight3D.new()
 		ceiling_light.name = "BackroomsCeilingLight"
@@ -803,6 +816,14 @@ func _build_cell_geometry(
 	floor_shape.shape = floor_box_shape
 	floor_shape.position = floor_mesh.position
 	collision.add_child(floor_shape)
+
+	var ceiling_shape := CollisionShape3D.new()
+	ceiling_shape.name = "CeilingCollision"
+	var ceiling_box_shape := BoxShape3D.new()
+	ceiling_box_shape.size = ceiling_box.size
+	ceiling_shape.shape = ceiling_box_shape
+	ceiling_shape.position = ceiling_mesh.position
+	collision.add_child(ceiling_shape)
 
 	var half: float = cell_size * 0.5
 	var inset: float = WALL_THICKNESS * 0.5
@@ -853,6 +874,13 @@ func _get_wall_material() -> StandardMaterial3D:
 		_wall_material.albedo_color = Color(0.76, 0.72, 0.51)
 		_wall_material.roughness = 0.9
 	return _wall_material
+
+func _get_ceiling_material() -> StandardMaterial3D:
+	if _ceiling_material == null:
+		_ceiling_material = StandardMaterial3D.new()
+		_ceiling_material.albedo_color = Color(0.83, 0.80, 0.70)
+		_ceiling_material.roughness = 0.95
+	return _ceiling_material
 
 func _is_metadata_only() -> bool:
 	return force_metadata_only or DisplayServer.get_name() == "headless"
