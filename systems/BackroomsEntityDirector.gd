@@ -6,7 +6,8 @@ const LEVEL_ENTITY_RULES := {
     "Level 0": [],
     "Level 1": ["window", "smiler"],
     "Level 2": ["hound", "skin_stealer"],
-    "Level 3": ["clump", "faceling"]
+    "Level 3": ["clump", "faceling"],
+    "Level 4": ["duller", "deathmoth"]
 }
 
 const ENTITY_CHANCES := {
@@ -15,7 +16,9 @@ const ENTITY_CHANCES := {
     "hound": 8,
     "skin_stealer": 5,
     "clump": 6,
-    "faceling": 8
+    "faceling": 8,
+    "duller": 5,
+    "deathmoth": 8
 }
 
 static func get_allowed_entities(level_name: String) -> Array[String]:
@@ -51,6 +54,10 @@ static func _entity_salt(entity_id: String) -> int:
             return 27103
         "faceling":
             return 31847
+        "duller":
+            return 39217
+        "deathmoth":
+            return 45631
     return 0
 
 static func _stable_hash(x: int, y: int, salt: int) -> int:
