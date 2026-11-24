@@ -44,9 +44,19 @@ godot --headless --path . --script res://tests/backrooms_cell_route_planner_test
 - Reinstall the counting probe after the shift and verify the old route is rejected without a ledger lookup.
 - Emit a dedicated marker and require it in the Full Compatibility Gate workflow.
 
-## Validation status
+## Validation status — code/test HEAD 69b103a
 
-Pending exact-head GitHub Actions Godot 4.3 validation and complete log audit. No prior PR #430 workflow result is reused for the new commit.
+- Exact code/test candidate: `69b103aa6e609da60cd5a5f8e5cca1b080baeba9`.
+- Fresh PR-triggered matrix: 19/19 workflows succeeded.
+- Godot Full Compatibility Gate [45403729819](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45403729819): 571/571 numbered validation steps succeeded; 574/574 total step records succeeded including 3 post-job steps.
+- Route planner step #25 succeeded and the workflow accepted the dedicated lookup-order marker.
+- Production integration steps #222–#227 all succeeded: SurfaceWorld integration, combined Backrooms save envelope, SurfaceWorld file persistence, SurfaceWorld/Hound durable round-trip, keyboard/touch Save/Load, and survival test hub smoke.
+- Full Gate log: 7,978,358 characters / 87,213 lines / 80,441 PASS matches. Actual Script/Parse/Runtime/ERROR/FAIL diagnostics: 0; ObjectDB leaks: 0; Orphan StringName: 0.
+- 26 retained warnings, not claimed fixed: 19 filled `draw_rect` width warnings; 1 nested KROLL project warning; 1 mineral stale-unload rollback warning; 3 SurfaceWorld restore rollback warnings; 2 synchronous mineral registration rollback warnings.
+- Xvfb/Mesa Backrooms rendering job was skipped by the workflow branch-prefix condition. This metadata-only route/ownership test does not claim rendering, physics, GPU, FPS, or mobile-device validation. No local Godot executable is available.
+- Full Gate produced no artifact. The route test's new positive/negative lookup-order assertions were visible in the Full Gate log.
+
+A documentation-only finalization commit follows this code/test HEAD so the version record can carry the measured result. The new PR head must complete its own fresh workflow matrix before integration; the above run is not reused as final-head evidence.
 
 ## Limitations
 
