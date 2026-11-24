@@ -73,6 +73,8 @@ jobs:
           test -f tests/world_object_registry_snapshot_benchmark.gd
           test -f tests/world_object_chunk_lifecycle_benchmark.gd
           test -f tests/world_object_multi_prop_chunk_lifecycle_benchmark.gd
+          test -f tests/world_object_multi_prop_rollback_test.gd
+          test -f docs/WORLD_OBJECT_MULTI_PROP_ROLLBACK_M0_3_14.md
           test -f docs/WORLD_OBJECT_REGISTRY_SNAPSHOT_COST_BENCHMARK_M0_3_11.md
           test -f systems/MineralGridStreamingDirector.gd
           test -f tests/mineral_grid_streaming_director_test.gd
@@ -437,6 +439,14 @@ jobs:
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q 'WORLD_OBJECT_MULTI_PROP_CHUNK_LIFECYCLE_BENCHMARK_JSON:'
           echo "$output" | grep -q "World object multi-prop chunk lifecycle benchmark passed."
+      - name: Run WorldObjectStateRegistry multi-prop rollback regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s godot --headless --path . --script res://tests/world_object_multi_prop_rollback_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "World object multi-prop rollback tests passed."
       - name: Run Backrooms player input regression test
         shell: bash
         run: |
