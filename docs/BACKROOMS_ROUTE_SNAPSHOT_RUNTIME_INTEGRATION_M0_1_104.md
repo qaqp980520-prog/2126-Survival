@@ -55,3 +55,13 @@ Pending exact-head Godot 4.3 Full Compatibility Gate and complete log audit. The
 2. Audit the Full Gate log for actual Script/Parse/Runtime/ERROR/FAIL diagnostics and classify retained warnings.
 3. Update this record, PR #430 and the Notion asset/work index with the exact final HEAD and evidence.
 4. Obtain independent review and preserve parent-first integration; revalidate every resulting HEAD.
+
+## Run 410 follow-up — exact code/test HEAD validation
+
+- Lookup-order follow-up asset: `docs/BACKROOMS_ROUTE_TRANSFER_LOOKUP_ORDER_M0_1_105.md`.
+- Code/test HEAD `69b103aa6e609da60cd5a5f8e5cca1b080baeba9` passed 19/19 PR-triggered workflows; Full Gate [45403729819](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45403729819) completed 571/571 numbered validation steps and 574/574 total step records.
+- The route planner test emitted both the existing M0.1.104 marker and the new M0.1.105 lookup-order marker. The positive control reached `get_record` exactly once; six malformed snapshot variants plus the post-stream-shift stale route were rejected without a lookup-count increase.
+- Production integration steps #222–#227 all passed. Full Gate log: 7,978,358 characters / 87,213 lines / 80,441 PASS matches; 0 actual Script/Parse/Runtime/ERROR/FAIL diagnostics; 0 ObjectDB leaks; 0 Orphan StringName.
+- 26 warnings remain: 19 filled `draw_rect` width, 1 nested KROLL project, 1 mineral stale-unload rollback, 3 SurfaceWorld restore rollback, 2 synchronous mineral registration rollback. None is claimed fixed.
+- Xvfb/Mesa Backrooms job skipped by branch-prefix condition; no rendering, physics, GPU, FPS, or mobile result. No local Godot executable. No Full Gate artifact.
+- This entry records the code/test HEAD; a documentation-only finalization commit changes the PR HEAD and must complete a fresh exact-head matrix before integration.
