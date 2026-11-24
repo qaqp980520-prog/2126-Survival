@@ -149,10 +149,11 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 		"noise_position": player.global_position + Vector3(0.2, 0.0, 0.0),
 		"player_position": player.global_position
 	}, 0.2)
+	var nearby_noise_target: Vector3 = nearby_noise.get("target_position", Vector3.ZERO)
 	_expect(
 		str(nearby_noise.get("state", "")) == "pursue"
 		and str(nearby_noise.get("target_source", "")) == "noise"
-		and (nearby_noise.get("target_position", Vector3.ZERO) as Vector3).distance_to(player.global_position) <= 2.5,
+		and nearby_noise_target.distance_to(player.global_position) <= 2.5,
 		"nearby unrelated noise can place a Hound in pursue state with a target near the player"
 	)
 	for _wait_index in range(3):
