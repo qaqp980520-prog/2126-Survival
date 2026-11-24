@@ -80,6 +80,9 @@ jobs:
           test -f tests/backrooms_maze_layout_test.gd
           test -f tests/backrooms_cell_route_planner_test.gd
           test -f docs/BACKROOMS_CELL_ROUTE_PLANNER_M0_1_68.md
+          test -f docs/BACKROOMS_ROUTE_SNAPSHOT_RUNTIME_INTEGRATION_M0_1_104.md
+          test -f docs/BACKROOMS_ROUTE_TRANSFER_LOOKUP_ORDER_M0_1_105.md
+          test -f docs/BACKROOMS_ROUTE_TRANSFER_COMMIT_ROLLBACK_M0_1_135.md
           test -f systems/BackroomsEntityOwnershipLedger.gd
           test -f tests/backrooms_entity_ownership_ledger_test.gd
           test -f docs/BACKROOMS_ENTITY_OWNERSHIP_LEDGER_M0_1_69.md
@@ -399,6 +402,8 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms loaded-cell route planner tests passed."
+          echo "$output" | grep -q "Backrooms route snapshot runtime transfer guard passed."
+          echo "$output" | grep -q "Backrooms route transfer lookup-order guard passed."
 
       - name: Run Backrooms transactional entity ownership ledger tests
         shell: bash
@@ -441,6 +446,7 @@ jobs:
           output="$(timeout -k 5s 90s godot --headless --path . --script res://tests/backrooms_entity_owner_runtime_integration_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Backrooms live transfer commit rollback guard passed."
           echo "$output" | grep -q "Backrooms entity owner runtime integration tests passed."
       - name: Run Backrooms production entity visual factory contract tests
         shell: bash
@@ -5104,7 +5110,7 @@ jobs:
 
   backrooms-visual-render-smoke:
     name: Godot 4.3 software-rendered Backrooms entity smoke
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile') || startsWith(github.head_ref, 'feat/durable-world-file-persistence-current-spine') || startsWith(github.head_ref, 'feat/hound-cross-cell-pursuit-edge-approach') || startsWith(github.head_ref, 'feat/hound-two-hop-pursuit-durable-recovery') || startsWith(github.head_ref, 'test/backrooms-multidirection-ceiling')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'integration/backrooms-entity-visual-factory') || startsWith(github.head_ref, 'integration/backrooms-lighting-profile') || startsWith(github.head_ref, 'feat/durable-world-file-persistence-current-spine') || startsWith(github.head_ref, 'feat/hound-cross-cell-pursuit-edge-approach') || startsWith(github.head_ref, 'feat/hound-two-hop-pursuit-durable-recovery') || startsWith(github.head_ref, 'test/backrooms-route-snapshot-transaction') || startsWith(github.head_ref, 'test/backrooms-multidirection-ceiling')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     container:
@@ -5170,6 +5176,7 @@ jobs:
             echo "Hound durable file round-trip failed in the software-rendered runtime."
             exit 1
           fi
+          echo "$output" | grep -q "Backrooms live transfer commit rollback guard passed."
           echo "$output" | grep -q "Backrooms entity owner runtime integration tests passed."
       - name: Upload rendered frame
         if: always()
