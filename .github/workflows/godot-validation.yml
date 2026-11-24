@@ -272,12 +272,29 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Backrooms entity prototype integration tests passed."
-      - name: Run Backrooms production entity factory geometry tests
+      - name: Install Xvfb and Mesa software renderer for Backrooms factory validation
         shell: bash
         run: |
           set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends xvfb xauth libgl1-mesa-dri libglx-mesa0
+          command -v xvfb-run
+          command -v timeout
+          command -v godot
+      - name: Import root project resources for software-rendered Backrooms factory validation
+        run: |
+          godot --headless --path . --editor --import --quit
+          test -f assets/textures/backrooms_wallpaper.svg.import
+          test -f assets/textures/backrooms_carpet.svg.import
+      - name: Run Backrooms production entity factory geometry tests
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -euo pipefail
           test -f tests/backrooms_entity_factory_geometry_test.gd
-          output="$(timeout -k 5s 60s godot --headless --path . --script res://tests/backrooms_entity_factory_geometry_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          output="$(timeout -k 5s 120s xvfb-run -a -s '-screen 0 1280x720x24' godot --audio-driver Dummy --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_factory_geometry_test.gd 2>&1)" || { echo "$output"; exit 1; }
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
             echo "Godot reported errors during production Backrooms entity factory tests."
