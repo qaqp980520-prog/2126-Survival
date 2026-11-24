@@ -119,6 +119,10 @@ func _run() -> void:
 		probe.global_position.y <= RuntimeScript.WALL_HEIGHT - PROBE_RADIUS + 0.05,
 		"collision keeps the probe fully below the ceiling underside"
 	)
+	print(
+		"CEILING_COLLISION_PROBE: final_y=%.3f ceiling_underside=%.3f"
+		% [probe.global_position.y, RuntimeScript.WALL_HEIGHT]
+	)
 
 	runtime.call("deactivate_destination")
 	_finish(stage)
@@ -191,6 +195,7 @@ func _assert_cell_enclosure(cell_root: Node3D, cell_key: String) -> void:
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
+		print("PASS: " + message)
 		return
 	failures.append(message)
 	push_error("FAIL: " + message)
