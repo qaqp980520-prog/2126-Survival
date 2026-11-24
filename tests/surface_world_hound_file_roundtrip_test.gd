@@ -275,7 +275,11 @@ func _run() -> void:
 	restored_player.velocity = Vector3(3.0, 0.0, 0.0)
 	var lethal_damage: Dictionary = restored_health.call("apply_damage", 200.0, "test")
 	_expect(bool(lethal_damage.get("defeated", false)), "production SurfaceWorld player can enter the downed state after lethal damage")
-	await physics_frame
+	var downed_camera: Camera3D = restored_world.get("camera") as Camera3D
+	_expect(downed_camera != null, "production SurfaceWorld camera remains available while downed")
+	# Invoke the production physics callback directly so the assertion does not
+	# depend on SceneTree signal ordering before the next physics tick.
+	restored_world.call("_physics_process", 0.016)
 	_expect(
 		restored_player.velocity.is_zero_approx()
 		and restored_player.global_position.is_equal_approx(downed_position),
