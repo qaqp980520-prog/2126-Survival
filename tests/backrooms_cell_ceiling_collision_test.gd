@@ -215,9 +215,174 @@ func _run() -> void:
 		% [probe.global_position.y, RuntimeScript.WALL_HEIGHT]
 	)
 
+	# Exercise four cardinal shifts and a diagonal out-and-back cycle. Each commit
+	# must retain overlap roots, retire only stale roots, and activate every new ceiling.
+	var current_center := Vector2i(1, 0)
+	var multi_direction_centers: Array[Vector2i] = [
+		Vector2i(1, 1),
+		Vector2i(0, 1),
+		Vector2i(0, 0),
+		Vector2i(1, 0),
+		Vector2i(2, 1),
+		Vector2i(1, 0)
+	]
+	for next_center in multi_direction_centers:
+		var shift_ok: bool = await _validate_multi_direction_shift(
+			runtime,
+			probe,
+			current_center,
+			next_center
+		)
+		if not shift_ok:
+			break
+		current_center = next_center
+
 	runtime.call("deactivate_destination")
 	await _test_level5_deathmoth_collision(stage)
 	_finish(stage)
+
+
+func _validate_multi_direction_shift(
+	runtime: Node3D,
+	probe: CharacterBody3D,
+	from_center: Vector2i,
+	to_center: Vector2i
+) -> bool:
+	var delta: Vector2i = to_center - from_center
+	var cardinal_shift: bool = abs(delta.x) + abs(delta.y) == 1
+	var diagonal_shift: bool = abs(delta.x) == 1 and abs(delta.y) == 1
+	_expect(
+		cardinal_shift or diagonal_shift,
+		"multi-direction regression uses a one-cell cardinal or diagonal shift"
+	)
+	if not (cardinal_shift or diagonal_shift):
+		return false
+
+	var from_key: String = "%d,%d" % [from_center.x, from_center.y]
+	var retained_root: Node3D = runtime.call("get_cell_root", from_key) as Node3D
+	var retired_cell: Vector2i = from_center - delta
+	var retired_key: String = "%d,%d" % [retired_cell.x, retired_cell.y]
+	var retired_root: Node3D = runtime.call("get_cell_root", retired_key) as Node3D
+	var new_cell: Vector2i = to_center + delta
+	var new_key: String = "%d,%d" % [new_cell.x, new_cell.y]
+	_expect(retained_root != null, "shift from %s to %s has an overlapping root" % [from_key, str(to_center)])
+	_expect(retired_root != null, "shift from %s to %s has a loaded outgoing edge root" % [from_key, str(to_center)])
+	if retained_root == null or retired_root == null:
+		return false
+
+	var previous_state: Variant = runtime.get("stream_state")
+	var previous_generation: int = int(previous_state.call("get_generation")) if previous_state is RefCounted else -1
+	var result: Dictionary = runtime.call(
+		"sync_to_world_position",
+		Vector3(float(to_center.x) * CELL_SIZE, 0.0, float(to_center.y) * CELL_SIZE)
+	)
+	_expect(
+		bool(result.get("ok", false)),
+		"production stream commits shift %s -> %s" % [from_key, str(to_center)]
+	)
+	if not bool(result.get("ok", false)):
+		return false
+	await physics_frame
+
+	var expected_load: int = 3 if cardinal_shift else 5
+	var expected_keep: int = 6 if cardinal_shift else 4
+	var expected_unload: int = expected_load
+	_expect(result.get("center_cell", Vector2i.ZERO) == to_center, "stream center commits %s" % str(to_center))
+	_expect(int(result.get("load_count", -1)) == expected_load, "shift %s -> %s stages %d cells" % [from_key, str(to_center), expected_load])
+	_expect(int(result.get("keep_count", -1)) == expected_keep, "shift %s -> %s retains %d overlapping cells" % [from_key, str(to_center), expected_keep])
+	_expect(int(result.get("unload_count", -1)) == expected_unload, "shift %s -> %s retires %d outgoing cells" % [from_key, str(to_center), expected_unload])
+
+	var current_state: Variant = runtime.get("stream_state")
+	if previous_generation >= 0 and current_state is RefCounted:
+		_expect(
+			int(current_state.call("get_generation")) == previous_generation + 1,
+			"shift %s -> %s advances the committed stream generation exactly once" % [from_key, str(to_center)]
+		)
+	_expect(
+		runtime.call("get_cell_root", from_key) == retained_root,
+		"overlapping cell %s preserves root identity after shift to %s" % [from_key, str(to_center)]
+	)
+	_expect(not is_instance_valid(retired_root), "retired edge root %s is freed after shift to %s" % [retired_key, str(to_center)])
+	_expect(
+		runtime.call("get_cell_root", retired_key) == null,
+		"retired edge cell %s is absent from the root map" % retired_key
+	)
+
+	var keys_value: Variant = runtime.call("get_loaded_cell_keys")
+	if not (keys_value is Array):
+		_expect(false, "shifted runtime exposes its exact loaded-cell set")
+		return false
+	var actual_keys: Array = (keys_value as Array).duplicate()
+	var expected_keys: Array[String] = []
+	for z in range(to_center.y - 1, to_center.y + 2):
+		for x in range(to_center.x - 1, to_center.x + 2):
+			expected_keys.append("%d,%d" % [x, z])
+	expected_keys.sort()
+	actual_keys.sort()
+	_expect(actual_keys.size() == 9, "shift to %s keeps exactly nine loaded cells" % str(to_center))
+	_expect(actual_keys == expected_keys, "shift to %s commits the exact radius-one cell window" % str(to_center))
+	_expect(actual_keys.has(new_key), "new leading cell %s is present after shift" % new_key)
+	_expect(not actual_keys.has(retired_key), "outgoing cell %s is absent after shift" % retired_key)
+
+	for key_value in actual_keys:
+		var key: String = str(key_value)
+		var cell_root: Node3D = runtime.call("get_cell_root", key) as Node3D
+		var world_collision: StaticBody3D = null
+		if cell_root != null:
+			world_collision = cell_root.get_node_or_null("WorldCollision") as StaticBody3D
+		_expect(
+			world_collision != null and world_collision.collision_layer == RuntimeScript.WORLD_GEOMETRY_LAYER,
+			"shifted active cell %s keeps production floor, wall and ceiling collision enabled" % key
+		)
+		var ceiling_shape: CollisionShape3D = null
+		if world_collision != null:
+			ceiling_shape = world_collision.get_node_or_null("CeilingCollision") as CollisionShape3D
+		_expect(
+			ceiling_shape != null and not ceiling_shape.disabled,
+			"shifted active cell %s keeps its ceiling collision shape enabled" % key
+		)
+
+	var new_root: Node3D = runtime.call("get_cell_root", new_key) as Node3D
+	if new_root == null:
+		_expect(false, "new leading cell %s has a production root for collision probing" % new_key)
+		return false
+	var new_collision: StaticBody3D = new_root.get_node_or_null("WorldCollision") as StaticBody3D
+	var new_ceiling: CollisionShape3D = null
+	if new_collision != null:
+		new_ceiling = new_collision.get_node_or_null("CeilingCollision") as CollisionShape3D
+	_expect(
+		new_ceiling != null and not new_ceiling.disabled,
+		"new leading cell %s activates its production ceiling collision" % new_key
+	)
+	if new_collision == null or new_ceiling == null:
+		return false
+
+	probe.global_position = new_root.to_global(Vector3(0.0, RuntimeScript.WALL_HEIGHT - 0.55, 0.0))
+	await physics_frame
+	var ceiling_hit: KinematicCollision3D = probe.move_and_collide(
+		Vector3.UP * PROBE_TRAVEL,
+		false,
+		probe.safe_margin,
+		false
+	)
+	_expect(
+		ceiling_hit != null,
+		"newly streamed ceiling in cell %s blocks upward player-probe movement" % new_key
+	)
+	if ceiling_hit != null:
+		_expect(
+			ceiling_hit.get_collider() == new_collision,
+			"newly streamed ceiling contact in cell %s resolves to its WorldCollision body" % new_key
+		)
+	_expect(
+		probe.global_position.y <= RuntimeScript.WALL_HEIGHT - PROBE_RADIUS + 0.05,
+		"newly streamed ceiling in cell %s keeps the probe below the ceiling underside" % new_key
+	)
+	print(
+		"MULTI_DIRECTION_CEILING_SHIFT: from=%s to=%s load=%d keep=%d unload=%d probe_y=%.3f"
+		% [from_key, str(to_center), expected_load, expected_keep, expected_unload, probe.global_position.y]
+	)
+	return ceiling_hit != null and ceiling_hit.get_collider() == new_collision
 
 
 func _test_level5_deathmoth_collision(stage: Node3D) -> void:
