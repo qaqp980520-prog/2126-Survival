@@ -104,6 +104,7 @@ jobs:
           test -f tests/backrooms_cell_ceiling_collision_test.gd
           test -f docs/BACKROOMS_ACTIVE_STREAM_CEILING_COLLISION_M0_1_101.md
           test -f docs/BACKROOMS_LEVEL5_DEATHMOTH_CEILING_PLAYER_COLLISION_M0_1_102.md
+          test -f docs/BACKROOMS_MULTI_DIRECTION_ACTIVE_STREAM_CEILING_M0_1_103.md
           test -f systems/BackroomsEntityBrain.gd
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
