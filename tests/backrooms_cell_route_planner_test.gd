@@ -16,6 +16,7 @@ func _initialize() -> void:
 	_test_maximum_loaded_window_stress()
 	if failures.is_empty():
 		print("Backrooms loaded-cell route planner tests passed.")
+		print("Backrooms route snapshot runtime transfer guard passed.")
 		quit(0)
 	else:
 		for message in failures:
@@ -95,6 +96,23 @@ func _test_loaded_window_routes() -> void:
 		"repeated route requests return the same deterministic path"
 	)
 	_expect(bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is current before the loaded window changes")
+	var invalid_revision: Dictionary = route.duplicate(true)
+	invalid_revision["configuration_revision"] = int(invalid_revision.get("configuration_revision", -1)) + 1
+	_expect(
+		not bool(runtime.call("is_route_snapshot_current", invalid_revision)),
+		"route snapshots reject a mismatched stream configuration revision"
+	)
+	var invalid_cell_keys: Dictionary = route.duplicate(true)
+	var invalid_key_values: Array = invalid_cell_keys.get("cell_keys", []).duplicate(true)
+	if invalid_key_values.size() > 1:
+		invalid_key_values[1] = "99,99"
+		invalid_cell_keys["cell_keys"] = invalid_key_values
+		_expect(
+			not bool(runtime.call("is_route_snapshot_current", invalid_cell_keys)),
+			"route snapshots reject canonical cell keys that no longer match the cell path"
+		)
+	else:
+		_expect(false, "the production route fixture contains an edge for cell-key integrity validation")
 	var invalid_ok_type: Dictionary = route.duplicate(true)
 	invalid_ok_type["ok"] = "true"
 	_expect(not bool(runtime.call("is_route_snapshot_current", invalid_ok_type)), "route snapshots require a boolean success flag")
@@ -198,6 +216,14 @@ func _test_loaded_window_routes() -> void:
 	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
 	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
 	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
+	var stale_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", "-1,0", "hound", route
+	)
+	_expect(
+		not bool(stale_transfer.get("ok", false))
+		and str(stale_transfer.get("reason", "")) == "route_snapshot_stale",
+		"the production ownership-transfer gate rejects a stale route before owner lookup"
+	)
 	var fresh_route: Dictionary = runtime.call("plan_route_between_loaded_cells", Vector2i(3, 0), Vector2i(3, 0))
 	_expect(bool(fresh_route.get("ok", false)) and bool(runtime.call("is_route_snapshot_current", fresh_route)), "a new route snapshot is accepted for the committed window")
 
