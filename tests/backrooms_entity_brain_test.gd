@@ -114,6 +114,17 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 		"noise_position": Vector3(7.0, 0.0, 3.0)
 	}, 0.1)
 	_expect(str(hound_chase.get("state", "")) == "pursue" and bool(hound_chase.get("has_target_position", false)), "Hound pursues a strong nearby sound even without line of sight")
+	_expect(str(hound_chase.get("target_source", "")) == "noise" and str(hound_chase.get("intent", "")) == "pursue_sound", "noise-driven Hound pursuit is explicitly tagged as a sound target")
+	var saved_noise_hound: Dictionary = hound.call("to_save_dict")
+	var restored_noise_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(restored_noise_hound.call("load_save_dict", saved_noise_hound)), "noise-pursuit brain save restores with its explicit target source")
+	var restored_noise_snapshot: Dictionary = restored_noise_hound.call("get_behavior_snapshot")
+	_expect(
+		str(restored_noise_snapshot.get("target_source", "")) == "noise"
+		and str(restored_noise_snapshot.get("intent", "")) == "pursue_sound",
+		"noise-pursuit save round-trip preserves fail-closed combat target semantics"
+	)
+	restored_noise_hound.free()
 	var hound_investigate: Dictionary = hound.call("evaluate_perception", {
 		"distance_to_player": 30.0,
 		"has_line_of_sight": false,
@@ -127,6 +138,37 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 		"noise_strength": 0.0
 	}, 0.1)
 	_expect(str(hound_patrol.get("state", "")) == "patrol", "Hound returns to patrol when no usable signal remains")
+	var hound_player_chase: Dictionary = hound.call("evaluate_perception", {
+		"distance_to_player": 5.0,
+		"has_line_of_sight": true,
+		"noise_strength": 0.8,
+		"noise_distance": 5.0,
+		"noise_position": Vector3(2.0, 0.0, 1.0),
+		"player_position": Vector3(2.0, 0.0, 1.0)
+	}, 0.1)
+	_expect(
+		str(hound_player_chase.get("state", "")) == "pursue"
+		and str(hound_player_chase.get("target_source", "")) == "player"
+		and str(hound_player_chase.get("intent", "")) == "pursue_player",
+		"visible-player Hound pursuit is explicitly tagged as a player target"
+	)
+	var saved_hound: Dictionary = hound.call("to_save_dict")
+	_expect(str(saved_hound.get("target_source", "")) == "player", "brain save includes the explicit target source")
+	var restored_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(restored_hound.call("load_save_dict", saved_hound)), "new brain save with target source restores")
+	_expect(str(restored_hound.call("get_behavior_snapshot").get("target_source", "")) == "player", "restored brain preserves player target source")
+	var legacy_hound_payload: Dictionary = saved_hound.duplicate(true)
+	legacy_hound_payload.erase("target_source")
+	var legacy_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(legacy_hound.call("load_save_dict", legacy_hound_payload)), "legacy brain save without target source remains compatible")
+	var legacy_snapshot: Dictionary = legacy_hound.call("get_behavior_snapshot")
+	_expect(
+		str(legacy_snapshot.get("target_source", "")) == "none"
+		and not bool(legacy_snapshot.get("has_target_position", true)),
+		"legacy brain save clears its ambiguous target until the next perception sample"
+	)
+	restored_hound.free()
+	legacy_hound.free()
 	hound.free()
 
 	var skin: Node = _make_brain("skin_stealer", "Level 2")

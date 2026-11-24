@@ -5,6 +5,8 @@ const MineralCatalogScript = preload("res://systems/MineralCatalog.gd")
 const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFactory.gd")
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
+const HealthScript = preload("res://systems/SurvivalHealth.gd")
+const BackroomsEntityCombatDriverScript = preload("res://systems/BackroomsEntityCombatDriver.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
 const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const BackroomsPortalDirectorScript = preload("res://systems/BackroomsPortalDirector.gd")
@@ -42,6 +44,7 @@ const MAX_WORLD_SEED: int = 2147483647
 @export_range(0.0, 100.0, 0.5) var backrooms_portal_safe_distance: float = 8.0
 @export_range(0.0, 16.0, 0.5) var backrooms_portal_spawn_padding: float = 4.0
 var stamina: RefCounted = StaminaScript.new()
+var health: RefCounted = HealthScript.new()
 var quick_use: RefCounted = QuickUseScript.new()
 var camera: Camera3D
 var hud: Label
@@ -73,6 +76,7 @@ var backrooms_maze_runtime: Node3D
 var backrooms_transition_manager: RefCounted
 var backrooms_perception_driver: RefCounted
 var backrooms_entity_movement_driver: RefCounted
+var backrooms_entity_combat_driver: RefCounted
 var backrooms_lighting_controller: RefCounted
 var surface_world_environment: WorldEnvironment
 var surface_sun: DirectionalLight3D
@@ -123,6 +127,7 @@ func _ready() -> void:
 	backrooms_transition_manager = BackroomsTransitionManagerScript.new()
 	backrooms_perception_driver = BackroomsPerceptionDriverScript.new()
 	backrooms_entity_movement_driver = BackroomsEntityMovementDriverScript.new()
+	backrooms_entity_combat_driver = BackroomsEntityCombatDriverScript.new()
 	backrooms_lighting_controller = BackroomsLightingControllerScript.new()
 	_refresh_hud()
 
@@ -451,6 +456,11 @@ func _tick_stamina(delta: float, moving: bool, sprinting: bool = false) -> void:
 
 func _physics_process(delta: float) -> void:
 	if player == null or camera == null:
+		return
+	if health != null and not bool(health.call("is_alive")):
+		player.velocity = Vector3.ZERO
+		_camera_interaction_target_cache.clear()
+		_refresh_hud()
 		return
 	if _is_in_backrooms:
 		_physics_process_backrooms(delta)
@@ -1042,6 +1052,8 @@ func enter_backrooms_from_portal(portal_id: int) -> Dictionary:
 		backrooms_perception_driver.call("reset")
 	if backrooms_entity_movement_driver != null:
 		backrooms_entity_movement_driver.call("reset")
+	if backrooms_entity_combat_driver != null:
+		backrooms_entity_combat_driver.call("reset")
 	_last_backrooms_sync_position = player.global_position
 	_set_surface_chunk_visibility(false)
 	_remove_backrooms_portal_visual()
@@ -1092,6 +1104,8 @@ func return_from_backrooms() -> Dictionary:
 		backrooms_perception_driver.call("reset")
 	if backrooms_entity_movement_driver != null:
 		backrooms_entity_movement_driver.call("reset")
+	if backrooms_entity_combat_driver != null:
+		backrooms_entity_combat_driver.call("reset")
 	player.velocity = Vector3.ZERO
 	backrooms_maze_runtime.position = Vector3.ZERO
 	_set_surface_chunk_visibility(true)
@@ -1220,6 +1234,8 @@ func _tick_backrooms_entity_perception(delta_seconds: float, previous_position: 
 			backrooms_perception_driver.call("reset")
 		if backrooms_entity_movement_driver != null:
 			backrooms_entity_movement_driver.call("reset")
+		if backrooms_entity_combat_driver != null:
+			backrooms_entity_combat_driver.call("reset")
 		return
 	var safe_delta: float = maxf(delta_seconds, 0.000001)
 	var displacement: Vector3 = player.global_position - previous_position
@@ -1242,6 +1258,8 @@ func _tick_backrooms_entity_perception(delta_seconds: float, previous_position: 
 	)
 	if backrooms_entity_movement_driver != null:
 		backrooms_entity_movement_driver.call("tick", backrooms_maze_runtime, delta_seconds)
+	if backrooms_entity_combat_driver != null and health != null:
+		backrooms_entity_combat_driver.call("tick", backrooms_maze_runtime, player, world_3d, health, delta_seconds)
 
 
 func _spawn_backrooms_portal_visual(portal_data: Dictionary) -> bool:
@@ -2201,6 +2219,9 @@ func _refresh_hud() -> void:
 		jump_status = "JUMP LOCKED (LOW STAMINA)"
 	var stamina_value: float = float(movement_profile.get("stamina", 100.0))
 	var stamina_max: float = float(movement_profile.get("stamina_max", 100.0))
+	var health_value: float = float(health.call("get_current_health")) if health != null else 100.0
+	var health_max: float = float(health.call("get_max_health")) if health != null else 100.0
+	var health_status: String = " · DOWNED" if health != null and not bool(health.call("is_alive")) else ""
 	_mine_layer_index = mine_director.get_layer_index(player.global_position) if _is_underground and mine_director != null and player != null else 0
 	var backrooms_level: String = "BACKROOMS"
 	if _is_in_backrooms and backrooms_transition_manager != null:
@@ -2237,10 +2258,12 @@ func _refresh_hud() -> void:
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
 	var action_help: String = ("G return · WASD move · SPACE jump · 1-4 ration" if _is_in_backrooms else ("E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use")) + " · F5 save · F9 load"
-	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
+	if not health_status.is_empty():
+		action_help = "DOWNED · G return to surface · F9 load after return" if _is_in_backrooms else "DOWNED · F9 load saved world"
+	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nHealth: %.0f / %.0f%s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, displayed_vein_count,
 		displayed_crop_count, displayed_object_count,
-		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
+		weight, limit, movement_percent, movement_mode, jump_status, health_value, health_max, health_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
 
 func serialize_world_envelope() -> Dictionary:
@@ -2252,6 +2275,7 @@ func serialize_world_envelope() -> Dictionary:
 		or not is_instance_valid(backrooms_transition_manager)
 		or backrooms_maze_runtime == null
 		or not is_instance_valid(backrooms_maze_runtime)
+		or health == null
 	):
 		return {}
 	if _is_in_backrooms:
@@ -2272,7 +2296,8 @@ func serialize_world_envelope() -> Dictionary:
 		return {}
 	var player_payload: Dictionary = {
 		"position": _vector3_to_world_save_array(player.global_position),
-		"velocity": _vector3_to_world_save_array(player.velocity)
+		"velocity": _vector3_to_world_save_array(player.velocity),
+		"health": health.call("to_save_dict")
 	}
 	if _is_in_backrooms:
 		if (
@@ -2378,6 +2403,12 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 	):
 		_set_world_envelope_restore_report(false, "validation", "Combined world envelope is missing a required dictionary or location.", true)
 		return false
+	var health_probe: RefCounted = HealthScript.new()
+	var saved_health_value: Variant = player_value.get("health", health_probe.call("to_save_dict"))
+	if not (saved_health_value is Dictionary) or not bool(health_probe.call("validate_save_dict", saved_health_value)):
+		_set_world_envelope_restore_report(false, "health_validation", "Saved player health payload is invalid; no world state was changed.", true)
+		return false
+	var saved_health_payload: Dictionary = saved_health_value.duplicate(true)
 	if not _validate_surface_chunk_snapshot(surface_ids_value, visibility_value):
 		_set_world_envelope_restore_report(false, "validation", "Saved surface chunk IDs or visibility snapshot are invalid.", true)
 		return false
@@ -2572,6 +2603,14 @@ func restore_world_envelope(payload: Dictionary, now_unix: int = -1) -> bool:
 			return false
 		_backrooms_surface_visibility_snapshot.clear()
 		player.velocity = saved_player_velocity["value"]
+	var health_restored: bool = health != null and bool(health.call("load_save_dict", saved_health_payload))
+	if not health_restored:
+		var health_rollback: bool = _rollback_world_envelope_restore(
+			previous_surface_payload, previous_session_payload, previous_position, previous_velocity,
+			previous_surface_ids, previous_visibility, now
+		)
+		_set_world_envelope_restore_report(false, "health_restore", "Validated player health could not be applied after the world restore.", health_rollback)
+		return false
 	_set_world_envelope_restore_report(true, "complete", "", true, {
 		"active_location": str(location_value),
 		"surface_chunk_ids": expected_surface_ids,
@@ -2588,6 +2627,8 @@ func get_last_world_envelope_restore_report() -> Dictionary:
 func _can_save_world() -> bool:
 	if (
 		player == null
+		or health == null
+		or not bool(health.call("is_alive"))
 		or _surface_stream_pending
 		or backrooms_transition_manager == null
 		or not is_instance_valid(backrooms_transition_manager)

@@ -154,6 +154,10 @@ func _run() -> void:
 	)
 	_expect(entity_root.get_parent() == target_root, "transferred Hound is attached to the target cell before disk save")
 
+	var source_health: RefCounted = source_world.get("health") as RefCounted
+	_expect(source_health != null, "production SurfaceWorld owns a player-health model")
+	if source_health != null:
+		_expect(bool(source_health.call("load_save_dict", {"schema_version": 1, "current": 64.0})), "test sets a deterministic non-full player-health value before disk save")
 	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
 	if not first_save_ok:
 		print("DEBUG: combined Hound save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
@@ -178,6 +182,8 @@ func _run() -> void:
 	_expect(bool(first_session.get("active", false)), "combined disk envelope preserves the active Backrooms Session")
 	var saved_player_position: Array = first_payload.get("backrooms_player", {}).get("position", [])
 	_expect(saved_player_position.size() == 3, "combined disk envelope stores the Backrooms player position")
+	var saved_health: Dictionary = first_payload.get("backrooms_player", {}).get("health", {})
+	_expect(int(saved_health.get("schema_version", -1)) == 1 and is_equal_approx(float(saved_health.get("current", -1.0)), 64.0), "combined disk envelope stores the validated player-health payload")
 
 	# A second production save rotates the known-good combined Hound envelope to
 	# .bak. Corrupt only the primary so recovery must rebuild the full SurfaceWorld.
@@ -224,6 +230,8 @@ func _run() -> void:
 	_expect(_save_values_equal(repaired_payload, backup_payload), "repaired primary exactly matches the validated combined Hound backup")
 
 	_expect(bool(restored_world.get("_is_in_backrooms")), "fresh-world recovery activates Backrooms only after the combined runtime is reconstructed")
+	var restored_health: RefCounted = restored_world.get("health") as RefCounted
+	_expect(restored_health != null and is_equal_approx(float(restored_health.call("get_current_health")), 64.0), "combined backup recovery restores the exact player-health value")
 	_expect(int(restored_world.get("world_seed")) == WORLD_SEED, "combined backup recovery restores the original SurfaceWorld seed")
 	var restored_player: CharacterBody3D = restored_world.get("player") as CharacterBody3D
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
@@ -262,6 +270,62 @@ func _run() -> void:
 			_expect(restored_agent.get_instance_id() != source_navigation_agent_id, "restored Hound navigation agent is a new runtime object, not serialized scene state")
 			_expect(not restored_agent.avoidance_enabled, "restored NavigationAgent3D preserves the bounded non-avoidance policy")
 			_expect(absf(restored_agent.path_desired_distance - 0.2) <= 0.0001, "restored NavigationAgent3D preserves the current waypoint tolerance")
+
+	var downed_position: Vector3 = restored_player.global_position
+	restored_player.velocity = Vector3(3.0, 0.0, 0.0)
+	var lethal_damage: Dictionary = restored_health.call("apply_damage", 200.0, "test")
+	_expect(bool(lethal_damage.get("defeated", false)), "production SurfaceWorld player can enter the downed state after lethal damage")
+	var downed_camera: Camera3D = restored_world.get("camera") as Camera3D
+	_expect(downed_camera != null, "production SurfaceWorld camera remains available while downed")
+	# Invoke the production physics callback directly so the assertion does not
+	# depend on SceneTree signal ordering before the next physics tick.
+	restored_world.call("_physics_process", 0.016)
+	_expect(
+		restored_player.velocity.is_zero_approx()
+		and restored_player.global_position.is_equal_approx(downed_position),
+		"downed SurfaceWorld player movement is stopped before physics movement"
+	)
+	var downed_hud: Label = restored_world.get("hud") as Label
+	_expect(downed_hud != null and downed_hud.text.contains("DOWNED"), "production HUD exposes the downed state")
+	var downed_save_ok: bool = bool(restored_world.call("save_game", SAVE_PATH + ".downed"))
+	_expect(not downed_save_ok and not FileAccess.file_exists(SAVE_PATH + ".downed"), "downed player cannot create a new save file")
+	var returned: Dictionary = restored_world.call("return_from_backrooms")
+	_expect(bool(returned.get("ok", false)), "downed player can return from Backrooms to the SurfaceWorld")
+	await process_frame
+	_expect(not bool(restored_world.get("_is_in_backrooms")), "downed return leaves the world on the surface before recovery load")
+	var recovered_from_downed: bool = bool(restored_world.call("load_game", SAVE_PATH))
+	_expect(recovered_from_downed, "saved world can be loaded after a downed player returns to the surface")
+	_expect(
+		bool(restored_world.get("_is_in_backrooms"))
+		and is_equal_approx(float(restored_health.call("get_current_health")), 64.0),
+		"F9-equivalent recovery restores the saved Backrooms location and player health"
+	)
+	var recovered_return: Dictionary = restored_world.call("return_from_backrooms")
+	_expect(bool(recovered_return.get("ok", false)), "recovered player can return to the surface for legacy-save compatibility validation")
+	await process_frame
+	if restored_health != null:
+		restored_health.call("load_save_dict", {"schema_version": 1, "current": 37.0})
+	var invalid_payload: Dictionary = backup_payload.duplicate(true)
+	var invalid_player_payload: Dictionary = invalid_payload.get("backrooms_player", {})
+	var invalid_health_payload: Dictionary = invalid_player_payload.get("health", {})
+	invalid_health_payload["current"] = 100.1
+	invalid_player_payload["health"] = invalid_health_payload
+	invalid_payload["backrooms_player"] = invalid_player_payload
+	var position_before_invalid_restore: Vector3 = (restored_world.get("player") as CharacterBody3D).global_position
+	var invalid_health_restore: bool = bool(restored_world.call("restore_world_envelope", invalid_payload, int(Time.get_unix_time_from_system())))
+	var invalid_health_report: Dictionary = restored_world.call("get_last_world_envelope_restore_report")
+	_expect(not invalid_health_restore, "out-of-range player health is rejected before world restore")
+	_expect(str(invalid_health_report.get("phase", "")) == "health_validation", "invalid player health reports the pre-mutation validation phase")
+	_expect(not bool(restored_world.get("_is_in_backrooms")) and restored_health != null and is_equal_approx(float(restored_health.call("get_current_health")), 37.0), "rejected health payload leaves the idle world and current health unchanged")
+	_expect((restored_world.get("player") as CharacterBody3D).global_position.is_equal_approx(position_before_invalid_restore), "rejected health payload leaves player position unchanged")
+	var legacy_payload: Dictionary = backup_payload.duplicate(true)
+	var legacy_player_payload: Dictionary = legacy_payload.get("backrooms_player", {})
+	legacy_player_payload.erase("health")
+	legacy_payload["backrooms_player"] = legacy_player_payload
+	var legacy_restored: bool = bool(restored_world.call("restore_world_envelope", legacy_payload, int(Time.get_unix_time_from_system())))
+	_expect(legacy_restored, "legacy combined envelope without player health remains loadable")
+	if restored_health != null and legacy_restored:
+		_expect(is_equal_approx(float(restored_health.call("get_current_health")), 100.0), "legacy combined envelope defaults missing health to full health")
 
 	_finish(0)
 
@@ -416,7 +480,7 @@ func _write_text(path: String, value: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for suffix in ["", ".tmp", ".bak", ".corrupt"]:
+	for suffix in ["", ".tmp", ".bak", ".corrupt", ".downed"]:
 		var path: String = SAVE_PATH + suffix
 		var absolute: String = ProjectSettings.globalize_path(path)
 		if FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute):
