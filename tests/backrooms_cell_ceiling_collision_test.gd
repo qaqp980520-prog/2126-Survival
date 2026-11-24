@@ -124,6 +124,95 @@ func _run() -> void:
 		% [probe.global_position.y, RuntimeScript.WALL_HEIGHT]
 	)
 
+	# Shift the live window one cell east. Six existing roots must be retained,
+	# three new roots must be staged and activated, and the west column retired.
+	var retained_root: Node3D = runtime.call("get_cell_root", "0,0") as Node3D
+	var retired_root: Node3D = runtime.call("get_cell_root", "-1,0") as Node3D
+	_expect(retained_root != null, "active window has a root that should survive the shift")
+	_expect(retired_root != null, "active window has a west-edge root that should be retired")
+	var shift_result: Dictionary = runtime.call(
+		"sync_to_world_position",
+		Vector3(CELL_SIZE, 0.0, 0.0)
+	)
+	_expect(bool(shift_result.get("ok", false)), "active runtime commits an eastward streaming-window shift")
+	if not bool(shift_result.get("ok", false)):
+		_finish(stage)
+		return
+	_expect(
+		shift_result.get("center_cell", Vector2i.ZERO) == Vector2i(1, 0),
+		"streaming shift commits center cell (1, 0)"
+	)
+	_expect(int(shift_result.get("load_count", -1)) == 3, "eastward shift stages exactly three new cells")
+	_expect(int(shift_result.get("keep_count", -1)) == 6, "eastward shift retains six overlapping cells")
+	_expect(int(shift_result.get("unload_count", -1)) == 3, "eastward shift retires exactly three west-edge cells")
+	_expect(
+		runtime.call("get_cell_root", "0,0") == retained_root,
+		"overlapping origin cell keeps the same production root across the shift"
+	)
+	_expect(not is_instance_valid(retired_root), "retired west-edge cell root is freed after the shift commits")
+	_expect(runtime.call("get_cell_root", "-1,0") == null, "retired west-edge cell is absent from the runtime root map")
+
+	var shifted_keys_value: Variant = runtime.call("get_loaded_cell_keys")
+	if not (shifted_keys_value is Array):
+		_expect(false, "shifted runtime exposes its committed cell keys")
+		_finish(stage)
+		return
+	var shifted_keys: Array = shifted_keys_value
+	_expect(shifted_keys.size() == 9, "shifted runtime still owns exactly nine loaded cells")
+	_expect(
+		shifted_keys.has("2,0") and not shifted_keys.has("-1,0"),
+		"shifted loaded window contains the new east column and excludes the retired west column"
+	)
+	for key_value in shifted_keys:
+		var key: String = str(key_value)
+		var shifted_root: Node3D = runtime.call("get_cell_root", key) as Node3D
+		var shifted_collision_body: StaticBody3D = null
+		if shifted_root != null:
+			shifted_collision_body = shifted_root.get_node_or_null("WorldCollision") as StaticBody3D
+		_expect(
+			shifted_collision_body != null
+			and shifted_collision_body.collision_layer == RuntimeScript.WORLD_GEOMETRY_LAYER,
+			"shifted active cell %s keeps floor, wall and ceiling collision enabled" % key
+		)
+
+	var east_root: Node3D = runtime.call("get_cell_root", "2,0") as Node3D
+	if east_root == null:
+		_expect(false, "new east-edge cell exists for the post-shift ceiling probe")
+		_finish(stage)
+		return
+	var east_collision: StaticBody3D = east_root.get_node_or_null("WorldCollision") as StaticBody3D
+	_expect(
+		east_collision != null and east_collision.collision_layer == RuntimeScript.WORLD_GEOMETRY_LAYER,
+		"newly streamed east-edge cell activates its production ceiling collision"
+	)
+	var east_ceiling: CollisionShape3D = east_collision.get_node_or_null("CeilingCollision") as CollisionShape3D if east_collision != null else null
+	_expect(east_ceiling != null, "newly streamed east-edge cell contains its ceiling collision shape")
+	probe.global_position = east_root.to_global(start_local)
+	await physics_frame
+	var shifted_collision: KinematicCollision3D = probe.move_and_collide(
+		Vector3.UP * PROBE_TRAVEL,
+		false,
+		probe.safe_margin,
+		false
+	)
+	_expect(
+		shifted_collision != null,
+		"newly streamed active ceiling blocks upward CharacterBody3D movement"
+	)
+	if shifted_collision != null and east_collision != null:
+		_expect(
+			shifted_collision.get_collider() == east_collision,
+			"post-shift ceiling collision is owned by the new cell's WorldCollision body"
+		)
+	_expect(
+		probe.global_position.y <= RuntimeScript.WALL_HEIGHT - PROBE_RADIUS + 0.05,
+		"post-shift collision keeps the probe below the ceiling underside"
+	)
+	print(
+		"SHIFTED_CEILING_COLLISION_PROBE: final_y=%.3f ceiling_underside=%.3f"
+		% [probe.global_position.y, RuntimeScript.WALL_HEIGHT]
+	)
+
 	runtime.call("deactivate_destination")
 	_finish(stage)
 
