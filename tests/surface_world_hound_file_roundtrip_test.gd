@@ -276,6 +276,16 @@ func _run() -> void:
 	await process_frame
 	if restored_health != null:
 		restored_health.call("load_save_dict", {"schema_version": 1, "current": 37.0})
+	var invalid_payload: Dictionary = backup_payload.duplicate(true)
+	var invalid_player_payload: Dictionary = invalid_payload.get("backrooms_player", {})
+	var invalid_health_payload: Dictionary = invalid_player_payload.get("health", {})
+	invalid_health_payload["current"] = 100.1
+	invalid_player_payload["health"] = invalid_health_payload
+	invalid_payload["backrooms_player"] = invalid_player_payload
+	var invalid_health_restore: bool = bool(restored_world.call("restore_world_envelope", invalid_payload, int(Time.get_unix_time_from_system())))
+	_expect(not invalid_health_restore, "out-of-range player health is rejected before world restore")
+	_expect(str(restored_world.call("get_last_world_envelope_restore_report").get("phase", "")) == "health_validation", "invalid player health reports the pre-mutation validation phase")
+	_expect(not bool(restored_world.get("_is_in_backrooms")) and restored_health != null and is_equal_approx(float(restored_health.call("get_current_health")), 37.0), "rejected health payload leaves the idle world and current health unchanged")
 	var legacy_payload: Dictionary = backup_payload.duplicate(true)
 	var legacy_player_payload: Dictionary = legacy_payload.get("backrooms_player", {})
 	legacy_player_payload.erase("health")
