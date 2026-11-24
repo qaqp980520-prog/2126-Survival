@@ -876,6 +876,11 @@ func _make_surface_material(is_floor: bool, seed_cell: Vector2i) -> Material:
     material.uv1_triplanar = false
     if is_floor:
         material.albedo_texture = load("res://assets/textures/backrooms_carpet.svg") as Texture2D
+        # FloorMesh replaces the base color material with this textured material.
+        # Carry the level palette into the texture tint so per-level floor colors
+        # (including the Level 4 charcoal office carpet) remain visible.
+        if _cell_material_floor != null:
+            material.albedo_color = _cell_material_floor.albedo_color
         material.uv1_scale = Vector3(1.0, 1.0, 1.0)
     else:
         var wallpaper := load("res://assets/textures/backrooms_wallpaper.svg") as Texture2D
