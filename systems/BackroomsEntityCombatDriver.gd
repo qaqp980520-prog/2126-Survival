@@ -175,6 +175,8 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 		if not (cell_root_value is Node3D) or not is_instance_valid(cell_root_value):
 			continue
 		var cell_root: Node3D = cell_root_value as Node3D
+		var level_id: String = str(cell_root.get_meta("backrooms_level_id")) if cell_root.has_meta("backrooms_level_id") else ""
+		var world_seed: int = int(cell_root.get_meta("backrooms_world_seed")) if cell_root.has_meta("backrooms_world_seed") else 0
 		for child in cell_root.get_children():
 			if not (child is CharacterBody3D):
 				continue
@@ -186,13 +188,16 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 			var spawn_cell_value: Variant = entity_root.get_meta("spawn_cell")
 			if not (spawn_cell_value is Vector2i):
 				continue
+			var owner_cell_key: String = str(entity_root.get_meta("backrooms_owner_cell_key")) if entity_root.has_meta("backrooms_owner_cell_key") else cell_key
+			if owner_cell_key != cell_key:
+				continue
 			var brain: Node = entity_root.get_node_or_null("AI")
 			if brain == null or not brain.has_method("get_behavior_snapshot"):
 				continue
 			var spawn_cell: Vector2i = spawn_cell_value
 			var spawn_cell_key: String = "%d,%d" % [spawn_cell.x, spawn_cell.y]
 			records.append({
-				"key": spawn_cell_key + "|hound",
+				"key": "%s|%d|%s|hound" % [level_id, world_seed, spawn_cell_key],
 				"cell_key": cell_key,
 				"entity_root": entity_root,
 				"brain": brain
