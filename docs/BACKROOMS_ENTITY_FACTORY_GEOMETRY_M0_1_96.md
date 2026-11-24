@@ -31,7 +31,7 @@ From the repository root:
 
 ~~~bash
 godot --headless --path . --editor --quit
-godot --headless --path . --script res://tests/backrooms_entity_factory_geometry_test.gd
+LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe xvfb-run -a -s '-screen 0 1280x720x24' godot --audio-driver Dummy --path . --rendering-method gl_compatibility --script res://tests/backrooms_entity_factory_geometry_test.gd
 ~~~
 
 ## Test contract
@@ -50,7 +50,8 @@ Minimum mesh-part contracts: Window 5; Smiler 3; Hound 8; Skin-Stealer 6; Clump 
 
 - This PR was created from the already validated PR #425 HEAD.
 - Local Godot executable is unavailable in the authoring environment. No local engine pass is claimed.
-- Exact-head Godot 4.3 Full Compatibility Gate and focused tests are pending CI; do not mark this asset as validated until the new test step and full gate both pass.
+- The first headless attempt on candidate 870420957f9ea5460c4dcf3cd08372c4433606fb ran the assertions (6 factories / 35 mesh parts) but emitted dummy-renderer `Parameter \"m\" is null` diagnostics during mesh teardown; the Full Gate correctly failed. That candidate is superseded and is not a pass.
+- The harness now explicitly requires a non-headless Xvfb DisplayServer and runs with Mesa llvmpipe / Godot 4.3 gl_compatibility. Fresh exact-head CI is pending; do not mark this asset as validated until the new test step and full gate both pass.
 
 ## Limitations
 
