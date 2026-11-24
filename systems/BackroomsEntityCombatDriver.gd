@@ -5,6 +5,7 @@ class_name BackroomsEntityCombatDriver
 ## Cooldowns are keyed by immutable spawn identity so cell transfers do not reset them.
 const ATTACK_INTERVAL_SECONDS: float = 0.1
 const MAX_ENTITY_SAMPLES_PER_TICK: int = 12
+const MAX_COLLECTED_HOUNDS: int = 256
 const MAX_FRAME_DELTA_SECONDS: float = 0.5
 const MAX_TRACKED_COOLDOWNS: int = 4096
 const HOUND_ATTACK_RANGE: float = 1.35
@@ -29,7 +30,8 @@ func get_diagnostics() -> Dictionary:
 		"tracked_cooldowns": _cooldown_remaining_by_entity.size(),
 		"next_entity_key": _next_entity_key,
 		"attack_interval_seconds": ATTACK_INTERVAL_SECONDS,
-		"max_entities_per_tick": MAX_ENTITY_SAMPLES_PER_TICK
+		"max_entities_per_tick": MAX_ENTITY_SAMPLES_PER_TICK,
+		"max_collected_hounds": MAX_COLLECTED_HOUNDS
 	}
 
 func tick(
@@ -186,6 +188,8 @@ func _collect_entity_records(runtime: Node) -> Array[Dictionary]:
 		var level_id: String = str(cell_root.get_meta("backrooms_level_id")) if cell_root.has_meta("backrooms_level_id") else ""
 		var world_seed: int = int(cell_root.get_meta("backrooms_world_seed")) if cell_root.has_meta("backrooms_world_seed") else 0
 		for child in cell_root.get_children():
+			if records.size() >= MAX_COLLECTED_HOUNDS:
+				return records
 			if not (child is CharacterBody3D):
 				continue
 			var entity_root: CharacterBody3D = child as CharacterBody3D
