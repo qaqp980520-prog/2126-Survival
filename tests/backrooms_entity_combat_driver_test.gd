@@ -73,6 +73,11 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 	await physics_frame
 	await physics_frame
 	var brain: Node = hound.get_node("AI")
+	var visible_noisy_snapshot: Dictionary = brain.call("get_behavior_snapshot")
+	_expect(
+		str(visible_noisy_snapshot.get("target_source", "")) == "player",
+		"visible player remains the explicit melee target even while movement noise is present"
+	)
 	var driver: RefCounted = DriverScript.new()
 	var health: RefCounted = HealthScript.new()
 	var first: Dictionary = driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.1)
@@ -241,7 +246,9 @@ func _add_hound(cell_root: Node3D, spawn_cell: Vector2i, position: Vector3) -> C
 	brain.call("evaluate_perception", {
 		"distance_to_player": 0.9,
 		"has_line_of_sight": true,
-		"noise_strength": 0.0,
+		"noise_strength": 0.8,
+		"noise_distance": 0.9,
+		"noise_position": Vector3.ZERO,
 		"player_position": Vector3.ZERO
 	}, 0.2)
 	cell_root.add_child(hound)
