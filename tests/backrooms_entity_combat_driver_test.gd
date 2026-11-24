@@ -152,7 +152,7 @@ func _assert_round_robin_budget() -> void:
 	_expect(int(first.get("pending_count", -1)) == 1, "combat driver reports the unprocessed entity")
 	_expect(int(first.get("attacked_count", -1)) == 12 and health.events == 12, "first round-robin batch processes twelve eligible Hounds")
 	var second: Dictionary = driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.1)
-	_expect(int(second.get("sampled_count", -1)) == 1, "round-robin cursor reaches the thirteenth Hound on the next tick")
+	_expect(int(second.get("sampled_count", -1)) == 12 and int(second.get("pending_count", -1)) == 1, "round-robin cursor includes the thirteenth Hound in the next bounded batch")
 	_expect(int(second.get("attacked_count", -1)) == 1 and health.events == 13, "thirteenth Hound is not starved by the bounded budget")
 	_expect(is_equal_approx(health.total_damage, 156.0), "thirteen attacks apply exactly thirteen bounded damage events")
 	world_root.queue_free()
