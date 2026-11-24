@@ -1,6 +1,8 @@
 extends SceneTree
 
 const RuntimeScript = preload("res://systems/BackroomsMazeCellRuntime.gd")
+const EntityDirectorScript = preload("res://systems/BackroomsEntityDirector.gd")
+const CollisionFactoryScript = preload("res://systems/BackroomsEntityCollisionFactory.gd")
 
 const WORLD_SEED: int = 20261124
 const CELL_SIZE: float = 8.0
@@ -214,7 +216,148 @@ func _run() -> void:
 	)
 
 	runtime.call("deactivate_destination")
+	await _test_level5_deathmoth_collision(stage)
 	_finish(stage)
+
+
+func _test_level5_deathmoth_collision(stage: Node3D) -> void:
+	var deathmoth_cell := Vector2i(0, 2)
+	var allowed_entities: Array[String] = EntityDirectorScript.get_allowed_entities("Level 5")
+	_expect(
+		allowed_entities.size() == 1 and allowed_entities[0] == "deathmoth",
+		"modern Level 5 production roster contains only Deathmoth"
+	)
+	var deterministic_spawns: Array[String] = EntityDirectorScript.get_cell_spawns("Level 5", deathmoth_cell)
+	_expect(
+		deterministic_spawns.has("deathmoth"),
+		"Level 5 fixture deterministically selects a Deathmoth in cell (0,2)"
+	)
+
+	var deathmoth_runtime: Node3D = RuntimeScript.new() as Node3D
+	stage.add_child(deathmoth_runtime)
+	var prepared: Dictionary = deathmoth_runtime.call(
+		"prepare_destination",
+		"Level 5",
+		WORLD_SEED,
+		Vector3.ZERO,
+		CELL_SIZE,
+		2
+	)
+	_expect(bool(prepared.get("ok", false)), "production runtime prepares a 25-cell Level 5 window")
+	if not bool(prepared.get("ok", false)):
+		return
+	_expect(
+		int(deathmoth_runtime.call("get_loaded_cell_count")) == 25,
+		"Level 5 radius-two window contains all 25 production cells"
+	)
+
+	var deathmoth_cell_root: Node3D = deathmoth_runtime.call("get_cell_root", "0,2") as Node3D
+	if deathmoth_cell_root == null:
+		_expect(false, "deterministic Level 5 Deathmoth spawn cell has a production root")
+		deathmoth_runtime.call("deactivate_destination")
+		return
+	var deathmoth: CharacterBody3D = null
+	for child in deathmoth_cell_root.get_children():
+		if child is CharacterBody3D and str(child.get_meta("backrooms_entity_id", "")) == "deathmoth":
+			deathmoth = child as CharacterBody3D
+	_expect(deathmoth != null, "production Level 5 cell builds the deterministic Deathmoth CharacterBody3D")
+	if deathmoth == null:
+		deathmoth_runtime.call("deactivate_destination")
+		return
+
+	var deathmoth_shape: CollisionShape3D = deathmoth.get_node_or_null("EntityCollision") as CollisionShape3D
+	var world_collision: StaticBody3D = deathmoth_cell_root.get_node_or_null("WorldCollision") as StaticBody3D
+	_expect(
+		deathmoth_shape != null and deathmoth_shape.shape is SphereShape3D,
+		"production Deathmoth owns its spherical collision proxy"
+	)
+	_expect(
+		deathmoth.collision_layer == 0 and deathmoth.collision_mask == 0,
+		"staged Level 5 Deathmoth collision remains disabled before activation"
+	)
+	_expect(
+		deathmoth_shape != null and deathmoth_shape.disabled,
+		"staged Deathmoth collision shape remains disabled before activation"
+	)
+	_expect(
+		world_collision != null and world_collision.collision_layer == 0,
+		"staged Level 5 ceiling collision remains disabled before activation"
+	)
+	_expect(
+		bool(deathmoth_runtime.call("activate_destination")),
+		"production Level 5 destination activates its Deathmoth and room geometry"
+	)
+	await physics_frame
+	_expect(
+		deathmoth.collision_layer == CollisionFactoryScript.ENTITY_COLLISION_LAYER
+		and deathmoth.collision_mask == CollisionFactoryScript.ENTITY_COLLISION_MASK,
+		"active Deathmoth uses the production entity/player/world collision contract"
+	)
+	_expect(
+		deathmoth_shape != null and not deathmoth_shape.disabled,
+		"active Deathmoth enables its production collision shape"
+	)
+	_expect(
+		world_collision != null and world_collision.collision_layer == RuntimeScript.WORLD_GEOMETRY_LAYER,
+		"active Level 5 cell enables its ceiling world-geometry collision"
+	)
+
+	var deathmoth_spawn_position: Vector3 = deathmoth.global_position
+	var ceiling_hit: KinematicCollision3D = deathmoth.move_and_collide(
+		Vector3.UP * 2.0,
+		false,
+		deathmoth.safe_margin,
+		false
+	)
+	_expect(ceiling_hit != null, "flying Deathmoth is physically blocked by the active production ceiling")
+	if ceiling_hit != null and world_collision != null:
+		_expect(
+			ceiling_hit.get_collider() == world_collision,
+			"Deathmoth ceiling contact is owned by its cell WorldCollision body"
+		)
+	_expect(
+		deathmoth.global_position.y <= RuntimeScript.WALL_HEIGHT - 0.38 + 0.05,
+		"Deathmoth sphere remains below the 3.2 m ceiling underside"
+	)
+	print(
+		"DEATHMOTH_CEILING_PROBE: final_y=%.3f ceiling_underside=%.3f"
+		% [deathmoth.global_position.y, RuntimeScript.WALL_HEIGHT]
+	)
+
+	deathmoth.global_position = deathmoth_spawn_position
+	await physics_frame
+	var player_probe := CharacterBody3D.new()
+	player_probe.name = "DeathmothPlayerCollisionProbe"
+	player_probe.motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+	player_probe.collision_layer = CollisionFactoryScript.PLAYER_COLLISION_LAYER
+	player_probe.collision_mask = CollisionFactoryScript.ENTITY_COLLISION_LAYER
+	player_probe.safe_margin = 0.02
+	var player_shape := CollisionShape3D.new()
+	var player_sphere := SphereShape3D.new()
+	player_sphere.radius = 0.25
+	player_shape.shape = player_sphere
+	player_probe.add_child(player_shape)
+	stage.add_child(player_probe)
+	player_probe.global_position = deathmoth_spawn_position + Vector3(-1.0, 0.0, 0.0)
+	await physics_frame
+	var player_hit: KinematicCollision3D = player_probe.move_and_collide(
+		Vector3.RIGHT * 2.0,
+		false,
+		player_probe.safe_margin,
+		false
+	)
+	_expect(player_hit != null, "player-layer probe physically collides with the production Deathmoth")
+	if player_hit != null:
+		_expect(
+			player_hit.get_collider() == deathmoth,
+			"player-layer collision resolves to the live Deathmoth CharacterBody3D"
+		)
+	print(
+		"DEATHMOTH_PLAYER_PROBE: hit=%s"
+		% [str(player_hit != null and player_hit.get_collider() == deathmoth)]
+	)
+	player_probe.queue_free()
+	deathmoth_runtime.call("deactivate_destination")
 
 
 func _assert_cell_enclosure(cell_root: Node3D, cell_key: String) -> void:
