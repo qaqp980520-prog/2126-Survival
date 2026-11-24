@@ -154,6 +154,10 @@ func _run() -> void:
 	)
 	_expect(entity_root.get_parent() == target_root, "transferred Hound is attached to the target cell before disk save")
 
+	var source_health: RefCounted = source_world.get("health") as RefCounted
+	_expect(source_health != null, "production SurfaceWorld owns a player-health model")
+	if source_health != null:
+		_expect(bool(source_health.call("load_save_dict", {"schema_version": 1, "current": 64.0}), "test sets a deterministic non-full player-health value before disk save")
 	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
 	if not first_save_ok:
 		print("DEBUG: combined Hound save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
@@ -178,6 +182,8 @@ func _run() -> void:
 	_expect(bool(first_session.get("active", false)), "combined disk envelope preserves the active Backrooms Session")
 	var saved_player_position: Array = first_payload.get("backrooms_player", {}).get("position", [])
 	_expect(saved_player_position.size() == 3, "combined disk envelope stores the Backrooms player position")
+	var saved_health: Dictionary = first_payload.get("backrooms_player", {}).get("health", {})
+	_expect(int(saved_health.get("schema_version", -1)) == 1 and is_equal_approx(float(saved_health.get("current", -1.0)), 64.0), "combined disk envelope stores the validated player-health payload")
 
 	# A second production save rotates the known-good combined Hound envelope to
 	# .bak. Corrupt only the primary so recovery must rebuild the full SurfaceWorld.
@@ -224,6 +230,8 @@ func _run() -> void:
 	_expect(_save_values_equal(repaired_payload, backup_payload), "repaired primary exactly matches the validated combined Hound backup")
 
 	_expect(bool(restored_world.get("_is_in_backrooms")), "fresh-world recovery activates Backrooms only after the combined runtime is reconstructed")
+	var restored_health: RefCounted = restored_world.get("health") as RefCounted
+	_expect(restored_health != null and is_equal_approx(float(restored_health.call("get_current_health")), 64.0), "combined backup recovery restores the exact player-health value")
 	_expect(int(restored_world.get("world_seed")) == WORLD_SEED, "combined backup recovery restores the original SurfaceWorld seed")
 	var restored_player: CharacterBody3D = restored_world.get("player") as CharacterBody3D
 	var restored_manager: RefCounted = restored_world.get("backrooms_transition_manager") as RefCounted
@@ -262,6 +270,20 @@ func _run() -> void:
 			_expect(restored_agent.get_instance_id() != source_navigation_agent_id, "restored Hound navigation agent is a new runtime object, not serialized scene state")
 			_expect(not restored_agent.avoidance_enabled, "restored NavigationAgent3D preserves the bounded non-avoidance policy")
 			_expect(absf(restored_agent.path_desired_distance - 0.2) <= 0.0001, "restored NavigationAgent3D preserves the current waypoint tolerance")
+
+	var returned: Dictionary = restored_world.call("return_from_backrooms")
+	_expect(bool(returned.get("ok", false)), "restored player can return to the idle SurfaceWorld before legacy-save compatibility validation")
+	await process_frame
+	if restored_health != null:
+		restored_health.call("load_save_dict", {"schema_version": 1, "current": 37.0})
+	var legacy_payload: Dictionary = backup_payload.duplicate(true)
+	var legacy_player_payload: Dictionary = legacy_payload.get("backrooms_player", {})
+	legacy_player_payload.erase("health")
+	legacy_payload["backrooms_player"] = legacy_player_payload
+	var legacy_restored: bool = bool(restored_world.call("restore_world_envelope", legacy_payload, int(Time.get_unix_time_from_system())))
+	_expect(legacy_restored, "legacy combined envelope without player health remains loadable")
+	if restored_health != null and legacy_restored:
+		_expect(is_equal_approx(float(restored_health.call("get_current_health")), 100.0), "legacy combined envelope defaults missing health to full health")
 
 	_finish(0)
 
