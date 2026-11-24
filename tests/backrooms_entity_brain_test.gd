@@ -159,7 +159,12 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 	legacy_hound_payload.erase("target_source")
 	var legacy_hound: Node = _make_brain("hound", "Level 2")
 	_expect(bool(legacy_hound.call("load_save_dict", legacy_hound_payload)), "legacy brain save without target source remains compatible")
-	_expect(str(legacy_hound.call("get_behavior_snapshot").get("target_source", "")) == "none", "legacy target source defaults to fail-closed none")
+	var legacy_snapshot: Dictionary = legacy_hound.call("get_behavior_snapshot")
+	_expect(
+		str(legacy_snapshot.get("target_source", "")) == "none"
+		and not bool(legacy_snapshot.get("has_target_position", true)),
+		"legacy brain save clears its ambiguous target until the next perception sample"
+	)
 	restored_hound.free()
 	legacy_hound.free()
 	hound.free()
