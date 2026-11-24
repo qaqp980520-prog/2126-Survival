@@ -114,6 +114,7 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 		"noise_position": Vector3(7.0, 0.0, 3.0)
 	}, 0.1)
 	_expect(str(hound_chase.get("state", "")) == "pursue" and bool(hound_chase.get("has_target_position", false)), "Hound pursues a strong nearby sound even without line of sight")
+	_expect(str(hound_chase.get("target_source", "")) == "noise" and str(hound_chase.get("intent", "")) == "pursue_sound", "noise-driven Hound pursuit is explicitly tagged as a sound target")
 	var hound_investigate: Dictionary = hound.call("evaluate_perception", {
 		"distance_to_player": 30.0,
 		"has_line_of_sight": false,
@@ -127,6 +128,30 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 		"noise_strength": 0.0
 	}, 0.1)
 	_expect(str(hound_patrol.get("state", "")) == "patrol", "Hound returns to patrol when no usable signal remains")
+	var hound_player_chase: Dictionary = hound.call("evaluate_perception", {
+		"distance_to_player": 5.0,
+		"has_line_of_sight": true,
+		"noise_strength": 0.0,
+		"player_position": Vector3(2.0, 0.0, 1.0)
+	}, 0.1)
+	_expect(
+		str(hound_player_chase.get("state", "")) == "pursue"
+		and str(hound_player_chase.get("target_source", "")) == "player"
+		and str(hound_player_chase.get("intent", "")) == "pursue_player",
+		"visible-player Hound pursuit is explicitly tagged as a player target"
+	)
+	var saved_hound: Dictionary = hound.call("to_save_dict")
+	_expect(str(saved_hound.get("target_source", "")) == "player", "brain save includes the explicit target source")
+	var restored_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(restored_hound.call("load_save_dict", saved_hound)), "new brain save with target source restores")
+	_expect(str(restored_hound.call("get_behavior_snapshot").get("target_source", "")) == "player", "restored brain preserves player target source")
+	var legacy_hound_payload: Dictionary = saved_hound.duplicate(true)
+	legacy_hound_payload.erase("target_source")
+	var legacy_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(legacy_hound.call("load_save_dict", legacy_hound_payload)), "legacy brain save without target source remains compatible")
+	_expect(str(legacy_hound.call("get_behavior_snapshot").get("target_source", "")) == "none", "legacy target source defaults to fail-closed none")
+	restored_hound.free()
+	legacy_hound.free()
 	hound.free()
 
 	var skin: Node = _make_brain("skin_stealer", "Level 2")
