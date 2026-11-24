@@ -45,3 +45,13 @@ Add a Level 4 destination to the existing legacy Backrooms portal playground, wi
 - Duller and Deathmoth are static visual prototypes; AI/physics behavior belongs in the separate newer BackroomsMazeCellRuntime architecture after its parent stack is reviewed.
 - No collision, navigation, attack, pursuit, persistence, GPU hardware, FPS, or mobile-device claim is made by this asset.
 - After independent review, integrate parent-first through PR #425 → #426 → this PR, rerunning exact-head validation after every parent synchronization.
+
+
+## Run 405 follow-up correction — visible carpet tint
+
+A source review found that `_prepare_maze_materials()` configured a muted Level 4 floor palette, but `_make_surface_material(true, ...)` later replaced the floor mesh material with the carpet texture and reset its albedo tint to white. The configured palette therefore did not reach the visible textured floor. This is corrected and covered by the independent M0.1.99 follow-up:
+
+- `prototypes/BackroomsPortalPlayground.gd` now carries `_cell_material_floor.albedo_color` into the textured carpet material.
+- `tests/backrooms_entity_factory_geometry_test.gd` checks the texture and matching tint for Levels 1–4, plus the exact Level 4 charcoal source color.
+- See `docs/BACKROOMS_LEVEL4_FLOOR_PALETTE_TEXTURE_TINT_M0_1_99.md`.
+- The new exact-head validation is pending; do not treat M0.1.99 as accepted until its full Gate and focused geometry test pass.
