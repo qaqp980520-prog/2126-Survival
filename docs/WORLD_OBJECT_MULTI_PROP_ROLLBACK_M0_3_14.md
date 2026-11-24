@@ -42,11 +42,18 @@ Every scenario instruments the production registry and asserts that the scoped p
 - Parent PR #422 exact HEAD at branch creation: `5b49eb24103d5df24dbd303c8f5a5493d83fc602`.
 - No production runtime code, save schema, scenes, Project Settings, input mappings, or third-party dependencies change.
 
-## Validation status
+## Validation status — PR #423 exact HEAD (2026-11-24)
 
-- Exact-head Godot 4.3 Full Compatibility Gate: pending.
-- Local Godot executable is unavailable in the authoring environment; no local engine pass is claimed.
-- No GPU, rendered FPS, or target-device performance claim is made.
+- Parent PR #422 exact HEAD: `5b49eb24103d5df24dbd303c8f5a5493d83fc602`.
+- Candidate PR #423 HEAD: `60b0bb4a0cbb6d81c557dc33740d8303ce1c7691`, 4 ahead / 0 behind.
+- All 19 PR-triggered workflows completed successfully, 0 failures / 0 in progress.
+- Godot 4.3 Full Compatibility Gate [45317429840](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45317429840): 557/557 steps successful, 0 failed / 0 skipped.
+- The four-prop rollback regression produced 43 PASS assertions, 0 FAIL assertions, and its exact success marker.
+- Mineral Grid Streaming Lifecycle [45317429996](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45317429996): 14/14 steps successful.
+- Full Gate log audit: 7,759,685 characters / 84,862 lines / 78,468 PASS matches; actual Script/Parse/Runtime errors 0; ObjectDB leaks 0; Orphan StringName diagnostics 0.
+- 23 warnings remain and are not claimed fixed: 19 filled draw_rect width notices, 1 nested legacy project notice, 1 stale-unload rollback warning, and 2 synchronous mineral-registration rollback warnings.
+- Local Godot executable is unavailable in the authoring environment. Exact-head engine tests ran on GitHub Actions Godot 4.3. No GPU, rendered FPS, or target-device performance claim is made.
+- PR #423 is Open / Ready for Review / Mergeable / Unmerged. Independent review submissions: 0; inline review threads: 0.
 
 ## Limitations and next steps
 
