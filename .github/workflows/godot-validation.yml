@@ -101,6 +101,7 @@ jobs:
           test -f systems/BackroomsEntityVisualFactory.gd
           test -f tests/backrooms_entity_visual_factory_test.gd
           test -f tests/backrooms_entity_visual_factory_render_smoke_test.gd
+          test -f tests/backrooms_cell_ceiling_collision_test.gd
           test -f systems/BackroomsEntityBrain.gd
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
@@ -5125,6 +5126,20 @@ jobs:
           godot --headless --path . --editor --import --quit
           test -f assets/textures/backrooms_wallpaper.svg.import
           test -f assets/textures/backrooms_carpet.svg.import
+      - name: Run production Backrooms cell ceiling geometry and collision regression
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 120s xvfb-run -a -s '-screen 0 1280x720x24' godot --audio-driver Dummy --path . --rendering-method gl_compatibility --script res://tests/backrooms_cell_ceiling_collision_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then
+            echo "Godot reported errors during production cell ceiling geometry/collision validation."
+            exit 1
+          fi
+          echo "$output" | grep -q "Backrooms cell ceiling geometry and collision tests passed."
       - name: Run actual MeshInstance3D construction and frame capture
         shell: bash
         env:
