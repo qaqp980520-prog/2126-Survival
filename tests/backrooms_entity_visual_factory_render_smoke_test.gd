@@ -192,6 +192,7 @@ func _assert_level_zero_is_entity_free(stage: Node3D) -> void:
 	var cell_root: Node3D = runtime.call("get_cell_root", "0,0") as Node3D
 	_expect(cell_root != null, "Level 0 production cell root exists")
 	if cell_root != null:
+		_assert_cell_ceiling(cell_root, "Level 0")
 		_expect(cell_root.get_meta("backrooms_entity_spawn_ids", []).is_empty(), "Level 0 spawn identity list remains empty")
 		var light_descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor", {})
 		var ceiling_light: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
@@ -234,6 +235,7 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 			var entity_root: Node3D = _find_entity_root(cell_root, entity_id)
 			if entity_root == null:
 				continue
+			_assert_cell_ceiling(cell_root, entity_id)
 			var light_descriptor: Dictionary = cell_root.get_meta("backrooms_light_descriptor", {})
 			var ceiling_light: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
 			_expect(not light_descriptor.is_empty(), "%s owning cell exposes a deterministic lighting descriptor" % entity_id)
@@ -259,7 +261,7 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 				_expect(is_equal_approx(entity_root.rotation.y, expected_yaw), "Window production visual follows its owned wall orientation")
 
 			for cell_child in cell_root.get_children():
-				if cell_child.name == "Floor" or str(cell_child.name).begins_with("Wall_"):
+				if cell_child.name in ["Floor", "Ceiling"] or str(cell_child.name).begins_with("Wall_"):
 					cell_child.visible = false
 
 			_expect(bool(runtime.call("activate_destination")), "%s production runtime activates its rendered cell" % entity_id)
@@ -267,6 +269,48 @@ func _build_production_entity(stage: Node3D, level_id: String, entity_id: String
 
 	runtime.queue_free()
 	return null
+
+func _assert_cell_ceiling(cell_root: Node3D, context: String) -> void:
+	var ceiling_mesh: MeshInstance3D = cell_root.get_node_or_null("Ceiling") as MeshInstance3D
+	_expect(ceiling_mesh != null, "%s production cell owns a ceiling mesh" % context)
+	if ceiling_mesh == null:
+		return
+	var ceiling_box: BoxMesh = ceiling_mesh.mesh as BoxMesh
+	_expect(ceiling_box != null, "%s ceiling uses a BoxMesh" % context)
+	if ceiling_box != null:
+		_expect(
+			ceiling_box.size.is_equal_approx(Vector3(CELL_SIZE, RuntimeScript.CEILING_THICKNESS, CELL_SIZE)),
+			"%s ceiling covers the complete cell footprint" % context
+		)
+	_expect(
+		ceiling_mesh.position.is_equal_approx(
+			Vector3(0.0, RuntimeScript.WALL_HEIGHT + RuntimeScript.CEILING_THICKNESS * 0.5, 0.0)
+		),
+		"%s ceiling underside aligns with the perimeter wall tops" % context
+	)
+	_expect(ceiling_mesh.material_override is StandardMaterial3D, "%s ceiling has an explicit material" % context)
+	var world_collision: StaticBody3D = cell_root.get_node_or_null("WorldCollision") as StaticBody3D
+	_expect(world_collision != null, "%s production cell exposes WorldCollision" % context)
+	if world_collision != null:
+		_expect(world_collision.collision_layer == 0, "%s prepared ceiling collision remains disabled" % context)
+		var ceiling_shape: CollisionShape3D = world_collision.get_node_or_null("CeilingCollision") as CollisionShape3D
+		_expect(ceiling_shape != null, "%s WorldCollision includes CeilingCollision" % context)
+		if ceiling_shape != null:
+			var box_shape: BoxShape3D = ceiling_shape.shape as BoxShape3D
+			_expect(box_shape != null, "%s ceiling collision uses a BoxShape3D" % context)
+			if box_shape != null:
+				_expect(
+					box_shape.size.is_equal_approx(Vector3(CELL_SIZE, RuntimeScript.CEILING_THICKNESS, CELL_SIZE)),
+					"%s ceiling collision matches the visual footprint" % context
+				)
+			_expect(ceiling_shape.position.is_equal_approx(ceiling_mesh.position), "%s ceiling collision matches the visual transform" % context)
+	var light: OmniLight3D = cell_root.get_node_or_null("BackroomsCeilingLight") as OmniLight3D
+	if light != null:
+		_expect(
+			light.position.y < RuntimeScript.WALL_HEIGHT,
+			"%s ceiling light remains below the ceiling underside" % context
+		)
+
 
 func _find_entity_root(cell_root: Node3D, entity_id: String) -> Node3D:
 	if cell_root == null:
