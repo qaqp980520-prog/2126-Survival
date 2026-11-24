@@ -72,7 +72,9 @@ func _run() -> void:
 			palette_floor_mesh = palette_cell.get_node_or_null("FloorMesh") as MeshInstance3D
 			if palette_floor_mesh != null:
 				break
-		var textured_floor := palette_floor_mesh.material_override as StandardMaterial3D if palette_floor_mesh != null else null
+		var textured_floor: StandardMaterial3D = null
+		if palette_floor_mesh != null:
+			textured_floor = palette_floor_mesh.material_override as StandardMaterial3D
 		_expect(
 			palette_source != null and textured_floor != null,
 			"%s production cells expose both palette and textured floor materials" % level_name
