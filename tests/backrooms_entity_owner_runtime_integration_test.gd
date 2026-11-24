@@ -7,6 +7,37 @@ const MovementDriverScript = preload("res://systems/BackroomsEntityMovementDrive
 const DISK_SAVE_PATH: String = "user://run342_backrooms_hound_file_roundtrip.json"
 const MOBILE_ENTITY_IDS := ["smiler", "hound", "skin_stealer", "faceling", "duller", "deathmoth"]
 
+class CommitRejectingOwnershipLedger extends RefCounted:
+	var configured: bool = true
+	var inner_ledger: RefCounted
+
+	func _init(source_ledger: RefCounted) -> void:
+		inner_ledger = source_ledger
+
+	func get_record(spawn_cell_key: String, entity_id: String) -> Dictionary:
+		return inner_ledger.call("get_record", spawn_cell_key, entity_id)
+
+	func plan_transfer(
+		spawn_cell_key: String,
+		entity_id: String,
+		target_owner_cell_key: String,
+		route_snapshot: Dictionary
+	) -> Dictionary:
+		return inner_ledger.call(
+			"plan_transfer",
+			spawn_cell_key,
+			entity_id,
+			target_owner_cell_key,
+			route_snapshot
+		)
+
+	func commit_transfer(_plan: Dictionary) -> Dictionary:
+		return {"ok": false, "reason": "injected_commit_rejection"}
+
+	func rollback_transfer(plan: Dictionary) -> bool:
+		return bool(inner_ledger.call("rollback_transfer", plan))
+
+
 class PhysicsMovementTickDriver:
 	extends Node
 
@@ -286,6 +317,62 @@ func _run() -> void:
 	_expect(target_root.get_meta("backrooms_entity_spawn_ids", []) == target_spawn_ids_before, "blocked transfer leaves target spawn IDs unchanged")
 	target_root.remove_child(blocker)
 	blocker.free()
+	await physics_frame
+
+	var transform_before_commit_rejection: Transform3D = entity_root.global_transform
+	var owner_before_commit_rejection: Dictionary = runtime.call(
+		"get_entity_owner_record", spawn_cell_key, entity_id
+	)
+	var rejecting_ledger := CommitRejectingOwnershipLedger.new(ownership_ledger)
+	runtime.set("ownership_ledger", rejecting_ledger)
+	var commit_rejected_transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", spawn_cell_key, entity_id, route
+	)
+	runtime.set("ownership_ledger", ownership_ledger)
+	_expect(
+		not bool(commit_rejected_transfer.get("ok", false))
+		and str(commit_rejected_transfer.get("reason", "")) == "injected_commit_rejection",
+		"ownership commit rejection is reached after the live physics handoff"
+	)
+	_expect(
+		entity_root.get_parent() == source_root,
+		"commit rejection reparents the live entity back to its original owner"
+	)
+	_expect(
+		entity_root.global_transform.is_equal_approx(transform_before_commit_rejection),
+		"commit rejection restores the exact pre-handoff world transform"
+	)
+	var owner_after_commit_rejection: Dictionary = runtime.call(
+		"get_entity_owner_record", spawn_cell_key, entity_id
+	)
+	_expect(
+		owner_after_commit_rejection == owner_before_commit_rejection,
+		"commit rejection preserves the committed owner record and revision"
+	)
+	_expect(
+		str(entity_root.get_meta("backrooms_owner_cell_key", "")) == source_key
+		and int(entity_root.get_meta("backrooms_owner_revision", -1)) == 0,
+		"commit rejection restores live entity owner metadata"
+	)
+	_expect(
+		int(ownership_ledger.call("get_pending_transfer_count")) == 0,
+		"commit rejection rolls back the pending production-ledger plan"
+	)
+	_expect(
+		source_root.get_meta("backrooms_entity_identity_keys", []) == source_identity_keys_before
+		and source_root.get_meta("backrooms_entity_spawn_ids", []) == source_spawn_ids_before,
+		"commit rejection leaves source identity metadata unchanged"
+	)
+	_expect(
+		target_root.get_meta("backrooms_entity_identity_keys", []) == target_identity_keys_before
+		and target_root.get_meta("backrooms_entity_spawn_ids", []) == target_spawn_ids_before,
+		"commit rejection leaves target identity metadata unchanged"
+	)
+	_expect(
+		_count_identity_in_root(source_root, spawn_cell_key, entity_id) == 1
+		and _count_identity_in_root(target_root, spawn_cell_key, entity_id) == 0,
+		"commit rejection leaves exactly one live identity under the source root"
+	)
 	await physics_frame
 
 	var hound_brain: Node = entity_root.get_node_or_null("AI")
@@ -1038,6 +1125,7 @@ func _finish(runtime: Node3D, restored: Node3D) -> void:
 			DirAccess.remove_absolute(absolute)
 	await process_frame
 	if failures.is_empty():
+		print("Backrooms live transfer commit rollback guard passed.")
 		print("Backrooms entity owner runtime integration tests passed.")
 		quit(0)
 	else:
