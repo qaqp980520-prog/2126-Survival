@@ -7,6 +7,7 @@ Connect the existing Level 2 Hound pursuit loop to a bounded contact-attack driv
 ## Gameplay contract
 
 - Hound attacks only while its production brain is configured, in the pursue state, and explicitly targeting the player. Noise-driven pursuit is never treated as player pursuit, even when the noise position is close to the player.
+- Brain snapshots now carry an optional `target_source` (`player`, `noise`, or `none`). Older snapshots without that field remain loadable, but their ambiguous target position is cleared until the next perception sample (fail-closed combat compatibility).
 - The player must be within 1.35 m and have a clear world-geometry ray from the Hound's upper body to the player's upper body.
 - Each successful attack applies 12 health damage and starts a 1.25 s cooldown.
 - Cooldowns are keyed by world seed, level, and immutable spawn-cell/entity identity, so transferring a Hound between streamed cells does not reset them. They are session-local and reset when the Backrooms session is exited or restored.
