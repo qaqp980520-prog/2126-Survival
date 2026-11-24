@@ -102,6 +102,7 @@ jobs:
           test -f tests/backrooms_entity_visual_factory_test.gd
           test -f tests/backrooms_entity_visual_factory_render_smoke_test.gd
           test -f tests/backrooms_cell_ceiling_collision_test.gd
+          test -f docs/BACKROOMS_ACTIVE_STREAM_CEILING_COLLISION_M0_1_101.md
           test -f systems/BackroomsEntityBrain.gd
           test -f tests/backrooms_entity_brain_test.gd
           test -f systems/BackroomsPerceptionDriver.gd
