@@ -189,6 +189,7 @@ func _run() -> void:
 
 	_production_entity_spawn_contract_is_valid()
 	await _assert_entity_runtime_state_round_trip()
+	await _assert_route_snapshot_lifecycle()
 
 	restored.queue_free()
 	runtime.queue_free()
@@ -200,6 +201,128 @@ func _run() -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _assert_route_snapshot_lifecycle() -> void:
+	var failure_count_before: int = failures.size()
+	var route_runtime: Variant = RuntimeScript.new()
+	route_runtime.force_metadata_only = true
+	root.add_child(route_runtime)
+	await process_frame
+
+	var prepared: Dictionary = route_runtime.call(
+		"prepare_destination", "Level 1", 20261124, Vector3.ZERO, 8.0, 1
+	)
+	_expect(bool(prepared.get("ok", false)), "route snapshot fixture prepares a production Level 1 radius-one window")
+	if not bool(prepared.get("ok", false)):
+		route_runtime.queue_free()
+		await process_frame
+		return
+	_expect(int(route_runtime.call("get_loaded_cell_count")) == 9, "route snapshot fixture owns exactly nine loaded cells")
+	_expect(bool(route_runtime.call("activate_destination")), "route snapshot fixture activates the production runtime")
+
+	var route_value: Variant = route_runtime.call(
+		"plan_route_between_loaded_cells", Vector2i.ZERO, Vector2i(1, 0)
+	)
+	if not (route_value is Dictionary) or not bool(route_value.get("ok", false)):
+		_expect(false, "production runtime plans the guaranteed parent-edge route from origin to east neighbor")
+		route_runtime.call("deactivate_destination")
+		route_runtime.queue_free()
+		await process_frame
+		return
+	var initial_route: Dictionary = route_value
+	var initial_state: RefCounted = route_runtime.get("stream_state") as RefCounted
+	var initial_generation: int = int(initial_state.call("get_generation")) if initial_state != null else -1
+	_expect(initial_generation >= 1, "active runtime has a committed stream generation")
+	_expect(
+		int(initial_route.get("stream_generation", -1)) == initial_generation,
+		"planned route records the current committed stream generation"
+	)
+	_expect(
+		bool(route_runtime.call("is_route_snapshot_current", initial_route)),
+		"production runtime accepts its own unmodified current route snapshot"
+	)
+
+	var wrong_generation: Dictionary = initial_route.duplicate(true)
+	wrong_generation["stream_generation"] = initial_generation - 1
+	_expect(
+		not bool(route_runtime.call("is_route_snapshot_current", wrong_generation)),
+		"runtime rejects a route snapshot from another stream generation"
+	)
+	var wrong_revision: Dictionary = initial_route.duplicate(true)
+	wrong_revision["configuration_revision"] = int(wrong_revision.get("configuration_revision", -1)) + 1
+	_expect(
+		not bool(route_runtime.call("is_route_snapshot_current", wrong_revision)),
+		"runtime rejects a route snapshot from another configuration revision"
+	)
+	var wrong_keys: Dictionary = initial_route.duplicate(true)
+	var wrong_key_values: Array = wrong_keys.get("cell_keys", []).duplicate()
+	if wrong_key_values.size() > 1:
+		wrong_key_values[1] = "99,99"
+		wrong_keys["cell_keys"] = wrong_key_values
+		_expect(
+			not bool(route_runtime.call("is_route_snapshot_current", wrong_keys)),
+			"runtime rejects route cell keys that no longer match the cell path"
+		)
+	else:
+		_expect(false, "route fixture contains at least one traversed edge for key-integrity validation")
+	var wrong_directions: Dictionary = initial_route.duplicate(true)
+	var wrong_direction_values: Array = wrong_directions.get("edge_directions", []).duplicate()
+	if not wrong_direction_values.is_empty():
+		wrong_direction_values[0] = Vector2i(0, 1)
+		wrong_directions["edge_directions"] = wrong_direction_values
+		_expect(
+			not bool(route_runtime.call("is_route_snapshot_current", wrong_directions)),
+			"runtime rejects route directions that do not connect consecutive path cells"
+		)
+	else:
+		_expect(false, "route fixture contains an edge direction for topology-integrity validation")
+
+	var shifted: Dictionary = route_runtime.call("sync_to_world_position", Vector3(8.0, 0.0, 0.0))
+	_expect(bool(shifted.get("ok", false)), "active production runtime commits a one-cell eastward stream shift")
+	if not bool(shifted.get("ok", false)):
+		route_runtime.call("deactivate_destination")
+		route_runtime.queue_free()
+		await process_frame
+		return
+	var shifted_state: RefCounted = route_runtime.get("stream_state") as RefCounted
+	var shifted_generation: int = int(shifted_state.call("get_generation")) if shifted_state != null else -1
+	_expect(
+		shifted_generation == initial_generation + 1,
+		"successful stream shift advances the committed generation exactly once"
+	)
+	_expect(
+		not bool(route_runtime.call("is_route_snapshot_current", initial_route)),
+		"previous-window route snapshot becomes stale after the stream transaction commits"
+	)
+	var stale_transfer: Dictionary = route_runtime.call(
+		"transfer_entity_to_next_cell", "0,0", "hound", initial_route
+	)
+	_expect(
+		not bool(stale_transfer.get("ok", false))
+		and str(stale_transfer.get("reason", "")) == "route_snapshot_stale",
+		"ownership transfer rejects a stale route before inspecting or mutating entity ownership"
+	)
+
+	var current_route: Dictionary = route_runtime.call(
+		"plan_route_between_loaded_cells", Vector2i(1, 0), Vector2i(2, 0)
+	)
+	_expect(bool(current_route.get("ok", false)), "runtime replans a route in the newly committed window")
+	if bool(current_route.get("ok", false)):
+		_expect(
+			bool(route_runtime.call("is_route_snapshot_current", current_route)),
+			"newly planned route is current for the committed stream window"
+		)
+	_expect(bool(route_runtime.call("deactivate_destination")), "route snapshot fixture deactivates cleanly")
+	_expect(
+		not bool(route_runtime.call("is_route_snapshot_current", current_route)),
+		"deactivation invalidates every previously current route snapshot"
+	)
+
+	route_runtime.queue_free()
+	await process_frame
+	if failures.size() == failure_count_before:
+		print("Backrooms route snapshot runtime integration passed.")
+
 
 func _assert_entity_runtime_state_round_trip() -> void:
 	var runtime: Variant = RuntimeScript.new()
