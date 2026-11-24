@@ -269,7 +269,7 @@ func _run_scenario(use_full_snapshot: bool, label: String) -> Dictionary:
 func _cleanup_scenario(controller: Node, object_registry: Node, mineral_registry: Node, chunk_roots: Array) -> void:
 	controller.queue_free()
 	for chunk_root in chunk_roots:
-		if is_instance_valid(chunk_root) and chunk_root.get_parent() == null:
+		if is_instance_valid(chunk_root) and chunk_root.get_parent() == null and not chunk_root.is_queued_for_deletion():
 			chunk_root.free()
 	object_registry.queue_free()
 	mineral_registry.queue_free()
