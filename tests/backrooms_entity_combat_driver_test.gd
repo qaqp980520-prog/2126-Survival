@@ -128,6 +128,42 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 		driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.5)
 		await physics_frame
 	_expect(is_equal_approx(float(health.call("get_current_health")), 76.0), "patrolling Hound cannot damage the player")
+	var distracted: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 0.9,
+		"has_line_of_sight": false,
+		"noise_strength": 1.0,
+		"noise_distance": 0.5,
+		"noise_position": Vector3(10.0, 0.0, 10.0),
+		"player_position": player.global_position
+	}, 0.2)
+	_expect(bool(distracted.get("ok", false)) and str(distracted.get("state", "")) == "pursue", "Hound can pursue a non-player noise target")
+	for _wait_index in range(3):
+		driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.5)
+		await physics_frame
+	_expect(is_equal_approx(float(health.call("get_current_health")), 76.0), "Hound pursuing a distant noise target cannot damage the nearby player")
+	var smiler := CharacterBody3D.new()
+	smiler.name = "Smiler_NonCombat"
+	smiler.collision_layer = 1 << 2
+	smiler.collision_mask = 1
+	smiler.position = Vector3(0.0, 0.0, -0.5)
+	smiler.set_meta("backrooms_entity_id", "smiler")
+	smiler.set_meta("spawn_cell", Vector2i(5, 5))
+	var smiler_brain: Node = BrainScript.new()
+	smiler_brain.name = "AI"
+	smiler.add_child(smiler_brain)
+	smiler_brain.call("configure", "smiler", "Level 1", Vector2i(5, 5), 20261125)
+	smiler_brain.call("evaluate_perception", {
+		"distance_to_player": 0.5,
+		"has_line_of_sight": true,
+		"is_dark": true,
+		"player_position": player.global_position
+	}, 0.2)
+	target_root.add_child(smiler)
+	await physics_frame
+	for _wait_index in range(3):
+		driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.5)
+		await physics_frame
+	_expect(is_equal_approx(float(health.call("get_current_health")), 76.0), "non-Hound entities do not use the Hound melee damage path")
 	brain.call("evaluate_perception", {
 		"distance_to_player": 0.9,
 		"has_line_of_sight": true,
