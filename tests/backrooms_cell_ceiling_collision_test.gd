@@ -95,7 +95,9 @@ func _run() -> void:
 	for key_value in loaded_keys:
 		var key: String = str(key_value)
 		var cell_root: Node3D = runtime.call("get_cell_root", key) as Node3D
-		var world_collision: StaticBody3D = cell_root.get_node_or_null("WorldCollision") as StaticBody3D if cell_root != null else null
+		var world_collision: StaticBody3D = null
+		if cell_root != null:
+			world_collision = cell_root.get_node_or_null("WorldCollision") as StaticBody3D
 		_expect(
 			world_collision != null and world_collision.collision_layer == RuntimeScript.WORLD_GEOMETRY_LAYER,
 			"activated cell %s enables its floor, wall and ceiling collision together" % key
@@ -161,7 +163,7 @@ func _assert_cell_enclosure(cell_root: Node3D, cell_key: String) -> void:
 		_expect(ceiling_box_shape != null, "loaded cell %s ceiling collision uses a BoxShape3D" % cell_key)
 		if ceiling_box_shape != null:
 			_expect(
-				ceiling_box_shape.size.is_equal_approx(ceiling_box.size),
+				ceiling_box_shape.size.is_equal_approx(Vector3(CELL_SIZE, RuntimeScript.CEILING_THICKNESS, CELL_SIZE)),
 				"loaded cell %s ceiling collision matches its visual bounds" % cell_key
 			)
 		_expect(
