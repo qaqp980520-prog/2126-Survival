@@ -130,7 +130,8 @@ func tick(
 		var target_position_value: Variant = snapshot.get("target_position", null)
 		if not (target_position_value is Vector3):
 			continue
-		if (target_position_value as Vector3).distance_to(player.global_position) > 2.5:
+		var target_position: Vector3 = target_position_value
+		if target_position.distance_to(player.global_position) > 2.5:
 			continue
 		var distance: float = entity_root.global_position.distance_to(player.global_position)
 		if not is_finite(distance) or distance > HOUND_ATTACK_RANGE:
