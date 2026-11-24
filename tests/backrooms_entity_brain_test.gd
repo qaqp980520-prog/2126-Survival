@@ -141,7 +141,9 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 	var hound_player_chase: Dictionary = hound.call("evaluate_perception", {
 		"distance_to_player": 5.0,
 		"has_line_of_sight": true,
-		"noise_strength": 0.0,
+		"noise_strength": 0.8,
+		"noise_distance": 5.0,
+		"noise_position": Vector3(2.0, 0.0, 1.0),
 		"player_position": Vector3(2.0, 0.0, 1.0)
 	}, 0.1)
 	_expect(
