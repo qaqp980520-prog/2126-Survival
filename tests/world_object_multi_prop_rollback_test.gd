@@ -184,6 +184,8 @@ func _test_scoped_snapshot_recovery_after_partial_restore_failure() -> void:
 	_expect(str(target_snapshot.get("mode", "")) == "records", "self-recovery fixture captures a chunk-scoped target snapshot")
 	_expect(_seed_chunk_records(registry, chunk_id, SAVED_STATE), "self-recovery fixture writes a distinct current state")
 	var expected_current_records: Dictionary = _read_chunk_records(registry, chunk_id)
+	var expected_total_properties: int = int(registry.get("_total_properties"))
+	var expected_total_string_chars: int = int(registry.get("_total_string_chars"))
 
 	registry.set("set_calls", 0)
 	registry.set("fail_after_set_calls", 2)
@@ -191,6 +193,8 @@ func _test_scoped_snapshot_recovery_after_partial_restore_failure() -> void:
 	_expect(not restored_after_set_failure, "a one-shot third set failure rejects the target snapshot restore")
 	_expect(int(registry.get("set_calls")) == 7, "set failure triggers all four writes needed to recover the pre-attempt records")
 	_expect(_read_chunk_records(registry, chunk_id) == expected_current_records, "set failure recovery restores every pre-attempt chunk record exactly")
+	_expect(int(registry.get("_total_properties")) == expected_total_properties, "set failure recovery restores the registry property counter")
+	_expect(int(registry.get("_total_string_chars")) == expected_total_string_chars, "set failure recovery restores the registry string-character counter")
 	_expect(_read_unrelated_record(registry) == _expected_unrelated_record(), "set failure recovery preserves unrelated unloaded records")
 	_expect(int(registry.get("full_snapshot_calls")) == 0, "set failure recovery never serializes the full object registry")
 
@@ -200,6 +204,8 @@ func _test_scoped_snapshot_recovery_after_partial_restore_failure() -> void:
 	_expect(not restored_after_forget_failure, "a one-shot third forget failure rejects the target snapshot restore")
 	_expect(int(registry.get("forget_calls")) == 5, "forget failure recovery removes remaining records and retries all four current records")
 	_expect(_read_chunk_records(registry, chunk_id) == expected_current_records, "forget failure recovery restores every pre-attempt chunk record exactly")
+	_expect(int(registry.get("_total_properties")) == expected_total_properties, "forget failure recovery restores the registry property counter")
+	_expect(int(registry.get("_total_string_chars")) == expected_total_string_chars, "forget failure recovery restores the registry string-character counter")
 	_expect(_read_unrelated_record(registry) == _expected_unrelated_record(), "forget failure recovery preserves unrelated unloaded records")
 	_expect(int(registry.get("full_snapshot_calls")) == 0, "forget failure recovery never serializes the full object registry")
 	await _cleanup_environment(env, null)
