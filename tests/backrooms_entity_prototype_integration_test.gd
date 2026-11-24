@@ -9,7 +9,10 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var playground: Node3D = PlaygroundScript.new()
+	var scene_root := get_root()
+	var playground := Node3D.new()
+	scene_root.add_child(playground)
+	playground.set_script(PlaygroundScript)
 	var checked_cells: int = 0
 	var rendered_entities: int = 0
 
@@ -24,6 +27,7 @@ func _run() -> void:
 					continue
 
 				var cell_root := Node3D.new()
+				playground.add_child(cell_root)
 				playground.call("_spawn_level_entities_for_cell", cell_root, cell)
 				var actual: Array[String] = []
 				for child in cell_root.get_children():
@@ -45,6 +49,7 @@ func _run() -> void:
 				_expect(actual == expected_visuals, "%s visual dispatch matches director output at %s" % [level_name, cell])
 				rendered_entities += actual.size()
 				checked_cells += 1
+				playground.remove_child(cell_root)
 				cell_root.free()
 
 		for entity_id in EntityDirector.get_allowed_entities(level_name):
@@ -53,17 +58,22 @@ func _run() -> void:
 	playground.set("current_level", "Level 0")
 	for cell in [Vector2i.ZERO, Vector2i(3, 7), Vector2i(-13, 21)]:
 		var empty_root := Node3D.new()
+		playground.add_child(empty_root)
 		playground.call("_spawn_level_entities_for_cell", empty_root, cell)
 		_expect(empty_root.get_child_count() == 0, "Level 0 remains entity-free")
+		playground.remove_child(empty_root)
 		empty_root.free()
 
 	playground.set("current_level", "Unknown Level")
 	for cell in [Vector2i.ZERO, Vector2i(3, 7), Vector2i(-13, 21)]:
 		var unknown_root := Node3D.new()
+		playground.add_child(unknown_root)
 		playground.call("_spawn_level_entities_for_cell", unknown_root, cell)
 		_expect(unknown_root.get_child_count() == 0, "Unknown levels fail closed without prototype visuals")
+		playground.remove_child(unknown_root)
 		unknown_root.free()
 
+	scene_root.remove_child(playground)
 	playground.free()
 	_finish(checked_cells, rendered_entities)
 
