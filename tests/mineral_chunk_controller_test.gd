@@ -20,6 +20,8 @@ func _initialize() -> void:
 	call_deferred("_run_tests")
 
 func _run_tests() -> void:
+	await _test_nested_terrain_adjacency_batch_defers_rebuild()
+	await process_frame
 	await _test_chunk_save_unload_reload_with_offline_regeneration()
 	await process_frame
 	await _test_empty_chunk_and_duplicate_id()
@@ -40,6 +42,28 @@ func _run_tests() -> void:
 	await process_frame
 	print("Mineral chunk controller integration tests passed.")
 	quit(0)
+
+func _test_nested_terrain_adjacency_batch_defers_rebuild() -> void:
+	var controller: Node3D = Controller.new()
+	root.add_child(controller)
+	await process_frame
+	var initial_rebuild_count: int = int(controller.call("get_terrain_adjacency_rebuild_count"))
+	assert(bool(controller.call("begin_terrain_adjacency_batch")), "outer terrain adjacency batch opens")
+	assert(bool(controller.call("begin_terrain_adjacency_batch")), "nested terrain adjacency batch opens")
+	var empty_patches: Array[Node3D] = []
+	var deferred_request: Dictionary = controller.call("_request_terrain_adjacency_rebind", empty_patches)
+	assert(bool(deferred_request.get("ok", false)) and bool(deferred_request.get("deferred", false)), "nested batch defers the adjacency request")
+	var inner_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	assert(bool(inner_result.get("ok", false)) and bool(inner_result.get("deferred", false)), "inner batch close defers finalization")
+	assert(int(controller.call("get_terrain_adjacency_rebuild_count")) == initial_rebuild_count, "inner close performs no rebuild")
+	var outer_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	assert(bool(outer_result.get("ok", false)), "outer batch close finalizes successfully")
+	assert(int(controller.call("get_terrain_adjacency_rebuild_count")) == initial_rebuild_count + 1, "outer close performs exactly one full adjacency rebuild")
+	var extra_result: Dictionary = controller.call("end_terrain_adjacency_batch")
+	assert(bool(extra_result.get("ok", false)) and not bool(extra_result.get("active", true)), "extra close is safely reported as inactive")
+	assert(int(controller.call("get_terrain_adjacency_rebuild_count")) == initial_rebuild_count + 1, "extra close does not rebuild again")
+	controller.queue_free()
+	await process_frame
 
 func _test_chunk_save_unload_reload_with_offline_regeneration() -> void:
 	var base_time: int = int(Time.get_unix_time_from_system()) - 5

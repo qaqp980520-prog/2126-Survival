@@ -96,6 +96,7 @@ func _test_async_superseded_during_staging_releases_roots() -> void:
 	_expect(director.call("get_managed_chunk_ids") == expected_ids, "Director ownership mirrors the replacement request's actual chunk")
 	_expect(controller.get_child_count() == 1, "superseded root is not left beside the replacement root")
 	_expect(int(director.call("get_active_async_request_id")) == -1, "replacement completion clears the active async request")
+	_expect_batch_closed(controller, 1, "superseded staging replacement")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
@@ -120,6 +121,7 @@ func _test_async_false_after_registration_is_rolled_back() -> void:
 	_expect(director.call("get_managed_chunk_ids").is_empty(), "false-after-registration leaves no Director ownership")
 	await process_frame
 	_expect(controller.get_child_count() == 0, "false-after-registration releases the candidate root instead of orphaning it")
+	_expect_batch_closed(controller, 1, "false-after-registration rollback")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "false-after-registration candidate weak reference is released")
 	controller.queue_free()
@@ -145,6 +147,10 @@ func _test_async_queued_controller_after_prior_loads_does_not_receive_rollback_c
 	_expect(not bool(report.get("rollback_complete", true)), "queued async Controller teardown is honestly reported as incomplete")
 	_expect(bool(report.get("details", {}).get("controller_queued_for_deletion", false)), "async report identifies the queued Controller")
 	_expect(not bool(report.get("details", {}).get("new_loads_rollback_ok", true)), "async report records that prior loads were released by Controller teardown rather than explicit rollback")
+	_expect(int(controller.get("adjacency_batch_begin_calls")) == 1, "queued-controller commit opens one adjacency batch")
+	_expect(int(controller.get("adjacency_batch_end_calls")) == 0, "queued Controller is not called to close its batch")
+	_expect(int(controller.get("adjacency_batch_depth")) == 1, "queued Controller retains its open batch only until its own teardown")
+	_expect(int(controller.get("adjacency_batch_finalize_calls")) == 0, "queued Controller does not report a false adjacency finalization")
 	_expect(newly_loaded.size() == 8, "async report records the eight chunks registered before the Controller was queued")
 	_expect(_factory_roots.size() == 9, "queued async fixture created all nine staged chunk roots")
 	await process_frame
@@ -170,6 +176,7 @@ func _test_async_failed_rollback_keeps_ownership_mirrored() -> void:
 	_expect(controller.get_loaded_chunk_ids() == expected_ids, "Controller retains the chunk that could not be unloaded")
 	_expect(director.call("get_managed_chunk_ids") == expected_ids, "Director retains ownership for the chunk still loaded by the Controller")
 	_expect(controller.get_child_count() == 1, "failed rollback retains exactly one owned root instead of orphaning it")
+	_expect_batch_closed(controller, 1, "failed rollback")
 	_expect(bool(director.call("sync_to_world_position", Vector3.ZERO, _test_time + 2)), "a later sync can reconcile the retained, actually loaded chunk")
 	_expect(controller.get_loaded_chunk_ids() == director.call("get_managed_chunk_ids"), "retry preserves Controller and Director ownership agreement")
 	controller.queue_free()
@@ -193,6 +200,7 @@ func _test_async_true_without_registration_is_rejected() -> void:
 	_expect(director.call("get_managed_chunk_ids").is_empty(), "unregistered-success leaves no Director ownership")
 	await process_frame
 	_expect(controller.get_child_count() == 0, "unregistered-success removes the attached but unregistered root")
+	_expect_batch_closed(controller, 0, "unregistered-success cleanup")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "unregistered-success candidate weak reference is released")
 	controller.queue_free()
@@ -223,6 +231,7 @@ func _test_stale_restore_true_without_registration_is_rejected() -> void:
 	_expect(actual_ids == director.call("get_managed_chunk_ids"), "Director ownership mirrors the actual partially restored Controller state")
 	await process_frame
 	_expect(controller.get_child_count() == 8, "unregistered restoration candidate is removed rather than retained as an orphan child")
+	_expect_batch_closed(controller, 1, "stale-root restore failure")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "new and unregistered restoration candidates are released")
 	controller.queue_free()
@@ -248,6 +257,7 @@ func _test_async_controller_detach_during_commit_reports_dependency_unavailable(
 	_expect(director.call("get_managed_chunk_ids").is_empty(), "Director ownership is cleared after detached-controller rollback")
 	await process_frame
 	_expect(controller.get_child_count() == 0, "detached-controller rollback releases its candidate root")
+	_expect_batch_closed(controller, 1, "detached-controller rollback")
 	for reference in _factory_roots:
 		_expect(reference.get_ref() == null, "detached-controller candidate weak reference is released")
 	controller.queue_free()
@@ -269,6 +279,9 @@ func _test_async_factory_unavailable_preserves_diagnostic_reason() -> void:
 	_expect(str(diagnostics.get("cancellation_reason", "")) == "factory_unavailable", "factory-loss diagnostic reason is preserved instead of being mislabeled as Controller loss")
 	_expect(controller.get_loaded_chunk_ids().is_empty(), "factory loss leaves the Controller window unchanged")
 	_expect(director.call("get_managed_chunk_ids").is_empty(), "factory loss leaves the Director ownership map unchanged")
+	_expect(int(controller.get("adjacency_batch_begin_calls")) == 0, "factory loss during staging does not open a commit batch")
+	_expect(int(controller.get("adjacency_batch_end_calls")) == 1, "factory loss during staging safely invokes the idempotent batch finalizer")
+	_expect(int(controller.get("adjacency_batch_depth")) == 0, "factory loss leaves no open batch")
 	controller.queue_free()
 	director.queue_free()
 	await process_frame
@@ -301,6 +314,12 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 
 func _capture_async_report(request_id: int, report: Dictionary) -> void:
 	_completed_async_reports[request_id] = report.duplicate(true)
+
+func _expect_batch_closed(controller: Variant, expected_finalizations: int, label: String) -> void:
+	_expect(int(controller.get("adjacency_batch_begin_calls")) == 1, "%s opens exactly one adjacency batch" % label)
+	_expect(int(controller.get("adjacency_batch_end_calls")) >= 1, "%s invokes the idempotent batch finalizer" % label)
+	_expect(int(controller.get("adjacency_batch_depth")) == 0, "%s leaves no open adjacency batch" % label)
+	_expect(int(controller.get("adjacency_batch_finalize_calls")) == expected_finalizations, "%s records the expected finalization count" % label)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:

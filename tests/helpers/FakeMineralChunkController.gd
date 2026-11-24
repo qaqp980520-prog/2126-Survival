@@ -9,6 +9,33 @@ var detach_on_load_call: int = -1
 var queue_on_load_call: int = -1
 var fail_after_register_on_load_call: int = -1
 var return_success_without_register_on_load_call: int = -1
+var adjacency_batch_depth: int = 0
+var adjacency_batch_begin_calls: int = 0
+var adjacency_batch_end_calls: int = 0
+var adjacency_batch_finalize_calls: int = 0
+var adjacency_batch_dirty: bool = false
+
+func begin_terrain_adjacency_batch() -> bool:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return false
+	if adjacency_batch_depth == 0:
+		adjacency_batch_dirty = false
+	adjacency_batch_depth += 1
+	adjacency_batch_begin_calls += 1
+	return true
+
+func end_terrain_adjacency_batch() -> Dictionary:
+	adjacency_batch_end_calls += 1
+	if adjacency_batch_depth <= 0:
+		return {"ok": true, "active": false}
+	adjacency_batch_depth -= 1
+	if adjacency_batch_depth > 0:
+		return {"ok": true, "deferred": true}
+	if not adjacency_batch_dirty:
+		return {"ok": true, "rebuild_count": 0}
+	adjacency_batch_dirty = false
+	adjacency_batch_finalize_calls += 1
+	return {"ok": true, "rebuild_count": 1}
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bool:
 	load_calls += 1
@@ -20,6 +47,8 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, _now_unix: int = -1) -> bo
 		return true
 	add_child(chunk_root)
 	_loaded[chunk_id] = chunk_root
+	if adjacency_batch_depth > 0:
+		adjacency_batch_dirty = true
 	if detach_on_next_load or load_calls == detach_on_load_call:
 		detach_on_next_load = false
 		detach_on_load_call = -1
@@ -43,6 +72,8 @@ func unload_chunk(chunk_id: String, _now_unix: int = -1) -> bool:
 		return false
 	var chunk_root: Node3D = _loaded[chunk_id] as Node3D
 	_loaded.erase(chunk_id)
+	if adjacency_batch_depth > 0:
+		adjacency_batch_dirty = true
 	remove_child(chunk_root)
 	chunk_root.queue_free()
 	return true
