@@ -75,6 +75,7 @@ jobs:
           test -f tests/backrooms_player_input_test.gd
           test -f systems/BackroomsEntityDirector.gd
           test -f tests/backrooms_entity_director_test.gd
+          test -f assets/textures/backrooms_level4_office_wallpaper.svg
           test -f tests/backrooms_entity_prototype_integration_test.gd
           test -f tests/helpers/BackroomsEntityDispatchProbe.gd
           test -f systems/BackroomsSettingsProfile.gd
