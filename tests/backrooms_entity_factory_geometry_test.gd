@@ -38,7 +38,13 @@ func _run() -> void:
 
 	root.add_child(world)
 	await process_frame
+	_expect(DisplayServer.get_name() != "headless", "Xvfb software-rendered DisplayServer is active")
 	_expect(world.is_inside_tree(), "Production playground is inside the SceneTree before factory calls")
+	if DisplayServer.get_name() == "headless":
+		world.queue_free()
+		await process_frame
+		_finish()
+		return
 
 	for level_name in ["Level 1", "Level 2", "Level 3"]:
 		world.set("current_level", level_name)
