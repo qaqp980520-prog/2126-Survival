@@ -9,7 +9,9 @@ const ENTITY_ROOT_NAMES := {
 	"hound": "Entity_Hound",
 	"skin_stealer": "Entity_SkinStealer",
 	"clump": "Entity_Clump",
-	"faceling": "Entity_Faceling"
+	"faceling": "Entity_Faceling",
+	"duller": "Entity_Duller",
+	"deathmoth": "Entity_Deathmoth"
 }
 
 const MINIMUM_MESH_COUNTS := {
@@ -18,7 +20,9 @@ const MINIMUM_MESH_COUNTS := {
 	"hound": 8,
 	"skin_stealer": 6,
 	"clump": 7,
-	"faceling": 6
+	"faceling": 6,
+	"duller": 6,
+	"deathmoth": 17
 }
 
 var failures: Array[String] = []
@@ -46,10 +50,50 @@ func _run() -> void:
 		_finish()
 		return
 
-	for level_name in ["Level 1", "Level 2", "Level 3"]:
+	for level_name in ["Level 1", "Level 2", "Level 3", "Level 4"]:
 		world.set("current_level", level_name)
 		world.call("_build_backrooms_room", level_name)
 		await process_frame
+		if level_name == "Level 4":
+			var level4_wall_material := world.get("_cell_material_wall") as StandardMaterial3D
+			_expect(
+				level4_wall_material != null
+				and level4_wall_material.albedo_texture != null
+				and level4_wall_material.albedo_texture.resource_path.ends_with("backrooms_level4_office_wallpaper.svg"),
+				"Level 4 production cells use the dedicated office-wall texture"
+			)
+		var palette_source := world.get("_cell_material_floor") as StandardMaterial3D
+		var palette_floor_mesh: MeshInstance3D
+		var loaded_level_cells: Dictionary = world.get("_loaded_cells")
+		for cell_value in loaded_level_cells.values():
+			var palette_cell := cell_value as Node3D
+			if palette_cell == null:
+				continue
+			palette_floor_mesh = palette_cell.get_node_or_null("FloorMesh") as MeshInstance3D
+			if palette_floor_mesh != null:
+				break
+		var textured_floor: StandardMaterial3D = null
+		if palette_floor_mesh != null:
+			textured_floor = palette_floor_mesh.material_override as StandardMaterial3D
+		_expect(
+			palette_source != null and textured_floor != null,
+			"%s production cells expose both palette and textured floor materials" % level_name
+		)
+		if palette_source != null and textured_floor != null:
+			_expect(
+				textured_floor.albedo_texture != null
+				and textured_floor.albedo_texture.resource_path.ends_with("backrooms_carpet.svg"),
+				"%s floor retains the repeating carpet texture" % level_name
+			)
+			_expect(
+				textured_floor.albedo_color == palette_source.albedo_color,
+				"%s floor palette tint reaches the textured carpet material" % level_name
+			)
+		if level_name == "Level 4" and palette_source != null:
+			_expect(
+				palette_source.albedo_color == Color(0.28, 0.31, 0.33),
+				"Level 4 source palette is the muted charcoal office color"
+			)
 		var level_factory_count: int = 0
 		for entity_id in EntityDirector.get_allowed_entities(level_name):
 			var spawn: Dictionary = _find_unloaded_spawn_cell(level_name, entity_id)

@@ -36,6 +36,7 @@ func _test_spawn_retry_when_no_safe_point_exists() -> void:
     assert(director.active_portal.is_empty())
 
 func _test_portal_consumption_is_single_use() -> void:
+    assert(Director.TARGET_LEVELS == ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4"])
     var director = Director.new(99, BOUNDS, 40.0)
     var spawned: Dictionary = director.tick(director.next_spawn_in + 0.1, Vector2(500.0, 500.0))
     var portal_id: int = int(spawned["portal"]["id"])

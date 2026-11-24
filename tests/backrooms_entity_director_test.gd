@@ -12,6 +12,7 @@ func _run() -> void:
 	_expect(EntityDirector.get_allowed_entities("Level 1") == ["window", "smiler"], "Level 1 allows only windows and Smilers")
 	_expect(EntityDirector.get_allowed_entities("Level 2") == ["hound", "skin_stealer"], "Level 2 has its own Hound and Skin-Stealer roster")
 	_expect(EntityDirector.get_allowed_entities("Level 3") == ["clump", "faceling"], "Level 3 has its own Clump and Faceling roster")
+	_expect(EntityDirector.get_allowed_entities("Level 4") == ["duller", "deathmoth"], "Level 4 has its own Duller and Deathmoth roster")
 	_expect(EntityDirector.get_allowed_entities("Unknown Level").is_empty(), "Unknown levels fail closed with no entities")
 
 	var observed: Dictionary = {}
@@ -29,18 +30,29 @@ func _run() -> void:
 	_expect(EntityDirector.get_cell_spawns("Level 0", Vector2i(3, 7)).is_empty(), "Level 0 never rolls Level 1 entities")
 	var level_2_seen: Dictionary = {}
 	var level_3_seen: Dictionary = {}
+	var level_4_seen: Dictionary = {}
 	for z in range(-40, 41):
 		for x in range(-40, 41):
-			for entity_id in EntityDirector.get_cell_spawns("Level 2", Vector2i(x, z)):
+			var cell := Vector2i(x, z)
+			for entity_id in EntityDirector.get_cell_spawns("Level 2", cell):
 				level_2_seen[entity_id] = true
-			for entity_id in EntityDirector.get_cell_spawns("Level 3", Vector2i(x, z)):
+			for entity_id in EntityDirector.get_cell_spawns("Level 3", cell):
 				level_3_seen[entity_id] = true
+			var level_4_first: Array[String] = EntityDirector.get_cell_spawns("Level 4", cell)
+			var level_4_second: Array[String] = EntityDirector.get_cell_spawns("Level 4", cell)
+			_expect(level_4_first == level_4_second, "Level 4 cell spawn selection is deterministic")
+			for entity_id in level_4_first:
+				_expect(entity_id == "duller" or entity_id == "deathmoth", "Level 4 spawn stays on its own whitelist")
+				level_4_seen[entity_id] = true
 	_expect(level_2_seen.has("hound") and level_2_seen.has("skin_stealer"), "Both Level 2 entities can spawn")
 	_expect(level_3_seen.has("clump") and level_3_seen.has("faceling"), "Both Level 3 entities can spawn")
+	_expect(level_4_seen.has("duller") and level_4_seen.has("deathmoth"), "Both Level 4 entities can spawn")
 	for entity_id in EntityDirector.get_cell_spawns("Level 2", Vector2i(3, 7)):
 		_expect(entity_id == "hound" or entity_id == "skin_stealer", "Level 2 spawn stays on its own whitelist")
 	for entity_id in EntityDirector.get_cell_spawns("Level 3", Vector2i(3, 7)):
 		_expect(entity_id == "clump" or entity_id == "faceling", "Level 3 spawn stays on its own whitelist")
+	for entity_id in EntityDirector.get_cell_spawns("Level 4", Vector2i(3, 7)):
+		_expect(entity_id == "duller" or entity_id == "deathmoth", "Level 4 spawn stays on its own whitelist")
 	_finish()
 
 func _expect(condition: bool, description: String) -> void:

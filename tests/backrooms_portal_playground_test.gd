@@ -1,7 +1,7 @@
 extends SceneTree
 
 const PlaygroundScene = preload("res://prototypes/BackroomsPortalPlayground.tscn")
-const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3"]
+const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4"]
 
 var failures: Array[String] = []
 var watchdog: Timer
@@ -49,7 +49,7 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
-    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-4 list")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
@@ -67,6 +67,18 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("load_world_state_from_dictionary", saved)), "restores valid world envelope")
     _expect(int(world.call("get_inventory_count", "berries")) == 2, "load restores prior inventory count")
     _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
+
+    var level4_save: Dictionary = saved.duplicate(true)
+    level4_save["current_level"] = "Level 4"
+    level4_save["in_backrooms"] = true
+    _expect(bool(world.call("load_world_state_from_dictionary", level4_save)), "accepts and restores a Level 4 world save")
+    _expect(str(world.call("get_current_level")) == "Level 4", "Level 4 remains active after save restore")
+    var level4_loaded_cells: Dictionary = world.get("_loaded_cells")
+    var level4_room: Node = world.get("backrooms_room")
+    _expect(
+        level4_loaded_cells.size() == 25 and level4_room != null and level4_room.get_child_count() == 25,
+        "Level 4 save restore rebuilds the expected 25-cell maze"
+    )
 
     var bridge: Node = world.get("bridge")
     _expect(bool(bridge.call("collect_world_item", "rock", 40)), "rock pickup updates shared inventory")
