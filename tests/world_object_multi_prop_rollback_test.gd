@@ -16,6 +16,8 @@ class InstrumentedObjectRegistry:
 	var set_calls: int = 0
 	var fail_after_set_calls: int = -1
 	var full_snapshot_calls: int = 0
+	var forget_calls: int = 0
+	var fail_after_forget_calls: int = -1
 
 	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
 		set_calls += 1
@@ -27,6 +29,13 @@ class InstrumentedObjectRegistry:
 	func to_save_dict() -> Dictionary:
 		full_snapshot_calls += 1
 		return super.to_save_dict()
+
+	func forget_object_state(stable_id: String) -> bool:
+		forget_calls += 1
+		if fail_after_forget_calls >= 0 and forget_calls > fail_after_forget_calls:
+			fail_after_forget_calls = -1
+			return false
+		return super.forget_object_state(stable_id)
 
 class RejectingStatefulProp:
 	extends "res://systems/WorldObjectStatefulProp.gd"
@@ -48,6 +57,8 @@ func _run() -> void:
 	await _test_four_prop_saved_state_apply_rollback()
 	await process_frame
 	await _test_four_prop_capture_and_unload_rollback()
+	await process_frame
+	await _test_scoped_snapshot_recovery_after_partial_restore_failure()
 	await process_frame
 	if failures.is_empty():
 		print("World object multi-prop rollback tests passed.")
@@ -158,6 +169,46 @@ func _test_four_prop_capture_and_unload_rollback() -> void:
 	_expect(_read_unrelated_record(registry) == _expected_unrelated_record(), "successful unload also preserves unrelated unloaded records")
 	_expect(int(registry.get("full_snapshot_calls")) == 0, "successful four-prop capture and unload avoid full-registry snapshots")
 	await _cleanup_environment(env, chunk)
+
+func _test_scoped_snapshot_recovery_after_partial_restore_failure() -> void:
+	var env: Dictionary = await _create_environment("scoped snapshot self-recovery")
+	var registry: Node = env["object_registry"] as Node
+	var controller: Node3D = env["controller"] as Node3D
+	var chunk_id: String = "surface/multiprop-rollback/self-recovery"
+	_expect(_seed_unrelated_record(registry), "self-recovery fixture seeds an unrelated unloaded record")
+	_expect(_seed_chunk_records(registry, chunk_id, DEFAULT_STATE), "self-recovery fixture seeds all four target records")
+	var stable_ids: Array[String] = []
+	for index in range(PROP_COUNT):
+		stable_ids.append(_stable_id(chunk_id, index))
+	var target_snapshot: Dictionary = controller.call("_capture_world_object_registry_snapshot", stable_ids)
+	_expect(str(target_snapshot.get("mode", "")) == "records", "self-recovery fixture captures a chunk-scoped target snapshot")
+	_expect(_seed_chunk_records(registry, chunk_id, SAVED_STATE), "self-recovery fixture writes a distinct current state")
+	var expected_current_records: Dictionary = _read_chunk_records(registry, chunk_id)
+	var expected_total_properties: int = int(registry.get("_total_properties"))
+	var expected_total_string_chars: int = int(registry.get("_total_string_chars"))
+
+	registry.set("set_calls", 0)
+	registry.set("fail_after_set_calls", 2)
+	var restored_after_set_failure: bool = bool(controller.call("_restore_world_object_registry_snapshot", target_snapshot))
+	_expect(not restored_after_set_failure, "a one-shot third set failure rejects the target snapshot restore")
+	_expect(int(registry.get("set_calls")) == 7, "set failure triggers all four writes needed to recover the pre-attempt records")
+	_expect(_read_chunk_records(registry, chunk_id) == expected_current_records, "set failure recovery restores every pre-attempt chunk record exactly")
+	_expect(int(registry.get("_total_properties")) == expected_total_properties, "set failure recovery restores the registry property counter")
+	_expect(int(registry.get("_total_string_chars")) == expected_total_string_chars, "set failure recovery restores the registry string-character counter")
+	_expect(_read_unrelated_record(registry) == _expected_unrelated_record(), "set failure recovery preserves unrelated unloaded records")
+	_expect(int(registry.get("full_snapshot_calls")) == 0, "set failure recovery never serializes the full object registry")
+
+	registry.set("forget_calls", 0)
+	registry.set("fail_after_forget_calls", 2)
+	var restored_after_forget_failure: bool = bool(controller.call("_restore_world_object_registry_snapshot", target_snapshot))
+	_expect(not restored_after_forget_failure, "a one-shot third forget failure rejects the target snapshot restore")
+	_expect(int(registry.get("forget_calls")) == 5, "forget failure recovery removes remaining records and retries all four current records")
+	_expect(_read_chunk_records(registry, chunk_id) == expected_current_records, "forget failure recovery restores every pre-attempt chunk record exactly")
+	_expect(int(registry.get("_total_properties")) == expected_total_properties, "forget failure recovery restores the registry property counter")
+	_expect(int(registry.get("_total_string_chars")) == expected_total_string_chars, "forget failure recovery restores the registry string-character counter")
+	_expect(_read_unrelated_record(registry) == _expected_unrelated_record(), "forget failure recovery preserves unrelated unloaded records")
+	_expect(int(registry.get("full_snapshot_calls")) == 0, "forget failure recovery never serializes the full object registry")
+	await _cleanup_environment(env, null)
 
 func _seed_unrelated_record(registry: Node) -> bool:
 	return bool(registry.call("set_object_state", UNRELATED_STABLE_ID, UNRELATED_CHUNK_ID, UNRELATED_STATE))
