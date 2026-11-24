@@ -85,6 +85,7 @@ func _run() -> void:
 				if mesh_instance.mesh != null:
 					var bounds: AABB = mesh_instance.mesh.get_aabb()
 					_expect(bounds.size.x > 0.0 and bounds.size.y > 0.0 and bounds.size.z > 0.0, "%s mesh part has positive geometry bounds" % entity_id)
+					_expect_mesh_inside_cell(mesh_instance, cell_root, entity_id)
 				checked_meshes += 1
 		_expect(level_factory_count == EntityDirector.get_allowed_entities(level_name).size(), "%s validates every configured production factory" % level_name)
 
@@ -142,3 +143,18 @@ func _finish() -> void:
 		for failure in failures:
 			push_error("FAIL: " + failure)
 		quit(1)
+
+func _expect_mesh_inside_cell(mesh_instance: MeshInstance3D, cell_root: Node3D, entity_id: String) -> void:
+	# CELL_SIZE=8.0 and WALL_HEIGHT=3.4 are the production playground's current
+	# cell envelope. The tolerance only absorbs floating-point boundary noise.
+	var world_bounds: AABB = mesh_instance.global_transform * mesh_instance.mesh.get_aabb()
+	var cell_origin: Vector3 = cell_root.global_position
+	const HALF_CELL := 4.0
+	const WALL_HEIGHT := 3.4
+	const EPSILON := 0.02
+	_expect(world_bounds.position.x >= cell_origin.x - HALF_CELL - EPSILON, "%s mesh stays inside the cell west bound" % entity_id)
+	_expect(world_bounds.end.x <= cell_origin.x + HALF_CELL + EPSILON, "%s mesh stays inside the cell east bound" % entity_id)
+	_expect(world_bounds.position.z >= cell_origin.z - HALF_CELL - EPSILON, "%s mesh stays inside the cell north bound" % entity_id)
+	_expect(world_bounds.end.z <= cell_origin.z + HALF_CELL + EPSILON, "%s mesh stays inside the cell south bound" % entity_id)
+	_expect(world_bounds.position.y >= cell_origin.y - EPSILON, "%s mesh stays above the cell floor" % entity_id)
+	_expect(world_bounds.end.y <= cell_origin.y + WALL_HEIGHT + EPSILON, "%s mesh stays below the cell ceiling" % entity_id)
