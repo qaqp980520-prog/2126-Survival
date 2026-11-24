@@ -115,6 +115,16 @@ func _assert_hound_and_skin_stealer_policies() -> void:
 	}, 0.1)
 	_expect(str(hound_chase.get("state", "")) == "pursue" and bool(hound_chase.get("has_target_position", false)), "Hound pursues a strong nearby sound even without line of sight")
 	_expect(str(hound_chase.get("target_source", "")) == "noise" and str(hound_chase.get("intent", "")) == "pursue_sound", "noise-driven Hound pursuit is explicitly tagged as a sound target")
+	var saved_noise_hound: Dictionary = hound.call("to_save_dict")
+	var restored_noise_hound: Node = _make_brain("hound", "Level 2")
+	_expect(bool(restored_noise_hound.call("load_save_dict", saved_noise_hound)), "noise-pursuit brain save restores with its explicit target source")
+	var restored_noise_snapshot: Dictionary = restored_noise_hound.call("get_behavior_snapshot")
+	_expect(
+		str(restored_noise_snapshot.get("target_source", "")) == "noise"
+		and str(restored_noise_snapshot.get("intent", "")) == "pursue_sound",
+		"noise-pursuit save round-trip preserves fail-closed combat target semantics"
+	)
+	restored_noise_hound.free()
 	var hound_investigate: Dictionary = hound.call("evaluate_perception", {
 		"distance_to_player": 30.0,
 		"has_line_of_sight": false,
