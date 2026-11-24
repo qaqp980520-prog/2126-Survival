@@ -34,7 +34,7 @@ The existing Godot 4.3 Full Compatibility Gate already invokes this test script,
 1. **Partial target-record rewrite:** seed four current records, capture a distinct target snapshot, then make the third target `set_object_state` call fail once. The helper must return false for the failed target restore but recover all four exact pre-attempt current records. The unrelated unloaded record must remain unchanged.
 2. **Partial target-record removal:** repeat with the third `forget_object_state` call failing once after two records have been removed. The helper must recover all four exact pre-attempt current records and preserve the unrelated record.
 
-Both cases assert zero calls to the full-registry serializer. The fault is one-shot so the recovery attempt can succeed and its contract can be tested deterministically.
+Both cases assert zero calls to the full-registry serializer and verify the registry's total-property and total-string-character accounting counters return to their exact pre-attempt values. The fault is one-shot so the recovery attempt can succeed and its contract can be tested deterministically.
 
 ## Validation status
 
