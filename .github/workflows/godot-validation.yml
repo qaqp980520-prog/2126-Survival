@@ -81,6 +81,7 @@ jobs:
           test -f tests/backrooms_cell_route_planner_test.gd
           test -f docs/BACKROOMS_CELL_ROUTE_PLANNER_M0_1_68.md
           test -f docs/BACKROOMS_ROUTE_SNAPSHOT_RUNTIME_INTEGRATION_M0_1_104.md
+          test -f docs/BACKROOMS_ROUTE_TRANSFER_LOOKUP_ORDER_M0_1_105.md
           test -f systems/BackroomsEntityOwnershipLedger.gd
           test -f tests/backrooms_entity_ownership_ledger_test.gd
           test -f docs/BACKROOMS_ENTITY_OWNERSHIP_LEDGER_M0_1_69.md
@@ -401,6 +402,7 @@ jobs:
           fi
           echo "$output" | grep -q "Backrooms loaded-cell route planner tests passed."
           echo "$output" | grep -q "Backrooms route snapshot runtime transfer guard passed."
+          echo "$output" | grep -q "Backrooms route transfer lookup-order guard passed."
 
       - name: Run Backrooms transactional entity ownership ledger tests
         shell: bash
