@@ -400,6 +400,7 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms loaded-cell route planner tests passed."
+          echo "$output" | grep -q "Backrooms route snapshot runtime transfer guard passed."
 
       - name: Run Backrooms transactional entity ownership ledger tests
         shell: bash
@@ -435,7 +436,6 @@ jobs:
             exit 1
           fi
           echo "$output" | grep -q "Backrooms maze cell runtime tests passed."
-          echo "$output" | grep -q "Backrooms route snapshot runtime integration passed."
       - name: Run Backrooms entity owner runtime integration tests
         shell: bash
         run: |
