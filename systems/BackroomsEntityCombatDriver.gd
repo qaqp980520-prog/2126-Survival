@@ -4,7 +4,7 @@ class_name BackroomsEntityCombatDriver
 ## World-owned, bounded contact attacks for active Backrooms entities.
 ## Cooldowns are keyed by immutable spawn identity so cell transfers do not reset them.
 const ATTACK_INTERVAL_SECONDS: float = 0.1
-const MAX_ENTITY_ATTACKS_PER_TICK: int = 12
+const MAX_ENTITY_SAMPLES_PER_TICK: int = 12
 const MAX_FRAME_DELTA_SECONDS: float = 0.5
 const MAX_TRACKED_COOLDOWNS: int = 4096
 const HOUND_ATTACK_RANGE: float = 1.35
@@ -29,7 +29,7 @@ func get_diagnostics() -> Dictionary:
 		"tracked_cooldowns": _cooldown_remaining_by_entity.size(),
 		"next_entity_key": _next_entity_key,
 		"attack_interval_seconds": ATTACK_INTERVAL_SECONDS,
-		"max_entities_per_tick": MAX_ENTITY_ATTACKS_PER_TICK
+		"max_entities_per_tick": MAX_ENTITY_SAMPLES_PER_TICK
 	}
 
 func tick(
@@ -95,7 +95,7 @@ func tick(
 		}
 
 	var start_index: int = _find_start_index(records, _next_entity_key)
-	var sample_count: int = mini(MAX_ENTITY_ATTACKS_PER_TICK, records.size())
+	var sample_count: int = mini(MAX_ENTITY_SAMPLES_PER_TICK, records.size())
 	var processed_count: int = 0
 	var attacked_count: int = 0
 	var blocked_count: int = 0
@@ -124,6 +124,13 @@ func tick(
 			continue
 		var snapshot: Dictionary = snapshot_value
 		if not bool(snapshot.get("configured", false)) or str(snapshot.get("state", "")) != "pursue":
+			continue
+		if not bool(snapshot.get("has_target_position", false)):
+			continue
+		var target_position_value: Variant = snapshot.get("target_position", null)
+		if not (target_position_value is Vector3):
+			continue
+		if (target_position_value as Vector3).distance_to(player.global_position) > 2.5:
 			continue
 		var distance: float = entity_root.global_position.distance_to(player.global_position)
 		if not is_finite(distance) or distance > HOUND_ATTACK_RANGE:
