@@ -271,8 +271,33 @@ func _run() -> void:
 			_expect(not restored_agent.avoidance_enabled, "restored NavigationAgent3D preserves the bounded non-avoidance policy")
 			_expect(absf(restored_agent.path_desired_distance - 0.2) <= 0.0001, "restored NavigationAgent3D preserves the current waypoint tolerance")
 
+	var downed_position: Vector3 = restored_player.global_position
+	restored_player.velocity = Vector3(3.0, 0.0, 0.0)
+	var lethal_damage: Dictionary = restored_health.call("apply_damage", 200.0, "test")
+	_expect(bool(lethal_damage.get("defeated", false)), "production SurfaceWorld player can enter the downed state after lethal damage")
+	await physics_frame
+	_expect(
+		restored_player.velocity.is_zero_approx()
+		and restored_player.global_position.is_equal_approx(downed_position),
+		"downed SurfaceWorld player movement is stopped before physics movement"
+	)
+	var downed_hud: Label = restored_world.get("hud") as Label
+	_expect(downed_hud != null and downed_hud.text.contains("DOWNED"), "production HUD exposes the downed state")
+	var downed_save_ok: bool = bool(restored_world.call("save_game", SAVE_PATH + ".downed"))
+	_expect(not downed_save_ok and not FileAccess.file_exists(SAVE_PATH + ".downed"), "downed player cannot create a new save file")
 	var returned: Dictionary = restored_world.call("return_from_backrooms")
-	_expect(bool(returned.get("ok", false)), "restored player can return to the idle SurfaceWorld before legacy-save compatibility validation")
+	_expect(bool(returned.get("ok", false)), "downed player can return from Backrooms to the SurfaceWorld")
+	await process_frame
+	_expect(not bool(restored_world.get("_is_in_backrooms")), "downed return leaves the world on the surface before recovery load")
+	var recovered_from_downed: bool = bool(restored_world.call("load_game", SAVE_PATH))
+	_expect(recovered_from_downed, "saved world can be loaded after a downed player returns to the surface")
+	_expect(
+		bool(restored_world.get("_is_in_backrooms"))
+		and is_equal_approx(float(restored_health.call("get_current_health")), 64.0),
+		"F9-equivalent recovery restores the saved Backrooms location and player health"
+	)
+	var recovered_return: Dictionary = restored_world.call("return_from_backrooms")
+	_expect(bool(recovered_return.get("ok", false)), "recovered player can return to the surface for legacy-save compatibility validation")
 	await process_frame
 	if restored_health != null:
 		restored_health.call("load_save_dict", {"schema_version": 1, "current": 37.0})
@@ -451,7 +476,7 @@ func _write_text(path: String, value: String) -> bool:
 
 
 func _cleanup_save_paths() -> void:
-	for suffix in ["", ".tmp", ".bak", ".corrupt"]:
+	for suffix in ["", ".tmp", ".bak", ".corrupt", ".downed"]:
 		var path: String = SAVE_PATH + suffix
 		var absolute: String = ProjectSettings.globalize_path(path)
 		if FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute):
