@@ -73,6 +73,7 @@ var state_elapsed_seconds: float = 0.0
 var has_evaluated_perception: bool = false
 var has_target_position: bool = false
 var target_position: Vector3 = Vector3.ZERO
+var target_source: String = "none"
 
 func _ready() -> void:
 	# Perception is submitted by the owning world/runtime. The controller never
@@ -120,6 +121,7 @@ func configure(
 	has_evaluated_perception = false
 	has_target_position = false
 	target_position = Vector3.ZERO
+	target_source = "none"
 	configured = true
 	set_process(false)
 	set_physics_process(false)
@@ -191,25 +193,45 @@ func evaluate_perception(perception: Dictionary, delta_seconds: float = 0.0) -> 
 		state_elapsed_seconds = 0.0
 	else:
 		state_elapsed_seconds += delta_seconds
+	var next_target_position: Vector3 = target_position
+	var next_has_target_position: bool = has_target_position
+	var next_target_source: String = target_source
+	if next_state in ["avoid", "retreat"] and has_player_position:
+		next_target_position = player_position_value
+		next_has_target_position = true
+		next_target_source = "player"
+	elif next_state == "pursue" and has_player_position and has_line_of_sight:
+		# Directly visible player pursuit takes precedence over ambient movement noise.
+		next_target_position = player_position_value
+		next_has_target_position = true
+		next_target_source = "player"
+	elif next_state in ["investigate", "pursue"] and noise_strength > 0.0 and has_noise_position:
+		next_target_position = noise_position_value
+		next_has_target_position = true
+		next_target_source = "noise"
+	elif next_state == "pursue" and not has_line_of_sight:
+		# A noise-driven pursuit without a resolved noise position must not silently
+		# become a player-targeted attack.
+		next_target_position = Vector3.ZERO
+		next_has_target_position = false
+		next_target_source = "none"
+	elif has_player_position and (has_line_of_sight or next_state in ["approach", "observe"]):
+		next_target_position = player_position_value
+		next_has_target_position = true
+		next_target_source = "player"
+	elif next_state in ["avoid", "retreat"] or not _state_retains_target(next_state):
+		next_target_position = Vector3.ZERO
+		next_has_target_position = false
+		next_target_source = "none"
+
 	current_state = next_state
 	current_intent = _intent_for_state(next_state)
+	if next_state == "pursue" and next_target_source == "noise":
+		current_intent = "pursue_sound"
 	has_evaluated_perception = true
-
-	if next_state in ["avoid", "retreat"] and has_player_position:
-		target_position = player_position_value
-		has_target_position = true
-	elif next_state in ["investigate", "pursue"] and noise_strength > 0.0 and has_noise_position:
-		target_position = noise_position_value
-		has_target_position = true
-	elif has_player_position and (has_line_of_sight or next_state in ["approach", "pursue", "observe"]):
-		target_position = player_position_value
-		has_target_position = true
-	elif next_state in ["avoid", "retreat"]:
-		target_position = Vector3.ZERO
-		has_target_position = false
-	elif not _state_retains_target(next_state):
-		target_position = Vector3.ZERO
-		has_target_position = false
+	target_position = next_target_position
+	has_target_position = next_has_target_position
+	target_source = next_target_source
 
 	var result: Dictionary = get_behavior_snapshot()
 	result["ok"] = true
@@ -228,6 +250,7 @@ func get_behavior_snapshot() -> Dictionary:
 		"state_elapsed_seconds": state_elapsed_seconds,
 		"has_evaluated_perception": has_evaluated_perception,
 		"has_target_position": has_target_position,
+		"target_source": target_source,
 		"target_position": target_position if has_target_position else Vector3.ZERO
 	}
 
@@ -244,6 +267,7 @@ func to_save_dict() -> Dictionary:
 		"state_elapsed_seconds": state_elapsed_seconds,
 		"has_evaluated_perception": has_evaluated_perception,
 		"has_target_position": has_target_position,
+		"target_source": target_source,
 		"target_position": [
 			target_position.x if has_target_position else 0.0,
 			target_position.y if has_target_position else 0.0,
@@ -287,7 +311,19 @@ static func validate_save_dict(payload: Dictionary, expected_entity_id: String, 
 		return false
 	if not _is_state_allowed_for_entity(expected_entity_id, str(state_value)):
 		return false
-	if str(intent_value) != _intent_for_state_value(str(state_value)):
+	var has_target_source: bool = payload.has("target_source")
+	var target_source_value: Variant = payload.get("target_source", "none")
+	if has_target_source:
+		if not (target_source_value is String) or not ["none", "player", "noise"].has(str(target_source_value)):
+			return false
+		if bool(target_flag_value) == (str(target_source_value) == "none"):
+			return false
+		if str(target_source_value) == "noise" and str(state_value) not in ["investigate", "pursue"]:
+			return false
+	var expected_intent: String = _intent_for_state_value(str(state_value))
+	if str(state_value) == "pursue" and has_target_source and str(target_source_value) == "noise":
+		expected_intent = "pursue_sound"
+	if str(intent_value) != expected_intent:
 		return false
 	if not (target_value is Array) or target_value.size() != 3:
 		return false
@@ -316,6 +352,7 @@ func load_save_dict(payload: Dictionary) -> bool:
 	has_target_position = bool(payload["has_target_position"])
 	var target: Array = payload["target_position"]
 	target_position = Vector3(float(target[0]), float(target[1]), float(target[2]))
+	target_source = str(payload.get("target_source", "none"))
 	return true
 
 func reset_behavior() -> bool:
@@ -327,6 +364,7 @@ func reset_behavior() -> bool:
 	has_evaluated_perception = false
 	has_target_position = false
 	target_position = Vector3.ZERO
+	target_source = "none"
 	return true
 
 func _decide_state(
