@@ -62,6 +62,8 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 	world_root.add_child(runtime)
 	var cell_root := Node3D.new()
 	cell_root.name = "Cell_0_0"
+	cell_root.set_meta("backrooms_level_id", "Level 2")
+	cell_root.set_meta("backrooms_world_seed", 20261125)
 	runtime.add_cell("0,0", cell_root)
 	var player := CharacterBody3D.new()
 	player.collision_layer = 1
@@ -76,9 +78,20 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 	var first: Dictionary = driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.1)
 	_expect(int(first.get("attacked_count", 0)) == 1, "nearby pursuing Hound performs one melee attack")
 	_expect(is_equal_approx(float(health.call("get_current_health")), 88.0), "first Hound attack applies twelve health damage")
+	var target_root := Node3D.new()
+	target_root.name = "Cell_1_0"
+	target_root.set_meta("backrooms_level_id", "Level 2")
+	target_root.set_meta("backrooms_world_seed", 20261125)
+	runtime.add_cell("1,0", target_root)
+	var hound_transform: Transform3D = hound.global_transform
+	cell_root.remove_child(hound)
+	target_root.add_child(hound)
+	hound.global_transform = hound_transform
+	hound.set_meta("backrooms_owner_cell_key", "1,0")
+	await physics_frame
 	var cooldown: Dictionary = driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.1)
-	_expect(int(cooldown.get("attacked_count", -1)) == 0, "Hound cannot attack again during its cooldown")
-	_expect(is_equal_approx(float(health.call("get_current_health")), 88.0), "cooldown prevents duplicate damage")
+	_expect(int(cooldown.get("attacked_count", -1)) == 0, "Hound transfer to a new owner cell preserves its immutable-identity cooldown")
+	_expect(is_equal_approx(float(health.call("get_current_health")), 88.0), "cross-cell transfer cannot reset the Hound damage cooldown")
 
 	var wall := StaticBody3D.new()
 	wall.collision_layer = 1
