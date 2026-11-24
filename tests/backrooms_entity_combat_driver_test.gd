@@ -141,6 +141,24 @@ func _assert_melee_cooldown_and_occlusion() -> void:
 		driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.5)
 		await physics_frame
 	_expect(is_equal_approx(float(health.call("get_current_health")), 76.0), "Hound pursuing a distant noise target cannot damage the nearby player")
+	var nearby_noise: Dictionary = brain.call("evaluate_perception", {
+		"distance_to_player": 0.9,
+		"has_line_of_sight": false,
+		"noise_strength": 1.0,
+		"noise_distance": 0.5,
+		"noise_position": player.global_position + Vector3(0.2, 0.0, 0.0),
+		"player_position": player.global_position
+	}, 0.2)
+	_expect(
+		str(nearby_noise.get("state", "")) == "pursue"
+		and str(nearby_noise.get("target_source", "")) == "noise"
+		and (nearby_noise.get("target_position", Vector3.ZERO) as Vector3).distance_to(player.global_position) <= 2.5,
+		"nearby unrelated noise can place a Hound in pursue state with a target near the player"
+	)
+	for _wait_index in range(3):
+		driver.call("tick", runtime, player, world_root.get_world_3d(), health, 0.5)
+		await physics_frame
+	_expect(is_equal_approx(float(health.call("get_current_health")), 76.0), "noise-driven pursuit near the player cannot trigger a false melee attack")
 	var smiler := CharacterBody3D.new()
 	smiler.name = "Smiler_NonCombat"
 	smiler.collision_layer = 1 << 2
