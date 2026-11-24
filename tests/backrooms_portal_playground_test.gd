@@ -68,6 +68,18 @@ func _run_integration_test() -> void:
     _expect(int(world.call("get_inventory_count", "berries")) == 2, "load restores prior inventory count")
     _expect(str(world.call("get_current_level")) == entered_level, "load restores current Backrooms level")
 
+    var level4_save: Dictionary = saved.duplicate(true)
+    level4_save["current_level"] = "Level 4"
+    level4_save["in_backrooms"] = true
+    _expect(bool(world.call("load_world_state_from_dictionary", level4_save)), "accepts and restores a Level 4 world save")
+    _expect(str(world.call("get_current_level")) == "Level 4", "Level 4 remains active after save restore")
+    var level4_loaded_cells: Dictionary = world.get("_loaded_cells")
+    var level4_room: Node = world.get("backrooms_room")
+    _expect(
+        level4_loaded_cells.size() == 25 and level4_room != null and level4_room.get_child_count() == 25,
+        "Level 4 save restore rebuilds the expected 25-cell maze"
+    )
+
     var bridge: Node = world.get("bridge")
     _expect(bool(bridge.call("collect_world_item", "rock", 40)), "rock pickup updates shared inventory")
     _expect(is_equal_approx(float(player.call("get_effective_movement_multiplier")), 0.42), "super-heavy inventory slows player movement")
