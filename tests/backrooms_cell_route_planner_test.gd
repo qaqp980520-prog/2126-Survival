@@ -8,6 +8,14 @@ const StreamStateScript = preload("res://systems/BackroomsMazeStreamState.gd")
 const TEST_SEED: int = 20261118
 const TEST_LEVEL: String = "Level 0"
 
+class CountingOwnershipLedger extends RefCounted:
+	var configured: bool = true
+	var get_record_calls: int = 0
+
+	func get_record(_spawn_cell_key: String, _entity_id: String) -> Dictionary:
+		get_record_calls += 1
+		return {}
+
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -17,6 +25,7 @@ func _initialize() -> void:
 	if failures.is_empty():
 		print("Backrooms loaded-cell route planner tests passed.")
 		print("Backrooms route snapshot runtime transfer guard passed.")
+		print("Backrooms route transfer lookup-order guard passed.")
 		quit(0)
 	else:
 		for message in failures:
@@ -213,17 +222,35 @@ func _test_loaded_window_routes() -> void:
 		"the planner respects its explicit expansion budget"
 	)
 
-	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
-	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
-	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
-	var stale_transfer: Dictionary = runtime.call(
+	var production_ledger: RefCounted = runtime.get("ownership_ledger") as RefCounted
+	var counting_ledger := CountingOwnershipLedger.new()
+	runtime.set("ownership_ledger", counting_ledger)
+	var valid_route_probe: Dictionary = runtime.call(
 		"transfer_entity_to_next_cell", "-1,0", "hound", route
 	)
 	_expect(
-		not bool(stale_transfer.get("ok", false))
-		and str(stale_transfer.get("reason", "")) == "route_snapshot_stale",
-		"the production ownership-transfer gate rejects a stale route before owner lookup"
+		not bool(valid_route_probe.get("ok", false))
+		and str(valid_route_probe.get("reason", "")) == "entity_owner_record_mismatch",
+		"a current route passes snapshot validation and reaches the ownership-record lookup"
 	)
+	_expect(
+		counting_ledger.get_record_calls == 1,
+		"a current route performs exactly one ownership-record lookup"
+	)
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, invalid_revision, "configuration-revision mismatch")
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, invalid_cell_keys, "canonical cell-key mismatch")
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, invalid_ok_type, "non-boolean success flag")
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, invalid_seed_type, "non-integer world seed")
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, invalid_endpoint, "route endpoint mismatch")
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, tampered_route, "edge-direction tampering")
+	runtime.set("ownership_ledger", production_ledger)
+
+	var shifted: Dictionary = runtime.call("sync_to_world_position", Vector3(24.0, 0.0, 0.0))
+	_expect(bool(shifted.get("ok", false)), "the active runtime commits a new loaded window")
+	_expect(not bool(runtime.call("is_route_snapshot_current", route)), "a route snapshot is rejected after the loaded-window generation changes")
+	runtime.set("ownership_ledger", counting_ledger)
+	_expect_transfer_gate_rejects_before_owner_lookup(runtime, counting_ledger, route, "route invalidated by active stream shift")
+	runtime.set("ownership_ledger", production_ledger)
 	var fresh_route: Dictionary = runtime.call("plan_route_between_loaded_cells", Vector2i(3, 0), Vector2i(3, 0))
 	_expect(bool(fresh_route.get("ok", false)) and bool(runtime.call("is_route_snapshot_current", fresh_route)), "a new route snapshot is accepted for the committed window")
 
@@ -378,6 +405,26 @@ func _test_maximum_loaded_window_stress() -> void:
 				and str(oversized_result.get("reason", "")) == "loaded_cell_descriptor_count_invalid",
 				"the planner rejects a 290th loaded-cell descriptor"
 			)
+
+func _expect_transfer_gate_rejects_before_owner_lookup(
+	runtime: Node3D,
+	ledger: RefCounted,
+	snapshot: Dictionary,
+	label: String
+) -> void:
+	var calls_before: int = int(ledger.get("get_record_calls"))
+	var transfer: Dictionary = runtime.call(
+		"transfer_entity_to_next_cell", "-1,0", "hound", snapshot
+	)
+	_expect(
+		not bool(transfer.get("ok", false))
+		and str(transfer.get("reason", "")) == "route_snapshot_stale",
+		label + " is rejected by the production route-snapshot gate"
+	)
+	_expect(
+		int(ledger.get("get_record_calls")) == calls_before,
+		label + " is rejected before ownership-ledger lookup"
+	)
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
