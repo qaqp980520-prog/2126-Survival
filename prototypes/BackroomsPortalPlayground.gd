@@ -11,6 +11,7 @@ const CropPlotControllerScript = preload("res://systems/CropPlotController.gd")
 const CropPlotVisualScene = preload("res://systems/CropPlotVisual.tscn")
 const SettingsProfile = preload("res://systems/BackroomsSettingsProfile.gd")
 const BACKROOMS_WALLPAPER = preload("res://assets/textures/backrooms_wallpaper.svg")
+const BACKROOMS_LEVEL4_WALLPAPER = preload("res://assets/textures/backrooms_level4_office_wallpaper.svg")
 const WORLD_BOUNDS := Rect2(-30.0, -30.0, 60.0, 60.0)
 const WORLD_SEED: int = 20261026
 const SAFE_DISTANCE: float = 7.0
@@ -411,6 +412,7 @@ func _interact_nearest_crop_plot() -> void:
 func _prepare_maze_materials() -> void:
     var floor_color := Color(0.57, 0.51, 0.31)
     var wall_color := Color(0.76, 0.69, 0.42)
+    var wall_texture: Texture2D = BACKROOMS_WALLPAPER
     match current_level:
         "Level 1":
             floor_color = Color(0.24, 0.27, 0.28)
@@ -421,6 +423,10 @@ func _prepare_maze_materials() -> void:
         "Level 3":
             floor_color = Color(0.12, 0.19, 0.27)
             wall_color = Color(0.27, 0.37, 0.49)
+        "Level 4":
+            floor_color = Color(0.28, 0.31, 0.33)
+            wall_color = Color(0.72, 0.75, 0.75)
+            wall_texture = BACKROOMS_LEVEL4_WALLPAPER
     _cell_material_floor = StandardMaterial3D.new()
     _cell_material_floor.albedo_color = floor_color
     _cell_material_floor.roughness = 0.94
@@ -431,7 +437,7 @@ func _prepare_maze_materials() -> void:
     _cell_material_wall.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     _cell_material_wall.albedo_color = Color.WHITE
     _cell_material_wall.cull_mode = BaseMaterial3D.CULL_DISABLED
-    _cell_material_wall.albedo_texture = BACKROOMS_WALLPAPER
+    _cell_material_wall.albedo_texture = wall_texture
     _cell_material_wall.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
     _cell_material_wall.uv1_triplanar = false
     _cell_material_wall.uv1_scale = Vector3(1.0, 1.0, 1.0)
@@ -562,6 +568,10 @@ func _spawn_level_entities_for_cell(cell_root: Node3D, cell: Vector2i) -> void:
                 _create_clump_entity(cell_root, cell)
             "faceling":
                 _create_faceling_entity(cell_root, cell)
+            "duller":
+                _create_duller_entity(cell_root, cell)
+            "deathmoth":
+                _create_deathmoth_entity(cell_root, cell)
 
 func _create_window_entity(cell_root: Node3D, cell: Vector2i) -> void:
     var window_root := Node3D.new()
@@ -723,11 +733,103 @@ func _create_faceling_entity(cell_root: Node3D, cell: Vector2i) -> void:
     root.set_meta("backrooms_entity_id", "faceling")
     root.set_meta("spawn_cell", cell)
 
-func _add_entity_box(parent: Node3D, node_name: String, local_position: Vector3, box_size: Vector3, material: Material) -> void:
+func _create_duller_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_Duller"
+    root.position = Vector3(
+        float(posmod(_hash_value(cell.x, cell.y, 3921), 5) - 2) * 0.52,
+        0.0,
+        float(posmod(_hash_value(cell.x, cell.y, 3922), 5) - 2) * 0.52
+    )
+    cell_root.add_child(root)
+
+    var material := StandardMaterial3D.new()
+    material.albedo_color = Color(0.075, 0.085, 0.095)
+    material.roughness = 1.0
+    _add_entity_box(root, "Torso", Vector3(0.0, 1.02, 0.0), Vector3(0.42, 0.9, 0.24), material)
+    _add_entity_sphere(root, "FeaturelessHead", Vector3(0.0, 1.68, 0.0), 0.19, 0.38, material)
+    _add_entity_box(root, "LongArmLeft", Vector3(-0.33, 1.05, 0.0), Vector3(0.13, 0.92, 0.18), material)
+    _add_entity_box(root, "LongArmRight", Vector3(0.33, 1.05, 0.0), Vector3(0.13, 0.92, 0.18), material)
+    _add_entity_box(root, "LegLeft", Vector3(-0.1584, 0.34, 0.0), Vector3(0.16, 0.68, 0.2), material)
+    _add_entity_box(root, "LegRight", Vector3(0.1584, 0.34, 0.0), Vector3(0.16, 0.68, 0.2), material)
+    root.set_meta("backrooms_entity_id", "duller")
+    root.set_meta("spawn_cell", cell)
+
+func _create_deathmoth_entity(cell_root: Node3D, cell: Vector2i) -> void:
+    var root := Node3D.new()
+    root.name = "Entity_Deathmoth"
+    var offset_x := float(posmod(_hash_value(cell.x, cell.y, 4563), 5) - 2) * 0.34
+    var offset_z := float(posmod(_hash_value(cell.x, cell.y, 4564), 5) - 2) * 0.34
+    root.position = Vector3(offset_x, 2.15, offset_z)
+    cell_root.add_child(root)
+
+    var body_material := StandardMaterial3D.new()
+    body_material.albedo_color = Color(0.12, 0.085, 0.055)
+    body_material.roughness = 0.9
+    var wing_material := StandardMaterial3D.new()
+    wing_material.albedo_color = Color(0.38, 0.32, 0.25, 0.9)
+    wing_material.roughness = 1.0
+    wing_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    var eye_material := StandardMaterial3D.new()
+    eye_material.albedo_color = Color(0.72, 0.18, 0.08)
+    eye_material.emission_enabled = true
+    eye_material.emission = Color(0.45, 0.06, 0.015)
+    eye_material.emission_energy_multiplier = 0.8
+
+    _add_entity_box(root, "WingLeft", Vector3(-0.48, 0.08, 0.0), Vector3(0.86, 0.045, 0.54), wing_material, Vector3(0.0, 0.0, -0.18))
+    _add_entity_box(root, "WingRight", Vector3(0.48, 0.08, 0.0), Vector3(0.86, 0.045, 0.54), wing_material, Vector3(0.0, 0.0, 0.18))
+    _add_entity_box(root, "RearWingLeft", Vector3(-0.34, 0.02, -0.28), Vector3(0.58, 0.04, 0.38), wing_material, Vector3(0.0, 0.0, -0.12))
+    _add_entity_box(root, "RearWingRight", Vector3(0.34, 0.02, -0.28), Vector3(0.58, 0.04, 0.38), wing_material, Vector3(0.0, 0.0, 0.12))
+    _add_entity_box(root, "Abdomen", Vector3(0.0, 0.0, -0.22), Vector3(0.32, 0.34, 0.55), body_material)
+    _add_entity_box(root, "Thorax", Vector3(0.0, 0.02, 0.15), Vector3(0.36, 0.38, 0.36), body_material)
+    _add_entity_box(root, "Head", Vector3(0.0, 0.05, 0.42), Vector3(0.24, 0.24, 0.22), body_material)
+    for eye_index in range(2):
+        var eye_side: float = -1.0 if eye_index == 0 else 1.0
+        _add_entity_sphere(root, "CompoundEye_%d" % eye_index, Vector3(eye_side * 0.1, 0.08, 0.53), 0.055, 0.11, eye_material)
+        _add_entity_box(root, "Antenna_%d" % eye_index, Vector3(eye_side * 0.09, 0.24, 0.57), Vector3(0.035, 0.28, 0.035), body_material)
+        for leg_index in range(3):
+            var leg_z: float = 0.24 - float(leg_index) * 0.22
+            _add_entity_box(
+                root,
+                "Leg_%d_%d" % [eye_index, leg_index],
+                Vector3(eye_side * 0.16, -0.2, leg_z),
+                Vector3(0.045, 0.3, 0.045),
+                body_material
+            )
+    root.set_meta("backrooms_entity_id", "deathmoth")
+    root.set_meta("spawn_cell", cell)
+
+func _add_entity_box(
+    parent: Node3D,
+    node_name: String,
+    local_position: Vector3,
+    box_size: Vector3,
+    material: Material,
+    local_rotation: Vector3 = Vector3.ZERO
+) -> void:
     var mesh_instance := MeshInstance3D.new()
     mesh_instance.name = node_name
     var mesh := BoxMesh.new()
     mesh.size = box_size
+    mesh_instance.mesh = mesh
+    mesh_instance.material_override = material
+    mesh_instance.position = local_position
+    mesh_instance.rotation = local_rotation
+    parent.add_child(mesh_instance)
+
+func _add_entity_sphere(
+    parent: Node3D,
+    node_name: String,
+    local_position: Vector3,
+    radius: float,
+    height: float,
+    material: Material
+) -> void:
+    var mesh_instance := MeshInstance3D.new()
+    mesh_instance.name = node_name
+    var mesh := SphereMesh.new()
+    mesh.radius = radius
+    mesh.height = height
     mesh_instance.mesh = mesh
     mesh_instance.material_override = material
     mesh_instance.position = local_position
