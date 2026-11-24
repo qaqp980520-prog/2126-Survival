@@ -22,7 +22,7 @@ Connect the existing Level 2 Hound pursuit loop to a bounded contact-attack driv
 - world/SurfaceWorld.gd — owns the health and combat models, runs attacks after perception/movement, displays health, and includes health in the combined world envelope.
 - tests/survival_health_test.gd — health, invalid-input, healing, defeat, revival, and save/restore tests.
 - tests/backrooms_entity_combat_driver_test.gd — explicit player/noise target gate (including a noise point co-located with the player), cross-cell cooldown preservation, wall occlusion, non-Hound exclusion, defeated-player gate, and 12-entity round-robin budget.
-- tests/surface_world_hound_file_roundtrip_test.gd — verifies health survives the production SurfaceWorld/Hound backup-file round trip, rejects out-of-range health before world mutation, and preserves legacy-envelope fallback.
+- tests/surface_world_hound_file_roundtrip_test.gd — verifies health survives the production SurfaceWorld/Hound backup-file round trip, downed movement/HUD/save blocking and return-then-load recovery, rejects out-of-range health before world mutation, and preserves legacy-envelope fallback.
 - .github/workflows/godot-validation.yml — adds required test inputs and headless test steps; enables the feature branch in the existing Xvfb/Mesa Hound job.
 
 ## Dependencies and import
