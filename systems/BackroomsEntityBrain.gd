@@ -349,10 +349,18 @@ func load_save_dict(payload: Dictionary) -> bool:
 	current_intent = str(payload["intent"])
 	state_elapsed_seconds = float(payload["state_elapsed_seconds"])
 	has_evaluated_perception = bool(payload["has_evaluated_perception"])
-	has_target_position = bool(payload["has_target_position"])
 	var target: Array = payload["target_position"]
-	target_position = Vector3(float(target[0]), float(target[1]), float(target[2]))
-	target_source = str(payload.get("target_source", "none"))
+	if payload.has("target_source"):
+		has_target_position = bool(payload["has_target_position"])
+		target_position = Vector3(float(target[0]), float(target[1]), float(target[2]))
+		target_source = str(payload["target_source"])
+	else:
+		# Legacy brain snapshots do not identify whether a retained position came
+		# from the player or a noise event. Clear that ambiguous target until the
+		# next perception sample rather than allowing it to authorize combat.
+		has_target_position = false
+		target_position = Vector3.ZERO
+		target_source = "none"
 	return true
 
 func reset_behavior() -> bool:
