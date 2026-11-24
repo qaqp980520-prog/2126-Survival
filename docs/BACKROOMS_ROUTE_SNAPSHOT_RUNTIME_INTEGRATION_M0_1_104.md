@@ -1,53 +1,57 @@
-# M0.1.104 — Production Route Snapshot Runtime Integration
+# M0.1.104 — Production Route Snapshot Transfer Guard
 
 ## Purpose
 
-Verify the immutable route-snapshot contract against the real `BackroomsMazeCellRuntime`, rather than only a fake runtime used by the movement-driver unit tests. A route planned for one committed stream window must be rejected after a later window commit or runtime deactivation, and stale transfer attempts must fail closed before touching entity ownership.
+Extend the existing loaded-cell route planner freshness suite with one missing integration assertion: the production `BackroomsMazeCellRuntime.transfer_entity_to_next_cell()` gate must reject a route snapshot from a previous stream generation before it performs entity-owner lookup or any ownership transfer.
+
+This is deliberately an extension of the existing M0.1.69 route-snapshot contract, not a second implementation of route freshness or maximum-window stress.
 
 ## GitHub asset
 
-- PR: #430 — production route snapshot invalidation integration.
+- PR: #430 — production stale-route ownership-transfer guard.
 - Branch: `test/backrooms-route-snapshot-transaction-2026-11-24-run409`.
 - Parent PR #429 exact HEAD: `b8ead3491e46a196dd3dd5b8bb8bf92a05a42d03`.
-- Candidate HEAD: pending exact-head CI.
+- Candidate HEAD after this focused correction: pending exact-head CI.
 
 ## Files
 
-- `tests/backrooms_maze_cell_runtime_test.gd` — adds a real production-runtime route snapshot lifecycle fixture.
-- `.github/workflows/godot-validation.yml` — requires this version record and checks the dedicated route-snapshot integration success marker in the existing runtime test step.
+- `tests/backrooms_cell_route_planner_test.gd` — adds configuration-revision and canonical-cell-key tampering assertions plus the production stale-transfer rejection assertion.
+- `.github/workflows/godot-validation.yml` — requires this version record and checks the dedicated transfer-guard success marker from the existing route-planner test step.
 - `docs/BACKROOMS_ROUTE_SNAPSHOT_RUNTIME_INTEGRATION_M0_1_104.md` — this version record.
+
+## Existing coverage retained
+
+M0.1.69 / PR #397 already exercises the real metadata-only `BackroomsMazeCellRuntime` for route planning, fresh snapshot acceptance, edge/type/endpoint tampering, stream-window shift invalidation, fresh route acceptance, disconnected windows, expansion budgets and 289-cell maximum-window stress. This follow-up does not duplicate those tests.
+
+## New regression coverage
+
+- Reject a snapshot with a mismatched `configuration_revision`.
+- Reject canonical `cell_keys` that no longer match the route's `cell_path`.
+- After the existing active stream shift invalidates the old route, call `transfer_entity_to_next_cell` with that stale route.
+- Require the explicit `route_snapshot_stale` result, proving the production ownership-transfer gate fails closed before owner-record lookup.
+- Emit and require a dedicated success marker from the existing route-planner suite.
 
 ## Dependencies and import
 
 - Godot 4.3 root project.
-- `BackroomsMazeCellRuntime`, `BackroomsMazeStreamState`, `BackroomsCellRoutePlanner`, `BackroomsMazeLayout`, and `BackroomsEntityOwnershipLedger`.
-- Uses the existing root-project headless runtime test; no new external assets, plugins, autoloads, project settings, scenes, or save-schema changes.
-- Run through the existing Full Compatibility Gate command for `tests/backrooms_maze_cell_runtime_test.gd`.
-
-## Regression coverage
-
-- Prepare and activate a real metadata-only Level 1 radius-one production runtime.
-- Plan the guaranteed parent-edge route from `(0,0)` to `(1,0)` and confirm the current snapshot is accepted.
-- Reject modified stream-generation and configuration-revision fields.
-- Reject cell-key tampering and edge-direction tampering that no longer matches the path.
-- Commit a one-cell eastward stream shift and verify the generation advances exactly once.
-- Confirm the prior-window snapshot becomes stale.
-- Call `transfer_entity_to_next_cell` with that stale snapshot and require the explicit `route_snapshot_stale` rejection before ownership lookup or mutation.
-- Replan from `(1,0)` to `(2,0)`, confirm the new snapshot is current, then deactivate the runtime and confirm the snapshot is no longer current.
+- Existing `BackroomsMazeCellRuntime`, `BackroomsMazeStreamState`, `BackroomsCellRoutePlanner`, `BackroomsMazeLayout`, and `BackroomsEntityOwnershipLedger`.
+- No new scene, external asset, plugin, autoload, project setting, or save-schema change.
+- Run through the existing Full Compatibility Gate command for `tests/backrooms_cell_route_planner_test.gd`.
 
 ## Validation status
 
-Pending exact-head Godot 4.3 Full Compatibility Gate and full-log audit. Do not reuse parent PR #429's historical CI as evidence for this child candidate.
+Pending exact-head Godot 4.3 Full Compatibility Gate and complete log audit. The initial candidate's CI is not reused after this test-scope correction; all checks must pass on the new final HEAD.
 
 ## Limitations
 
-- Uses the production runtime in metadata-only mode to isolate route-snapshot and stream-generation semantics; it does not validate rendered geometry, physics, player movement, or AI pursuit.
-- This is not a hardware-GPU, FPS, or mobile-device test.
-- No production runtime behavior or save format is changed.
+- Uses the existing metadata-only production runtime fixture; it does not validate rendered geometry, physics, player movement, or AI pursuit.
+- No hardware-GPU, FPS, or mobile-device test is claimed.
+- No production runtime code or save format is changed.
+- Local environment has no `godot` or `godot4` executable; exact engine evidence must come from GitHub Actions.
 
 ## Next steps
 
-1. Complete exact-head CI and inspect the runtime-test log for the dedicated success marker.
-2. Audit Full Gate logs for actual Script/Parse/Runtime/ERROR/FAIL diagnostics and retained warnings.
-3. Update this record and the Notion asset/work records with the exact candidate HEAD and evidence.
-4. Obtain independent review for the parent stack before any parent-first integration; revalidate every resulting HEAD.
+1. Complete exact-head CI and inspect the route-planner test log for the dedicated transfer-guard marker.
+2. Audit the Full Gate log for actual Script/Parse/Runtime/ERROR/FAIL diagnostics and classify retained warnings.
+3. Update this record, PR #430 and the Notion asset/work index with the exact final HEAD and evidence.
+4. Obtain independent review and preserve parent-first integration; revalidate every resulting HEAD.
