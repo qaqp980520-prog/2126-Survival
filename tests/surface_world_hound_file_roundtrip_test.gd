@@ -157,7 +157,7 @@ func _run() -> void:
 	var source_health: RefCounted = source_world.get("health") as RefCounted
 	_expect(source_health != null, "production SurfaceWorld owns a player-health model")
 	if source_health != null:
-		_expect(bool(source_health.call("load_save_dict", {"schema_version": 1, "current": 64.0}), "test sets a deterministic non-full player-health value before disk save")
+		_expect(bool(source_health.call("load_save_dict", {"schema_version": 1, "current": 64.0})), "test sets a deterministic non-full player-health value before disk save")
 	var first_save_ok: bool = bool(source_world.call("save_game", SAVE_PATH))
 	if not first_save_ok:
 		print("DEBUG: combined Hound save report = ", source_world.call("get_last_world_file_report"), " envelope = ", source_world.call("get_last_world_envelope_restore_report"))
