@@ -1,7 +1,6 @@
 extends SceneTree
 
 const MineralRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
-const ObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 const ControllerScript = preload("res://systems/MineralChunkController.gd")
 const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
 
@@ -206,7 +205,8 @@ func _live_props_match(chunk: Node3D, expected_state: Dictionary) -> bool:
 
 func _chunk_records_absent(registry: Node, chunk_id: String) -> bool:
 	for index in range(PROP_COUNT):
-		if not (registry.call("get_object_state", _stable_id(chunk_id, index)) as Dictionary).is_empty():
+		var record: Variant = registry.call("get_object_state", _stable_id(chunk_id, index))
+		if not (record is Dictionary) or not record.is_empty():
 			return false
 	return true
 
