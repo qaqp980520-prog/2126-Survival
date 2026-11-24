@@ -1,7 +1,7 @@
 extends SceneTree
 
 const PlaygroundScene = preload("res://prototypes/BackroomsPortalPlayground.tscn")
-const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3"]
+const TARGET_LEVELS: Array[String] = ["Level 0", "Level 1", "Level 2", "Level 3", "Level 4"]
 
 var failures: Array[String] = []
 var watchdog: Timer
@@ -49,7 +49,7 @@ func _run_integration_test() -> void:
     _expect(bool(world.call("debug_enter_active_portal")), "entering portal changes world")
     await process_frame
     var entered_level: String = str(world.call("get_current_level"))
-    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-3 list")
+    _expect(TARGET_LEVELS.has(entered_level), "destination belongs to supported Level 0-4 list")
     var director: Object = world.get("director")
     director.set("next_spawn_in", 0.0)
     await process_frame
