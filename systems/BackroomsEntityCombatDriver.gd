@@ -127,6 +127,8 @@ func tick(
 		var snapshot: Dictionary = snapshot_value
 		if not bool(snapshot.get("configured", false)) or str(snapshot.get("state", "")) != "pursue":
 			continue
+		if str(snapshot.get("target_source", "none")) != "player":
+			continue
 		if not bool(snapshot.get("has_target_position", false)):
 			continue
 		var target_position_value: Variant = snapshot.get("target_position", null)
