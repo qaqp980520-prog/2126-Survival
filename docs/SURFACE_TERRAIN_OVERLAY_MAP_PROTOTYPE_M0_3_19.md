@@ -42,6 +42,7 @@ The base snapshot is immutable by contract after construction. A fork seals its 
 - Overlay: `fork()` plus the same edits/lookups.
 - Overlay `materialize()` is timed separately because a production integration would retain the persistent snapshot rather than flatten it after every transaction.
 - Every sample compares the fully materialized overlay against the Dictionary oracle and checks lookup checksum and cached size.
+- The 32 lookups use one get call per key on both sides; the overlay passes the same missing-key sentinel as Dictionary.get, avoiding a has+get double-lookup bias.
 - Overlay benchmark records use the distinct `SURFACE_TERRAIN_OVERLAY_MAP_BENCHMARK_JSON` prefix and are included in the focused benchmark log artifact without changing the existing six-record JSONL contract.
 
 ## Complexity and safety limits
@@ -53,7 +54,7 @@ The base snapshot is immutable by contract after construction. A fork seals its 
 - `keys`, `materialize`, and `compact` are O(N).
 - Periodic compaction deliberately trades an occasional O(N) flatten for bounded lookup depth.
 - This utility does not make the complete Index plan O(Δ). The current Index still scans candidate instance records, copies/updates other graph maps, and may traverse a broad connected corner closure.
-- A caller must not mutate the base Dictionary outside the overlay after ownership is transferred. Production adoption requires a single owner for the committed snapshot and a transaction design that never exposes mutable backing maps.
+- The root and overlay are shallow: nested Array/Dictionary values remain shared. Callers must treat nested containers as immutable or explicitly clone them before mutation. Production adoption needs clone-on-write for bucket and adjacency arrays, a single owner for the committed snapshot, and no exposure of mutable backing maps.
 - The full Binder rebuild remains the correctness and recovery oracle.
 
 ## Validation status
