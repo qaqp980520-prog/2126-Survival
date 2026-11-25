@@ -21,6 +21,7 @@ var _base_keys_copied: int = 0
 var _materialize_calls: int = 0
 var _materialized_keys: int = 0
 var _container_clone_count: int = 0
+var _path_container_clone_count: int = 0
 
 
 func _init(base: Dictionary = {}, copy_base: bool = true) -> void:
@@ -135,14 +136,20 @@ func apply_nested_patches(patches: Array) -> bool:
 		var operations: Array = operations_value
 		if operations.is_empty():
 			return false
-		var working_copy: Variant = get_value(key, null)
+		# This raw lookup is internal to the transaction path. Every mutation below
+		# clones the root and each container on the edited path before writing.
+		var working_copy: Variant = _get_stored_value(key, null)
 		if not (working_copy is Dictionary or working_copy is Array):
 			return false
 		for operation_value in operations:
 			if not operation_value is Dictionary:
 				return false
 			var operation: Dictionary = operation_value
-			if not _apply_nested_patch_operation(working_copy, operation):
+			var operation_result: Dictionary = _apply_nested_patch_operation(working_copy, operation)
+			if not bool(operation_result.get("ok", false)):
+				return false
+			working_copy = operation_result.get("root", null)
+			if not (working_copy is Dictionary or working_copy is Array):
 				return false
 		staged_values[key] = working_copy
 	for key in staged_values:
@@ -226,6 +233,7 @@ func get_stats() -> Dictionary:
 		"materialize_calls": _materialize_calls,
 		"materialized_keys": _materialized_keys,
 		"container_clone_count": _container_clone_count,
+		"path_container_clone_count": _path_container_clone_count,
 		"sealed": _sealed
 	}
 
@@ -248,78 +256,128 @@ func _get_overlay_changes() -> Dictionary:
 	}
 
 
-func _resolve_nested_path(root_value: Variant, path: Array) -> Variant:
-	var cursor: Variant = root_value
+## Internal-only lookup used by apply_nested_patches(). Never return this value to callers.
+## Stored containers are immutable: patch application clones the root and edited path first.
+func _get_stored_value(key: Variant, default_value: Variant = null) -> Variant:
+	if _removed.has(key):
+		return default_value
+	if _writes.has(key):
+		return _writes[key]
+	if _parent != null:
+		return _parent.call("_get_stored_value", key, default_value)
+	return _base.get(key, default_value)
+
+
+func _clone_path_container(value: Variant) -> Variant:
+	if value is Dictionary:
+		_path_container_clone_count += 1
+		var dictionary_value: Dictionary = value
+		return dictionary_value.duplicate(false)
+	if value is Array:
+		_path_container_clone_count += 1
+		var array_value: Array = value
+		return array_value.duplicate(false)
+	return null
+
+
+## Shallow-clones the root and every Array/Dictionary on path, sharing untouched subtrees.
+## The returned target is private to this transaction and must not escape the caller.
+func _clone_container_path(root_value: Variant, path: Array) -> Dictionary:
+	if not (root_value is Dictionary or root_value is Array):
+		return {"ok": false}
+	var root_copy: Variant = _clone_path_container(root_value)
+	var original_cursor: Variant = root_value
+	var copied_cursor: Variant = root_copy
 	for segment in path:
-		if cursor is Dictionary:
-			var dictionary_cursor: Dictionary = cursor
-			if not dictionary_cursor.has(segment):
-				return null
-			cursor = dictionary_cursor[segment]
-		elif cursor is Array:
+		var child_value: Variant = null
+		if original_cursor is Dictionary:
+			var original_dictionary: Dictionary = original_cursor
+			if not original_dictionary.has(segment):
+				return {"ok": false}
+			child_value = original_dictionary[segment]
+		elif original_cursor is Array:
 			if not segment is int:
-				return null
-			var array_cursor: Array = cursor
+				return {"ok": false}
+			var original_array: Array = original_cursor
 			var array_index: int = int(segment)
-			if array_index < 0 or array_index >= array_cursor.size():
-				return null
-			cursor = array_cursor[array_index]
+			if array_index < 0 or array_index >= original_array.size():
+				return {"ok": false}
+			child_value = original_array[array_index]
 		else:
-			return null
-	return cursor
+			return {"ok": false}
+		if not (child_value is Dictionary or child_value is Array):
+			return {"ok": false}
+		var child_copy: Variant = _clone_path_container(child_value)
+		if copied_cursor is Dictionary:
+			var copied_dictionary: Dictionary = copied_cursor
+			copied_dictionary[segment] = child_copy
+		elif copied_cursor is Array:
+			var copied_array: Array = copied_cursor
+			copied_array[int(segment)] = child_copy
+		else:
+			return {"ok": false}
+		original_cursor = child_value
+		copied_cursor = child_copy
+	return {"ok": true, "root": root_copy, "target": copied_cursor}
 
 
-func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -> bool:
+func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -> Dictionary:
 	var operation_kind: String = str(operation.get("op", ""))
 	var path_value: Variant = operation.get("path", null)
 	if not path_value is Array:
-		return false
+		return {"ok": false}
 	var path: Array = path_value
 	if operation_kind == "append":
 		if not operation.has("value"):
-			return false
-		var append_target: Variant = _resolve_nested_path(root_value, path)
+			return {"ok": false}
+		var append_path: Dictionary = _clone_container_path(root_value, path)
+		if not bool(append_path.get("ok", false)):
+			return {"ok": false}
+		var append_target: Variant = append_path.get("target", null)
 		if not append_target is Array:
-			return false
+			return {"ok": false}
 		var append_array: Array = append_target
 		append_array.append(_clone_mutable_container(operation["value"]))
-		return true
+		return {"ok": true, "root": append_path.get("root", null)}
 	if path.is_empty():
-		return false
+		return {"ok": false}
 	var parent_path: Array = []
 	for path_index in range(path.size() - 1):
 		parent_path.append(path[path_index])
-	var parent_value: Variant = _resolve_nested_path(root_value, parent_path)
+	var parent_copy: Dictionary = _clone_container_path(root_value, parent_path)
+	if not bool(parent_copy.get("ok", false)):
+		return {"ok": false}
+	var parent_value: Variant = parent_copy.get("target", null)
 	var leaf: Variant = path[path.size() - 1]
 	if parent_value is Dictionary:
 		var parent_dictionary: Dictionary = parent_value
 		if operation_kind == "set":
 			if not operation.has("value"):
-				return false
+				return {"ok": false}
 			parent_dictionary[leaf] = _clone_mutable_container(operation["value"])
-			return true
+			return {"ok": true, "root": parent_copy.get("root", null)}
 		if operation_kind == "erase":
 			if not parent_dictionary.has(leaf):
-				return false
+				return {"ok": false}
 			parent_dictionary.erase(leaf)
-			return true
-		return false
+			return {"ok": true, "root": parent_copy.get("root", null)}
+		return {"ok": false}
 	if parent_value is Array:
 		var parent_array: Array = parent_value
 		if not leaf is int:
-			return false
+			return {"ok": false}
 		var array_index: int = int(leaf)
 		if array_index < 0 or array_index >= parent_array.size():
-			return false
+			return {"ok": false}
 		if operation_kind == "set":
 			if not operation.has("value"):
-				return false
+				return {"ok": false}
 			parent_array[array_index] = _clone_mutable_container(operation["value"])
-			return true
+			return {"ok": true, "root": parent_copy.get("root", null)}
 		if operation_kind == "erase":
 			parent_array.remove_at(array_index)
-			return true
-	return false
+			return {"ok": true, "root": parent_copy.get("root", null)}
+	return {"ok": false}
 
 
 func _clone_mutable_container(value: Variant) -> Variant:
