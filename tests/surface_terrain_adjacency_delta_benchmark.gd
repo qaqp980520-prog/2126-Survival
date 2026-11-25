@@ -727,13 +727,18 @@ func _benchmark_overlay_nested_cow() -> void:
 			base["patch/%05d" % index] = _make_nested_cow_record(index, "patch/%05d" % index, 0)
 		var dictionary_samples: Array[float] = []
 		var overlay_samples: Array[float] = []
+		var overlay_batch_samples: Array[float] = []
 		var parity_samples: int = 0
+		var batch_parity_samples: int = 0
 		for sample_index in range(5):
 			var dictionary_snapshot: Dictionary = base.duplicate(true)
 			var overlay_snapshot: RefCounted = OverlayMapScript.new(base)
+			var overlay_batch_snapshot: RefCounted = OverlayMapScript.new(base)
 			var dictionary_total_usec: int = 0
 			var overlay_total_usec: int = 0
+			var overlay_batch_total_usec: int = 0
 			var sample_parity_ok: bool = true
+			var batch_sample_parity_ok: bool = true
 			for transaction_index in range(9):
 				var update_keys: Array[String] = []
 				var remove_keys: Array[String] = []
@@ -797,20 +802,60 @@ func _benchmark_overlay_nested_cow() -> void:
 					candidate.call("set_value", addition_key, addition_value)
 				overlay_total_usec += Time.get_ticks_usec() - overlay_started_usec
 
+				var batch_started_usec: int = Time.get_ticks_usec()
+				var batch_candidate: RefCounted = overlay_batch_snapshot.call("fork")
+				var batch_patches: Array = []
+				for key in update_keys:
+					var previous_record_value: Variant = dictionary_snapshot.get(key, null)
+					if not previous_record_value is Dictionary:
+						batch_sample_parity_ok = false
+						_expect(false, "nested COW fixture %d sample %d transaction %d batch patch source exists for %s" % [fixture_size, sample_index + 1, transaction_index + 1, key])
+						continue
+					var previous_record: Dictionary = previous_record_value
+					batch_patches.append({
+						"key": key,
+						"operations": [
+							{"op": "set", "path": ["revision"], "value": int(previous_record.get("revision", 0)) + 1},
+							{"op": "append", "path": ["samples"], "value": transaction_index},
+							{"op": "set", "path": ["metadata", "last_transaction"], "value": transaction_index}
+						]
+					})
+			var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
+			_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
+			for key in remove_keys:
+				batch_candidate.call("erase_key", key)
+			for addition_index in range(addition_keys.size()):
+				var addition_key: String = addition_keys[addition_index]
+				var addition_value: Dictionary = _make_nested_cow_record(
+					400000 + sample_index * 1000 + transaction_index * 10 + addition_index,
+					addition_key,
+					transaction_index
+				)
+				batch_candidate.call("set_value", addition_key, addition_value)
+			overlay_batch_total_usec += Time.get_ticks_usec() - batch_started_usec
+
 				var checksum_keys: Array[String] = []
 				checksum_keys.append_array(update_keys)
 				checksum_keys.append_array(remove_keys)
 				checksum_keys.append_array(addition_keys)
 				var dictionary_checksum: int = _nested_cow_dictionary_checksum(dictionary_candidate, checksum_keys)
 				var overlay_checksum: int = _nested_cow_overlay_checksum(candidate, checksum_keys)
+				var batch_checksum: int = _nested_cow_overlay_checksum(batch_candidate, checksum_keys)
 				_expect(
 					dictionary_checksum == overlay_checksum,
-					"nested COW fixture %d sample %d transaction %d checksum parity" % [fixture_size, sample_index + 1, transaction_index + 1]
+					"nested COW fixture %d sample %d transaction %d callback checksum parity" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
+				_expect(
+					dictionary_checksum == batch_checksum,
+					"nested COW fixture %d sample %d transaction %d batch checksum parity" % [fixture_size, sample_index + 1, transaction_index + 1]
 				)
 				if dictionary_checksum != overlay_checksum or dictionary_candidate.size() != int(candidate.call("size")):
 					sample_parity_ok = false
+				if dictionary_checksum != batch_checksum or dictionary_candidate.size() != int(batch_candidate.call("size")):
+					batch_sample_parity_ok = false
 				dictionary_snapshot = dictionary_candidate
 				overlay_snapshot = candidate
+				overlay_batch_snapshot = batch_candidate
 
 			var final_overlay: Dictionary = overlay_snapshot.call("materialize")
 			_expect(
@@ -823,13 +868,28 @@ func _benchmark_overlay_nested_cow() -> void:
 			)
 			if final_overlay != dictionary_snapshot or int(overlay_snapshot.call("size")) != dictionary_snapshot.size():
 				sample_parity_ok = false
+			var final_batch_overlay: Dictionary = overlay_batch_snapshot.call("materialize")
+			_expect(
+				final_batch_overlay == dictionary_snapshot,
+				"nested COW fixture %d sample %d final batch Dictionary parity" % [fixture_size, sample_index + 1]
+			)
+			_expect(
+				int(overlay_batch_snapshot.call("size")) == dictionary_snapshot.size(),
+				"nested COW fixture %d sample %d final batch cached-size parity" % [fixture_size, sample_index + 1]
+			)
+			if final_batch_overlay != dictionary_snapshot or int(overlay_batch_snapshot.call("size")) != dictionary_snapshot.size():
+				batch_sample_parity_ok = false
 			if sample_parity_ok:
 				parity_samples += 1
+			if batch_sample_parity_ok:
+				batch_parity_samples += 1
 			dictionary_samples.append(float(dictionary_total_usec))
 			overlay_samples.append(float(overlay_total_usec))
+			overlay_batch_samples.append(float(overlay_batch_total_usec))
 
 		var dictionary_p50: int = _percentile(dictionary_samples, 0.5)
 		var overlay_p50: int = _percentile(overlay_samples, 0.5)
+		var overlay_batch_p50: int = _percentile(overlay_batch_samples, 0.5)
 		var record: Dictionary = {
 			"fixture_entries": fixture_size,
 			"sample_count": 5,
@@ -839,13 +899,17 @@ func _benchmark_overlay_nested_cow() -> void:
 			"insertions_per_transaction": OVERLAY_ADD_COUNT,
 			"dictionary_deep_copy_update_p50_usec": dictionary_p50,
 			"overlay_fork_cow_update_p50_usec": overlay_p50,
+			"overlay_batch_patch_update_p50_usec": overlay_batch_p50,
 			"dictionary_to_overlay_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
+			"dictionary_to_batch_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_batch_p50)),
 			"depth_eight_compaction_included": true,
 			"parity_samples": parity_samples,
+			"batch_parity_samples": batch_parity_samples,
 			"expected_parity_samples": 5
 		}
 		print("SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON:" + JSON.stringify(record))
-		_expect(parity_samples == 5, "nested COW fixture %d passes all matched deep-snapshot samples" % fixture_size)
+		_expect(parity_samples == 5, "nested COW fixture %d passes all callback deep-snapshot samples" % fixture_size)
+		_expect(batch_parity_samples == 5, "nested COW fixture %d passes all atomic batch deep-snapshot samples" % fixture_size)
 
 
 func _mutate_nested_cow_record(value: Variant, transaction_index: int) -> bool:
