@@ -1,14 +1,26 @@
 # Backrooms Transition Manager — M0.0.8
 
+## M0.0.8.4 — Recovery barrier after SurfaceWorld restoration
+
+- Clarified the restore callback contract: it must be failure-atomic; a false/non-boolean result means the SurfaceWorld remains unchanged, while true means the SurfaceWorld restore has committed.
+- Fixed a cross-system rollback gap after a successful SurfaceWorld restore. If the Session changes during the callback or complete_return() fails/incompletely clears the Session, restoring the Session snapshot alone does not undo the already-committed SurfaceWorld transition.
+- These post-restore failures now always enter RECOVERY_REQUIRED, even when the Session snapshot is restored and verified. Results report session_state_restored separately, set rollback_complete=false, and expose recovery_required=true.
+- Added/updated regressions for both a successful Session snapshot restore after a failed return commit and a successful Session restore after callback-side mutation. Both require RECOVERY_REQUIRED and reject retries.
+- Updated files: systems/BackroomsTransitionManager.gd, tests/backrooms_transition_manager_test.gd, docs/BACKROOMS_TRANSITION_MANAGER_M0_0_8.md, and docs/BACKROOMS_TRANSITION_MANAGER_POST_RESTORE_RECOVERY_M0_0_8_4.md.
+- Dependencies: PR #334 root Backrooms/SurfaceWorld integration and PR #335 Session rollback.
+- No persisted save-schema, scene, input mapping, or third-party dependency changes.
+- Exact-head Godot 4.3 CI is the validation source; local Godot is unavailable. See the linked PR checks and the M0.0.8.4 Notion asset record for the final exact-head result.
+
+
 ## Purpose
 
-Add a production-facing state coordinator around BackroomsPortalDirector and BackroomsLocationSession. It enforces the prepare/commit entry boundary and prevents the return session from being cleared until the SurfaceWorld restore callback reports success.
+Add a contract-level state coordinator intended for production wiring around BackroomsPortalDirector and BackroomsLocationSession. It enforces the prepare/commit entry boundary and prevents the return session from being cleared until the SurfaceWorld restore callback reports success.
 
-This is an orchestration contract, not yet a playable transition or scene owner.
+This is not yet a playable transition or scene owner, and the current BackroomsPortalPlayground does not call this manager. The playable-flow wiring and persistence integration remain separate work.
 
 ## Files
 
-- systems/BackroomsTransitionManager.gd — RefCounted coordinator with IDLE, ENTRY_PREPARED, and IN_BACKROOMS states.
+- systems/BackroomsTransitionManager.gd — RefCounted coordinator with IDLE, ENTRY_PREPARED, IN_BACKROOMS, and RECOVERY_REQUIRED states.
 - tests/backrooms_transition_manager_test.gd — headless transaction regressions.
 - .github/workflows/godot-validation.yml — focused test input guard and execution step.
 - docs/BACKROOMS_TRANSITION_MANAGER_M0_0_8.md — this version record.
@@ -32,7 +44,7 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - Commit revalidates that the session is still inactive and the original preview remains acceptable before consuming the portal; external session mutation cannot silently consume the one-use portal.
 - Return rechecks that the same return context remains active after the restore callback before clearing it.
 - cancel_prepared_entry() only clears manager state; it does not consume or alter the portal.
-- return_to_surface() passes a copy of the saved return context to a callback. A false/non-boolean callback result retains the complete session for retry. Only a true result allows complete_return() to clear the session.
+- return_to_surface() passes a copy of the saved return context to a callback. The callback is failure-atomic: false/non-boolean means the SurfaceWorld remains unchanged, so a restored Session snapshot can safely remain IN_BACKROOMS for retry. A true result means the SurfaceWorld is already restored; if Session validation or complete_return() then fails, restoring only the Session is not a full cross-system rollback, so the manager enters RECOVERY_REQUIRED even when that Session snapshot is restored exactly.
 
 ## Validation
 
@@ -46,6 +58,7 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 
 - The manager does not instantiate a maze, spawn the production portal visual, move the player, change collision/visibility, pause surface streaming, or serialize itself.
 - SurfaceWorld must own scene construction and activation, and must call this coordinator only after its destination runtime is prepared.
+- Static audit of the current root PR #334 prototype confirms BackroomsPortalPlayground._on_portal_entered() still calls director.consume_portal() directly, while debug_return_to_surface() toggles world visibility/collision directly. Neither path currently instantiates or calls this manager; wiring it into the playable flow requires a separate integration change, including Session persistence and scene-level rollback.
 - The session is surface-origin only; underground-origin transitions require mine-depth/window context.
 - Graphics, GPU, and iPhone tests are not covered by headless CI.
 
@@ -59,3 +72,25 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - Added a fail-closed regression proving that a Session without snapshot/restore methods cannot consume the one-use portal.
 - Updated files: `systems/BackroomsTransitionManager.gd`, `tests/backrooms_transition_manager_test.gd`, and this version record.
 - Dependency remains PR #332 and its ancestors #331/#327. Godot 4.3 focused and Full Compatibility Gate are pending for the new child HEAD; no pass is claimed yet.
+
+
+## M0.0.8.3 — Fail-closed state after incomplete rollback
+
+- Added a dedicated `RECOVERY_REQUIRED` transition state. If a Director or Session snapshot cannot be restored and verified after a failed transaction, the manager no longer reports `IDLE` or `IN_BACKROOMS` from a partially mutated participant.
+- Portal prepare, portal commit, and surface return now fail closed with `recovery_required` while the manager is in this state; a fresh transition cannot start on top of uncertain world/session state.
+- Applied the fail-closed state to rejected portal consumption, rejected Session entry commit, failed SurfaceWorld restore callbacks, Session mutation during restore, and failed/incomplete return commit rollback.
+- Added three regressions for failed rollback after a mutating SurfaceWorld callback, failed `complete_return()`, and Session mutation during a successful callback. Each proves the manager enters `RECOVERY_REQUIRED` and refuses another return attempt.
+- Updated files: `systems/BackroomsTransitionManager.gd`, `tests/backrooms_transition_manager_test.gd`, and this version record.
+- Dependency: PR #334 production Backrooms/SurfaceWorld integration and PR #335 return-side Session rollback.
+- Validation: pending exact-head Godot 4.3 Full Gate and full-log audit. No local Godot executable is available.
+
+## M0.0.8.2 — Return-side Session rollback hardening
+
+- Before invoking the SurfaceWorld restore callback, the manager now requires a non-empty Session save snapshot and a load/restore method. A missing rollback contract fails closed before changing the SurfaceWorld.
+- If the SurfaceWorld callback fails or mutates the Session context before returning, the manager restores the pre-return Session snapshot and reads it back for exact Dictionary equality.
+- After the SurfaceWorld is restored, a failed or partially mutating complete_return() also restores and verifies the exact active return context.
+- A reported successful complete_return() is accepted only when the Session is inactive, its return context is empty, and its full save payload equals the canonical inactive BackroomsLocationSession payload.
+- Added regressions for a partially mutating complete_return() failure, a callback that mutates the Session before failing, and a Session without snapshot/restore support. The existing successful return/retry path remains covered.
+- Updated files: systems/BackroomsTransitionManager.gd, tests/backrooms_transition_manager_test.gd, and this version record.
+- Dependency: PR #334 integration candidate, which reconciles the production SurfaceWorld interaction/restore stack with the Backrooms Director/Session/TransitionManager stack.
+- Validation: pending exact-head Godot 4.3 focused and Full Compatibility Gate. Local Godot executable unavailable; no local engine pass is claimed.
