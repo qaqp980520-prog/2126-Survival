@@ -147,8 +147,9 @@ func cancel_prepared_entry() -> bool:
 	last_error = ""
 	return true
 
-## The callback must restore the actual SurfaceWorld and return a bool.
-## A false result retains the complete Backrooms return context for retry.
+## The callback must be failure-atomic: false means the SurfaceWorld remains unchanged.
+## A true result means the SurfaceWorld is already restored. If Session validation or
+## finalization then fails, this manager cannot undo that world restore and must fail closed.
 func return_to_surface(restore_surface: Callable) -> Dictionary:
 	last_error = ""
 	if state == TransitionState.RECOVERY_REQUIRED:
@@ -181,7 +182,10 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	var current_return_context: Variant = session.call("get_return_context")
 	if not bool(session.call("is_active")) or current_return_context != return_context:
 		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
-		_set_state_after_failed_rollback(bool(session.call("is_active")), changed_session_restored)
+		# The SurfaceWorld callback already committed the destination world. Restoring
+		# only the Session cannot return the world to Backrooms, so this is not a full
+		# transaction rollback even when the Session snapshot is restored exactly.
+		state = TransitionState.RECOVERY_REQUIRED
 		last_error = "session_changed_during_surface_restore"
 		return {
 			"ok": false,
@@ -189,7 +193,8 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 			"surface_restored": true,
 			"session_retained": bool(session.call("is_active")),
 			"session_state_restored": changed_session_restored,
-			"rollback_complete": changed_session_restored
+			"rollback_complete": false,
+			"recovery_required": true
 		}
 	var completed_value: Variant = session.call("complete_return")
 	var completed: Dictionary = completed_value if completed_value is Dictionary else {}
@@ -205,7 +210,9 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	)
 	if not bool(completed.get("ok", false)) or not session_cleared:
 		var completed_session_restored: bool = _restore_session_snapshot(session_snapshot)
-		_set_state_after_failed_rollback(bool(session.call("is_active")), completed_session_restored)
+		# The SurfaceWorld is already restored. A successful Session-only rollback
+		# cannot compensate that world transition, so require higher-level recovery.
+		state = TransitionState.RECOVERY_REQUIRED
 		last_error = "session_return_commit_failed_after_surface_restore" if not bool(completed.get("ok", false)) else "session_return_commit_incomplete_after_surface_restore"
 		return {
 			"ok": false,
@@ -213,7 +220,8 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 			"surface_restored": true,
 			"session_retained": bool(session.call("is_active")),
 			"session_state_restored": completed_session_restored,
-			"rollback_complete": completed_session_restored
+			"rollback_complete": false,
+			"recovery_required": true
 		}
 	state = TransitionState.IDLE
 	return {"ok": true, "event": "returned", "context": completed}

@@ -1,5 +1,17 @@
 # Backrooms Transition Manager — M0.0.8
 
+## M0.0.8.4 — Recovery barrier after SurfaceWorld restoration
+
+- Clarified the restore callback contract: it must be failure-atomic; a false/non-boolean result means the SurfaceWorld remains unchanged, while true means the SurfaceWorld restore has committed.
+- Fixed a cross-system rollback gap after a successful SurfaceWorld restore. If the Session changes during the callback or complete_return() fails/incompletely clears the Session, restoring the Session snapshot alone does not undo the already-committed SurfaceWorld transition.
+- These post-restore failures now always enter RECOVERY_REQUIRED, even when the Session snapshot is restored and verified. Results report session_state_restored separately, set rollback_complete=false, and expose recovery_required=true.
+- Added/updated regressions for both a successful Session snapshot restore after a failed return commit and a successful Session restore after callback-side mutation. Both require RECOVERY_REQUIRED and reject retries.
+- Updated files: systems/BackroomsTransitionManager.gd, tests/backrooms_transition_manager_test.gd, docs/BACKROOMS_TRANSITION_MANAGER_M0_0_8.md, and docs/BACKROOMS_TRANSITION_MANAGER_POST_RESTORE_RECOVERY_M0_0_8_4.md.
+- Dependencies: PR #334 root Backrooms/SurfaceWorld integration and PR #335 Session rollback.
+- No persisted save-schema, scene, input mapping, or third-party dependency changes.
+- Exact-head Godot 4.3 CI is the validation source; local Godot is unavailable. See the linked PR checks and the M0.0.8.4 Notion asset record for the final exact-head result.
+
+
 ## Purpose
 
 Add a production-facing state coordinator around BackroomsPortalDirector and BackroomsLocationSession. It enforces the prepare/commit entry boundary and prevents the return session from being cleared until the SurfaceWorld restore callback reports success.
@@ -32,7 +44,7 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - Commit revalidates that the session is still inactive and the original preview remains acceptable before consuming the portal; external session mutation cannot silently consume the one-use portal.
 - Return rechecks that the same return context remains active after the restore callback before clearing it.
 - cancel_prepared_entry() only clears manager state; it does not consume or alter the portal.
-- return_to_surface() passes a copy of the saved return context to a callback. A false/non-boolean callback result retains the complete session for retry. Only a true result allows complete_return() to clear the session.
+- return_to_surface() passes a copy of the saved return context to a callback. The callback is failure-atomic: false/non-boolean means the SurfaceWorld remains unchanged, so a restored Session snapshot can safely remain IN_BACKROOMS for retry. A true result means the SurfaceWorld is already restored; if Session validation or complete_return() then fails, restoring only the Session is not a full cross-system rollback, so the manager enters RECOVERY_REQUIRED even when that Session snapshot is restored exactly.
 
 ## Validation
 
