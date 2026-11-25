@@ -204,13 +204,13 @@ func _benchmark_radius(holder: Node3D, radius: int) -> void:
 			"delta_profile_usec": last_profile_usec,
 			"delta_profile_counts": last_profile_counts,
 			"corner_report_buckets_visited": int(last_profile_counts.get("corner_report_buckets_visited", 0)),
-			"corner_report_buckets_full_scan_equivalent": total_full_scan_buckets,
-			"corner_report_bucket_visit_reduction_ratio": 1.0 - float(last_profile_counts.get("corner_report_buckets_visited", 0)) / maxf(float(total_full_scan_buckets), 1.0),
+			"corner_report_buckets_full_scan_equivalent": last_total_full_scan_buckets,
+			"corner_report_bucket_visit_reduction_ratio": 1.0 - float(last_profile_counts.get("corner_report_buckets_visited", 0)) / maxf(float(last_total_full_scan_buckets), 1.0),
 			"corner_reports_visited": int(last_profile_counts.get("corner_reports_visited", 0)),
-			"corner_reports_full_scan_equivalent": total_full_scan_reports,
-			"corner_report_visit_reduction_ratio": 1.0 - float(last_profile_counts.get("corner_reports_visited", 0)) / maxf(float(total_full_scan_reports), 1.0),
-			"candidate_reverse_index_junction_count": pending.get("candidate_junction_to_report_stable_ids", {}).size(),
-			"candidate_reverse_index_membership_count": int(pending.get("candidate_corner_report_index_membership_count", 0)),
+			"corner_reports_full_scan_equivalent": last_total_full_scan_reports,
+			"corner_report_visit_reduction_ratio": 1.0 - float(last_profile_counts.get("corner_reports_visited", 0)) / maxf(float(last_total_full_scan_reports), 1.0),
+			"candidate_reverse_index_junction_count": last_reverse_index_junction_count,
+			"candidate_reverse_index_membership_count": last_reverse_index_membership_count,
 			"descriptor_report_graph_parity_samples": parity_passes,
 			"os": OS.get_name(),
 			"processor": OS.get_processor_name(),
@@ -261,6 +261,10 @@ func _benchmark_sparse_localized(holder: Node3D) -> void:
 	var full_samples: Array[float] = []
 	var last_profile_usec: Dictionary = {}
 	var last_profile_counts: Dictionary = {}
+	var last_total_full_scan_buckets: int = 0
+	var last_total_full_scan_reports: int = 0
+	var last_reverse_index_junction_count: int = 0
+	var last_reverse_index_membership_count: int = 0
 	var parity_passes: int = 0
 	for sample_index in range(SAMPLE_COUNT):
 		var replacement: Node3D = _new_patch(holder, "SparseCenterReplacement%d" % sample_index, 0, 0)
@@ -351,6 +355,10 @@ func _benchmark_sparse_localized(holder: Node3D) -> void:
 		var profile_counts: Dictionary = delta_result.get("plan_delta_profile_counts", {})
 		var total_full_scan_buckets: int = index._corner_reports_by_stable_id.size() + candidate_reports.size()
 		var total_full_scan_reports: int = _count_report_entries(index._corner_reports_by_stable_id) + _count_report_entries(candidate_reports)
+		last_total_full_scan_buckets = total_full_scan_buckets
+		last_total_full_scan_reports = total_full_scan_reports
+		last_reverse_index_junction_count = int(pending.get("candidate_junction_to_report_stable_ids", {}).size())
+		last_reverse_index_membership_count = int(pending.get("candidate_corner_report_index_membership_count", 0))
 		var visited_buckets: int = int(profile_counts.get("corner_report_buckets_visited", -1))
 		var visited_reports: int = int(profile_counts.get("corner_reports_visited", -1))
 		_expect(visited_buckets >= 0 and visited_buckets < total_full_scan_buckets, "sparse sample %d reverse index visits fewer report buckets than a full scan" % (sample_index + 1))
