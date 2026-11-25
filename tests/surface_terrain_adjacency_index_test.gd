@@ -661,8 +661,8 @@ func _run_persistent_corner_graph_tests() -> void:
 		for junction_key in closure_junctions:
 			closure_junction_set[str(junction_key)] = true
 		var expected_report_bucket_visits: int = (
-			_expected_report_bucket_visits(graph_index._corner_reports_by_stable_id, graph_index._junction_to_report_stable_ids, closure_junction_set)
-			+ _expected_report_bucket_visits(candidate_reports_by_id, candidate_reverse_index, closure_junction_set)
+			_expected_report_bucket_visits(graph_index._junction_to_report_stable_ids, closure_junction_set)
+			+ _expected_report_bucket_visits(candidate_reverse_index, closure_junction_set)
 		)
 		var expected_report_visits: int = (
 			_expected_report_visit_count(graph_index._corner_reports_by_stable_id, graph_index._junction_to_report_stable_ids, closure_junction_set)
@@ -997,7 +997,6 @@ func _count_reverse_index_memberships(reverse_index: Dictionary) -> int:
 
 
 func _expected_report_bucket_visits(
-	reports_by_stable_id: Dictionary,
 	reverse_index: Dictionary,
 	selected_junctions: Dictionary
 ) -> int:
