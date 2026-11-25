@@ -737,6 +737,7 @@ func _benchmark_overlay_nested_cow() -> void:
 			var dictionary_total_usec: int = 0
 			var overlay_total_usec: int = 0
 			var overlay_batch_total_usec: int = 0
+			var batch_path_clone_total: int = 0
 			var sample_parity_ok: bool = true
 			var batch_sample_parity_ok: bool = true
 			for transaction_index in range(9):
@@ -822,6 +823,12 @@ func _benchmark_overlay_nested_cow() -> void:
 					})
 				var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
 				_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
+				var transaction_path_clones: int = int(batch_candidate.call("get_stats").get("path_container_clone_count", 0))
+				batch_path_clone_total += transaction_path_clones
+				_expect(
+					transaction_path_clones == OVERLAY_UPDATE_COUNT * 5,
+					"nested COW fixture %d sample %d transaction %d clones exactly five containers per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
 				for key in remove_keys:
 					batch_candidate.call("erase_key", key)
 				for addition_index in range(addition_keys.size()):
@@ -890,6 +897,11 @@ func _benchmark_overlay_nested_cow() -> void:
 		var dictionary_p50: int = _percentile(dictionary_samples, 0.5)
 		var overlay_p50: int = _percentile(overlay_samples, 0.5)
 		var overlay_batch_p50: int = _percentile(overlay_batch_samples, 0.5)
+		var expected_batch_path_clones: int = OVERLAY_UPDATE_COUNT * 5 * 9
+		_expect(
+			batch_path_clone_total == expected_batch_path_clones,
+			"nested COW fixture %d performs exactly %d path-container clones per sample" % [fixture_size, expected_batch_path_clones]
+		)
 		var record: Dictionary = {
 			"fixture_entries": fixture_size,
 			"sample_count": 5,
@@ -900,6 +912,9 @@ func _benchmark_overlay_nested_cow() -> void:
 			"dictionary_deep_copy_update_p50_usec": dictionary_p50,
 			"overlay_fork_cow_update_p50_usec": overlay_p50,
 			"overlay_batch_patch_update_p50_usec": overlay_batch_p50,
+			"nested_payload_values_per_record": 80,
+			"batch_path_container_clones_per_sample": batch_path_clone_total,
+			"expected_batch_path_container_clones_per_sample": expected_batch_path_clones,
 			"dictionary_to_overlay_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
 			"dictionary_to_batch_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_batch_p50)),
 			"depth_eight_compaction_included": true,
@@ -927,10 +942,24 @@ func _mutate_nested_cow_record(value: Variant, transaction_index: int) -> bool:
 
 
 func _make_nested_cow_record(revision: int, tag: String, transaction_index: int) -> Dictionary:
+	var payload_branches: Array = []
+	for branch_index in range(4):
+		var payload_values: Array = []
+		for value_index in range(16):
+			payload_values.append(revision + branch_index * 100 + value_index)
+		payload_branches.append({
+			"branch": branch_index,
+			"values": payload_values,
+			"metadata": {"tag": tag, "active": branch_index % 2 == 0}
+		})
+	var payload_labels: Array = []
+	for label_index in range(16):
+		payload_labels.append("%s/%02d" % [tag, label_index])
 	return {
 		"revision": revision,
 		"samples": [revision % 7, revision % 11, revision % 13],
-		"metadata": {"tag": tag, "last_transaction": transaction_index}
+		"metadata": {"tag": tag, "last_transaction": transaction_index},
+		"payload": {"branches": payload_branches, "labels": payload_labels}
 	}
 
 
