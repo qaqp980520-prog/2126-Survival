@@ -4,11 +4,14 @@ on:
   pull_request:
     paths:
       - "systems/SurfaceTerrainAdjacencyBinder.gd"
+      - "systems/SurfaceTerrainAdjacencyIndex.gd"
+      - "systems/SurfaceTerrainAffectedComponentPlanner.gd"
       - "systems/SurfaceTerrainTransitionDescriptor.gd"
       - "systems/SurfaceTerrainPatch.gd"
       - "systems/SurfaceTerrainTransitionColliderManager.gd"
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
+      - "tests/surface_terrain_adjacency_index_test.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
   push:
@@ -16,11 +19,14 @@ on:
       - main
     paths:
       - "systems/SurfaceTerrainAdjacencyBinder.gd"
+      - "systems/SurfaceTerrainAdjacencyIndex.gd"
+      - "systems/SurfaceTerrainAffectedComponentPlanner.gd"
       - "systems/SurfaceTerrainTransitionDescriptor.gd"
       - "systems/SurfaceTerrainPatch.gd"
       - "systems/SurfaceTerrainTransitionColliderManager.gd"
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
+      - "tests/surface_terrain_adjacency_index_test.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
 
@@ -47,6 +53,9 @@ jobs:
           test -f systems/SurfaceTerrainAdjacencyBinder.gd
           test -f systems/SurfaceTerrainTransitionDescriptor.gd
           test -f tests/surface_terrain_adjacency_binder_test.gd
+          test -f systems/SurfaceTerrainAdjacencyIndex.gd
+          test -f systems/SurfaceTerrainAffectedComponentPlanner.gd
+          test -f tests/surface_terrain_adjacency_index_test.gd
           grep -Fq '_position_bucket' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'adjacency_candidate_checks' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
@@ -54,6 +63,14 @@ jobs:
         run: godot --headless --path . --editor --quit
       - name: Run real-patch and spatial-index adjacency regressions
         run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd
+      - name: Run full-rebuild parity and delta-plan lifecycle regression
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_adjacency_index_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Surface terrain adjacency index tests passed."
       - name: Run transition collider compatibility regression
         run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd
       - name: Verify clean workspace
