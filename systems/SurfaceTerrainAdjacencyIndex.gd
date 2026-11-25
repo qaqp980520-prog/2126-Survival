@@ -28,6 +28,7 @@ var _corner_reports_by_stable_id: Dictionary = {}
 var _edge_to_junctions: Dictionary = {}
 var _junction_to_edges: Dictionary = {}
 var _edge_junction_refcounts: Dictionary = {}
+var _corner_report_count: int = 0
 var _reserved_plan_id: String = ""
 
 var _entries_by_stable_id: Dictionary = {}
@@ -100,6 +101,7 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 	_edge_to_junctions = graph_result.get("edge_to_junctions", {}).duplicate(true)
 	_junction_to_edges = graph_result.get("junction_to_edges", {}).duplicate(true)
 	_edge_junction_refcounts = graph_result.get("edge_junction_refcounts", {}).duplicate(true)
+	_corner_report_count = int(graph_result.get("report_count", 0))
 	_generation += 1
 	_pending_plans.clear()
 	_reserved_plan_id = ""
@@ -119,13 +121,34 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: bool = false) -> Dictionary:
 	var plan_profile_started_usec: int = Time.get_ticks_usec() if profile_enabled else 0
 	var plan_profile_usec: Dictionary = {}
+	var plan_profile_counts: Dictionary = {}
 	if profile_enabled:
+		for count_key in [
+			"candidate_entries_shallow_copied",
+			"candidate_buckets_shallow_copied",
+			"candidate_instance_records_scanned",
+			"corner_report_buckets_shallow_copied",
+			"corner_edge_to_junction_keys_shallow_copied",
+			"corner_junction_to_edge_keys_shallow_copied",
+			"corner_refcount_entries_shallow_copied",
+			"corner_report_buckets_visited",
+			"corner_reports_visited",
+			"corner_report_delta_buckets_touched",
+			"corner_report_delta_reports_replaced",
+			"corner_report_count_full_scan_entries",
+			"closure_edges_visited",
+			"closure_junctions_visited"
+		]:
+			plan_profile_counts[count_key] = 0
 		for profile_key in PLAN_DELTA_PROFILE_KEYS:
 			plan_profile_usec[profile_key] = 0
 	var phase_started_usec: int = plan_profile_started_usec
 	var candidate_entries: Dictionary = _entries_by_stable_id.duplicate()
 	# Dictionary.duplicate() copies the bucket map; arrays are copied only when a bucket is touched.
 	var candidate_buckets: Dictionary = _bucket_to_stable_ids.duplicate()
+	if profile_enabled:
+		plan_profile_counts["candidate_entries_shallow_copied"] = _entries_by_stable_id.size()
+		plan_profile_counts["candidate_buckets_shallow_copied"] = _bucket_to_stable_ids.size()
 	var copied_buckets: Dictionary = {}
 	var removed_ids: Array[String] = []
 	var added_ids: Array[String] = []
@@ -167,6 +190,8 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 	for stable_id_value in candidate_entries:
 		var candidate_record: Dictionary = candidate_entries[stable_id_value]
 		candidate_instance_ids[int(candidate_record.get("instance_id", -1))] = true
+		if profile_enabled:
+			plan_profile_counts["candidate_instance_records_scanned"] = int(plan_profile_counts["candidate_instance_records_scanned"]) + 1
 	if profile_enabled:
 		plan_profile_usec["candidate_instance_set_usec"] = Time.get_ticks_usec() - phase_started_usec
 		phase_started_usec = Time.get_ticks_usec()
@@ -213,7 +238,7 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		var noop_result: Dictionary = {"ok": true, "noop": true, "generation": _generation}
 		if profile_enabled:
 			plan_profile_usec["plan_storage_usec"] = Time.get_ticks_usec() - phase_started_usec
-			return _attach_plan_delta_profile(noop_result, plan_profile_usec, plan_profile_started_usec)
+			return _attach_plan_delta_profile(noop_result, plan_profile_usec, plan_profile_counts, plan_profile_started_usec)
 		return noop_result
 
 	var touched_ids: Dictionary = changed_ids.duplicate()
@@ -316,7 +341,8 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		return new_report_result
 	var graph_delta: Dictionary = _apply_corner_report_delta(
 		touched_ids,
-		new_report_result.get("reports_by_stable_id", {})
+		new_report_result.get("reports_by_stable_id", {}),
+		plan_profile_counts if profile_enabled else {}
 	)
 	if not bool(graph_delta.get("ok", false)):
 		return graph_delta
@@ -343,6 +369,9 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		return closure_result
 	var closure_edge_keys: Array = closure_result.get("edge_keys", [])
 	var closure_junction_keys: Array = closure_result.get("junction_keys", [])
+	if profile_enabled:
+		plan_profile_counts["closure_edges_visited"] = closure_edge_keys.size()
+		plan_profile_counts["closure_junctions_visited"] = closure_junction_keys.size()
 	var closure_junction_set: Dictionary = {}
 	for junction_key in closure_junction_keys:
 		closure_junction_set[junction_key] = true
@@ -350,11 +379,13 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 	var new_closure_descriptors: Dictionary = _select_descriptors(candidate_descriptors, closure_edge_keys)
 	var old_closure_reports: Array[Dictionary] = _collect_corner_reports_for_junctions(
 		_corner_reports_by_stable_id,
-		closure_junction_set
+		closure_junction_set,
+		plan_profile_counts if profile_enabled else {}
 	)
 	var new_closure_reports: Array[Dictionary] = _collect_corner_reports_for_junctions(
 		graph_delta.get("reports_by_stable_id", {}),
-		closure_junction_set
+		closure_junction_set,
+		plan_profile_counts if profile_enabled else {}
 	)
 	if profile_enabled:
 		plan_profile_usec["closure_snapshot_usec"] = Time.get_ticks_usec() - phase_started_usec
@@ -399,16 +430,17 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		"candidate_edge_to_junctions": graph_delta.get("edge_to_junctions", {}),
 		"candidate_junction_to_edges": graph_delta.get("junction_to_edges", {}),
 		"candidate_edge_junction_refcounts": graph_delta.get("edge_junction_refcounts", {}),
+		"candidate_corner_report_count": int(graph_delta.get("report_count", _corner_report_count)),
 		"summary": summary.duplicate(true)
 	}
 	var success_result: Dictionary = {"ok": true, "noop": false, "summary": summary.duplicate(true)}
 	if profile_enabled:
 		plan_profile_usec["plan_storage_usec"] = Time.get_ticks_usec() - phase_started_usec
-		return _attach_plan_delta_profile(success_result, plan_profile_usec, plan_profile_started_usec)
+		return _attach_plan_delta_profile(success_result, plan_profile_usec, plan_profile_counts, plan_profile_started_usec)
 	return success_result
 
 
-func _attach_plan_delta_profile(result: Dictionary, profile_usec: Dictionary, started_usec: int) -> Dictionary:
+func _attach_plan_delta_profile(result: Dictionary, profile_usec: Dictionary, profile_counts: Dictionary, started_usec: int) -> Dictionary:
 	var total_usec: int = Time.get_ticks_usec() - started_usec
 	var measured_usec: int = 0
 	for profile_key in PLAN_DELTA_PROFILE_KEYS:
@@ -416,6 +448,7 @@ func _attach_plan_delta_profile(result: Dictionary, profile_usec: Dictionary, st
 	profile_usec["total_usec"] = total_usec
 	profile_usec["unattributed_usec"] = total_usec - measured_usec
 	result["plan_delta_profile_usec"] = profile_usec.duplicate(true)
+	result["plan_delta_profile_counts"] = profile_counts.duplicate(true)
 	return result
 
 
@@ -481,7 +514,8 @@ func publish_delta(plan_id: String) -> Dictionary:
 		"corner_reports": _corner_reports_by_stable_id.duplicate(false),
 		"edge_to_junctions": _edge_to_junctions.duplicate(false),
 		"junction_to_edges": _junction_to_edges.duplicate(false),
-		"edge_junction_refcounts": _edge_junction_refcounts.duplicate(false)
+		"edge_junction_refcounts": _edge_junction_refcounts.duplicate(false),
+		"corner_report_count": _corner_report_count
 	}
 	plan["previous_state"] = previous_state
 	plan["published"] = true
@@ -496,6 +530,7 @@ func publish_delta(plan_id: String) -> Dictionary:
 	_edge_to_junctions = plan.get("candidate_edge_to_junctions", {}).duplicate(false)
 	_junction_to_edges = plan.get("candidate_junction_to_edges", {}).duplicate(false)
 	_edge_junction_refcounts = plan.get("candidate_edge_junction_refcounts", {}).duplicate(false)
+	_corner_report_count = int(plan.get("candidate_corner_report_count", _corner_report_count))
 	_generation += 1
 	return {
 		"ok": true,
@@ -551,6 +586,7 @@ func rollback_published_delta(plan_id: String) -> Dictionary:
 	_edge_to_junctions = previous_state.get("edge_to_junctions", {}).duplicate(false)
 	_junction_to_edges = previous_state.get("junction_to_edges", {}).duplicate(false)
 	_edge_junction_refcounts = previous_state.get("edge_junction_refcounts", {}).duplicate(false)
+	_corner_report_count = int(previous_state.get("corner_report_count", 0))
 	_generation += 1
 	_pending_plans.erase(plan_id)
 	_reserved_plan_id = ""
@@ -649,17 +685,14 @@ func get_corner_reports_by_stable_id() -> Dictionary:
 
 
 func get_corner_graph_stats() -> Dictionary:
-	var report_count: int = 0
-	for reports_value in _corner_reports_by_stable_id.values():
-		if reports_value is Array:
-			report_count += reports_value.size()
 	var link_count: int = 0
 	for count_value in _edge_junction_refcounts.values():
 		link_count += int(count_value)
 	return {
 		"patch_count": _entries_by_stable_id.size(),
 		"descriptor_count": _descriptors_by_edge_key.size(),
-		"report_count": report_count,
+		"report_count": _corner_report_count,
+		"report_bucket_count": _corner_reports_by_stable_id.size(),
 		"junction_count": _junction_to_edges.size(),
 		"edge_junction_link_count": link_count,
 		"generation": _generation,
@@ -824,15 +857,33 @@ func _build_corner_graph(reports_by_stable_id: Dictionary) -> Dictionary:
 	}
 
 
-func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Dictionary) -> Dictionary:
+func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Dictionary, profile_counts: Dictionary = {}) -> Dictionary:
 	var next_reports: Dictionary = _corner_reports_by_stable_id.duplicate(false)
 	var next_edge_to_junctions: Dictionary = _edge_to_junctions.duplicate(false)
 	var next_junction_to_edges: Dictionary = _junction_to_edges.duplicate(false)
 	var next_refcounts: Dictionary = _edge_junction_refcounts.duplicate(false)
+	if not profile_counts.is_empty():
+		profile_counts["corner_report_buckets_shallow_copied"] = _corner_reports_by_stable_id.size()
+		profile_counts["corner_edge_to_junction_keys_shallow_copied"] = _edge_to_junctions.size()
+		profile_counts["corner_junction_to_edge_keys_shallow_copied"] = _junction_to_edges.size()
+		profile_counts["corner_refcount_entries_shallow_copied"] = _edge_junction_refcounts.size()
 	var copied_edge_arrays: Dictionary = {}
 	var copied_junction_arrays: Dictionary = {}
+	var report_count: int = _corner_report_count
 	for stable_id in _sorted_strings(touched_ids.keys()):
-		var old_reports: Array = _corner_reports_by_stable_id.get(stable_id, [])
+		var old_reports_value: Variant = _corner_reports_by_stable_id.get(stable_id, [])
+		if not (old_reports_value is Array):
+			return {"ok": false, "error": "committed_corner_report_bucket_invalid"}
+		var old_reports: Array = old_reports_value
+		var new_reports_value: Variant = replacement_reports.get(stable_id, [])
+		if not (new_reports_value is Array):
+			return {"ok": false, "error": "candidate_corner_report_bucket_invalid"}
+		var new_reports: Array = new_reports_value
+		report_count -= old_reports.size()
+		report_count += new_reports.size()
+		if not profile_counts.is_empty():
+			profile_counts["corner_report_delta_buckets_touched"] = int(profile_counts.get("corner_report_delta_buckets_touched", 0)) + 1
+			profile_counts["corner_report_delta_reports_replaced"] = int(profile_counts.get("corner_report_delta_reports_replaced", 0)) + old_reports.size() + new_reports.size()
 		for report_value in old_reports:
 			if not (report_value is Dictionary):
 				return {"ok": false, "error": "committed_corner_report_invalid"}
@@ -849,7 +900,6 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 				):
 					return {"ok": false, "error": "committed_corner_graph_inconsistent"}
 		next_reports.erase(stable_id)
-		var new_reports: Array = replacement_reports.get(stable_id, [])
 		if not new_reports.is_empty():
 			var stored_reports: Array = new_reports.duplicate(true)
 			next_reports[stable_id] = stored_reports
@@ -866,10 +916,10 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 						copied_junction_arrays
 					):
 						return {"ok": false, "error": "candidate_corner_graph_invalid"}
-	var report_count: int = 0
-	for reports_value in next_reports.values():
-		if reports_value is Array:
-			report_count += reports_value.size()
+	if report_count < 0:
+		return {"ok": false, "error": "candidate_corner_report_count_invalid"}
+	if not profile_counts.is_empty():
+		profile_counts["corner_report_count_full_scan_entries"] = 0
 	return {
 		"ok": true,
 		"reports_by_stable_id": next_reports,
@@ -1018,12 +1068,17 @@ func _select_descriptors(source: Dictionary, selected_keys: Array) -> Dictionary
 
 func _collect_corner_reports_for_junctions(
 	reports_by_stable_id: Dictionary,
-	selected_junctions: Dictionary
+	selected_junctions: Dictionary,
+	profile_counts: Dictionary = {}
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var stable_ids: Array[String] = _sorted_strings(reports_by_stable_id.keys())
+	if not profile_counts.is_empty():
+		profile_counts["corner_report_buckets_visited"] = int(profile_counts.get("corner_report_buckets_visited", 0)) + stable_ids.size()
 	for stable_id in stable_ids:
 		for report_value in reports_by_stable_id[stable_id]:
+			if not profile_counts.is_empty():
+				profile_counts["corner_reports_visited"] = int(profile_counts.get("corner_reports_visited", 0)) + 1
 			if not (report_value is Dictionary):
 				continue
 			var report: Dictionary = report_value
