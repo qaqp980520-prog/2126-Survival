@@ -739,12 +739,18 @@ func _benchmark_overlay_nested_cow() -> void:
 				var remove_keys: Array[String] = []
 				var addition_keys: Array[String] = []
 				for update_index in range(OVERLAY_UPDATE_COUNT):
-					update_keys.append("patch/%05d" % (update_index * max(1, int(fixture_size / OVERLAY_UPDATE_COUNT))))
+					update_keys.append("patch/%05d" % (update_index * max(1, int(fixture_size / (OVERLAY_UPDATE_COUNT * 2)))))
 				for remove_index in range(OVERLAY_REMOVE_COUNT):
 					var removed_index: int = fixture_size - 1 - transaction_index * OVERLAY_REMOVE_COUNT - remove_index
 					remove_keys.append("patch/%05d" % removed_index)
 				for addition_index in range(OVERLAY_ADD_COUNT):
 					addition_keys.append("cow/%02d/%02d" % [transaction_index, addition_index])
+
+				var update_remove_sets_disjoint: bool = true
+				for key in update_keys:
+					if remove_keys.has(key):
+						update_remove_sets_disjoint = false
+				_expect(update_remove_sets_disjoint, "nested COW fixture %d sample %d transaction %d keeps update and removal keys disjoint" % [fixture_size, sample_index + 1, transaction_index + 1])
 
 				var dictionary_started_usec: int = Time.get_ticks_usec()
 				var dictionary_candidate: Dictionary = dictionary_snapshot.duplicate(true)
