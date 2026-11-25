@@ -730,6 +730,8 @@ func _benchmark_overlay_nested_cow() -> void:
 		var overlay_batch_samples: Array[float] = []
 		var parity_samples: int = 0
 		var batch_parity_samples: int = 0
+		var batch_path_clone_totals: Array[int] = []
+		var expected_batch_path_clones: int = OVERLAY_UPDATE_COUNT * 5 * 9
 		for sample_index in range(5):
 			var dictionary_snapshot: Dictionary = base.duplicate(true)
 			var overlay_snapshot: RefCounted = OverlayMapScript.new(base)
@@ -893,6 +895,11 @@ func _benchmark_overlay_nested_cow() -> void:
 				parity_samples += 1
 			if batch_sample_parity_ok:
 				batch_parity_samples += 1
+			_expect(
+				batch_path_clone_total == expected_batch_path_clones,
+				"nested COW fixture %d sample %d performs exactly %d path-container clones" % [fixture_size, sample_index + 1, expected_batch_path_clones]
+			)
+			batch_path_clone_totals.append(batch_path_clone_total)
 			dictionary_samples.append(float(dictionary_total_usec))
 			overlay_samples.append(float(overlay_total_usec))
 			overlay_batch_samples.append(float(overlay_batch_total_usec))
@@ -900,10 +907,10 @@ func _benchmark_overlay_nested_cow() -> void:
 		var dictionary_p50: int = _percentile(dictionary_samples, 0.5)
 		var overlay_p50: int = _percentile(overlay_samples, 0.5)
 		var overlay_batch_p50: int = _percentile(overlay_batch_samples, 0.5)
-		var expected_batch_path_clones: int = OVERLAY_UPDATE_COUNT * 5 * 9
+		var batch_path_clone_p50: int = int(batch_path_clone_totals[2]) if batch_path_clone_totals.size() == 5 else -1
 		_expect(
-			batch_path_clone_total == expected_batch_path_clones,
-			"nested COW fixture %d performs exactly %d path-container clones per sample" % [fixture_size, expected_batch_path_clones]
+			batch_path_clone_totals.size() == 5 and batch_path_clone_p50 == expected_batch_path_clones,
+			"nested COW fixture %d reports five samples at the exact path-container clone budget" % fixture_size
 		)
 		var record: Dictionary = {
 			"fixture_entries": fixture_size,
@@ -916,7 +923,8 @@ func _benchmark_overlay_nested_cow() -> void:
 			"overlay_fork_cow_update_p50_usec": overlay_p50,
 			"overlay_batch_patch_update_p50_usec": overlay_batch_p50,
 			"nested_payload_values_per_record": 80,
-			"batch_path_container_clones_per_sample": batch_path_clone_total,
+			"batch_path_container_clones_per_sample": batch_path_clone_p50,
+			"batch_path_container_clone_sample_count": batch_path_clone_totals.size(),
 			"expected_batch_path_container_clones_per_sample": expected_batch_path_clones,
 			"path_clone_stats_collected_outside_timing": true,
 			"dictionary_to_overlay_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
