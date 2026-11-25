@@ -22,19 +22,17 @@ The previous main baseline `65b2cabc751637729d58f64c9633f888d3c8b74c` and curren
 
 ## Live comparison after synchronization
 
-- main to root HEAD: 111 commits ahead / 0 behind.
+- main to root HEAD: 110 commits ahead / 0 behind.
 - Merge base: current main `7e0eedd2d8ef126ee38f30350fe115814da7c313`.
-- Changed files: 27 (including this root-sync record).
+- Changed files: 26 (same set as before the ancestry-only sync).
 - PR #334: Open / Ready for Review / Mergeable / Unmerged.
 - No main merge was performed.
 
-## Validation
+## Validation status
 
-- The ancestry merge commit preserves the original feature tree SHA; the subsequent commit adds only this documentation record.
-- Exact-head GitHub Actions validation for `7859d9db78648c7d657f8aab91c97592a00228b3` passed: 19/19 workflows and Full Gate 555/555.
-- Full Gate log audit: 7,703,099 characters / 84,264 lines / 77,885 PASS markers; 0 actual Godot Script/Parse/Runtime/ERROR/FAIL diagnostics; 0 ObjectDB leaks; 0 Orphan StringName.
-- 23 unsuppressed warnings remain: 19 filled `draw_rect()` width warnings, 1 nested KROLL project notice, 1 mineral stale-unload rollback warning, and 2 synchronous mineral-registration rollback warnings.
-- No dedicated Xvfb/Mesa job ran on the root branch; no hardware GPU, FPS, mobile, or final visual QA is claimed.
+- The new merge commit preserves the exact root PR tree SHA.
+- Exact-head GitHub Actions validation for `6b5678f34a4a8937111dabe520f19d7c88955fcc` has not yet been observed. Do not reuse the historical 555/555 result from the previous root HEAD as validation for this merge commit.
+- This document is added to the root PR to trigger a fresh pull-request validation on the synchronized branch. The next checkpoint must audit the exact resulting HEAD and complete Full Gate log.
 
 ## Dependencies and import
 
@@ -45,8 +43,8 @@ The previous main baseline `65b2cabc751637729d58f64c9633f888d3c8b74c` and curren
 
 ## Limitations and next steps
 
-- PR #334 is the root of a 36-PR Backrooms/Hound ancestry chain; descendants must be synchronized and revalidated parent-first after the root is reviewed.
+- PR #334 is the root of a 35-PR Backrooms/Hound ancestry chain; descendants must be synchronized and revalidated parent-first after the root is reviewed.
 - Independent review submissions on the checked root were zero at the last audit.
-- main currently reports `protected: false`; repository rulesets are empty. The connected GitHub integration cannot write branch-protection settings.
+- main currently reports `protected: false`; the connected GitHub integration does not expose a branch-protection write action.
 - Do not merge the root or any child to main until an authorized maintainer enables required review/status-check protection and the root has independent review.
 - Run exact-head Godot 4.3 Full Gate and focused workflows, audit logs, then update the PR, asset catalog, and daily work record with final evidence.
