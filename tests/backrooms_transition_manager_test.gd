@@ -386,7 +386,7 @@ func _test_return_commit_failure_restores_session_snapshot() -> void:
 	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
 	var retry: Dictionary = manager.return_to_surface(Callable(self, "_restore_surface"))
 	assert(str(retry.get("reason", "")) == "recovery_required")
-	assert(_restore_calls == 1)
+	assert(_restore_calls == 0, "Recovery-required retry must be rejected before invoking the SurfaceWorld callback.")
 
 
 func _test_return_callback_failure_restores_mutated_session() -> void:

@@ -14,13 +14,13 @@
 
 ## Purpose
 
-Add a production-facing state coordinator around BackroomsPortalDirector and BackroomsLocationSession. It enforces the prepare/commit entry boundary and prevents the return session from being cleared until the SurfaceWorld restore callback reports success.
+Add a contract-level state coordinator intended for production wiring around BackroomsPortalDirector and BackroomsLocationSession. It enforces the prepare/commit entry boundary and prevents the return session from being cleared until the SurfaceWorld restore callback reports success.
 
-This is an orchestration contract, not yet a playable transition or scene owner.
+This is not yet a playable transition or scene owner, and the current BackroomsPortalPlayground does not call this manager. The playable-flow wiring and persistence integration remain separate work.
 
 ## Files
 
-- systems/BackroomsTransitionManager.gd — RefCounted coordinator with IDLE, ENTRY_PREPARED, and IN_BACKROOMS states.
+- systems/BackroomsTransitionManager.gd — RefCounted coordinator with IDLE, ENTRY_PREPARED, IN_BACKROOMS, and RECOVERY_REQUIRED states.
 - tests/backrooms_transition_manager_test.gd — headless transaction regressions.
 - .github/workflows/godot-validation.yml — focused test input guard and execution step.
 - docs/BACKROOMS_TRANSITION_MANAGER_M0_0_8.md — this version record.
@@ -58,6 +58,7 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 
 - The manager does not instantiate a maze, spawn the production portal visual, move the player, change collision/visibility, pause surface streaming, or serialize itself.
 - SurfaceWorld must own scene construction and activation, and must call this coordinator only after its destination runtime is prepared.
+- Static audit of the current root PR #334 prototype confirms BackroomsPortalPlayground._on_portal_entered() still calls director.consume_portal() directly, while debug_return_to_surface() toggles world visibility/collision directly. Neither path currently instantiates or calls this manager; wiring it into the playable flow requires a separate integration change, including Session persistence and scene-level rollback.
 - The session is surface-origin only; underground-origin transitions require mine-depth/window context.
 - Graphics, GPU, and iPhone tests are not covered by headless CI.
 
