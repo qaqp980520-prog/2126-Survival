@@ -5,6 +5,7 @@ on:
     paths:
       - "systems/SurfaceTerrainAdjacencyBinder.gd"
       - "systems/SurfaceTerrainAdjacencyIndex.gd"
+      - "systems/SurfaceTerrainOverlayMap.gd"
       - "systems/SurfaceTerrainAffectedComponentPlanner.gd"
       - "systems/SurfaceTerrainTransitionDescriptor.gd"
       - "systems/SurfaceTerrainPatch.gd"
@@ -21,6 +22,7 @@ on:
     paths:
       - "systems/SurfaceTerrainAdjacencyBinder.gd"
       - "systems/SurfaceTerrainAdjacencyIndex.gd"
+      - "systems/SurfaceTerrainOverlayMap.gd"
       - "systems/SurfaceTerrainAffectedComponentPlanner.gd"
       - "systems/SurfaceTerrainTransitionDescriptor.gd"
       - "systems/SurfaceTerrainPatch.gd"
@@ -87,6 +89,8 @@ jobs:
           grep -q "Surface terrain adjacency delta benchmark completed." surface_terrain_adjacency_delta_benchmark.log
           test "$(grep -c '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log)" -eq 6
           grep '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON://' > surface_terrain_adjacency_delta_benchmark.jsonl
+          test "$(grep -c '^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log)" -eq 4
+          grep '^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON://' > surface_terrain_overlay_nested_cow_benchmark.jsonl
       - name: Upload matched adjacency benchmark
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,6 +99,7 @@ jobs:
           path: |
             surface_terrain_adjacency_delta_benchmark.log
             surface_terrain_adjacency_delta_benchmark.jsonl
+            surface_terrain_overlay_nested_cow_benchmark.jsonl
           if-no-files-found: warn
           retention-days: 30
       - name: Run transition collider compatibility regression
