@@ -31,6 +31,7 @@ func _run() -> void:
 		await _benchmark_radius(holder, radius)
 	await _benchmark_sparse_localized(holder)
 	_benchmark_overlay_map()
+	_benchmark_overlay_compaction()
 
 	holder.queue_free()
 	await process_frame
@@ -583,3 +584,136 @@ func _overlay_map_checksum(source: RefCounted, fixture_size: int, sample_index: 
 		if value != OVERLAY_MISSING_SENTINEL and value is Dictionary:
 			checksum += int(value.get("revision", 0))
 	return checksum
+
+func _benchmark_overlay_compaction() -> void:
+	for fixture_size in OVERLAY_FIXTURE_SIZES:
+		var base: Dictionary = {}
+		for index in range(fixture_size):
+			base["patch/%05d" % index] = {
+				"revision": index,
+				"payload": PackedInt32Array([index % 13, index % 17, index % 23])
+			}
+		var dictionary_total_samples: Array[float] = []
+		var overlay_total_samples: Array[float] = []
+		var compaction_fork_samples: Array[float] = []
+		var parity_passes: int = 0
+		for sample_index in range(OVERLAY_SAMPLE_COUNT):
+			var dictionary_snapshot: Dictionary = base.duplicate(false)
+			var overlay_snapshot: RefCounted = OverlayMapScript.new(base)
+			var dictionary_total_usec: int = 0
+			var overlay_total_usec: int = 0
+			var compaction_fork_usec: int = -1
+			var sample_parity_ok: bool = true
+			for transaction_index in range(9):
+				var update_values: Dictionary = {}
+				var update_keys: Array[String] = []
+				for update_index in range(OVERLAY_UPDATE_COUNT):
+					var update_key: String = "patch/%05d" % (update_index * max(1, int(fixture_size / OVERLAY_UPDATE_COUNT)))
+					update_keys.append(update_key)
+					update_values[update_key] = {
+						"revision": 300000 + sample_index * 1000 + transaction_index * 100 + update_index,
+						"payload": PackedInt32Array([fixture_size, sample_index, transaction_index, update_index])
+					}
+				var remove_keys: Array[String] = []
+				for remove_index in range(OVERLAY_REMOVE_COUNT):
+					var removed_key_index: int = fixture_size - 1 - transaction_index * OVERLAY_REMOVE_COUNT - remove_index
+					remove_keys.append("patch/%05d" % removed_key_index)
+				var addition_values: Dictionary = {}
+				var addition_keys: Array[String] = []
+				for addition_index in range(OVERLAY_ADD_COUNT):
+					var addition_key: String = "compaction/%02d/%02d" % [transaction_index, addition_index]
+					addition_keys.append(addition_key)
+					addition_values[addition_key] = {
+						"revision": 400000 + sample_index * 1000 + transaction_index * 100 + addition_index,
+						"payload": PackedInt32Array([fixture_size, sample_index, transaction_index, addition_index])
+					}
+				var lookup_keys: Array[String] = []
+				for lookup_index in range(OVERLAY_LOOKUP_COUNT):
+					var lookup_group: int = int(lookup_index / 4)
+					match lookup_index % 4:
+						0:
+							lookup_keys.append(update_keys[lookup_group % update_keys.size()])
+						1:
+							lookup_keys.append(remove_keys[lookup_group % remove_keys.size()])
+						2:
+							lookup_keys.append(addition_keys[lookup_group % addition_keys.size()])
+						_:
+							lookup_keys.append("missing/%02d/%02d" % [transaction_index, lookup_group])
+				var dictionary_started_usec: int = Time.get_ticks_usec()
+				var dictionary_candidate: Dictionary = dictionary_snapshot.duplicate(false)
+				for key in update_values:
+					dictionary_candidate[key] = update_values[key]
+				for key in remove_keys:
+					dictionary_candidate.erase(key)
+				for key in addition_values:
+					dictionary_candidate[key] = addition_values[key]
+				var dictionary_checksum: int = 0
+				for key in lookup_keys:
+					var dictionary_value: Variant = dictionary_candidate.get(key, OVERLAY_MISSING_SENTINEL)
+					if dictionary_value is Dictionary:
+						dictionary_checksum += int(dictionary_value.get("revision", 0))
+				dictionary_total_usec += Time.get_ticks_usec() - dictionary_started_usec
+				dictionary_snapshot = dictionary_candidate
+				var overlay_started_usec: int = Time.get_ticks_usec()
+				var fork_started_usec: int = Time.get_ticks_usec()
+				var candidate: RefCounted = overlay_snapshot.call("fork")
+				var fork_elapsed_usec: int = Time.get_ticks_usec() - fork_started_usec
+				if transaction_index == 8:
+					compaction_fork_usec = fork_elapsed_usec
+				for key in update_values:
+					candidate.call("set_value", key, update_values[key])
+				for key in remove_keys:
+					candidate.call("erase_key", key)
+				for key in addition_values:
+					candidate.call("set_value", key, addition_values[key])
+				var overlay_checksum: int = 0
+				for key in lookup_keys:
+					var overlay_value: Variant = candidate.call("get_value", key, OVERLAY_MISSING_SENTINEL)
+					if overlay_value is Dictionary:
+						overlay_checksum += int(overlay_value.get("revision", 0))
+				overlay_total_usec += Time.get_ticks_usec() - overlay_started_usec
+				var previous_depth: int = int(overlay_snapshot.call("get_depth"))
+				var candidate_depth: int = int(candidate.call("get_depth"))
+				if transaction_index == 8:
+					_expect(previous_depth == 8 and candidate_depth == 1, "overlay fixture %d sample %d performs one depth-eight compaction" % [fixture_size, sample_index + 1])
+				else:
+					_expect(candidate_depth == previous_depth + 1, "overlay fixture %d sample %d advances one layer before compaction" % [fixture_size, sample_index + 1])
+				_expect(overlay_checksum == dictionary_checksum, "overlay compaction fixture %d sample %d transaction %d lookup parity" % [fixture_size, sample_index + 1, transaction_index + 1])
+				if overlay_checksum != dictionary_checksum:
+					sample_parity_ok = false
+				overlay_snapshot = candidate
+			if compaction_fork_usec < 0:
+				_expect(false, "overlay compaction fixture %d sample %d records the depth-eight fork" % [fixture_size, sample_index + 1])
+				sample_parity_ok = false
+			var final_materialized: Dictionary = overlay_snapshot.call("materialize")
+			_expect(final_materialized == dictionary_snapshot, "overlay compaction fixture %d sample %d final Dictionary parity" % [fixture_size, sample_index + 1])
+			_expect(int(overlay_snapshot.call("size")) == dictionary_snapshot.size(), "overlay compaction fixture %d sample %d cached size parity" % [fixture_size, sample_index + 1])
+			if final_materialized != dictionary_snapshot or int(overlay_snapshot.call("size")) != dictionary_snapshot.size():
+				sample_parity_ok = false
+			if sample_parity_ok:
+				parity_passes += 1
+			dictionary_total_samples.append(float(dictionary_total_usec))
+			overlay_total_samples.append(float(overlay_total_usec))
+			compaction_fork_samples.append(float(compaction_fork_usec))
+		var dictionary_p50: int = _percentile(dictionary_total_samples, 0.5)
+		var overlay_p50: int = _percentile(overlay_total_samples, 0.5)
+		var record: Dictionary = {
+			"fixture_entries": fixture_size,
+			"sample_count": OVERLAY_SAMPLE_COUNT,
+			"transactions_per_sample": 9,
+			"updates_per_transaction": OVERLAY_UPDATE_COUNT,
+			"removals_per_transaction": OVERLAY_REMOVE_COUNT,
+			"insertions_per_transaction": OVERLAY_ADD_COUNT,
+			"lookups_per_transaction": OVERLAY_LOOKUP_COUNT,
+			"dictionary_nine_transaction_total_p50_usec": dictionary_p50,
+			"overlay_nine_transaction_total_p50_usec": overlay_p50,
+			"overlay_depth_eight_compaction_fork_p50_usec": _percentile(compaction_fork_samples, 0.5),
+			"overlay_depth_eight_compaction_fork_p95_usec": _percentile(compaction_fork_samples, 0.95),
+			"dictionary_to_overlay_total_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
+			"compactions_per_sample": 1,
+			"parity_passes": parity_passes,
+			"expected_parity_passes": OVERLAY_SAMPLE_COUNT
+		}
+		print("SURFACE_TERRAIN_OVERLAY_COMPACTION_BENCHMARK_JSON:" + JSON.stringify(record))
+		_expect(parity_passes == OVERLAY_SAMPLE_COUNT, "overlay compaction fixture %d passes all nine-transaction parity samples" % fixture_size)
+
