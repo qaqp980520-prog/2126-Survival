@@ -1147,6 +1147,91 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(root_map.call("get_value", "missing_value", "__overlay_missing_sentinel__") == "__overlay_missing_sentinel__", "overlay returns the fallback for an absent key")
 	_expect(int(root_map.call("get_stats").get("base_keys_copied", -1)) == 5, "overlay root records its one-time base copy")
 
+	var nested_source: Dictionary = {
+		"nested": {"values": [1, 2], "meta": {"owner": "root"}},
+		"array": [{"value": 3}]
+	}
+	var nested_root: RefCounted = OverlayMapScript.new(nested_source)
+	nested_source["nested"]["values"].append(99)
+	nested_source["nested"]["meta"]["owner"] = "external"
+	nested_source["array"].append({"value": 99})
+	var root_nested: Dictionary = nested_root.call("get_value", "nested", {})
+	var root_array: Array = nested_root.call("get_value", "array", [])
+	_expect(root_nested.get("values", []) == [1, 2], "overlay root deep-copies nested Array values from the source")
+	_expect(root_nested.get("meta", {}).get("owner", "") == "root", "overlay root deep-copies nested Dictionary values from the source")
+	_expect(root_array.size() == 1, "overlay root isolates nested arrays in the source")
+	root_nested["values"].append(77)
+	root_array.append({"value": 77})
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "overlay get_value returns a detached nested Dictionary copy")
+	_expect(nested_root.call("get_value", "array", []).size() == 1, "overlay get_value returns a detached Array copy")
+
+	var nested_child: RefCounted = nested_root.call("fork")
+	var retained_child_values: Array = []
+	var child_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(3)
+		value["values"] = values
+		var metadata: Dictionary = value.get("meta", {})
+		metadata["owner"] = "child"
+		value["meta"] = metadata
+		retained_child_values.append(value)
+		return true
+	_expect(not bool(nested_root.call("mutate_value", "nested", child_mutator)), "sealed overlay snapshots reject nested mutation")
+	_expect(not bool(nested_child.call("mutate_value", "missing", child_mutator)), "nested mutation rejects absent keys")
+	_expect(bool(nested_child.call("mutate_value", "nested", child_mutator)), "child commits a nested Dictionary mutation")
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "child copy-on-write does not mutate the sealed parent Array")
+	_expect(nested_root.call("get_value", "nested", {}).get("meta", {}).get("owner", "") == "root", "child copy-on-write does not mutate the sealed parent Dictionary")
+	retained_child_values[0]["values"].append(99)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "retained mutator reference cannot mutate the committed snapshot")
+	var child_array_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Array:
+			return false
+		value.append({"value": 4})
+		return true
+	_expect(bool(nested_child.call("mutate_value", "array", child_array_mutator)), "child commits a nested Array mutation")
+	_expect(nested_root.call("get_value", "array", []).size() == 1, "child Array mutation does not leak into its parent")
+
+	var nested_grandchild: RefCounted = nested_child.call("fork")
+	var grandchild_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(4)
+		value["values"] = values
+		return true
+	_expect(bool(nested_grandchild.call("mutate_value", "nested", grandchild_mutator)), "grandchild commits its own nested mutation")
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "grandchild copy-on-write preserves the parent-local Array")
+	_expect(nested_grandchild.call("get_value", "nested", {}).get("values", []) == [1, 2, 3, 4], "grandchild publishes only its own nested mutation")
+
+	var external_input: Dictionary = {"items": [10]}
+	_expect(bool(nested_child.call("set_value", "external_input", external_input)), "overlay accepts a caller-owned nested Dictionary")
+	external_input["items"].append(11)
+	_expect(nested_child.call("get_value", "external_input", {}).get("items", []) == [10], "set_value isolates caller-owned nested containers")
+
+	var materialized_nested: Dictionary = nested_child.call("materialize")
+	materialized_nested["nested"]["values"].append(50)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "materialize returns nested containers detached from the overlay")
+	var exposed_base: Dictionary = nested_root.call("_get_base_dictionary")
+	exposed_base["nested"]["values"].append(60)
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "base accessor cannot mutate a sealed snapshot")
+	var exposed_changes: Dictionary = nested_child.call("_get_overlay_changes")
+	exposed_changes["writes"]["nested"]["values"].append(70)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "overlay-change accessor cannot mutate a local write")
+
+	var compacted_nested: RefCounted = nested_child.call("compact")
+	var compacted_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(80)
+		value["values"] = values
+		return true
+	_expect(bool(compacted_nested.call("mutate_value", "nested", compacted_mutator)), "compacted root supports isolated nested mutation")
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "compacted snapshot mutation does not affect its source chain")
+	_expect(int(nested_child.call("get_stats").get("container_clone_count", 0)) > 0, "overlay reports nested-container clone activity")
+
 	var first: RefCounted = root_map.call("fork")
 	_expect(bool(root_map.call("is_sealed")), "overlay fork seals the parent snapshot")
 	_expect(not bool(root_map.call("set_value", "late_write", 1)), "sealed overlay snapshots reject writes")
