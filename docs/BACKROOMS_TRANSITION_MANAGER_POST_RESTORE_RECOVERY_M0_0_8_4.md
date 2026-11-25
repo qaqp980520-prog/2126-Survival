@@ -28,11 +28,16 @@ A successful SurfaceWorld restore callback commits the world transition before t
 - No new autoload, scene, input mapping, third-party package, resource import, or persisted save-schema field.
 - Callers must treat RECOVERY_REQUIRED as a hard boundary and invoke a higher-level world reconstruction path; this manager does not implement automatic reload or a recovery UI.
 
+
+## Current playable-flow integration status
+
+Static audit of the root PR #334 version of `prototypes/BackroomsPortalPlayground.gd` confirms that `_on_portal_entered()` still calls `director.consume_portal()` directly and `debug_return_to_surface()` performs world visibility/collision changes directly. The current playable prototype does not instantiate or call `BackroomsTransitionManager`. M0.0.8.4 therefore hardens the coordinator contract and its regression tests; it does not claim that the manager is already active in the playable portal flow. A separate integration change must wire entry/return, persist the Session, and provide scene-level compensation/recovery before this coordinator can own live gameplay transitions.
+
 ## Regression coverage
 
 - A complete_return() failure after successful SurfaceWorld restoration, with the Session snapshot restore succeeding.
 - A Session mutation during a successful SurfaceWorld callback, with the Session snapshot restore succeeding.
-- Both cases require surface_restored=true, session_state_restored=true, rollback_complete=false, recovery_required=true, and a blocked retry.
+- Both cases require surface_restored=true, session_state_restored=true, rollback_complete=false, recovery_required=true, and a blocked retry. The retry callback must not be invoked after the recovery barrier is set.
 - Existing tests continue to cover callback failure with Session rollback, callback failure with Session rollback rejection, and post-restore Session rollback rejection.
 
 ## Validation
