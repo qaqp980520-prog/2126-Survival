@@ -1,5 +1,8 @@
 name: Run 24 Frequency Lock and mineral regeneration validation
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
@@ -30,7 +33,7 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify engine and required files
         run: |
           godot --version
