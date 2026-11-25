@@ -48,6 +48,10 @@ godot --headless --path . --script res://tests/surface_terrain_adjacency_index_t
 godot --headless --path . --script res://tests/surface_terrain_adjacency_delta_benchmark.gd
 ```
 
+## Run 431 diagnostic correction
+
+The first Run 431 focused benchmark log exposed a pre-existing helper defect: the depth-one checksum helpers compared a Dictionary value directly with a String sentinel before checking its type. Godot 4.3 emitted repeated `Invalid operands 'Dictionary' and 'String' in operator '!=' ` Script Errors, even though the benchmark script still returned exit code zero. The helpers now use a Dictionary type check directly, and the focused workflow explicitly fails if the benchmark log contains `SCRIPT ERROR`, `ERROR:`, or `FAIL:`. The earlier Run 431 artifact is retained as a failed diagnostic checkpoint and is not accepted as final evidence.
+
 ## Safety and limitations
 
 - This remains an isolated data-structure prototype; it is not wired into SurfaceTerrainAdjacencyIndex or MineralChunkController.
