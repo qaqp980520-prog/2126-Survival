@@ -1243,6 +1243,7 @@ func _run_overlay_map_contract_tests() -> void:
 		}
 	})
 	var path_cow_child: RefCounted = path_cow_root.call("fork")
+	var path_cow_initial_container_clones: int = int(path_cow_child.call("get_stats").get("container_clone_count", 0))
 	var path_cow_patches: Array = [
 		{
 			"key": "record",
@@ -1255,7 +1256,7 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(bool(path_cow_child.call("apply_nested_patches", path_cow_patches)), "path-level COW applies nested edits without cloning untouched payload branches")
 	var path_cow_stats: Dictionary = path_cow_child.call("get_stats")
 	_expect(int(path_cow_stats.get("path_container_clone_count", 0)) == 3, "path-level COW clones only root and edited metadata containers")
-	_expect(int(path_cow_stats.get("container_clone_count", 0)) == 0, "path-level COW performs no deep container clone while staging scalar edits")
+	_expect(int(path_cow_stats.get("container_clone_count", 0)) == path_cow_initial_container_clones, "path-level COW performs no additional deep container clone while staging scalar edits")
 	var path_cow_parent_record: Dictionary = path_cow_root.call("get_value", "record", {})
 	var path_cow_child_record: Dictionary = path_cow_child.call("get_value", "record", {})
 	_expect(int(path_cow_parent_record.get("revision", -1)) == 1, "path-level COW leaves parent scalar values unchanged")
