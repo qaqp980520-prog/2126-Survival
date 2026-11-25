@@ -1190,11 +1190,46 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(int(second.call("get_depth")) == 2, "overlay compaction does not mutate its source chain")
 
 	var cursor: RefCounted = OverlayMapScript.new({"seed": 0})
+	var compaction_count: int = 0
 	for index in range(24):
-		var next: RefCounted = cursor.call("fork")
+		var previous: RefCounted = cursor
+		var previous_depth: int = int(previous.call("get_depth"))
+		var previous_snapshot: Dictionary = {}
+		if previous_depth == 8:
+			previous_snapshot = previous.call("materialize")
+		var previous_materialize_calls: int = int(previous.call("get_stats").get("materialize_calls", -1))
+		var next: RefCounted = previous.call("fork")
+		if previous_depth == 8:
+			compaction_count += 1
+			_expect(int(next.call("get_depth")) == 1, "overlay fork compacts a depth-eight snapshot before creating its child")
+			_expect(
+				int(previous.call("get_stats").get("materialize_calls", -1)) == previous_materialize_calls + 1,
+				"depth-eight fork materializes exactly once for compaction"
+			)
+			var compact_root_value: Variant = next.call("_get_parent")
+			_expect(compact_root_value is RefCounted, "depth-eight fork retains a compacted root parent")
+			if compact_root_value is RefCounted:
+				var compact_root: RefCounted = compact_root_value as RefCounted
+				_expect(int(compact_root.call("get_depth")) == 0, "depth-eight compaction resets the parent depth to zero")
+				_expect(
+					int(compact_root.call("get_stats").get("base_keys_copied", -1)) == 0,
+					"compacted root takes ownership of the flattened Dictionary without a second shallow copy"
+				)
+		else:
+			_expect(
+				int(next.call("get_depth")) == previous_depth + 1,
+				"overlay fork increments depth until the compaction boundary at write %d" % index
+			)
 		_expect(bool(next.call("set_value", "key_%02d" % index, index)), "overlay chain accepts write %d" % index)
+		if previous_depth == 8:
+			_expect(
+				previous.call("materialize") == previous_snapshot,
+				"depth-eight compaction leaves the sealed source snapshot unchanged"
+			)
 		cursor = next
 		_expect(int(cursor.call("get_depth")) <= 8, "overlay chain compacts before depth exceeds eight at write %d" % index)
+	_expect(compaction_count == 2, "24 writes trigger exactly two depth-eight compactions")
+
 	var chain_snapshot: Dictionary = cursor.call("materialize")
 	_expect(chain_snapshot.size() == 25, "bounded overlay chain retains every inserted key")
 	_expect(int(chain_snapshot.get("seed", -1)) == 0, "bounded overlay chain retains the root value")
