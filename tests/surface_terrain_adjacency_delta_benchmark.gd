@@ -4,6 +4,12 @@ const PatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const IndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
 const OverlayMapScript = preload("res://systems/SurfaceTerrainOverlayMap.gd")
+const OVERLAY_FIXTURE_SIZES: Array[int] = [225, 576, 2048, 8192]
+const OVERLAY_SAMPLE_COUNT: int = 7
+const OVERLAY_UPDATE_COUNT: int = 8
+const OVERLAY_REMOVE_COUNT: int = 4
+const OVERLAY_ADD_COUNT: int = 4
+const OVERLAY_LOOKUP_COUNT: int = 32
 const RADII: Array[int] = [1, 2, 3, 4, 8]
 const SAMPLE_COUNT: int = 5
 
@@ -475,13 +481,7 @@ func _expect(condition: bool, description: String) -> void:
 
 
 func _benchmark_overlay_map() -> void:
-	const FIXTURE_SIZES: Array[int] = [225, 576, 2048, 8192]
-	const OVERLAY_SAMPLES: int = 7
-	const UPDATE_COUNT: int = 8
-	const REMOVE_COUNT: int = 4
-	const ADD_COUNT: int = 4
-	const LOOKUP_COUNT: int = 32
-	for fixture_size in FIXTURE_SIZES:
+	for fixture_size in OVERLAY_FIXTURE_SIZES:
 		var base: Dictionary = {}
 		for index in range(fixture_size):
 			base["patch/%05d" % index] = {
@@ -492,26 +492,26 @@ func _benchmark_overlay_map() -> void:
 		var update_keys: Array[String] = []
 		var remove_keys: Array[String] = []
 		var addition_keys: Array[String] = []
-		for index in range(UPDATE_COUNT):
+		for index in range(OVERLAY_UPDATE_COUNT):
 			update_keys.append("patch/%05d" % (index * max(1, int(fixture_size / UPDATE_COUNT))))
-		for index in range(REMOVE_COUNT):
+		for index in range(OVERLAY_REMOVE_COUNT):
 			remove_keys.append("patch/%05d" % (fixture_size - 1 - index))
-		for index in range(ADD_COUNT):
+		for index in range(OVERLAY_ADD_COUNT):
 			addition_keys.append("new/%02d" % index)
 
 		var full_samples: Array[float] = []
 		var overlay_samples: Array[float] = []
 		var materialize_samples: Array[float] = []
 		var parity_passes: int = 0
-		for sample_index in range(OVERLAY_SAMPLES):
+		for sample_index in range(OVERLAY_SAMPLE_COUNT):
 			var update_values: Dictionary = {}
-			for update_index in range(UPDATE_COUNT):
+			for update_index in range(OVERLAY_UPDATE_COUNT):
 				update_values[update_keys[update_index]] = {
 					"revision": 100000 + sample_index * 100 + update_index,
 					"payload": PackedInt32Array([fixture_size, sample_index, update_index])
 				}
 			var addition_values: Dictionary = {}
-			for addition_index in range(ADD_COUNT):
+			for addition_index in range(OVERLAY_ADD_COUNT):
 				addition_values[addition_keys[addition_index]] = {
 					"revision": 200000 + sample_index * 100 + addition_index,
 					"payload": PackedInt32Array([fixture_size, sample_index, addition_index])
@@ -525,7 +525,7 @@ func _benchmark_overlay_map() -> void:
 				full_candidate.erase(key)
 			for key in addition_values:
 				full_candidate[key] = addition_values[key]
-			var full_checksum: int = _overlay_dictionary_checksum(full_candidate, fixture_size, sample_index, LOOKUP_COUNT)
+			var full_checksum: int = _overlay_dictionary_checksum(full_candidate, fixture_size, sample_index, OVERLAY_LOOKUP_COUNT)
 			full_samples.append(float(Time.get_ticks_usec() - full_started_usec))
 
 			var overlay_started_usec: int = Time.get_ticks_usec()
@@ -536,7 +536,7 @@ func _benchmark_overlay_map() -> void:
 				candidate.call("erase_key", key)
 			for key in addition_values:
 				candidate.call("set_value", key, addition_values[key])
-			var overlay_checksum: int = _overlay_map_checksum(candidate, fixture_size, sample_index, LOOKUP_COUNT)
+			var overlay_checksum: int = _overlay_map_checksum(candidate, fixture_size, sample_index, OVERLAY_LOOKUP_COUNT)
 			overlay_samples.append(float(Time.get_ticks_usec() - overlay_started_usec))
 
 			var materialize_started_usec: int = Time.get_ticks_usec()
@@ -550,18 +550,18 @@ func _benchmark_overlay_map() -> void:
 
 		var record: Dictionary = {
 			"fixture_entries": fixture_size,
-			"sample_count": OVERLAY_SAMPLES,
-			"delta_operations": UPDATE_COUNT + REMOVE_COUNT + ADD_COUNT,
+			"sample_count": OVERLAY_SAMPLE_COUNT,
+			"delta_operations": OVERLAY_UPDATE_COUNT + OVERLAY_REMOVE_COUNT + OVERLAY_ADD_COUNT,
 			"lookup_count": LOOKUP_COUNT,
 			"dictionary_copy_edit_lookup_p50_usec": _percentile(full_samples, 0.5),
 			"overlay_fork_edit_lookup_p50_usec": _percentile(overlay_samples, 0.5),
 			"overlay_materialize_p50_usec": _percentile(materialize_samples, 0.5),
 			"parity_passes": parity_passes,
-			"expected_parity_passes": OVERLAY_SAMPLES,
+			"expected_parity_passes": OVERLAY_SAMPLE_COUNT,
 			"overlay_max_depth": 1
 		}
 		print("SURFACE_TERRAIN_OVERLAY_MAP_BENCHMARK_JSON:" + JSON.stringify(record))
-		_expect(parity_passes == OVERLAY_SAMPLES, "overlay fixture %d passes all matched samples" % fixture_size)
+		_expect(parity_passes == OVERLAY_SAMPLE_COUNT, "overlay fixture %d passes all matched samples" % fixture_size)
 
 
 func _overlay_dictionary_checksum(source: Dictionary, fixture_size: int, sample_index: int, lookup_count: int) -> int:
