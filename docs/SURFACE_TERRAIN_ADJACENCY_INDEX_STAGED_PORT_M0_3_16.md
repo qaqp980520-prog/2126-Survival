@@ -59,7 +59,17 @@ The expectation count is a source count, not a test pass count. Pass/fail is det
 
 ## Validation status
 
-Pending exact-head Godot 4.3 Full Gate, focused spatial-index workflow, and full-log diagnostic scan. No pass or performance improvement is claimed before those results complete.
+The exact code/test/workflow HEAD `515a51c6fb5bdc0b3bb61af3a666ec21923554db` passed:
+
+- Focused spatial-index workflow [45573879124](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45573879124): 9/9 job steps; the new index test emitted 217 PASS, 0 FAIL, and 0 actual Godot diagnostics.
+- Full Compatibility Gate [45573879369](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45573879369): 559/559 job steps successful, 78,704 PASS markers, 0 failed steps, 0 skipped steps, 0 actual Script/Parse/Runtime/ERROR/FAIL diagnostics, 0 ObjectDB leaks, and 0 Orphan StringName diagnostics.
+- Full Gate log: 7,784,148 characters / 85,116 lines. The 336 raw `SCRIPT ERROR` and 336 raw `ERROR:` and 335 raw `FAIL:` matches were shell guard command echoes; after excluding command text, there were no actual diagnostics.
+- 23 warnings remain: 19 filled-mode `draw_rect()` width warnings, 1 nested KROLL project warning, 1 mineral unload rollback warning, and 2 synchronous mineral registration rollback warnings. These are not claimed fixed.
+- Production benchmark [45573879319](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45573879319): 21 valid JSONL records / 301 PASS / 0 FAIL / 0 engine diagnostics / 0 warning lines. Radius-8 mean adjacency batch is 213.750 ms against mean async total 391.625 ms (54.6%) on headless Intel Xeon 6975P-C / 4 visible CPUs. This is a fresh baseline, not a before/after improvement.
+
+This document update is documentation-only and does not change the tested GDScript, test sources, or workflow definitions. The resulting PR HEAD receives its own Full Gate because the documentation path triggers validation; the final exact-HEAD result is recorded in PR #434 and the M0.3.16 Notion asset record.
+
+No production runtime adoption or performance improvement is claimed.
 
 ## Limitations and next step
 
