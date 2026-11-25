@@ -12,6 +12,7 @@ on:
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
       - "tests/surface_terrain_adjacency_index_test.gd"
+      - "tests/surface_terrain_adjacency_delta_benchmark.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
   push:
@@ -27,6 +28,7 @@ on:
       - "systems/SurfaceTerrainCornerConflictResolver.gd"
       - "tests/surface_terrain_adjacency_binder_test.gd"
       - "tests/surface_terrain_adjacency_index_test.gd"
+      - "tests/surface_terrain_adjacency_delta_benchmark.gd"
       - "tests/surface_terrain_transition_collider_manager_test.gd"
       - ".github/workflows/surface-terrain-adjacency-spatial-index-validation.yml"
 
@@ -56,6 +58,7 @@ jobs:
           test -f systems/SurfaceTerrainAdjacencyIndex.gd
           test -f systems/SurfaceTerrainAffectedComponentPlanner.gd
           test -f tests/surface_terrain_adjacency_index_test.gd
+          test -f tests/surface_terrain_adjacency_delta_benchmark.gd
           grep -Fq '_position_bucket' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'adjacency_candidate_checks' systems/SurfaceTerrainAdjacencyBinder.gd
           grep -Fq 'TerrainAdjacencyBinderScript.bind_patches' systems/MineralChunkController.gd
@@ -71,6 +74,25 @@ jobs:
           echo "$output"
           if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
           echo "$output" | grep -q "Surface terrain adjacency index tests passed."
+      - name: Run matched delta-vs-full-rebuild benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          timeout -k 5s 240s godot --headless --path . --script res://tests/surface_terrain_adjacency_delta_benchmark.gd 2>&1 | tee surface_terrain_adjacency_delta_benchmark.log
+          grep -q "Surface terrain adjacency delta benchmark completed." surface_terrain_adjacency_delta_benchmark.log
+          test "$(grep -c '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log)" -eq 5
+          grep '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON://' > surface_terrain_adjacency_delta_benchmark.jsonl
+      - name: Upload matched adjacency benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surface-terrain-adjacency-delta-benchmark
+          path: |
+            surface_terrain_adjacency_delta_benchmark.log
+            surface_terrain_adjacency_delta_benchmark.jsonl
+          if-no-files-found: warn
+          retention-days: 30
       - name: Run transition collider compatibility regression
         run: timeout -k 5s 180s godot --headless --path . --script res://tests/surface_terrain_transition_collider_manager_test.gd
       - name: Verify clean workspace
