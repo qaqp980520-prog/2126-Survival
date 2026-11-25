@@ -37,14 +37,12 @@ func _run() -> void:
 func _benchmark_radius(holder: Node3D, radius: int) -> void:
 	var base_patches: Array[Node3D] = []
 	var base_ids: Dictionary = {}
-	var patch_by_stable_id: Dictionary = {}
-	for x in range(-radius, radius + 1):
+		for x in range(-radius, radius + 1):
 		for z in range(-radius, radius + 1):
 			var stable_id: String = _stable_id(x, z)
 			var patch: Node3D = _new_patch(holder, "R%d_X%d_Z%d" % [radius, x, z], x, z)
 			base_patches.append(patch)
 			base_ids[patch.get_instance_id()] = stable_id
-			patch_by_stable_id[stable_id] = patch
 	await process_frame
 
 	var index = IndexScript.new()
@@ -134,11 +132,12 @@ func _benchmark_radius(holder: Node3D, radius: int) -> void:
 			and candidate_descriptors == full_binder.get("descriptors", {})
 		)
 		var report_parity: bool = (
-			not full_graph.is_empty()
+			bool(full_graph.get("ok", false))
 			and candidate_reports == full_graph.get("reports_by_stable_id", {})
 		)
 		var edge_graph_parity: bool = (
 			candidate_entries.size() == candidate_patches.size()
+			and int(pending.get("candidate_corner_report_count", -1)) == int(full_graph.get("report_count", -2))
 			and pending.get("candidate_edge_to_junctions", {}) == full_graph.get("edge_to_junctions", {})
 			and pending.get("candidate_junction_to_edges", {}) == full_graph.get("junction_to_edges", {})
 			and pending.get("candidate_edge_junction_refcounts", {}) == full_graph.get("edge_junction_refcounts", {})
