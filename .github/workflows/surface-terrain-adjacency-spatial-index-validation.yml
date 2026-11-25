@@ -80,6 +80,10 @@ jobs:
           set -euo pipefail
           set -o pipefail
           timeout -k 5s 240s godot --headless --path . --script res://tests/surface_terrain_adjacency_delta_benchmark.gd 2>&1 | tee surface_terrain_adjacency_delta_benchmark.log
+          if grep -E 'SCRIPT ERROR|ERROR:|FAIL:' surface_terrain_adjacency_delta_benchmark.log; then
+            echo "Godot benchmark emitted an engine or test diagnostic." >&2
+            exit 1
+          fi
           grep -q "Surface terrain adjacency delta benchmark completed." surface_terrain_adjacency_delta_benchmark.log
           test "$(grep -c '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log)" -eq 6
           grep '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON://' > surface_terrain_adjacency_delta_benchmark.jsonl
