@@ -820,19 +820,19 @@ func _benchmark_overlay_nested_cow() -> void:
 							{"op": "set", "path": ["metadata", "last_transaction"], "value": transaction_index}
 						]
 					})
-			var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
-			_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
-			for key in remove_keys:
-				batch_candidate.call("erase_key", key)
-			for addition_index in range(addition_keys.size()):
-				var addition_key: String = addition_keys[addition_index]
-				var addition_value: Dictionary = _make_nested_cow_record(
-					400000 + sample_index * 1000 + transaction_index * 10 + addition_index,
-					addition_key,
-					transaction_index
-				)
-				batch_candidate.call("set_value", addition_key, addition_value)
-			overlay_batch_total_usec += Time.get_ticks_usec() - batch_started_usec
+				var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
+				_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
+				for key in remove_keys:
+					batch_candidate.call("erase_key", key)
+				for addition_index in range(addition_keys.size()):
+					var addition_key: String = addition_keys[addition_index]
+					var addition_value: Dictionary = _make_nested_cow_record(
+						400000 + sample_index * 1000 + transaction_index * 10 + addition_index,
+						addition_key,
+						transaction_index
+					)
+					batch_candidate.call("set_value", addition_key, addition_value)
+				overlay_batch_total_usec += Time.get_ticks_usec() - batch_started_usec
 
 				var checksum_keys: Array[String] = []
 				checksum_keys.append_array(update_keys)
