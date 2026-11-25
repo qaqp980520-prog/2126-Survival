@@ -112,9 +112,10 @@ func mutate_value(key: Variant, mutator: Callable) -> bool:
 
 
 ## Atomically applies data-driven nested edits across multiple existing keys.
-## Each target container is cloned once. No mutable working reference escapes this method.
+## Each operation shallow-clones only the root-to-target container path; untouched subtrees stay shared.
 ## Supported operations: set (Dictionary key or existing Array index), erase, and append (Array path).
 ## Every target is staged before any local write is committed; one invalid operation aborts the whole batch.
+## Repeated operations may re-clone common ancestors; clone counts are exposed for measurement.
 func apply_nested_patches(patches: Array) -> bool:
 	if _sealed:
 		return false
