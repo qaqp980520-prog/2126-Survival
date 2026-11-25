@@ -208,7 +208,7 @@ func _initialize() -> void:
 	_test_return_requires_snapshot_contract_before_surface_restore()
 	_test_failed_return_callback_rollback_enters_recovery_required()
 	_test_failed_return_commit_rollback_enters_recovery_required()
-	_test_failed_return_context_rollback_enters_recovery_required()
+	_test_context_change_after_surface_restore_requires_recovery_even_when_session_restores()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
 
@@ -378,11 +378,14 @@ func _test_return_commit_failure_restores_session_snapshot() -> void:
 	assert(not bool(result.get("ok", false)))
 	assert(str(result.get("reason", "")) == "session_return_commit_failed_after_surface_restore")
 	assert(bool(result.get("surface_restored", false)))
-	assert(bool(result.get("session_state_restored", false)))
-	assert(bool(result.get("rollback_complete", false)))
+	assert(bool(result.get("session_state_restored", false)), "The Session snapshot can be restored independently.")
+	assert(not bool(result.get("rollback_complete", true)), "Restoring Session alone cannot undo an already committed SurfaceWorld restore.")
+	assert(bool(result.get("recovery_required", false)))
 	assert(bool(result.get("session_retained", false)))
 	assert(session.to_save_dict() == session_before, "A partially mutating failed complete_return must restore the exact active session.")
-	assert(manager.get_state_name() == "IN_BACKROOMS")
+	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
+	var retry: Dictionary = manager.return_to_surface(Callable(self, "_restore_surface"))
+	assert(str(retry.get("reason", "")) == "recovery_required")
 	assert(_restore_calls == 1)
 
 
@@ -467,18 +470,24 @@ func _test_failed_return_commit_rollback_enters_recovery_required() -> void:
 	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
 
 
-func _test_failed_return_context_rollback_enters_recovery_required() -> void:
+func _test_context_change_after_surface_restore_requires_recovery_even_when_session_restores() -> void:
 	var session = MutatingReturnSession.new()
-	session.reject_restore = true
+	var session_before: Dictionary = session.to_save_dict()
 	var manager = ManagerScript.new(session)
 	_restore_calls = 0
 	var callback := Callable(self, "_mutate_session_then_succeed").bind(session)
 	var result: Dictionary = manager.return_to_surface(callback)
 	assert(not bool(result.get("ok", false)))
 	assert(bool(result.get("surface_restored", false)))
+	assert(bool(result.get("session_state_restored", false)))
 	assert(not bool(result.get("rollback_complete", true)))
+	assert(bool(result.get("recovery_required", false)))
 	assert(str(result.get("reason", "")) == "session_changed_during_surface_restore")
+	assert(session.to_save_dict() == session_before, "Session restoration does not compensate the already-restored SurfaceWorld.")
 	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
+	var retry: Dictionary = manager.return_to_surface(Callable(self, "_restore_surface"))
+	assert(str(retry.get("reason", "")) == "recovery_required")
+	assert(_restore_calls == 1)
 
 
 func _restore_surface(context: Dictionary) -> bool:
