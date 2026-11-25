@@ -110,6 +110,47 @@ func mutate_value(key: Variant, mutator: Callable) -> bool:
 	return set_value(key, working_copy)
 
 
+## Atomically applies data-driven nested edits across multiple existing keys.
+## Each target container is cloned once. No mutable working reference escapes this method.
+## Supported operations: set (Dictionary key or existing Array index), erase, and append (Array path).
+## Every target is staged before any local write is committed; one invalid operation aborts the whole batch.
+func apply_nested_patches(patches: Array) -> bool:
+	if _sealed:
+		return false
+	if patches.is_empty():
+		return true
+	var staged_values: Dictionary = {}
+	for patch_value in patches:
+		if not patch_value is Dictionary:
+			return false
+		var patch: Dictionary = patch_value
+		if not patch.has("key") or not patch.has("operations"):
+			return false
+		var key: Variant = patch["key"]
+		if staged_values.has(key) or not has_key(key):
+			return false
+		var operations_value: Variant = patch["operations"]
+		if not operations_value is Array:
+			return false
+		var operations: Array = operations_value
+		if operations.is_empty():
+			return false
+		var working_copy: Variant = get_value(key, null)
+		if not (working_copy is Dictionary or working_copy is Array):
+			return false
+		for operation_value in operations:
+			if not operation_value is Dictionary:
+				return false
+			var operation: Dictionary = operation_value
+			if not _apply_nested_patch_operation(working_copy, operation):
+				return false
+		staged_values[key] = working_copy
+	for key in staged_values:
+		_removed.erase(key)
+		_writes[key] = staged_values[key]
+	return true
+
+
 ## Returns false when the snapshot has been sealed.
 ## Mutable containers are deep-copied so caller-owned inputs cannot mutate a snapshot.
 func set_value(key: Variant, value: Variant) -> bool:
@@ -205,6 +246,80 @@ func _get_overlay_changes() -> Dictionary:
 		"writes": _writes.duplicate(true),
 		"removed_keys": _removed.keys()
 	}
+
+
+func _resolve_nested_path(root_value: Variant, path: Array) -> Variant:
+	var cursor: Variant = root_value
+	for segment in path:
+		if cursor is Dictionary:
+			var dictionary_cursor: Dictionary = cursor
+			if not dictionary_cursor.has(segment):
+				return null
+			cursor = dictionary_cursor[segment]
+		elif cursor is Array:
+			if not segment is int:
+				return null
+			var array_cursor: Array = cursor
+			var array_index: int = int(segment)
+			if array_index < 0 or array_index >= array_cursor.size():
+				return null
+			cursor = array_cursor[array_index]
+		else:
+			return null
+	return cursor
+
+
+func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -> bool:
+	var operation_kind: String = str(operation.get("op", ""))
+	var path_value: Variant = operation.get("path", null)
+	if not path_value is Array:
+		return false
+	var path: Array = path_value
+	if operation_kind == "append":
+		if not operation.has("value"):
+			return false
+		var append_target: Variant = _resolve_nested_path(root_value, path)
+		if not append_target is Array:
+			return false
+		var append_array: Array = append_target
+		append_array.append(_clone_mutable_container(operation["value"]))
+		return true
+	if path.is_empty():
+		return false
+	var parent_path: Array = []
+	for path_index in range(path.size() - 1):
+		parent_path.append(path[path_index])
+	var parent_value: Variant = _resolve_nested_path(root_value, parent_path)
+	var leaf: Variant = path[path.size() - 1]
+	if parent_value is Dictionary:
+		var parent_dictionary: Dictionary = parent_value
+		if operation_kind == "set":
+			if not operation.has("value"):
+				return false
+			parent_dictionary[leaf] = _clone_mutable_container(operation["value"])
+			return true
+		if operation_kind == "erase":
+			if not parent_dictionary.has(leaf):
+				return false
+			parent_dictionary.erase(leaf)
+			return true
+		return false
+	if parent_value is Array:
+		var parent_array: Array = parent_value
+		if not leaf is int:
+			return false
+		var array_index: int = int(leaf)
+		if array_index < 0 or array_index >= parent_array.size():
+			return false
+		if operation_kind == "set":
+			if not operation.has("value"):
+				return false
+			parent_array[array_index] = _clone_mutable_container(operation["value"])
+			return true
+		if operation_kind == "erase":
+			parent_array.remove_at(array_index)
+			return true
+	return false
 
 
 func _clone_mutable_container(value: Variant) -> Variant:
