@@ -1193,6 +1193,65 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(bool(nested_child.call("mutate_value", "array", child_array_mutator)), "child commits a nested Array mutation")
 	_expect(nested_root.call("get_value", "array", []).size() == 1, "child Array mutation does not leak into its parent")
 
+	var batch_root: RefCounted = OverlayMapScript.new({
+		"record": {"revision": 1, "samples": [2], "metadata": {"owner": "root", "obsolete": true}},
+		"items": [{"value": 3}, {"value": 8}]
+	})
+	var batch_child: RefCounted = batch_root.call("fork")
+	var inserted_batch_value: Dictionary = {"value": 5, "nested": [7]}
+	var batch_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["revision"], "value": 2},
+				{"op": "append", "path": ["samples"], "value": 5},
+				{"op": "set", "path": ["metadata", "owner"], "value": "batch"},
+				{"op": "erase", "path": ["metadata", "obsolete"]}
+			]
+		},
+		{
+			"key": "items",
+			"operations": [
+				{"op": "set", "path": [0, "value"], "value": 4},
+				{"op": "append", "path": [], "value": inserted_batch_value},
+				{"op": "erase", "path": [1]}
+			]
+		}
+	]
+	_expect(bool(batch_child.call("apply_nested_patches", batch_patches)), "batch nested patches atomically update multiple Dictionary and Array values")
+	inserted_batch_value["nested"].append(99)
+	var batch_record: Dictionary = batch_child.call("get_value", "record", {})
+	var batch_items: Array = batch_child.call("get_value", "items", [])
+	var batch_inserted_result: Dictionary = batch_items[1]
+	_expect(int(batch_record.get("revision", -1)) == 2, "batch nested set updates a Dictionary scalar")
+	_expect(batch_record.get("samples", []) == [2, 5], "batch nested append updates an Array path")
+	_expect(batch_record.get("metadata", {}).get("owner", "") == "batch" and not batch_record.get("metadata", {}).has("obsolete"), "batch nested set and erase update nested Dictionary paths")
+	_expect(batch_items.size() == 2 and int(batch_items[0].get("value", -1)) == 4, "batch nested set updates an Array element")
+	_expect(batch_inserted_result.get("nested", []) == [7], "batch append clones caller-owned nested values")
+	_expect(batch_root.call("get_value", "record", {}).get("revision", -1) == 1, "batch commit does not mutate the sealed parent Dictionary")
+	_expect(batch_root.call("get_value", "items", []).size() == 2, "batch commit does not mutate the sealed parent Array")
+	_expect(int(batch_child.call("get_stats").get("local_write_count", 0)) == 2, "batch commit publishes all staged keys together")
+
+	var atomic_batch_root: RefCounted = OverlayMapScript.new({
+		"first": {"revision": 1},
+		"second": {"revision": 2}
+	})
+	var atomic_batch_child: RefCounted = atomic_batch_root.call("fork")
+	var invalid_batch: Array = [
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 99}]},
+		{"key": "second", "operations": [{"op": "set", "path": ["missing", "value"], "value": 99}]}
+	]
+	_expect(not bool(atomic_batch_child.call("apply_nested_patches", invalid_batch)), "batch rejects a later invalid path before publishing any staged key")
+	_expect(atomic_batch_child.call("get_value", "first", {}).get("revision", -1) == 1, "failed batch leaves an earlier staged key unchanged")
+	_expect(atomic_batch_child.call("get_value", "second", {}).get("revision", -1) == 2, "failed batch leaves the invalid target unchanged")
+	_expect(int(atomic_batch_child.call("get_stats").get("local_write_count", 0)) == 0, "failed batch publishes zero local writes")
+	var duplicate_key_batch: Array = [
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 3}]},
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 4}]}
+	]
+	_expect(not bool(atomic_batch_child.call("apply_nested_patches", duplicate_key_batch)), "batch rejects duplicate top-level keys")
+	_expect(not bool(batch_child.call("apply_nested_patches", batch_patches)), "sealed overlay rejects a nested patch batch")
+
 	var external_input: Dictionary = {"items": [10]}
 	_expect(bool(nested_child.call("set_value", "external_input", external_input)), "overlay accepts a caller-owned nested Dictionary")
 	external_input["items"].append(11)
