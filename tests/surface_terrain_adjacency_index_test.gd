@@ -1144,6 +1144,7 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(int(root_map.call("size")) == 5, "overlay root caches its visible size")
 	_expect(bool(root_map.call("has_key", "null_value")), "overlay distinguishes present null from an absent key")
 	_expect(root_map.call("get_value", "false_value", true) == false, "overlay returns false values without using the fallback")
+	_expect(root_map.call("get_value", "missing_value", "__overlay_missing_sentinel__") == "__overlay_missing_sentinel__", "overlay returns the fallback for an absent key")
 	_expect(int(root_map.call("get_stats").get("base_keys_copied", -1)) == 5, "overlay root records its one-time base copy")
 
 	var first: RefCounted = root_map.call("fork")
