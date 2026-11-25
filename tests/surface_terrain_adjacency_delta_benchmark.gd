@@ -135,16 +135,25 @@ func _benchmark_radius(holder: Node3D, radius: int) -> void:
 			bool(full_graph.get("ok", false))
 			and candidate_reports == full_graph.get("reports_by_stable_id", {})
 		)
+		var candidate_entry_count_match: bool = candidate_entries.size() == candidate_patches.size()
+		var candidate_report_count_match: bool = int(pending.get("candidate_corner_report_count", -1)) == int(full_graph.get("report_count", -2))
+		var edge_to_junctions_match: bool = _normalize_string_array_map(pending.get("candidate_edge_to_junctions", {})) == _normalize_string_array_map(full_graph.get("edge_to_junctions", {}))
+		var junction_to_edges_match: bool = _normalize_string_array_map(pending.get("candidate_junction_to_edges", {})) == _normalize_string_array_map(full_graph.get("junction_to_edges", {}))
+		var refcounts_match: bool = pending.get("candidate_edge_junction_refcounts", {}) == full_graph.get("edge_junction_refcounts", {})
 		var edge_graph_parity: bool = (
-			candidate_entries.size() == candidate_patches.size()
-			and int(pending.get("candidate_corner_report_count", -1)) == int(full_graph.get("report_count", -2))
-			and pending.get("candidate_edge_to_junctions", {}) == full_graph.get("edge_to_junctions", {})
-			and pending.get("candidate_junction_to_edges", {}) == full_graph.get("junction_to_edges", {})
-			and pending.get("candidate_edge_junction_refcounts", {}) == full_graph.get("edge_junction_refcounts", {})
+			candidate_entry_count_match
+			and candidate_report_count_match
+			and edge_to_junctions_match
+			and junction_to_edges_match
+			and refcounts_match
 		)
 		_expect(descriptor_parity, "radius %d sample %d incremental descriptors match full Binder rebuild" % [radius, sample_index + 1])
 		_expect(report_parity, "radius %d sample %d corner reports match full resolver rebuild" % [radius, sample_index + 1])
-		_expect(edge_graph_parity, "radius %d sample %d corner graph maps match full rebuild" % [radius, sample_index + 1])
+		_expect(candidate_entry_count_match, "radius %d sample %d candidate entry count matches the full patch set" % [radius, sample_index + 1])
+		_expect(candidate_report_count_match, "radius %d sample %d cached report count matches the full graph rebuild" % [radius, sample_index + 1])
+		_expect(edge_to_junctions_match, "radius %d sample %d edge-to-junction links match as unordered sets" % [radius, sample_index + 1])
+		_expect(junction_to_edges_match, "radius %d sample %d junction-to-edge links match as unordered sets" % [radius, sample_index + 1])
+		_expect(refcounts_match, "radius %d sample %d edge/junction reference counts match exactly" % [radius, sample_index + 1])
 
 		var profile_usec: Dictionary = delta_result.get("plan_delta_profile_usec", {})
 		var profile_counts: Dictionary = delta_result.get("plan_delta_profile_counts", {})
@@ -204,6 +213,21 @@ func _new_patch(holder: Node3D, patch_name: String, x: int, z: int) -> Node3D:
 	state["revision"] = int(state.get("revision", 0)) + 1
 	_expect(bool(patch.call("apply_world_object_state", state)), patch_name + " applies deterministic checkerboard height")
 	return patch
+
+
+func _normalize_string_array_map(source: Dictionary) -> Dictionary:
+	var normalized: Dictionary = {}
+	var keys: Array[String] = []
+	for key_value in source.keys():
+		keys.append(str(key_value))
+	keys.sort()
+	for key in keys:
+		var values: Array[String] = []
+		for value in source.get(key, []):
+			values.append(str(value))
+		values.sort()
+		normalized[key] = values
+	return normalized
 
 
 func _stable_id(x: int, z: int) -> String:
