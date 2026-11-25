@@ -424,6 +424,7 @@ func _test_plan_delta_phase_profile() -> void:
 	]
 	var profiled_noop: Dictionary = profile_index.plan_delta([], [], true)
 	var noop_profile: Dictionary = profiled_noop.get("plan_delta_profile_usec", {})
+	var noop_counts: Dictionary = profiled_noop.get("plan_delta_profile_counts", {})
 	var noop_profile_valid: bool = bool(profiled_noop.get("ok", false)) and bool(profiled_noop.get("noop", false))
 	var noop_measured_usec: int = 0
 	for phase_key in phase_keys:
@@ -437,6 +438,10 @@ func _test_plan_delta_phase_profile() -> void:
 	noop_profile_valid = noop_profile_valid and noop_measured_usec <= noop_total_usec
 	noop_profile_valid = noop_profile_valid and noop_unattributed_usec == noop_total_usec - noop_measured_usec
 	_expect(noop_profile_valid, "profile-enabled no-op returns a complete non-overlapping Index phase profile")
+	_expect(int(noop_counts.get("candidate_entries_shallow_copied", -1)) == 2, "no-op profile reports the exact top-level candidate entry copy size")
+	_expect(int(noop_counts.get("candidate_buckets_shallow_copied", -1)) == 2, "no-op profile reports the exact spatial bucket map copy size")
+	_expect(int(noop_counts.get("candidate_instance_records_scanned", -1)) == 2, "no-op profile reports the exact candidate instance-set scan count")
+	_expect(int(noop_counts.get("corner_report_count_full_scan_entries", -1)) == 0, "no-op profile reports no corner-report count full scan")
 
 	var replacement: Node3D = _new_patch(holder, "ProfileEastReplacement", Vector3(2.0, 0.0, 0.0))
 	await process_frame
@@ -447,6 +452,7 @@ func _test_plan_delta_phase_profile() -> void:
 	)
 	_expect(bool(plan.get("ok", false)) and not bool(plan.get("noop", true)), "profiled Index plan builds a real adjacent replacement candidate")
 	var profile: Dictionary = plan.get("plan_delta_profile_usec", {})
+	var profile_counts: Dictionary = plan.get("plan_delta_profile_counts", {})
 	var measured_usec: int = 0
 	var all_phases_valid: bool = true
 	for key in phase_keys:
@@ -462,6 +468,9 @@ func _test_plan_delta_phase_profile() -> void:
 	_expect(unattributed_usec == total_usec - measured_usec, "Index plan profile reports the exact unattributed remainder")
 	_expect(int(profile.get("changed_descriptor_build_usec", -1)) == 0, "changed-edge descriptor build phase is zero after local-map reuse")
 	_expect(int(profile.get("changed_descriptor_projection_usec", -1)) >= 0, "changed-edge descriptor projection has its own measured phase")
+	_expect(int(profile_counts.get("candidate_entries_shallow_copied", -1)) == 2, "replacement profile reports the exact candidate entries shallow-copy count")
+	_expect(int(profile_counts.get("candidate_instance_records_scanned", -1)) == 1, "same-ID replacement scans only the post-removal candidate instance set")
+	_expect(int(profile_counts.get("corner_report_count_full_scan_entries", -1)) == 0, "replacement profile confirms report-count maintenance avoids a full bucket scan")
 	if bool(plan.get("ok", false)):
 		var summary: Dictionary = plan.get("summary", {})
 		_assert_changed_descriptor_projection_parity(profile_index, plan, ["profile/east"], "profiled same-ID replacement")
@@ -617,7 +626,8 @@ func _run_persistent_corner_graph_tests() -> void:
 	await process_frame
 	var delta_result: Dictionary = graph_index.plan_delta(
 		["grid/top_center"],
-		[{"stable_id": "grid/top_center", "patch": replacement}]
+		[{"stable_id": "grid/top_center", "patch": replacement}],
+		true
 	)
 	_expect(bool(delta_result.get("ok", false)), "height-changing same-Stable-ID replacement plans a corner graph delta")
 	if bool(delta_result.get("ok", false)):
@@ -635,6 +645,20 @@ func _run_persistent_corner_graph_tests() -> void:
 		_expect(not closure_edges.has(isolated_edge_key), "delta closure does not include the unrelated isolated edge")
 
 		var plan_id: String = str(summary.get("plan_id", ""))
+		var graph_profile_counts: Dictionary = delta_result.get("plan_delta_profile_counts", {})
+		var pending_plan_value: Variant = graph_index._pending_plans.get(plan_id, {})
+		var candidate_reports_by_id: Dictionary = {}
+		if pending_plan_value is Dictionary:
+			candidate_reports_by_id = pending_plan_value.get("candidate_corner_reports_by_stable_id", {})
+		var expected_report_bucket_visits: int = graph_index._corner_reports_by_stable_id.size() + candidate_reports_by_id.size()
+		var expected_report_visits: int = _count_report_entries(graph_index._corner_reports_by_stable_id) + _count_report_entries(candidate_reports_by_id)
+		_expect(int(graph_profile_counts.get("candidate_entries_shallow_copied", -1)) == grid_patches.size(), "delta profile counts the full candidate entry map copy")
+		_expect(int(graph_profile_counts.get("candidate_instance_records_scanned", -1)) == grid_patches.size() - 1, "delta profile counts post-removal instance records scanned")
+		_expect(int(graph_profile_counts.get("corner_report_buckets_visited", -1)) == expected_report_bucket_visits, "delta profile counts every old and candidate report bucket visited")
+		_expect(int(graph_profile_counts.get("corner_reports_visited", -1)) == expected_report_visits, "delta profile counts every old and candidate report visited")
+		_expect(int(graph_profile_counts.get("closure_edges_visited", -1)) == closure_edges.size(), "delta profile reports the exact union-closure edge count")
+		_expect(int(graph_profile_counts.get("closure_junctions_visited", -1)) == closure_junctions.size(), "delta profile reports the exact union-closure junction count")
+		_expect(int(graph_profile_counts.get("corner_report_count_full_scan_entries", -1)) == 0, "delta profile confirms report-count maintenance performs no full report-bucket count scan")
 		var reservation: Dictionary = graph_index.reserve_delta(plan_id)
 		_expect(bool(reservation.get("ok", false)), "prepared delta reserves the committed index generation")
 		var competing_patch: Node3D = _new_patch(graph_holder, "CompetingPatch", Vector3(200.0, 0.0, 0.0))
@@ -657,14 +681,26 @@ func _run_persistent_corner_graph_tests() -> void:
 				and str(blocked_rebuild.get("error", "")) == "generation_reserved",
 				"full rebuild cannot invalidate a reserved cross-participant transaction"
 			)
-		var committed: Dictionary = graph_index.commit_delta(plan_id)
-		_expect(bool(committed.get("ok", false)), "reserved delta publishes the candidate corner graph atomically with the index")
+		var published: Dictionary = graph_index.publish_delta(plan_id)
+		_expect(bool(published.get("ok", false)), "reserved delta publishes the candidate corner graph atomically with the index")
+		_expect(int(graph_index.get_corner_graph_stats().get("report_count", -1)) == 2, "published candidate uses the incrementally maintained corner report count")
+		var rolled_back: Dictionary = graph_index.rollback_published_delta(plan_id)
+		_expect(bool(rolled_back.get("ok", false)), "published corner graph delta can roll back to the prior snapshot")
+		_expect(int(graph_index.get_corner_graph_stats().get("report_count", -1)) == 8, "rollback restores the exact cached corner report count")
+		var retry_delta: Dictionary = graph_index.plan_delta(
+			["grid/top_center"],
+			[{"stable_id": "grid/top_center", "patch": replacement}]
+		)
+		_expect(bool(retry_delta.get("ok", false)), "same corner graph delta can be prepared again after rollback")
+		var retry_plan_id: String = str(retry_delta.get("summary", {}).get("plan_id", ""))
+		var committed: Dictionary = graph_index.commit_delta(retry_plan_id)
+		_expect(bool(committed.get("ok", false)), "retried corner graph delta commits after a successful rollback")
 		if bool(competing_plan.get("ok", false)):
 			var stale_competing: Dictionary = graph_index.commit_delta(str(competing_plan.get("summary", {}).get("plan_id", "")))
 			_expect(
 				not bool(stale_competing.get("ok", true))
 				and str(stale_competing.get("error", "")) == "stale_generation",
-				"competing plan becomes stale after the reserved generation commits"
+				"competing plan becomes stale after the reserved generation commits and rolls back"
 			)
 		_expect(graph_index.get_patch("grid/top_center") == replacement, "committed delta points at the replacement Patch instance")
 		var committed_stats: Dictionary = graph_index.get_corner_graph_stats()
@@ -913,6 +949,14 @@ func _assert_changed_descriptor_projection_parity(index, plan: Dictionary, chang
 		int(summary.get("changed_descriptor_projection_count", -1)) == expected_old.get("descriptors", {}).size() + expected_new.get("descriptors", {}).size(),
 		label + ": projection count matches the old/new changed-edge descriptor maps"
 	)
+
+
+func _count_report_entries(reports_by_stable_id: Dictionary) -> int:
+	var count: int = 0
+	for reports_value in reports_by_stable_id.values():
+		if reports_value is Array:
+			count += reports_value.size()
+	return count
 
 
 func _assert_matches_full_rebuild_oracle(index, patches: Array[Node3D], stable_ids: Dictionary, label: String) -> void:
