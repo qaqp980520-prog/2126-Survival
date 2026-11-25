@@ -40,7 +40,7 @@ godot --headless --path . --script res://tests/surface_terrain_adjacency_delta_b
 
 ## Validation
 
-Pending exact-head Focused Spatial Index Validation, Production Surface Chunk Benchmark, and Full Compatibility Gate. The benchmark uses 225, 576, 2,048, and 8,192 entries, five samples per size, nine transactions per sample, eight updated records per transaction, four removals, and four insertions. Each record includes a nested payload with 80 scalar values that remains untouched by the patch set. The batch path must report exactly 360 shallow path-container clones per sample and match the full Dictionary oracle after all nine transactions.
+Pending exact-head Focused Spatial Index Validation, Production Surface Chunk Benchmark, and Full Compatibility Gate. The benchmark uses 225, 576, 2,048, and 8,192 entries, five samples per size, nine transactions per sample, eight updated records per transaction, four removals, and four insertions. Each record includes a nested payload with 80 scalar values that remains untouched by the patch set. The batch path must report exactly 360 shallow path-container clones per sample and match the full Dictionary oracle after all nine transactions. Timing excludes assertion and stats-query overhead; patch construction remains included in the batch path because callers must build the transaction payload.
 
 ## Complexity and limitations
 
