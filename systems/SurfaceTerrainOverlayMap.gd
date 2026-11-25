@@ -1,27 +1,31 @@
 extends RefCounted
 
-## Persistent, shallow overlay map for transaction candidates.
-## The root owns a shallow copy of the initial Dictionary. fork() seals the current
-## snapshot and creates an O(1) child containing only writes and tombstones.
-## Reads walk at most MAX_OVERLAY_DEPTH layers; size() is O(1).
-## keys()/materialize()/compact() are explicitly O(N) operations.
+## Persistent overlay map with nested Array/Dictionary copy-on-write.
+## Root construction takes one deep copy of nested containers. fork() seals the
+## current snapshot and creates an O(1) child containing only writes/tombstones.
+## Reads of Array/Dictionary values return detached deep copies. Call
+## get_mutable_value() to obtain a child-owned mutable container. Object/Resource
+## references are not cloned and must remain immutable while stored in a snapshot.
+## keys()/materialize()/compact() are explicit O(N) boundaries.
 const MAX_OVERLAY_DEPTH: int = 8
 
 var _base: Dictionary = {}
 var _parent: RefCounted = null
 var _writes: Dictionary = {}
 var _removed: Dictionary = {}
+var _owned_mutable_values: Dictionary = {}
 var _visible_size: int = 0
 var _depth: int = 0
 var _sealed: bool = false
 var _base_keys_copied: int = 0
 var _materialize_calls: int = 0
 var _materialized_keys: int = 0
+var _container_clone_count: int = 0
 
 
 func _init(base: Dictionary = {}, copy_base: bool = true) -> void:
 	if copy_base:
-		_base = base.duplicate(false)
+		_base = _clone_mutable_container(base)
 		_base_keys_copied = base.size()
 	else:
 		# Internal ownership-transfer path used only by compact().
@@ -47,6 +51,7 @@ func _initialize_child(parent: RefCounted) -> void:
 	_parent = parent
 	_depth = int(parent.call("get_depth")) + 1
 	_visible_size = int(parent.call("size"))
+	_owned_mutable_values = {}
 
 
 func seal() -> void:
@@ -79,23 +84,51 @@ func has_key(key: Variant) -> bool:
 	return _base.has(key)
 
 
+## Array/Dictionary results are detached deep copies. Scalars and value types are returned directly.
 func get_value(key: Variant, default_value: Variant = null) -> Variant:
 	if _removed.has(key):
-		return default_value
+		return _clone_mutable_container(default_value)
 	if _writes.has(key):
-		return _writes[key]
+		return _clone_mutable_container(_writes[key])
 	if _parent != null:
 		return _parent.call("get_value", key, default_value)
-	return _base.get(key, default_value)
+	return _clone_mutable_container(_base.get(key, default_value))
+
+
+## Returns a child-owned mutable Array/Dictionary copy for an explicit write.
+## Repeated calls for a locally owned key return the same local container.
+## Scalars are returned unchanged; absent keys and sealed snapshots return null.
+func get_mutable_value(key: Variant) -> Variant:
+	if _sealed or not has_key(key):
+		return null
+	if _writes.has(key):
+		var local_value: Variant = _writes[key]
+		if local_value is Dictionary or local_value is Array:
+			if not _owned_mutable_values.has(key):
+				local_value = _clone_mutable_container(local_value)
+				_writes[key] = local_value
+				_owned_mutable_values[key] = true
+		return local_value
+	var inherited_value: Variant = get_value(key, null)
+	if inherited_value is Dictionary or inherited_value is Array:
+		_writes[key] = inherited_value
+		_owned_mutable_values[key] = true
+	return inherited_value
 
 
 ## Returns false when the snapshot has been sealed.
+## Mutable containers are deep-copied so caller-owned inputs cannot mutate a snapshot.
 func set_value(key: Variant, value: Variant) -> bool:
 	if _sealed:
 		return false
 	var existed: bool = has_key(key)
+	var stored_value: Variant = _clone_mutable_container(value)
 	_removed.erase(key)
-	_writes[key] = value
+	_writes[key] = stored_value
+	if stored_value is Dictionary or stored_value is Array:
+		_owned_mutable_values[key] = true
+	else:
+		_owned_mutable_values.erase(key)
 	if not existed:
 		_visible_size += 1
 	return true
@@ -106,6 +139,7 @@ func erase_key(key: Variant) -> bool:
 	if _sealed or not has_key(key):
 		return false
 	_writes.erase(key)
+	_owned_mutable_values.erase(key)
 	_removed[key] = true
 	_visible_size -= 1
 	return true
@@ -116,7 +150,7 @@ func keys() -> Array:
 	return materialize().keys()
 
 
-## Produces an independent Dictionary snapshot. Call only at APIs that require a Dictionary.
+## Produces an independent Dictionary snapshot, including nested Array/Dictionary values.
 func materialize() -> Dictionary:
 	var layers: Array[RefCounted] = []
 	var cursor: RefCounted = self
@@ -128,8 +162,8 @@ func materialize() -> Dictionary:
 		cursor = parent_value as RefCounted
 
 	var root_layer: RefCounted = layers.pop_back()
-	var root_base: Dictionary = root_layer.call("_get_base_dictionary")
-	var result: Dictionary = root_base.duplicate(false)
+	# Accessors return detached nested containers; this is the explicit O(N) boundary.
+	var result: Dictionary = root_layer.call("_get_base_dictionary")
 	while not layers.is_empty():
 		var layer: RefCounted = layers.pop_back()
 		var changes: Dictionary = layer.call("_get_overlay_changes")
@@ -158,9 +192,11 @@ func get_stats() -> Dictionary:
 		"visible_size": _visible_size,
 		"local_write_count": _writes.size(),
 		"local_tombstone_count": _removed.size(),
+		"owned_mutable_value_count": _owned_mutable_values.size(),
 		"base_keys_copied": _base_keys_copied,
 		"materialize_calls": _materialize_calls,
 		"materialized_keys": _materialized_keys,
+		"container_clone_count": _container_clone_count,
 		"sealed": _sealed
 	}
 
@@ -169,12 +205,25 @@ func _get_parent() -> RefCounted:
 	return _parent
 
 
+## Internal accessors return detached containers; callers cannot mutate sealed backing state.
 func _get_base_dictionary() -> Dictionary:
-	return _base
+	return _clone_mutable_container(_base)
 
 
 func _get_overlay_changes() -> Dictionary:
 	return {
-		"writes": _writes,
+		"writes": _clone_mutable_container(_writes),
 		"removed_keys": _removed.keys()
 	}
+
+
+func _clone_mutable_container(value: Variant) -> Variant:
+	if value is Dictionary:
+		_container_clone_count += 1
+		var dictionary_value: Dictionary = value
+		return dictionary_value.duplicate(true)
+	if value is Array:
+		_container_clone_count += 1
+		var array_value: Array = value
+		return array_value.duplicate(true)
+	return value
