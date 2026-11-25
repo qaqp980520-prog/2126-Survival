@@ -54,6 +54,36 @@ func _run_tests() -> void:
 	_check(director.get_managed_chunk_ids() == managed_before, "Invalid chunk size must not mutate the managed map.")
 	director.chunk_size_x = 10.0
 
+	var original_radius: int = int(director.get("load_radius"))
+	director.load_radius = 8
+	_check(bool(director.call("_is_safe_grid_position", Vector3(15.0, 0.0, 15.0))), "Runtime radius equal to the supported maximum must remain valid.")
+	director.load_radius = 9
+	_check(not bool(director.sync_to_world_position(Vector3(15.0, 0.0, 15.0), 1006)), "Sync must reject a runtime load radius above the Inspector maximum.")
+	var excessive_radius_report: Dictionary = director.get_last_sync_report()
+	_check(str(excessive_radius_report.get("phase", "")) == "validation", "Excessive runtime radius should report validation.")
+	_check(str(excessive_radius_report.get("message", "")).contains("0 and 8"), "Excessive runtime radius report should explain the supported 0–8 range.")
+	_check(not bool(director.recover_to_world_position(Vector3(15.0, 0.0, 15.0), 1007)), "Recovery must reject an excessive runtime load radius before reconciling ownership.")
+	var excessive_radius_recovery_report: Dictionary = director.get_last_sync_report()
+	_check(str(excessive_radius_recovery_report.get("phase", "")) == "recovery_validation", "Excessive recovery radius should report recovery_validation.")
+	_check(str(excessive_radius_recovery_report.get("message", "")).contains("0 and 8"), "Excessive recovery radius report should explain the supported 0–8 range.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected excessive sync and recovery must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected excessive sync and recovery must not mutate controller chunks.")
+	_check(director.get_grid_coordinate(Vector3(15.0, 0.0, 15.0)) == Vector2i.ZERO, "Coordinate helper must reject a runtime radius above the supported maximum.")
+	director.load_radius = -1
+	_check(not bool(director.call("_is_safe_grid_position", Vector3(15.0, 0.0, 15.0))), "Runtime radius below zero must be rejected by the shared grid guard.")
+	_check(not bool(director.sync_to_world_position(Vector3(15.0, 0.0, 15.0), 1008)), "Sync must reject a negative runtime load radius.")
+	var negative_radius_report: Dictionary = director.get_last_sync_report()
+	_check(str(negative_radius_report.get("phase", "")) == "validation", "Negative runtime radius should report validation.")
+	_check(str(negative_radius_report.get("message", "")).contains("0 and 8"), "Negative runtime radius report should explain the supported 0–8 range.")
+	_check(not bool(director.recover_to_world_position(Vector3(15.0, 0.0, 15.0), 1009)), "Recovery must reject a negative runtime load radius.")
+	var negative_recovery_report: Dictionary = director.get_last_sync_report()
+	_check(str(negative_recovery_report.get("phase", "")) == "recovery_validation", "Negative recovery radius should report recovery_validation.")
+	_check(str(negative_recovery_report.get("message", "")).contains("0 and 8"), "Negative recovery radius report should explain the supported 0–8 range.")
+	_check(director.get_managed_chunk_ids() == managed_before, "Rejected negative radius must not mutate the managed map.")
+	_check(PackedStringArray(controller.call("get_loaded_chunk_ids")) == actual_before, "Rejected negative radius must not mutate controller chunks.")
+	_check(director.get_grid_coordinate(Vector3(15.0, 0.0, 15.0)) == Vector2i.ZERO, "Coordinate helper must reject a negative runtime radius.")
+	director.load_radius = original_radius
+
 	director.queue_free()
 	controller.queue_free()
 	await process_frame
