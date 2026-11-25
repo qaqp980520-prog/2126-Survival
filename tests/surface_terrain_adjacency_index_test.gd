@@ -1231,6 +1231,65 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(batch_root.call("get_value", "record", {}).get("revision", -1) == 1, "batch commit does not mutate the sealed parent Dictionary")
 	_expect(batch_root.call("get_value", "items", []).size() == 2, "batch commit does not mutate the sealed parent Array")
 	_expect(int(batch_child.call("get_stats").get("local_write_count", 0)) == 2, "batch commit publishes all staged keys together")
+	_expect(int(batch_child.call("get_stats").get("path_container_clone_count", 0)) == 11, "batch clones only the root and edited Array/Dictionary path containers")
+	var path_payload_values: Array = []
+	for value_index in range(32):
+		path_payload_values.append(value_index)
+	var path_cow_root: RefCounted = OverlayMapScript.new({
+		"record": {
+			"revision": 1,
+			"metadata": {"owner": "root", "flags": ["stable", "shared"]},
+			"payload": {"branches": [{"values": path_payload_values}, {"values": [100, 101]}], "labels": ["a", "b", "c"]}
+		}
+	})
+	var path_cow_child: RefCounted = path_cow_root.call("fork")
+	var path_cow_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["metadata", "owner"], "value": "child"},
+				{"op": "set", "path": ["revision"], "value": 2}
+			]
+		}
+	]
+	_expect(bool(path_cow_child.call("apply_nested_patches", path_cow_patches)), "path-level COW applies nested edits without cloning untouched payload branches")
+	var path_cow_stats: Dictionary = path_cow_child.call("get_stats")
+	_expect(int(path_cow_stats.get("path_container_clone_count", 0)) == 3, "path-level COW clones only root and edited metadata containers")
+	_expect(int(path_cow_stats.get("container_clone_count", 0)) == 0, "path-level COW performs no deep container clone while staging scalar edits")
+	var path_cow_parent_record: Dictionary = path_cow_root.call("get_value", "record", {})
+	var path_cow_child_record: Dictionary = path_cow_child.call("get_value", "record", {})
+	_expect(int(path_cow_parent_record.get("revision", -1)) == 1, "path-level COW leaves parent scalar values unchanged")
+	_expect(int(path_cow_child_record.get("revision", -1)) == 2, "path-level COW publishes the child scalar value")
+	_expect(path_cow_parent_record.get("payload", {}) == path_cow_child_record.get("payload", {}), "path-level COW preserves the complete untouched nested payload")
+	var detached_path_payload: Dictionary = path_cow_child_record.get("payload", {})
+	var detached_path_branches: Array = detached_path_payload.get("branches", [])
+	var detached_path_first_branch: Dictionary = detached_path_branches[0]
+	var detached_path_values: Array = detached_path_first_branch.get("values", [])
+	detached_path_values[0] = 999
+	detached_path_first_branch["values"] = detached_path_values
+	detached_path_branches[0] = detached_path_first_branch
+	detached_path_payload["branches"] = detached_path_branches
+	path_cow_child_record["payload"] = detached_path_payload
+	var child_after_detached_read: Dictionary = path_cow_child.call("get_value", "record", {})
+	var child_payload_after_detached_read: Dictionary = child_after_detached_read.get("payload", {})
+	var child_branches_after_detached_read: Array = child_payload_after_detached_read.get("branches", [])
+	var child_first_branch_after_detached_read: Dictionary = child_branches_after_detached_read[0]
+	var child_values_after_detached_read: Array = child_first_branch_after_detached_read.get("values", [])
+	_expect(int(child_values_after_detached_read[0]) == 0, "path-level COW still returns detached nested reads")
+	var failed_path_child: RefCounted = path_cow_root.call("fork")
+	var failed_path_before: Dictionary = failed_path_child.call("materialize")
+	var invalid_path_batch: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["metadata", "owner"], "value": "must_not_publish"},
+				{"op": "set", "path": ["payload", "branches", 0, "missing", 0], "value": 123}
+			]
+		}
+	]
+	_expect(not bool(failed_path_child.call("apply_nested_patches", invalid_path_batch)), "path-level COW rejects a later invalid nested path")
+	_expect(failed_path_child.call("materialize") == failed_path_before, "failed path-level COW batch leaves the complete candidate unchanged")
+	_expect(int(failed_path_child.call("get_stats").get("local_write_count", 0)) == 0, "failed path-level COW batch publishes no top-level writes")
 
 	var atomic_batch_root: RefCounted = OverlayMapScript.new({
 		"first": {"revision": 1},
