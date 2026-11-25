@@ -493,7 +493,7 @@ func _benchmark_overlay_map() -> void:
 		var remove_keys: Array[String] = []
 		var addition_keys: Array[String] = []
 		for index in range(OVERLAY_UPDATE_COUNT):
-			update_keys.append("patch/%05d" % (index * max(1, int(fixture_size / UPDATE_COUNT))))
+			update_keys.append("patch/%05d" % (index * max(1, int(fixture_size / OVERLAY_UPDATE_COUNT))))
 		for index in range(OVERLAY_REMOVE_COUNT):
 			remove_keys.append("patch/%05d" % (fixture_size - 1 - index))
 		for index in range(OVERLAY_ADD_COUNT):
@@ -552,7 +552,7 @@ func _benchmark_overlay_map() -> void:
 			"fixture_entries": fixture_size,
 			"sample_count": OVERLAY_SAMPLE_COUNT,
 			"delta_operations": OVERLAY_UPDATE_COUNT + OVERLAY_REMOVE_COUNT + OVERLAY_ADD_COUNT,
-			"lookup_count": LOOKUP_COUNT,
+			"lookup_count": OVERLAY_LOOKUP_COUNT,
 			"dictionary_copy_edit_lookup_p50_usec": _percentile(full_samples, 0.5),
 			"overlay_fork_edit_lookup_p50_usec": _percentile(overlay_samples, 0.5),
 			"overlay_materialize_p50_usec": _percentile(materialize_samples, 0.5),
