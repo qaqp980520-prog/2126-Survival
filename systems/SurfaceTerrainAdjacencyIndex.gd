@@ -29,6 +29,8 @@ var _edge_to_junctions: Dictionary = {}
 var _junction_to_edges: Dictionary = {}
 var _edge_junction_refcounts: Dictionary = {}
 var _corner_report_count: int = 0
+var _junction_to_report_stable_ids: Dictionary = {}
+var _corner_report_index_membership_count: int = 0
 var _reserved_plan_id: String = ""
 
 var _entries_by_stable_id: Dictionary = {}
@@ -102,6 +104,8 @@ func rebuild(patches: Array[Node3D], stable_ids_by_instance: Dictionary) -> Dict
 	_junction_to_edges = graph_result.get("junction_to_edges", {}).duplicate(true)
 	_edge_junction_refcounts = graph_result.get("edge_junction_refcounts", {}).duplicate(true)
 	_corner_report_count = int(graph_result.get("report_count", 0))
+	_junction_to_report_stable_ids = graph_result.get("junction_to_report_stable_ids", {}).duplicate(true)
+	_corner_report_index_membership_count = int(graph_result.get("report_index_membership_count", 0))
 	_generation += 1
 	_pending_plans.clear()
 	_reserved_plan_id = ""
@@ -136,6 +140,12 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 			"corner_report_delta_buckets_touched",
 			"corner_report_delta_reports_replaced",
 			"corner_report_count_full_scan_entries",
+			"corner_report_reverse_junctions_visited",
+			"corner_report_reverse_index_keys_shallow_copied",
+			"corner_report_reverse_index_arrays_copied",
+			"corner_report_reverse_index_memberships_touched",
+			"corner_report_reverse_index_memberships_added",
+			"corner_report_reverse_index_memberships_removed",
 			"closure_edges_visited",
 			"closure_junctions_visited"
 		]:
@@ -380,11 +390,13 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 	var old_closure_reports: Array[Dictionary] = _collect_corner_reports_for_junctions(
 		_corner_reports_by_stable_id,
 		closure_junction_set,
+		_junction_to_report_stable_ids,
 		plan_profile_counts if profile_enabled else {}
 	)
 	var new_closure_reports: Array[Dictionary] = _collect_corner_reports_for_junctions(
 		graph_delta.get("reports_by_stable_id", {}),
 		closure_junction_set,
+		graph_delta.get("junction_to_report_stable_ids", {}),
 		plan_profile_counts if profile_enabled else {}
 	)
 	if profile_enabled:
@@ -431,6 +443,8 @@ func plan_delta(remove_stable_ids: Array, additions: Array, profile_enabled: boo
 		"candidate_junction_to_edges": graph_delta.get("junction_to_edges", {}),
 		"candidate_edge_junction_refcounts": graph_delta.get("edge_junction_refcounts", {}),
 		"candidate_corner_report_count": int(graph_delta.get("report_count", _corner_report_count)),
+		"candidate_junction_to_report_stable_ids": graph_delta.get("junction_to_report_stable_ids", {}),
+		"candidate_corner_report_index_membership_count": int(graph_delta.get("report_index_membership_count", _corner_report_index_membership_count)),
 		"summary": summary.duplicate(true)
 	}
 	var success_result: Dictionary = {"ok": true, "noop": false, "summary": summary.duplicate(true)}
@@ -515,7 +529,9 @@ func publish_delta(plan_id: String) -> Dictionary:
 		"edge_to_junctions": _edge_to_junctions.duplicate(false),
 		"junction_to_edges": _junction_to_edges.duplicate(false),
 		"edge_junction_refcounts": _edge_junction_refcounts.duplicate(false),
-		"corner_report_count": _corner_report_count
+		"corner_report_count": _corner_report_count,
+		"junction_to_report_stable_ids": _junction_to_report_stable_ids.duplicate(false),
+		"corner_report_index_membership_count": _corner_report_index_membership_count
 	}
 	plan["previous_state"] = previous_state
 	plan["published"] = true
@@ -531,6 +547,8 @@ func publish_delta(plan_id: String) -> Dictionary:
 	_junction_to_edges = plan.get("candidate_junction_to_edges", {}).duplicate(false)
 	_edge_junction_refcounts = plan.get("candidate_edge_junction_refcounts", {}).duplicate(false)
 	_corner_report_count = int(plan.get("candidate_corner_report_count", _corner_report_count))
+	_junction_to_report_stable_ids = plan.get("candidate_junction_to_report_stable_ids", {}).duplicate(false)
+	_corner_report_index_membership_count = int(plan.get("candidate_corner_report_index_membership_count", _corner_report_index_membership_count))
 	_generation += 1
 	return {
 		"ok": true,
@@ -587,6 +605,8 @@ func rollback_published_delta(plan_id: String) -> Dictionary:
 	_junction_to_edges = previous_state.get("junction_to_edges", {}).duplicate(false)
 	_edge_junction_refcounts = previous_state.get("edge_junction_refcounts", {}).duplicate(false)
 	_corner_report_count = int(previous_state.get("corner_report_count", 0))
+	_junction_to_report_stable_ids = previous_state.get("junction_to_report_stable_ids", {}).duplicate(false)
+	_corner_report_index_membership_count = int(previous_state.get("corner_report_index_membership_count", 0))
 	_generation += 1
 	_pending_plans.erase(plan_id)
 	_reserved_plan_id = ""
@@ -684,6 +704,10 @@ func get_corner_reports_by_stable_id() -> Dictionary:
 	return _corner_reports_by_stable_id.duplicate(true)
 
 
+func get_junction_to_report_stable_ids() -> Dictionary:
+	return _junction_to_report_stable_ids.duplicate(true)
+
+
 func get_corner_graph_stats() -> Dictionary:
 	var link_count: int = 0
 	for count_value in _edge_junction_refcounts.values():
@@ -693,6 +717,8 @@ func get_corner_graph_stats() -> Dictionary:
 		"descriptor_count": _descriptors_by_edge_key.size(),
 		"report_count": _corner_report_count,
 		"report_bucket_count": _corner_reports_by_stable_id.size(),
+		"report_index_junction_count": _junction_to_report_stable_ids.size(),
+		"report_index_membership_count": _corner_report_index_membership_count,
 		"junction_count": _junction_to_edges.size(),
 		"edge_junction_link_count": link_count,
 		"generation": _generation,
@@ -820,20 +846,30 @@ func _build_corner_graph(reports_by_stable_id: Dictionary) -> Dictionary:
 	var edge_to_junctions: Dictionary = {}
 	var junction_to_edges: Dictionary = {}
 	var edge_junction_refcounts: Dictionary = {}
+	var junction_to_report_stable_ids: Dictionary = {}
 	var copied_edge_arrays: Dictionary = {}
 	var copied_junction_arrays: Dictionary = {}
 	var report_count: int = 0
-	for reports_value in reports_by_stable_id.values():
+	var report_index_membership_count: int = 0
+	for stable_id in _sorted_strings(reports_by_stable_id.keys()):
+		var reports_value: Variant = reports_by_stable_id.get(stable_id, [])
 		if not (reports_value is Array):
 			return {"ok": false, "error": "invalid_corner_report_bucket"}
 		for report_value in reports_value:
 			if not (report_value is Dictionary):
 				return {"ok": false, "error": "invalid_corner_report"}
 			var report: Dictionary = report_value
+			var report_stable_id: String = str(report.get("stable_id", stable_id))
 			var junction_key: String = str(report.get("junction_key", ""))
 			var edge_keys: Variant = report.get("edge_keys", null)
-			if junction_key.is_empty() or not (edge_keys is Array) or edge_keys.size() != 2:
+			if report_stable_id != stable_id or junction_key.is_empty() or not (edge_keys is Array) or edge_keys.size() != 2:
 				return {"ok": false, "error": "invalid_corner_graph_report"}
+			var report_stable_ids: Array = junction_to_report_stable_ids.get(junction_key, [])
+			if not report_stable_ids.has(stable_id):
+				report_stable_ids.append(stable_id)
+				report_stable_ids.sort()
+				junction_to_report_stable_ids[junction_key] = report_stable_ids
+				report_index_membership_count += 1
 			for edge_key_value in edge_keys:
 				var edge_key: String = str(edge_key_value)
 				if edge_key.is_empty() or not _add_corner_graph_link(
@@ -853,23 +889,28 @@ func _build_corner_graph(reports_by_stable_id: Dictionary) -> Dictionary:
 		"edge_to_junctions": edge_to_junctions,
 		"junction_to_edges": junction_to_edges,
 		"edge_junction_refcounts": edge_junction_refcounts,
-		"report_count": report_count
+		"report_count": report_count,
+		"junction_to_report_stable_ids": junction_to_report_stable_ids,
+		"report_index_membership_count": report_index_membership_count
 	}
-
 
 func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Dictionary, profile_counts: Dictionary = {}) -> Dictionary:
 	var next_reports: Dictionary = _corner_reports_by_stable_id.duplicate(false)
 	var next_edge_to_junctions: Dictionary = _edge_to_junctions.duplicate(false)
 	var next_junction_to_edges: Dictionary = _junction_to_edges.duplicate(false)
 	var next_refcounts: Dictionary = _edge_junction_refcounts.duplicate(false)
+	var next_junction_to_report_stable_ids: Dictionary = _junction_to_report_stable_ids.duplicate(false)
 	if not profile_counts.is_empty():
 		profile_counts["corner_report_buckets_shallow_copied"] = _corner_reports_by_stable_id.size()
 		profile_counts["corner_edge_to_junction_keys_shallow_copied"] = _edge_to_junctions.size()
 		profile_counts["corner_junction_to_edge_keys_shallow_copied"] = _junction_to_edges.size()
 		profile_counts["corner_refcount_entries_shallow_copied"] = _edge_junction_refcounts.size()
+		profile_counts["corner_report_reverse_index_keys_shallow_copied"] = _junction_to_report_stable_ids.size()
 	var copied_edge_arrays: Dictionary = {}
 	var copied_junction_arrays: Dictionary = {}
+	var copied_report_arrays: Dictionary = {}
 	var report_count: int = _corner_report_count
+	var report_index_membership_count: int = _corner_report_index_membership_count
 	for stable_id in _sorted_strings(touched_ids.keys()):
 		var old_reports_value: Variant = _corner_reports_by_stable_id.get(stable_id, [])
 		if not (old_reports_value is Array):
@@ -881,12 +922,66 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 		var new_reports: Array = new_reports_value
 		report_count -= old_reports.size()
 		report_count += new_reports.size()
+
+		# Reverse membership is one Stable ID per Junction, even if a bucket ever
+		# contains more than one report for that same Junction.
+		var old_junctions: Dictionary = {}
+		for old_report_value in old_reports:
+			if not (old_report_value is Dictionary):
+				return {"ok": false, "error": "committed_corner_report_invalid"}
+			var old_report: Dictionary = old_report_value
+			var old_junction_key: String = str(old_report.get("junction_key", ""))
+			if old_junction_key.is_empty():
+				return {"ok": false, "error": "committed_corner_report_junction_invalid"}
+			old_junctions[old_junction_key] = true
+		var new_junctions: Dictionary = {}
+		for new_report_value in new_reports:
+			if not (new_report_value is Dictionary):
+				return {"ok": false, "error": "candidate_corner_report_invalid"}
+			var new_report: Dictionary = new_report_value
+			var new_junction_key: String = str(new_report.get("junction_key", ""))
+			if new_junction_key.is_empty():
+				return {"ok": false, "error": "candidate_corner_report_junction_invalid"}
+			new_junctions[new_junction_key] = true
+
+		var removed_memberships: int = 0
+		for junction_key in _sorted_strings(old_junctions.keys()):
+			var prior_stable_ids: Array = _mutable_graph_array(
+				next_junction_to_report_stable_ids,
+				junction_key,
+				copied_report_arrays
+			)
+			if prior_stable_ids.has(stable_id):
+				prior_stable_ids.erase(stable_id)
+				removed_memberships += 1
+			if prior_stable_ids.is_empty():
+				next_junction_to_report_stable_ids.erase(junction_key)
+			else:
+				prior_stable_ids.sort()
+				next_junction_to_report_stable_ids[junction_key] = prior_stable_ids
+		report_index_membership_count -= removed_memberships
+
+		var added_memberships: int = 0
+		for junction_key in _sorted_strings(new_junctions.keys()):
+			var next_stable_ids: Array = _mutable_graph_array(
+				next_junction_to_report_stable_ids,
+				junction_key,
+				copied_report_arrays
+			)
+			if not next_stable_ids.has(stable_id):
+				next_stable_ids.append(stable_id)
+				next_stable_ids.sort()
+				next_junction_to_report_stable_ids[junction_key] = next_stable_ids
+				added_memberships += 1
+		report_index_membership_count += added_memberships
 		if not profile_counts.is_empty():
 			profile_counts["corner_report_delta_buckets_touched"] = int(profile_counts.get("corner_report_delta_buckets_touched", 0)) + 1
 			profile_counts["corner_report_delta_reports_replaced"] = int(profile_counts.get("corner_report_delta_reports_replaced", 0)) + old_reports.size() + new_reports.size()
+			profile_counts["corner_report_reverse_index_memberships_touched"] = int(profile_counts.get("corner_report_reverse_index_memberships_touched", 0)) + old_junctions.size() + new_junctions.size()
+			profile_counts["corner_report_reverse_index_memberships_removed"] = int(profile_counts.get("corner_report_reverse_index_memberships_removed", 0)) + removed_memberships
+			profile_counts["corner_report_reverse_index_memberships_added"] = int(profile_counts.get("corner_report_reverse_index_memberships_added", 0)) + added_memberships
+
 		for report_value in old_reports:
-			if not (report_value is Dictionary):
-				return {"ok": false, "error": "committed_corner_report_invalid"}
 			var old_report: Dictionary = report_value
 			for edge_key_value in old_report.get("edge_keys", []):
 				if not _remove_corner_graph_link(
@@ -918,17 +1013,21 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 						return {"ok": false, "error": "candidate_corner_graph_invalid"}
 	if report_count < 0:
 		return {"ok": false, "error": "candidate_corner_report_count_invalid"}
+	if report_index_membership_count < 0:
+		return {"ok": false, "error": "candidate_corner_report_index_count_invalid"}
 	if not profile_counts.is_empty():
 		profile_counts["corner_report_count_full_scan_entries"] = 0
+		profile_counts["corner_report_reverse_index_arrays_copied"] = copied_report_arrays.size()
 	return {
 		"ok": true,
 		"reports_by_stable_id": next_reports,
 		"edge_to_junctions": next_edge_to_junctions,
 		"junction_to_edges": next_junction_to_edges,
 		"edge_junction_refcounts": next_refcounts,
-		"report_count": report_count
+		"report_count": report_count,
+		"junction_to_report_stable_ids": next_junction_to_report_stable_ids,
+		"report_index_membership_count": report_index_membership_count
 	}
-
 
 func _add_corner_graph_link(
 	edge_key: String,
@@ -1069,14 +1168,28 @@ func _select_descriptors(source: Dictionary, selected_keys: Array) -> Dictionary
 func _collect_corner_reports_for_junctions(
 	reports_by_stable_id: Dictionary,
 	selected_junctions: Dictionary,
+	junction_to_report_stable_ids: Dictionary,
 	profile_counts: Dictionary = {}
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var stable_ids: Array[String] = _sorted_strings(reports_by_stable_id.keys())
+	var selected_keys: Array[String] = _sorted_strings(selected_junctions.keys())
+	var selected_stable_ids: Dictionary = {}
+	if not profile_counts.is_empty():
+		profile_counts["corner_report_reverse_junctions_visited"] = int(profile_counts.get("corner_report_reverse_junctions_visited", 0)) + selected_keys.size()
+	for junction_key in selected_keys:
+		var stable_ids_value: Variant = junction_to_report_stable_ids.get(junction_key, [])
+		if not (stable_ids_value is Array):
+			continue
+		for stable_id_value in stable_ids_value:
+			selected_stable_ids[str(stable_id_value)] = true
+	var stable_ids: Array[String] = _sorted_strings(selected_stable_ids.keys())
 	if not profile_counts.is_empty():
 		profile_counts["corner_report_buckets_visited"] = int(profile_counts.get("corner_report_buckets_visited", 0)) + stable_ids.size()
 	for stable_id in stable_ids:
-		for report_value in reports_by_stable_id[stable_id]:
+		var reports_value: Variant = reports_by_stable_id.get(stable_id, [])
+		if not (reports_value is Array):
+			continue
+		for report_value in reports_value:
 			if not profile_counts.is_empty():
 				profile_counts["corner_reports_visited"] = int(profile_counts.get("corner_reports_visited", 0)) + 1
 			if not (report_value is Dictionary):
@@ -1086,7 +1199,6 @@ func _collect_corner_reports_for_junctions(
 				result.append(report.duplicate(true))
 	result.sort_custom(Callable(self, "_corner_report_less"))
 	return result
-
 
 func _corner_report_less(first: Dictionary, second: Dictionary) -> bool:
 	if str(first.get("stable_id", "")) != str(second.get("stable_id", "")):
