@@ -547,6 +547,58 @@ func _test_patch_size_cache_after_emptying_index() -> void:
 	await process_frame
 
 
+func _run_reverse_index_corruption_guard_test(
+	holder: Node3D,
+	patches: Array[Node3D],
+	stable_ids: Dictionary
+) -> void:
+	var guard_index = IndexScript.new()
+	var rebuild: Dictionary = guard_index.rebuild(patches, stable_ids)
+	_expect(bool(rebuild.get("ok", false)), "reverse-index corruption guard fixture rebuilds")
+	if not bool(rebuild.get("ok", false)):
+		return
+	var reverse_index: Dictionary = guard_index.get_junction_to_report_stable_ids()
+	var junction_keys: Array = reverse_index.keys()
+	junction_keys.sort()
+	if junction_keys.is_empty():
+		_expect(false, "reverse-index corruption guard fixture has at least one Junction")
+		return
+	var junction_key: String = str(junction_keys[0])
+	var stable_id_values: Variant = reverse_index.get(junction_key, [])
+	if not (stable_id_values is Array) or stable_id_values.is_empty():
+		_expect(false, "reverse-index corruption guard fixture has a Stable ID membership")
+		return
+	var stable_id: String = str(stable_id_values[0])
+	var original_patch: Node3D = guard_index.get_patch(stable_id)
+	if not is_instance_valid(original_patch):
+		_expect(false, "reverse-index corruption guard resolves the original Patch")
+		return
+	var replacement: Node3D = _new_patch(holder, "ReverseIndexCorruptReplacement", original_patch.position)
+	var original_state: Dictionary = original_patch.call("get_world_object_state")
+	_expect(bool(replacement.call("apply_world_object_state", original_state)), "reverse-index corruption guard replacement copies the original Patch state")
+	await process_frame
+	var corrupted_reverse_index: Dictionary = guard_index._junction_to_report_stable_ids.duplicate(true)
+	var corrupted_stable_ids: Array = corrupted_reverse_index.get(junction_key, []).duplicate()
+	corrupted_stable_ids.erase(stable_id)
+	if corrupted_stable_ids.is_empty():
+		corrupted_reverse_index.erase(junction_key)
+	else:
+		corrupted_reverse_index[junction_key] = corrupted_stable_ids
+	guard_index._junction_to_report_stable_ids = corrupted_reverse_index
+	var rejected: Dictionary = guard_index.plan_delta(
+		[stable_id],
+		[{"stable_id": stable_id, "patch": replacement}],
+		true
+	)
+	_expect(
+		not bool(rejected.get("ok", true))
+		and str(rejected.get("error", "")) == "committed_corner_report_reverse_index_inconsistent",
+		"delta planning fails closed when a committed Junction-to-report membership is missing"
+	)
+	replacement.queue_free()
+	await process_frame
+
+
 func _run_persistent_corner_graph_tests() -> void:
 	var graph_holder := Node3D.new()
 	graph_holder.name = "PersistentCornerGraphTestRoot"
@@ -610,6 +662,7 @@ func _run_persistent_corner_graph_tests() -> void:
 		"initial persistent graph rebuild"
 	)
 	var initial_report_reverse_index: Dictionary = graph_index.get_junction_to_report_stable_ids()
+	await _run_reverse_index_corruption_guard_test(graph_holder, grid_patches, grid_ids)
 	var isolated_edge_key: String = ""
 	var grid_seed_edge_key: String = ""
 	for edge_key_value in descriptors.keys():
@@ -678,6 +731,7 @@ func _run_persistent_corner_graph_tests() -> void:
 		_expect(int(graph_profile_counts.get("closure_edges_visited", -1)) == closure_edges.size(), "delta profile reports the exact union-closure edge count")
 		_expect(int(graph_profile_counts.get("closure_junctions_visited", -1)) == closure_junctions.size(), "delta profile reports the exact union-closure junction count")
 		_expect(int(graph_profile_counts.get("corner_report_count_full_scan_entries", -1)) == 0, "delta profile confirms report-count maintenance performs no full report-bucket count scan")
+		_expect(graph_index.get_junction_to_report_stable_ids() == initial_report_reverse_index, "detached plan leaves the committed reverse index unchanged before publish")
 		var reservation: Dictionary = graph_index.reserve_delta(plan_id)
 		_expect(bool(reservation.get("ok", false)), "prepared delta reserves the committed index generation")
 		var competing_patch: Node3D = _new_patch(graph_holder, "CompetingPatch", Vector3(200.0, 0.0, 0.0))
