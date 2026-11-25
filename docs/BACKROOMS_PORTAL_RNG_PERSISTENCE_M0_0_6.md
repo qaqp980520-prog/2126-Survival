@@ -56,3 +56,15 @@ Make portal save/load preserve the deterministic RandomNumberGenerator stream. T
 - Strengthened schema-1 legacy compatibility: a payload without `rng_state` must load while retaining the receiving director's constructor RNG stream, rather than silently adopting the source director's state.
 - Dependencies and import remain unchanged: Godot 4.3; `godot --headless --path . --import`; focused test `godot --headless --path . --script res://tests/backrooms_portal_director_test.gd`.
 - These are test and documentation hardening changes; exact-head Full Compatibility Gate must be rerun after the commits. No local Godot executable is available.
+
+
+## M0.0.6.2 — Configurable player-loaded portal spawn window
+
+- Static integration audit found that the legacy director padding is 16 m while the production SurfaceWorld streaming window is 3×3 chunks at 10 m each (30×30 m). With a 30 m bounds rectangle, the old condition `size <= padding × 2` rejects every candidate, so a production portal constrained to currently loaded surface chunks could never spawn using the legacy margin.
+- Added `set_spawn_window(bounds, safe_distance, padding)` to validate the entire runtime policy before mutating the director. Invalid bounds, non-finite values, negative safe distance/padding, or a margin that leaves no candidate area are rejected atomically.
+- Added configurable `spawn_padding`; the default remains the legacy 16 m to preserve existing callers and tests. The active portal continues to retain its original spawn bounds when the candidate window moves.
+- Added a regression using a 30×30 m loaded window, 4 m edge margin, and 8 m safe distance; it proves the director can spawn inside the loaded window while preserving the minimum player distance. It also proves the legacy 16 m margin still rejects that small window and invalid reconfiguration leaves the previous policy unchanged.
+- Updated files: `systems/BackroomsPortalDirector.gd`, `tests/backrooms_portal_director_test.gd`, and this version record.
+- Dependencies/import: Godot 4.3 root project; no third-party packages or Project Settings. Import: `godot --headless --path . --import`; focused test: `godot --headless --path . --script res://tests/backrooms_portal_director_test.gd`.
+- Integration note: this API is not yet called by SurfaceWorld. The next production runtime change must derive bounds from the current loaded chunk window and configure the director with a deliberate safe distance/padding. The 8 m / 4 m values are regression fixtures, not yet a final gameplay balance decision.
+- Validation: pending exact-head Godot 4.3 focused and Full Compatibility Gate; no local Godot executable is available.
