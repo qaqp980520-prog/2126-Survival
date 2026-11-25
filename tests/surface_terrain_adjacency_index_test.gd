@@ -1250,6 +1250,8 @@ func _run_overlay_map_contract_tests() -> void:
 		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 4}]}
 	]
 	_expect(not bool(atomic_batch_child.call("apply_nested_patches", duplicate_key_batch)), "batch rejects duplicate top-level keys")
+	batch_child.call("fork")
+	_expect(bool(batch_child.call("is_sealed")), "fork seals the batch-patched snapshot")
 	_expect(not bool(batch_child.call("apply_nested_patches", batch_patches)), "sealed overlay rejects a nested patch batch")
 
 	var external_input: Dictionary = {"items": [10]}
