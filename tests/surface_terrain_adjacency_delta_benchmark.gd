@@ -786,11 +786,10 @@ func _benchmark_overlay_nested_cow() -> void:
 				var overlay_started_usec: int = Time.get_ticks_usec()
 				var candidate: RefCounted = overlay_snapshot.call("fork")
 				var mutator: Callable = Callable(self, "_mutate_nested_cow_record").bind(transaction_index)
+				var overlay_updates_ok: bool = true
 				for key in update_keys:
-					_expect(
-						bool(candidate.call("mutate_value", key, mutator)),
-						"nested COW fixture %d sample %d transaction %d mutates %s" % [fixture_size, sample_index + 1, transaction_index + 1, key]
-					)
+					if not bool(candidate.call("mutate_value", key, mutator)):
+						overlay_updates_ok = false
 				for key in remove_keys:
 					candidate.call("erase_key", key)
 				for addition_index in range(addition_keys.size()):
@@ -802,6 +801,10 @@ func _benchmark_overlay_nested_cow() -> void:
 					)
 					candidate.call("set_value", addition_key, addition_value)
 				overlay_total_usec += Time.get_ticks_usec() - overlay_started_usec
+				_expect(
+					overlay_updates_ok,
+					"nested COW fixture %d sample %d transaction %d completes all callback updates" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
 
 				var batch_started_usec: int = Time.get_ticks_usec()
 				var batch_candidate: RefCounted = overlay_batch_snapshot.call("fork")
@@ -822,13 +825,6 @@ func _benchmark_overlay_nested_cow() -> void:
 						]
 					})
 				var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
-				_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
-				var transaction_path_clones: int = int(batch_candidate.call("get_stats").get("path_container_clone_count", 0))
-				batch_path_clone_total += transaction_path_clones
-				_expect(
-					transaction_path_clones == OVERLAY_UPDATE_COUNT * 5,
-					"nested COW fixture %d sample %d transaction %d clones exactly five containers per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
-				)
 				for key in remove_keys:
 					batch_candidate.call("erase_key", key)
 				for addition_index in range(addition_keys.size()):
@@ -840,6 +836,13 @@ func _benchmark_overlay_nested_cow() -> void:
 					)
 					batch_candidate.call("set_value", addition_key, addition_value)
 				overlay_batch_total_usec += Time.get_ticks_usec() - batch_started_usec
+				var transaction_path_clones: int = int(batch_candidate.call("get_stats").get("path_container_clone_count", 0))
+				batch_path_clone_total += transaction_path_clones
+				_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
+				_expect(
+					transaction_path_clones == OVERLAY_UPDATE_COUNT * 5,
+					"nested COW fixture %d sample %d transaction %d clones exactly five containers per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
 
 				var checksum_keys: Array[String] = []
 				checksum_keys.append_array(update_keys)
@@ -915,6 +918,7 @@ func _benchmark_overlay_nested_cow() -> void:
 			"nested_payload_values_per_record": 80,
 			"batch_path_container_clones_per_sample": batch_path_clone_total,
 			"expected_batch_path_container_clones_per_sample": expected_batch_path_clones,
+			"path_clone_stats_collected_outside_timing": true,
 			"dictionary_to_overlay_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
 			"dictionary_to_batch_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_batch_p50)),
 			"depth_eight_compaction_included": true,
