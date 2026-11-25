@@ -1,3 +1,40 @@
+## Run 421 — authoritative live-state reconciliation (2026-11-25)
+
+This section is the current checkpoint and supersedes earlier status statements below where they conflict. Historical sections are retained for auditability.
+
+### Repository and root PR #334
+
+- Repository: `qaqp980520-prog/2126-Survival`; current `main`: `7e0eedd2d8ef126ee38f30350fe115814da7c313`.
+- Root branch: `integration/backrooms-production-world-and-transition-2026-11-12`; live branch HEAD at the start of Run 421: `8efb5303e95929b16335a31e5e168e444ac52817`.
+- PR #334 is Open / Ready for Review / Mergeable / Unmerged; base is `main`; compare is 113 ahead / 0 behind / 27 changed paths.
+- Exact-head Godot 4.3 Full Compatibility Gate: [run #45528695970](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45528695970), job `138918318106`: 555/555 steps successful, 0 failed, 0 skipped.
+- Exact-commit PR-triggered workflow matrix: 19/19 successful.
+- Full Gate log audited: 7,703,107 characters / 84,264 lines / 77,885 PASS markers. After excluding echoed workflow shell guards: 0 actual Godot Script / Parse / Runtime / ERROR / FAIL diagnostics; 0 ObjectDB leaks; 0 Orphan StringName diagnostics.
+- 23 Godot warnings remain and are not claimed fixed: 19 filled `draw_rect()` width warnings, 1 nested KROLL project notice, 1 mineral stale-unload rollback warning, and 2 synchronous mineral-registration rollback warnings. The runner also emitted a Node.js 20 deprecation notice; it is not a Godot runtime warning.
+- This root validation is headless Godot 4.3. No dedicated Xvfb/Mesa render, hardware GPU, FPS, mobile-device, or final visual QA is claimed.
+- Independent review submissions / inline review threads on #334: 0 / 0. Ready for Review is not approval.
+
+### Child PR #335 and synchronization PR #432
+
+- PR #335 branch: `fix/backrooms-return-session-rollback-2026-11-12`, live branch HEAD `3c59d117d1b0912c902529dbb800d01e662f91ef`; Open / Draft / Unmerged.
+- PR #335 metadata currently reports base SHA `7859d9db78648c7d657f8aab91c97592a00228b3`, while the live base branch endpoint for the same base ref reports root HEAD `8efb5303e95929b16335a31e5e168e444ac52817`. This API-level base-SHA discrepancy is recorded rather than silently reconciled. Do not merge #335 until it is resolved by a fresh compare and exact-head validation.
+- Sync PR [#432](https://github.com/qaqp980520-prog/2126-Survival/pull/432) targets the #335 feature branch, not main. Its live HEAD is `1121e7ef9b532e849dde005ccf3bcc901aefdc90`; its ordered parents are current root #334 HEAD `8efb5303e95929b16335a31e5e168e444ac52817` followed by #335 child HEAD `3c59d117d1b0912c902529dbb800d01e662f91ef`.
+- PR #432 is Open / Ready for Review / Mergeable / Unmerged; compare #335 branch → #432 branch is 3 ahead / 0 behind with exactly one changed path, the inherited root integration document.
+- Exact-head Godot 4.3 Full Gate: [run #45532705664](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45532705664), job `138931688791`: 555/555 steps successful, 0 failed, 0 skipped. This synchronization PR produced one Full Gate workflow; no 19/19 workflow-matrix claim is made.
+- Full Gate log audited: 7,703,106 characters / 84,264 lines / 77,885 PASS markers. After excluding echoed workflow shell guards: 0 actual Godot Script / Parse / Runtime / ERROR / FAIL diagnostics; 0 ObjectDB leaks; 0 Orphan StringName diagnostics.
+- The same 23 Godot warnings remain; none is claimed fixed.
+- The three child #335 blobs are preserved exactly: transition-manager doc `5d864e74c5845360f8b57723d370bd115f3c1e64`, runtime `187ad64d1c5cbc7f1132c58ff3c17c9e3deb0357`, and tests `adc6693288b027f8af99915de5159cd7fd6fa3a6`.
+- Independent review submissions / inline threads on #335 and #432: 0 / 0. #335 remains Draft. #432's Ready status is not approval.
+
+### Release boundary and next gate
+
+- The live `main` branch endpoint reports `protected: false`. The branch-protection detail endpoint returns HTTP 403 to this GitHub App; no branch-protection write operation is available. No protection change is claimed.
+- No PR or main merge occurred in this checkpoint.
+- Before #432 is integrated into #335, require independent review and resolve the #335 base-SHA discrepancy. After integration, rerun #335's exact new HEAD and full-log audit before advancing to #336.
+- Do not merge the root or any descendant to `main` until an authorized repository administrator enables required reviews and status checks.
+
+---
+
 # M0.1.138 — Backrooms Root PR Current-Main Ancestry Sync
 
 ## Purpose
