@@ -82,4 +82,15 @@ godot --headless --path . --script res://tests/surface_terrain_adjacency_delta_b
 - Working branch: `work/pr438-batch-nested-patch-2026-11-25-run433`.
 - Backup branch: `backup/pr438-before-batch-nested-patch-2026-11-25-run433`.
 - No production behavior, main branch, or save schema is changed by this prototype.
-- Exact-head focused, production benchmark, and Full Compatibility Gate results are pending; no pass or performance improvement is claimed until all workflows finish and artifacts are inspected.
+## Exact-head validation
+
+The implementation and benchmark code were tested on code HEAD `25cdcd6f9e7b810d1ff24cacb4400f33567fae4f`:
+
+- Focused Godot 4.3 spatial-index workflow [45642336073](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45642336073): 14/14 steps, 4,893 PASS lines, zero FAIL/ERROR/SCRIPT ERROR diagnostics; the log includes the new batch contract assertions and all four nested-COW fixture records.
+- Production Surface Chunk Benchmark [45642336100](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45642336100): 11/11 steps, 301 PASS, 21 JSONL records, zero FAIL/ERROR/SCRIPT ERROR diagnostics. This is a baseline only; the overlay prototype is not wired into production.
+- Full Godot 4.3 Compatibility Gate [45642336138](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45642336138): 559/559 steps successful, 78,952 PASS lines, zero failed steps, zero skipped steps. The complete log was independently fetched and audited (7,806,627 characters / 85,364 lines); after excluding echoed shell-guard commands there are zero actual Godot Script/Parse/Runtime/ERROR/FAIL diagnostics, zero ObjectDB leaks, and zero Orphan StringName diagnostics.
+- The Full Gate has 23 existing Godot warnings: 19 filled-mode `draw_rect()` width warnings, 1 nested KROLL project warning, 1 stale mineral-unload rollback warning, and 2 synchronous mineral-registration rollback warnings. One GitHub Actions Node.js 20 deprecation warning also remains.
+- Focused artifact 15033489917 ZIP SHA-256: `2671291380da7fc3317f2b2c73f04785d837af1f5a5e056b53ea362e9ceb317b`.
+- Production artifact 15036490896 ZIP SHA-256: `9a4b7e686d1eaf66ea346a30e3a3f7e9611b759cf89d2548c4e73bacfe28ab7d`.
+- No local Godot executable is available; engine tests ran on GitHub Actions Godot 4.3.
+- A documentation-only follow-up commit records these results. It does not change the tested GDScript or test files; the Full Gate workflow also watches `docs/**`, so the documentation-only HEAD receives its own Full Gate run.
