@@ -37,7 +37,7 @@ func _run() -> void:
 func _benchmark_radius(holder: Node3D, radius: int) -> void:
 	var base_patches: Array[Node3D] = []
 	var base_ids: Dictionary = {}
-		for x in range(-radius, radius + 1):
+	for x in range(-radius, radius + 1):
 		for z in range(-radius, radius + 1):
 			var stable_id: String = _stable_id(x, z)
 			var patch: Node3D = _new_patch(holder, "R%d_X%d_Z%d" % [radius, x, z], x, z)
