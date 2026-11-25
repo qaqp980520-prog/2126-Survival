@@ -61,6 +61,16 @@ This is an orchestration contract, not yet a playable transition or scene owner.
 - Dependency remains PR #332 and its ancestors #331/#327. Godot 4.3 focused and Full Compatibility Gate are pending for the new child HEAD; no pass is claimed yet.
 
 
+## M0.0.8.3 — Fail-closed state after incomplete rollback
+
+- Added a dedicated `RECOVERY_REQUIRED` transition state. If a Director or Session snapshot cannot be restored and verified after a failed transaction, the manager no longer reports `IDLE` or `IN_BACKROOMS` from a partially mutated participant.
+- Portal prepare, portal commit, and surface return now fail closed with `recovery_required` while the manager is in this state; a fresh transition cannot start on top of uncertain world/session state.
+- Applied the fail-closed state to rejected portal consumption, rejected Session entry commit, failed SurfaceWorld restore callbacks, Session mutation during restore, and failed/incomplete return commit rollback.
+- Added three regressions for failed rollback after a mutating SurfaceWorld callback, failed `complete_return()`, and Session mutation during a successful callback. Each proves the manager enters `RECOVERY_REQUIRED` and refuses another return attempt.
+- Updated files: `systems/BackroomsTransitionManager.gd`, `tests/backrooms_transition_manager_test.gd`, and this version record.
+- Dependency: PR #334 production Backrooms/SurfaceWorld integration and PR #335 return-side Session rollback.
+- Validation: pending exact-head Godot 4.3 Full Gate and full-log audit. No local Godot executable is available.
+
 ## M0.0.8.2 — Return-side Session rollback hardening
 
 - Before invoking the SurfaceWorld restore callback, the manager now requires a non-empty Session save snapshot and a load/restore method. A missing rollback contract fails closed before changing the SurfaceWorld.

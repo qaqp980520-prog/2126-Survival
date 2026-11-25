@@ -87,6 +87,7 @@ class MutatingReturnSession extends RefCounted:
 	var surface_world_seed: int = 20261112
 	var backrooms_seed: int = 1202677
 	var mutation_marker: String = "original"
+	var reject_restore: bool = false
 
 	func is_active() -> bool:
 		return active
@@ -120,10 +121,13 @@ class MutatingReturnSession extends RefCounted:
 			"backrooms_position": [0.0, 0.0, 0.0],
 			"surface_world_seed": surface_world_seed,
 			"backrooms_seed": backrooms_seed,
-			"mutation_marker": mutation_marker
+			"mutation_marker": mutation_marker,
+			"reject_restore": reject_restore
 		}
 
 	func load_save_dict(payload: Dictionary) -> bool:
+		if reject_restore:
+			return false
 		if int(payload.get("schema_version", 0)) != 1:
 			return false
 		var return_value: Variant = payload.get("surface_return_position", null)
@@ -202,6 +206,9 @@ func _initialize() -> void:
 	_test_return_commit_failure_restores_session_snapshot()
 	_test_return_callback_failure_restores_mutated_session()
 	_test_return_requires_snapshot_contract_before_surface_restore()
+	_test_failed_return_callback_rollback_enters_recovery_required()
+	_test_failed_return_commit_rollback_enters_recovery_required()
+	_test_failed_return_context_rollback_enters_recovery_required()
 	print("Backrooms transition manager tests passed.")
 	quit(0)
 
@@ -417,6 +424,61 @@ func _mutate_session_then_fail(context: Dictionary, session: RefCounted) -> bool
 	session.set("backrooms_seed", 0)
 	session.set("mutation_marker", "callback_mutated")
 	return false
+
+
+func _mutate_session_then_succeed(context: Dictionary, session: RefCounted) -> bool:
+	assert(context.has("surface_return_position"))
+	session.set("active", false)
+	session.set("level_id", "")
+	session.set("entry_portal_id", 0)
+	session.set("surface_return_position", Vector3.ZERO)
+	session.set("surface_world_seed", 0)
+	session.set("backrooms_seed", 0)
+	session.set("mutation_marker", "callback_mutated")
+	return true
+
+
+func _test_failed_return_callback_rollback_enters_recovery_required() -> void:
+	var session = MutatingReturnSession.new()
+	session.reject_restore = true
+	var manager = ManagerScript.new(session)
+	_restore_calls = 0
+	var callback := Callable(self, "_mutate_session_then_fail").bind(session)
+	var result: Dictionary = manager.return_to_surface(callback)
+	assert(not bool(result.get("ok", false)))
+	assert(not bool(result.get("rollback_complete", true)))
+	assert(str(result.get("reason", "")) == "surface_restore_failed")
+	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
+	var retry: Dictionary = manager.return_to_surface(Callable(self, "_restore_surface"))
+	assert(str(retry.get("reason", "")) == "recovery_required")
+
+
+func _test_failed_return_commit_rollback_enters_recovery_required() -> void:
+	var session = MutatingReturnSession.new()
+	session.reject_restore = true
+	var manager = ManagerScript.new(session)
+	_restore_result = true
+	_restore_calls = 0
+	var result: Dictionary = manager.return_to_surface(Callable(self, "_restore_surface"))
+	assert(not bool(result.get("ok", false)))
+	assert(bool(result.get("surface_restored", false)))
+	assert(not bool(result.get("rollback_complete", true)))
+	assert(str(result.get("reason", "")) == "session_return_commit_failed_after_surface_restore")
+	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
+
+
+func _test_failed_return_context_rollback_enters_recovery_required() -> void:
+	var session = MutatingReturnSession.new()
+	session.reject_restore = true
+	var manager = ManagerScript.new(session)
+	_restore_calls = 0
+	var callback := Callable(self, "_mutate_session_then_succeed").bind(session)
+	var result: Dictionary = manager.return_to_surface(callback)
+	assert(not bool(result.get("ok", false)))
+	assert(bool(result.get("surface_restored", false)))
+	assert(not bool(result.get("rollback_complete", true)))
+	assert(str(result.get("reason", "")) == "session_changed_during_surface_restore")
+	assert(manager.get_state_name() == "RECOVERY_REQUIRED")
 
 
 func _restore_surface(context: Dictionary) -> bool:

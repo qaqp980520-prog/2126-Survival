@@ -8,7 +8,8 @@ const SessionScript = preload("res://systems/BackroomsLocationSession.gd")
 enum TransitionState {
 	IDLE,
 	ENTRY_PREPARED,
-	IN_BACKROOMS
+	IN_BACKROOMS,
+	RECOVERY_REQUIRED
 }
 
 var session: RefCounted
@@ -37,6 +38,8 @@ func prepare_portal_entry(
 	entry_position: Vector3 = Vector3.ZERO
 ) -> Dictionary:
 	last_error = ""
+	if state == TransitionState.RECOVERY_REQUIRED:
+		return _failure("recovery_required")
 	if state != TransitionState.IDLE or bool(session.call("is_active")):
 		return _failure("transition_busy")
 	if director == null or not is_instance_valid(director) or not director.has_method("preview_portal_entry"):
@@ -72,6 +75,8 @@ func commit_portal_entry(
 	entry_position: Vector3 = Vector3.ZERO
 ) -> Dictionary:
 	last_error = ""
+	if state == TransitionState.RECOVERY_REQUIRED:
+		return _failure("recovery_required")
 	if state != TransitionState.ENTRY_PREPARED:
 		return _failure("entry_not_prepared")
 	if director == null or not is_instance_valid(director) or director.get_instance_id() != _pending_director_instance_id:
@@ -108,7 +113,7 @@ func commit_portal_entry(
 		var consume_reason: String = str(consumed.get("reason", "portal_consumption_rejected")) if consumed is Dictionary else "portal_consumption_invalid"
 		var consume_rollback_complete: bool = _restore_director_snapshot(director, director_snapshot)
 		_clear_pending()
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		_set_state_after_failed_rollback(bool(session.call("is_active")), consume_rollback_complete)
 		last_error = consume_reason
 		return {
 			"ok": false,
@@ -119,7 +124,7 @@ func commit_portal_entry(
 		var director_restored: bool = _restore_director_snapshot(director, director_snapshot)
 		var session_restored: bool = _restore_session_snapshot(session_snapshot)
 		_clear_pending()
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		_set_state_after_failed_rollback(bool(session.call("is_active")), director_restored and session_restored)
 		last_error = "session_commit_rejected_after_portal_consumption"
 		return {
 			"ok": false,
@@ -146,6 +151,8 @@ func cancel_prepared_entry() -> bool:
 ## A false result retains the complete Backrooms return context for retry.
 func return_to_surface(restore_surface: Callable) -> Dictionary:
 	last_error = ""
+	if state == TransitionState.RECOVERY_REQUIRED:
+		return _failure("recovery_required")
 	if state != TransitionState.IN_BACKROOMS or not bool(session.call("is_active")):
 		return _failure("backrooms_session_not_active")
 	if not restore_surface.is_valid():
@@ -162,7 +169,7 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	var restored: Variant = restore_surface.call(return_context.duplicate(true))
 	if not (restored is bool) or not bool(restored):
 		var callback_session_restored: bool = _restore_session_snapshot(session_snapshot)
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		_set_state_after_failed_rollback(bool(session.call("is_active")), callback_session_restored)
 		last_error = "surface_restore_failed"
 		return {
 			"ok": false,
@@ -174,7 +181,7 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	var current_return_context: Variant = session.call("get_return_context")
 	if not bool(session.call("is_active")) or current_return_context != return_context:
 		var changed_session_restored: bool = _restore_session_snapshot(session_snapshot)
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		_set_state_after_failed_rollback(bool(session.call("is_active")), changed_session_restored)
 		last_error = "session_changed_during_surface_restore"
 		return {
 			"ok": false,
@@ -198,7 +205,7 @@ func return_to_surface(restore_surface: Callable) -> Dictionary:
 	)
 	if not bool(completed.get("ok", false)) or not session_cleared:
 		var completed_session_restored: bool = _restore_session_snapshot(session_snapshot)
-		state = TransitionState.IN_BACKROOMS if bool(session.call("is_active")) else TransitionState.IDLE
+		_set_state_after_failed_rollback(bool(session.call("is_active")), completed_session_restored)
 		last_error = "session_return_commit_failed_after_surface_restore" if not bool(completed.get("ok", false)) else "session_return_commit_incomplete_after_surface_restore"
 		return {
 			"ok": false,
@@ -220,6 +227,8 @@ func get_state_name() -> String:
 			return "ENTRY_PREPARED"
 		TransitionState.IN_BACKROOMS:
 			return "IN_BACKROOMS"
+		TransitionState.RECOVERY_REQUIRED:
+			return "RECOVERY_REQUIRED"
 		_:
 			return "IDLE"
 
@@ -231,6 +240,12 @@ func get_session_save_dict() -> Dictionary:
 
 func get_last_error() -> String:
 	return last_error
+
+func _set_state_after_failed_rollback(session_active: bool, rollback_complete: bool) -> void:
+	if not rollback_complete:
+		state = TransitionState.RECOVERY_REQUIRED
+	else:
+		state = TransitionState.IN_BACKROOMS if session_active else TransitionState.IDLE
 
 func _restore_director_snapshot(director: RefCounted, snapshot: Dictionary) -> bool:
 	if director == null or not is_instance_valid(director) or not director.has_method("load_save_dict"):
