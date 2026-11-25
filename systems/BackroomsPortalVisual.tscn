@@ -27,7 +27,7 @@ size = Vector2(1.1, 1.7)
 radius = 1.25
 
 [node name="BackroomsPortalVisual" type="Area3D"]
-collision_layer = 0
+collision_layer = 2
 collision_mask = 1
 script = ExtResource("1_portal_script")
 
