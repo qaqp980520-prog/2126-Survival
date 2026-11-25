@@ -10,6 +10,7 @@ const OVERLAY_UPDATE_COUNT: int = 8
 const OVERLAY_REMOVE_COUNT: int = 4
 const OVERLAY_ADD_COUNT: int = 4
 const OVERLAY_LOOKUP_COUNT: int = 32
+const OVERLAY_MISSING_SENTINEL: String = "__overlay_missing_sentinel__"
 const RADII: Array[int] = [1, 2, 3, 4, 8]
 const SAMPLE_COUNT: int = 5
 
@@ -568,8 +569,8 @@ func _overlay_dictionary_checksum(source: Dictionary, fixture_size: int, sample_
 	var checksum: int = 0
 	for index in range(lookup_count):
 		var key: String = "patch/%05d" % ((index * 7919 + sample_index * 13) % fixture_size)
-		var value: Variant = source.get(key, null)
-		if value is Dictionary:
+		var value: Variant = source.get(key, OVERLAY_MISSING_SENTINEL)
+		if value != OVERLAY_MISSING_SENTINEL and value is Dictionary:
 			checksum += int(value.get("revision", 0))
 	return checksum
 
@@ -578,8 +579,7 @@ func _overlay_map_checksum(source: RefCounted, fixture_size: int, sample_index: 
 	var checksum: int = 0
 	for index in range(lookup_count):
 		var key: String = "patch/%05d" % ((index * 7919 + sample_index * 13) % fixture_size)
-		if bool(source.call("has_key", key)):
-			var value: Variant = source.call("get_value", key)
-			if value is Dictionary:
-				checksum += int(value.get("revision", 0))
+		var value: Variant = source.call("get_value", key, OVERLAY_MISSING_SENTINEL)
+		if value != OVERLAY_MISSING_SENTINEL and value is Dictionary:
+			checksum += int(value.get("revision", 0))
 	return checksum
