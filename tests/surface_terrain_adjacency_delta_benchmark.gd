@@ -571,7 +571,7 @@ func _overlay_dictionary_checksum(source: Dictionary, fixture_size: int, sample_
 	for index in range(lookup_count):
 		var key: String = "patch/%05d" % ((index * 7919 + sample_index * 13) % fixture_size)
 		var value: Variant = source.get(key, OVERLAY_MISSING_SENTINEL)
-		if value != OVERLAY_MISSING_SENTINEL and value is Dictionary:
+		if value is Dictionary:
 			checksum += int(value.get("revision", 0))
 	return checksum
 
@@ -581,7 +581,7 @@ func _overlay_map_checksum(source: RefCounted, fixture_size: int, sample_index: 
 	for index in range(lookup_count):
 		var key: String = "patch/%05d" % ((index * 7919 + sample_index * 13) % fixture_size)
 		var value: Variant = source.call("get_value", key, OVERLAY_MISSING_SENTINEL)
-		if value != OVERLAY_MISSING_SENTINEL and value is Dictionary:
+		if value is Dictionary:
 			checksum += int(value.get("revision", 0))
 	return checksum
 
