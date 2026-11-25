@@ -547,6 +547,58 @@ func _test_patch_size_cache_after_emptying_index() -> void:
 	await process_frame
 
 
+func _run_reverse_index_corruption_guard_test(
+	holder: Node3D,
+	patches: Array[Node3D],
+	stable_ids: Dictionary
+) -> void:
+	var guard_index = IndexScript.new()
+	var rebuild: Dictionary = guard_index.rebuild(patches, stable_ids)
+	_expect(bool(rebuild.get("ok", false)), "reverse-index corruption guard fixture rebuilds")
+	if not bool(rebuild.get("ok", false)):
+		return
+	var reverse_index: Dictionary = guard_index.get_junction_to_report_stable_ids()
+	var junction_keys: Array = reverse_index.keys()
+	junction_keys.sort()
+	if junction_keys.is_empty():
+		_expect(false, "reverse-index corruption guard fixture has at least one Junction")
+		return
+	var junction_key: String = str(junction_keys[0])
+	var stable_id_values: Variant = reverse_index.get(junction_key, [])
+	if not (stable_id_values is Array) or stable_id_values.is_empty():
+		_expect(false, "reverse-index corruption guard fixture has a Stable ID membership")
+		return
+	var stable_id: String = str(stable_id_values[0])
+	var original_patch: Node3D = guard_index.get_patch(stable_id)
+	if not is_instance_valid(original_patch):
+		_expect(false, "reverse-index corruption guard resolves the original Patch")
+		return
+	var replacement: Node3D = _new_patch(holder, "ReverseIndexCorruptReplacement", original_patch.position)
+	var original_state: Dictionary = original_patch.call("get_world_object_state")
+	_expect(bool(replacement.call("apply_world_object_state", original_state)), "reverse-index corruption guard replacement copies the original Patch state")
+	await process_frame
+	var corrupted_reverse_index: Dictionary = guard_index._junction_to_report_stable_ids.duplicate(true)
+	var corrupted_stable_ids: Array = corrupted_reverse_index.get(junction_key, []).duplicate()
+	corrupted_stable_ids.erase(stable_id)
+	if corrupted_stable_ids.is_empty():
+		corrupted_reverse_index.erase(junction_key)
+	else:
+		corrupted_reverse_index[junction_key] = corrupted_stable_ids
+	guard_index._junction_to_report_stable_ids = corrupted_reverse_index
+	var rejected: Dictionary = guard_index.plan_delta(
+		[stable_id],
+		[{"stable_id": stable_id, "patch": replacement}],
+		true
+	)
+	_expect(
+		not bool(rejected.get("ok", true))
+		and str(rejected.get("error", "")) == "committed_corner_report_reverse_index_inconsistent",
+		"delta planning fails closed when a committed Junction-to-report membership is missing"
+	)
+	replacement.queue_free()
+	await process_frame
+
+
 func _run_persistent_corner_graph_tests() -> void:
 	var graph_holder := Node3D.new()
 	graph_holder.name = "PersistentCornerGraphTestRoot"
@@ -604,6 +656,13 @@ func _run_persistent_corner_graph_tests() -> void:
 		graph_index.get_corner_reports_by_stable_id() == initial_report_oracle.get("reports_by_stable_id", {}),
 		"persistent corner report cache matches the full resolver oracle after rebuild"
 	)
+	_assert_report_reverse_index_parity(
+		graph_index,
+		initial_report_oracle.get("reports_by_stable_id", {}),
+		"initial persistent graph rebuild"
+	)
+	var initial_report_reverse_index: Dictionary = graph_index.get_junction_to_report_stable_ids()
+	await _run_reverse_index_corruption_guard_test(graph_holder, grid_patches, grid_ids)
 	var isolated_edge_key: String = ""
 	var grid_seed_edge_key: String = ""
 	for edge_key_value in descriptors.keys():
@@ -650,15 +709,29 @@ func _run_persistent_corner_graph_tests() -> void:
 		var candidate_reports_by_id: Dictionary = {}
 		if pending_plan_value is Dictionary:
 			candidate_reports_by_id = pending_plan_value.get("candidate_corner_reports_by_stable_id", {})
-		var expected_report_bucket_visits: int = graph_index._corner_reports_by_stable_id.size() + candidate_reports_by_id.size()
-		var expected_report_visits: int = _count_report_entries(graph_index._corner_reports_by_stable_id) + _count_report_entries(candidate_reports_by_id)
+		var candidate_reverse_index: Dictionary = pending_plan_value.get("candidate_junction_to_report_stable_ids", {}) if pending_plan_value is Dictionary else {}
+		var closure_junction_set: Dictionary = {}
+		for junction_key in closure_junctions:
+			closure_junction_set[str(junction_key)] = true
+		var expected_report_bucket_visits: int = (
+			_expected_report_bucket_visits(graph_index._junction_to_report_stable_ids, closure_junction_set)
+			+ _expected_report_bucket_visits(candidate_reverse_index, closure_junction_set)
+		)
+		var expected_report_visits: int = (
+			_expected_report_visit_count(graph_index._corner_reports_by_stable_id, graph_index._junction_to_report_stable_ids, closure_junction_set)
+			+ _expected_report_visit_count(candidate_reports_by_id, candidate_reverse_index, closure_junction_set)
+		)
 		_expect(int(graph_profile_counts.get("candidate_entries_shallow_copied", -1)) == grid_patches.size(), "delta profile counts the full candidate entry map copy")
 		_expect(int(graph_profile_counts.get("candidate_instance_records_scanned", -1)) == grid_patches.size() - 1, "delta profile counts post-removal instance records scanned")
-		_expect(int(graph_profile_counts.get("corner_report_buckets_visited", -1)) == expected_report_bucket_visits, "delta profile counts every old and candidate report bucket visited")
-		_expect(int(graph_profile_counts.get("corner_reports_visited", -1)) == expected_report_visits, "delta profile counts every old and candidate report visited")
+		_expect(int(graph_profile_counts.get("corner_report_buckets_visited", -1)) == expected_report_bucket_visits, "delta profile visits only Stable-ID report buckets linked to the affected Junction closure")
+		_expect(int(graph_profile_counts.get("corner_reports_visited", -1)) == expected_report_visits, "delta profile visits only reports in the affected Stable-ID buckets")
+		_expect(int(graph_profile_counts.get("corner_report_reverse_junctions_visited", -1)) == closure_junctions.size() * 2, "delta profile counts the old and candidate reverse-index Junction lookups")
+		_expect(int(graph_profile_counts.get("corner_report_reverse_index_keys_shallow_copied", -1)) == graph_index._junction_to_report_stable_ids.size(), "delta profile exposes the remaining reverse-index top-level copy size")
+		_expect(_count_reverse_index_memberships(candidate_reverse_index) == int(pending_plan_value.get("candidate_corner_report_index_membership_count", -1)), "candidate reverse-index membership count matches its arrays")
 		_expect(int(graph_profile_counts.get("closure_edges_visited", -1)) == closure_edges.size(), "delta profile reports the exact union-closure edge count")
 		_expect(int(graph_profile_counts.get("closure_junctions_visited", -1)) == closure_junctions.size(), "delta profile reports the exact union-closure junction count")
 		_expect(int(graph_profile_counts.get("corner_report_count_full_scan_entries", -1)) == 0, "delta profile confirms report-count maintenance performs no full report-bucket count scan")
+		_expect(graph_index.get_junction_to_report_stable_ids() == initial_report_reverse_index, "detached plan leaves the committed reverse index unchanged before publish")
 		var reservation: Dictionary = graph_index.reserve_delta(plan_id)
 		_expect(bool(reservation.get("ok", false)), "prepared delta reserves the committed index generation")
 		var competing_patch: Node3D = _new_patch(graph_holder, "CompetingPatch", Vector3(200.0, 0.0, 0.0))
@@ -684,9 +757,13 @@ func _run_persistent_corner_graph_tests() -> void:
 		var published: Dictionary = graph_index.publish_delta(plan_id)
 		_expect(bool(published.get("ok", false)), "reserved delta publishes the candidate corner graph atomically with the index")
 		_expect(int(graph_index.get_corner_graph_stats().get("report_count", -1)) == 2, "published candidate uses the incrementally maintained corner report count")
+		_expect(graph_index.get_junction_to_report_stable_ids() == candidate_reverse_index, "publish installs the candidate Junction-to-report reverse index")
+		_expect(int(graph_index.get_corner_graph_stats().get("report_index_membership_count", -1)) == _count_reverse_index_memberships(candidate_reverse_index), "publish installs the candidate reverse-index membership count")
 		var rolled_back: Dictionary = graph_index.rollback_published_delta(plan_id)
 		_expect(bool(rolled_back.get("ok", false)), "published corner graph delta can roll back to the prior snapshot")
 		_expect(int(graph_index.get_corner_graph_stats().get("report_count", -1)) == 8, "rollback restores the exact cached corner report count")
+		_expect(graph_index.get_junction_to_report_stable_ids() == initial_report_reverse_index, "rollback restores the exact pre-publish Junction-to-report reverse index")
+		_expect(int(graph_index.get_corner_graph_stats().get("report_index_membership_count", -1)) == _count_reverse_index_memberships(initial_report_reverse_index), "rollback restores the exact reverse-index membership count")
 		var retry_delta: Dictionary = graph_index.plan_delta(
 			["grid/top_center"],
 			[{"stable_id": "grid/top_center", "patch": replacement}]
@@ -695,6 +772,7 @@ func _run_persistent_corner_graph_tests() -> void:
 		var retry_plan_id: String = str(retry_delta.get("summary", {}).get("plan_id", ""))
 		var committed: Dictionary = graph_index.commit_delta(retry_plan_id)
 		_expect(bool(committed.get("ok", false)), "retried corner graph delta commits after a successful rollback")
+		_assert_report_reverse_index_parity(graph_index, graph_index.get_corner_reports_by_stable_id(), "retried corner graph commit")
 		if bool(competing_plan.get("ok", false)):
 			var stale_competing: Dictionary = graph_index.commit_delta(str(competing_plan.get("summary", {}).get("plan_id", "")))
 			_expect(
@@ -734,6 +812,11 @@ func _run_persistent_corner_graph_tests() -> void:
 		_expect(
 			graph_index.get_corner_reports_by_stable_id() == committed_report_oracle.get("reports_by_stable_id", {}),
 			"persistent corner report cache matches the full resolver oracle after the delta"
+		)
+		_assert_report_reverse_index_parity(
+			graph_index,
+			committed_report_oracle.get("reports_by_stable_id", {}),
+			"persistent graph after committed delta"
 		)
 		top_center.queue_free()
 		if is_instance_valid(competing_patch):
@@ -959,12 +1042,74 @@ func _count_report_entries(reports_by_stable_id: Dictionary) -> int:
 	return count
 
 
+func _count_reverse_index_memberships(reverse_index: Dictionary) -> int:
+	var count: int = 0
+	for stable_ids_value in reverse_index.values():
+		if stable_ids_value is Array:
+			count += stable_ids_value.size()
+	return count
+
+
+func _expected_report_bucket_visits(
+	reverse_index: Dictionary,
+	selected_junctions: Dictionary
+) -> int:
+	var selected_stable_ids: Dictionary = {}
+	for junction_key in selected_junctions:
+		for stable_id_value in reverse_index.get(str(junction_key), []):
+			selected_stable_ids[str(stable_id_value)] = true
+	return selected_stable_ids.size()
+
+
+func _expected_report_visit_count(
+	reports_by_stable_id: Dictionary,
+	reverse_index: Dictionary,
+	selected_junctions: Dictionary
+) -> int:
+	var selected_stable_ids: Dictionary = {}
+	for junction_key in selected_junctions:
+		for stable_id_value in reverse_index.get(str(junction_key), []):
+			selected_stable_ids[str(stable_id_value)] = true
+	var count: int = 0
+	for stable_id in selected_stable_ids:
+		var reports_value: Variant = reports_by_stable_id.get(str(stable_id), [])
+		if reports_value is Array:
+			count += reports_value.size()
+	return count
+
+
+func _assert_report_reverse_index_parity(index, reports_by_stable_id: Dictionary, label: String) -> void:
+	var expected: Dictionary = {}
+	var expected_memberships: int = 0
+	for stable_id in reports_by_stable_id:
+		var reports_value: Variant = reports_by_stable_id[stable_id]
+		if not (reports_value is Array):
+			continue
+		for report_value in reports_value:
+			if not (report_value is Dictionary):
+				continue
+			var junction_key: String = str(report_value.get("junction_key", ""))
+			if junction_key.is_empty():
+				continue
+			if not expected.has(junction_key):
+				expected[junction_key] = []
+			var stable_ids: Array = expected[junction_key]
+			if not stable_ids.has(str(stable_id)):
+				stable_ids.append(str(stable_id))
+				stable_ids.sort()
+				expected[junction_key] = stable_ids
+				expected_memberships += 1
+	_expect(index.get_junction_to_report_stable_ids() == expected, label + ": Junction-to-report reverse index matches the report cache")
+	_expect(int(index.get_corner_graph_stats().get("report_index_membership_count", -1)) == expected_memberships, label + ": reverse-index membership count matches the oracle")
+
+
 func _assert_matches_full_rebuild_oracle(index, patches: Array[Node3D], stable_ids: Dictionary, label: String) -> void:
 	var oracle_report: Dictionary = BinderScript.bind_patches(patches, stable_ids)
 	_expect(bool(oracle_report.get("ok", false)), label + ": full-rebuild binder oracle succeeds")
 	var oracle_descriptors: Dictionary = oracle_report.get("descriptors", {})
 	var indexed_descriptors: Dictionary = index.get_edge_descriptors()
 	_expect(oracle_descriptors == indexed_descriptors, label + ": delta index descriptor map matches the full-rebuild oracle")
+	_assert_report_reverse_index_parity(index, index.get_corner_reports_by_stable_id(), label)
 
 
 func _new_patch(holder: Node3D, patch_name: String, patch_position: Vector3) -> Node3D:
