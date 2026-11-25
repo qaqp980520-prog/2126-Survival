@@ -1193,6 +1193,11 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(bool(nested_child.call("mutate_value", "array", child_array_mutator)), "child commits a nested Array mutation")
 	_expect(nested_root.call("get_value", "array", []).size() == 1, "child Array mutation does not leak into its parent")
 
+	var external_input: Dictionary = {"items": [10]}
+	_expect(bool(nested_child.call("set_value", "external_input", external_input)), "overlay accepts a caller-owned nested Dictionary")
+	external_input["items"].append(11)
+	_expect(nested_child.call("get_value", "external_input", {}).get("items", []) == [10], "set_value isolates caller-owned nested containers")
+
 	var nested_grandchild: RefCounted = nested_child.call("fork")
 	var grandchild_mutator: Callable = func(value: Variant) -> bool:
 		if not value is Dictionary:
@@ -1204,11 +1209,6 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(bool(nested_grandchild.call("mutate_value", "nested", grandchild_mutator)), "grandchild commits its own nested mutation")
 	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "grandchild copy-on-write preserves the parent-local Array")
 	_expect(nested_grandchild.call("get_value", "nested", {}).get("values", []) == [1, 2, 3, 4], "grandchild publishes only its own nested mutation")
-
-	var external_input: Dictionary = {"items": [10]}
-	_expect(bool(nested_child.call("set_value", "external_input", external_input)), "overlay accepts a caller-owned nested Dictionary")
-	external_input["items"].append(11)
-	_expect(nested_child.call("get_value", "external_input", {}).get("items", []) == [10], "set_value isolates caller-owned nested containers")
 
 	var materialized_nested: Dictionary = nested_child.call("materialize")
 	materialized_nested["nested"]["values"].append(50)
