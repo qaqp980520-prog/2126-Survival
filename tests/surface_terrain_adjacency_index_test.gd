@@ -5,6 +5,7 @@ const BinderScript = preload("res://systems/SurfaceTerrainAdjacencyBinder.gd")
 const IndexScript = preload("res://systems/SurfaceTerrainAdjacencyIndex.gd")
 const CornerResolverScript = preload("res://systems/SurfaceTerrainCornerConflictResolver.gd")
 const AffectedComponentPlannerScript = preload("res://systems/SurfaceTerrainAffectedComponentPlanner.gd")
+const OverlayMapScript = preload("res://systems/SurfaceTerrainOverlayMap.gd")
 
 class AlternateSizePatch:
 	extends Node3D
@@ -34,6 +35,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	_run_overlay_map_contract_tests()
 	var holder := Node3D.new()
 	holder.name = "TerrainAdjacencyIndexTestRoot"
 	root.add_child(holder)
@@ -1126,3 +1128,316 @@ func _expect(condition: bool, description: String) -> void:
 	else:
 		failures.append(description)
 		push_error("FAIL: " + description)
+
+
+func _run_overlay_map_contract_tests() -> void:
+	var source: Dictionary = {
+		"keep": 1,
+		"replace": 2,
+		"remove": 3,
+		"false_value": false,
+		"null_value": null
+	}
+	var root_map: RefCounted = OverlayMapScript.new(source)
+	source["external_mutation"] = 99
+	_expect(not bool(root_map.call("has_key", "external_mutation")), "overlay root isolates the source Dictionary")
+	_expect(int(root_map.call("size")) == 5, "overlay root caches its visible size")
+	_expect(bool(root_map.call("has_key", "null_value")), "overlay distinguishes present null from an absent key")
+	_expect(root_map.call("get_value", "false_value", true) == false, "overlay returns false values without using the fallback")
+	_expect(root_map.call("get_value", "missing_value", "__overlay_missing_sentinel__") == "__overlay_missing_sentinel__", "overlay returns the fallback for an absent key")
+	_expect(int(root_map.call("get_stats").get("base_keys_copied", -1)) == 5, "overlay root records its one-time base copy")
+
+	var nested_source: Dictionary = {
+		"nested": {"values": [1, 2], "meta": {"owner": "root"}},
+		"array": [{"value": 3}]
+	}
+	var nested_root: RefCounted = OverlayMapScript.new(nested_source)
+	nested_source["nested"]["values"].append(99)
+	nested_source["nested"]["meta"]["owner"] = "external"
+	nested_source["array"].append({"value": 99})
+	var root_nested: Dictionary = nested_root.call("get_value", "nested", {})
+	var root_array: Array = nested_root.call("get_value", "array", [])
+	_expect(root_nested.get("values", []) == [1, 2], "overlay root deep-copies nested Array values from the source")
+	_expect(root_nested.get("meta", {}).get("owner", "") == "root", "overlay root deep-copies nested Dictionary values from the source")
+	_expect(root_array.size() == 1, "overlay root isolates nested arrays in the source")
+	root_nested["values"].append(77)
+	root_array.append({"value": 77})
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "overlay get_value returns a detached nested Dictionary copy")
+	_expect(nested_root.call("get_value", "array", []).size() == 1, "overlay get_value returns a detached Array copy")
+
+	var nested_child: RefCounted = nested_root.call("fork")
+	var retained_child_values: Array = []
+	var child_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(3)
+		value["values"] = values
+		var metadata: Dictionary = value.get("meta", {})
+		metadata["owner"] = "child"
+		value["meta"] = metadata
+		retained_child_values.append(value)
+		return true
+	_expect(not bool(nested_root.call("mutate_value", "nested", child_mutator)), "sealed overlay snapshots reject nested mutation")
+	_expect(not bool(nested_child.call("mutate_value", "missing", child_mutator)), "nested mutation rejects absent keys")
+	_expect(bool(nested_child.call("mutate_value", "nested", child_mutator)), "child commits a nested Dictionary mutation")
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "child copy-on-write does not mutate the sealed parent Array")
+	_expect(nested_root.call("get_value", "nested", {}).get("meta", {}).get("owner", "") == "root", "child copy-on-write does not mutate the sealed parent Dictionary")
+	retained_child_values[0]["values"].append(99)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "retained mutator reference cannot mutate the committed snapshot")
+	var child_array_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Array:
+			return false
+		value.append({"value": 4})
+		return true
+	_expect(bool(nested_child.call("mutate_value", "array", child_array_mutator)), "child commits a nested Array mutation")
+	_expect(nested_root.call("get_value", "array", []).size() == 1, "child Array mutation does not leak into its parent")
+
+	var batch_root: RefCounted = OverlayMapScript.new({
+		"record": {"revision": 1, "samples": [2], "metadata": {"owner": "root", "obsolete": true}},
+		"items": [{"value": 3}, {"value": 8}]
+	})
+	var batch_child: RefCounted = batch_root.call("fork")
+	var inserted_batch_value: Dictionary = {"value": 5, "nested": [7]}
+	var batch_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["revision"], "value": 2},
+				{"op": "append", "path": ["samples"], "value": 5},
+				{"op": "set", "path": ["metadata", "owner"], "value": "batch"},
+				{"op": "erase", "path": ["metadata", "obsolete"]}
+			]
+		},
+		{
+			"key": "items",
+			"operations": [
+				{"op": "set", "path": [0, "value"], "value": 4},
+				{"op": "append", "path": [], "value": inserted_batch_value},
+				{"op": "erase", "path": [1]}
+			]
+		}
+	]
+	_expect(bool(batch_child.call("apply_nested_patches", batch_patches)), "batch nested patches atomically update multiple Dictionary and Array values")
+	inserted_batch_value["nested"].append(99)
+	var batch_record: Dictionary = batch_child.call("get_value", "record", {})
+	var batch_items: Array = batch_child.call("get_value", "items", [])
+	var batch_inserted_result: Dictionary = batch_items[1]
+	_expect(int(batch_record.get("revision", -1)) == 2, "batch nested set updates a Dictionary scalar")
+	_expect(batch_record.get("samples", []) == [2, 5], "batch nested append updates an Array path")
+	_expect(batch_record.get("metadata", {}).get("owner", "") == "batch" and not batch_record.get("metadata", {}).has("obsolete"), "batch nested set and erase update nested Dictionary paths")
+	_expect(batch_items.size() == 2 and int(batch_items[0].get("value", -1)) == 4, "batch nested set updates an Array element")
+	_expect(batch_inserted_result.get("nested", []) == [7], "batch append clones caller-owned nested values")
+	_expect(batch_root.call("get_value", "record", {}).get("revision", -1) == 1, "batch commit does not mutate the sealed parent Dictionary")
+	_expect(batch_root.call("get_value", "items", []).size() == 2, "batch commit does not mutate the sealed parent Array")
+	_expect(int(batch_child.call("get_stats").get("local_write_count", 0)) == 2, "batch commit publishes all staged keys together")
+	_expect(int(batch_child.call("get_stats").get("path_container_clone_count", 0)) == 11, "batch clones only the root and edited Array/Dictionary path containers")
+	var path_payload_values: Array = []
+	for value_index in range(32):
+		path_payload_values.append(value_index)
+	var path_cow_root: RefCounted = OverlayMapScript.new({
+		"record": {
+			"revision": 1,
+			"metadata": {"owner": "root", "flags": ["stable", "shared"]},
+			"payload": {"branches": [{"values": path_payload_values}, {"values": [100, 101]}], "labels": ["a", "b", "c"]}
+		}
+	})
+	var path_cow_child: RefCounted = path_cow_root.call("fork")
+	var path_cow_initial_container_clones: int = int(path_cow_child.call("get_stats").get("container_clone_count", 0))
+	var path_cow_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["metadata", "owner"], "value": "child"},
+				{"op": "set", "path": ["revision"], "value": 2}
+			]
+		}
+	]
+	_expect(bool(path_cow_child.call("apply_nested_patches", path_cow_patches)), "path-level COW applies nested edits without cloning untouched payload branches")
+	var path_cow_stats: Dictionary = path_cow_child.call("get_stats")
+	_expect(int(path_cow_stats.get("path_container_clone_count", 0)) == 3, "path-level COW clones only root and edited metadata containers")
+	_expect(int(path_cow_stats.get("container_clone_count", 0)) == path_cow_initial_container_clones, "path-level COW performs no additional deep container clone while staging scalar edits")
+	var path_cow_parent_record: Dictionary = path_cow_root.call("get_value", "record", {})
+	var path_cow_child_record: Dictionary = path_cow_child.call("get_value", "record", {})
+	_expect(int(path_cow_parent_record.get("revision", -1)) == 1, "path-level COW leaves parent scalar values unchanged")
+	_expect(int(path_cow_child_record.get("revision", -1)) == 2, "path-level COW publishes the child scalar value")
+	_expect(path_cow_parent_record.get("payload", {}) == path_cow_child_record.get("payload", {}), "path-level COW preserves the complete untouched nested payload")
+	var detached_path_payload: Dictionary = path_cow_child_record.get("payload", {})
+	var detached_path_branches: Array = detached_path_payload.get("branches", [])
+	var detached_path_first_branch: Dictionary = detached_path_branches[0]
+	var detached_path_values: Array = detached_path_first_branch.get("values", [])
+	detached_path_values[0] = 999
+	detached_path_first_branch["values"] = detached_path_values
+	detached_path_branches[0] = detached_path_first_branch
+	detached_path_payload["branches"] = detached_path_branches
+	path_cow_child_record["payload"] = detached_path_payload
+	var child_after_detached_read: Dictionary = path_cow_child.call("get_value", "record", {})
+	var child_payload_after_detached_read: Dictionary = child_after_detached_read.get("payload", {})
+	var child_branches_after_detached_read: Array = child_payload_after_detached_read.get("branches", [])
+	var child_first_branch_after_detached_read: Dictionary = child_branches_after_detached_read[0]
+	var child_values_after_detached_read: Array = child_first_branch_after_detached_read.get("values", [])
+	_expect(int(child_values_after_detached_read[0]) == 0, "path-level COW still returns detached nested reads")
+	var failed_path_child: RefCounted = path_cow_root.call("fork")
+	var failed_path_before: Dictionary = failed_path_child.call("materialize")
+	var invalid_path_batch: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["metadata", "owner"], "value": "must_not_publish"},
+				{"op": "set", "path": ["payload", "branches", 0, "missing", 0], "value": 123}
+			]
+		}
+	]
+	_expect(not bool(failed_path_child.call("apply_nested_patches", invalid_path_batch)), "path-level COW rejects a later invalid nested path")
+	_expect(failed_path_child.call("materialize") == failed_path_before, "failed path-level COW batch leaves the complete candidate unchanged")
+	_expect(int(failed_path_child.call("get_stats").get("local_write_count", 0)) == 0, "failed path-level COW batch publishes no top-level writes")
+
+	var atomic_batch_root: RefCounted = OverlayMapScript.new({
+		"first": {"revision": 1},
+		"second": {"revision": 2}
+	})
+	var atomic_batch_child: RefCounted = atomic_batch_root.call("fork")
+	var invalid_batch: Array = [
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 99}]},
+		{"key": "second", "operations": [{"op": "set", "path": ["missing", "value"], "value": 99}]}
+	]
+	_expect(not bool(atomic_batch_child.call("apply_nested_patches", invalid_batch)), "batch rejects a later invalid path before publishing any staged key")
+	_expect(atomic_batch_child.call("get_value", "first", {}).get("revision", -1) == 1, "failed batch leaves an earlier staged key unchanged")
+	_expect(atomic_batch_child.call("get_value", "second", {}).get("revision", -1) == 2, "failed batch leaves the invalid target unchanged")
+	_expect(int(atomic_batch_child.call("get_stats").get("local_write_count", 0)) == 0, "failed batch publishes zero local writes")
+	var duplicate_key_batch: Array = [
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 3}]},
+		{"key": "first", "operations": [{"op": "set", "path": ["revision"], "value": 4}]}
+	]
+	_expect(not bool(atomic_batch_child.call("apply_nested_patches", duplicate_key_batch)), "batch rejects duplicate top-level keys")
+	batch_child.call("fork")
+	_expect(bool(batch_child.call("is_sealed")), "fork seals the batch-patched snapshot")
+	_expect(not bool(batch_child.call("apply_nested_patches", batch_patches)), "sealed overlay rejects a nested patch batch")
+
+	var external_input: Dictionary = {"items": [10]}
+	_expect(bool(nested_child.call("set_value", "external_input", external_input)), "overlay accepts a caller-owned nested Dictionary")
+	external_input["items"].append(11)
+	_expect(nested_child.call("get_value", "external_input", {}).get("items", []) == [10], "set_value isolates caller-owned nested containers")
+
+	var nested_grandchild: RefCounted = nested_child.call("fork")
+	var grandchild_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(4)
+		value["values"] = values
+		return true
+	_expect(bool(nested_grandchild.call("mutate_value", "nested", grandchild_mutator)), "grandchild commits its own nested mutation")
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "grandchild copy-on-write preserves the parent-local Array")
+	_expect(nested_grandchild.call("get_value", "nested", {}).get("values", []) == [1, 2, 3, 4], "grandchild publishes only its own nested mutation")
+
+	var materialized_nested: Dictionary = nested_child.call("materialize")
+	materialized_nested["nested"]["values"].append(50)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "materialize returns nested containers detached from the overlay")
+	var exposed_base: Dictionary = nested_root.call("_get_base_dictionary")
+	exposed_base["nested"]["values"].append(60)
+	_expect(nested_root.call("get_value", "nested", {}).get("values", []) == [1, 2], "base accessor cannot mutate a sealed snapshot")
+	var exposed_changes: Dictionary = nested_child.call("_get_overlay_changes")
+	exposed_changes["writes"]["nested"]["values"].append(70)
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "overlay-change accessor cannot mutate a local write")
+
+	var compacted_nested: RefCounted = nested_child.call("compact")
+	var compacted_mutator: Callable = func(value: Variant) -> bool:
+		if not value is Dictionary:
+			return false
+		var values: Array = value.get("values", [])
+		values.append(80)
+		value["values"] = values
+		return true
+	_expect(bool(compacted_nested.call("mutate_value", "nested", compacted_mutator)), "compacted root supports isolated nested mutation")
+	_expect(nested_child.call("get_value", "nested", {}).get("values", []) == [1, 2, 3], "compacted snapshot mutation does not affect its source chain")
+	_expect(int(nested_child.call("get_stats").get("container_clone_count", 0)) > 0, "overlay reports nested-container clone activity")
+
+	var first: RefCounted = root_map.call("fork")
+	_expect(bool(root_map.call("is_sealed")), "overlay fork seals the parent snapshot")
+	_expect(not bool(root_map.call("set_value", "late_write", 1)), "sealed overlay snapshots reject writes")
+	_expect(int(first.call("get_stats").get("base_keys_copied", -1)) == 0, "overlay fork copies zero base keys")
+	_expect(int(first.call("get_stats").get("materialize_calls", -1)) == 0, "overlay fork does not enumerate the visible key set")
+	_expect(bool(first.call("set_value", "replace", 20)), "overlay replaces an existing key")
+	_expect(bool(first.call("erase_key", "remove")), "overlay tombstones an existing key")
+	_expect(not bool(first.call("erase_key", "missing")), "overlay rejects erasing an absent key")
+	_expect(bool(first.call("set_value", "new", 4)), "overlay adds a new key")
+	_expect(int(first.call("size")) == 5, "overlay replace, erase, and insert maintain cached size")
+	_expect(int(root_map.call("get_value", "replace")) == 2, "child override leaves parent value unchanged")
+	_expect(bool(root_map.call("has_key", "remove")), "child tombstone leaves parent key visible")
+	_expect(not bool(first.call("has_key", "remove")), "child tombstone hides parent key")
+	_expect(bool(first.call("set_value", "remove", 30)), "overlay can resurrect a tombstoned key")
+	_expect(int(first.call("size")) == 6, "resurrection increments visible size once")
+	_expect(bool(first.call("set_value", "remove", 31)), "overlay can replace a resurrected key")
+	_expect(int(first.call("size")) == 6, "replacing a local write preserves visible size")
+
+	var second: RefCounted = first.call("fork")
+	_expect(bool(first.call("is_sealed")), "second fork seals its parent snapshot")
+	_expect(bool(second.call("erase_key", "new")), "grandchild can tombstone a parent-local write")
+	_expect(bool(second.call("set_value", "false_value", false)), "grandchild preserves false-valued overrides")
+	_expect(bool(second.call("set_value", "new_null", null)), "grandchild supports null-valued insertions")
+	_expect(int(second.call("size")) == 6, "grandchild cached size includes inherited writes and tombstones")
+	_expect(bool(first.call("has_key", "new")), "grandchild mutation does not change parent snapshot")
+	_expect(not bool(second.call("has_key", "new")), "grandchild tombstone hides an inherited write")
+	_expect(bool(second.call("has_key", "new_null")), "null-valued insertion remains present")
+	var keys: Array = second.call("keys")
+	_expect(keys.size() == int(second.call("size")), "overlay key enumeration matches cached size")
+	var materialized: Dictionary = second.call("materialize")
+	_expect(materialized.size() == 6, "overlay materialization has the visible size")
+	_expect(int(materialized.get("replace", -1)) == 20, "overlay materialization applies the newest override")
+	_expect(int(materialized.get("remove", -1)) == 31, "overlay materialization applies a resurrected key")
+	_expect(not materialized.has("new"), "overlay materialization applies child tombstones")
+	_expect(materialized.has("new_null") and materialized["new_null"] == null, "overlay materialization preserves null-valued keys")
+	_expect(materialized.get("false_value", true) == false, "overlay materialization preserves false-valued keys")
+	_expect(bool(root_map.call("has_key", "new")) == false, "original root remains independent of descendants")
+	var compacted: RefCounted = second.call("compact")
+	_expect(int(compacted.call("get_depth")) == 0, "overlay compact returns a new root snapshot")
+	_expect(compacted.call("materialize") == materialized, "overlay compaction preserves exact Dictionary contents")
+	_expect(int(second.call("get_depth")) == 2, "overlay compaction does not mutate its source chain")
+
+	var cursor: RefCounted = OverlayMapScript.new({"seed": 0})
+	var compaction_count: int = 0
+	for index in range(24):
+		var previous: RefCounted = cursor
+		var previous_depth: int = int(previous.call("get_depth"))
+		var previous_snapshot: Dictionary = {}
+		if previous_depth == 8:
+			previous_snapshot = previous.call("materialize")
+		var previous_materialize_calls: int = int(previous.call("get_stats").get("materialize_calls", -1))
+		var next: RefCounted = previous.call("fork")
+		if previous_depth == 8:
+			compaction_count += 1
+			_expect(int(next.call("get_depth")) == 1, "overlay fork compacts a depth-eight snapshot before creating its child")
+			_expect(
+				int(previous.call("get_stats").get("materialize_calls", -1)) == previous_materialize_calls + 1,
+				"depth-eight fork materializes exactly once for compaction"
+			)
+			var compact_root_value: Variant = next.call("_get_parent")
+			_expect(compact_root_value is RefCounted, "depth-eight fork retains a compacted root parent")
+			if compact_root_value is RefCounted:
+				var compact_root: RefCounted = compact_root_value as RefCounted
+				_expect(int(compact_root.call("get_depth")) == 0, "depth-eight compaction resets the parent depth to zero")
+				_expect(
+					int(compact_root.call("get_stats").get("base_keys_copied", -1)) == 0,
+					"compacted root takes ownership of the flattened Dictionary without a second shallow copy"
+				)
+		else:
+			_expect(
+				int(next.call("get_depth")) == previous_depth + 1,
+				"overlay fork increments depth until the compaction boundary at write %d" % index
+			)
+		_expect(bool(next.call("set_value", "key_%02d" % index, index)), "overlay chain accepts write %d" % index)
+		if previous_depth == 8:
+			_expect(
+				previous.call("materialize") == previous_snapshot,
+				"depth-eight compaction leaves the sealed source snapshot unchanged"
+			)
+		cursor = next
+		_expect(int(cursor.call("get_depth")) <= 8, "overlay chain compacts before depth exceeds eight at write %d" % index)
+	_expect(compaction_count == 2, "24 writes trigger exactly two depth-eight compactions")
+
+	var chain_snapshot: Dictionary = cursor.call("materialize")
+	_expect(chain_snapshot.size() == 25, "bounded overlay chain retains every inserted key")
+	_expect(int(chain_snapshot.get("seed", -1)) == 0, "bounded overlay chain retains the root value")
+	for index in range(24):
+		_expect(int(chain_snapshot.get("key_%02d" % index, -1)) == index, "bounded overlay chain retains key %d" % index)
