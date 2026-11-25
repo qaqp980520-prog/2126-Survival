@@ -951,9 +951,10 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 				junction_key,
 				copied_report_arrays
 			)
-			if prior_stable_ids.has(stable_id):
-				prior_stable_ids.erase(stable_id)
-				removed_memberships += 1
+			if not prior_stable_ids.has(stable_id):
+				return {"ok": false, "error": "committed_corner_report_reverse_index_inconsistent"}
+			prior_stable_ids.erase(stable_id)
+			removed_memberships += 1
 			if prior_stable_ids.is_empty():
 				next_junction_to_report_stable_ids.erase(junction_key)
 			else:
@@ -968,11 +969,12 @@ func _apply_corner_report_delta(touched_ids: Dictionary, replacement_reports: Di
 				junction_key,
 				copied_report_arrays
 			)
-			if not next_stable_ids.has(stable_id):
-				next_stable_ids.append(stable_id)
-				next_stable_ids.sort()
-				next_junction_to_report_stable_ids[junction_key] = next_stable_ids
-				added_memberships += 1
+			if next_stable_ids.has(stable_id):
+				return {"ok": false, "error": "candidate_corner_report_reverse_index_duplicate"}
+			next_stable_ids.append(stable_id)
+			next_stable_ids.sort()
+			next_junction_to_report_stable_ids[junction_key] = next_stable_ids
+			added_memberships += 1
 		report_index_membership_count += added_memberships
 		if not profile_counts.is_empty():
 			profile_counts["corner_report_delta_buckets_touched"] = int(profile_counts.get("corner_report_delta_buckets_touched", 0)) + 1
