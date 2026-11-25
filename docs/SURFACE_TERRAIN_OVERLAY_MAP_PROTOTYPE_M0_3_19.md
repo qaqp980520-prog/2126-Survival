@@ -22,17 +22,15 @@ The base snapshot is immutable by contract after construction. A fork seals its 
 ## Files
 
 - `systems/SurfaceTerrainOverlayMap.gd`
-- `tests/surface_terrain_overlay_map_test.gd`
-- `tests/surface_terrain_overlay_map_benchmark.gd`
-- `.github/workflows/surface-terrain-overlay-map-validation.yml`
+- `tests/surface_terrain_adjacency_index_test.gd` (overlay contract regressions run by the existing focused workflow)
+- `tests/surface_terrain_adjacency_delta_benchmark.gd` (matched overlay benchmark appended to the existing benchmark run)
 - `docs/SURFACE_TERRAIN_OVERLAY_MAP_PROTOTYPE_M0_3_19.md`
 
 ## Dependencies and import
 
 - Godot 4.3 root project.
 - No third-party dependencies, autoloads, scenes, Project Settings, or save-schema changes.
-- Run the contract test with `godot --headless --path . --script res://tests/surface_terrain_overlay_map_test.gd`.
-- Run the matched benchmark with `godot --headless --path . --script res://tests/surface_terrain_overlay_map_benchmark.gd`.
+- The existing `surface-terrain-adjacency-spatial-index-validation.yml` workflow imports/parses the project, runs the index test script (including overlay contract assertions), and runs the matched delta benchmark (including four overlay benchmark JSONL records).
 - GitHub Actions uses `barichello/godot-ci:4.3`.
 
 ## Benchmark protocol
@@ -44,6 +42,7 @@ The base snapshot is immutable by contract after construction. A fork seals its 
 - Overlay: `fork()` plus the same edits/lookups.
 - Overlay `materialize()` is timed separately because a production integration would retain the persistent snapshot rather than flatten it after every transaction.
 - Every sample compares the fully materialized overlay against the Dictionary oracle and checks lookup checksum and cached size.
+- Overlay benchmark records use the distinct `SURFACE_TERRAIN_OVERLAY_MAP_BENCHMARK_JSON` prefix and are included in the focused benchmark log artifact without changing the existing six-record JSONL contract.
 
 ## Complexity and safety limits
 
@@ -59,7 +58,7 @@ The base snapshot is immutable by contract after construction. A fork seals its 
 
 ## Validation status
 
-Pending exact-head Godot 4.3 contract, benchmark, and full compatibility workflows. No benchmark result or production adoption is claimed until the exact PR HEAD completes all required workflows and the logs are audited.
+Pending exact-head Godot 4.3 focused and full compatibility workflows. No benchmark result or production adoption is claimed until the exact PR HEAD completes all required workflows and the logs are audited.
 
 ## Next step
 
