@@ -32,6 +32,83 @@ class FailOnceUnloadController:
 	func recover_failed_chunk_load() -> bool:
 		return bool(delegate.call("recover_failed_chunk_load"))
 
+class PairRecoveryObjectRegistry:
+	extends Node
+	var records: Dictionary = {"pair/chunk/object": {"opened": false}}
+	var restore_calls: int = 0
+	var rejected_restore_calls: Dictionary = {2: true, 3: true}
+
+	func to_chunk_set_save_dict(chunk_ids: Array) -> Dictionary:
+		return {"chunk_ids": chunk_ids.duplicate(), "objects": records.duplicate(true)}
+
+	func validate_chunk_set_save_dict(chunk_ids: Array, data: Dictionary) -> bool:
+		var supplied_ids: Variant = data.get("chunk_ids", null)
+		var supplied_records: Variant = data.get("objects", null)
+		return supplied_ids is Array and supplied_ids == chunk_ids and supplied_records is Dictionary
+
+	func restore_chunk_set_save_dict(_chunk_ids: Array, data: Dictionary) -> bool:
+		restore_calls += 1
+		if rejected_restore_calls.has(restore_calls):
+			return false
+		var next_records: Variant = data.get("objects", null)
+		if not (next_records is Dictionary):
+			return false
+		records = next_records.duplicate(true)
+		return true
+
+
+class PairRecoveryMineralRegistry:
+	extends Node
+	var records: Dictionary = {"pair/chunk/vein/ore": {"remaining_units": 3}}
+	var restore_calls: int = 0
+	var reject_first_restore: bool = true
+
+	func to_chunk_set_snapshot(chunk_ids: Array) -> Dictionary:
+		return {"schema_version": 1, "chunk_ids": chunk_ids.duplicate(), "veins": records.duplicate(true)}
+
+	func validate_chunk_set_snapshot(chunk_ids: Array, data: Dictionary, _now_unix: int = -1) -> bool:
+		var supplied_ids: Variant = data.get("chunk_ids", null)
+		var supplied_records: Variant = data.get("veins", null)
+		return int(data.get("schema_version", 0)) == 1 and supplied_ids is Array and supplied_ids == chunk_ids and supplied_records is Dictionary
+
+	func restore_chunk_set_snapshot(_chunk_ids: Array, data: Dictionary, _now_unix: int = -1) -> bool:
+		restore_calls += 1
+		if reject_first_restore and restore_calls == 1:
+			reject_first_restore = false
+			return false
+		var next_records: Variant = data.get("veins", null)
+		if not (next_records is Dictionary):
+			return false
+		records = next_records.duplicate(true)
+		return true
+
+	func has_pending_atomic_registration_recovery() -> bool:
+		return false
+
+
+class PairRecoveryController:
+	extends Node3D
+	var registry: Node
+	var object_state_registry: Node
+	var loaded_ids: PackedStringArray = PackedStringArray(["underground/mine_0_0"])
+	var load_calls: int = 0
+	var unload_calls: int = 0
+
+	func get_loaded_chunk_ids() -> PackedStringArray:
+		return loaded_ids
+
+	func is_chunk_loaded(chunk_id: String) -> bool:
+		return loaded_ids.has(chunk_id)
+
+	func load_chunk(_chunk_id: String, _chunk_root: Node3D, _now_unix: int = -1) -> bool:
+		load_calls += 1
+		return false
+
+	func unload_chunk(_chunk_id: String, _now_unix: int = -1) -> bool:
+		unload_calls += 1
+		return false
+
+
 const Registry = preload("res://systems/MineralVeinRegistry.gd")
 const Controller = preload("res://systems/MineralChunkController.gd")
 const Director = preload("res://systems/UndergroundMineDirector.gd")
@@ -224,7 +301,60 @@ func _run() -> void:
 	_expect(deeper_root != null and deeper_root.get_node_or_null("MineLiftAnchor") != null, "deeper origin chunk contains the lift anchor")
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -8.25, 7.5), 1006)), "director can return to the legacy layer-zero window")
 	_expect(bool(controller.call("is_chunk_loaded", "underground/mine_0_0")) and not bool(controller.call("is_chunk_loaded", "underground/layer_1/mine_0_0")), "returning to layer zero unloads the deeper window")
+	_test_registry_pair_compensation_recovery()
 	_finish(0 if failures.is_empty() else 1)
+
+func _test_registry_pair_compensation_recovery() -> void:
+	var pair_object_registry := PairRecoveryObjectRegistry.new()
+	var pair_mineral_registry := PairRecoveryMineralRegistry.new()
+	var pair_controller := PairRecoveryController.new()
+	var pair_director := Director.new()
+	pair_controller.registry = pair_mineral_registry
+	pair_controller.object_state_registry = pair_object_registry
+	root.add_child(pair_object_registry)
+	root.add_child(pair_mineral_registry)
+	root.add_child(pair_controller)
+	root.add_child(pair_director)
+	pair_director.load_radius = 0
+	_expect(bool(pair_director.call("bind_controller", pair_controller)), "pair-recovery director binds the injected two-registry controller")
+	_expect(bool(pair_director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "pair-recovery director accepts a factory")
+	var chunk_ids: Array[String] = ["pair/chunk"]
+	var target_objects: Dictionary = pair_object_registry.to_chunk_set_save_dict(chunk_ids)
+	var target_object_records: Dictionary = target_objects["objects"].duplicate(true)
+	target_object_records["pair/chunk/object"]["opened"] = true
+	target_objects["objects"] = target_object_records
+	var target_mineral: Dictionary = pair_mineral_registry.to_chunk_set_snapshot(chunk_ids)
+	var target_vein_records: Dictionary = target_mineral["veins"].duplicate(true)
+	target_vein_records["pair/chunk/vein/ore"]["remaining_units"] = 1
+	target_mineral["veins"] = target_vein_records
+	var pair_snapshot: Dictionary = {
+		"chunk_ids": chunk_ids.duplicate(),
+		"objects": target_objects,
+		"mineral": target_mineral
+	}
+	_expect(not bool(pair_director.call("_restore_registry_snapshot_pair", pair_snapshot, 100)), "mineral restore rejection rejects the registry-pair restore")
+	_expect(bool(pair_object_registry.records["pair/chunk/object"]["opened"]), "object target restore is visible before the injected compensation rejection")
+	_expect(bool(pair_director.call("has_pending_registry_pair_recovery")), "failed object compensation creates a durable director recovery barrier")
+	_expect(pair_object_registry.restore_calls == 2, "initial object restore and first compensation attempt are both observed")
+	var blocked_sync: bool = bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100))
+	_expect(not blocked_sync, "underground streaming remains blocked while pair compensation is unresolved")
+	var blocked_report: Dictionary = pair_director.call("get_last_sync_report")
+	_expect(str(blocked_report.get("phase", "")) == "registry_pair_recovery_barrier" and not bool(blocked_report.get("rollback_complete", true)), "director reports the incomplete registry-pair rollback")
+	_expect(pair_controller.load_calls == 0 and pair_controller.unload_calls == 0, "blocked streaming performs no controller load or unload")
+	_expect(pair_director.call("has_pending_registry_pair_recovery"), "failed retry retains the director recovery barrier")
+	pair_object_registry.rejected_restore_calls.erase(2)
+	pair_object_registry.rejected_restore_calls.erase(3)
+	_expect(bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100)), "streaming resumes after both registry snapshots recover and verify")
+	_expect(not bool(pair_director.call("has_pending_registry_pair_recovery")), "verified pair recovery clears the director barrier")
+	_expect(not bool(pair_object_registry.records["pair/chunk/object"]["opened"]), "object registry returns to the exact pre-compensation state")
+	_expect(int(pair_mineral_registry.records["pair/chunk/vein/ore"]["remaining_units"]) == 3, "mineral registry returns to the exact pre-compensation state")
+	_expect(pair_mineral_registry.restore_calls == 2, "mineral snapshot is retried only during pair recovery")
+	_expect(pair_director.call("get_managed_chunk_ids").size() == 1, "managed underground window is reconciled after pair recovery")
+	pair_director.free()
+	pair_controller.free()
+	pair_object_registry.free()
+	pair_mineral_registry.free()
+
 
 func _make_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
 	if mutate_unrelated_on_factory_success and coord == Vector2i(2, -1) and layer_index == 0:
