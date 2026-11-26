@@ -6,6 +6,9 @@ const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFacto
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
+const InventoryModelScript = preload("res://systems/SurvivalInventory.gd")
+const SurfaceWorldSaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
+const DEFAULT_SAVE_PATH: String = "user://surface_world_save.json"
 const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
@@ -51,6 +54,12 @@ var _surface_stream_request_id: int = -1
 var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
+var _save_recovery_barrier_report: Dictionary = {}
+var _save_recovery_kind: String = ""
+var _save_recovery_path: String = ""
+var _pending_save_recovery_payload: Dictionary = {}
+var _pending_save_recovery_now: int = -1
+var _last_save_report: Dictionary = {}
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -473,6 +482,20 @@ func _unhandled_input(event: InputEvent) -> void:
 					streaming_diagnostics_panel.call("toggle_open")
 				get_viewport().set_input_as_handled()
 				return
+			if key_event.keycode == KEY_F5:
+				var saved: bool = save_game()
+				var save_report: Dictionary = get_last_save_report()
+				_world_object_action_message = "World saved." if saved else "World save blocked: %s." % str(save_report.get("reason", save_report.get("phase", "unknown")))
+				_refresh_hud()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_F9:
+				var loaded: bool = load_game()
+				var load_report: Dictionary = get_last_save_report()
+				_world_object_action_message = "World loaded." if loaded else "World load blocked: %s." % str(load_report.get("reason", load_report.get("phase", "unknown")))
+				_refresh_hud()
+				get_viewport().set_input_as_handled()
+				return
 			match key_event.keycode:
 				KEY_1: _select_quick_slot(0)
 				KEY_2: _select_quick_slot(1)
@@ -815,7 +838,7 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 		_world_object_action_message = "Mining rejected: inventory full or vein depleted."
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
-func _get_world_save_recovery_barrier_report() -> Dictionary:
+func _get_underground_recovery_barrier_report() -> Dictionary:
 	if mine_director == null or not is_instance_valid(mine_director):
 		return {"recovery_required": true, "reason": "underground_director_unavailable"}
 	if not mine_director.has_method("has_pending_registry_pair_recovery"):
@@ -827,6 +850,11 @@ func _get_world_save_recovery_barrier_report() -> Dictionary:
 		if report is Dictionary and not report.is_empty():
 			return report
 	return {"recovery_required": true, "reason": "underground_registry_pair_recovery_pending"}
+
+func _get_world_save_recovery_barrier_report() -> Dictionary:
+	if not _save_recovery_barrier_report.is_empty():
+		return _save_recovery_barrier_report.duplicate(true)
+	return _get_underground_recovery_barrier_report()
 
 func serialize_stream_state() -> Dictionary:
 	var payload: Dictionary = super.serialize_stream_state()
@@ -1219,3 +1247,229 @@ func _refresh_hud() -> void:
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
 		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
+
+## Production SurfaceWorld persistence. The Backrooms prototype keeps its separate file path.
+func _validate_world_save_payload(payload: Dictionary) -> bool:
+	var schema: Variant = payload.get("schema_version", null)
+	if not (schema is int) or int(schema) != 1:
+		return false
+	var position_value: Variant = payload.get("player_position", null)
+	if not (position_value is Array) or position_value.size() != 3:
+		return false
+	for component in position_value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return false
+	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or inventory_bridge == null:
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	var minerals_value: Variant = payload.get("minerals", null)
+	if not (minerals_value is Dictionary) or not bool(registry.call("validate_save_dict", minerals_value, now)):
+		return false
+	var crops_value: Variant = payload.get("crops", null)
+	if not (crops_value is Dictionary) or not bool(crop_registry.call("validate_save_dict", crops_value)):
+		return false
+	var objects_value: Variant = payload.get("world_objects", null)
+	if not (objects_value is Dictionary) or not bool(object_state_registry.call("validate_save_dict", objects_value)):
+		return false
+	var inventory_value: Variant = payload.get("inventory", null)
+	if not (inventory_value is Dictionary):
+		return false
+	var inventory_probe: RefCounted = InventoryModelScript.new()
+	if not bool(inventory_probe.call("load_save_dict", inventory_value)):
+		return false
+	var world_seed_value: Variant = payload.get("world_seed", null)
+	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)):
+		return false
+	if float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
+		return false
+	var stamina_value: Variant = payload.get("stamina", null)
+	var stamina_probe: RefCounted = StaminaScript.new()
+	if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
+		return false
+	var quick_use_value: Variant = payload.get("quick_use", null)
+	var quick_use_probe: RefCounted = QuickUseScript.new()
+	if not (quick_use_value is Dictionary) or not bool(quick_use_probe.call("validate_save_dict", quick_use_value)):
+		return false
+	var layer_value: Variant = payload.get("location_layer", null)
+	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
+		return false
+	var depth_value: Variant = payload.get("mine_depth", null)
+	if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+		return false
+	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
+	if str(layer_value) == "surface":
+		if int(depth_value) != 0:
+			return false
+	else:
+		if mine_director == null or not is_instance_valid(mine_director):
+			return false
+		if mine_director.get_layer_index(target_position) != int(depth_value):
+			return false
+	var return_value: Variant = payload.get("surface_return_position", null)
+	if not (return_value is Array) or return_value.size() != 3:
+		return false
+	for component in return_value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return false
+	return true
+
+func _set_save_report(success: bool, phase: String, reason: String = "", details: Dictionary = {}) -> void:
+	_last_save_report = {
+		"success": success,
+		"phase": phase,
+		"reason": reason,
+		"details": details.duplicate(true)
+	}
+
+func get_last_save_report() -> Dictionary:
+	return _last_save_report.duplicate(true)
+
+func save_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	var payload: Dictionary = serialize_stream_state()
+	if payload.is_empty() or not _validate_world_save_payload(payload):
+		_set_save_report(false, "snapshot_validation", "world_snapshot_unavailable_or_invalid")
+		return false
+	var envelope: Dictionary = SurfaceWorldSaveStoreScript.build_envelope(payload, now)
+	var encoded: String = SurfaceWorldSaveStoreScript.encode_envelope(envelope)
+	var validator := Callable(self, "_validate_world_save_payload")
+	var write_report: Dictionary = SurfaceWorldSaveStoreScript.write_atomic(save_path, encoded, validator)
+	if not bool(write_report.get("ok", false)):
+		if bool(write_report.get("recovery_required", false)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "save_file_promotion_recovery_required",
+				"file_report": write_report.duplicate(true)
+			}
+			_save_recovery_kind = "file"
+			_save_recovery_path = save_path
+		_set_save_report(false, str(write_report.get("phase", "write")), str(write_report.get("reason", "save_failed")), write_report)
+		return false
+	_set_save_report(true, "complete", "", {
+		"path": save_path,
+		"saved_at_unix": now,
+		"backup_path": str(write_report.get("backup_path", "")),
+		"archive_path": str(write_report.get("archive_path", "")),
+		"warning": str(write_report.get("warning", ""))
+	})
+	return true
+
+func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	var previous_payload: Dictionary = serialize_stream_state()
+	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
+		_set_save_report(false, "preload_snapshot", "current_world_snapshot_unavailable_or_invalid")
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	var primary_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path, validator)
+	var source: String = "primary"
+	var candidate_payload: Dictionary = {}
+	if bool(primary_report.get("ok", false)):
+		candidate_payload = primary_report["payload"].duplicate(true)
+	else:
+		var backup_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path + ".bak", validator)
+		if not bool(backup_report.get("ok", false)):
+			_set_save_report(false, "file_validation", "primary_and_backup_unavailable_or_invalid", {
+				"primary": primary_report,
+				"backup": backup_report
+			})
+			return false
+		source = "backup"
+		candidate_payload = backup_report["payload"].duplicate(true)
+	var now: int = int(Time.get_unix_time_from_system())
+	if not restore_stream_state(candidate_payload, now):
+		var restore_report: Dictionary = get_last_restore_report()
+		if not bool(restore_report.get("rollback_complete", true)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_restore_rollback_incomplete",
+				"restore_report": restore_report.duplicate(true)
+			}
+			_save_recovery_kind = "world"
+			_save_recovery_path = save_path
+			_pending_save_recovery_payload = previous_payload.duplicate(true)
+			_pending_save_recovery_now = now
+		_set_save_report(false, "world_restore", "validated_save_restore_failed", restore_report)
+		return false
+	if source == "backup":
+		var promotion_report: Dictionary = SurfaceWorldSaveStoreScript.promote_backup(save_path, validator)
+		if not bool(promotion_report.get("ok", false)) and bool(promotion_report.get("recovery_required", false)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "backup_promotion_recovery_required",
+				"file_report": promotion_report.duplicate(true)
+			}
+			_save_recovery_kind = "backup_promotion"
+			_save_recovery_path = save_path
+		_set_save_report(true, "loaded_from_backup_promotion_pending", "", {
+			"source": source,
+			"promotion": promotion_report
+		})
+		return true
+		if not bool(promotion_report.get("ok", false)):
+			_set_save_report(true, "loaded_from_backup", "", {
+				"source": source,
+				"promotion_warning": promotion_report
+			})
+			return true
+		_set_save_report(true, "loaded_from_backup", "", {
+			"source": source,
+			"archive_path": str(promotion_report.get("archive_path", "")),
+			"backup_path": str(promotion_report.get("backup_path", ""))
+		})
+		return true
+	_set_save_report(true, "loaded_from_primary", "", {"source": source, "saved_at_unix": int(primary_report.get("saved_at_unix", 0))})
+	return true
+
+func retry_save_recovery() -> bool:
+	if _save_recovery_barrier_report.is_empty():
+		return true
+	if not _get_underground_recovery_barrier_report().is_empty():
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	if _save_recovery_kind == "file":
+		var file_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(_save_recovery_path, validator)
+		if not bool(file_report.get("ok", false)):
+			_save_recovery_barrier_report["last_retry"] = file_report.duplicate(true)
+			return false
+	elif _save_recovery_kind == "backup_promotion":
+		var promotion_report: Dictionary = SurfaceWorldSaveStoreScript.promote_backup(_save_recovery_path, validator)
+		if not bool(promotion_report.get("ok", false)):
+			_save_recovery_barrier_report["last_retry"] = promotion_report.duplicate(true)
+			return false
+	elif _save_recovery_kind == "world":
+		var recovery_payload: Dictionary = _pending_save_recovery_payload.duplicate(true)
+		if recovery_payload.is_empty():
+			return false
+		_save_recovery_barrier_report.clear()
+		if not restore_stream_state(recovery_payload, _pending_save_recovery_now):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_recovery_retry_failed",
+				"restore_report": get_last_restore_report()
+			}
+			return false
+		var verified_payload: Dictionary = serialize_stream_state()
+		if verified_payload != recovery_payload:
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_recovery_readback_mismatch"
+			}
+			return false
+	else:
+		return false
+	_save_recovery_barrier_report.clear()
+	_save_recovery_kind = ""
+	_save_recovery_path = ""
+	_pending_save_recovery_payload.clear()
+	_pending_save_recovery_now = -1
+	_set_save_report(true, "recovery_complete")
+	return true
+
