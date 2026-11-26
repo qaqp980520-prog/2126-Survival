@@ -379,8 +379,8 @@ func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: in
 	if not bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, object_snapshot)):
 		pre_compensation_pair["reason"] = "object_restore_rejected"
 		_pending_registry_pair_recovery = pre_compensation_pair
-		var compensation_recovered: bool = recover_pending_registry_pair()
-		if not compensation_recovered and has_pending_registry_pair_recovery():
+		var object_compensation_recovered: bool = recover_pending_registry_pair()
+		if not object_compensation_recovered and has_pending_registry_pair_recovery():
 			_pending_registry_pair_recovery["last_recovery_attempt_failed"] = true
 		return false
 	if not bool(mineral_registry.call("restore_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
@@ -389,8 +389,8 @@ func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: in
 		# all subsequent streaming until both Registries read back this same pair.
 		pre_compensation_pair["reason"] = "mineral_restore_and_object_compensation"
 		_pending_registry_pair_recovery = pre_compensation_pair
-		var compensation_recovered: bool = recover_pending_registry_pair()
-		if not compensation_recovered and has_pending_registry_pair_recovery():
+		var mineral_compensation_recovered: bool = recover_pending_registry_pair()
+		if not mineral_compensation_recovered and has_pending_registry_pair_recovery():
 			_pending_registry_pair_recovery["last_recovery_attempt_failed"] = true
 		return false
 	return true
