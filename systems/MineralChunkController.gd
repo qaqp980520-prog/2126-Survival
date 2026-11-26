@@ -24,7 +24,7 @@ var _terrain_adjacency_recovery_required: bool = false
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["register_vein", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
+	for method_name in ["register_vein", "register_veins_atomic", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and registry != candidate:
