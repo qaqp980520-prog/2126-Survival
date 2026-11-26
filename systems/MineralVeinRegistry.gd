@@ -158,7 +158,7 @@ func _snapshot_live_vein_state(vein: Node) -> Dictionary:
 		"regen_interval_seconds": int(vein.get("regen_interval_seconds")),
 		"last_regen_unix": int(vein.get("last_regen_unix")),
 		"depleted_signal_sent": bool(vein.get("_depleted_signal_sent")),
-		"visible": vein.visible,
+		"visible": bool(vein.get("visible")),
 		"interaction_collision_layer": interaction_area.collision_layer if interaction_area != null else -1
 	}
 
@@ -168,7 +168,7 @@ func _restore_live_vein_state(vein: Node, snapshot: Dictionary) -> void:
 	vein.set("regen_interval_seconds", int(snapshot.get("regen_interval_seconds", vein.get("regen_interval_seconds"))))
 	vein.set("last_regen_unix", int(snapshot.get("last_regen_unix", vein.get("last_regen_unix"))))
 	vein.set("_depleted_signal_sent", bool(snapshot.get("depleted_signal_sent", false)))
-	vein.visible = bool(snapshot.get("visible", vein.visible))
+	vein.set("visible", bool(snapshot.get("visible", vein.get("visible"))))
 	var interaction_area: Area3D = vein.get_node_or_null("InteractionArea") as Area3D
 	var collision_layer: int = int(snapshot.get("interaction_collision_layer", -1))
 	if interaction_area != null and collision_layer >= 0:
