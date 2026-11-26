@@ -1007,8 +1007,28 @@ func has_active_portal() -> bool:
 func get_active_portal_id() -> int:
     return int(director.active_portal.get("id", 0))
 
+func _get_world_save_recovery_barrier_report() -> Dictionary:
+    if mineral_vein_registry == null or not is_instance_valid(mineral_vein_registry):
+        return {"recovery_required": true, "reason": "mineral_registry_unavailable"}
+    if not mineral_vein_registry.has_method("has_pending_atomic_registration_recovery"):
+        return {"recovery_required": true, "reason": "mineral_registry_recovery_api_unavailable"}
+    if not bool(mineral_vein_registry.call("has_pending_atomic_registration_recovery")):
+        return {}
+    var registry_report: Dictionary = {}
+    if mineral_vein_registry.has_method("get_last_atomic_registration_report"):
+        var raw_report: Variant = mineral_vein_registry.call("get_last_atomic_registration_report")
+        if raw_report is Dictionary:
+            registry_report = raw_report.duplicate(true)
+    return {
+        "recovery_required": true,
+        "reason": "mineral_registry_atomic_registration_recovery_pending",
+        "registry_report": registry_report
+    }
+
 func serialize_world_state() -> Dictionary:
-    if bridge == null or director == null:
+    if bridge == null or director == null or crop_registry == null:
+        return {}
+    if not _get_world_save_recovery_barrier_report().is_empty():
         return {}
     var inventory_payload: Dictionary = bridge.serialize_inventory()
     var envelope := {
@@ -1038,6 +1058,8 @@ func serialize_world_state() -> Dictionary:
     return save
 
 func load_world_state_from_dictionary(world_save: Dictionary) -> bool:
+    if not _get_world_save_recovery_barrier_report().is_empty():
+        return false
     var converted: Dictionary = SaveAdapter.world_save_to_inventory_payload(world_save)
     if not bool(converted.get("ok", false)):
         return false
