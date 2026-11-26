@@ -1566,6 +1566,25 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 	_set_save_report(true, "loaded_from_primary", "", {"source": source, "saved_at_unix": int(primary_report.get("saved_at_unix", 0))})
 	return true
 
+func _get_expected_loaded_chunk_ids() -> PackedStringArray:
+	var combined: Array[String] = []
+	var seen: Dictionary = {}
+	if director != null and director.has_method("get_managed_chunk_ids"):
+		for raw_id in director.get_managed_chunk_ids():
+			var stable_id: String = str(raw_id)
+			if not seen.has(stable_id):
+				seen[stable_id] = true
+				combined.append(stable_id)
+	if mine_director != null and mine_director.has_method("get_managed_chunk_ids"):
+		for raw_id in mine_director.get_managed_chunk_ids():
+			var stable_id: String = str(raw_id)
+			if not seen.has(stable_id):
+				seen[stable_id] = true
+				combined.append(stable_id)
+	combined.sort()
+	return PackedStringArray(combined)
+
+
 func _world_recovery_matches_snapshot(current: Dictionary, expected: Dictionary) -> bool:
 	if current.is_empty() or not _validate_world_save_payload(current):
 		return false
@@ -1582,7 +1601,7 @@ func _world_recovery_matches_snapshot(current: Dictionary, expected: Dictionary)
 	current_ids.sort()
 	if expected_ids != current_ids:
 		return false
-	if director == null or chunk_controller == null or director.get_managed_chunk_ids() != chunk_controller.get_loaded_chunk_ids():
+	if director == null or chunk_controller == null or _get_expected_loaded_chunk_ids() != chunk_controller.get_loaded_chunk_ids():
 		return false
 	return true
 
