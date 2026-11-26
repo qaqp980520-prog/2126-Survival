@@ -340,10 +340,16 @@ func _test_durable_save_load(now_unix: int) -> void:
 	invalid_stream_payload["minerals"] = {"schema_version": 1, "veins": []}
 	var before_invalid_stream_position: Vector3 = world.player.global_position
 	var before_invalid_stream_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+	var before_invalid_stream_minerals: Dictionary = world.chunk_controller.call("to_save_dict")
+	var before_invalid_stream_crops: Dictionary = world.crop_registry.call("to_save_dict")
+	var before_invalid_stream_objects: Dictionary = world.object_state_registry.call("to_save_dict")
+	var before_invalid_stream_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
 	_expect(not bool(world.call("restore_stream_state", invalid_stream_payload, now_unix + 9)), "invalid mineral payload is rejected by complete restore preflight")
 	var invalid_stream_report: Dictionary = world.call("get_last_restore_report")
 	_expect(str(invalid_stream_report.get("phase", "")) == "payload_validation", "invalid restore reports preflight rejection before streaming")
 	_expect(world.player.global_position.is_equal_approx(before_invalid_stream_position) and world.chunk_controller.get_loaded_chunk_ids() == before_invalid_stream_ids, "invalid restore preflight preserves player position and active chunks")
+	_expect(world.chunk_controller.call("to_save_dict") == before_invalid_stream_minerals and world.crop_registry.call("to_save_dict") == before_invalid_stream_crops, "invalid restore preflight preserves mineral and crop registries")
+	_expect(world.object_state_registry.call("to_save_dict") == before_invalid_stream_objects and world.inventory_bridge.call("serialize_inventory") == before_invalid_stream_inventory, "invalid restore preflight preserves world-object Registry and inventory")
 
 	_expect(bool(world.call("save_game", blocked_path)), "recovery-barrier test prepares an existing valid disk save")
 	var blocked_primary_before: String = FileAccess.get_file_as_string(blocked_path)
