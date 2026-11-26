@@ -51,4 +51,4 @@ Godot 4.3 project; existing `MineralMiningNode`, `MineralCatalog`, `MineralVeinR
 
 ## Next
 
-Review the final-head Director integration test and Full Gate logs. Keep Run 438's unrelated Director recovery warnings as separate work until their own failure-injection reproductions are fixed. Keep terrain Binder full rebuild as its existing correctness/recovery path until cross-participant equivalence is proven.
+Review the final-head Director integration test and Full Gate logs. Run 438's one stale-unload and two synchronous-registration warnings are expected diagnostics from explicit failure-injection tests: they assert incomplete rollback when stale restoration fails or the Controller is queued for deletion. Preserve those diagnostics; they are not marked as production regressions. Keep terrain Binder full rebuild as its existing correctness/recovery path until cross-participant equivalence is proven.
