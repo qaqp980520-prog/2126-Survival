@@ -276,7 +276,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	await process_frame
 	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh production SurfaceWorld instance initializes before disk restore")
 	_expect(bool(world.call("load_game", path)), "production SurfaceWorld loads its primary save after a simulated restart")
-	_expect(_inventory_count("berries") == 5, "restart restore recovers the primary inventory count")
+	_expect(_inventory_count("berries") == int(payload_b.get("inventory", {}).get("inventory", {}).get("berries", 5)), "restart restore recovers the primary inventory count")
 	var restored_stamina: RefCounted = world.get("stamina") as RefCounted
 	var restored_quick_use: RefCounted = world.get("quick_use") as RefCounted
 	_expect(is_equal_approx(float(restored_stamina.get("current_stamina")), 31.5), "restart restore recovers stamina")
@@ -352,8 +352,8 @@ func _test_durable_save_load(now_unix: int) -> void:
 	if not locked_chunk_ids.is_empty():
 		var locked_chunk_id: String = str(locked_chunk_ids[0])
 		var lock_token: String = "surface-save-barrier-test"
-		_expect(bool(world.object_state_registry.call("lock_chunk_writes", locked_chunk_id, lock_token)), "test acquires an active WorldObject chunk write lease")
 		var lock_restore_payload: Dictionary = world.call("serialize_stream_state")
+		_expect(bool(world.object_state_registry.call("lock_chunk_writes", locked_chunk_id, lock_token)), "test acquires an active WorldObject chunk write lease")
 		_expect(not bool(world.call("restore_stream_state", lock_restore_payload, now_unix + 9)), "active WorldObject write lease blocks direct stream restore")
 		_expect(str(world.call("get_last_restore_report").get("phase", "")) == "registry_pair_recovery_barrier", "active WorldObject write lease is reported as a restore barrier")
 		_expect(world.call("serialize_stream_state").is_empty(), "active WorldObject write lease blocks new snapshots")
