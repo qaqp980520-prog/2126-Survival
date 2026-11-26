@@ -39,8 +39,8 @@ class FaultInjectingObjectRegistry extends "res://systems/WorldObjectStateRegist
 	var fail_set_after_commit_count: int = 0
 	var fail_restore_count: int = 0
 
-	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
-		var succeeded: bool = super.set_object_state(stable_id, chunk_id, state)
+	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary, transaction_token: String = "") -> bool:
+		var succeeded: bool = super.set_object_state(stable_id, chunk_id, state, transaction_token)
 		if succeeded and fail_set_after_commit_count > 0:
 			fail_set_after_commit_count -= 1
 			return false
@@ -51,6 +51,12 @@ class FaultInjectingObjectRegistry extends "res://systems/WorldObjectStateRegist
 			fail_restore_count -= 1
 			return false
 		return super.restore_save_dict(data)
+
+	func restore_chunk_save_dict(chunk_id: String, data: Dictionary, transaction_token: String = "") -> bool:
+		if fail_restore_count > 0:
+			fail_restore_count -= 1
+			return false
+		return super.restore_chunk_save_dict(chunk_id, data, transaction_token)
 
 class FaultInjectingCropController extends "res://systems/CropPlotController.gd":
 	var fail_restore_count: int = 0
@@ -493,8 +499,11 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	var object_id := chunk_id + "/object/ChunkRoot/FaultProp"
 	assert(crop_registry.register_crop(crop_id, "wheat", 0, 0.0, 80.0, now - 120, 0))
 	assert(object_registry.set_object_state(object_id, chunk_id, {"opened": true, "loot_remaining": 1}))
+	var unrelated_chunk_id := "earth/unrelated-recovery-chunk"
+	var unrelated_object_id := unrelated_chunk_id + "/object/Crate"
+	assert(object_registry.set_object_state(unrelated_object_id, unrelated_chunk_id, {"opened": false, "loot_remaining": 3}))
 	var crop_before: Dictionary = crop_registry.to_save_dict()
-	var object_before: Dictionary = object_registry.to_save_dict()
+	var object_before: Dictionary = object_registry.to_chunk_save_dict(chunk_id)
 
 	var incoming := Node3D.new()
 	incoming.name = "ChunkRoot"
@@ -517,6 +526,10 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	assert(bool(details.get("world_object_registry_ok", false)), "The object registry snapshot was restored")
 	assert(not bool(details.get("crop_registry_ok", true)), "The failed crop registry restore is surfaced")
 	assert(crop_registry.to_save_dict() != crop_before, "The injected crop restore failure leaves a detectable pending recovery")
+	assert(not controller.capture_loaded_world_object_states(), "World-save capture is blocked while any chunk participant requires recovery")
+	assert(not controller.restore_world_object_states(object_registry.to_save_dict()), "World-wide object restore is blocked while chunk recovery is pending")
+	assert(not object_registry.set_object_state(object_id, chunk_id, {"opened": false, "loot_remaining": 2}), "The affected chunk's direct Registry writes are blocked by its recovery lease")
+	assert(object_registry.set_object_state(unrelated_object_id, unrelated_chunk_id, {"opened": true, "loot_remaining": 2}), "Unrelated chunk writes remain available during scoped recovery")
 	var blocked_root := Node3D.new()
 	assert(not controller.load_chunk("earth/blocked-during-recovery", blocked_root, now), "New chunk loads are blocked while participant recovery is pending")
 	assert(blocked_root.get_parent() == null)
@@ -525,7 +538,10 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	assert(controller.recover_failed_chunk_load(), "A later recovery pass retries every failed participant")
 	assert(not controller.has_pending_chunk_load_recovery(), "Successful recovery clears the lifecycle barrier")
 	assert(crop_registry.to_save_dict() == crop_before, "Recovery restores the exact crop registry snapshot")
-	assert(object_registry.to_save_dict() == object_before, "Recovery restores the exact world-object registry snapshot")
+	assert(object_registry.to_chunk_save_dict(chunk_id) == object_before, "Recovery restores only the failed chunk's exact object snapshot")
+	var unrelated_state: Dictionary = object_registry.get_object_state(unrelated_object_id).get("state", {})
+	assert(bool(unrelated_state.get("opened", false)) and int(unrelated_state.get("loot_remaining", -1)) == 2, "Recovery preserves a newer write to an unrelated chunk")
+	assert(object_registry.set_object_state(object_id, chunk_id, {"opened": false, "loot_remaining": 2}), "Affected chunk writes resume after recovery releases its lease")
 	assert(prop.call("get_world_object_state") == {"opened": false, "loot_remaining": 2, "loot_item_id": "iron_ore"}, "Recovery restores the caller-owned live object state")
 	var recovery_report: Dictionary = controller.get_last_chunk_load_report()
 	assert(bool(recovery_report.get("success", false)) and str(recovery_report.get("phase", "")) == "recovery_complete")
@@ -602,7 +618,7 @@ func _test_incomplete_chunk_unload_registry_rollback_is_reported_and_recoverable
 	var stable_id := chunk_id + "/object/ChunkRoot/SalvageCrate"
 	var crate: Node = chunk.get_node("SalvageCrate")
 	assert(bool(crate.call("interact")), "The live crate changes before the unload attempt")
-	var registry_before: Dictionary = object_registry.to_save_dict()
+	var registry_before: Dictionary = object_registry.to_chunk_save_dict(chunk_id)
 	object_registry.set("fail_set_after_commit_count", 1)
 	object_registry.set("fail_restore_count", 1)
 
@@ -616,7 +632,7 @@ func _test_incomplete_chunk_unload_registry_rollback_is_reported_and_recoverable
 	assert(not bool(report.get("rollback_complete", true)), "The Controller must not claim a complete rollback when registry restoration failed")
 	assert(bool(report.get("recovery_required", false)))
 	assert(not bool(details.get("world_object_registry_rollback_ok", true)))
-	assert(object_registry.to_save_dict() != registry_before, "The injected restore failure leaves a detectable pending registry mutation")
+	assert(object_registry.to_chunk_save_dict(chunk_id) != registry_before, "The injected restore failure leaves a detectable pending registry mutation")
 
 	var blocked_root := Node3D.new()
 	assert(not controller.load_chunk("earth/blocked-during-unload-recovery", blocked_root, now), "New loads are blocked during unload recovery")
@@ -626,7 +642,7 @@ func _test_incomplete_chunk_unload_registry_rollback_is_reported_and_recoverable
 
 	assert(controller.recover_failed_chunk_load(), "The shared recovery entry point retries the failed unload participant")
 	assert(not controller.has_pending_chunk_load_recovery(), "Successful object-registry recovery clears the lifecycle barrier")
-	assert(object_registry.to_save_dict() == registry_before, "Recovery restores the exact pre-unload object registry snapshot")
+	assert(object_registry.to_chunk_save_dict(chunk_id) == registry_before, "Recovery restores the exact pre-unload chunk snapshot without replacing other chunks")
 	assert(controller.is_chunk_loaded(chunk_id) and chunk.get_parent() == controller, "Recovery keeps the original chunk available for retry")
 
 	assert(controller.unload_chunk(chunk_id, now), "The same chunk can unload after recovery")
