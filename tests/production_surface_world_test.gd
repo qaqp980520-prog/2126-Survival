@@ -355,6 +355,21 @@ func _test_durable_save_load(now_unix: int) -> void:
 	world.set("mine_director", original_mine_director)
 	pending_director.queue_free()
 
+	var missing_api_director := MissingRegistryPairRecoveryApi.new()
+	root.add_child(missing_api_director)
+	world.set("mine_director", missing_api_director)
+	_expect(not bool(world.call("save_game", blocked_path)) and not bool(world.call("load_game", blocked_path)), "missing Underground Director recovery API fails closed for disk persistence")
+	world.set("mine_director", original_mine_director)
+	missing_api_director.queue_free()
+
+	var original_registry: Node = world.get("registry") as Node
+	var missing_registry_api := Node.new()
+	root.add_child(missing_registry_api)
+	world.set("registry", missing_registry_api)
+	_expect(not bool(world.call("save_game", blocked_path)) and not bool(world.call("load_game", blocked_path)), "missing Mineral Registry recovery API fails closed for disk persistence")
+	world.set("registry", original_registry)
+	missing_registry_api.queue_free()
+
 	var locked_chunk_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
 	if not locked_chunk_ids.is_empty():
 		var locked_chunk_id: String = str(locked_chunk_ids[0])
