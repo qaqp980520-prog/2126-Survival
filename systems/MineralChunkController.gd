@@ -285,7 +285,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))
 		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, not terrain_rollback_ok)
 		_set_chunk_load_report(false, "terrain_adjacency", str(adjacency_result.get("error", "terrain_rebind_failed")), rollback_complete, {
 			"world_object_live_nodes_ok": bool(object_rollback.get("live_nodes_ok", false)),
 			"world_object_registry_ok": bool(object_rollback.get("registry_ok", false)),
@@ -309,7 +309,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var mineral_recovery_required: bool = bool(mineral_report.get("recovery_required", false))
 		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok and mineral_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true, mineral_recovery_required)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, not terrain_rollback_ok, mineral_recovery_required)
 		_set_chunk_load_report(false, "mineral_registration", "Atomic mineral registration rejected the candidate chunk.", rollback_complete, {
 			"world_object_live_nodes_ok": bool(object_rollback.get("live_nodes_ok", false)),
 			"world_object_registry_ok": bool(object_rollback.get("registry_ok", false)),
