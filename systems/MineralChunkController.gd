@@ -81,6 +81,7 @@ func get_last_chunk_load_report() -> Dictionary:
 func has_pending_chunk_load_recovery() -> bool:
 	return (
 		_chunk_load_recovery_required
+		or not _pending_chunk_load_recovery.is_empty()
 		or _terrain_adjacency_recovery_required
 		or (
 			registry != null
