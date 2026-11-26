@@ -96,13 +96,15 @@ func recover_failed_chunk_load() -> bool:
 	var crop_ok: bool = true
 	var pending_crop_controller: Node = pending.get("crop_controller") as Node
 	var crop_snapshot: Dictionary = pending.get("crop_snapshot", {})
+	var crop_plots: Dictionary = pending.get("crop_plots", {})
 	if not crop_snapshot.is_empty():
 		if not is_instance_valid(pending_crop_controller) or crop_controller != pending_crop_controller:
 			crop_ok = false
 		else:
-			crop_ok = _restore_crop_snapshot(crop_snapshot, pending.get("crop_plots", {}))
+			crop_ok = _restore_crop_snapshot(crop_snapshot, crop_plots)
 
-	var live_objects_ok: bool = _restore_live_world_object_snapshot(pending.get("initial_object_states", {}), true)
+	var initial_object_states: Dictionary = pending.get("initial_object_states", {})
+	var live_objects_ok: bool = _restore_live_world_object_snapshot(initial_object_states, true)
 	var object_registry_ok: bool = true
 	var pending_object_registry: Node = pending.get("object_state_registry") as Node
 	var object_snapshot: Dictionary = pending.get("object_registry_snapshot", {})
