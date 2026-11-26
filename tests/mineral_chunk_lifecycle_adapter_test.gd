@@ -119,6 +119,11 @@ func _test_failed_batch_load_is_atomic_for_all_veins() -> void:
 	var second_before: Dictionary = second.call("to_save_dict")
 	var registry_before: Dictionary = registry.to_save_dict()
 
+	assert(not adapter.load_chunk("earth/adapter-duplicate-node", {"gold-a": first, "gold-b": first}, now), "One live node cannot be registered under two stable IDs in the same batch")
+	assert(first.call("to_save_dict") == first_before, "Duplicate-node rejection leaves the shared node unchanged")
+	assert(registry.to_save_dict() == registry_before, "Duplicate-node rejection leaves saved records unchanged")
+	assert(registry.get_registered_ids().is_empty(), "Duplicate-node rejection commits no registry entry")
+
 	assert(not adapter.load_chunk(chunk_id, {"gold-01": first, "iron-02": second}, now), "A later saved-record mineral mismatch rejects the complete adapter batch")
 	assert(first.call("to_save_dict") == first_before, "Earlier live vein remains unchanged after a later participant rejects")
 	assert(second.call("to_save_dict") == second_before, "Rejected live vein remains unchanged")
