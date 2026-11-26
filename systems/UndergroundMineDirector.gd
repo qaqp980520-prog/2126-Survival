@@ -43,6 +43,9 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _is_safe_world_position(world_position):
 		_set_report(false, "validation", "Underground position, depth or grid settings are invalid.", true)
 		return false
+	if not _recover_controller_before_compensation():
+		_set_report(false, "recovery_barrier", "Controller recovery is still pending; underground streaming is blocked.", false)
+		return false
 	if not _reconcile_controller_ids():
 		_set_report(false, "reconcile", "Loaded underground mine IDs cannot be reconciled safely.", false)
 		return false
@@ -52,11 +55,6 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		_set_report(false, "validation", "A positive Unix timestamp is required.", true)
 		return false
 	var previous_managed: Dictionary = _managed_chunk_ids.duplicate(true)
-	var registry_snapshot: Dictionary = _capture_registry_snapshot()
-	if registry_snapshot.is_empty():
-		_set_report(false, "snapshot", "Could not snapshot the mineral registry before underground streaming.", true)
-		return false
-
 	var center: Vector2i = get_grid_coordinate(world_position)
 	var target_layer: int = get_layer_index(world_position)
 	var desired: Array[Vector2i] = []
@@ -69,6 +67,25 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	for coord in desired:
 		var id: String = _chunk_id(coord, target_layer)
 		desired_ids[id] = {"coord": coord, "layer": target_layer}
+
+	# Compute the complete transaction scope before any load mutates a Registry.
+	# It includes all planned loads and every currently managed chunk that may unload.
+	var stale_ids: Array[String] = []
+	var affected_chunk_ids: Array[String] = []
+	for raw_id in desired_ids.keys():
+		affected_chunk_ids.append(str(raw_id))
+	for raw_id in previous_managed.keys():
+		var previous_id: String = str(raw_id)
+		if not desired_ids.has(previous_id):
+			stale_ids.append(previous_id)
+		if not affected_chunk_ids.has(previous_id):
+			affected_chunk_ids.append(previous_id)
+	stale_ids.sort()
+	affected_chunk_ids.sort()
+	var registry_snapshot: Dictionary = _capture_registry_snapshot(affected_chunk_ids)
+	if registry_snapshot.is_empty():
+		_set_report(false, "snapshot", "Could not capture scoped Registry snapshots for the underground transaction.", true)
+		return false
 
 	var newly_loaded: Array[String] = []
 	for coord in desired:
@@ -83,36 +100,34 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 			_set_report(false, "load_factory", "Underground factory returned an invalid chunk root.", rollback_ok, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
+				"affected_chunk_ids": affected_chunk_ids.duplicate(),
 				"rollback_complete": rollback_ok
 			})
 			return false
 		if not bool(chunk_controller.call("load_chunk", id, candidate, now)):
-			_free_unowned_root(candidate)
+			if not _controller_has_pending_recovery():
+				_free_unowned_root(candidate)
 			var rollback_ok: bool = _rollback_transaction(newly_loaded, [], previous_managed, registry_snapshot, now)
 			_set_report(false, "load_registration", "Chunk controller rejected an underground chunk.", rollback_ok, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
+				"affected_chunk_ids": affected_chunk_ids.duplicate(),
 				"rollback_complete": rollback_ok
 			})
 			return false
 		_managed_chunk_ids[id] = {"coord": coord, "layer": target_layer}
 		newly_loaded.append(id)
 
-	var stale_ids: Array[String] = []
-	for id_value in _managed_chunk_ids.keys():
-		var id: String = str(id_value)
-		if not desired_ids.has(id):
-			stale_ids.append(id)
-	stale_ids.sort()
 	var unloaded_stale: Array[Dictionary] = []
 	for id in stale_ids:
-		var stale_entry: Dictionary = _managed_chunk_ids[id]
+		var stale_entry: Dictionary = previous_managed.get(id, {})
 		if not bool(chunk_controller.call("unload_chunk", id, now)):
 			var rollback_ok: bool = _rollback_transaction(newly_loaded, unloaded_stale, previous_managed, registry_snapshot, now)
 			_set_report(false, "stale_unload", "An obsolete underground chunk could not be unloaded.", rollback_ok, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
 				"unloaded_stale_ids": _entry_ids(unloaded_stale),
+				"affected_chunk_ids": affected_chunk_ids.duplicate(),
 				"rollback_complete": rollback_ok
 			})
 			return false
@@ -128,7 +143,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		"layer_index": target_layer,
 		"desired_count": desired.size(),
 		"newly_loaded_ids": newly_loaded.duplicate(),
-		"unloaded_stale_ids": _entry_ids(unloaded_stale)
+		"unloaded_stale_ids": _entry_ids(unloaded_stale),
+		"affected_chunk_ids": affected_chunk_ids.duplicate()
 	})
 	return true
 
@@ -221,44 +237,91 @@ func _parse_chunk_id(id: String) -> Dictionary:
 		return {"valid": false, "coordinate": Vector2i.ZERO, "layer": -1}
 	return {"valid": true, "coordinate": coord, "layer": layer_index}
 
-func _capture_registry_snapshot() -> Dictionary:
+func _capture_registry_snapshot(chunk_ids: Array[String]) -> Dictionary:
 	var mineral_registry: Variant = chunk_controller.get("registry")
-	if mineral_registry == null or not is_instance_valid(mineral_registry) or not mineral_registry.has_method("to_save_dict") or not mineral_registry.has_method("restore_snapshot_exact"):
+	if mineral_registry == null or not is_instance_valid(mineral_registry):
 		return {}
-	var mineral_snapshot: Variant = mineral_registry.call("to_save_dict")
-	if not (mineral_snapshot is Dictionary) or not mineral_snapshot.has("schema_version") or not mineral_snapshot.has("veins"):
+	for method_name in ["to_chunk_set_snapshot", "validate_chunk_set_snapshot", "restore_chunk_set_snapshot"]:
+		if not mineral_registry.has_method(method_name):
+			return {}
+	var mineral_snapshot: Variant = mineral_registry.call("to_chunk_set_snapshot", chunk_ids)
+	if not (mineral_snapshot is Dictionary) or not bool(mineral_registry.call("validate_chunk_set_snapshot", chunk_ids, mineral_snapshot)):
 		return {}
 	var object_registry: Variant = chunk_controller.get("object_state_registry")
-	if object_registry == null or not is_instance_valid(object_registry) or not object_registry.has_method("to_save_dict") or not object_registry.has_method("restore_save_dict"):
+	if object_registry == null or not is_instance_valid(object_registry):
 		return {}
-	var object_snapshot: Variant = object_registry.call("to_save_dict")
-	if not (object_snapshot is Dictionary) or not object_snapshot.has("schema_version") or not object_snapshot.has("objects"):
+	for method_name in ["to_chunk_set_save_dict", "validate_chunk_set_save_dict", "restore_chunk_set_save_dict"]:
+		if not object_registry.has_method(method_name):
+			return {}
+	var object_snapshot: Variant = object_registry.call("to_chunk_set_save_dict", chunk_ids)
+	if not (object_snapshot is Dictionary) or not bool(object_registry.call("validate_chunk_set_save_dict", chunk_ids, object_snapshot)):
 		return {}
 	return {
+		"chunk_ids": chunk_ids.duplicate(),
 		"mineral": mineral_snapshot.duplicate(true),
 		"objects": object_snapshot.duplicate(true)
 	}
 
-func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], previous_managed: Dictionary, registry_snapshot: Dictionary, now_unix: int) -> bool:
-	var new_ok: bool = _rollback_new_loads(new_ids, now_unix)
+func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: int) -> bool:
+	var chunk_ids: Array = registry_snapshot.get("chunk_ids", [])
 	var mineral_registry: Variant = chunk_controller.get("registry")
 	var object_registry: Variant = chunk_controller.get("object_state_registry")
+	if chunk_ids.is_empty() or mineral_registry == null or not is_instance_valid(mineral_registry) or object_registry == null or not is_instance_valid(object_registry):
+		return false
 	var mineral_snapshot: Dictionary = registry_snapshot.get("mineral", {})
 	var object_snapshot: Dictionary = registry_snapshot.get("objects", {})
-	var mineral_ok: bool = mineral_registry != null and is_instance_valid(mineral_registry) and mineral_registry.has_method("restore_snapshot_exact") and bool(mineral_registry.call("restore_snapshot_exact", mineral_snapshot, now_unix))
-	var objects_ok: bool = object_registry != null and is_instance_valid(object_registry) and object_registry.has_method("restore_save_dict") and bool(object_registry.call("restore_save_dict", object_snapshot))
-	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix) if mineral_ok and objects_ok else false
-	var final_mineral_ok: bool = false
-	var final_objects_ok: bool = false
-	if old_ok and mineral_registry != null and is_instance_valid(mineral_registry) and mineral_registry.has_method("restore_snapshot_exact"):
-		# Re-apply exact snapshots after reloading stale roots; registration can update both registries.
-		final_mineral_ok = bool(mineral_registry.call("restore_snapshot_exact", mineral_snapshot, now_unix))
-	if old_ok and object_registry != null and is_instance_valid(object_registry) and object_registry.has_method("restore_save_dict"):
-		final_objects_ok = bool(object_registry.call("restore_save_dict", object_snapshot))
-	var rollback_complete: bool = new_ok and mineral_ok and objects_ok and old_ok and final_mineral_ok and final_objects_ok
+	if not bool(mineral_registry.call("validate_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
+		return false
+	if not bool(object_registry.call("validate_chunk_set_save_dict", chunk_ids, object_snapshot)):
+		return false
+	var current_objects: Dictionary = object_registry.call("to_chunk_set_save_dict", chunk_ids)
+	if current_objects.is_empty():
+		return false
+	if not bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, object_snapshot)):
+		return false
+	if not bool(mineral_registry.call("restore_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
+		# The mineral restore is internally atomic. If it rejects, return the object
+		# Registry to its pre-compensation chunk set rather than leave half a pair.
+		var object_rollback_ok: bool = bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, current_objects))
+		return false and object_rollback_ok
+	return true
+
+func _controller_has_pending_recovery() -> bool:
+	if chunk_controller == null or not is_instance_valid(chunk_controller):
+		return true
+	return chunk_controller.has_method("has_pending_chunk_load_recovery") and bool(chunk_controller.call("has_pending_chunk_load_recovery"))
+
+func _recover_controller_before_compensation() -> bool:
+	if not _controller_has_pending_recovery():
+		return true
+	if not chunk_controller.has_method("recover_failed_chunk_load"):
+		return false
+	if not bool(chunk_controller.call("recover_failed_chunk_load")):
+		return false
+	return not _controller_has_pending_recovery()
+
+func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], previous_managed: Dictionary, registry_snapshot: Dictionary, now_unix: int) -> bool:
+	if not _recover_controller_before_compensation():
+		_managed_chunk_ids = _actual_managed_map()
+		return false
+	var new_ok: bool = _rollback_new_loads(new_ids, now_unix)
+	if not new_ok or not _recover_controller_before_compensation():
+		_managed_chunk_ids = _actual_managed_map()
+		return false
+	var registry_ok: bool = _restore_registry_snapshot_pair(registry_snapshot, now_unix)
+	if not registry_ok:
+		_managed_chunk_ids = _actual_managed_map()
+		return false
+	var old_ok: bool = _restore_unloaded_chunks(unloaded, now_unix)
+	if not old_ok or not _recover_controller_before_compensation():
+		_managed_chunk_ids = _actual_managed_map()
+		return false
+	var final_registry_ok: bool = _restore_registry_snapshot_pair(registry_snapshot, now_unix)
+	var rollback_complete: bool = old_ok and final_registry_ok
 	_managed_chunk_ids = previous_managed.duplicate(true) if rollback_complete else _actual_managed_map()
 	return rollback_complete
 
+func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 	var success := true
 	for i in range(ids.size() - 1, -1, -1):
@@ -270,7 +333,6 @@ func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 	return success
 
 func _restore_unloaded_chunks(entries: Array[Dictionary], now_unix: int) -> bool:
-	var success := true
 	for entry in entries:
 		var id: String = str(entry.get("id", ""))
 		var coord: Vector2i = entry.get("coord", Vector2i.ZERO)
@@ -278,13 +340,14 @@ func _restore_unloaded_chunks(entries: Array[Dictionary], now_unix: int) -> bool
 		var candidate: Variant = chunk_factory.call(coord, layer_index, now_unix)
 		if not is_instance_valid(candidate) or not (candidate is Node3D) or candidate.get_parent() != null:
 			_free_unowned_root(candidate)
-			success = false
-			continue
+			return false
 		if not bool(chunk_controller.call("load_chunk", id, candidate, now_unix)):
-			_free_unowned_root(candidate)
-			success = false
-	return success
+			if not _controller_has_pending_recovery():
+				_free_unowned_root(candidate)
+			return false
+	return true
 
+func _actual_managed_map() -> Dictionary:
 func _actual_managed_map() -> Dictionary:
 	var result: Dictionary = {}
 	if chunk_controller == null or not is_instance_valid(chunk_controller):
