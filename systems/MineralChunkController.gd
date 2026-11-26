@@ -668,6 +668,11 @@ func restore_save_dict(payload: Dictionary, now_unix: int = -1) -> bool:
 		return false
 	return bool(registry.restore_save_dict(payload, now_unix))
 
+func restore_snapshot_exact(payload: Dictionary, now_unix: int = -1) -> bool:
+	if registry == null or not registry.has_method("restore_snapshot_exact"):
+		return false
+	return bool(registry.call("restore_snapshot_exact", payload, now_unix))
+
 func _collect_loaded_terrain_patches() -> Array[Node3D]:
 	var patches: Array[Node3D] = []
 	for chunk_objects in _chunk_objects.values():
