@@ -6,6 +6,42 @@ const Adapter = preload("res://systems/MineralChunkLifecycleAdapter.gd")
 const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const Director = preload("res://systems/MineralGridStreamingDirector.gd")
 
+class RecoveryReportingController extends "res://systems/MineralChunkController.gd":
+	var fail_next_load_with_recovery: bool = false
+	var recovery_pending: bool = false
+	var last_load_report: Dictionary = {}
+
+	func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
+		if fail_next_load_with_recovery:
+			fail_next_load_with_recovery = false
+			recovery_pending = true
+			last_load_report = {
+				"success": false,
+				"phase": "world_object_restore",
+				"rollback_complete": false,
+				"recovery_required": true,
+				"details": {"crop_registry_ok": false}
+			}
+			return false
+		return super.load_chunk(chunk_id, chunk_root, now_unix)
+
+	func has_pending_chunk_load_recovery() -> bool:
+		return recovery_pending
+
+	func get_last_chunk_load_report() -> Dictionary:
+		return last_load_report.duplicate(true)
+
+	func recover_failed_chunk_load() -> bool:
+		recovery_pending = false
+		last_load_report = {
+			"success": true,
+			"phase": "recovery_complete",
+			"rollback_complete": true,
+			"recovery_required": false,
+			"details": {}
+		}
+		return true
+
 var _fail_coordinate := Vector2i(999, 999)
 var _registration_fail_coordinate := Vector2i(999, 999)
 var _registration_now: int = 0
@@ -24,6 +60,8 @@ func _run_tests() -> void:
 	await _test_generation_failure_preserves_active_set()
 	await process_frame
 	await _test_registration_failure_preserves_active_window()
+	await process_frame
+	await _test_controller_rollback_state_propagates_to_director_report()
 	await process_frame
 	print("Mineral grid streaming director tests passed.")
 	quit(0)
@@ -158,6 +196,45 @@ func _test_registration_failure_preserves_active_window() -> void:
 	_registration_fail_coordinate = Vector2i(999, 999)
 	_registration_first = null
 	_registration_second = null
+
+func _test_controller_rollback_state_propagates_to_director_report() -> void:
+	var registry: Node = Registry.new()
+	var controller: Node3D = RecoveryReportingController.new()
+	var director: Node = Director.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	root.add_child(director)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	director.chunk_size_x = 10.0
+	director.chunk_size_z = 10.0
+	director.load_radius = 0
+	assert(director.bind_controller(controller))
+	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
+	assert(director.sync_to_world_position(Vector3(1, 0, 1), 3000))
+	var previous: PackedStringArray = director.get_managed_chunk_ids()
+	assert(previous.size() == 1)
+
+	controller.set("fail_next_load_with_recovery", true)
+	assert(not director.sync_to_world_position(Vector3(21, 0, 1), 3001))
+	var report: Dictionary = director.get_last_sync_report()
+	var details: Dictionary = report.get("details", {})
+	assert(str(report.get("phase", "")) == "load_registration")
+	assert(bool(details.get("candidate_cleanup_ok", false)), "The rejected detached candidate was cleaned up")
+	assert(bool(details.get("new_loads_rollback_ok", false)), "No earlier new chunks needed rollback in this radius-zero move")
+	assert(bool(details.get("controller_load_recovery_required", false)), "The Director surfaces the Controller recovery barrier")
+	assert(not bool(details.get("controller_load_rollback_complete", true)), "The Controller's incomplete rollback is propagated")
+	assert(not bool(report.get("rollback_complete", true)), "The Director must not claim complete rollback when the Controller reports incomplete recovery")
+	assert(director.get_managed_chunk_ids() == previous, "The previous Director active set remains unchanged")
+	assert(controller.get_loaded_chunk_ids() == previous, "The previous Controller active set remains unchanged")
+
+	assert(director.recover_to_world_position(Vector3(21, 0, 1), 3002), "Explicit Director recovery retries Controller recovery before reconciling the window")
+	assert(director.get_managed_chunk_ids().size() == 1)
+	assert(controller.get_loaded_chunk_ids() == director.get_managed_chunk_ids())
+	director.queue_free()
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
 
 func _make_chunk(coord: Vector2i) -> Node3D:
 	if coord == _fail_coordinate:
