@@ -190,6 +190,10 @@ static func promote_backup(path: String, payload_validator: Callable, rename_ope
 	var absolute_path: String = ProjectSettings.globalize_path(path)
 	if DirAccess.dir_exists_absolute(absolute_path):
 		return {"ok": false, "phase": "primary_preflight", "reason": "primary_path_is_directory"}
+	if FileAccess.file_exists(path):
+		var current_primary: Dictionary = read_valid_file(path, payload_validator)
+		if bool(current_primary.get("ok", false)):
+			return {"ok": false, "phase": "primary_preflight", "reason": "primary_became_valid_before_backup_promotion"}
 	var temp_path: String = path + ".restore.tmp"
 	if not _remove_file_if_present(temp_path):
 		return {"ok": false, "phase": "restore_temp", "reason": "stale_restore_temp_could_not_be_removed"}
@@ -232,9 +236,16 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 		return {"ok": true, "phase": "no_interrupted_write"}
 	var primary_result: Dictionary = read_valid_file(path, payload_validator)
 	if bool(primary_result.get("ok", false)):
-		if not _remove_file_if_present(previous_path):
-			return {"ok": false, "reason": "stale_previous_cleanup_failed"}
-		return {"ok": true, "phase": "primary_already_valid"}
+		var previous_result: Dictionary = read_valid_file(previous_path, payload_validator)
+		if bool(previous_result.get("ok", false)):
+			if not _remove_file_if_present(previous_path):
+				return {"ok": false, "reason": "stale_previous_cleanup_failed"}
+			return {"ok": true, "phase": "primary_already_valid"}
+		var archive_path: String = _unique_corrupt_archive_path(path)
+		var archive_error: int = _rename_path(previous_path, archive_path, rename_operation)
+		if archive_error != OK:
+			return {"ok": false, "reason": "invalid_previous_could_not_be_archived", "error": archive_error}
+		return {"ok": true, "phase": "invalid_previous_archived", "archive_path": archive_path}
 	var previous_result: Dictionary = read_valid_file(previous_path, payload_validator)
 	if not bool(previous_result.get("ok", false)):
 		return {"ok": false, "reason": "neither_primary_nor_previous_is_valid"}
