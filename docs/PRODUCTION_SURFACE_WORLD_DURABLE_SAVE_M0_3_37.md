@@ -113,3 +113,17 @@ No third-party dependency, new Autoload, scene, or save-schema migration is intr
 - The in-memory recovery barrier is not a disk-backed crash-recovery journal.
 - `save_game()` and `load_game()` are manual F5/F9 entry points; no autosave is enabled. Future autosave must route through the same barrier-aware entry points.
 - Verify the exact final CI HEAD, inspect all workflow logs, and update this asset with the final evidence before requesting review.
+
+
+## Run 451 — exact-head JSON round-trip and Controller barrier correction (candidate)
+
+The first exact-head Full Compatibility Gate on the initial PR #452 candidate reached the production SurfaceWorld integration test and failed at temporary-file verification. The decoded JSON payload was rejected by the stream validator because schema_version and mine_depth accepted only int, while Godot 4.3 JSON parsing represents integral JSON numbers as numeric Variants that may be float. This caused the first save to fail with phase=temp_verify, reason=payload_validation_failed; backup, promotion, and restart assertions then failed downstream. The failure was a production preflight compatibility defect, not a file-write failure.
+
+The correction candidate:
+
+- Accepts only finite whole-valued numeric Variants for the stream schema, world seed, and mine depth; fractional values remain rejected.
+- Treats a non-empty retained _pending_chunk_load_recovery payload as a pending Controller recovery barrier, even if the companion boolean is temporarily inconsistent.
+- Adds a file-reader regression that serializes whole-valued JSON numeric fields, parses the envelope back from disk, and validates the decoded payload.
+- Adds positive and negative fractional schema/depth assertions and checks that Controller recovery blocks snapshots and direct restore with the expected barrier phase.
+
+Exact-head Godot 4.3 validation for this correction candidate is pending. Do not treat the failed initial PR #452 Full Gate as a pass. Local Godot is unavailable; no local engine run is claimed.
