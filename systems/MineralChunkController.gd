@@ -27,7 +27,7 @@ var _last_chunk_load_report: Dictionary = {}
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["register_vein", "register_veins_atomic", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
+	for method_name in ["register_vein", "register_veins_atomic", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict", "get_last_atomic_registration_report", "has_pending_atomic_registration_recovery", "recover_last_atomic_registration"]:
 		if not candidate.has_method(method_name):
 			return false
 	if _chunk_load_recovery_required and registry != candidate:
@@ -104,7 +104,14 @@ func recover_failed_chunk_load() -> bool:
 	var terrain_ok: bool = true
 	if bool(pending.get("refresh_terrain", false)):
 		terrain_ok = refresh_terrain_adjacency()
-	var rollback_complete: bool = crop_ok and live_objects_ok and object_registry_ok and terrain_ok
+	var mineral_ok: bool = true
+	if bool(pending.get("mineral_recovery_required", false)):
+		var pending_mineral_registry: Node = pending.get("mineral_registry") as Node
+		if not is_instance_valid(pending_mineral_registry) or registry != pending_mineral_registry or not registry.has_method("recover_last_atomic_registration"):
+			mineral_ok = false
+		else:
+			mineral_ok = bool(registry.call("recover_last_atomic_registration"))
+	var rollback_complete: bool = crop_ok and live_objects_ok and object_registry_ok and terrain_ok and mineral_ok
 	if rollback_complete:
 		_chunk_load_recovery_required = false
 		_pending_chunk_load_recovery.clear()
@@ -117,13 +124,17 @@ func recover_failed_chunk_load() -> bool:
 			"crop_registry_ok": crop_ok,
 			"world_object_live_nodes_ok": live_objects_ok,
 			"world_object_registry_ok": object_registry_ok,
-			"terrain_adjacency_ok": terrain_ok
+			"terrain_adjacency_ok": terrain_ok,
+			"mineral_registry_ok": mineral_ok
 		}
 	)
 	return rollback_complete
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	_set_chunk_load_report(false, "validation", "preflight_rejected", true)
+	if not _chunk_load_recovery_required and registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
 	if _chunk_load_recovery_required:
 		_set_chunk_load_report(false, "recovery_required", "Recover the previous failed chunk-load transaction before loading or unloading more chunks.", false, {"recovery_required": true})
 		return false
@@ -276,14 +287,20 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 		var terrain_restore: Dictionary = _rebind_terrain_patches(existing_terrain_patches)
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))
-		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok
+		var mineral_report: Dictionary = registry.call("get_last_atomic_registration_report")
+		var mineral_rollback_ok: bool = bool(mineral_report.get("rollback_complete", true))
+		var mineral_recovery_required: bool = bool(mineral_report.get("recovery_required", false))
+		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok and mineral_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true, mineral_recovery_required)
 		_set_chunk_load_report(false, "mineral_registration", "Atomic mineral registration rejected the candidate chunk.", rollback_complete, {
 			"world_object_live_nodes_ok": bool(object_rollback.get("live_nodes_ok", false)),
 			"world_object_registry_ok": bool(object_rollback.get("registry_ok", false)),
 			"crop_registry_ok": crop_rollback_ok,
-			"terrain_adjacency_ok": terrain_rollback_ok
+			"terrain_adjacency_ok": terrain_rollback_ok,
+			"mineral_registry_rollback_ok": mineral_rollback_ok,
+			"mineral_registry_recovery_required": mineral_recovery_required,
+			"mineral_registry_report": mineral_report
 		})
 		return false
 
@@ -313,6 +330,10 @@ func _end_chunk_load_restore(veins: Dictionary) -> void:
 ## Captures mineral state before freeing a chunk. Crop records remain in CropRegistry;
 ## the next root with the same chunk ID reuses the same stable crop IDs.
 func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
+	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+		_chunk_load_recovery_required = true
+		if _pending_chunk_load_recovery.is_empty():
+			_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
 	if _chunk_load_recovery_required:
 		return false
 	if registry == null or not _chunk_roots.has(chunk_id):
@@ -752,7 +773,8 @@ func _queue_chunk_load_recovery(
 	crop_plots: Dictionary,
 	object_registry_snapshot: Dictionary,
 	initial_object_states: Dictionary,
-	refresh_terrain: bool
+	refresh_terrain: bool,
+	mineral_recovery_required: bool = false
 ) -> void:
 	_chunk_load_recovery_required = true
 	_pending_chunk_load_recovery = {
@@ -762,7 +784,9 @@ func _queue_chunk_load_recovery(
 		"object_state_registry": object_state_registry,
 		"object_registry_snapshot": object_registry_snapshot.duplicate(true),
 		"initial_object_states": initial_object_states.duplicate(true),
-		"refresh_terrain": refresh_terrain
+		"refresh_terrain": refresh_terrain,
+		"mineral_registry": registry,
+		"mineral_recovery_required": mineral_recovery_required
 	}
 
 func _set_chunk_load_report(success: bool, phase: String, error: String, rollback_complete: bool, details: Dictionary = {}) -> void:
