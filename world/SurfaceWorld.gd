@@ -890,6 +890,38 @@ func serialize_stream_state() -> Dictionary:
 	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
+		return false
+	var previous_payload: Dictionary = serialize_stream_state()
+	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload)
+
+func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, previous_payload: Dictionary) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
+		return false
+	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
+		_set_restore_report(false, "preload_snapshot", "A complete rollback snapshot is unavailable; no restore was started.", true)
+		return false
+	var success: bool = _restore_stream_state_impl(payload, now_unix)
+	if not success:
+		var restore_report: Dictionary = get_last_restore_report()
+		if not bool(restore_report.get("rollback_complete", true)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "direct_world_restore_rollback_incomplete",
+				"restore_report": restore_report.duplicate(true)
+			}
+			_save_recovery_kind = "world"
+			_save_recovery_path = ""
+			_pending_save_recovery_payload = previous_payload.duplicate(true)
+			_pending_save_recovery_now = now_unix if now_unix >= 0 else int(Time.get_unix_time_from_system())
+		return false
+	return true
+
+func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1) -> bool:
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not recovery_barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
@@ -1446,7 +1478,7 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 		_set_save_report(false, "preload_snapshot", "current_world_snapshot_unavailable_or_invalid")
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
-	if not restore_stream_state(candidate_payload, now):
+	if not _restore_stream_state_with_snapshot(candidate_payload, now, previous_payload):
 		var restore_report: Dictionary = get_last_restore_report()
 		if not bool(restore_report.get("rollback_complete", true)):
 			_save_recovery_barrier_report = {
@@ -1532,7 +1564,7 @@ func retry_save_recovery() -> bool:
 		if recovery_payload.is_empty():
 			return false
 		_save_recovery_barrier_report.clear()
-		if not restore_stream_state(recovery_payload, _pending_save_recovery_now):
+		if not _restore_stream_state_with_snapshot(recovery_payload, _pending_save_recovery_now, recovery_payload):
 			_save_recovery_barrier_report = {
 				"recovery_required": true,
 				"reason": "world_recovery_retry_failed",
