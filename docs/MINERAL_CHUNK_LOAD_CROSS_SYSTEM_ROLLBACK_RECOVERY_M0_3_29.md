@@ -16,10 +16,10 @@ Close the gap where `MineralChunkController.load_chunk()` could reject a candida
 ## Transaction behavior
 
 - Controller reports include phase, error, `rollback_complete`, `recovery_required`, and participant-level results for crop registry, live world-object nodes, world-object registry, terrain adjacency, and mineral registry.
-- If any participant cannot prove restoration, Controller retains the exact snapshots/references needed for a retry and raises a lifecycle barrier. Further chunk loads and unloads are rejected until recovery succeeds.
+- If any participant cannot prove restoration, Controller retains the exact snapshots/references needed for a retry and raises a lifecycle barrier. Its pending-state query also reflects a Registry-level pending mineral recovery, even if that recovery was initiated outside the Controller. Further chunk loads and unloads are rejected until recovery succeeds.
 - MineralVeinRegistry compares each live node against the pre-apply snapshot after a failed atomic registration. A mismatch creates a pending recovery record; direct register/unregister/restore mutations are blocked until that record is recovered.
 - Director sync reports combine candidate cleanup, newly loaded chunk rollback, and the Controller's own rollback result. The async path uses the same aggregation.
-- If the Controller reports incomplete rollback, the Director retains the detached candidate root instead of freeing nodes still referenced by a pending Registry recovery record. It releases that root only after Controller recovery succeeds.
+- If the Controller reports incomplete rollback, the Director retains the detached candidate root together with the exact Controller owner instead of freeing nodes still referenced by a pending Registry recovery record. It releases that root only after that same Controller reports recovery complete; replacing or destroying the owner does not silently free the candidate.
 - `recover_to_world_position()` invokes the Controller recovery hook first, then releases retained failed candidates, reconciles actual loaded IDs, and retries the requested window.
 
 ## Dependencies
@@ -39,7 +39,7 @@ No new import step. Existing scripts are loaded by the Godot project. The Contro
 
 ## Limitations
 
-- Recovery is an explicit retry operation; it does not silently restart a rejected chunk load. The caller must retry the same detached root or generate a replacement after recovery.
+- Recovery is an explicit retry operation; it does not silently restart a rejected chunk load. A direct Controller caller must keep the same detached root alive until recovery completes, then retry it or generate a replacement. The Director retains its own factory-created candidate together with the original Controller identity while that Controller is pending; it does not free the candidate if the owner is replaced or destroyed.
 - Missing candidate world-object nodes are skipped during recovery because a freed caller-owned root no longer has live objects to restore; the authoritative registry snapshot is still restored.
 - This does not yet make every world subsystem (inventory, crop visuals, terrain collider resources, and all streaming participants) a single lock-free transaction. It provides a fail-closed Controller barrier and reports the rollback state of the participants currently owned by chunk loading.
 - No GPU, rendered FPS, Xvfb/Mesa, mobile, or target-device validation is implied.
