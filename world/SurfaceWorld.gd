@@ -856,6 +856,20 @@ func _get_underground_recovery_barrier_report() -> Dictionary:
 	var locked_chunk_ids: PackedStringArray = object_state_registry.call("get_locked_chunk_ids")
 	if not locked_chunk_ids.is_empty():
 		return {"recovery_required": true, "reason": "world_object_chunk_write_locked", "locked_chunk_ids": locked_chunk_ids}
+	if chunk_controller == null or not is_instance_valid(chunk_controller):
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_unavailable"}
+	if not chunk_controller.has_method("has_pending_chunk_load_recovery"):
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_recovery_api_unavailable"}
+	if bool(chunk_controller.call("has_pending_chunk_load_recovery")):
+		var controller_report: Dictionary = chunk_controller.call("get_last_chunk_load_report") if chunk_controller.has_method("get_last_chunk_load_report") else {}
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_recovery_pending", "controller_report": controller_report}
+	if director == null or not is_instance_valid(director):
+		return {"recovery_required": true, "reason": "surface_streaming_director_unavailable"}
+	if not director.has_method("get_pending_recovery_root_count"):
+		return {"recovery_required": true, "reason": "surface_streaming_director_recovery_api_unavailable"}
+	var pending_recovery_root_count: int = int(director.call("get_pending_recovery_root_count"))
+	if pending_recovery_root_count > 0:
+		return {"recovery_required": true, "reason": "surface_streaming_director_recovery_roots_pending", "pending_recovery_root_count": pending_recovery_root_count}
 	if mine_director == null or not is_instance_valid(mine_director):
 		return {"recovery_required": true, "reason": "underground_director_unavailable"}
 	if not mine_director.has_method("has_pending_registry_pair_recovery"):
