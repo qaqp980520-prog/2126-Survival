@@ -76,7 +76,8 @@ func _run() -> void:
 	_expect(bool(chunk_registry.call("set_object_state", chunk_set_b + "/crate", chunk_set_b, {"opened": false})), "chunk-set snapshot accepts second selected chunk")
 	_expect(bool(chunk_registry.call("set_object_state", chunk_set_unrelated + "/crate", chunk_set_unrelated, {"opened": false})), "chunk-set snapshot accepts unrelated chunk")
 	var chunk_set_snapshot: Dictionary = chunk_registry.call("to_chunk_set_save_dict", [chunk_set_b, chunk_set_a])
-	_expect(chunk_set_snapshot.get("chunk_ids", []) == [chunk_set_a, chunk_set_b], "chunk-set snapshot normalizes selected IDs deterministically")
+	var normalized_chunk_ids: Array = chunk_set_snapshot.get("chunk_ids", [])
+	_expect(normalized_chunk_ids.size() == 2 and str(normalized_chunk_ids[0]) == chunk_set_a and str(normalized_chunk_ids[1]) == chunk_set_b, "chunk-set snapshot normalizes selected IDs deterministically")
 	_expect(chunk_set_snapshot.get("objects", {}).size() == 2, "chunk-set snapshot contains only selected chunk records")
 	_expect(bool(chunk_registry.call("set_object_state", chunk_set_a + "/crate", chunk_set_a, {"opened": true})), "selected chunk changes after snapshot")
 	_expect(bool(chunk_registry.call("set_object_state", chunk_set_b + "/crate", chunk_set_b, {"opened": true})), "second selected chunk changes after snapshot")
@@ -88,6 +89,10 @@ func _run() -> void:
 	var foreign_chunk_set: Dictionary = chunk_set_snapshot.duplicate(true)
 	foreign_chunk_set["objects"][chunk_set_unrelated + "/foreign"] = {"chunk_id": chunk_set_unrelated, "state": {"opened": false}}
 	_expect(not bool(chunk_registry.call("validate_chunk_set_save_dict", [chunk_set_a, chunk_set_b], foreign_chunk_set)), "multi-chunk validation rejects foreign records")
+	var chunk_set_lock_token := "chunk-set-recovery-token"
+	_expect(bool(chunk_registry.call("lock_chunk_writes", chunk_set_a, chunk_set_lock_token)), "multi-chunk restore test locks one selected chunk")
+	_expect(not bool(chunk_registry.call("restore_chunk_set_save_dict", [chunk_set_a, chunk_set_b], chunk_set_snapshot)), "multi-chunk restore cannot bypass a selected chunk write lease")
+	_expect(bool(chunk_registry.call("unlock_chunk_writes", chunk_set_a, chunk_set_lock_token)), "multi-chunk restore test releases selected chunk lease")
 	_expect(chunk_registry.call("to_chunk_set_save_dict", [chunk_set_a, chunk_set_a]).is_empty(), "multi-chunk capture rejects duplicate chunk IDs")
 	chunk_registry.queue_free()
 	await process_frame
