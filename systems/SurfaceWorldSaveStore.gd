@@ -36,9 +36,9 @@ static func decode_envelope(content: String) -> Dictionary:
 	var payload: Variant = raw_envelope.get("payload", null)
 	if not (format_id is String) or str(format_id) != FORMAT_ID:
 		return {"ok": false, "reason": "unsupported_format_id"}
-	if not (format_version is int) or int(format_version) != FORMAT_VERSION:
+	if not _is_integer_value(format_version) or int(format_version) != FORMAT_VERSION:
 		return {"ok": false, "reason": "unsupported_format_version"}
-	if not (saved_at is int) or int(saved_at) <= 0:
+	if not _is_integer_value(saved_at) or int(saved_at) <= 0:
 		return {"ok": false, "reason": "invalid_saved_at"}
 	if not (payload is Dictionary):
 		return {"ok": false, "reason": "invalid_payload_type"}
@@ -313,6 +313,13 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 	if not bool(verified_primary.get("ok", false)):
 		return {"ok": false, "reason": "restored_previous_primary_failed_verification", "recovery_required": true}
 	return {"ok": true, "phase": "previous_primary_restored", "archive_path": archive_path}
+
+static func _is_integer_value(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
 
 static func _canonical_payload_text(payload: Dictionary) -> String:
 	# Sorted keys and full precision make the digest stable across JSON parse/re-encode.
