@@ -179,7 +179,7 @@ func _run() -> void:
 	mutate_unrelated_on_factory_failure = false
 	fail_coordinate = Vector2i(999, 999)
 	fail_layer = 0
-	var current_managed_ids: Array = director.call("get_managed_chunk_ids")
+	var current_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
 	var shifted_desired_ids: Dictionary = {}
 	for z in range(-1, 2):
 		for x in range(1, 4):
