@@ -13,12 +13,12 @@ static func build_envelope(payload: Dictionary, saved_at_unix: int) -> Dictionar
 		"format_id": FORMAT_ID,
 		"format_version": FORMAT_VERSION,
 		"saved_at_unix": saved_at_unix,
-		"payload_sha256": JSON.stringify(payload_copy).sha256_text(),
+		"payload_sha256": _canonical_payload_text(payload_copy).sha256_text(),
 		"payload": payload_copy
 	}
 
 static func encode_envelope(envelope: Dictionary) -> String:
-	return JSON.stringify(envelope, "\t")
+	return JSON.stringify(envelope, "\t", true, true)
 
 static func decode_envelope(content: String) -> Dictionary:
 	if content.is_empty() or content.to_utf8_buffer().size() > MAX_SAVE_BYTES:
@@ -45,7 +45,7 @@ static func decode_envelope(content: String) -> Dictionary:
 	var payload_hash: Variant = raw_envelope.get("payload_sha256", null)
 	if not (payload_hash is String) or str(payload_hash).length() != 64:
 		return {"ok": false, "reason": "invalid_payload_checksum"}
-	if str(payload_hash) != JSON.stringify(payload).sha256_text():
+	if str(payload_hash) != _canonical_payload_text(payload).sha256_text():
 		return {"ok": false, "reason": "payload_checksum_mismatch"}
 	return {
 		"ok": true,
@@ -57,6 +57,8 @@ static func decode_envelope(content: String) -> Dictionary:
 static func read_valid_file(path: String, payload_validator: Callable) -> Dictionary:
 	if not _is_supported_user_path(path):
 		return {"ok": false, "reason": "unsupported_save_path"}
+	if _has_symlink_in_save_family(path):
+		return {"ok": false, "reason": "path_symlink", "path": path}
 	if not FileAccess.file_exists(path):
 		return {"ok": false, "reason": "file_missing"}
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -90,6 +92,8 @@ static func read_valid_file(path: String, payload_validator: Callable) -> Dictio
 static func write_atomic(path: String, envelope_text: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
 	if not _is_supported_user_path(path) or envelope_text.is_empty() or not payload_validator.is_valid():
 		return {"ok": false, "phase": "preflight", "reason": "invalid_write_arguments"}
+	if _has_symlink_in_save_family(path):
+		return {"ok": false, "phase": "path_symlink", "reason": "save_paths_must_not_traverse_symbolic_links"}
 	var interrupted: Dictionary = recover_interrupted_write(path, payload_validator, rename_operation)
 	if not bool(interrupted.get("ok", false)):
 		return {"ok": false, "phase": "interrupted_write_recovery", "reason": str(interrupted.get("reason", "recovery_failed")), "recovery_required": true}
@@ -212,6 +216,8 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 static func promote_backup(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
 	if not _is_supported_user_path(path):
 		return {"ok": false, "phase": "path_preflight", "reason": "unsupported_save_path"}
+	if _has_symlink_in_save_family(path):
+		return {"ok": false, "phase": "path_symlink", "reason": "save_paths_must_not_traverse_symbolic_links"}
 	var backup_path: String = path + ".bak"
 	var backup_result: Dictionary = read_valid_file(backup_path, payload_validator)
 	if not bool(backup_result.get("ok", false)):
@@ -260,6 +266,8 @@ static func promote_backup(path: String, payload_validator: Callable, rename_ope
 static func recover_interrupted_write(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
 	if not _is_supported_user_path(path):
 		return {"ok": false, "reason": "unsupported_save_path"}
+	if _has_symlink_in_save_family(path):
+		return {"ok": false, "reason": "path_symlink"}
 	var previous_path: String = path + ".previous"
 	if not FileAccess.file_exists(previous_path):
 		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(previous_path)):
@@ -305,6 +313,33 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 	if not bool(verified_primary.get("ok", false)):
 		return {"ok": false, "reason": "restored_previous_primary_failed_verification", "recovery_required": true}
 	return {"ok": true, "phase": "previous_primary_restored", "archive_path": archive_path}
+
+static func _canonical_payload_text(payload: Dictionary) -> String:
+	# Sorted keys and full precision make the digest stable across JSON parse/re-encode.
+	return JSON.stringify(payload, "", true, true)
+
+
+static func _has_symlink_in_save_family(path: String) -> bool:
+	for suffix in ["", ".tmp", ".bak", ".bak.tmp", ".previous", ".restore.tmp"]:
+		if _has_symlink_ancestor(ProjectSettings.globalize_path(path + suffix)):
+			return true
+	return false
+
+
+static func _has_symlink_ancestor(path: String) -> bool:
+	var user_root: String = ProjectSettings.globalize_path("user://").simplify_path()
+	var candidate: String = path.simplify_path()
+	while candidate != user_root:
+		var parent: String = candidate.get_base_dir()
+		if parent == candidate:
+			return true
+		if DirAccess.dir_exists_absolute(parent):
+			var parent_access: DirAccess = DirAccess.open(parent)
+			if parent_access == null or parent_access.is_link(candidate.get_file()):
+				return true
+		candidate = parent
+	return false
+
 
 static func _is_supported_user_path(path: String) -> bool:
 	if not path.begins_with("user://"):
