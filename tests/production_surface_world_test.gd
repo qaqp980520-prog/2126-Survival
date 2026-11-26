@@ -308,6 +308,13 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var quick_use_model: RefCounted = world.get("quick_use") as RefCounted
 	stamina_model.set("current_stamina", 42.5)
 	_expect(bool(quick_use_model.call("select_slot", 2)), "production save fixture selects the third quick-use slot")
+	var numeric_stamina: Dictionary = stamina_model.call("to_save_dict")
+	numeric_stamina["schema_version"] = float(numeric_stamina.get("schema_version", 1))
+	_expect(bool(stamina_model.call("validate_save_dict", numeric_stamina)), "stamina validator accepts integer-valued JSON schema numbers")
+	var numeric_quick_use: Dictionary = quick_use_model.call("to_save_dict")
+	numeric_quick_use["schema_version"] = float(numeric_quick_use.get("schema_version", 1))
+	numeric_quick_use["selected_slot"] = float(numeric_quick_use.get("selected_slot", 0))
+	_expect(bool(quick_use_model.call("validate_save_dict", numeric_quick_use)), "quick-use validator accepts integer-valued JSON schema and slot numbers")
 	var order_a: Dictionary = {}
 	order_a["alpha"] = 1
 	order_a["beta"] = 2
@@ -616,7 +623,8 @@ func _test_failed_restore_stream_rollback() -> void:
 	_expect(world.object_state_registry.call("to_save_dict") == original_objects, "failed target streaming restores world-object records")
 	_expect(world.inventory_bridge.call("serialize_inventory") == original_inventory, "failed target streaming preserves inventory")
 	_expect(world.stamina.call("to_save_dict") == original_stamina and world.quick_use.call("to_save_dict") == original_quick_use, "failed target streaming preserves stamina and quick-use state")
-	_expect(original_director.get_managed_chunk_ids() == world.chunk_controller.get_loaded_chunk_ids(), "failed target streaming leaves Director and Controller chunk sets consistent")
+	var expected_managed_ids: PackedStringArray = world.call("_get_expected_loaded_chunk_ids")
+	_expect(expected_managed_ids == world.chunk_controller.get_loaded_chunk_ids(), "failed target streaming leaves combined Director and Controller chunk sets consistent")
 	_expect(bool(original_director.call("bind_chunk_factory", Callable(world, "_make_chunk"))), "restore rollback test reinstates the production chunk factory")
 	_fail_chunk_coord = Vector2i(999999, 999999)
 
