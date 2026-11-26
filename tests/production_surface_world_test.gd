@@ -2,6 +2,7 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const SaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
+const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
 
 class PendingRegistryPairDirector extends Node:
@@ -15,6 +16,7 @@ class PendingRegistryPairDirector extends Node:
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
+var _fail_chunk_coord: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -273,6 +275,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(int(restored_quick_use.get("selected_slot")) == 1, "restart restore recovers the selected quick-use slot")
 	var primary_report: Dictionary = world.call("get_last_save_report")
 	_expect(str(primary_report.get("phase", "")) == "loaded_from_primary", "primary load reports its source explicitly")
+	await _test_failed_restore_stream_rollback(now_unix + 8)
 
 	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
 	_expect(bool(world.call("load_game", path)), "valid backup is restored when the primary is corrupt")
@@ -341,6 +344,36 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(invalid_path)
+
+
+func _test_failed_restore_stream_rollback(now_unix: int) -> void:
+	var original_director: Node = world.get("director") as Node
+	var original_position: Vector3 = world.player.global_position
+	var original_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+	var original_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
+	var original_minerals: Dictionary = world.chunk_controller.call("to_save_dict")
+	var target_position: Vector3 = original_position + Vector3(1200.0, 0.0, 1200.0)
+	_fail_chunk_coord = original_director.get_grid_coordinate(target_position)
+	_expect(bool(original_director.call("bind_chunk_factory", Callable(self, "_make_chunk_with_injected_failure"))), "restore rollback test installs a deterministic failing chunk factory")
+	var candidate: Dictionary = world.call("serialize_stream_state")
+	candidate["player_position"] = [target_position.x, target_position.y, target_position.z]
+	var restored: bool = bool(world.call("restore_stream_state", candidate, now_unix))
+	_expect(not restored, "failed target chunk streaming rejects the disk restore candidate")
+	var report: Dictionary = world.call("get_last_restore_report")
+	_expect(str(report.get("phase", "")) == "stream_sync" and bool(report.get("rollback_complete", false)), "failed target streaming reports a complete rollback")
+	_expect(world.player.global_position.is_equal_approx(original_position), "failed target streaming restores the original player position")
+	_expect(world.chunk_controller.get_loaded_chunk_ids() == original_ids, "failed target streaming restores the original active chunk window")
+	_expect(world.chunk_controller.call("to_save_dict") == original_minerals, "failed target streaming restores mineral records")
+	_expect(world.inventory_bridge.call("serialize_inventory") == original_inventory, "failed target streaming preserves inventory")
+	_expect(original_director.get_managed_chunk_ids() == world.chunk_controller.get_loaded_chunk_ids(), "failed target streaming leaves Director and Controller chunk sets consistent")
+	_expect(bool(original_director.call("bind_chunk_factory", Callable(world, "_make_chunk"))), "restore rollback test reinstates the production chunk factory")
+	_fail_chunk_coord = Vector2i(999999, 999999)
+
+func _make_chunk_with_injected_failure(coord: Vector2i) -> Node3D:
+	if coord == _fail_chunk_coord:
+		return null
+	return SurfaceChunkFactoryScript.make_chunk(coord, int(world.get("_stream_clock_unix")))
+
 
 func _write_test_text(path: String, content: String) -> bool:
 	var file := FileAccess.open(path, FileAccess.WRITE)
