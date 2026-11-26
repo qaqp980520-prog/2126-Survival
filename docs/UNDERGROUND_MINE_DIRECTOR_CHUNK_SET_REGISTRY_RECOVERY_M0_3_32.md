@@ -9,7 +9,7 @@ Remove world-wide Registry rollback from `UndergroundMineDirector`. A failed mul
 - `systems/WorldObjectStateRegistry.gd`: deterministic multi-chunk snapshot, validation, and restore; merges selected records into the current Registry and validates global budgets before commit.
 - `systems/MineralVeinRegistry.gd`: chunk-set mineral snapshots and exact restoration; merges only selected records, refreshes unrelated loaded veins from their current live state, preserves unrelated unloaded records, preflights live nodes, and restores live-node state if apply fails.
 - `systems/UndergroundMineDirector.gd`: computes the complete affected chunk set before mutation; captures both scoped snapshots; resolves Controller recovery barriers before compensation; restores the two Registry scopes as a compensated pair; stops stale-root restoration after the first failed load.
-- `tests/world_object_state_registry_test.gd`: multi-chunk capture/restore, selected-chunk rollback, unrelated-write preservation, foreign-record rejection, and duplicate-ID rejection.
+- `tests/world_object_state_registry_test.gd`: multi-chunk capture/restore, selected-chunk rollback, unrelated-write preservation, foreign-record rejection, duplicate-ID rejection, and rejection while a selected chunk write lease is active.
 - `tests/underground_mine_director_test.gd`: deterministic factory-failure injection that commits newer object state, an unrelated loaded mineral update, and an unrelated unloaded mineral update after the Director snapshot; verifies all three survive rollback.
 
 ## Dependencies
