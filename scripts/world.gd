@@ -208,18 +208,18 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
 		return false
 	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
-		var minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var minerals_rolled_back: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		_set_restore_report(false, "crop_restore", "Crop registry rejected the candidate save.", minerals_rolled_back)
 		return false
 	if has_inventory and not bool(inventory_bridge.call("restore_inventory", inventory_value)):
-		var minerals_rolled_back_for_inventory: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var minerals_rolled_back_for_inventory: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		var crops_rolled_back_for_inventory: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
 		_set_restore_report(false, "inventory_restore", "Inventory bridge rejected the candidate save.", minerals_rolled_back_for_inventory and crops_rolled_back_for_inventory)
 		return false
 	if has_world_objects and not bool(chunk_controller.call("restore_world_object_states", world_objects_value)):
-		var objects_minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var objects_minerals_rolled_back: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		var objects_crops_rolled_back: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 		var objects_inventory_rolled_back: bool = not has_inventory or bool(inventory_bridge.call("restore_inventory", previous_inventory))
 		var objects_rolled_back: bool = chunk_controller.call("restore_world_object_states", previous_world_objects)
@@ -254,7 +254,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if recovery_success:
 		_last_grid = director.get_grid_coordinate(previous_position)
 
-	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+	var minerals_restored: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 	var crops_restored: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 	var inventory_restored: bool = true
 	if has_inventory and inventory_bridge != null and not previous_inventory.is_empty():
