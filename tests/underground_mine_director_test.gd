@@ -336,6 +336,21 @@ func _test_registry_pair_compensation_recovery() -> void:
 	_expect(bool(pair_object_registry.records["pair/chunk/object"]["opened"]), "object target restore is visible before the injected compensation rejection")
 	_expect(bool(pair_director.call("has_pending_registry_pair_recovery")), "failed object compensation creates a durable director recovery barrier")
 	_expect(pair_object_registry.restore_calls == 2, "initial object restore and first compensation attempt are both observed")
+	var alternate_object_registry := PairRecoveryObjectRegistry.new()
+	var alternate_mineral_registry := PairRecoveryMineralRegistry.new()
+	var alternate_controller := PairRecoveryController.new()
+	alternate_controller.registry = alternate_mineral_registry
+	alternate_controller.object_state_registry = alternate_object_registry
+	root.add_child(alternate_object_registry)
+	root.add_child(alternate_mineral_registry)
+	root.add_child(alternate_controller)
+	pair_director._managed_chunk_ids.clear()
+	_expect(not bool(pair_director.call("bind_controller", alternate_controller)), "pending pair recovery prevents rebinding to a different controller even with an empty managed window")
+	pair_controller.registry = alternate_mineral_registry
+	_expect(not bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100)), "registry identity change blocks pair recovery instead of restoring into a replacement registry")
+	_expect(alternate_mineral_registry.restore_calls == 0 and bool(pair_director.call("has_pending_registry_pair_recovery")), "identity mismatch preserves the pending pair and does not touch the replacement registry")
+	pair_controller.registry = pair_mineral_registry
+	_expect(pair_object_registry.restore_calls == 2, "identity mismatch does not consume another object compensation attempt")
 	var blocked_sync: bool = bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100))
 	_expect(not blocked_sync, "underground streaming remains blocked while pair compensation is unresolved")
 	var blocked_report: Dictionary = pair_director.call("get_last_sync_report")
@@ -354,6 +369,9 @@ func _test_registry_pair_compensation_recovery() -> void:
 	pair_controller.free()
 	pair_object_registry.free()
 	pair_mineral_registry.free()
+	alternate_controller.free()
+	alternate_object_registry.free()
+	alternate_mineral_registry.free()
 
 
 func _make_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
