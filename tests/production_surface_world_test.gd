@@ -248,6 +248,14 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var primary_a: String = FileAccess.get_file_as_string(path)
 	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
 	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
+	var unknown_version_envelope: Dictionary = {
+		"format_id": "2126.surface_world",
+		"format_version": 999,
+		"saved_at_unix": now_unix,
+		"payload": payload_a
+	}
+	var unknown_version_report: Dictionary = SaveStoreScript.decode_envelope(JSON.stringify(unknown_version_envelope))
+	_expect(not bool(unknown_version_report.get("ok", false)) and str(unknown_version_report.get("reason", "")) == "unsupported_format_version", "unknown production save versions fail closed")
 	_expect(bool(_write_test_text(path + ".tmp", "interrupted temporary write")), "test creates a stale interrupted temp file")
 
 	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 2)), "production save fixture advances inventory before second save")
@@ -345,6 +353,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 		var locked_chunk_id: String = str(locked_chunk_ids[0])
 		var lock_token: String = "surface-save-barrier-test"
 		_expect(bool(world.object_state_registry.call("lock_chunk_writes", locked_chunk_id, lock_token)), "test acquires an active WorldObject chunk write lease")
+		var lock_restore_payload: Dictionary = world.call("serialize_stream_state")
+		_expect(not bool(world.call("restore_stream_state", lock_restore_payload, now_unix + 9)), "active WorldObject write lease blocks direct stream restore")
+		_expect(str(world.call("get_last_restore_report").get("phase", "")) == "registry_pair_recovery_barrier", "active WorldObject write lease is reported as a restore barrier")
+		_expect(world.call("serialize_stream_state").is_empty(), "active WorldObject write lease blocks new snapshots")
 		var lock_primary_before: String = FileAccess.get_file_as_string(blocked_path)
 		_expect(not bool(world.call("save_game", blocked_path)), "active WorldObject write lease blocks manual save")
 		_expect(not bool(world.call("load_game", blocked_path)), "active WorldObject write lease blocks disk restore")
@@ -354,6 +366,9 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var mineral_registry: Node = world.get("registry") as Node
 	var previous_pending_recovery: Dictionary = mineral_registry.get("_pending_atomic_registration_recovery")
 	mineral_registry.set("_pending_atomic_registration_recovery", {"test_fixture": true})
+	var mineral_restore_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(mineral_restore_payload.is_empty(), "pending Mineral Registry recovery blocks new snapshots")
+	_expect(not bool(world.call("restore_stream_state", payload_a, now_unix + 10)), "pending Mineral Registry recovery blocks direct stream restore")
 	var mineral_barrier_bytes: String = FileAccess.get_file_as_string(blocked_path)
 	_expect(not bool(world.call("save_game", blocked_path)), "pending Mineral Registry recovery blocks manual save")
 	_expect(not bool(world.call("load_game", blocked_path)), "pending Mineral Registry recovery blocks disk restore")
@@ -405,6 +420,10 @@ func _test_failed_restore_stream_rollback(now_unix: int) -> void:
 	var original_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
 	var original_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
 	var original_minerals: Dictionary = world.chunk_controller.call("to_save_dict")
+	var original_crops: Dictionary = world.crop_registry.call("to_save_dict")
+	var original_objects: Dictionary = world.object_state_registry.call("to_save_dict")
+	var original_stamina: Dictionary = world.stamina.call("to_save_dict")
+	var original_quick_use: Dictionary = world.quick_use.call("to_save_dict")
 	var target_position: Vector3 = original_position + Vector3(1200.0, 0.0, 1200.0)
 	_fail_chunk_coord = original_director.get_grid_coordinate(target_position)
 	_expect(bool(original_director.call("bind_chunk_factory", Callable(self, "_make_chunk_with_injected_failure"))), "restore rollback test installs a deterministic failing chunk factory")
@@ -417,7 +436,10 @@ func _test_failed_restore_stream_rollback(now_unix: int) -> void:
 	_expect(world.player.global_position.is_equal_approx(original_position), "failed target streaming restores the original player position")
 	_expect(world.chunk_controller.get_loaded_chunk_ids() == original_ids, "failed target streaming restores the original active chunk window")
 	_expect(world.chunk_controller.call("to_save_dict") == original_minerals, "failed target streaming restores mineral records")
+	_expect(world.crop_registry.call("to_save_dict") == original_crops, "failed target streaming restores crop records")
+	_expect(world.object_state_registry.call("to_save_dict") == original_objects, "failed target streaming restores world-object records")
 	_expect(world.inventory_bridge.call("serialize_inventory") == original_inventory, "failed target streaming preserves inventory")
+	_expect(world.stamina.call("to_save_dict") == original_stamina and world.quick_use.call("to_save_dict") == original_quick_use, "failed target streaming preserves stamina and quick-use state")
 	_expect(original_director.get_managed_chunk_ids() == world.chunk_controller.get_loaded_chunk_ids(), "failed target streaming leaves Director and Controller chunk sets consistent")
 	_expect(bool(original_director.call("bind_chunk_factory", Callable(world, "_make_chunk"))), "restore rollback test reinstates the production chunk factory")
 	_fail_chunk_coord = Vector2i(999999, 999999)
