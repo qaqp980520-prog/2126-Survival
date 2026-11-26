@@ -122,6 +122,10 @@ func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_
 				probe.call("apply_elapsed_regeneration", now)
 			else:
 				probe.set("last_regen_unix", now)
+		elif bool(live_vein.call("is_chunk_load_restore_pending")):
+			# Controller deferred _ready() catch-up so a rejected load cannot mutate
+			# the caller-owned root. Apply it to the detached probe at the explicit clock.
+			probe.call("apply_elapsed_regeneration", now)
 
 		var next_record: Dictionary = probe.call("to_save_dict")
 		if not _validate_record(stable_id, next_record, live_mineral_id, now):
