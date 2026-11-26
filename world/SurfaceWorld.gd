@@ -887,6 +887,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if not recovery_barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
 		return false
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no streaming or participant mutation was started.", true)
+		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
 	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
 		return false
@@ -1259,7 +1262,7 @@ func _refresh_hud() -> void:
 	]
 
 ## Production SurfaceWorld persistence. The Backrooms prototype keeps its separate file path.
-func _validate_world_save_payload(payload: Dictionary) -> bool:
+func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = false) -> bool:
 	var schema: Variant = payload.get("schema_version", null)
 	if not (schema is int) or int(schema) != 1:
 		return false
@@ -1269,7 +1272,7 @@ func _validate_world_save_payload(payload: Dictionary) -> bool:
 	for component in position_value:
 		if not (component is int or component is float) or not is_finite(float(component)):
 			return false
-	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or inventory_bridge == null:
+	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or player == null or mine_director == null:
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	var minerals_value: Variant = payload.get("minerals", null)
@@ -1280,62 +1283,85 @@ func _validate_world_save_payload(payload: Dictionary) -> bool:
 	mineral_probe.free()
 	if not minerals_valid:
 		return false
-	var crops_value: Variant = payload.get("crops", null)
-	if not (crops_value is Dictionary):
+	if payload.has("crops"):
+		var crops_value: Variant = payload.get("crops", null)
+		if not (crops_value is Dictionary):
+			return false
+		var crop_probe: Node = CropRegistryScript.new()
+		var crops_valid: bool = bool(crop_probe.call("validate_save_dict", crops_value))
+		crop_probe.free()
+		if not crops_valid:
+			return false
+	elif not allow_legacy:
 		return false
-	var crop_probe: Node = CropRegistryScript.new()
-	var crops_valid: bool = bool(crop_probe.call("validate_save_dict", crops_value))
-	crop_probe.free()
-	if not crops_valid:
+	if payload.has("world_objects"):
+		var objects_value: Variant = payload.get("world_objects", null)
+		if not (objects_value is Dictionary):
+			return false
+		var object_probe: Node = WorldObjectStateRegistryScript.new()
+		var objects_valid: bool = bool(object_probe.call("validate_save_dict", objects_value))
+		object_probe.free()
+		if not objects_valid:
+			return false
+	elif not allow_legacy:
 		return false
-	var objects_value: Variant = payload.get("world_objects", null)
-	if not (objects_value is Dictionary):
+	if payload.has("inventory"):
+		var inventory_value: Variant = payload.get("inventory", null)
+		if not (inventory_value is Dictionary) or inventory_bridge == null:
+			return false
+		var inventory_probe: RefCounted = InventoryModelScript.new()
+		if not bool(inventory_probe.call("load_save_dict", inventory_value)):
+			return false
+	elif not allow_legacy:
 		return false
-	var object_probe: Node = WorldObjectStateRegistryScript.new()
-	var objects_valid: bool = bool(object_probe.call("validate_save_dict", objects_value))
-	object_probe.free()
-	if not objects_valid:
-		return false
-	var inventory_value: Variant = payload.get("inventory", null)
-	if not (inventory_value is Dictionary):
-		return false
-	var inventory_probe: RefCounted = InventoryModelScript.new()
-	if not bool(inventory_probe.call("load_save_dict", inventory_value)):
-		return false
-	var world_seed_value: Variant = payload.get("world_seed", null)
+	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED if allow_legacy else null)
 	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)):
 		return false
 	if float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
 		return false
-	var stamina_value: Variant = payload.get("stamina", null)
-	var stamina_probe: RefCounted = StaminaScript.new()
-	if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
+	if payload.has("stamina"):
+		var stamina_value: Variant = payload.get("stamina", null)
+		var stamina_probe: RefCounted = StaminaScript.new()
+		if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
+			return false
+	elif not allow_legacy:
 		return false
-	var quick_use_value: Variant = payload.get("quick_use", null)
-	var quick_use_probe: RefCounted = QuickUseScript.new()
-	if not (quick_use_value is Dictionary) or not bool(quick_use_probe.call("validate_save_dict", quick_use_value)):
+	if payload.has("quick_use"):
+		var quick_use_value: Variant = payload.get("quick_use", null)
+		var quick_use_probe: RefCounted = QuickUseScript.new()
+		if not (quick_use_value is Dictionary) or not bool(quick_use_probe.call("validate_save_dict", quick_use_value)):
+			return false
+	elif not allow_legacy:
 		return false
-	var layer_value: Variant = payload.get("location_layer", null)
+	var layer_value: Variant = payload.get("location_layer", "surface" if allow_legacy else null)
 	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
 		return false
-	var depth_value: Variant = payload.get("mine_depth", null)
-	if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
-		return false
 	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
-	if str(layer_value) == "surface":
-		if int(depth_value) != 0:
+	var depth_value: Variant = payload.get("mine_depth", null)
+	var target_depth: int = 0
+	if str(layer_value) == "underground":
+		if depth_value == null and allow_legacy:
+			target_depth = mine_director.get_layer_index(target_position)
+		elif depth_value is int:
+			target_depth = int(depth_value)
+		else:
+			return false
+		if target_depth < 0 or target_depth > UndergroundMineDirectorScript.MAX_LAYER_INDEX or mine_director.get_layer_index(target_position) != target_depth:
 			return false
 	else:
-		if mine_director == null or not is_instance_valid(mine_director):
+		if depth_value == null and allow_legacy:
+			target_depth = 0
+		elif not (depth_value is int) or int(depth_value) != 0:
 			return false
-		if mine_director.get_layer_index(target_position) != int(depth_value):
+	if payload.has("surface_return_position"):
+		var return_value: Variant = payload.get("surface_return_position", null)
+		if not (return_value is Array) or return_value.size() != 3:
 			return false
-	var return_value: Variant = payload.get("surface_return_position", null)
-	if not (return_value is Array) or return_value.size() != 3:
+		for component in return_value:
+			if not (component is int or component is float) or not is_finite(float(component)):
+				return false
+	elif not allow_legacy:
 		return false
-	for component in return_value:
-		if not (component is int or component is float) or not is_finite(float(component)):
-			return false
 	return true
 
 func _set_save_report(success: bool, phase: String, reason: String = "", details: Dictionary = {}) -> void:
