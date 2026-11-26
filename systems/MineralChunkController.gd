@@ -201,7 +201,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		if not bool(plot.call("configure", crop_controller, stable_id, str(plot.get("crop_id")), int(plot.get("plot_index")))):
 			var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 			if not crop_rollback_ok:
-				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, {}, false)
+				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, false)
 			_set_chunk_load_report(false, "crop_binding", "A crop plot rejected its chunk binding.", crop_rollback_ok, {"crop_registry_rollback_ok": crop_rollback_ok})
 			return false
 
@@ -212,7 +212,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		if not object_registry_snapshot.has("schema_version") or not object_registry_snapshot.has("objects"):
 			var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 			if not crop_rollback_ok:
-				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, {}, false)
+				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, false)
 			_set_chunk_load_report(false, "object_registry_snapshot", "The world-object registry returned an invalid snapshot.", crop_rollback_ok, {"crop_registry_rollback_ok": crop_rollback_ok})
 			return false
 
@@ -278,7 +278,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))
 		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, {}, true)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true)
 		_set_chunk_load_report(false, "mineral_registration", "Atomic mineral registration rejected the candidate chunk.", rollback_complete, {
 			"world_object_live_nodes_ok": bool(object_rollback.get("live_nodes_ok", false)),
 			"world_object_registry_ok": bool(object_rollback.get("registry_ok", false)),
