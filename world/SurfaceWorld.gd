@@ -1425,7 +1425,14 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 		return false
 	if source == "backup":
 		var promotion_report: Dictionary = SurfaceWorldSaveStoreScript.promote_backup(save_path, validator)
-		if not bool(promotion_report.get("ok", false)) and bool(promotion_report.get("recovery_required", false)):
+		if bool(promotion_report.get("ok", false)):
+			_set_save_report(true, "loaded_from_backup", "", {
+				"source": source,
+				"archive_path": str(promotion_report.get("archive_path", "")),
+				"backup_path": str(promotion_report.get("backup_path", ""))
+			})
+			return true
+		if bool(promotion_report.get("recovery_required", false)):
 			_save_recovery_barrier_report = {
 				"recovery_required": true,
 				"reason": "backup_promotion_recovery_required",
@@ -1433,25 +1440,39 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 			}
 			_save_recovery_kind = "backup_promotion"
 			_save_recovery_path = save_path
-		_set_save_report(true, "loaded_from_backup_promotion_pending", "", {
-			"source": source,
-			"promotion": promotion_report
-		})
-		return true
-		if not bool(promotion_report.get("ok", false)):
-			_set_save_report(true, "loaded_from_backup", "", {
+			_set_save_report(true, "loaded_from_backup_promotion_pending", "", {
 				"source": source,
-				"promotion_warning": promotion_report
+				"promotion": promotion_report
 			})
 			return true
 		_set_save_report(true, "loaded_from_backup", "", {
 			"source": source,
-			"archive_path": str(promotion_report.get("archive_path", "")),
-			"backup_path": str(promotion_report.get("backup_path", ""))
+			"promotion_warning": promotion_report
 		})
 		return true
 	_set_save_report(true, "loaded_from_primary", "", {"source": source, "saved_at_unix": int(primary_report.get("saved_at_unix", 0))})
 	return true
+
+func _world_recovery_matches_snapshot(current: Dictionary, expected: Dictionary) -> bool:
+	if current.is_empty() or not _validate_world_save_payload(current):
+		return false
+	for key in ["player_position", "world_seed", "location_layer", "mine_depth", "surface_return_position", "inventory", "crops", "world_objects", "stamina", "quick_use"]:
+		if current.get(key, null) != expected.get(key, null):
+			return false
+	var expected_minerals: Variant = expected.get("minerals", {}).get("veins", {})
+	var current_minerals: Variant = current.get("minerals", {}).get("veins", {})
+	if not (expected_minerals is Dictionary) or not (current_minerals is Dictionary):
+		return false
+	var expected_ids: Array = expected_minerals.keys()
+	var current_ids: Array = current_minerals.keys()
+	expected_ids.sort()
+	current_ids.sort()
+	if expected_ids != current_ids:
+		return false
+	if director == null or chunk_controller == null or director.get_managed_chunk_ids() != chunk_controller.get_loaded_chunk_ids():
+		return false
+	return true
+
 
 func retry_save_recovery() -> bool:
 	if _save_recovery_barrier_report.is_empty():
