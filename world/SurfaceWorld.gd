@@ -1421,10 +1421,6 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 	if not barrier_report.is_empty():
 		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
 		return false
-	var previous_payload: Dictionary = serialize_stream_state()
-	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
-		_set_save_report(false, "preload_snapshot", "current_world_snapshot_unavailable_or_invalid")
-		return false
 	var validator := Callable(self, "_validate_world_save_payload")
 	var primary_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path, validator)
 	var source: String = "primary"
@@ -1441,6 +1437,12 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 			return false
 		source = "backup"
 		candidate_payload = backup_report["payload"].duplicate(true)
+	# Only capture live participants after a disk candidate has passed full validation.
+	# Invalid primary and backup files must not trigger even a live-object snapshot refresh.
+	var previous_payload: Dictionary = serialize_stream_state()
+	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
+		_set_save_report(false, "preload_snapshot", "current_world_snapshot_unavailable_or_invalid")
+		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	if not restore_stream_state(candidate_payload, now):
 		var restore_report: Dictionary = get_last_restore_report()
