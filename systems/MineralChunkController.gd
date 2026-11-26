@@ -87,9 +87,10 @@ func has_pending_chunk_load_recovery() -> bool:
 	)
 
 func recover_failed_chunk_load() -> bool:
-	if not _chunk_load_recovery_required and registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
-		_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if not _chunk_load_recovery_required:
 		return true
 	var pending: Dictionary = _pending_chunk_load_recovery
@@ -145,9 +146,10 @@ func recover_failed_chunk_load() -> bool:
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	_set_chunk_load_report(false, "validation", "preflight_rejected", true)
-	if not _chunk_load_recovery_required and registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
-		_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if _chunk_load_recovery_required:
 		_set_chunk_load_report(false, "recovery_required", "Recover the previous failed chunk-load transaction before loading or unloading more chunks.", false, {"recovery_required": true})
 		return false
@@ -345,8 +347,8 @@ func _end_chunk_load_restore(veins: Dictionary) -> void:
 func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
-		if _pending_chunk_load_recovery.is_empty():
-			_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if _chunk_load_recovery_required:
 		return false
 	if registry == null or not _chunk_roots.has(chunk_id):
