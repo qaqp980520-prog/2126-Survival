@@ -20,6 +20,16 @@ signal ore_mined(mineral_id: String, amount: int)
 ## Unix timestamp for the start of the current partial regeneration interval.
 var last_regen_unix: int = 0
 var _depleted_signal_sent := false
+var _chunk_load_restore_pending: bool = false
+
+func begin_chunk_load_restore() -> void:
+	_chunk_load_restore_pending = true
+
+func end_chunk_load_restore() -> void:
+	_chunk_load_restore_pending = false
+
+func is_chunk_load_restore_pending() -> bool:
+	return _chunk_load_restore_pending
 
 ## Pure preflight used by chunk streaming before it mutates registries or binds sibling assets.
 ## Unlike _ready(), this rejects invalid values instead of silently clamping them.
@@ -45,7 +55,8 @@ func _ready() -> void:
 	if not Catalog.has_mineral(mineral_id):
 		push_error("MineralMiningNode has unknown mineral_id: " + mineral_id)
 		return
-	if last_regen_unix <= 0:
+	var defer_initial_regeneration: bool = _chunk_load_restore_pending
+	if last_regen_unix <= 0 and not defer_initial_regeneration:
 		last_regen_unix = Time.get_unix_time_from_system()
 	_build_interaction_area()
 	# Dedicated/headless servers do not need renderer resources. Keep gameplay and
@@ -65,7 +76,8 @@ func _ready() -> void:
 			add_child(created_visual)
 	_depleted_signal_sent = remaining_units == 0
 	visible = remaining_units > 0
-	apply_elapsed_regeneration()
+	if not defer_initial_regeneration:
+		apply_elapsed_regeneration()
 	_set_interaction_area_enabled(remaining_units > 0)
 
 func _build_interaction_area() -> void:
