@@ -80,6 +80,7 @@ func get_last_chunk_load_report() -> Dictionary:
 func has_pending_chunk_load_recovery() -> bool:
 	return (
 		_chunk_load_recovery_required
+		or _terrain_adjacency_recovery_required
 		or (
 			registry != null
 			and is_instance_valid(registry)
@@ -89,6 +90,9 @@ func has_pending_chunk_load_recovery() -> bool:
 	)
 
 func recover_failed_chunk_load() -> bool:
+	if _terrain_adjacency_recovery_required:
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery["refresh_terrain"] = true
 	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
 		_pending_chunk_load_recovery["mineral_registry"] = registry
@@ -115,7 +119,7 @@ func recover_failed_chunk_load() -> bool:
 		if not is_instance_valid(pending_object_registry) or object_state_registry != pending_object_registry:
 			object_registry_ok = false
 		else:
-			object_registry_ok = bool(object_state_registry.call("restore_save_dict", object_snapshot))
+			object_registry_ok = _restore_object_registry_snapshot(object_snapshot)
 
 	var terrain_ok: bool = true
 	if bool(pending.get("refresh_terrain", false)):
@@ -148,6 +152,9 @@ func recover_failed_chunk_load() -> bool:
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	_set_chunk_load_report(false, "validation", "preflight_rejected", true)
+	if _terrain_adjacency_recovery_required:
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery["refresh_terrain"] = true
 	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
 		_pending_chunk_load_recovery["mineral_registry"] = registry
@@ -347,59 +354,107 @@ func _end_chunk_load_restore(veins: Dictionary) -> void:
 ## Captures mineral state before freeing a chunk. Crop records remain in CropRegistry;
 ## the next root with the same chunk ID reuses the same stable crop IDs.
 func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
+	_set_chunk_load_report(false, "unload_validation", "preflight_rejected", true)
+	if _terrain_adjacency_recovery_required:
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery["refresh_terrain"] = true
 	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
 		_pending_chunk_load_recovery["mineral_registry"] = registry
 		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if _chunk_load_recovery_required:
+		_set_chunk_load_report(false, "recovery_required", "Recover the previous chunk lifecycle transaction before unloading more chunks.", false, {"recovery_required": true})
 		return false
 	if registry == null or not _chunk_roots.has(chunk_id):
+		_set_chunk_load_report(false, "unload_validation", "unknown_chunk_or_registry", true, {"chunk_id": chunk_id})
 		return false
 	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 	if not is_instance_valid(chunk_root):
+		_set_chunk_load_report(false, "unload_validation", "invalid_chunk_root", true, {"chunk_id": chunk_id})
 		return false
 	if not _ensure_terrain_adjacency_ready():
+		_queue_chunk_load_recovery({}, {}, {}, {}, true)
+		_set_chunk_load_report(false, "terrain_adjacency", "terrain_refresh_failed_before_unload", false, {"terrain_adjacency_ok": false})
 		return false
 	var veins: Dictionary = _chunk_veins[chunk_id]
 	var object_snapshot: Dictionary = {}
-	if not _chunk_objects.get(chunk_id, {}).is_empty():
-		if object_state_registry == null:
+	var object_registry_mutated: bool = false
+	var chunk_objects: Dictionary = _chunk_objects.get(chunk_id, {})
+	if not chunk_objects.is_empty():
+		if object_state_registry == null or not is_instance_valid(object_state_registry):
+			_set_chunk_load_report(false, "world_object_capture", "world_object_registry_unavailable", true)
 			return false
 		object_snapshot = object_state_registry.call("to_save_dict")
 		if not object_snapshot.has("schema_version") or not object_snapshot.has("objects"):
+			_set_chunk_load_report(false, "world_object_capture", "invalid_world_object_registry_snapshot", true)
 			return false
-		for stable_id in _chunk_objects[chunk_id].keys():
-			var object_node: Node = _chunk_objects[chunk_id][stable_id] as Node
+		for stable_id in chunk_objects.keys():
+			var object_node: Node = chunk_objects[stable_id] as Node
 			if not is_instance_valid(object_node) or not object_node.has_method("get_world_object_state"):
-				object_state_registry.call("restore_save_dict", object_snapshot)
+				var invalid_node_rollback_ok: bool = not object_registry_mutated or _restore_object_registry_snapshot(object_snapshot)
+				if not invalid_node_rollback_ok:
+					_queue_chunk_load_recovery({}, {}, object_snapshot, {}, false)
+				_set_chunk_load_report(false, "world_object_capture", "invalid_world_object_node", invalid_node_rollback_ok, {
+					"world_object_registry_rollback_ok": invalid_node_rollback_ok
+				})
 				return false
 			var object_state: Variant = object_node.call("get_world_object_state")
-			if not (object_state is Dictionary) or (object_node.has_method("validate_world_object_state") and not bool(object_node.call("validate_world_object_state", object_state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
-				object_state_registry.call("restore_save_dict", object_snapshot)
+			if not (object_state is Dictionary) or (object_node.has_method("validate_world_object_state") and not bool(object_node.call("validate_world_object_state", object_state))):
+				var invalid_state_rollback_ok: bool = not object_registry_mutated or _restore_object_registry_snapshot(object_snapshot)
+				if not invalid_state_rollback_ok:
+					_queue_chunk_load_recovery({}, {}, object_snapshot, {}, false)
+				_set_chunk_load_report(false, "world_object_capture", "invalid_world_object_state", invalid_state_rollback_ok, {
+					"world_object_registry_rollback_ok": invalid_state_rollback_ok
+				})
+				return false
+			# Treat set_object_state as an untrusted transaction boundary: an implementation
+			# may commit its record and still return false.
+			object_registry_mutated = true
+			if not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
+				var set_rollback_ok: bool = _restore_object_registry_snapshot(object_snapshot)
+				if not set_rollback_ok:
+					_queue_chunk_load_recovery({}, {}, object_snapshot, {}, false)
+				_set_chunk_load_report(false, "world_object_capture", "world_object_registry_rejected_state", set_rollback_ok, {
+					"world_object_registry_rollback_ok": set_rollback_ok
+				})
 				return false
 	# Keep the departing root alive until the remaining terrain set has rebound successfully.
 	# Temporarily remove only its patch ownership so the Binder can clear reciprocal edges
 	# without freeing the old patch Nodes before the adjacency commit is known to succeed.
-	var departing_objects: Dictionary = _chunk_objects.get(chunk_id, {}).duplicate()
+	var departing_objects: Dictionary = chunk_objects.duplicate()
 	_chunk_objects.erase(chunk_id)
 	var adjacency_result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
 	if not bool(adjacency_result.get("ok", false)):
 		_chunk_objects[chunk_id] = departing_objects
-		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
-			push_error("Failed to restore world-object registry after terrain adjacency unload preflight failed.")
+		var object_registry_rollback_ok: bool = _restore_object_registry_snapshot(object_snapshot)
 		# A non-mutating Binder preflight rejection already preserved the previous live
 		# adjacency, so do not rebuild it again. Failures after mutation need a full restore.
 		var live_state_mutated: bool = bool(adjacency_result.get("live_state_mutated", true))
-		if live_state_mutated and not refresh_terrain_adjacency():
-			_terrain_adjacency_recovery_required = true
+		var terrain_rollback_ok: bool = true
+		if live_state_mutated:
+			terrain_rollback_ok = refresh_terrain_adjacency()
+		var rollback_complete: bool = object_registry_rollback_ok and terrain_rollback_ok
+		if not rollback_complete:
+			_queue_chunk_load_recovery({}, {}, object_snapshot, {}, not terrain_rollback_ok)
+		_set_chunk_load_report(false, "terrain_adjacency", str(adjacency_result.get("error", "terrain_rebind_failed")), rollback_complete, {
+			"world_object_registry_rollback_ok": object_registry_rollback_ok,
+			"terrain_adjacency_ok": terrain_rollback_ok,
+			"binder_live_state_mutated": live_state_mutated
+		})
 		return false
 
 	if not veins.is_empty() and not bool(adapter.unload_chunk(chunk_id, now_unix)):
 		_chunk_objects[chunk_id] = departing_objects
-		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
-			push_error("Failed to restore world-object registry after mineral unload failed.")
-		if not refresh_terrain_adjacency():
-			_terrain_adjacency_recovery_required = true
+		var object_registry_rollback_ok: bool = _restore_object_registry_snapshot(object_snapshot)
+		var terrain_rollback_ok: bool = refresh_terrain_adjacency()
+		var rollback_complete: bool = object_registry_rollback_ok and terrain_rollback_ok
+		if not rollback_complete:
+			_queue_chunk_load_recovery({}, {}, object_snapshot, {}, not terrain_rollback_ok)
+		_set_chunk_load_report(false, "mineral_unregistration", "Atomic mineral chunk unregistration failed.", rollback_complete, {
+			"world_object_registry_rollback_ok": object_registry_rollback_ok,
+			"terrain_adjacency_ok": terrain_rollback_ok,
+			"mineral_registry_rollback_ok": true
+		})
 		return false
 
 	_chunk_roots.erase(chunk_id)
@@ -409,6 +464,11 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	remove_child(chunk_root)
 	if not chunk_root.is_queued_for_deletion():
 		chunk_root.queue_free()
+	_set_chunk_load_report(true, "complete", "", true, {
+		"chunk_id": chunk_id,
+		"mineral_count": veins.size(),
+		"world_object_count": chunk_objects.size()
+	})
 	return true
 
 func get_chunk_root(chunk_id: String) -> Node3D:
@@ -570,7 +630,11 @@ func _restore_live_world_object_snapshot(states: Dictionary, allow_missing_nodes
 				continue
 			success = false
 			continue
-		if not node.has_method("apply_world_object_state") or not bool(node.call("apply_world_object_state", entry.get("state", {}))):
+		if not node.has_method("apply_world_object_state") or not node.has_method("get_world_object_state") or not bool(node.call("apply_world_object_state", entry.get("state", {}))):
+			success = false
+			continue
+		var restored_state: Variant = node.call("get_world_object_state")
+		if not (restored_state is Dictionary) or restored_state != entry.get("state", {}):
 			success = false
 	return success
 
@@ -763,11 +827,20 @@ func _restore_world_object_nodes(chunk_id: String, objects: Dictionary, registry
 			return {"ok": false, "error": "world_object_default_registration_failed", "rollback": _rollback_world_object_restore(initial_states, registry_snapshot)}
 	return {"ok": true, "rollback": {"ok": true, "live_nodes_ok": true, "registry_ok": true}}
 
+func _restore_object_registry_snapshot(snapshot: Dictionary) -> bool:
+	if snapshot.is_empty():
+		return true
+	if object_state_registry == null or not is_instance_valid(object_state_registry) or not object_state_registry.has_method("restore_save_dict"):
+		return false
+	if not bool(object_state_registry.call("restore_save_dict", snapshot)):
+		return false
+	return object_state_registry.has_method("to_save_dict") and object_state_registry.call("to_save_dict") == snapshot
+
 func _rollback_world_object_restore(initial_states: Dictionary, registry_snapshot: Dictionary) -> Dictionary:
 	var live_nodes_ok: bool = _restore_live_world_object_snapshot(initial_states)
 	var registry_ok: bool = true
-	if object_state_registry != null and not registry_snapshot.is_empty():
-		registry_ok = bool(object_state_registry.call("restore_save_dict", registry_snapshot))
+	if not registry_snapshot.is_empty():
+		registry_ok = _restore_object_registry_snapshot(registry_snapshot)
 		if not registry_ok:
 			push_error("Failed to restore world-object registry snapshot after chunk object-state failure.")
 	return {"ok": live_nodes_ok and registry_ok, "live_nodes_ok": live_nodes_ok, "registry_ok": registry_ok}
@@ -775,15 +848,16 @@ func _rollback_world_object_restore(initial_states: Dictionary, registry_snapsho
 func _restore_crop_snapshot(snapshot: Dictionary, plots: Dictionary) -> bool:
 	if snapshot.is_empty():
 		return true
-	if crop_controller == null or not is_instance_valid(crop_controller) or not crop_controller.has_method("restore_save_dict"):
+	if crop_controller == null or not is_instance_valid(crop_controller) or not crop_controller.has_method("restore_save_dict") or not crop_controller.has_method("to_save_dict"):
 		return false
 	var restored: bool = bool(crop_controller.call("restore_save_dict", snapshot))
-	if restored:
-		for plot_value in plots.values():
-			var plot_node: Node = plot_value as Node
-			if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
-				plot_node.call("refresh")
-	return restored
+	if not restored or crop_controller.call("to_save_dict") != snapshot:
+		return false
+	for plot_value in plots.values():
+		var plot_node: Node = plot_value as Node
+		if is_instance_valid(plot_node) and plot_node.has_method("refresh"):
+			plot_node.call("refresh")
+	return true
 
 func _queue_chunk_load_recovery(
 	crop_snapshot: Dictionary,
@@ -812,7 +886,7 @@ func _set_chunk_load_report(success: bool, phase: String, error: String, rollbac
 		"phase": phase,
 		"error": error,
 		"rollback_complete": rollback_complete,
-		"recovery_required": _chunk_load_recovery_required,
+		"recovery_required": has_pending_chunk_load_recovery(),
 		"details": details.duplicate(true)
 	}
 
