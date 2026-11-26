@@ -247,9 +247,10 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 		_chunk_objects[chunk_id] = departing_objects
 		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
 			push_error("Failed to restore world-object registry after terrain adjacency unload preflight failed.")
-		# A one-shot participant failure may be recoverable immediately. Persistent invalid
-		# state leaves the Controller fail-closed until an explicit refresh succeeds.
-		if not refresh_terrain_adjacency():
+		# A non-mutating Binder preflight rejection already preserved the previous live
+		# adjacency, so do not rebuild it again. Failures after mutation need a full restore.
+		var live_state_mutated: bool = bool(adjacency_result.get("live_state_mutated", true))
+		if live_state_mutated and not refresh_terrain_adjacency():
 			_terrain_adjacency_recovery_required = true
 		return false
 
