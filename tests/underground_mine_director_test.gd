@@ -139,7 +139,6 @@ func _run() -> void:
 	_expect(bool(scoped_rollback_report.get("rollback_complete", false)), "scoped multi-registry rollback reports complete")
 	mutate_unrelated_on_factory_failure = false
 	fail_coordinate = Vector2i(999, 999)
-	fail_coordinate = Vector2i(999, 999)
 	fail_layer = 0
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -28.25, 7.5), 1005)), "director switches transactionally to the second vertical mine layer")
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "deeper mine window remains bounded to nine chunks")
