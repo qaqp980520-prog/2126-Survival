@@ -351,8 +351,11 @@ func _test_registry_pair_compensation_recovery() -> void:
 	root.add_child(alternate_object_registry)
 	root.add_child(alternate_mineral_registry)
 	root.add_child(alternate_controller)
-	pair_director._managed_chunk_ids.clear()
+	pair_controller.loaded_ids = PackedStringArray()
+	_expect(bool(pair_director.call("_reconcile_controller_ids")), "pair-recovery fixture reconciles an empty actual managed window")
+	_expect(pair_director.call("get_managed_chunk_ids").is_empty(), "pair-recovery fixture has no managed chunks before the rebind attempt")
 	_expect(not bool(pair_director.call("bind_controller", alternate_controller)), "pending pair recovery prevents rebinding to a different controller even with an empty managed window")
+	pair_controller.loaded_ids = PackedStringArray(["underground/mine_0_0"])
 	alternate_mineral_registry.pending_recovery = true
 	pair_controller.registry = alternate_mineral_registry
 	_expect(not bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100)), "registry identity change blocks pair recovery instead of restoring into a replacement registry")
