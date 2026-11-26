@@ -460,7 +460,7 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	prop.name = "FaultProp"
 	prop.set("fail_apply_count", 2)
 	incoming.add_child(prop)
-	crop_controller.fail_restore_count = 1
+	crop_controller.set("fail_restore_count", 1)
 
 	assert(not controller.load_chunk(chunk_id, incoming, now), "A world-object apply failure rejects the complete chunk load")
 	assert(incoming.get_parent() == null, "The rejected root remains caller-owned and detached")
@@ -473,7 +473,10 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	assert(bool(details.get("world_object_registry_ok", false)), "The object registry snapshot was restored")
 	assert(not bool(details.get("crop_registry_ok", true)), "The failed crop registry restore is surfaced")
 	assert(crop_registry.to_save_dict() != crop_before, "The injected crop restore failure leaves a detectable pending recovery")
-	assert(not controller.load_chunk("earth/blocked-during-recovery", Node3D.new(), now), "New chunk loads are blocked while participant recovery is pending")
+	var blocked_root := Node3D.new()
+	assert(not controller.load_chunk("earth/blocked-during-recovery", blocked_root, now), "New chunk loads are blocked while participant recovery is pending")
+	assert(blocked_root.get_parent() == null)
+	blocked_root.free()
 
 	assert(controller.recover_failed_chunk_load(), "A later recovery pass retries every failed participant")
 	assert(not controller.has_pending_chunk_load_recovery(), "Successful recovery clears the lifecycle barrier")
