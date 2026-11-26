@@ -13,13 +13,16 @@ Add the first file-backed save/load path to the production `world/SurfaceWorld.t
 
 ## File format
 
-The outer JSON envelope is versioned independently from the existing stream payload:
+The outer JSON envelope is versioned independently from the existing stream payload and carries a SHA-256 checksum of the canonical compact JSON payload. Only `user://` paths are accepted; `res://`, traversal-like paths and malformed relative paths are rejected. This checksum detects accidental or semantic payload corruption; it is not an authenticity signature.
+
+The outer JSON envelope is:
 
 ```json
 {
   "format_id": "2126.surface_world",
   "format_version": 1,
   "saved_at_unix": 1795766400,
+  "payload_sha256": "<64 lowercase hexadecimal characters>",
   "payload": {
     "schema_version": 1
   }
@@ -51,7 +54,7 @@ Files used:
 
 Save sequence:
 
-1. Check the underground Director, Mineral Registry and WorldObject chunk-write lease barriers.
+1. Check all recovery barriers: Mineral Registry atomic-registration recovery, WorldObject chunk write leases, MineralChunkController load recovery, Surface streaming Director retained recovery roots, and UndergroundMineDirector Registry-pair recovery.
 2. Capture the stream payload and validate every participant using detached probes.
 3. Write a temporary envelope and read it back through the same envelope and payload validator.
 4. If the current primary is valid, copy and validate it before replacing the backup.
@@ -64,8 +67,9 @@ Load sequence:
 2. Validate the current in-memory snapshot for rollback.
 3. Read and validate the primary; if invalid or missing, validate the backup.
 4. Complete full payload preflight before any world streaming or participant mutation.
-5. Apply the payload through the existing transactional `restore_stream_state()` path.
-6. Only after a successful world restore may a validated backup be promoted over a corrupt/missing primary.
+5. Complete detached-probe validation for minerals, crops, world objects, inventory, stamina, quick-use, layer/depth and positions before any live snapshot or streaming mutation. Direct `restore_stream_state()` calls use the same preflight and retain a complete rollback snapshot.
+6. Apply the payload through the existing transactional `restore_stream_state()` path.
+7. Only after a successful world restore may a validated backup be promoted over a corrupt/missing primary.
 
 An invalid primary and invalid backup are left byte-for-byte untouched. A backup is never promoted before both its envelope and complete payload have passed validation.
 
@@ -81,8 +85,8 @@ This is an in-process recovery barrier, not a persistent transaction journal. A 
 
 - `systems/SurfaceWorldSaveStore.gd` — versioned envelope, bounded reads, verified temp writes, backup promotion, corrupt-file archival and interrupted-write recovery.
 - `world/SurfaceWorld.gd` — production save/load entry points, F5/F9 controls, complete detached preflight, recovery barriers and retry path.
-- `systems/WorldObjectStateRegistry.gd` — read-only query for active chunk write leases.
-- `tests/production_surface_world_test.gd` — restart roundtrip, backup fallback, corrupt-file preservation, invalid-envelope isolation, stale-temp replacement, failed promotion, interrupted-promotion recovery, target-stream rollback, and Director/Mineral/WorldObject write barriers.
+- `systems/WorldObjectStateRegistry.gd` — read-only query for active chunk write leases and pending-lock status.
+- `tests/production_surface_world_test.gd` — restart roundtrip, checksum tampering, unsupported envelope version, user-data path restriction, backup fallback, corrupt-primary and corrupt-backup archival, invalid-envelope isolation across every participant, stale-temp replacement, failed promotion, interrupted-promotion recovery, invalid direct-restore preflight, target-stream rollback, and Director/Controller/Mineral/WorldObject write barriers.
 - `docs/PRODUCTION_SURFACE_WORLD_DURABLE_SAVE_M0_3_37.md` — this record.
 
 No third-party dependency, new Autoload, scene, or save-schema migration is introduced. The new store script is loaded by a direct `preload` from `SurfaceWorld.gd`.
@@ -98,7 +102,7 @@ No third-party dependency, new Autoload, scene, or save-schema migration is intr
 ## Validation status
 
 - Implementation and regression tests are committed to the feature branch.
-- Exact-head Godot 4.3 Full Compatibility Gate: pending.
+- Exact-head Godot 4.3 Full Compatibility Gate: pending at the time of this document update; the final run ID and conclusion must be written after the final branch HEAD completes CI.
 - Local Godot executable is unavailable in the current authoring environment; no local engine pass is claimed.
 - GPU, rendered FPS, Xvfb/Mesa, mobile and target-device tests are not covered by headless CI.
 
@@ -107,4 +111,5 @@ No third-party dependency, new Autoload, scene, or save-schema migration is intr
 - The first production save format is version 1; unknown future versions fail closed until an explicit migration is implemented.
 - No autosave is added. Future autosave must route through `save_game()`.
 - The in-memory recovery barrier is not a disk-backed crash-recovery journal.
+- `save_game()` and `load_game()` are manual F5/F9 entry points; no autosave is enabled. Future autosave must route through the same barrier-aware entry points.
 - Verify the exact final CI HEAD, inspect all workflow logs, and update this asset with the final evidence before requesting review.
