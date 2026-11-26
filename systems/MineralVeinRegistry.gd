@@ -47,6 +47,127 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 	_saved_records[key] = mining_vein.to_save_dict()
 	return true
 
+## Atomically register every vein owned by one chunk. Saved state and offline
+## regeneration are prepared on detached probes before any live node or registry
+## entry changes. A rejected later participant cannot advance an earlier vein.
+func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int = -1) -> bool:
+	if chunk_id.is_empty() or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or veins_by_local_id.is_empty():
+		return false
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	if now <= 0:
+		return false
+
+	var local_ids: Array = veins_by_local_id.keys()
+	local_ids.sort()
+	var stable_ids: Array[String] = []
+	var live_veins: Dictionary = {}
+	var prepared_records: Dictionary = {}
+	var original_states: Dictionary = {}
+
+	for raw_local_id in local_ids:
+		if not (raw_local_id is String):
+			return false
+		var local_id: String = raw_local_id
+		if local_id.is_empty() or local_id != local_id.strip_edges() or local_id.contains("//"):
+			return false
+		var stable_id: String = chunk_id + "/vein/" + local_id
+		var candidate: Variant = veins_by_local_id[raw_local_id]
+		if not is_instance_valid(candidate) or not (candidate is MiningNode):
+			return false
+		var live_vein: MiningNode = candidate as MiningNode
+		if not live_vein.can_register():
+			return false
+		if _veins.has(stable_id) and is_instance_valid(_veins[stable_id]):
+			return false
+
+		# Match register_vein() defaults for legacy schema-v1 records by seeding
+		# the detached probe with the incoming node's authored capacities first.
+		var probe: MiningNode = MiningNode.new()
+		probe.mineral_id = live_vein.mineral_id
+		probe.max_units = live_vein.max_units
+		probe.remaining_units = live_vein.remaining_units
+		probe.units_per_hit = live_vein.units_per_hit
+		probe.regen_interval_seconds = live_vein.regen_interval_seconds
+		probe.last_regen_unix = live_vein.last_regen_unix
+
+		var has_saved_record: bool = _saved_records.has(stable_id)
+		var source_record: Dictionary = {}
+		if has_saved_record:
+			var saved_value: Variant = _saved_records[stable_id]
+			if not (saved_value is Dictionary):
+				probe.free()
+				return false
+			source_record = saved_value.duplicate(true)
+		else:
+			source_record = live_vein.to_save_dict()
+			if int(source_record.get("last_regen_unix", 0)) <= 0:
+				source_record["last_regen_unix"] = now
+
+		if not probe.load_save_dict(source_record, now, false):
+			probe.free()
+			return false
+		if has_saved_record:
+			if auto_apply_elapsed_time_on_restore:
+				probe.apply_elapsed_regeneration(now)
+			else:
+				probe.last_regen_unix = now
+
+		var next_record: Dictionary = probe.to_save_dict()
+		if not _validate_record(stable_id, next_record, live_vein.mineral_id, now):
+			probe.free()
+			return false
+		prepared_records[stable_id] = next_record.duplicate(true)
+		live_veins[stable_id] = live_vein
+		original_states[stable_id] = _snapshot_live_vein_state(live_vein)
+		stable_ids.append(stable_id)
+		probe.free()
+
+	if stable_ids.size() != veins_by_local_id.size():
+		return false
+
+	# Apply only fully prepared schema-v2 records. load_save_dict validates all
+	# fields before assigning them; retain exact live snapshots for defensive
+	# rollback if a participant unexpectedly rejects during this apply phase.
+	var applied_ids: Array[String] = []
+	for stable_id in stable_ids:
+		var live_vein: MiningNode = live_veins[stable_id] as MiningNode
+		if not live_vein.load_save_dict(prepared_records[stable_id], now, false):
+			for rollback_id in applied_ids:
+				_restore_live_vein_state(live_veins[rollback_id] as MiningNode, original_states[rollback_id])
+			return false
+		applied_ids.append(stable_id)
+
+	# Registry commit point: no registry map changes occur until every live node
+	# has accepted its already-validated state.
+	for stable_id in stable_ids:
+		_veins[stable_id] = live_veins[stable_id]
+		_saved_records[stable_id] = prepared_records[stable_id].duplicate(true)
+	return true
+
+func _snapshot_live_vein_state(vein: MiningNode) -> Dictionary:
+	var interaction_area: Area3D = vein.get_node_or_null("InteractionArea") as Area3D
+	return {
+		"max_units": vein.max_units,
+		"remaining_units": vein.remaining_units,
+		"regen_interval_seconds": vein.regen_interval_seconds,
+		"last_regen_unix": vein.last_regen_unix,
+		"depleted_signal_sent": bool(vein.get("_depleted_signal_sent")),
+		"visible": vein.visible,
+		"interaction_collision_layer": interaction_area.collision_layer if interaction_area != null else -1
+	}
+
+func _restore_live_vein_state(vein: MiningNode, snapshot: Dictionary) -> void:
+	vein.max_units = int(snapshot.get("max_units", vein.max_units))
+	vein.remaining_units = int(snapshot.get("remaining_units", vein.remaining_units))
+	vein.regen_interval_seconds = int(snapshot.get("regen_interval_seconds", vein.regen_interval_seconds))
+	vein.last_regen_unix = int(snapshot.get("last_regen_unix", vein.last_regen_unix))
+	vein.set("_depleted_signal_sent", bool(snapshot.get("depleted_signal_sent", false)))
+	vein.visible = bool(snapshot.get("visible", vein.visible))
+	var interaction_area: Area3D = vein.get_node_or_null("InteractionArea") as Area3D
+	var collision_layer: int = int(snapshot.get("interaction_collision_layer", -1))
+	if interaction_area != null and collision_layer >= 0:
+		interaction_area.collision_layer = collision_layer
+
 ## Capture the final state before a chunk releases its live node. The record remains
 ## serializable and can restore a new node with the same stable ID later.
 func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: int = -1) -> bool:
