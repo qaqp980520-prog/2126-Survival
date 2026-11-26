@@ -292,12 +292,17 @@ func _controller_has_pending_recovery() -> bool:
 	return chunk_controller.has_method("has_pending_chunk_load_recovery") and bool(chunk_controller.call("has_pending_chunk_load_recovery"))
 
 func _recover_controller_before_compensation() -> bool:
-	if not _controller_has_pending_recovery():
-		return true
-	if not chunk_controller.has_method("recover_failed_chunk_load"):
-		return false
-	if not bool(chunk_controller.call("recover_failed_chunk_load")):
-		return false
+	if _controller_has_pending_recovery():
+		if not chunk_controller.has_method("recover_failed_chunk_load"):
+			return false
+		if not bool(chunk_controller.call("recover_failed_chunk_load")) or _controller_has_pending_recovery():
+			return false
+	var mineral_registry: Variant = chunk_controller.get("registry")
+	if mineral_registry != null and is_instance_valid(mineral_registry) and mineral_registry.has_method("has_pending_atomic_registration_recovery") and bool(mineral_registry.call("has_pending_atomic_registration_recovery")):
+		if not mineral_registry.has_method("recover_last_atomic_registration") or not bool(mineral_registry.call("recover_last_atomic_registration")):
+			return false
+		if bool(mineral_registry.call("has_pending_atomic_registration_recovery")):
+			return false
 	return not _controller_has_pending_recovery()
 
 func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], previous_managed: Dictionary, registry_snapshot: Dictionary, now_unix: int) -> bool:
