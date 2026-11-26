@@ -6,6 +6,9 @@ const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFacto
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
+const MineralVeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const CropRegistryScript = preload("res://systems/CropRegistry.gd")
+const WorldObjectStateRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 const InventoryModelScript = preload("res://systems/SurvivalInventory.gd")
 const SurfaceWorldSaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
 const DEFAULT_SAVE_PATH: String = "user://surface_world_save.json"
@@ -839,6 +842,13 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
 func _get_underground_recovery_barrier_report() -> Dictionary:
+	if registry == null or not is_instance_valid(registry):
+		return {"recovery_required": true, "reason": "mineral_registry_unavailable"}
+	if not registry.has_method("has_pending_atomic_registration_recovery"):
+		return {"recovery_required": true, "reason": "mineral_registry_recovery_api_unavailable"}
+	if bool(registry.call("has_pending_atomic_registration_recovery")):
+		var mineral_report: Dictionary = registry.call("get_last_atomic_registration_report") if registry.has_method("get_last_atomic_registration_report") else {}
+		return {"recovery_required": true, "reason": "mineral_atomic_registration_recovery_pending", "registry_report": mineral_report}
 	if mine_director == null or not is_instance_valid(mine_director):
 		return {"recovery_required": true, "reason": "underground_director_unavailable"}
 	if not mine_director.has_method("has_pending_registry_pair_recovery"):
@@ -1241,7 +1251,7 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
+	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use · F5 save · F9 load" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use · F5 save · F9 load"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
@@ -1263,13 +1273,28 @@ func _validate_world_save_payload(payload: Dictionary) -> bool:
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	var minerals_value: Variant = payload.get("minerals", null)
-	if not (minerals_value is Dictionary) or not bool(registry.call("validate_save_dict", minerals_value, now)):
+	if not (minerals_value is Dictionary):
+		return false
+	var mineral_probe: Node = MineralVeinRegistryScript.new()
+	var minerals_valid: bool = bool(mineral_probe.call("validate_save_dict", minerals_value, now))
+	mineral_probe.free()
+	if not minerals_valid:
 		return false
 	var crops_value: Variant = payload.get("crops", null)
-	if not (crops_value is Dictionary) or not bool(crop_registry.call("validate_save_dict", crops_value)):
+	if not (crops_value is Dictionary):
+		return false
+	var crop_probe: Node = CropRegistryScript.new()
+	var crops_valid: bool = bool(crop_probe.call("validate_save_dict", crops_value))
+	crop_probe.free()
+	if not crops_valid:
 		return false
 	var objects_value: Variant = payload.get("world_objects", null)
-	if not (objects_value is Dictionary) or not bool(object_state_registry.call("validate_save_dict", objects_value)):
+	if not (objects_value is Dictionary):
+		return false
+	var object_probe: Node = WorldObjectStateRegistryScript.new()
+	var objects_valid: bool = bool(object_probe.call("validate_save_dict", objects_value))
+	object_probe.free()
+	if not objects_valid:
 		return false
 	var inventory_value: Variant = payload.get("inventory", null)
 	if not (inventory_value is Dictionary):
