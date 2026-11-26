@@ -1074,7 +1074,7 @@ func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> boo
 	return true
 
 func _restore_mine_snapshots(mineral_snapshot: Dictionary, object_snapshot: Dictionary, now_unix: int) -> bool:
-	if not bool(chunk_controller.call("restore_save_dict", mineral_snapshot, now_unix)):
+	if not bool(chunk_controller.call("restore_snapshot_exact", mineral_snapshot, now_unix)):
 		return false
 	return bool(chunk_controller.call("restore_world_object_states", object_snapshot))
 
