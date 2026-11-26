@@ -908,6 +908,9 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if not barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
 		return false
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no live snapshot or streaming mutation was started.", true)
+		return false
 	var previous_payload: Dictionary = serialize_stream_state()
 	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload)
 
@@ -915,6 +918,9 @@ func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, pre
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
+		return false
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no restore was started.", true)
 		return false
 	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
 		_set_restore_report(false, "preload_snapshot", "A complete rollback snapshot is unavailable; no restore was started.", true)
