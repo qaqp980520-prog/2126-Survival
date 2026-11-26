@@ -1465,6 +1465,7 @@ func save_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 		"path": save_path,
 		"saved_at_unix": now,
 		"backup_path": str(write_report.get("backup_path", "")),
+		"backup_archive_path": str(write_report.get("backup_archive_path", "")),
 		"archive_path": str(write_report.get("archive_path", "")),
 		"warning": str(write_report.get("warning", ""))
 	})
