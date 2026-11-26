@@ -209,6 +209,62 @@ func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> 
 	world.set("mine_director", previous_mine_director)
 	missing_api_director.queue_free()
 
+func _test_save_path_symlink_guards() -> void:
+	var user_directory: DirAccess = DirAccess.open("user://")
+	_expect(user_directory != null, "open user data for save-path symlink tests")
+	if user_directory == null:
+		return
+	var target_directory: String = "user://run451_symlink_target"
+	var target_directory_absolute: String = ProjectSettings.globalize_path(target_directory)
+	var target_directory_error: Error = DirAccess.make_dir_recursive_absolute(target_directory_absolute)
+	_expect(target_directory_error == OK or DirAccess.dir_exists_absolute(target_directory_absolute), "create a symlink test target directory")
+	var target_file_path: String = target_directory + "/existing.json"
+	_expect(_write_test_text(target_file_path, "protected-target-bytes"), "write a file behind the directory symlink")
+	var directory_link_name: String = "run451_symlink_directory"
+	var directory_link_error: Error = user_directory.create_link(target_directory_absolute, directory_link_name)
+	if directory_link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
+		_cleanup_save_test_files(target_file_path)
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
+	_expect(directory_link_error == OK, "create a directory symlink inside user data")
+	if directory_link_error == OK:
+		var nested_write: Dictionary = SaveStoreScript.write_atomic(
+			"user://" + directory_link_name + "/new_save.json",
+			"{}",
+			Callable(world, "_validate_world_save_payload")
+		)
+		_expect(not bool(nested_write.get("ok", false)) and str(nested_write.get("phase", "")) == "path_symlink", "writer rejects a save path beneath a directory symlink")
+		var nested_read: Dictionary = SaveStoreScript.read_valid_file(
+			"user://" + directory_link_name + "/existing.json",
+			Callable(world, "_validate_world_save_payload")
+		)
+		_expect(not bool(nested_read.get("ok", false)) and str(nested_read.get("reason", "")) == "path_symlink", "reader rejects a path beneath a directory symlink")
+		_expect(FileAccess.get_file_as_string(target_file_path) == "protected-target-bytes", "directory-symlink rejection preserves target bytes")
+		user_directory.remove(directory_link_name)
+	_cleanup_save_test_files(target_file_path)
+	DirAccess.remove_absolute(target_directory_absolute)
+
+	var direct_target: String = "user://run451_symlink_file_target.json"
+	var direct_link_name: String = "run451_symlink_file.json"
+	_expect(_write_test_text(direct_target, "protected-direct-file-bytes"), "write direct file-symlink target")
+	var direct_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(direct_target), direct_link_name)
+	if direct_link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: direct file-symlink fixture requires Windows Developer Mode or elevated privileges.")
+		_cleanup_save_test_files(direct_target)
+		return
+	_expect(direct_link_error == OK, "create a direct file symlink inside user data")
+	if direct_link_error == OK:
+		var direct_path: String = "user://" + direct_link_name
+		var direct_read: Dictionary = SaveStoreScript.read_valid_file(direct_path, Callable(world, "_validate_world_save_payload"))
+		_expect(not bool(direct_read.get("ok", false)) and str(direct_read.get("reason", "")) == "path_symlink", "reader rejects a direct file symlink")
+		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_path, "{}", Callable(world, "_validate_world_save_payload"))
+		_expect(not bool(direct_write.get("ok", false)) and str(direct_write.get("phase", "")) == "path_symlink", "writer rejects a direct file symlink")
+		_expect(FileAccess.get_file_as_string(direct_target) == "protected-direct-file-bytes", "direct-file-symlink rejection preserves target bytes")
+		user_directory.remove(direct_link_name)
+	_cleanup_save_test_files(direct_target)
+
+
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")
 	var counts: Dictionary = payload.get("inventory", {})
@@ -237,17 +293,31 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var path: String = "user://production_surface_world_save_test.json"
 	var blocked_path: String = "user://production_surface_world_save_blocked_test.json"
 	var promotion_path: String = "user://production_surface_world_save_promotion_test.json"
+	var interrupted_path: String = "user://production_surface_world_interrupted_restart_test.json"
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
+	_cleanup_save_test_files(interrupted_path)
 
 	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 3)), "production save fixture adds initial inventory")
 	var stamina_model: RefCounted = world.get("stamina") as RefCounted
 	var quick_use_model: RefCounted = world.get("quick_use") as RefCounted
 	stamina_model.set("current_stamina", 42.5)
 	_expect(bool(quick_use_model.call("select_slot", 2)), "production save fixture selects the third quick-use slot")
+	var order_a: Dictionary = {}
+	order_a["alpha"] = 1
+	order_a["beta"] = 2
+	var order_b: Dictionary = {}
+	order_b["beta"] = 2
+	order_b["alpha"] = 1
+	var envelope_order_a: Dictionary = SaveStoreScript.build_envelope(order_a, now_unix)
+	var envelope_order_b: Dictionary = SaveStoreScript.build_envelope(order_b, now_unix)
+	_expect(str(envelope_order_a.get("payload_sha256", "")) == str(envelope_order_b.get("payload_sha256", "")), "payload checksum is stable across Dictionary insertion order")
+	_expect(bool(SaveStoreScript.decode_envelope(SaveStoreScript.encode_envelope(envelope_order_a)).get("ok", false)), "canonical envelope survives JSON encode and decode")
 	var payload_a: Dictionary = world.call("serialize_stream_state")
-	_expect(bool(world.call("save_game", path)), "production SurfaceWorld writes a versioned disk save")
+	var first_save_ok: bool = bool(world.call("save_game", path))
+	var first_save_report: Dictionary = world.call("get_last_save_report")
+	_expect(first_save_ok, "production SurfaceWorld writes a versioned disk save: " + JSON.stringify(first_save_report))
 	var primary_a: String = FileAccess.get_file_as_string(path)
 	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
 	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
@@ -258,6 +328,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var tampered_report: Dictionary = SaveStoreScript.decode_envelope(JSON.stringify(tampered_envelope))
 	_expect(not bool(tampered_report.get("ok", false)) and str(tampered_report.get("reason", "")) == "payload_checksum_mismatch", "valid-looking payload tampering is rejected by the envelope checksum")
 	_expect(not bool(SaveStoreScript.read_valid_file("res://forbidden_surface_world_save.json", Callable(world, "_validate_world_save_payload")).get("ok", false)), "save reader rejects paths outside user data")
+	_test_save_path_symlink_guards()
 	var unknown_version_envelope: Dictionary = {
 		"format_id": "2126.surface_world",
 		"format_version": 999,
@@ -293,7 +364,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(int(restored_quick_use.get("selected_slot")) == 1, "restart restore recovers the selected quick-use slot")
 	var primary_report: Dictionary = world.call("get_last_save_report")
 	_expect(str(primary_report.get("phase", "")) == "loaded_from_primary", "primary load reports its source explicitly")
-	await _test_failed_restore_stream_rollback(now_unix + 8)
+	await _test_failed_restore_stream_rollback()
 
 	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
 	_expect(bool(world.call("load_game", path)), "valid backup is restored when the primary is corrupt")
@@ -317,6 +388,25 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var backup_rotation_report: Dictionary = world.call("get_last_save_report")
 	var backup_archive_path: String = str(backup_rotation_report.get("details", {}).get("backup_archive_path", ""))
 	_expect(not backup_archive_path.is_empty() and FileAccess.file_exists(backup_archive_path), "corrupt backup is preserved in a diagnostic archive before rotation")
+
+	var blocked_registry_before_file_recovery: Dictionary = world.object_state_registry.call("to_save_dict")
+	var previous_obstruction_absolute: String = ProjectSettings.globalize_path(blocked_path + ".previous")
+	var previous_obstruction_error: Error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
+	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "create a previous-path obstruction for save recovery")
+	_expect(not bool(world.call("save_game", blocked_path)), "save fails closed when interrupted-file recovery is obstructed")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "save reports the interrupted-file recovery phase")
+	_expect(world.object_state_registry.call("to_save_dict") == blocked_registry_before_file_recovery, "file-recovery failure happens before live world-object capture")
+	_expect(FileAccess.get_file_as_string(blocked_path) == blocked_primary_before, "file-recovery obstruction preserves the existing primary bytes")
+	_expect(not FileAccess.file_exists(blocked_path + ".tmp"), "file-recovery obstruction creates no temporary save")
+	DirAccess.remove_absolute(previous_obstruction_absolute)
+	_expect(bool(world.call("retry_save_recovery")), "file-recovery barrier clears after the obstruction is removed")
+
+	previous_obstruction_error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
+	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "recreate a previous-path obstruction for load recovery")
+	_expect(not bool(world.call("load_game", blocked_path)), "load fails closed when interrupted-file recovery is obstructed")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "load reports the interrupted-file recovery phase")
+	DirAccess.remove_absolute(previous_obstruction_absolute)
+	_expect(bool(world.call("retry_save_recovery")), "load recovery barrier clears after the obstruction is removed")
 
 	var invalid_path: String = "user://production_surface_world_invalid_save_test.json"
 	_cleanup_save_test_files(invalid_path)
@@ -463,13 +553,40 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(FileAccess.get_file_as_string(promotion_path) == last_valid_primary, "interrupted promotion recovery restores the last valid primary byte-for-byte")
 	_promotion_fail_path = ""
 
+	_cleanup_save_test_files(interrupted_path)
+	_expect(bool(world.call("save_game", interrupted_path)), "restart-recovery fixture writes its first valid primary")
+	var interrupted_primary_text: String = FileAccess.get_file_as_string(interrupted_path)
+	var stage_interrupted_error: Error = DirAccess.rename_absolute(
+		ProjectSettings.globalize_path(interrupted_path),
+		ProjectSettings.globalize_path(interrupted_path + ".previous")
+	)
+	_expect(stage_interrupted_error == OK, "simulate a process interruption after staging the previous primary")
+	_expect(not FileAccess.file_exists(interrupted_path) and FileAccess.file_exists(interrupted_path + ".previous"), "interrupted-write fixture leaves only the validated previous primary")
+	_expect(not FileAccess.file_exists(interrupted_path + ".bak"), "first-save interruption fixture has no backup fallback")
+	world.queue_free()
+	await process_frame
+	world = WorldScene.instantiate() as Node3D
+	root.add_child(world)
+	await process_frame
+	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh SurfaceWorld starts before interrupted-file recovery")
+	_expect(bool(world.call("load_game", interrupted_path)), "load entry recovers a validated previous primary after restart")
+	_expect(FileAccess.get_file_as_string(interrupted_path) == interrupted_primary_text, "load recovery restores the exact previous primary bytes")
+	_expect(not FileAccess.file_exists(interrupted_path + ".previous"), "successful load recovery consumes the staged previous file")
+
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
+	_cleanup_save_test_files(interrupted_path)
 	_cleanup_save_test_files(invalid_path)
 
 
-func _test_failed_restore_stream_rollback(now_unix: int) -> void:
+func _test_failed_restore_stream_rollback() -> void:
+	await process_frame
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	for mineral_node_value in world.chunk_controller.get_loaded_mineral_nodes():
+		var mineral_node: Node = mineral_node_value as Node
+		if mineral_node != null and mineral_node.has_method("apply_elapsed_regeneration"):
+			mineral_node.call("apply_elapsed_regeneration", now_unix)
 	var original_director: Node = world.get("director") as Node
 	var original_position: Vector3 = world.player.global_position
 	var original_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
@@ -487,7 +604,7 @@ func _test_failed_restore_stream_rollback(now_unix: int) -> void:
 	var restored: bool = bool(world.call("restore_stream_state", candidate, now_unix))
 	_expect(not restored, "failed target chunk streaming rejects the disk restore candidate")
 	var report: Dictionary = world.call("get_last_restore_report")
-	_expect(str(report.get("phase", "")) == "stream_sync" and bool(report.get("rollback_complete", false)), "failed target streaming reports a complete rollback")
+	_expect(str(report.get("phase", "")) == "stream_sync" and bool(report.get("rollback_complete", false)), "failed target streaming reports a complete rollback: " + JSON.stringify(report))
 	_expect(world.player.global_position.is_equal_approx(original_position), "failed target streaming restores the original player position")
 	_expect(world.chunk_controller.get_loaded_chunk_ids() == original_ids, "failed target streaming restores the original active chunk window")
 	_expect(world.chunk_controller.call("to_save_dict") == original_minerals, "failed target streaming restores mineral records")
