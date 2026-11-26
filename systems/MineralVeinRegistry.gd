@@ -321,6 +321,197 @@ func unregister_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, no
 		_veins.erase(stable_id)
 	return true
 
+## Capture only records owned by the selected chunks. Loaded veins in unrelated
+## chunks are refreshed from their current live state; unloaded records are preserved.
+func to_chunk_set_snapshot(chunk_ids: Array) -> Dictionary:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return {}
+	var normalized: Dictionary = _normalize_chunk_ids(chunk_ids)
+	if not bool(normalized.get("ok", false)):
+		return {}
+	var selected: Dictionary = {}
+	for chunk_id in normalized["ids"]:
+		selected[chunk_id] = true
+	for stable_id in get_registered_ids():
+		if selected.has(_chunk_id_from_stable_id(stable_id)):
+			_saved_records[stable_id] = _veins[stable_id].call("to_save_dict")
+	var records: Dictionary = {}
+	for raw_key in _saved_records.keys():
+		var stable_id: String = str(raw_key)
+		if selected.has(_chunk_id_from_stable_id(stable_id)):
+			records[stable_id] = _saved_records[raw_key].duplicate(true)
+	return {"schema_version": 1, "chunk_ids": normalized["ids"].duplicate(), "veins": records}
+
+func validate_chunk_set_snapshot(chunk_ids: Array, data: Dictionary, now_unix: int = -1) -> bool:
+	return bool(_prepare_chunk_set_snapshot(chunk_ids, data, now_unix).get("ok", false))
+
+## Restore only the selected chunk set. Current records and live state from every
+## unrelated chunk are merged at restore time, so newer unrelated writes survive.
+func restore_chunk_set_snapshot(chunk_ids: Array, data: Dictionary, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
+	var prepared: Dictionary = _prepare_chunk_set_snapshot(chunk_ids, data, now_unix)
+	if not bool(prepared.get("ok", false)):
+		_last_atomic_registration_report = {"success": false, "phase": "chunk_set_preflight", "error": str(prepared.get("error", "invalid_chunk_set_snapshot")), "rollback_complete": true, "recovery_required": false}
+		return false
+	var selected: Dictionary = prepared["selected"]
+	var next_records: Dictionary = prepared["records"]
+	var now: int = int(prepared["now"])
+	var live_veins: Dictionary = {}
+	var original_states: Dictionary = {}
+
+	for stable_id in get_registered_ids():
+		if not selected.has(_chunk_id_from_stable_id(stable_id)):
+			continue
+		var live_vein: Node = _veins[stable_id] as Node
+		if not next_records.has(stable_id):
+			return false
+		var record: Dictionary = next_records[stable_id]
+		var probe: Node = MiningNode.new()
+		probe.set("mineral_id", str(live_vein.get("mineral_id")))
+		probe.set("max_units", int(live_vein.get("max_units")))
+		probe.set("remaining_units", int(live_vein.get("remaining_units")))
+		probe.set("units_per_hit", int(live_vein.get("units_per_hit")))
+		probe.set("regen_interval_seconds", int(live_vein.get("regen_interval_seconds")))
+		probe.set("last_regen_unix", int(live_vein.get("last_regen_unix")))
+		var probe_ok: bool = bool(probe.call("load_save_dict", record, now, false))
+		probe.free()
+		if not probe_ok:
+			return false
+		live_veins[stable_id] = live_vein
+		original_states[stable_id] = _snapshot_live_vein_state(live_vein)
+
+	for stable_id in live_veins.keys():
+		var live_vein: Node = live_veins[stable_id] as Node
+		if not bool(live_vein.call("load_save_dict", next_records[stable_id], now, false)):
+			var rollback_complete: bool = true
+			for rollback_id in live_veins.keys():
+				var rollback_vein: Node = live_veins[rollback_id] as Node
+				if not is_instance_valid(rollback_vein):
+					rollback_complete = false
+					continue
+				_restore_live_vein_state(rollback_vein, original_states[rollback_id])
+				if _snapshot_live_vein_state(rollback_vein) != original_states[rollback_id]:
+					rollback_complete = false
+			if not rollback_complete:
+				_pending_atomic_registration_recovery = {
+					"live_veins": live_veins.duplicate(),
+					"original_states": original_states.duplicate(true)
+				}
+			_last_atomic_registration_report = {
+				"success": false,
+				"phase": "chunk_set_live_apply",
+				"error": "live_vein_apply_rejected",
+				"rollback_complete": rollback_complete,
+				"recovery_required": not rollback_complete,
+				"participant_count": live_veins.size()
+			}
+			return false
+
+	_saved_records = next_records
+	for stable_id in live_veins.keys():
+		_saved_records[stable_id] = live_veins[stable_id].call("to_save_dict")
+	_last_atomic_registration_report = {
+		"success": true,
+		"phase": "chunk_set_restore_complete",
+		"error": "",
+		"rollback_complete": true,
+		"recovery_required": false,
+		"participant_count": live_veins.size(),
+		"chunk_count": selected.size()
+	}
+	return true
+
+func _prepare_chunk_set_snapshot(chunk_ids: Array, data: Dictionary, now_unix: int = -1) -> Dictionary:
+	var normalized: Dictionary = _normalize_chunk_ids(chunk_ids)
+	if not bool(normalized.get("ok", false)):
+		return normalized
+	var supplied: Variant = data.get("chunk_ids", null)
+	if not (supplied is Array):
+		return {"ok": false, "error": "missing_chunk_set"}
+	var normalized_supplied: Dictionary = _normalize_chunk_ids(supplied)
+	if not bool(normalized_supplied.get("ok", false)) or normalized_supplied["ids"] != normalized["ids"]:
+		return {"ok": false, "error": "chunk_set_mismatch"}
+	var schema: Variant = data.get("schema_version", null)
+	if not (schema is int or schema is float) or not is_finite(float(schema)) or float(schema) != 1.0:
+		return {"ok": false, "error": "unsupported_schema"}
+	var raw_records: Variant = data.get("veins", null)
+	if not (raw_records is Dictionary):
+		return {"ok": false, "error": "invalid_vein_records"}
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	if now <= 0:
+		return {"ok": false, "error": "invalid_timestamp"}
+	var selected: Dictionary = {}
+	for chunk_id in normalized["ids"]:
+		selected[chunk_id] = true
+	var restored_records: Dictionary = {}
+	for raw_key in raw_records.keys():
+		if not (raw_key is String):
+			return {"ok": false, "error": "invalid_stable_id"}
+		var stable_id: String = raw_key
+		var chunk_id: String = _chunk_id_from_stable_id(stable_id)
+		var record: Variant = raw_records[raw_key]
+		if not selected.has(chunk_id) or not (record is Dictionary):
+			return {"ok": false, "error": "foreign_chunk_record"}
+		var expected_mineral: String = ""
+		if _veins.has(stable_id) and is_instance_valid(_veins[stable_id]):
+			expected_mineral = str(_veins[stable_id].get("mineral_id"))
+		if not _validate_record(stable_id, record, expected_mineral, now):
+			return {"ok": false, "error": "invalid_vein_record"}
+		restored_records[stable_id] = record.duplicate(true)
+
+	var merged_records: Dictionary = _saved_records.duplicate(true)
+	for raw_key in merged_records.keys():
+		if selected.has(_chunk_id_from_stable_id(str(raw_key))):
+			merged_records.erase(raw_key)
+	for stable_id in restored_records.keys():
+		merged_records[stable_id] = restored_records[stable_id].duplicate(true)
+
+	# Refresh unrelated live nodes at restore time instead of replaying their older
+	# snapshot values. Unloaded unrelated records remain from the current Registry.
+	for stable_id in get_registered_ids():
+		if selected.has(_chunk_id_from_stable_id(stable_id)):
+			if not restored_records.has(stable_id):
+				return {"ok": false, "error": "snapshot_missing_loaded_vein"}
+			continue
+		var live_record: Dictionary = _veins[stable_id].call("to_save_dict")
+		if not _validate_record(stable_id, live_record, str(_veins[stable_id].get("mineral_id")), now):
+			return {"ok": false, "error": "invalid_unrelated_live_vein"}
+		merged_records[stable_id] = live_record.duplicate(true)
+
+	var prepared_all: Dictionary = _prepare_restore({"schema_version": 1, "veins": merged_records}, now)
+	if not bool(prepared_all.get("ok", false)):
+		return {"ok": false, "error": "merged_registry_invalid"}
+	return {
+		"ok": true,
+		"records": prepared_all["records"],
+		"now": int(prepared_all["now"]),
+		"selected": selected
+	}
+
+func _normalize_chunk_ids(raw_chunk_ids: Array) -> Dictionary:
+	if raw_chunk_ids.is_empty():
+		return {"ok": false, "error": "empty_chunk_set"}
+	var ids: Array[String] = []
+	var seen: Dictionary = {}
+	for raw_chunk_id in raw_chunk_ids:
+		if not (raw_chunk_id is String):
+			return {"ok": false, "error": "invalid_chunk_id_type"}
+		var chunk_id: String = raw_chunk_id
+		if chunk_id.is_empty() or chunk_id.length() > 128 or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or chunk_id.contains("\n") or chunk_id.contains("\r") or seen.has(chunk_id):
+			return {"ok": false, "error": "invalid_or_duplicate_chunk_id"}
+		seen[chunk_id] = true
+		ids.append(chunk_id)
+	ids.sort()
+	return {"ok": true, "ids": ids}
+
+func _chunk_id_from_stable_id(stable_id: String) -> String:
+	var marker: String = "/vein/"
+	var marker_index: int = stable_id.find(marker)
+	if marker_index <= 0 or marker_index + marker.length() >= stable_id.length():
+		return ""
+	return stable_id.substr(0, marker_index)
+
 func get_registered_ids() -> PackedStringArray:
 	var ids := PackedStringArray()
 	for key in _veins.keys():

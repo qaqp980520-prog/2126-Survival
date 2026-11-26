@@ -1,9 +1,42 @@
 extends SceneTree
 
+class FailOnceUnloadController:
+	extends Node3D
+	var delegate: Node
+	var registry: Node
+	var object_state_registry: Node
+	var fail_unload_id: String = ""
+	var fail_once: bool = false
+
+	func get_loaded_chunk_ids() -> PackedStringArray:
+		return delegate.call("get_loaded_chunk_ids")
+
+	func is_chunk_loaded(chunk_id: String) -> bool:
+		return bool(delegate.call("is_chunk_loaded", chunk_id))
+
+	func get_chunk_root(chunk_id: String) -> Node3D:
+		return delegate.call("get_chunk_root", chunk_id) as Node3D
+
+	func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
+		return bool(delegate.call("load_chunk", chunk_id, chunk_root, now_unix))
+
+	func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
+		if fail_once and chunk_id == fail_unload_id:
+			fail_once = false
+			return false
+		return bool(delegate.call("unload_chunk", chunk_id, now_unix))
+
+	func has_pending_chunk_load_recovery() -> bool:
+		return bool(delegate.call("has_pending_chunk_load_recovery"))
+
+	func recover_failed_chunk_load() -> bool:
+		return bool(delegate.call("recover_failed_chunk_load"))
+
 const Registry = preload("res://systems/MineralVeinRegistry.gd")
 const Controller = preload("res://systems/MineralChunkController.gd")
 const Director = preload("res://systems/UndergroundMineDirector.gd")
 const Factory = preload("res://systems/UndergroundMineFactory.gd")
+const MiningNode = preload("res://systems/MineralMiningNode.gd")
 const ObjectRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
 
 var failures: Array[String] = []
@@ -11,8 +44,14 @@ var fail_coordinate: Vector2i = Vector2i(999, 999)
 var fail_layer: int = 0
 var registry: Node
 var controller: Node3D
+var controller_proxy: Node3D
 var director: Node
 var object_registry: Node
+var mutate_unrelated_on_factory_failure: bool = false
+var mutate_unrelated_on_factory_success: bool = false
+var unrelated_loaded_vein: Node
+var unrelated_unloaded_vein_id: String = "unrelated/unloaded/vein/ore"
+var unrelated_object_id: String = "unrelated/chunk/crate"
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -26,10 +65,15 @@ func _run() -> void:
 	root.add_child(object_registry)
 	root.add_child(controller)
 	root.add_child(director)
+	controller_proxy = FailOnceUnloadController.new()
+	controller_proxy.delegate = controller
+	controller_proxy.registry = registry
+	controller_proxy.object_state_registry = object_registry
+	root.add_child(controller_proxy)
 	await process_frame
 	_expect(bool(controller.call("bind_registry", registry)), "mineral chunk controller binds the mineral registry")
 	_expect(bool(controller.call("bind_object_state_registry", object_registry)), "mineral chunk controller binds the shared world-object registry")
-	_expect(bool(director.call("bind_controller", controller)), "underground director binds the shared chunk controller")
+	_expect(bool(director.call("bind_controller", controller_proxy)), "underground director binds the shared chunk controller through a failure-injection proxy")
 	_expect(bool(director.call("bind_chunk_factory", Callable(self, "_make_chunk"))), "underground director accepts a deterministic factory")
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -8.25, 7.5), 1000)), "initial underground window loads")
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "initial mine window contains nine chunks")
@@ -108,8 +152,69 @@ func _run() -> void:
 	_expect(object_registry.call("get_saved_ids") == pre_deeper_object_ids, "deeper-layer rollback restores the exact world-object registry snapshot")
 	var deeper_failure_report: Dictionary = director.call("get_last_sync_report")
 	_expect(bool(deeper_failure_report.get("rollback_complete", false)), "deeper-layer failure reports a complete two-registry rollback")
+	var unrelated_loaded_id: String = "unrelated/loaded/vein/ore"
+	unrelated_loaded_vein = MiningNode.new()
+	unrelated_loaded_vein.set("mineral_id", "iron_ore")
+	unrelated_loaded_vein.set("remaining_units", 6)
+	unrelated_loaded_vein.set("last_regen_unix", 1006)
+	_expect(bool(registry.call("register_vein", unrelated_loaded_id, unrelated_loaded_vein, 1006)), "unrelated loaded mineral vein is registered outside the mine window")
+	var unrelated_unloaded_vein: Node = MiningNode.new()
+	unrelated_unloaded_vein.set("mineral_id", "copper_ore")
+	unrelated_unloaded_vein.set("remaining_units", 8)
+	unrelated_unloaded_vein.set("last_regen_unix", 1006)
+	_expect(bool(registry.call("register_vein", unrelated_unloaded_vein_id, unrelated_unloaded_vein, 1006)), "unrelated unloaded mineral vein is registered")
+	_expect(bool(registry.call("unregister_vein", unrelated_unloaded_vein_id, unrelated_unloaded_vein, 1006)), "unrelated mineral vein is converted to an unloaded saved record")
+	unrelated_unloaded_vein.free()
+	_expect(bool(object_registry.call("set_object_state", unrelated_object_id, "unrelated/chunk", {"opened": false})), "unrelated world-object record is created")
+	mutate_unrelated_on_factory_failure = true
+	fail_coordinate = Vector2i(3, -1)
+	fail_layer = 0
+	_expect(not bool(director.call("sync_to_world_position", Vector3(21.5, -8.25, 7.5), 1007)), "later factory failure rejects a window after the scoped snapshot")
+	_expect(unrelated_loaded_vein != null and int(unrelated_loaded_vein.get("remaining_units")) == 17, "newer unrelated loaded mineral state survives Director rollback")
+	var unrelated_mineral_save: Dictionary = registry.call("to_save_dict")
+	_expect(int(unrelated_mineral_save.get("veins", {}).get(unrelated_unloaded_vein_id, {}).get("remaining_units", -1)) == 19, "newer unrelated unloaded mineral record survives Director rollback")
+	_expect(bool(object_registry.call("get_object_state", unrelated_object_id).get("state", {}).get("opened", false)), "newer unrelated world-object record survives Director rollback")
+	var scoped_rollback_report: Dictionary = director.call("get_last_sync_report")
+	_expect(bool(scoped_rollback_report.get("rollback_complete", false)), "scoped multi-registry rollback reports complete")
+	mutate_unrelated_on_factory_failure = false
 	fail_coordinate = Vector2i(999, 999)
 	fail_layer = 0
+	var current_managed_ids: PackedStringArray = director.call("get_managed_chunk_ids")
+	var shifted_desired_ids: Dictionary = {}
+	for z in range(-1, 2):
+		for x in range(1, 4):
+			shifted_desired_ids["underground/mine_%d_%d" % [x, z]] = true
+	var stale_ids_for_unload_failure: Array[String] = []
+	for raw_id in current_managed_ids:
+		var current_id: String = str(raw_id)
+		if not shifted_desired_ids.has(current_id):
+			stale_ids_for_unload_failure.append(current_id)
+	stale_ids_for_unload_failure.sort()
+	_expect(stale_ids_for_unload_failure.size() == 6, "shifted window identifies six stale chunks for unload")
+	var first_stale_root: Node3D = controller.call("get_chunk_root", stale_ids_for_unload_failure[0]) as Node3D
+	var first_stale_vein: Node3D = first_stale_root.get_node_or_null("Vein_0") as Node3D if first_stale_root != null else null
+	var first_stale_remaining: int = int(first_stale_vein.get("remaining_units")) if first_stale_vein != null else -1
+	var first_stale_regen: int = int(first_stale_vein.get("last_regen_unix")) if first_stale_vein != null else -1
+	controller_proxy.fail_unload_id = stale_ids_for_unload_failure[1]
+	controller_proxy.fail_once = true
+	mutate_unrelated_on_factory_success = true
+	_expect(not bool(director.call("sync_to_world_position", Vector3(21.5, -8.25, 7.5), 1008)), "second stale unload failure rejects a partially committed window shift")
+	_expect(director.call("get_managed_chunk_ids") == current_managed_ids, "stale-unload failure restores the previous managed window")
+	_expect(bool(controller.call("is_chunk_loaded", stale_ids_for_unload_failure[0])), "previously unloaded first stale chunk is restored")
+	_expect(bool(controller.call("is_chunk_loaded", stale_ids_for_unload_failure[1])), "stale chunk that rejected unload remains loaded")
+	_expect(not bool(controller.call("is_chunk_loaded", "underground/mine_2_-1")), "new chunk loads are removed after stale-unload failure")
+	var first_stale_restored_root: Node3D = controller.call("get_chunk_root", stale_ids_for_unload_failure[0]) as Node3D
+	var first_stale_restored_vein: Node3D = first_stale_restored_root.get_node_or_null("Vein_0") as Node3D if first_stale_restored_root != null else null
+	_expect(first_stale_restored_vein != null and int(first_stale_restored_vein.get("remaining_units")) == first_stale_remaining, "stale mineral stock is restored exactly after partial unload")
+	_expect(first_stale_restored_vein != null and int(first_stale_restored_vein.get("last_regen_unix")) == first_stale_regen, "stale mineral regeneration clock is restored exactly after partial unload")
+	_expect(int(unrelated_loaded_vein.get("remaining_units")) == 18, "newer unrelated loaded mineral write survives stale-unload rollback")
+	var stale_unload_mineral_save: Dictionary = registry.call("to_save_dict")
+	_expect(int(stale_unload_mineral_save.get("veins", {}).get(unrelated_unloaded_vein_id, {}).get("remaining_units", -1)) == 20, "newer unrelated unloaded mineral record survives stale-unload rollback")
+	_expect(not bool(object_registry.call("get_object_state", unrelated_object_id).get("state", {}).get("opened", true)), "newer unrelated world-object write survives stale-unload rollback")
+	var stale_unload_report: Dictionary = director.call("get_last_sync_report")
+	_expect(bool(stale_unload_report.get("rollback_complete", false)), "partial stale-unload failure reports a complete rollback")
+	mutate_unrelated_on_factory_success = false
+	controller_proxy.fail_unload_id = ""
 	_expect(bool(director.call("sync_to_world_position", Vector3(1.5, -28.25, 7.5), 1005)), "director switches transactionally to the second vertical mine layer")
 	_expect(director.call("get_managed_chunk_ids").size() == 9, "deeper mine window remains bounded to nine chunks")
 	_expect(controller.call("is_chunk_loaded", "underground/layer_1/mine_0_0"), "deeper origin chunk uses its layer-qualified stable ID")
@@ -122,9 +227,27 @@ func _run() -> void:
 	_finish(0 if failures.is_empty() else 1)
 
 func _make_chunk(coord: Vector2i, layer_index: int, now_unix: int) -> Node3D:
+	if mutate_unrelated_on_factory_success and coord == Vector2i(2, -1) and layer_index == 0:
+		mutate_unrelated_on_factory_success = false
+		_commit_unrelated_registry_writes(now_unix, 18, 20, false)
 	if coord == fail_coordinate and layer_index == fail_layer:
+		if mutate_unrelated_on_factory_failure:
+			mutate_unrelated_on_factory_failure = false
+			_commit_unrelated_registry_writes(now_unix, 17, 19, true)
 		return null
 	return Factory.make_chunk(now_unix, coord, layer_index)
+
+func _commit_unrelated_registry_writes(now_unix: int, loaded_amount: int, unloaded_amount: int, object_opened: bool) -> void:
+	if is_instance_valid(unrelated_loaded_vein):
+		unrelated_loaded_vein.set("remaining_units", loaded_amount)
+		unrelated_loaded_vein.set("last_regen_unix", now_unix)
+	var mineral_save: Dictionary = registry.call("to_save_dict")
+	var unloaded_record: Dictionary = mineral_save.get("veins", {}).get(unrelated_unloaded_vein_id, {}).duplicate(true)
+	unloaded_record["remaining_units"] = unloaded_amount
+	unloaded_record["last_regen_unix"] = now_unix
+	mineral_save["veins"][unrelated_unloaded_vein_id] = unloaded_record
+	_expect(bool(registry.call("restore_snapshot_exact", mineral_save, now_unix)), "factory callback commits newer unrelated loaded and unloaded mineral state")
+	_expect(bool(object_registry.call("set_object_state", unrelated_object_id, "unrelated/chunk", {"opened": object_opened})), "factory callback commits newer unrelated world-object state")
 
 func _expect(condition: bool, message: String) -> void:
 	if condition:
@@ -136,12 +259,16 @@ func _expect(condition: bool, message: String) -> void:
 func _finish(exit_code: int) -> void:
 	if is_instance_valid(director):
 		director.queue_free()
+	if is_instance_valid(controller_proxy):
+		controller_proxy.queue_free()
 	if is_instance_valid(controller):
 		controller.queue_free()
 	if is_instance_valid(registry):
 		registry.queue_free()
 	if is_instance_valid(object_registry):
 		object_registry.queue_free()
+	if is_instance_valid(unrelated_loaded_vein):
+		unrelated_loaded_vein.free()
 	await process_frame
 	if exit_code == 0 and failures.is_empty():
 		print("Underground mine director tests passed.")
