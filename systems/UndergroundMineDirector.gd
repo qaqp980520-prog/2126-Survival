@@ -18,6 +18,7 @@ var chunk_controller: Node3D
 var chunk_factory: Callable
 var _managed_chunk_ids: Dictionary = {} # chunk ID -> {coord: Vector2i, layer: int}
 var _last_sync_report: Dictionary = {}
+var _pending_registry_pair_recovery: Dictionary = {}
 
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null:
@@ -42,6 +43,10 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 		return false
 	if not _is_safe_world_position(world_position):
 		_set_report(false, "validation", "Underground position, depth or grid settings are invalid.", true)
+		return false
+	if has_pending_registry_pair_recovery() and not recover_pending_registry_pair():
+		_managed_chunk_ids = _actual_managed_map()
+		_set_report(false, "registry_pair_recovery_barrier", "Registry pair recovery is still pending; underground streaming is blocked.", false, get_pending_registry_pair_recovery_report())
 		return false
 	if not _recover_controller_before_compensation():
 		_set_report(false, "recovery_barrier", "Controller recovery is still pending; underground streaming is blocked.", false)
@@ -270,27 +275,104 @@ func _capture_registry_snapshot(chunk_ids: Array[String]) -> Dictionary:
 		"objects": object_snapshot.duplicate(true)
 	}
 
+func has_pending_registry_pair_recovery() -> bool:
+	return not _pending_registry_pair_recovery.is_empty()
+
+func get_pending_registry_pair_recovery_report() -> Dictionary:
+	if _pending_registry_pair_recovery.is_empty():
+		return {}
+	return {
+		"recovery_required": true,
+		"chunk_ids": _pending_registry_pair_recovery.get("chunk_ids", []).duplicate(),
+		"reason": str(_pending_registry_pair_recovery.get("reason", "registry_pair_compensation_incomplete"))
+	}
+
+## Retry both Registry participants from the exact pre-compensation pair snapshot.
+## Streaming remains blocked until both restores succeed and read-back matches.
+func recover_pending_registry_pair() -> bool:
+	if _pending_registry_pair_recovery.is_empty():
+		return true
+	if chunk_controller == null or not is_instance_valid(chunk_controller):
+		return false
+	if not _recover_controller_before_compensation():
+		return false
+	var chunk_ids: Array = _pending_registry_pair_recovery.get("chunk_ids", [])
+	var object_snapshot: Dictionary = _pending_registry_pair_recovery.get("objects", {})
+	var mineral_snapshot: Dictionary = _pending_registry_pair_recovery.get("mineral", {})
+	var now_unix: int = int(_pending_registry_pair_recovery.get("now_unix", 0))
+	var object_registry: Variant = chunk_controller.get("object_state_registry")
+	var mineral_registry: Variant = chunk_controller.get("registry")
+	if chunk_ids.is_empty() or now_unix <= 0 or object_registry == null or not is_instance_valid(object_registry) or mineral_registry == null or not is_instance_valid(mineral_registry):
+		return false
+	for method_name in ["validate_chunk_set_save_dict", "to_chunk_set_save_dict", "restore_chunk_set_save_dict"]:
+		if not object_registry.has_method(method_name):
+			return false
+	for method_name in ["validate_chunk_set_snapshot", "to_chunk_set_snapshot", "restore_chunk_set_snapshot"]:
+		if not mineral_registry.has_method(method_name):
+			return false
+	if not bool(object_registry.call("validate_chunk_set_save_dict", chunk_ids, object_snapshot)):
+		return false
+	if not bool(mineral_registry.call("validate_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
+		return false
+	if not bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, object_snapshot)):
+		return false
+	if not bool(mineral_registry.call("restore_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
+		return false
+	var restored_objects: Variant = object_registry.call("to_chunk_set_save_dict", chunk_ids)
+	var restored_mineral: Variant = mineral_registry.call("to_chunk_set_snapshot", chunk_ids)
+	if not (restored_objects is Dictionary) or not (restored_mineral is Dictionary):
+		return false
+	if restored_objects != object_snapshot or restored_mineral != mineral_snapshot:
+		return false
+	_pending_registry_pair_recovery = {}
+	return true
+
 func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: int) -> bool:
+	if has_pending_registry_pair_recovery():
+		return false
 	var chunk_ids: Array = registry_snapshot.get("chunk_ids", [])
 	var mineral_registry: Variant = chunk_controller.get("registry")
 	var object_registry: Variant = chunk_controller.get("object_state_registry")
 	if chunk_ids.is_empty() or mineral_registry == null or not is_instance_valid(mineral_registry) or object_registry == null or not is_instance_valid(object_registry):
 		return false
+	for method_name in ["validate_chunk_set_snapshot", "to_chunk_set_snapshot", "restore_chunk_set_snapshot"]:
+		if not mineral_registry.has_method(method_name):
+			return false
+	for method_name in ["validate_chunk_set_save_dict", "to_chunk_set_save_dict", "restore_chunk_set_save_dict"]:
+		if not object_registry.has_method(method_name):
+			return false
 	var mineral_snapshot: Dictionary = registry_snapshot.get("mineral", {})
 	var object_snapshot: Dictionary = registry_snapshot.get("objects", {})
+	var current_mineral: Variant = mineral_registry.call("to_chunk_set_snapshot", chunk_ids)
+	var current_objects: Variant = object_registry.call("to_chunk_set_save_dict", chunk_ids)
+	if not (current_mineral is Dictionary) or not (current_objects is Dictionary):
+		return false
+	if not bool(mineral_registry.call("validate_chunk_set_snapshot", chunk_ids, current_mineral, now_unix)):
+		return false
+	if not bool(object_registry.call("validate_chunk_set_save_dict", chunk_ids, current_objects)):
+		return false
 	if not bool(mineral_registry.call("validate_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
 		return false
 	if not bool(object_registry.call("validate_chunk_set_save_dict", chunk_ids, object_snapshot)):
 		return false
-	var current_objects: Dictionary = object_registry.call("to_chunk_set_save_dict", chunk_ids)
-	if current_objects.is_empty():
-		return false
+	var pre_compensation_pair: Dictionary = {
+		"chunk_ids": chunk_ids.duplicate(),
+		"objects": current_objects.duplicate(true),
+		"mineral": current_mineral.duplicate(true),
+		"now_unix": now_unix
+	}
 	if not bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, object_snapshot)):
+		pre_compensation_pair["reason"] = "object_restore_rejected"
+		_pending_registry_pair_recovery = pre_compensation_pair
+		recover_pending_registry_pair()
 		return false
 	if not bool(mineral_registry.call("restore_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
-		# The mineral restore is internally atomic. If it rejects, return the object
-		# Registry to its pre-compensation chunk set rather than leave half a pair.
-		object_registry.call("restore_chunk_set_save_dict", chunk_ids, current_objects)
+		# Keep the exact pre-call pair. If either the mineral restore or the object
+		# compensation cannot be proven complete, a durable Director barrier blocks
+		# all subsequent streaming until both Registries read back this same pair.
+		pre_compensation_pair["reason"] = "mineral_restore_and_object_compensation"
+		_pending_registry_pair_recovery = pre_compensation_pair
+		recover_pending_registry_pair()
 		return false
 	return true
 
