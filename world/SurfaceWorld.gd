@@ -1434,10 +1434,33 @@ func _set_save_report(success: bool, phase: String, reason: String = "", details
 func get_last_save_report() -> Dictionary:
 	return _last_save_report.duplicate(true)
 
+func _recover_interrupted_save_file(save_path: String, phase: String) -> bool:
+	if not SurfaceWorldSaveStoreScript._is_supported_user_path(save_path):
+		_set_save_report(false, "path_preflight", "unsupported_save_path", {"path": save_path})
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	var recovery_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(save_path, validator)
+	if bool(recovery_report.get("ok", false)):
+		return true
+	_save_recovery_barrier_report = {
+		"recovery_required": true,
+		"reason": "interrupted_save_file_recovery_required",
+		"file_report": recovery_report.duplicate(true)
+	}
+	_save_recovery_kind = "file"
+	_save_recovery_path = save_path
+	_pending_save_recovery_payload = {}
+	_pending_save_recovery_now = int(Time.get_unix_time_from_system())
+	_set_save_report(false, phase, str(recovery_report.get("reason", "file_recovery_failed")), recovery_report)
+	return false
+
+
 func save_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not barrier_report.is_empty():
 		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	if not _recover_interrupted_save_file(save_path, "interrupted_write_recovery"):
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	var payload: Dictionary = serialize_stream_state()
@@ -1473,6 +1496,8 @@ func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not barrier_report.is_empty():
 		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	if not _recover_interrupted_save_file(save_path, "interrupted_write_recovery"):
 		return false
 	var validator := Callable(self, "_validate_world_save_payload")
 	var primary_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path, validator)
