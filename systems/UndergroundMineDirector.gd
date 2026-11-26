@@ -296,17 +296,21 @@ func recover_pending_registry_pair() -> bool:
 		return true
 	if chunk_controller == null or not is_instance_valid(chunk_controller):
 		return false
+	var object_registry: Variant = _pending_registry_pair_recovery.get("object_registry_ref", null)
+	var mineral_registry: Variant = _pending_registry_pair_recovery.get("mineral_registry_ref", null)
+	if object_registry == null or not is_instance_valid(object_registry) or mineral_registry == null or not is_instance_valid(mineral_registry):
+		return false
+	# Verify the Controller still owns the exact Registry instances captured with
+	# the pending pair before invoking any Controller or Registry recovery method.
+	if chunk_controller.get("object_state_registry") != object_registry or chunk_controller.get("registry") != mineral_registry:
+		return false
 	if not _recover_controller_before_compensation():
 		return false
 	var chunk_ids: Array = _pending_registry_pair_recovery.get("chunk_ids", [])
 	var object_snapshot: Dictionary = _pending_registry_pair_recovery.get("objects", {})
 	var mineral_snapshot: Dictionary = _pending_registry_pair_recovery.get("mineral", {})
 	var now_unix: int = int(_pending_registry_pair_recovery.get("now_unix", 0))
-	var object_registry: Variant = _pending_registry_pair_recovery.get("object_registry_ref", null)
-	var mineral_registry: Variant = _pending_registry_pair_recovery.get("mineral_registry_ref", null)
-	if chunk_ids.is_empty() or now_unix <= 0 or object_registry == null or not is_instance_valid(object_registry) or mineral_registry == null or not is_instance_valid(mineral_registry):
-		return false
-	if chunk_controller.get("object_state_registry") != object_registry or chunk_controller.get("registry") != mineral_registry:
+	if chunk_ids.is_empty() or now_unix <= 0:
 		return false
 	for method_name in ["validate_chunk_set_save_dict", "to_chunk_set_save_dict", "restore_chunk_set_save_dict"]:
 		if not object_registry.has_method(method_name):
