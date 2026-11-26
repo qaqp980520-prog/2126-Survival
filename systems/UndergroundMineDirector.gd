@@ -282,8 +282,8 @@ func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: in
 	if not bool(mineral_registry.call("restore_chunk_set_snapshot", chunk_ids, mineral_snapshot, now_unix)):
 		# The mineral restore is internally atomic. If it rejects, return the object
 		# Registry to its pre-compensation chunk set rather than leave half a pair.
-		var object_rollback_ok: bool = bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, current_objects))
-		return false and object_rollback_ok
+		object_registry.call("restore_chunk_set_save_dict", chunk_ids, current_objects)
+		return false
 	return true
 
 func _controller_has_pending_recovery() -> bool:
