@@ -35,7 +35,7 @@ Uses the existing `MineralVeinRegistry`, `MineralChunkLifecycleAdapter`, `WorldO
 - Binder contract regression: `godot --headless --path . --script res://tests/surface_terrain_adjacency_binder_test.gd`
 - Full project validation: existing `.github/workflows/godot-validation.yml` Godot 4.3 headless gate.
 
-The new regression creates two adjacent unequal-height terrain chunks, corrupts the remaining patch state so Binder rejects unload during preflight, and verifies that the departing root, both reciprocal edge policies, the exact transition collider instance, published descriptors, and object-registry snapshot remain intact. It then verifies that subsequent unloads fail closed until the patch is repaired and a full refresh succeeds.
+The new regression creates two adjacent unequal-height terrain chunks, injects an invalid edge profile on the remaining patch so Binder rejects unload during preflight, and verifies that the departing root, both reciprocal edge policies, the exact transition collider instance, published descriptors, and object-registry snapshot remain intact. It then verifies that subsequent unloads fail closed until the patch is repaired and a full refresh succeeds.
 
 ## Limitations
 
