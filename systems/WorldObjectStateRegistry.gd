@@ -108,6 +108,102 @@ func restore_chunk_save_dict(chunk_id: String, data: Dictionary, transaction_tok
 	_total_string_chars = int(prepared_all["total_string_chars"])
 	return true
 
+## Capture and restore a set of chunks as one validated Registry replacement.
+## Records outside the selected set are always taken from the current Registry at restore time.
+func to_chunk_set_save_dict(chunk_ids: Array) -> Dictionary:
+	var normalized: Dictionary = _normalize_chunk_ids(chunk_ids)
+	if not bool(normalized.get("ok", false)):
+		return {}
+	var selected: Dictionary = {}
+	for chunk_id in normalized["ids"]:
+		selected[chunk_id] = true
+	var objects: Dictionary = {}
+	for stable_id in _records.keys():
+		var record: Dictionary = _records[stable_id]
+		if selected.has(str(record.get("chunk_id", ""))):
+			objects[str(stable_id)] = record.duplicate(true)
+	return {"schema_version": SCHEMA_VERSION, "chunk_ids": normalized["ids"].duplicate(), "objects": objects}
+
+func validate_chunk_set_save_dict(chunk_ids: Array, data: Dictionary) -> bool:
+	return bool(_prepare_chunk_set_restore(chunk_ids, data).get("ok", false))
+
+## Replace only the selected chunk set. Unrelated records are merged from the live Registry.
+## The complete merged payload is validated before the single commit point.
+func restore_chunk_set_save_dict(chunk_ids: Array, data: Dictionary) -> bool:
+	var normalized: Dictionary = _normalize_chunk_ids(chunk_ids)
+	if not bool(normalized.get("ok", false)):
+		return false
+	for chunk_id in normalized["ids"]:
+		if _chunk_write_locks.has(chunk_id):
+			return false
+	var prepared: Dictionary = _prepare_chunk_set_restore(normalized["ids"], data)
+	if not bool(prepared.get("ok", false)):
+		return false
+	_records = prepared["records"]
+	_total_properties = int(prepared["total_properties"])
+	_total_string_chars = int(prepared["total_string_chars"])
+	return true
+
+func _normalize_chunk_ids(raw_chunk_ids: Array) -> Dictionary:
+	if raw_chunk_ids.is_empty():
+		return {"ok": false, "error": "empty_chunk_set"}
+	var ids: Array[String] = []
+	var seen: Dictionary = {}
+	for raw_chunk_id in raw_chunk_ids:
+		if not (raw_chunk_id is String):
+			return {"ok": false, "error": "invalid_chunk_id_type"}
+		var chunk_id: String = raw_chunk_id
+		if not _is_valid_chunk_id(chunk_id) or seen.has(chunk_id):
+			return {"ok": false, "error": "invalid_or_duplicate_chunk_id"}
+		seen[chunk_id] = true
+		ids.append(chunk_id)
+	ids.sort()
+	return {"ok": true, "ids": ids}
+
+func _prepare_chunk_set_restore(chunk_ids: Array, data: Dictionary) -> Dictionary:
+	var expected: Dictionary = _normalize_chunk_ids(chunk_ids)
+	if not bool(expected.get("ok", false)):
+		return expected
+	var supplied: Variant = data.get("chunk_ids", null)
+	if not (supplied is Array):
+		return {"ok": false, "error": "missing_chunk_set"}
+	var normalized_supplied: Dictionary = _normalize_chunk_ids(supplied)
+	if not bool(normalized_supplied.get("ok", false)) or normalized_supplied["ids"] != expected["ids"]:
+		return {"ok": false, "error": "chunk_set_mismatch"}
+	var raw_schema: Variant = data.get("schema_version", null)
+	if not _is_integer_value(raw_schema) or int(raw_schema) != SCHEMA_VERSION:
+		return {"ok": false, "error": "unsupported_schema"}
+	var raw_records: Variant = data.get("objects", null)
+	if not (raw_records is Dictionary) or raw_records.size() > MAX_RECORDS:
+		return {"ok": false, "error": "invalid_records"}
+	var selected: Dictionary = {}
+	for chunk_id in expected["ids"]:
+		selected[chunk_id] = true
+	var restored_records: Dictionary = {}
+	for raw_id in raw_records.keys():
+		if not (raw_id is String):
+			return {"ok": false, "error": "invalid_stable_id"}
+		var stable_id: String = raw_id
+		var record: Variant = raw_records[raw_id]
+		if not (record is Dictionary) or not _is_valid_record(stable_id, record):
+			return {"ok": false, "error": "invalid_object_record"}
+		if not selected.has(str(record.get("chunk_id", ""))):
+			return {"ok": false, "error": "foreign_chunk_record"}
+		restored_records[stable_id] = record.duplicate(true)
+	var candidate_records: Dictionary = _records.duplicate(true)
+	for stable_id in candidate_records.keys():
+		var existing_record: Dictionary = candidate_records[stable_id]
+		if selected.has(str(existing_record.get("chunk_id", ""))):
+			candidate_records.erase(stable_id)
+	for stable_id in restored_records.keys():
+		if candidate_records.has(stable_id):
+			return {"ok": false, "error": "stable_id_collision"}
+		candidate_records[stable_id] = restored_records[stable_id]
+	var prepared_all: Dictionary = _prepare_restore({"schema_version": SCHEMA_VERSION, "objects": candidate_records})
+	if not bool(prepared_all.get("ok", false)):
+		return prepared_all
+	return prepared_all
+
 func lock_chunk_writes(chunk_id: String, transaction_token: String) -> bool:
 	if not _is_valid_chunk_id(chunk_id) or transaction_token.is_empty():
 		return false
