@@ -16,7 +16,7 @@ Close the load-side counterpart to M0.3.26. A chunk containing multiple mineral 
 - Change `MineralChunkLifecycleAdapter.load_chunk()` to require and call the registry batch API; remove sequential registration and best-effort per-vein rollback.
 - Update Controller and Adapter capability checks.
 - Add adapter and controller regressions for a later saved-record mineral mismatch after an earlier valid participant. Both tests verify unchanged live-node state, unchanged registry payload, no published chunk ownership, then repair the record and retry the same nodes successfully. The Adapter suite also injects an unexpected live-apply failure after mutation and verifies the first and rejecting nodes are both restored before a successful retry.
-- Extend the real MineralGridStreamingDirector integration test with a registration failure after an earlier new chunk loaded. Assert the report phase, candidate cleanup, rollback_complete, newly-loaded rollback, exact prior Director and Controller active-window IDs, unchanged Registry payload, and unchanged target vein states.
+- Extend the real MineralGridStreamingDirector integration test with a registration failure after an earlier new chunk loaded. Assert the report phase, candidate cleanup, rollback_complete, newly-loaded rollback, exact prior Director and Controller active-window IDs, unchanged Registry payload, and release of the detached rejected candidate root. Controller and Adapter tests separately verify unchanged target live-node state.
 
 ## Files
 
@@ -51,4 +51,4 @@ Godot 4.3 project; existing `MineralMiningNode`, `MineralCatalog`, `MineralVeinR
 
 ## Next
 
-Inspect MineralGridStreamingDirector's synchronous registration recovery report and assert active-window restoration separately. Keep terrain Binder full rebuild as its existing correctness/recovery path until cross-participant equivalence is proven.
+Review the final-head Director integration test and Full Gate logs. Keep Run 438's unrelated Director recovery warnings as separate work until their own failure-injection reproductions are fixed. Keep terrain Binder full rebuild as its existing correctness/recovery path until cross-participant equivalence is proven.
