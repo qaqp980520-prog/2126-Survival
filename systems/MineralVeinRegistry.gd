@@ -139,14 +139,15 @@ func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_
 	# Apply only fully prepared schema-v2 records. load_save_dict validates all
 	# fields before assigning them; retain exact live snapshots for defensive
 	# rollback if a participant unexpectedly rejects during this apply phase.
-	var applied_ids: Array[String] = []
 	for stable_id in stable_ids:
 		var live_vein: Node = live_veins[stable_id] as Node
 		if not bool(live_vein.call("load_save_dict", prepared_records[stable_id], now, false)):
-			for rollback_id in applied_ids:
+			# Include the rejecting participant: a subclass or injected failure may
+			# mutate before returning false, even though the base implementation
+			# validates before assignment.
+			for rollback_id in stable_ids:
 				_restore_live_vein_state(live_veins[rollback_id] as Node, original_states[rollback_id])
 			return false
-		applied_ids.append(stable_id)
 
 	# Registry commit point: no registry map changes occur until every live node
 	# has accepted its already-validated state.
