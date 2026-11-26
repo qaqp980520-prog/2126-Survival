@@ -11,11 +11,11 @@ Close the load-side counterpart to M0.3.26. A chunk containing multiple mineral 
 - Add `MineralVeinRegistry.register_veins_atomic(chunk_id, veins_by_local_id, now_unix)`.
 - Validate chunk/local IDs, incoming node identity, `can_register()`, current registry ownership, saved-record shape, mineral identity, and regeneration inputs before changing live state.
 - Prepare every restore and offline-regeneration result on detached `MineralMiningNode` probes. Seed probes from incoming authored defaults so legacy schema-v1 records retain the same fallback capacities and regeneration intervals as single-node registration.
-- Apply the fully prepared schema-v2 records to live nodes only after every participant passes preflight. Keep exact snapshots of every live node field changed by `load_save_dict()`; if an unexpected apply rejection occurs, restore already-applied nodes before returning false.
+- Apply the fully prepared schema-v2 records to live nodes only after every participant passes preflight. Keep exact snapshots of every live node field changed by `load_save_dict()`; if an unexpected apply rejection occurs, restore every participant, including the rejecting node, before returning false. This covers a fault-injecting subclass that mutates before returning false.
 - Commit `_veins` and `_saved_records` only after every live node accepts its prepared state.
 - Change `MineralChunkLifecycleAdapter.load_chunk()` to require and call the registry batch API; remove sequential registration and best-effort per-vein rollback.
 - Update Controller and Adapter capability checks.
-- Add adapter and controller regressions for a later saved-record mineral mismatch after an earlier valid participant. Both tests verify unchanged live-node state, unchanged registry payload, no published chunk ownership, then repair the record and retry the same nodes successfully.
+- Add adapter and controller regressions for a later saved-record mineral mismatch after an earlier valid participant. Both tests verify unchanged live-node state, unchanged registry payload, no published chunk ownership, then repair the record and retry the same nodes successfully. The Adapter suite also injects an unexpected live-apply failure after mutation and verifies the first and rejecting nodes are both restored before a successful retry.
 
 ## Files
 
@@ -32,7 +32,7 @@ Godot 4.3 project; existing `MineralMiningNode`, `MineralCatalog`, `MineralVeinR
 
 ## Validation
 
-- Focused Adapter lifecycle test: `godot --headless --path . --script res://tests/mineral_chunk_lifecycle_adapter_test.gd`.
+- Focused Adapter lifecycle test: `godot --headless --path . --script res://tests/mineral_chunk_lifecycle_adapter_test.gd` (saved-record preflight rejection, duplicate-node rejection, and unexpected live-apply rollback).
 - Focused Controller integration test: `godot --headless --path . --script res://tests/mineral_chunk_controller_test.gd`.
 - Registry chunk-stream persistence test remains part of the full Godot 4.3 validation workflow.
 - Exact-head focused and Full Compatibility Gate results will be recorded after GitHub Actions completes. No result is claimed before completion.
