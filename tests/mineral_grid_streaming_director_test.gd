@@ -225,10 +225,12 @@ func _test_controller_rollback_state_propagates_to_director_report() -> void:
 	assert(bool(details.get("controller_load_recovery_required", false)), "The Director surfaces the Controller recovery barrier")
 	assert(not bool(details.get("controller_load_rollback_complete", true)), "The Controller's incomplete rollback is propagated")
 	assert(not bool(report.get("rollback_complete", true)), "The Director must not claim complete rollback when the Controller reports incomplete recovery")
+	assert(director.get_pending_recovery_root_count() == 1, "The failed detached candidate is retained so Controller recovery references remain valid")
 	assert(director.get_managed_chunk_ids() == previous, "The previous Director active set remains unchanged")
 	assert(controller.get_loaded_chunk_ids() == previous, "The previous Controller active set remains unchanged")
 
 	assert(director.recover_to_world_position(Vector3(21, 0, 1), 3002), "Explicit Director recovery retries Controller recovery before reconciling the window")
+	assert(director.get_pending_recovery_root_count() == 0, "The retained failed candidate is released only after Controller recovery succeeds")
 	assert(director.get_managed_chunk_ids().size() == 1)
 	assert(controller.get_loaded_chunk_ids() == director.get_managed_chunk_ids())
 	director.queue_free()
