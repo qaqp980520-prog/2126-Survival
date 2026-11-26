@@ -140,10 +140,25 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 				_remove_file_if_present(backup_temp_path)
 				_remove_file_if_present(temp_path)
 				return {"ok": false, "phase": "backup_verify", "reason": "primary_backup_verification_failed"}
-			if not _remove_file_if_present(backup_path):
+			var backup_archive_path: String = ""
+			if FileAccess.file_exists(backup_path):
+				var old_backup_report: Dictionary = read_valid_file(backup_path, payload_validator)
+				if bool(old_backup_report.get("ok", false)):
+					if not _remove_file_if_present(backup_path):
+						_remove_file_if_present(backup_temp_path)
+						_remove_file_if_present(temp_path)
+						return {"ok": false, "phase": "backup_replace", "reason": "old_valid_backup_could_not_be_replaced"}
+				else:
+					backup_archive_path = _unique_corrupt_archive_path(backup_path)
+					var backup_archive_error: int = _rename_path(backup_path, backup_archive_path, rename_operation)
+					if backup_archive_error != OK:
+						_remove_file_if_present(backup_temp_path)
+						_remove_file_if_present(temp_path)
+						return {"ok": false, "phase": "backup_archive", "reason": "corrupt_backup_could_not_be_preserved", "error": backup_archive_error}
+			elif DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(backup_path)):
 				_remove_file_if_present(backup_temp_path)
 				_remove_file_if_present(temp_path)
-				return {"ok": false, "phase": "backup_replace", "reason": "old_backup_could_not_be_replaced"}
+				return {"ok": false, "phase": "backup_replace", "reason": "backup_path_is_directory"}
 			var backup_rename_error: int = _rename_path(backup_temp_path, backup_path, rename_operation)
 			if backup_rename_error != OK:
 				_remove_file_if_present(backup_temp_path)
@@ -189,6 +204,7 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 		"ok": true,
 		"phase": "complete",
 		"backup_path": backup_path if bool(primary_valid.get("ok", false)) else "",
+		"backup_archive_path": backup_archive_path if bool(primary_valid.get("ok", false)) else "",
 		"archive_path": archive_path,
 		"warning": cleanup_warning
 	}
