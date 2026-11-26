@@ -389,25 +389,6 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var backup_archive_path: String = str(backup_rotation_report.get("details", {}).get("backup_archive_path", ""))
 	_expect(not backup_archive_path.is_empty() and FileAccess.file_exists(backup_archive_path), "corrupt backup is preserved in a diagnostic archive before rotation")
 
-	var blocked_registry_before_file_recovery: Dictionary = world.object_state_registry.call("to_save_dict")
-	var previous_obstruction_absolute: String = ProjectSettings.globalize_path(blocked_path + ".previous")
-	var previous_obstruction_error: Error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
-	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "create a previous-path obstruction for save recovery")
-	_expect(not bool(world.call("save_game", blocked_path)), "save fails closed when interrupted-file recovery is obstructed")
-	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "save reports the interrupted-file recovery phase")
-	_expect(world.object_state_registry.call("to_save_dict") == blocked_registry_before_file_recovery, "file-recovery failure happens before live world-object capture")
-	_expect(FileAccess.get_file_as_string(blocked_path) == blocked_primary_before, "file-recovery obstruction preserves the existing primary bytes")
-	_expect(not FileAccess.file_exists(blocked_path + ".tmp"), "file-recovery obstruction creates no temporary save")
-	DirAccess.remove_absolute(previous_obstruction_absolute)
-	_expect(bool(world.call("retry_save_recovery")), "file-recovery barrier clears after the obstruction is removed")
-
-	previous_obstruction_error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
-	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "recreate a previous-path obstruction for load recovery")
-	_expect(not bool(world.call("load_game", blocked_path)), "load fails closed when interrupted-file recovery is obstructed")
-	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "load reports the interrupted-file recovery phase")
-	DirAccess.remove_absolute(previous_obstruction_absolute)
-	_expect(bool(world.call("retry_save_recovery")), "load recovery barrier clears after the obstruction is removed")
-
 	var invalid_path: String = "user://production_surface_world_invalid_save_test.json"
 	_cleanup_save_test_files(invalid_path)
 	_expect(_write_test_text(invalid_path, "not-json") and _write_test_text(invalid_path + ".bak", "{also-not-json"), "test prepares invalid primary and backup envelopes")
@@ -448,6 +429,25 @@ func _test_durable_save_load(now_unix: int) -> void:
 
 	_expect(bool(world.call("save_game", blocked_path)), "recovery-barrier test prepares an existing valid disk save")
 	var blocked_primary_before: String = FileAccess.get_file_as_string(blocked_path)
+	var blocked_registry_before_file_recovery: Dictionary = world.object_state_registry.call("to_save_dict")
+	var previous_obstruction_absolute: String = ProjectSettings.globalize_path(blocked_path + ".previous")
+	var previous_obstruction_error: Error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
+	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "create a previous-path obstruction for save recovery")
+	_expect(not bool(world.call("save_game", blocked_path)), "save fails closed when interrupted-file recovery is obstructed")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "save reports the interrupted-file recovery phase")
+	_expect(world.object_state_registry.call("to_save_dict") == blocked_registry_before_file_recovery, "file-recovery failure happens before live world-object capture")
+	_expect(FileAccess.get_file_as_string(blocked_path) == blocked_primary_before, "file-recovery obstruction preserves the existing primary bytes")
+	_expect(not FileAccess.file_exists(blocked_path + ".tmp"), "file-recovery obstruction creates no temporary save")
+	DirAccess.remove_absolute(previous_obstruction_absolute)
+	_expect(bool(world.call("retry_save_recovery")), "file-recovery barrier clears after the obstruction is removed")
+
+	previous_obstruction_error = DirAccess.make_dir_recursive_absolute(previous_obstruction_absolute)
+	_expect(previous_obstruction_error == OK or DirAccess.dir_exists_absolute(previous_obstruction_absolute), "recreate a previous-path obstruction for load recovery")
+	_expect(not bool(world.call("load_game", blocked_path)), "load fails closed when interrupted-file recovery is obstructed")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "interrupted_write_recovery", "load reports the interrupted-file recovery phase")
+	DirAccess.remove_absolute(previous_obstruction_absolute)
+	_expect(bool(world.call("retry_save_recovery")), "load recovery barrier clears after the obstruction is removed")
+
 	var original_mine_director: Node = world.get("mine_director") as Node
 	var pending_director := PendingRegistryPairDirector.new()
 	root.add_child(pending_director)
