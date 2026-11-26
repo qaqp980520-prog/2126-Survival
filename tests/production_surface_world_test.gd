@@ -1,6 +1,7 @@
 extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
+const SaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
 const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
 
 class PendingRegistryPairDirector extends Node:
@@ -13,6 +14,7 @@ class PendingRegistryPairDirector extends Node:
 		return {"recovery_required": pending, "reason": "injected_pair_recovery", "chunk_ids": ["underground/test_chunk"]}
 var failures: Array[String] = []
 var world: Node3D
+var _promotion_fail_path: String = ""
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -133,6 +135,7 @@ func _run() -> void:
 	buttons["forward"].emit_signal("button_up")
 	_expect(not directions.has("forward"), "touch release clears virtual input")
 	_test_world_save_recovery_gate(save_payload, now + 6)
+	await _test_durable_save_load(now + 7)
 	_finish(0 if failures.is_empty() else 1)
 
 func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> void:
@@ -224,3 +227,147 @@ func _finish(exit_code: int) -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _test_durable_save_load(now_unix: int) -> void:
+	var path: String = "user://production_surface_world_save_test.json"
+	var blocked_path: String = "user://production_surface_world_save_blocked_test.json"
+	var promotion_path: String = "user://production_surface_world_save_promotion_test.json"
+	_cleanup_save_test_files(path)
+	_cleanup_save_test_files(blocked_path)
+	_cleanup_save_test_files(promotion_path)
+
+	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 3)), "production save fixture adds initial inventory")
+	var stamina_model: RefCounted = world.get("stamina") as RefCounted
+	var quick_use_model: RefCounted = world.get("quick_use") as RefCounted
+	stamina_model.set("current_stamina", 42.5)
+	_expect(bool(quick_use_model.call("select_slot", 2)), "production save fixture selects the third quick-use slot")
+	var payload_a: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("save_game", path)), "production SurfaceWorld writes a versioned disk save")
+	var primary_a: String = FileAccess.get_file_as_string(path)
+	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
+	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
+	_expect(bool(_write_test_text(path + ".tmp", "interrupted temporary write")), "test creates a stale interrupted temp file")
+
+	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 2)), "production save fixture advances inventory before second save")
+	stamina_model.set("current_stamina", 31.5)
+	_expect(bool(quick_use_model.call("select_slot", 1)), "production save fixture changes selected quick-use slot")
+	var payload_b: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("save_game", path)), "second save replaces the primary after validating a temp copy")
+	_expect(not FileAccess.file_exists(path + ".tmp"), "successful save removes the interrupted temp file")
+	var backup_a: Dictionary = SaveStoreScript.read_valid_file(path + ".bak", Callable(world, "_validate_world_save_payload"))
+	_expect(bool(backup_a.get("ok", false)), "second save preserves the prior valid primary as backup")
+	if bool(backup_a.get("ok", false)):
+		_expect(backup_a.get("payload", {}).get("inventory", {}).get("inventory", {}).get("berries", -1) == payload_a.get("inventory", {}).get("inventory", {}).get("berries", -2), "backup retains the first save's inventory snapshot")
+
+	world.queue_free()
+	await process_frame
+	world = WorldScene.instantiate() as Node3D
+	root.add_child(world)
+	await process_frame
+	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh production SurfaceWorld instance initializes before disk restore")
+	_expect(bool(world.call("load_game", path)), "production SurfaceWorld loads its primary save after a simulated restart")
+	_expect(_inventory_count("berries") == 5, "restart restore recovers the primary inventory count")
+	var restored_stamina: RefCounted = world.get("stamina") as RefCounted
+	var restored_quick_use: RefCounted = world.get("quick_use") as RefCounted
+	_expect(is_equal_approx(float(restored_stamina.get("current_stamina")), 31.5), "restart restore recovers stamina")
+	_expect(int(restored_quick_use.get("selected_slot")) == 1, "restart restore recovers the selected quick-use slot")
+	var primary_report: Dictionary = world.call("get_last_save_report")
+	_expect(str(primary_report.get("phase", "")) == "loaded_from_primary", "primary load reports its source explicitly")
+
+	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
+	_expect(bool(world.call("load_game", path)), "valid backup is restored when the primary is corrupt")
+	_expect(_inventory_count("berries") == 3, "backup recovery restores the previous valid inventory")
+	var backup_stamina: RefCounted = world.get("stamina") as RefCounted
+	var backup_quick_use: RefCounted = world.get("quick_use") as RefCounted
+	_expect(is_equal_approx(float(backup_stamina.get("current_stamina")), 42.5), "backup recovery restores the previous stamina")
+	_expect(int(backup_quick_use.get("selected_slot")) == 2, "backup recovery restores the previous quick-use selection")
+	var archive_found: bool = false
+	var user_directory: DirAccess = DirAccess.open("user://")
+	if user_directory != null:
+		for filename in user_directory.get_files():
+			if filename.begins_with(path.get_file() + ".corrupt."):
+				archive_found = true
+				break
+	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
+	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
+	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
+
+	var invalid_path: String = "user://production_surface_world_invalid_save_test.json"
+	_cleanup_save_test_files(invalid_path)
+	_expect(_write_test_text(invalid_path, "not-json") and _write_test_text(invalid_path + ".bak", "{also-not-json"), "test prepares invalid primary and backup envelopes")
+	var before_invalid_position: Vector3 = world.player.global_position
+	var before_invalid_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
+	var invalid_primary_bytes: String = FileAccess.get_file_as_string(invalid_path)
+	var invalid_backup_bytes: String = FileAccess.get_file_as_string(invalid_path + ".bak")
+	_expect(not bool(world.call("load_game", invalid_path)), "invalid primary and backup are rejected without restore")
+	_expect(world.player.global_position.is_equal_approx(before_invalid_position), "invalid envelopes preserve player position")
+	_expect(world.inventory_bridge.call("serialize_inventory") == before_invalid_inventory, "invalid envelopes preserve inventory")
+	_expect(FileAccess.get_file_as_string(invalid_path) == invalid_primary_bytes and FileAccess.get_file_as_string(invalid_path + ".bak") == invalid_backup_bytes, "invalid envelopes are preserved byte-for-byte for diagnosis")
+
+	_expect(bool(world.call("save_game", blocked_path)), "recovery-barrier test prepares an existing valid disk save")
+	var blocked_primary_before: String = FileAccess.get_file_as_string(blocked_path)
+	var original_mine_director: Node = world.get("mine_director") as Node
+	var pending_director := PendingRegistryPairDirector.new()
+	root.add_child(pending_director)
+	world.set("mine_director", pending_director)
+	_expect(not bool(world.call("save_game", blocked_path)), "pending Registry-pair recovery blocks manual disk writes")
+	_expect(not bool(world.call("load_game", blocked_path)), "pending Registry-pair recovery blocks disk reads and restores")
+	_expect(FileAccess.get_file_as_string(blocked_path) == blocked_primary_before, "blocked save and load preserve existing primary bytes")
+	_expect(not FileAccess.file_exists(blocked_path + ".tmp"), "blocked save does not create a temporary file")
+	world.set("mine_director", original_mine_director)
+	pending_director.queue_free()
+
+	_expect(bool(world.call("save_game", promotion_path)), "promotion-failure test creates an initial valid save")
+	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 1)), "promotion-failure fixture advances the live inventory")
+	_expect(bool(world.call("save_game", promotion_path)), "promotion-failure test creates a valid backup")
+	var last_valid_primary: String = FileAccess.get_file_as_string(promotion_path)
+	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 1)), "promotion-failure fixture prepares a newer candidate")
+	var failed_promotion_payload: Dictionary = world.call("serialize_stream_state")
+	var failed_promotion_envelope: Dictionary = SaveStoreScript.build_envelope(failed_promotion_payload, now_unix + 10)
+	_promotion_fail_path = promotion_path
+	var failed_promotion_report: Dictionary = SaveStoreScript.write_atomic(
+		promotion_path,
+		SaveStoreScript.encode_envelope(failed_promotion_envelope),
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_primary_promotion")
+	)
+	_expect(not bool(failed_promotion_report.get("ok", false)), "injected primary promotion failure is reported")
+	_expect(not bool(failed_promotion_report.get("recovery_required", false)), "previous primary is restored after injected promotion failure")
+	_expect(FileAccess.get_file_as_string(promotion_path) == last_valid_primary, "failed promotion preserves the last valid primary byte-for-byte")
+	_expect(bool(SaveStoreScript.read_valid_file(promotion_path, Callable(world, "_validate_world_save_payload")).get("ok", false)), "last valid primary remains fully readable after failed promotion")
+	_promotion_fail_path = ""
+
+	_cleanup_save_test_files(path)
+	_cleanup_save_test_files(blocked_path)
+	_cleanup_save_test_files(promotion_path)
+	_cleanup_save_test_files(invalid_path)
+
+func _write_test_text(path: String, content: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(content)
+	file.flush()
+	var success: bool = file.get_error() == OK
+	file.close()
+	return success
+
+func _cleanup_save_test_files(path: String) -> void:
+	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
+		var candidate: String = path + suffix
+		if FileAccess.file_exists(candidate):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate))
+	var directory: DirAccess = DirAccess.open("user://")
+	if directory == null:
+		return
+	var prefix: String = path.get_file() + ".corrupt."
+	for filename in directory.get_files():
+		if filename.begins_with(prefix):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + filename))
+
+func _rename_fail_primary_promotion(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
+	if destination_absolute == primary_absolute and source_absolute.ends_with(".tmp"):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
