@@ -1246,6 +1246,9 @@ func _read_save_dictionary(path: String) -> Dictionary:
     return parsed
 
 func load_game() -> bool:
+    # Refuse before probing or parsing primary/backup files while recovery is unresolved.
+    if not _get_world_save_recovery_barrier_report().is_empty():
+        return false
     var backup_path := SAVE_PATH + ".bak"
     var corrupt_path := SAVE_PATH + ".corrupt"
     var primary_exists := FileAccess.file_exists(SAVE_PATH)
