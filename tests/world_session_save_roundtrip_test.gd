@@ -36,6 +36,37 @@ func _run() -> void:
 	_expect(int(world.call("get_inventory_count", "berries")) == 4, "file roundtrip restores the saved inventory count")
 	_expect(player.global_position.is_equal_approx(Vector3(2.0, 0.0, 3.0)), "file roundtrip restores player position")
 
+	# A failed atomic mineral-registration rollback must block both the prototype's
+	# direct file-save path and dictionary restore before any other system mutates.
+	var mineral_registry: Node = world.get("mineral_vein_registry") as Node
+	var crop_registry: Node = world.get("crop_registry") as Node
+	var bridge: Node = world.get("bridge") as Node
+	_expect(mineral_registry != null and crop_registry != null and bridge != null, "world persistence participants are available")
+	if mineral_registry != null and crop_registry != null and bridge != null:
+		var barrier_payload: Dictionary = world.call("serialize_world_state")
+		var barrier_file_before: String = FileAccess.get_file_as_string(SAVE_PATH)
+		var barrier_inventory_before: Dictionary = bridge.call("serialize_inventory")
+		var barrier_minerals_before: Dictionary = mineral_registry.call("to_save_dict")
+		var barrier_crops_before: Dictionary = crop_registry.call("to_save_dict")
+		var barrier_position_before: Vector3 = player.global_position
+		var barrier_level_before: String = str(world.get("current_level"))
+		var barrier_backrooms_before: bool = bool(world.get("in_backrooms"))
+		var pending_recovery_before: Variant = mineral_registry.get("_pending_atomic_registration_recovery")
+		mineral_registry.set("_pending_atomic_registration_recovery", {"fixture": "unresolved_atomic_registration"})
+		_expect(bool(mineral_registry.call("has_pending_atomic_registration_recovery")), "inject unresolved mineral registration recovery")
+		_expect(world.call("serialize_world_state").is_empty(), "pending mineral recovery blocks world serialization")
+		_expect(not bool(world.call("save_game")), "pending mineral recovery blocks the direct file-save entry point")
+		_expect(not bool(world.call("load_world_state_from_dictionary", barrier_payload)), "pending mineral recovery blocks dictionary restore")
+		_expect(not bool(world.call("load_game")), "pending mineral recovery blocks the direct file-load entry point")
+		_expect(FileAccess.get_file_as_string(SAVE_PATH) == barrier_file_before, "blocked save/load preserves primary save bytes")
+		_expect(bridge.call("serialize_inventory") == barrier_inventory_before, "blocked restore preserves inventory")
+		_expect(mineral_registry.call("to_save_dict") == barrier_minerals_before, "blocked restore preserves mineral records")
+		_expect(crop_registry.call("to_save_dict") == barrier_crops_before, "blocked restore preserves crop records")
+		_expect(player.global_position.is_equal_approx(barrier_position_before), "blocked restore preserves player position")
+		_expect(str(world.get("current_level")) == barrier_level_before and bool(world.get("in_backrooms")) == barrier_backrooms_before, "blocked restore preserves portal world state")
+		mineral_registry.set("_pending_atomic_registration_recovery", pending_recovery_before)
+		_expect(not world.call("serialize_world_state").is_empty(), "world serialization resumes after mineral recovery clears")
+
 	var before_count: int = int(world.call("get_inventory_count", "berries"))
 	var before_position: Vector3 = player.global_position
 	var invalid_inventory: Dictionary = world.call("serialize_world_state")
