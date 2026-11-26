@@ -1319,9 +1319,16 @@ func _refresh_hud() -> void:
 	]
 
 ## Production SurfaceWorld persistence. The Backrooms prototype keeps its separate file path.
+func _is_whole_save_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
+
 func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = false) -> bool:
 	var schema: Variant = payload.get("schema_version", null)
-	if not (schema is int) or int(schema) != 1:
+	if not _is_whole_save_number(schema) or int(schema) != 1:
 		return false
 	var position_value: Variant = payload.get("player_position", null)
 	if not (position_value is Array) or position_value.size() != 3:
@@ -1374,9 +1381,9 @@ func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = fals
 	elif not allow_legacy:
 		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED if allow_legacy else null)
-	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)):
+	if not _is_whole_save_number(world_seed_value):
 		return false
-	if float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
+	if float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED):
 		return false
 	if payload.has("stamina"):
 		var stamina_value: Variant = payload.get("stamina", null)
@@ -1401,7 +1408,7 @@ func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = fals
 	if str(layer_value) == "underground":
 		if depth_value == null and allow_legacy:
 			target_depth = mine_director.get_layer_index(target_position)
-		elif depth_value is int:
+		elif _is_whole_save_number(depth_value):
 			target_depth = int(depth_value)
 		else:
 			return false
@@ -1410,7 +1417,7 @@ func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = fals
 	else:
 		if depth_value == null and allow_legacy:
 			target_depth = 0
-		elif not (depth_value is int) or int(depth_value) != 0:
+		elif not _is_whole_save_number(depth_value) or int(depth_value) != 0:
 			return false
 	if payload.has("surface_return_position"):
 		var return_value: Variant = payload.get("surface_return_position", null)
