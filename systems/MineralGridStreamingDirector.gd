@@ -985,6 +985,8 @@ func _retain_pending_recovery_root(chunk_id: String, candidate: Variant) -> bool
 	return true
 
 func _release_pending_recovery_roots() -> int:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or _controller_has_pending_load_recovery():
+		return 0
 	var released: int = 0
 	for raw_id in _pending_recovery_roots.keys():
 		var root: Node3D = _pending_recovery_roots[raw_id] as Node3D
