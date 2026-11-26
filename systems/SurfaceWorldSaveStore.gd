@@ -125,6 +125,7 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 	var previous_path: String = path + ".previous"
 	var primary_exists: bool = FileAccess.file_exists(path)
 	var primary_valid: Dictionary = {"ok": false, "reason": "primary_missing"}
+	var backup_archive_path: String = ""
 	if primary_exists:
 		primary_valid = read_valid_file(path, payload_validator)
 		if bool(primary_valid.get("ok", false)):
@@ -140,7 +141,6 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 				_remove_file_if_present(backup_temp_path)
 				_remove_file_if_present(temp_path)
 				return {"ok": false, "phase": "backup_verify", "reason": "primary_backup_verification_failed"}
-			var backup_archive_path: String = ""
 			if FileAccess.file_exists(backup_path):
 				var old_backup_report: Dictionary = read_valid_file(backup_path, payload_validator)
 				if bool(old_backup_report.get("ok", false)):
