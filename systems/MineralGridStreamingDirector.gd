@@ -30,6 +30,7 @@ var chunk_factory: Callable:
 	set(value):
 		bind_chunk_factory(value)
 var _managed_chunk_ids: Dictionary = {} # chunk ID -> Vector2i coordinate
+var _pending_recovery_roots: Dictionary = {} # failed detached roots retained until Controller recovery completes
 var _last_sync_report: Dictionary = {}
 var _next_async_request_id: int = 1
 var _active_async_request_id: int = -1
@@ -63,6 +64,8 @@ func bind_chunk_factory(factory: Callable) -> bool:
 func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
 	if _active_async_request_id >= 0:
 		cancel_async_sync_request(_active_async_request_id)
+	if not _controller_has_pending_load_recovery():
+		_release_pending_recovery_roots()
 	if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller must be alive, inside the scene tree and not queued for deletion; chunk factory must be available.", true)
 		return false
@@ -148,9 +151,15 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 			_managed_chunk_ids[id] = coord
 			newly_loaded.append(id)
 		if not load_succeeded or not controller_ready_after_load or not candidate_loaded:
+			var controller_load_report: Dictionary = _get_controller_load_report()
+			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
 			var candidate_cleanup_ok: bool = true
+			var candidate_recovery_root_retained: bool = false
 			if not candidate_loaded:
-				if controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
+				if controller_load_recovery_required:
+					candidate_recovery_root_retained = _retain_pending_recovery_root(id, candidate)
+					candidate_cleanup_ok = candidate_recovery_root_retained
+				elif controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
 					chunk_controller.remove_child(candidate)
 					if not (candidate as Node3D).is_queued_for_deletion():
 						(candidate as Node3D).queue_free()
@@ -159,9 +168,7 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 					candidate_cleanup_ok = false
 				else:
 					_free_unowned_root(candidate)
-			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var controller_load_report: Dictionary = _get_controller_load_report()
-			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
+			var new_loads_rollback_ok: bool = newly_loaded.is_empty() if controller_load_recovery_required else _rollback_new_loads(newly_loaded, now_unix)
 			var controller_load_rollback_complete: bool = bool(controller_load_report.get("rollback_complete", true)) and not controller_load_recovery_required
 			var rollback_complete: bool = candidate_cleanup_ok and new_loads_rollback_ok and controller_load_rollback_complete
 			var controller_detached_after_load: bool = controller_alive_after_load and not chunk_controller.is_inside_tree()
@@ -172,6 +179,8 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 				"controller_queued_for_deletion": controller_queued_after_load,
 				"candidate_loaded": candidate_loaded,
 				"candidate_cleanup_ok": candidate_cleanup_ok,
+				"candidate_recovery_root_retained": candidate_recovery_root_retained,
+				"pending_recovery_root_count": _pending_recovery_roots.size(),
 				"newly_loaded_ids": newly_loaded.duplicate(),
 				"new_loads_rollback_ok": new_loads_rollback_ok,
 				"controller_load_rollback_complete": controller_load_rollback_complete,
@@ -234,6 +243,8 @@ func _exit_tree() -> void:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
+	if not _controller_has_pending_load_recovery():
+		_release_pending_recovery_roots()
 	if _controller_has_pending_load_recovery():
 		_set_sync_report(false, "controller_recovery_required", "Recover the Controller's previous failed chunk-load transaction before starting an async streaming request.", false, {"controller_load_report": _get_controller_load_report()})
 		return -1
@@ -475,9 +486,15 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			_managed_chunk_ids[id] = coord
 			newly_loaded.append(id)
 		if not load_succeeded or not controller_ready_after_load or not candidate_loaded:
+			var controller_load_report: Dictionary = _get_controller_load_report()
+			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
 			var candidate_cleanup_ok: bool = true
+			var candidate_recovery_root_retained: bool = false
 			if not candidate_loaded:
-				if controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
+				if controller_load_recovery_required:
+					candidate_recovery_root_retained = _retain_pending_recovery_root(id, candidate)
+					candidate_cleanup_ok = candidate_recovery_root_retained
+				elif controller_can_rollback and is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == chunk_controller:
 					chunk_controller.remove_child(candidate)
 					if not (candidate as Node3D).is_queued_for_deletion():
 						(candidate as Node3D).queue_free()
@@ -485,9 +502,7 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 					candidate_cleanup_ok = false
 				else:
 					_free_unowned_root(candidate)
-			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var controller_load_report: Dictionary = _get_controller_load_report()
-			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
+			var new_loads_rollback_ok: bool = newly_loaded.is_empty() if controller_load_recovery_required else _rollback_new_loads(newly_loaded, now_unix)
 			var controller_load_rollback_complete: bool = bool(controller_load_report.get("rollback_complete", true)) and not controller_load_recovery_required
 			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok and controller_load_rollback_complete
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
@@ -501,6 +516,8 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				"controller_queued_for_deletion": controller_queued_after_load,
 				"candidate_loaded": candidate_loaded,
 				"candidate_cleanup_ok": candidate_cleanup_ok,
+				"candidate_recovery_root_retained": candidate_recovery_root_retained,
+				"pending_recovery_root_count": _pending_recovery_roots.size(),
 				"newly_loaded_ids": newly_loaded.duplicate(),
 				"staged_count": staged_count,
 				"staged_roots_released": staged_roots_released,
@@ -782,6 +799,8 @@ func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> b
 		if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("recover_failed_chunk_load") or not bool(chunk_controller.call("recover_failed_chunk_load")):
 			_set_sync_report(false, "controller_recovery", "Controller chunk-load recovery did not complete; the previous active window remains blocked.", false, {"controller_load_report": _get_controller_load_report()})
 			return false
+	if not _controller_has_pending_load_recovery():
+		_release_pending_recovery_roots()
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
 		return false
@@ -955,6 +974,31 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 func _free_unowned_root(candidate: Variant) -> void:
 	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null and not (candidate as Node3D).is_queued_for_deletion():
 		candidate.free()
+
+func _retain_pending_recovery_root(chunk_id: String, candidate: Variant) -> bool:
+	if not is_instance_valid(candidate) or not (candidate is Node3D):
+		return false
+	var root: Node3D = candidate as Node3D
+	if root.is_queued_for_deletion() or root.get_parent() != null:
+		return false
+	_pending_recovery_roots[chunk_id] = root
+	return true
+
+func _release_pending_recovery_roots() -> int:
+	var released: int = 0
+	for raw_id in _pending_recovery_roots.keys():
+		var root: Node3D = _pending_recovery_roots[raw_id] as Node3D
+		if not is_instance_valid(root):
+			_pending_recovery_roots.erase(raw_id)
+			continue
+		if root.get_parent() == null and not root.is_queued_for_deletion():
+			root.free()
+			_pending_recovery_roots.erase(raw_id)
+			released += 1
+	return released
+
+func get_pending_recovery_root_count() -> int:
+	return _pending_recovery_roots.size()
 
 func _controller_has_pending_load_recovery() -> bool:
 	return (
