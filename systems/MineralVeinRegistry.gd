@@ -70,6 +70,7 @@ func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_
 	local_ids.sort()
 
 	var stable_ids: Array[String] = []
+	var seen_instance_ids: Dictionary = {}
 	var live_veins: Dictionary = {}
 	var prepared_records: Dictionary = {}
 	var original_states: Dictionary = {}
@@ -80,6 +81,10 @@ func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_
 		if not is_instance_valid(candidate) or not (candidate is MiningNode):
 			return false
 		var live_vein: Node = candidate as Node
+		var instance_id: int = live_vein.get_instance_id()
+		if seen_instance_ids.has(instance_id):
+			return false
+		seen_instance_ids[instance_id] = true
 		if not live_vein.has_method("can_register") or not bool(live_vein.call("can_register")):
 			return false
 		if _veins.has(stable_id) and is_instance_valid(_veins[stable_id]):
@@ -100,7 +105,7 @@ func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_
 		var source_record: Dictionary = {}
 		if has_saved_record:
 			var saved_value: Variant = _saved_records[stable_id]
-			if not (saved_value is Dictionary):
+			if not (saved_value is Dictionary) or not _validate_record(stable_id, saved_value, live_mineral_id, now):
 				probe.free()
 				return false
 			source_record = saved_value.duplicate(true)
