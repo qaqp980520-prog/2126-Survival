@@ -91,7 +91,8 @@ jobs:
           grep '^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_ADJACENCY_DELTA_BENCHMARK_JSON://' > surface_terrain_adjacency_delta_benchmark.jsonl
           test "$(grep -c '^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log)" -eq 4
           grep '^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON:' surface_terrain_adjacency_delta_benchmark.log | sed 's/^SURFACE_TERRAIN_OVERLAY_NESTED_COW_BENCHMARK_JSON://' > surface_terrain_overlay_nested_cow_benchmark.jsonl
-          test "$(grep -c '"batch_path_container_clones_per_sample":360' surface_terrain_overlay_nested_cow_benchmark.jsonl)" -eq 4
+          test "$(grep -c '"batch_path_container_clones_per_sample":216' surface_terrain_overlay_nested_cow_benchmark.jsonl)" -eq 4
+          test "$(grep -c '"batch_path_trie_cache_hits_per_sample":72' surface_terrain_overlay_nested_cow_benchmark.jsonl)" -eq 4
       - name: Upload matched adjacency benchmark
         if: always()
         uses: actions/upload-artifact@v4

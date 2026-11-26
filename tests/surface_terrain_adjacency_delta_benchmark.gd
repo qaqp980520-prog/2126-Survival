@@ -731,7 +731,9 @@ func _benchmark_overlay_nested_cow() -> void:
 		var parity_samples: int = 0
 		var batch_parity_samples: int = 0
 		var batch_path_clone_totals: Array[int] = []
-		var expected_batch_path_clones: int = OVERLAY_UPDATE_COUNT * 5 * 9
+		var batch_path_trie_cache_hit_totals: Array[int] = []
+		var expected_batch_path_clones: int = OVERLAY_UPDATE_COUNT * 3 * 9
+		var expected_batch_path_trie_cache_hits: int = OVERLAY_UPDATE_COUNT * 9
 		for sample_index in range(5):
 			var dictionary_snapshot: Dictionary = base.duplicate(true)
 			var overlay_snapshot: RefCounted = OverlayMapScript.new(base)
@@ -740,6 +742,7 @@ func _benchmark_overlay_nested_cow() -> void:
 			var overlay_total_usec: int = 0
 			var overlay_batch_total_usec: int = 0
 			var batch_path_clone_total: int = 0
+			var batch_path_trie_cache_hit_total: int = 0
 			var sample_parity_ok: bool = true
 			var batch_sample_parity_ok: bool = true
 			for transaction_index in range(9):
@@ -772,6 +775,7 @@ func _benchmark_overlay_nested_cow() -> void:
 						record["samples"] = samples
 						var metadata: Dictionary = record.get("metadata", {})
 						metadata["last_transaction"] = transaction_index
+						metadata["phase"] = transaction_index
 						record["metadata"] = metadata
 				for key in remove_keys:
 					dictionary_candidate.erase(key)
@@ -823,7 +827,8 @@ func _benchmark_overlay_nested_cow() -> void:
 						"operations": [
 							{"op": "set", "path": ["revision"], "value": int(previous_record.get("revision", 0)) + 1},
 							{"op": "append", "path": ["samples"], "value": transaction_index},
-							{"op": "set", "path": ["metadata", "last_transaction"], "value": transaction_index}
+							{"op": "set", "path": ["metadata", "last_transaction"], "value": transaction_index},
+							{"op": "set", "path": ["metadata", "phase"], "value": transaction_index}
 						]
 					})
 				var batch_applied: bool = bool(batch_candidate.call("apply_nested_patches", batch_patches))
@@ -838,12 +843,24 @@ func _benchmark_overlay_nested_cow() -> void:
 					)
 					batch_candidate.call("set_value", addition_key, addition_value)
 				overlay_batch_total_usec += Time.get_ticks_usec() - batch_started_usec
-				var transaction_path_clones: int = int(batch_candidate.call("get_stats").get("path_container_clone_count", 0))
+				var transaction_path_stats: Dictionary = batch_candidate.call("get_stats")
+				var transaction_path_clones: int = int(transaction_path_stats.get("path_container_clone_count", 0))
+				var transaction_path_trie_cache_hits: int = int(transaction_path_stats.get("path_trie_cache_hit_count", 0))
+				var transaction_path_trie_nodes: int = int(transaction_path_stats.get("path_trie_node_count", 0))
 				batch_path_clone_total += transaction_path_clones
+				batch_path_trie_cache_hit_total += transaction_path_trie_cache_hits
 				_expect(batch_applied, "nested COW fixture %d sample %d transaction %d applies one atomic batch" % [fixture_size, sample_index + 1, transaction_index + 1])
 				_expect(
-					transaction_path_clones == OVERLAY_UPDATE_COUNT * 5,
-					"nested COW fixture %d sample %d transaction %d clones exactly five containers per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
+					transaction_path_clones == OVERLAY_UPDATE_COUNT * 3,
+					"nested COW fixture %d sample %d transaction %d clones one root and two shared path containers per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
+				_expect(
+					transaction_path_trie_cache_hits == OVERLAY_UPDATE_COUNT,
+					"nested COW fixture %d sample %d transaction %d reuses one metadata ancestor per edited record" % [fixture_size, sample_index + 1, transaction_index + 1]
+				)
+				_expect(
+					transaction_path_trie_nodes == OVERLAY_UPDATE_COUNT * 3,
+					"nested COW fixture %d sample %d transaction %d creates one trie node per distinct cloned container" % [fixture_size, sample_index + 1, transaction_index + 1]
 				)
 
 				var checksum_keys: Array[String] = []
@@ -900,6 +917,7 @@ func _benchmark_overlay_nested_cow() -> void:
 				"nested COW fixture %d sample %d performs exactly %d path-container clones" % [fixture_size, sample_index + 1, expected_batch_path_clones]
 			)
 			batch_path_clone_totals.append(batch_path_clone_total)
+			batch_path_trie_cache_hit_totals.append(batch_path_trie_cache_hit_total)
 			dictionary_samples.append(float(dictionary_total_usec))
 			overlay_samples.append(float(overlay_total_usec))
 			overlay_batch_samples.append(float(overlay_batch_total_usec))
@@ -908,9 +926,14 @@ func _benchmark_overlay_nested_cow() -> void:
 		var overlay_p50: int = _percentile(overlay_samples, 0.5)
 		var overlay_batch_p50: int = _percentile(overlay_batch_samples, 0.5)
 		var batch_path_clone_p50: int = int(batch_path_clone_totals[2]) if batch_path_clone_totals.size() == 5 else -1
+		var batch_path_trie_cache_hits_p50: int = int(batch_path_trie_cache_hit_totals[2]) if batch_path_trie_cache_hit_totals.size() == 5 else -1
 		_expect(
 			batch_path_clone_totals.size() == 5 and batch_path_clone_p50 == expected_batch_path_clones,
 			"nested COW fixture %d reports five samples at the exact path-container clone budget" % fixture_size
+		)
+		_expect(
+			batch_path_trie_cache_hit_totals.size() == 5 and batch_path_trie_cache_hits_p50 == expected_batch_path_trie_cache_hits,
+			"nested COW fixture %d reports five samples at the exact shared-ancestor cache-hit budget" % fixture_size
 		)
 		var record: Dictionary = {
 			"fixture_entries": fixture_size,
@@ -926,7 +949,11 @@ func _benchmark_overlay_nested_cow() -> void:
 			"batch_path_container_clones_per_sample": batch_path_clone_p50,
 			"batch_path_container_clone_sample_count": batch_path_clone_totals.size(),
 			"expected_batch_path_container_clones_per_sample": expected_batch_path_clones,
+			"batch_path_trie_cache_hits_per_sample": batch_path_trie_cache_hits_p50,
+			"batch_path_trie_cache_hit_sample_count": batch_path_trie_cache_hit_totals.size(),
+			"expected_batch_path_trie_cache_hits_per_sample": expected_batch_path_trie_cache_hits,
 			"path_clone_stats_collected_outside_timing": true,
+			"path_trie_stats_collected_outside_timing": true,
 			"dictionary_to_overlay_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_p50)),
 			"dictionary_to_batch_ratio": float(dictionary_p50) / maxf(1.0, float(overlay_batch_p50)),
 			"depth_eight_compaction_included": true,
@@ -949,6 +976,7 @@ func _mutate_nested_cow_record(value: Variant, transaction_index: int) -> bool:
 	record["samples"] = samples
 	var metadata: Dictionary = record.get("metadata", {})
 	metadata["last_transaction"] = transaction_index
+	metadata["phase"] = transaction_index
 	record["metadata"] = metadata
 	return true
 
@@ -982,7 +1010,7 @@ func _nested_cow_dictionary_checksum(source: Dictionary, keys: Array[String]) ->
 		if value is Dictionary:
 			var record: Dictionary = value
 			var metadata: Dictionary = record.get("metadata", {})
-			checksum += int(record.get("revision", 0)) + int(record.get("samples", []).size()) + int(metadata.get("last_transaction", 0))
+			checksum += int(record.get("revision", 0)) + int(record.get("samples", []).size()) + int(metadata.get("last_transaction", 0)) + int(metadata.get("phase", -1))
 	return checksum
 
 
@@ -993,5 +1021,5 @@ func _nested_cow_overlay_checksum(source: RefCounted, keys: Array[String]) -> in
 		if value is Dictionary:
 			var record: Dictionary = value
 			var metadata: Dictionary = record.get("metadata", {})
-			checksum += int(record.get("revision", 0)) + int(record.get("samples", []).size()) + int(metadata.get("last_transaction", 0))
+			checksum += int(record.get("revision", 0)) + int(record.get("samples", []).size()) + int(metadata.get("last_transaction", 0)) + int(metadata.get("phase", -1))
 	return checksum
