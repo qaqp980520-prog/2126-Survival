@@ -44,6 +44,28 @@ class FaultInjectingCropController extends "res://systems/CropPlotController.gd"
 			return false
 		return super.restore_save_dict(payload)
 
+class FaultInjectingMiningNode extends "res://systems/MineralMiningNode.gd":
+	var fail_apply_count: int = 0
+
+	func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = true) -> bool:
+		var loaded: bool = super.load_save_dict(data, now_unix, apply_elapsed)
+		if not loaded:
+			return false
+		if fail_apply_count > 0:
+			fail_apply_count -= 1
+			return false
+		return true
+
+class FaultInjectingMineralRegistry extends "res://systems/MineralVeinRegistry.gd":
+	var fail_rollback_count: int = 0
+
+	func _restore_live_vein_state(vein: Node, snapshot: Dictionary) -> void:
+		super._restore_live_vein_state(vein, snapshot)
+		if fail_rollback_count > 0:
+			fail_rollback_count -= 1
+			vein.set("remaining_units", int(vein.get("max_units")))
+			vein.set("visible", true)
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -67,6 +89,8 @@ func _run_tests() -> void:
 	await _test_failed_object_state_application_is_atomic()
 	await process_frame
 	await _test_incomplete_chunk_load_rollback_is_reported_and_recoverable()
+	await process_frame
+	await _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable()
 	await process_frame
 	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
 	await process_frame
@@ -494,6 +518,50 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	crop_controller.queue_free()
 	crop_registry.queue_free()
 	mineral_registry.queue_free()
+	await process_frame
+
+func _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = FaultInjectingMineralRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var incoming := Node3D.new()
+	incoming.name = "ChunkRoot"
+	var vein: Node = FaultInjectingMiningNode.new()
+	vein.name = "gold-01"
+	vein.set("mineral_id", "gold_ore")
+	vein.set("max_units", 8)
+	vein.set("remaining_units", 3)
+	vein.set("regen_interval_seconds", 60)
+	vein.set("last_regen_unix", now)
+	vein.set("fail_apply_count", 1)
+	incoming.add_child(vein)
+	var vein_before: Dictionary = vein.call("to_save_dict")
+	registry.set("fail_rollback_count", 1)
+
+	assert(not controller.load_chunk("earth/mineral-registry-recovery", incoming, now), "An injected live mineral apply failure rejects the chunk")
+	assert(incoming.get_parent() == null, "The failed mineral candidate remains caller-owned")
+	assert(registry.call("has_pending_atomic_registration_recovery"), "The Registry retains a recovery record when live-node rollback verification fails")
+	assert(controller.has_pending_chunk_load_recovery(), "The Controller raises its cross-system recovery barrier")
+	var report: Dictionary = controller.get_last_chunk_load_report()
+	var details: Dictionary = report.get("details", {})
+	assert(str(report.get("phase", "")) == "mineral_registration")
+	assert(not bool(report.get("rollback_complete", true)))
+	assert(not bool(details.get("mineral_registry_rollback_ok", true)))
+	assert(bool(details.get("mineral_registry_recovery_required", false)))
+	assert(controller.recover_failed_chunk_load(), "Controller recovery delegates to the pending Registry participant")
+	assert(not registry.call("has_pending_atomic_registration_recovery"))
+	assert(not controller.has_pending_chunk_load_recovery())
+	assert(vein.call("to_save_dict") == vein_before, "Registry recovery restores the exact live mineral snapshot")
+
+	assert(controller.load_chunk("earth/mineral-registry-recovery", incoming, now), "The same candidate can be retried after mineral recovery")
+	assert(controller.unload_chunk("earth/mineral-registry-recovery", now))
+	controller.queue_free()
+	registry.queue_free()
 	await process_frame
 
 func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
