@@ -71,17 +71,25 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	# Compute the complete transaction scope before any load mutates a Registry.
 	# It includes all planned loads and every currently managed chunk that may unload.
 	var stale_ids: Array[String] = []
-	var affected_chunk_ids: Array[String] = []
+	var planned_load_ids: Array[String] = []
 	for raw_id in desired_ids.keys():
-		affected_chunk_ids.append(str(raw_id))
+		var desired_id: String = str(raw_id)
+		if not chunk_controller.is_chunk_loaded(desired_id):
+			planned_load_ids.append(desired_id)
 	for raw_id in previous_managed.keys():
 		var previous_id: String = str(raw_id)
 		if not desired_ids.has(previous_id):
 			stale_ids.append(previous_id)
-		if not affected_chunk_ids.has(previous_id):
-			affected_chunk_ids.append(previous_id)
 	stale_ids.sort()
+	planned_load_ids.sort()
+	var affected_chunk_ids: Array[String] = planned_load_ids.duplicate()
+	for stale_id in stale_ids:
+		if not affected_chunk_ids.has(stale_id):
+			affected_chunk_ids.append(stale_id)
 	affected_chunk_ids.sort()
+	if affected_chunk_ids.is_empty():
+		_set_report(true, "complete", "", true, {"center": center, "layer_index": target_layer, "desired_count": desired.size(), "newly_loaded_ids": [], "unloaded_stale_ids": [], "affected_chunk_ids": []})
+		return true
 	var registry_snapshot: Dictionary = _capture_registry_snapshot(affected_chunk_ids)
 	if registry_snapshot.is_empty():
 		_set_report(false, "snapshot", "Could not capture scoped Registry snapshots for the underground transaction.", true)
