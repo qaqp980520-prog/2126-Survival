@@ -23,6 +23,8 @@ var _pending_registry_pair_recovery: Dictionary = {}
 func bind_controller(candidate: Node3D) -> bool:
 	if candidate == null:
 		return false
+	if has_pending_registry_pair_recovery() and chunk_controller != candidate:
+		return false
 	for method_name in ["load_chunk", "unload_chunk", "is_chunk_loaded", "get_loaded_chunk_ids"]:
 		if not candidate.has_method(method_name):
 			return false
@@ -300,9 +302,11 @@ func recover_pending_registry_pair() -> bool:
 	var object_snapshot: Dictionary = _pending_registry_pair_recovery.get("objects", {})
 	var mineral_snapshot: Dictionary = _pending_registry_pair_recovery.get("mineral", {})
 	var now_unix: int = int(_pending_registry_pair_recovery.get("now_unix", 0))
-	var object_registry: Variant = chunk_controller.get("object_state_registry")
-	var mineral_registry: Variant = chunk_controller.get("registry")
+	var object_registry: Variant = _pending_registry_pair_recovery.get("object_registry_ref", null)
+	var mineral_registry: Variant = _pending_registry_pair_recovery.get("mineral_registry_ref", null)
 	if chunk_ids.is_empty() or now_unix <= 0 or object_registry == null or not is_instance_valid(object_registry) or mineral_registry == null or not is_instance_valid(mineral_registry):
+		return false
+	if chunk_controller.get("object_state_registry") != object_registry or chunk_controller.get("registry") != mineral_registry:
 		return false
 	for method_name in ["validate_chunk_set_save_dict", "to_chunk_set_save_dict", "restore_chunk_set_save_dict"]:
 		if not object_registry.has_method(method_name):
@@ -359,6 +363,8 @@ func _restore_registry_snapshot_pair(registry_snapshot: Dictionary, now_unix: in
 		"chunk_ids": chunk_ids.duplicate(),
 		"objects": current_objects.duplicate(true),
 		"mineral": current_mineral.duplicate(true),
+		"object_registry_ref": object_registry,
+		"mineral_registry_ref": mineral_registry,
 		"now_unix": now_unix
 	}
 	if not bool(object_registry.call("restore_chunk_set_save_dict", chunk_ids, object_snapshot)):
