@@ -134,6 +134,12 @@ func serialize_stream_state() -> Dictionary:
 		payload["inventory"] = inventory_bridge.call("serialize_inventory")
 	return payload
 
+func _get_expected_loaded_chunk_ids() -> PackedStringArray:
+	if director == null or not director.has_method("get_managed_chunk_ids"):
+		return PackedStringArray()
+	return director.get_managed_chunk_ids()
+
+
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
@@ -152,7 +158,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var inventory_value: Variant = payload.get("inventory", null)
 	var has_world_objects: bool = payload.has("world_objects")
 	var world_objects_value: Variant = payload.get("world_objects", null)
-	if not (schema_value is int) or int(schema_value) != 1:
+	if not (schema_value is int or schema_value is float) or not is_finite(float(schema_value)) or floorf(float(schema_value)) != float(schema_value) or int(schema_value) != 1:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	if not (position_value is Array) or position_value.size() != 3:
@@ -258,7 +264,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var world_objects_restored: bool = bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
-	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
+	var expected_managed_ids: PackedStringArray = _get_expected_loaded_chunk_ids()
+	var ids_consistent: bool = expected_managed_ids == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
 	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and inventory_restored and world_objects_restored and ids_consistent and position_restored
 	_refresh_world_hud()
@@ -271,6 +278,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		"inventory_restored": inventory_restored,
 		"world_objects_restored": world_objects_restored,
 		"ids_consistent": ids_consistent,
+		"expected_managed_chunk_ids": expected_managed_ids,
 		"position_restored": position_restored
 	})
 	if not rollback_complete:
