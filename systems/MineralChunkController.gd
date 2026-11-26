@@ -119,6 +119,9 @@ func recover_failed_chunk_load() -> bool:
 	var object_registry_chunk_id: String = str(pending.get("object_registry_chunk_id", ""))
 	var object_registry_lock_token: String = str(pending.get("object_registry_lock_token", ""))
 	var object_registry_lock_ok: bool = bool(pending.get("object_registry_lock_ok", true))
+	if not object_registry_lock_ok and is_instance_valid(pending_object_registry) and object_state_registry == pending_object_registry and not object_registry_chunk_id.is_empty() and not object_registry_lock_token.is_empty() and pending_object_registry.has_method("lock_chunk_writes"):
+		object_registry_lock_ok = bool(pending_object_registry.call("lock_chunk_writes", object_registry_chunk_id, object_registry_lock_token))
+		_pending_chunk_load_recovery["object_registry_lock_ok"] = object_registry_lock_ok
 	if not object_snapshot.is_empty():
 		if not is_instance_valid(pending_object_registry) or object_state_registry != pending_object_registry or object_registry_chunk_id.is_empty() or object_registry_lock_token.is_empty() or not object_registry_lock_ok:
 			object_registry_ok = false
@@ -298,7 +301,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		_end_chunk_load_restore(veins)
 		var object_rollback: Dictionary = {"ok": true, "live_nodes_ok": true, "registry_ok": true}
 		if not world_objects.is_empty():
-			object_rollback = _rollback_world_object_restore(initial_object_states, object_registry_snapshot)
+			object_rollback = _rollback_world_object_restore(initial_object_states, object_registry_snapshot, chunk_id)
 		var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 		var terrain_restore: Dictionary = _rebind_terrain_patches(existing_terrain_patches)
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))
@@ -319,7 +322,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		_end_chunk_load_restore(veins)
 		var object_rollback: Dictionary = {"ok": true, "live_nodes_ok": true, "registry_ok": true}
 		if not world_objects.is_empty():
-			object_rollback = _rollback_world_object_restore(initial_object_states, object_registry_snapshot)
+			object_rollback = _rollback_world_object_restore(initial_object_states, object_registry_snapshot, chunk_id)
 		var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 		var terrain_restore: Dictionary = _rebind_terrain_patches(existing_terrain_patches)
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))

@@ -201,14 +201,26 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	for id in stale_ids:
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		if not chunk_controller.unload_chunk(id, now_unix):
-			# Unloading can fail after earlier stale chunks have already been removed.
-			# Restore the previous active set instead of leaving a half-shifted window.
-			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
-			var rollback_complete: bool = new_loads_restored and old_chunks_restored
 			var unloaded_ids: Array[String] = []
 			for entry in unloaded_stale:
 				unloaded_ids.append(str(entry.get("id", "")))
+			var unload_recovery_required: bool = _controller_has_pending_load_recovery()
+			if unload_recovery_required:
+				var unload_recovery_report: Dictionary = _get_controller_load_report()
+				_set_sync_report(false, "stale_unload", "Controller rejected stale-chunk unload and requires participant recovery; Director compensation is deferred until the Controller barrier clears.", false, {
+					"failed_chunk_id": id,
+					"newly_loaded_ids": newly_loaded.duplicate(),
+					"unloaded_stale_ids": unloaded_ids,
+					"controller_load_recovery_required": true,
+					"controller_load_report": unload_recovery_report,
+					"new_loads_rollback_deferred": true,
+					"stale_restore_deferred": true
+				})
+				push_warning("Mineral grid streaming stopped compensation because the Controller has a pending lifecycle recovery barrier.")
+				return false
+			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored
 			_set_sync_report(false, "stale_unload", "Controller failed to unload a stale chunk.", rollback_complete, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
@@ -544,12 +556,25 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 			return
 		var stale_coord: Vector2i = _managed_chunk_ids[id]
 		if not chunk_controller.unload_chunk(id, now_unix):
-			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
-			var rollback_complete: bool = new_loads_restored and old_chunks_restored
 			var unloaded_ids: Array[String] = []
 			for item in unloaded_stale:
 				unloaded_ids.append(str(item.get("id", "")))
+			var unload_recovery_required: bool = _controller_has_pending_load_recovery()
+			if unload_recovery_required:
+				var unload_recovery_report: Dictionary = _get_controller_load_report()
+				_finish_async_sync_request(request_id, false, "stale_unload", "Controller rejected stale-chunk unload and requires participant recovery; Director compensation is deferred until the Controller barrier clears.", false, {
+					"failed_chunk_id": id,
+					"newly_loaded_ids": newly_loaded.duplicate(),
+					"unloaded_stale_ids": unloaded_ids,
+					"controller_load_recovery_required": true,
+					"controller_load_report": unload_recovery_report,
+					"new_loads_rollback_deferred": true,
+					"stale_restore_deferred": true
+				})
+				return
+			var new_loads_restored: bool = _rollback_new_loads(newly_loaded, now_unix)
+			var old_chunks_restored: bool = _restore_unloaded_chunks(unloaded_stale, now_unix)
+			var rollback_complete: bool = new_loads_restored and old_chunks_restored
 			_finish_async_sync_request(request_id, false, "stale_unload", "Controller failed to unload a stale chunk.", rollback_complete, {
 				"failed_chunk_id": id,
 				"newly_loaded_ids": newly_loaded.duplicate(),
