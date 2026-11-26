@@ -66,6 +66,9 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 	if not _controller_ready_for_sync() or not chunk_factory.is_valid():
 		_set_sync_report(false, "validation", "Controller must be alive, inside the scene tree and not queued for deletion; chunk factory must be available.", true)
 		return false
+	if _controller_has_pending_load_recovery():
+		_set_sync_report(false, "controller_recovery_required", "Recover the Controller's previous failed chunk-load transaction before synchronizing the streaming window.", false, {"controller_load_report": _get_controller_load_report()})
+		return false
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "validation", "World position must contain only finite coordinates.", true)
 		return false
@@ -157,7 +160,10 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 				else:
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var rollback_complete: bool = candidate_cleanup_ok and new_loads_rollback_ok
+			var controller_load_report: Dictionary = _get_controller_load_report()
+			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
+			var controller_load_rollback_complete: bool = bool(controller_load_report.get("rollback_complete", true)) and not controller_load_recovery_required
+			var rollback_complete: bool = candidate_cleanup_ok and new_loads_rollback_ok and controller_load_rollback_complete
 			var controller_detached_after_load: bool = controller_alive_after_load and not chunk_controller.is_inside_tree()
 			_set_sync_report(false, "controller_lifecycle" if not controller_ready_after_load else "load_registration", "Controller became unavailable during synchronous chunk registration." if not controller_ready_after_load else "Chunk controller rejected or failed to register a new chunk.", rollback_complete, {
 				"failed_chunk_id": id,
@@ -167,7 +173,10 @@ func sync_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool
 				"candidate_loaded": candidate_loaded,
 				"candidate_cleanup_ok": candidate_cleanup_ok,
 				"newly_loaded_ids": newly_loaded.duplicate(),
-				"new_loads_rollback_ok": new_loads_rollback_ok
+				"new_loads_rollback_ok": new_loads_rollback_ok,
+				"controller_load_rollback_complete": controller_load_rollback_complete,
+				"controller_load_recovery_required": controller_load_recovery_required,
+				"controller_load_report": controller_load_report
 			})
 			if not rollback_complete:
 				push_warning("Mineral grid streaming rollback was incomplete after synchronous chunk registration.")
@@ -225,6 +234,9 @@ func _exit_tree() -> void:
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
+	if _controller_has_pending_load_recovery():
+		_set_sync_report(false, "controller_recovery_required", "Recover the Controller's previous failed chunk-load transaction before starting an async streaming request.", false, {"controller_load_report": _get_controller_load_report()})
+		return -1
 	if not _async_dependencies_available():
 		return -1
 	if not _is_finite_world_position(world_position) or not _is_safe_grid_position(world_position):
@@ -474,7 +486,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				else:
 					_free_unowned_root(candidate)
 			var new_loads_rollback_ok: bool = _rollback_new_loads(newly_loaded, now_unix)
-			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok
+			var controller_load_report: Dictionary = _get_controller_load_report()
+			var controller_load_recovery_required: bool = _controller_has_pending_load_recovery()
+			var controller_load_rollback_complete: bool = bool(controller_load_report.get("rollback_complete", true)) and not controller_load_recovery_required
+			var rollback_complete: bool = controller_alive_after_load and not controller_queued_after_load and candidate_cleanup_ok and new_loads_rollback_ok and controller_load_rollback_complete
 			var controller_detached_after_load: bool = controller_alive_after_load and not controller_queued_after_load and not chunk_controller.is_inside_tree()
 			var failure_phase: String = "dependency_unavailable" if not controller_ready_after_load else "load_registration"
 			staged_roots.erase(id)
@@ -489,7 +504,10 @@ func _run_async_sync_request(request_id: int, desired: Array[Vector2i], now_unix
 				"newly_loaded_ids": newly_loaded.duplicate(),
 				"staged_count": staged_count,
 				"staged_roots_released": staged_roots_released,
-				"new_loads_rollback_ok": new_loads_rollback_ok
+				"new_loads_rollback_ok": new_loads_rollback_ok,
+				"controller_load_rollback_complete": controller_load_rollback_complete,
+				"controller_load_recovery_required": controller_load_recovery_required,
+				"controller_load_report": controller_load_report
 			})
 			return
 		staged_roots.erase(id)
@@ -760,6 +778,10 @@ func _free_staged_roots(staged_roots: Dictionary) -> void:
 ## This is intended for recovery after a previous sync reported an incomplete rollback.
 ## Unknown ID formats are rejected before changing the director's current managed map.
 func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
+	if _controller_has_pending_load_recovery():
+		if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("recover_failed_chunk_load") or not bool(chunk_controller.call("recover_failed_chunk_load")):
+			_set_sync_report(false, "controller_recovery", "Controller chunk-load recovery did not complete; the previous active window remains blocked.", false, {"controller_load_report": _get_controller_load_report()})
+			return false
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
 		return false
@@ -933,6 +955,20 @@ func _restore_unloaded_chunks(chunks: Array[Dictionary], now_unix: int) -> bool:
 func _free_unowned_root(candidate: Variant) -> void:
 	if is_instance_valid(candidate) and candidate is Node3D and candidate.get_parent() == null and not (candidate as Node3D).is_queued_for_deletion():
 		candidate.free()
+
+func _controller_has_pending_load_recovery() -> bool:
+	return (
+		chunk_controller != null
+		and is_instance_valid(chunk_controller)
+		and chunk_controller.has_method("has_pending_chunk_load_recovery")
+		and bool(chunk_controller.call("has_pending_chunk_load_recovery"))
+	)
+
+func _get_controller_load_report() -> Dictionary:
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("get_last_chunk_load_report"):
+		return {}
+	var report: Variant = chunk_controller.call("get_last_chunk_load_report")
+	return report.duplicate(true) if report is Dictionary else {}
 
 func _set_sync_report(success: bool, phase: String, message: String, rollback_complete: bool, details: Dictionary = {}) -> void:
 	_last_sync_report = {
