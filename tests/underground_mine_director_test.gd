@@ -342,6 +342,8 @@ func _test_registry_pair_compensation_recovery() -> void:
 	_expect(not bool(pair_director.call("_restore_registry_snapshot_pair", pair_snapshot, 100)), "mineral restore rejection rejects the registry-pair restore")
 	_expect(bool(pair_object_registry.records["pair/chunk/object"]["opened"]), "object target restore is visible before the injected compensation rejection")
 	_expect(bool(pair_director.call("has_pending_registry_pair_recovery")), "failed object compensation creates a durable director recovery barrier")
+	var initial_pair_recovery_report: Dictionary = pair_director.call("get_pending_registry_pair_recovery_report")
+	_expect(bool(initial_pair_recovery_report.get("last_recovery_attempt_failed", false)), "failed compensation result is explicitly recorded in the pending pair report")
 	_expect(pair_object_registry.restore_calls == 2, "initial object restore and first compensation attempt are both observed")
 	var alternate_object_registry := PairRecoveryObjectRegistry.new()
 	var alternate_mineral_registry := PairRecoveryMineralRegistry.new()
