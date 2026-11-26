@@ -541,7 +541,7 @@ func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
 	assert(object_registry.to_chunk_save_dict(chunk_id) == object_before, "Recovery restores only the failed chunk's exact object snapshot")
 	var unrelated_state: Dictionary = object_registry.get_object_state(unrelated_object_id).get("state", {})
 	assert(bool(unrelated_state.get("opened", false)) and int(unrelated_state.get("loot_remaining", -1)) == 2, "Recovery preserves a newer write to an unrelated chunk")
-	assert(object_registry.set_object_state(object_id, chunk_id, {"opened": false, "loot_remaining": 2}), "Affected chunk writes resume after recovery releases its lease")
+	assert(object_registry.set_object_state(object_id, chunk_id, {"opened": true, "loot_remaining": 1}), "Affected chunk writes resume after recovery releases its lease")
 	assert(prop.call("get_world_object_state") == {"opened": false, "loot_remaining": 2, "loot_item_id": "iron_ore"}, "Recovery restores the caller-owned live object state")
 	var recovery_report: Dictionary = controller.get_last_chunk_load_report()
 	assert(bool(recovery_report.get("success", false)) and str(recovery_report.get("phase", "")) == "recovery_complete")
