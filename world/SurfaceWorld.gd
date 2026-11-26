@@ -815,6 +815,19 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 		_world_object_action_message = "Mining rejected: inventory full or vein depleted."
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
+func _get_world_save_recovery_barrier_report() -> Dictionary:
+	if mine_director == null or not is_instance_valid(mine_director):
+		return {"recovery_required": true, "reason": "underground_director_unavailable"}
+	if not mine_director.has_method("has_pending_registry_pair_recovery"):
+		return {"recovery_required": true, "reason": "underground_director_recovery_api_unavailable"}
+	if not bool(mine_director.call("has_pending_registry_pair_recovery")):
+		return {}
+	if mine_director.has_method("get_pending_registry_pair_recovery_report"):
+		var report: Variant = mine_director.call("get_pending_registry_pair_recovery_report")
+		if report is Dictionary and not report.is_empty():
+			return report
+	return {"recovery_required": true, "reason": "underground_registry_pair_recovery_pending"}
+
 func serialize_stream_state() -> Dictionary:
 	var payload: Dictionary = super.serialize_stream_state()
 	if payload.is_empty():
@@ -832,6 +845,10 @@ func serialize_stream_state() -> Dictionary:
 	return payload
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not recovery_barrier_report.is_empty():
+		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
+		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
 	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
 		return false

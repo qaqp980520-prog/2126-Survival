@@ -2,6 +2,15 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
+
+class PendingRegistryPairDirector extends Node:
+	var pending: bool = true
+
+	func has_pending_registry_pair_recovery() -> bool:
+		return pending
+
+	func get_pending_registry_pair_recovery_report() -> Dictionary:
+		return {"recovery_required": pending, "reason": "injected_pair_recovery", "chunk_ids": ["underground/test_chunk"]}
 var failures: Array[String] = []
 var world: Node3D
 
@@ -123,7 +132,74 @@ func _run() -> void:
 	_expect(directions.has("forward"), "touch button activates virtual forward input")
 	buttons["forward"].emit_signal("button_up")
 	_expect(not directions.has("forward"), "touch release clears virtual input")
+	_test_world_save_recovery_gate(save_payload, now + 6)
 	_finish(0 if failures.is_empty() else 1)
+
+func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> void:
+	var previous_mine_director: Node = world.get("mine_director") as Node
+	var barrier_director := PendingRegistryPairDirector.new()
+	root.add_child(barrier_director)
+	world.set("mine_director", barrier_director)
+
+	var live_crate: Node = null
+	for candidate in world.chunk_controller.get_loaded_world_state_nodes():
+		if is_instance_valid(candidate) and str(candidate.name).begins_with("SalvageCrate"):
+			live_crate = candidate
+			break
+	_expect(live_crate != null, "save-gate fixture finds a loaded stateful crate")
+	if live_crate != null:
+		var live_state: Variant = live_crate.call("get_world_object_state")
+		if live_state is Dictionary:
+			var changed_state: Dictionary = live_state.duplicate(true)
+			var was_opened: bool = bool(changed_state.get("opened", false))
+			changed_state["opened"] = not was_opened
+			if changed_state.has("loot_remaining"):
+				# WorldObjectStatefulProp.MAX_LOOT is 2: a closed crate is full;
+				# an opened crate has consumed at least one unit.
+				changed_state["loot_remaining"] = 2 if was_opened else 1
+			_expect(bool(live_crate.call("apply_world_object_state", changed_state)), "save-gate fixture creates an unsaved live object-state change")
+		else:
+			_expect(false, "save-gate fixture reads a valid live object-state dictionary")
+
+	var before_minerals: Dictionary = world.chunk_controller.call("to_save_dict")
+	var before_crops: Dictionary = world.crop_registry.call("to_save_dict")
+	var before_objects: Dictionary = world.object_state_registry.call("to_save_dict")
+	var before_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
+	var before_position: Vector3 = world.player.global_position
+	var before_seed: int = int(world.get("world_seed"))
+	var before_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+
+	var blocked_save: Dictionary = world.call("serialize_stream_state")
+	_expect(blocked_save.is_empty(), "world serialization is refused while Registry-pair recovery is pending")
+	_expect(world.object_state_registry.call("to_save_dict") == before_objects, "blocked save does not capture or mutate live world-object records")
+	_expect(world.chunk_controller.call("to_save_dict") == before_minerals, "blocked save preserves mineral records")
+	_expect(world.crop_registry.call("to_save_dict") == before_crops, "blocked save preserves crop records")
+	_expect(world.inventory_bridge.call("serialize_inventory") == before_inventory, "blocked save preserves inventory")
+
+	var blocked_restore_payload: Dictionary = save_payload.duplicate(true)
+	blocked_restore_payload["world_seed"] = before_seed + 1
+	_expect(not bool(world.call("restore_stream_state", blocked_restore_payload, now_unix)), "world restore is refused before any streaming or seed mutation")
+	var restore_report: Dictionary = world.call("get_last_restore_report")
+	_expect(str(restore_report.get("phase", "")) == "registry_pair_recovery_barrier" and not bool(restore_report.get("rollback_complete", true)), "blocked restore exposes the pending pair barrier and incomplete status")
+	_expect(world.chunk_controller.call("to_save_dict") == before_minerals, "blocked restore preserves mineral records")
+	_expect(world.crop_registry.call("to_save_dict") == before_crops, "blocked restore preserves crop records")
+	_expect(world.object_state_registry.call("to_save_dict") == before_objects, "blocked restore preserves world-object records")
+	_expect(world.inventory_bridge.call("serialize_inventory") == before_inventory, "blocked restore preserves inventory")
+	_expect(world.player.global_position.is_equal_approx(before_position) and int(world.get("world_seed")) == before_seed, "blocked restore preserves player position and world seed")
+	_expect(world.chunk_controller.get_loaded_chunk_ids() == before_ids, "blocked restore does not alter the active chunk window")
+
+	world.set("mine_director", previous_mine_director)
+	barrier_director.queue_free()
+	var resumed_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not resumed_payload.is_empty(), "world serialization resumes after the original Director is restored")
+
+	var missing_api_director := Node.new()
+	root.add_child(missing_api_director)
+	world.set("mine_director", missing_api_director)
+	var missing_api_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(missing_api_payload.is_empty(), "save capture fails closed when the underground Director lacks the recovery API")
+	world.set("mine_director", previous_mine_director)
+	missing_api_director.queue_free()
 
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")

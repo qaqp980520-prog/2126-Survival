@@ -112,7 +112,13 @@ func debug_move_player_to(position: Vector3, now_unix: int = -1) -> bool:
 	player.global_position = position
 	return _sync_streaming(now_unix)
 
+## Derived worlds may block saves/restores while a recovery barrier is unresolved.
+func _get_world_save_recovery_barrier_report() -> Dictionary:
+	return {}
+
 func serialize_stream_state() -> Dictionary:
+	if not _get_world_save_recovery_barrier_report().is_empty():
+		return {}
 	if chunk_controller == null or player == null:
 		return {}
 	if chunk_controller.has_method("capture_loaded_world_object_states") and not bool(chunk_controller.call("capture_loaded_world_object_states")):
@@ -130,6 +136,10 @@ func serialize_stream_state() -> Dictionary:
 
 func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
+	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not recovery_barrier_report.is_empty():
+		_set_restore_report(false, "recovery_barrier", "World save restore is blocked while a world recovery barrier is pending.", false, recovery_barrier_report)
+		return false
 	if player == null or chunk_controller == null or director == null:
 		_set_restore_report(false, "validation", "Player, controller, or director is unavailable.", true)
 		return false
