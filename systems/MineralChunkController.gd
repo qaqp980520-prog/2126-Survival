@@ -73,7 +73,9 @@ func bind_object_state_registry(candidate: Node) -> bool:
 ## Accepts an instantiated, unparented chunk root. Mineral and crop local IDs are
 ## derived from node names/hierarchy; registry records persist after the scene unloads.
 func get_last_chunk_load_report() -> Dictionary:
-	return _last_chunk_load_report.duplicate(true)
+	var report: Dictionary = _last_chunk_load_report.duplicate(true)
+	report["recovery_required"] = has_pending_chunk_load_recovery()
+	return report
 
 func has_pending_chunk_load_recovery() -> bool:
 	return (
