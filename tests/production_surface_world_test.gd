@@ -328,6 +328,26 @@ func _test_durable_save_load(now_unix: int) -> void:
 	world.set("mine_director", original_mine_director)
 	pending_director.queue_free()
 
+	var locked_chunk_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+	if not locked_chunk_ids.is_empty():
+		var locked_chunk_id: String = str(locked_chunk_ids[0])
+		var lock_token: String = "surface-save-barrier-test"
+		_expect(bool(world.object_state_registry.call("lock_chunk_writes", locked_chunk_id, lock_token)), "test acquires an active WorldObject chunk write lease")
+		var lock_primary_before: String = FileAccess.get_file_as_string(blocked_path)
+		_expect(not bool(world.call("save_game", blocked_path)), "active WorldObject write lease blocks manual save")
+		_expect(not bool(world.call("load_game", blocked_path)), "active WorldObject write lease blocks disk restore")
+		_expect(FileAccess.get_file_as_string(blocked_path) == lock_primary_before, "active WorldObject write lease preserves existing save bytes")
+		_expect(bool(world.object_state_registry.call("unlock_chunk_writes", locked_chunk_id, lock_token)), "test releases the WorldObject chunk write lease")
+
+	var mineral_registry: Node = world.get("registry") as Node
+	var previous_pending_recovery: Dictionary = mineral_registry.get("_pending_atomic_registration_recovery")
+	mineral_registry.set("_pending_atomic_registration_recovery", {"test_fixture": true})
+	var mineral_barrier_bytes: String = FileAccess.get_file_as_string(blocked_path)
+	_expect(not bool(world.call("save_game", blocked_path)), "pending Mineral Registry recovery blocks manual save")
+	_expect(not bool(world.call("load_game", blocked_path)), "pending Mineral Registry recovery blocks disk restore")
+	_expect(FileAccess.get_file_as_string(blocked_path) == mineral_barrier_bytes, "pending Mineral Registry recovery preserves the existing save")
+	mineral_registry.set("_pending_atomic_registration_recovery", previous_pending_recovery)
+
 	_expect(bool(world.call("save_game", promotion_path)), "promotion-failure test creates an initial valid save")
 	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 1)), "promotion-failure fixture advances the live inventory")
 	_expect(bool(world.call("save_game", promotion_path)), "promotion-failure test creates a valid backup")
