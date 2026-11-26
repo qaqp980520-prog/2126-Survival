@@ -37,6 +37,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_load_preflight_is_atomic_for_all_veins()
 	await process_frame
+	await _test_new_mineral_regeneration_uses_explicit_chunk_timestamp()
+	await process_frame
 	await _test_failed_unload_preflight_is_atomic_for_all_veins()
 	await process_frame
 	await _test_failed_unload_preserves_terrain_adjacency()
@@ -120,6 +122,30 @@ func _test_empty_chunk_and_duplicate_id() -> void:
 	registry.queue_free()
 	await process_frame
 
+func _test_new_mineral_regeneration_uses_explicit_chunk_timestamp() -> void:
+	var now: int = int(Time.get_unix_time_from_system()) - 120
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var chunk_id := "earth/mineral-explicit-load-clock"
+	var incoming: Node3D = _new_mineral_chunk(3, now - 120)
+	var vein: Node = incoming.get_node("gold-01")
+	assert(controller.load_chunk(chunk_id, incoming, now), "A new chunk without a saved mineral record loads successfully")
+	assert(int(vein.get("remaining_units")) == 5, "Deferred _ready regeneration is applied exactly twice at the supplied load timestamp")
+	assert(int(vein.get("last_regen_unix")) == now, "New-vein regeneration clock ends at the explicit load timestamp")
+	assert(not bool(vein.call("is_chunk_load_restore_pending")), "Successful load clears the one-shot ready-regeneration guard")
+	var stable_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
+	var saved_record: Dictionary = registry.to_save_dict().get("veins", {}).get(stable_id, {})
+	assert(int(saved_record.get("remaining_units", -1)) == 5, "Registry commits the same once-regenerated state as the live node")
+	assert(controller.unload_chunk(chunk_id, now), "The explicit-clock chunk unloads after successful registration")
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
 func _test_failed_load_preserves_caller_root() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var registry: Node = Registry.new()
@@ -185,6 +211,9 @@ func _test_failed_load_preflight_is_atomic_for_all_veins() -> void:
 	var incoming: Node3D = _new_two_mineral_chunk(now)
 	var first: Node = incoming.get_node("gold-01")
 	var second: Node = incoming.get_node("iron-02")
+	# A detached root with an old authored timestamp must not regenerate in _ready()
+	# before the later saved-record mismatch rejects the complete transaction.
+	first.set("last_regen_unix", now - 120)
 	var first_before: Dictionary = first.call("to_save_dict")
 	var second_before: Dictionary = second.call("to_save_dict")
 	assert(not controller.load_chunk(chunk_id, incoming, now), "A later saved-record mineral mismatch rejects the whole chunk load")
@@ -192,6 +221,7 @@ func _test_failed_load_preflight_is_atomic_for_all_veins() -> void:
 	assert(not controller.is_chunk_loaded(chunk_id), "Rejected load does not publish chunk ownership")
 	assert(first.call("to_save_dict") == first_before, "Rejected load does not apply elapsed regeneration to the earlier live vein")
 	assert(second.call("to_save_dict") == second_before, "Rejected load does not mutate the rejected live vein")
+	assert(not bool(first.call("is_chunk_load_restore_pending")) and not bool(second.call("is_chunk_load_restore_pending")), "Rejected load clears the one-shot ready-regeneration guard")
 	assert(registry.to_save_dict() == registry_before, "Rejected load preserves the complete saved registry payload")
 	assert(registry.get_registered_ids().is_empty(), "Rejected load registers no live vein")
 
