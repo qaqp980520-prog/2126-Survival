@@ -363,6 +363,25 @@ func _test_durable_save_load(now_unix: int) -> void:
 		_expect(FileAccess.get_file_as_string(blocked_path) == lock_primary_before, "active WorldObject write lease preserves existing save bytes")
 		_expect(bool(world.object_state_registry.call("unlock_chunk_writes", locked_chunk_id, lock_token)), "test releases the WorldObject chunk write lease")
 
+	var controller: Node = world.get("chunk_controller") as Node
+	var previous_controller_recovery: Dictionary = controller.get("_pending_chunk_load_recovery")
+	controller.set("_pending_chunk_load_recovery", {"test_fixture": true})
+	var controller_barrier_bytes: String = FileAccess.get_file_as_string(blocked_path)
+	_expect(not bool(world.call("save_game", blocked_path)), "pending Controller lifecycle recovery blocks disk save")
+	_expect(not bool(world.call("load_game", blocked_path)), "pending Controller lifecycle recovery blocks disk load")
+	_expect(not bool(world.call("restore_stream_state", payload_a, now_unix + 10)), "pending Controller lifecycle recovery blocks direct restore")
+	_expect(FileAccess.get_file_as_string(blocked_path) == controller_barrier_bytes, "Controller recovery barrier preserves existing save bytes")
+	controller.set("_pending_chunk_load_recovery", previous_controller_recovery)
+
+	var surface_director: Node = world.get("director") as Node
+	var previous_recovery_roots: Dictionary = surface_director.get("_pending_recovery_roots")
+	surface_director.set("_pending_recovery_roots", {"test_fixture": {"root": null, "controller": controller}})
+	var director_barrier_bytes: String = FileAccess.get_file_as_string(blocked_path)
+	_expect(not bool(world.call("save_game", blocked_path)), "pending Surface Director recovery roots block disk save")
+	_expect(not bool(world.call("load_game", blocked_path)), "pending Surface Director recovery roots block disk load")
+	_expect(FileAccess.get_file_as_string(blocked_path) == director_barrier_bytes, "Surface Director recovery barrier preserves existing save bytes")
+	surface_director.set("_pending_recovery_roots", previous_recovery_roots)
+
 	var mineral_registry: Node = world.get("registry") as Node
 	var previous_pending_recovery: Dictionary = mineral_registry.get("_pending_atomic_registration_recovery")
 	mineral_registry.set("_pending_atomic_registration_recovery", {"test_fixture": true})
