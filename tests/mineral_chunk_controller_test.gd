@@ -35,7 +35,7 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_load_preserves_caller_root()
 	await process_frame
-	await _test_failed_unload_rolls_back_registration()
+	await _test_failed_unload_preflight_is_atomic_for_all_veins()
 	await process_frame
 	await _test_failed_unload_preserves_terrain_adjacency()
 	await process_frame
@@ -148,8 +148,9 @@ func _test_failed_load_preserves_caller_root() -> void:
 	registry.queue_free()
 	await process_frame
 
-func _test_failed_unload_rolls_back_registration() -> void:
+func _test_failed_unload_preflight_is_atomic_for_all_veins() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
+	var unload_time: int = now + 120
 	var registry: Node = Registry.new()
 	var controller: Node3D = Controller.new()
 	root.add_child(registry)
@@ -161,16 +162,23 @@ func _test_failed_unload_rolls_back_registration() -> void:
 	assert(controller.load_chunk(chunk_id, chunk, now))
 	var first_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
 	var second_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/iron-02")
+	var first: Node = chunk.get_node("gold-01")
 	var second: Node = chunk.get_node("iron-02")
-	second.mineral_id = "missing_mineral"
-	assert(not controller.unload_chunk(chunk_id, now), "Invalid second vein must abort unload")
+	var first_state_before: Dictionary = first.call("to_save_dict")
+	var registry_before: Dictionary = registry.call("to_save_dict")
+	second.set("mineral_id", "missing_mineral")
+	assert(not controller.unload_chunk(chunk_id, unload_time), "Invalid second vein must abort the complete chunk unload")
 	assert(controller.is_chunk_loaded(chunk_id), "Failed unload must retain controller ownership")
 	assert(controller.get_chunk_root(chunk_id) == chunk)
 	assert(chunk.get_parent() == controller)
-	assert(registry.get_registered_ids().has(first_id), "Previously unregistered first vein must be restored")
-	assert(registry.get_registered_ids().has(second_id), "Failed vein must remain registered")
-	second.mineral_id = "iron_ore"
-	assert(controller.unload_chunk(chunk_id, now), "Unload should succeed after repairing invalid vein data")
+	assert(registry.get_registered_ids().has(first_id), "Atomic preflight keeps the first vein registered")
+	assert(registry.get_registered_ids().has(second_id), "Atomic preflight keeps the rejected vein registered")
+	assert(first.call("to_save_dict") == first_state_before, "A rejected batch must not advance regeneration on an earlier vein")
+	assert(registry.call("to_save_dict") == registry_before, "A rejected batch must preserve the entire mineral registry snapshot")
+	second.set("mineral_id", "iron_ore")
+	assert(controller.unload_chunk(chunk_id, unload_time), "Unload should succeed after repairing invalid vein data")
+	var saved_veins: Dictionary = registry.call("to_save_dict").get("veins", {})
+	assert(int(saved_veins.get(first_id, {}).get("remaining_units", -1)) == 5, "Successful atomic unload applies the two elapsed regeneration intervals")
 	controller.queue_free()
 	registry.queue_free()
 	await process_frame
