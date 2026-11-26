@@ -62,6 +62,8 @@ class PairRecoveryMineralRegistry:
 	var records: Dictionary = {"pair/chunk/vein/ore": {"remaining_units": 3}}
 	var restore_calls: int = 0
 	var reject_first_restore: bool = true
+	var pending_recovery: bool = false
+	var recovery_calls: int = 0
 
 	func to_chunk_set_snapshot(chunk_ids: Array) -> Dictionary:
 		return {"schema_version": 1, "chunk_ids": chunk_ids.duplicate(), "veins": records.duplicate(true)}
@@ -83,7 +85,12 @@ class PairRecoveryMineralRegistry:
 		return true
 
 	func has_pending_atomic_registration_recovery() -> bool:
-		return false
+		return pending_recovery
+
+	func recover_last_atomic_registration() -> bool:
+		recovery_calls += 1
+		pending_recovery = false
+		return true
 
 
 class PairRecoveryController:
@@ -346,9 +353,10 @@ func _test_registry_pair_compensation_recovery() -> void:
 	root.add_child(alternate_controller)
 	pair_director._managed_chunk_ids.clear()
 	_expect(not bool(pair_director.call("bind_controller", alternate_controller)), "pending pair recovery prevents rebinding to a different controller even with an empty managed window")
+	alternate_mineral_registry.pending_recovery = true
 	pair_controller.registry = alternate_mineral_registry
 	_expect(not bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100)), "registry identity change blocks pair recovery instead of restoring into a replacement registry")
-	_expect(alternate_mineral_registry.restore_calls == 0 and bool(pair_director.call("has_pending_registry_pair_recovery")), "identity mismatch preserves the pending pair and does not touch the replacement registry")
+	_expect(alternate_mineral_registry.restore_calls == 0 and alternate_mineral_registry.recovery_calls == 0 and alternate_mineral_registry.pending_recovery and bool(pair_director.call("has_pending_registry_pair_recovery")), "identity mismatch is checked before any recovery method touches the replacement registry")
 	pair_controller.registry = pair_mineral_registry
 	_expect(pair_object_registry.restore_calls == 2, "identity mismatch does not consume another object compensation attempt")
 	var blocked_sync: bool = bool(pair_director.call("sync_to_world_position", Vector3(1.5, -8.25, 1.5), 100))
