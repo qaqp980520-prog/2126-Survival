@@ -22,7 +22,11 @@ No package, plugin, scene, autoload, Project Settings, or save-schema migration.
 
 ## Writer audit
 
-At the parent head, production Registry mutations are centralized in MineralChunkController load/unload and world-object capture/restore. `scripts/world.gd` routes save capture and restore through those Controller methods; it does not mutate the Registry directly. `world/SurfaceWorld.gd` reads a snapshot for transition rollback. `WorldObjectStatefulProp.gd` exposes state methods but does not write the Registry. No other production call site directly invokes Registry set/forget/restore mutation methods at this base. The registry-level lease also protects future direct same-chunk writers.
+At parent PR #443 HEAD, the primary Controller mutation paths are MineralChunkController load/unload and Controller-mediated world-object capture/restore. `scripts/world.gd` routes world-save operations through Controller; `world/SurfaceWorld.gd` reads a snapshot; `WorldObjectStatefulProp.gd` exposes state without direct Registry mutation.
+
+A broader scan of 45 production GDScript files also found `systems/UndergroundMineDirector.gd` using world-wide `WorldObjectStateRegistry.to_save_dict()/restore_save_dict()` for multi-chunk window rollback. That path is not covered by M0.3.31 and is tracked in [Issue #445](https://github.com/qaqp980520-prog/2126-Survival/issues/445). The Registry's global restore now fails closed while any chunk lease is active, but the Director can still overwrite newer unrelated object records when no lease is active. Do not treat the writer audit as complete until #445 is addressed.
+
+The Director also uses a world-wide `MineralVeinRegistry` snapshot; Issue #445 requires a separate decision on whether that mineral snapshot needs chunk-scoped restore.
 
 ## Transaction behavior
 
@@ -36,18 +40,19 @@ At the parent head, production Registry mutations are centralized in MineralChun
 
 ## Validation status
 
-Pending exact-head GitHub Actions Godot 4.3 validation. Local Godot executable is unavailable; no local engine pass is claimed. No GPU, rendered FPS, Xvfb/Mesa, mobile, or target-device validation is implied.
+Exact-head PR #444 commit a2b50163237d199c2f177d4ddfd5b7af4c275e73 passed the Godot 4.3 Full Compatibility Gate: 553/553 steps, 0 failed, 0 skipped. Focused Runs 103, 104, and 105–107 also succeeded. The earlier d5d481f Full Gate failure was a test-fixture expectation error corrected in test-only commit a2b5016. Local Godot executable is unavailable; no local engine pass is claimed. No GPU, rendered FPS, Xvfb/Mesa, mobile, or target-device validation is implied.
 
 ## Limitations
 
 - This is a recoverable Controller lifecycle barrier, not a lock-free transaction across every world subsystem.
 - Direct Registry callers must respect per-chunk leases; same-chunk writes are rejected while recovery is pending.
 - Chunk snapshots currently filter the record map; a dedicated chunk index is not introduced.
+- UndergroundMineDirector's world-wide WorldObjectStateRegistry snapshot/restore remains a separate follow-up in Issue #445.
+- MineralVeinRegistry still uses a world-wide snapshot in the Director; its chunk-scope requirements are part of Issue #445.
 - Full Binder rebuild remains the correctness/recovery path.
 
 ## Next
 
-1. Run focused WorldObjectStateRegistry and MineralChunkController tests plus the full Godot 4.3 Compatibility Gate on the exact child head.
-2. Review exact-head logs and warning changes.
-3. Keep the stacked PR Draft until parent #443 is reviewed/integrated and the child receives independent review.
-4. Continue auditing external save/restore writers before background persistence is allowed during pending recovery.
+1. Address Issue #445: scope UndergroundMineDirector's object-state rollback snapshot to planned loads and stale unloads; separately audit the MineralVeinRegistry snapshot.
+2. Keep PR #444 Draft until parent #443 is reviewed/integrated and the child receives independent review.
+3. After #445 is resolved, re-run the full Godot 4.3 Compatibility Gate on the integrated exact head.
