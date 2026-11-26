@@ -248,7 +248,17 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 		return {"ok": true, "phase": "invalid_previous_archived", "archive_path": archive_path}
 	var previous_result: Dictionary = read_valid_file(previous_path, payload_validator)
 	if not bool(previous_result.get("ok", false)):
-		return {"ok": false, "reason": "neither_primary_nor_previous_is_valid"}
+		var backup_result: Dictionary = read_valid_file(path + ".bak", payload_validator)
+		if not bool(backup_result.get("ok", false)):
+			return {"ok": false, "reason": "neither_primary_previous_nor_backup_is_valid"}
+		var invalid_previous_archive: String = _unique_corrupt_archive_path(path)
+		var archive_error: int = _rename_path(previous_path, invalid_previous_archive, rename_operation)
+		if archive_error != OK:
+			return {"ok": false, "reason": "invalid_previous_could_not_be_archived", "error": archive_error}
+		var backup_recovery: Dictionary = promote_backup(path, payload_validator, rename_operation)
+		if not bool(backup_recovery.get("ok", false)):
+			return {"ok": false, "reason": "verified_backup_recovery_failed", "recovery_required": true, "backup_recovery": backup_recovery}
+		return {"ok": true, "phase": "backup_recovered", "archive_path": invalid_previous_archive, "backup_recovery": backup_recovery}
 	var archive_path: String = ""
 	if FileAccess.file_exists(path):
 		archive_path = _unique_corrupt_archive_path(path)
