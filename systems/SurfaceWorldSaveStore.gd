@@ -8,11 +8,13 @@ const FORMAT_VERSION: int = 1
 const MAX_SAVE_BYTES: int = 16 * 1024 * 1024
 
 static func build_envelope(payload: Dictionary, saved_at_unix: int) -> Dictionary:
+	var payload_copy: Dictionary = payload.duplicate(true)
 	return {
 		"format_id": FORMAT_ID,
 		"format_version": FORMAT_VERSION,
 		"saved_at_unix": saved_at_unix,
-		"payload": payload.duplicate(true)
+		"payload_sha256": JSON.stringify(payload_copy).sha256_text(),
+		"payload": payload_copy
 	}
 
 static func encode_envelope(envelope: Dictionary) -> String:
@@ -40,6 +42,11 @@ static func decode_envelope(content: String) -> Dictionary:
 		return {"ok": false, "reason": "invalid_saved_at"}
 	if not (payload is Dictionary):
 		return {"ok": false, "reason": "invalid_payload_type"}
+	var payload_hash: Variant = raw_envelope.get("payload_sha256", null)
+	if not (payload_hash is String) or str(payload_hash).length() != 64:
+		return {"ok": false, "reason": "invalid_payload_checksum"}
+	if str(payload_hash) != JSON.stringify(payload).sha256_text():
+		return {"ok": false, "reason": "payload_checksum_mismatch"}
 	return {
 		"ok": true,
 		"saved_at_unix": int(saved_at),
@@ -48,7 +55,9 @@ static func decode_envelope(content: String) -> Dictionary:
 	}
 
 static func read_valid_file(path: String, payload_validator: Callable) -> Dictionary:
-	if path.is_empty() or not FileAccess.file_exists(path):
+	if not _is_supported_user_path(path):
+		return {"ok": false, "reason": "unsupported_save_path"}
+	if not FileAccess.file_exists(path):
 		return {"ok": false, "reason": "file_missing"}
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
@@ -79,7 +88,7 @@ static func read_valid_file(path: String, payload_validator: Callable) -> Dictio
 	}
 
 static func write_atomic(path: String, envelope_text: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
-	if path.is_empty() or envelope_text.is_empty() or not payload_validator.is_valid():
+	if not _is_supported_user_path(path) or envelope_text.is_empty() or not payload_validator.is_valid():
 		return {"ok": false, "phase": "preflight", "reason": "invalid_write_arguments"}
 	var interrupted: Dictionary = recover_interrupted_write(path, payload_validator, rename_operation)
 	if not bool(interrupted.get("ok", false)):
@@ -185,6 +194,8 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 	}
 
 static func promote_backup(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
+	if not _is_supported_user_path(path):
+		return {"ok": false, "phase": "path_preflight", "reason": "unsupported_save_path"}
 	var backup_path: String = path + ".bak"
 	var backup_result: Dictionary = read_valid_file(backup_path, payload_validator)
 	if not bool(backup_result.get("ok", false)):
@@ -231,6 +242,8 @@ static func promote_backup(path: String, payload_validator: Callable, rename_ope
 	return {"ok": true, "phase": "backup_promoted", "archive_path": archive_path, "backup_path": backup_path}
 
 static func recover_interrupted_write(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
+	if not _is_supported_user_path(path):
+		return {"ok": false, "reason": "unsupported_save_path"}
 	var previous_path: String = path + ".previous"
 	if not FileAccess.file_exists(previous_path):
 		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(previous_path)):
@@ -276,6 +289,14 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 	if not bool(verified_primary.get("ok", false)):
 		return {"ok": false, "reason": "restored_previous_primary_failed_verification", "recovery_required": true}
 	return {"ok": true, "phase": "previous_primary_restored", "archive_path": archive_path}
+
+static func _is_supported_user_path(path: String) -> bool:
+	if not path.begins_with("user://"):
+		return false
+	var relative_path: String = path.substr(7)
+	if relative_path.is_empty() or relative_path.contains("..") or relative_path.contains("\\") or relative_path.begins_with("/") or relative_path.ends_with("/") or relative_path.contains("//"):
+		return false
+	return true
 
 static func _rename_path(source_path: String, destination_path: String, rename_operation: Callable) -> int:
 	var source_absolute: String = ProjectSettings.globalize_path(source_path)
