@@ -1231,7 +1231,9 @@ func _run_overlay_map_contract_tests() -> void:
 	_expect(batch_root.call("get_value", "record", {}).get("revision", -1) == 1, "batch commit does not mutate the sealed parent Dictionary")
 	_expect(batch_root.call("get_value", "items", []).size() == 2, "batch commit does not mutate the sealed parent Array")
 	_expect(int(batch_child.call("get_stats").get("local_write_count", 0)) == 2, "batch commit publishes all staged keys together")
-	_expect(int(batch_child.call("get_stats").get("path_container_clone_count", 0)) == 11, "batch clones only the root and edited Array/Dictionary path containers")
+	_expect(int(batch_child.call("get_stats").get("path_container_clone_count", 0)) == 5, "batch clones each top-level root and distinct edited child path only once")
+	_expect(int(batch_child.call("get_stats").get("path_trie_cache_hit_count", 0)) == 1, "batch reuses the cached metadata ancestor for its second edit")
+	_expect(int(batch_child.call("get_stats").get("path_trie_node_count", 0)) == 5, "batch creates one trie node per distinct cloned container")
 	var path_payload_values: Array = []
 	for value_index in range(32):
 		path_payload_values.append(value_index)
@@ -1255,12 +1257,64 @@ func _run_overlay_map_contract_tests() -> void:
 	]
 	_expect(bool(path_cow_child.call("apply_nested_patches", path_cow_patches)), "path-level COW applies nested edits without cloning untouched payload branches")
 	var path_cow_stats: Dictionary = path_cow_child.call("get_stats")
-	_expect(int(path_cow_stats.get("path_container_clone_count", 0)) == 3, "path-level COW clones only root and edited metadata containers")
+	_expect(int(path_cow_stats.get("path_container_clone_count", 0)) == 2, "path-level COW clones the root and metadata container once each")
+	_expect(int(path_cow_stats.get("path_trie_node_count", 0)) == 2, "path-level COW creates only the root and metadata trie nodes")
 	_expect(int(path_cow_stats.get("container_clone_count", 0)) == path_cow_initial_container_clones, "path-level COW performs no additional deep container clone while staging scalar edits")
 	var path_cow_parent_record: Dictionary = path_cow_root.call("get_value", "record", {})
 	var path_cow_child_record: Dictionary = path_cow_child.call("get_value", "record", {})
 	_expect(int(path_cow_parent_record.get("revision", -1)) == 1, "path-level COW leaves parent scalar values unchanged")
 	_expect(int(path_cow_child_record.get("revision", -1)) == 2, "path-level COW publishes the child scalar value")
+
+	var trie_root: RefCounted = OverlayMapScript.new({
+		"record": {
+			"metadata": {"owner": "root"},
+			"groups": [{"values": [1, 2]}, {"values": [3, 4]}]
+		}
+	})
+	var trie_child: RefCounted = trie_root.call("fork")
+	var trie_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["metadata", "owner"], "value": "child"},
+				{"op": "set", "path": ["metadata", "revision"], "value": 2},
+				{"op": "set", "path": ["groups", 0, "values", 0], "value": 10},
+				{"op": "append", "path": ["groups", 0, "values"], "value": 11},
+				{"op": "erase", "path": ["groups", 0]},
+				{"op": "set", "path": ["groups", 0, "values", 0], "value": 30}
+			]
+		}
+	]
+	_expect(bool(trie_child.call("apply_nested_patches", trie_patches)), "transaction-local path trie reuses shared Dictionary and Array ancestors")
+	var trie_child_record: Dictionary = trie_child.call("get_value", "record", {})
+	var trie_groups: Array = trie_child_record.get("groups", [])
+	_expect(trie_child_record.get("metadata", {}).get("owner", "") == "child", "path trie preserves the first nested Dictionary edit")
+	_expect(int(trie_child_record.get("metadata", {}).get("revision", -1)) == 2, "path trie reuses a previously cloned Dictionary ancestor")
+	_expect(trie_groups.size() == 1 and trie_groups[0].get("values", []) == [30, 4], "Array erase invalidates shifted child paths before the next edit")
+	_expect(trie_root.call("get_value", "record", {}).get("groups", []) == [{"values": [1, 2]}, {"values": [3, 4]}], "path trie Array edits leave the sealed Parent unchanged")
+	var trie_stats: Dictionary = trie_child.call("get_stats")
+	_expect(int(trie_stats.get("path_container_clone_count", 0)) == 7, "path trie clones each distinct path container once and reclones shifted Array descendants")
+	_expect(int(trie_stats.get("path_trie_cache_hit_count", 0)) == 6, "path trie records six shared-ancestor cache hits")
+	_expect(int(trie_stats.get("path_trie_node_count", 0)) == 7, "path trie creates seven distinct container nodes across Array invalidation")
+
+	var replacement_root: RefCounted = OverlayMapScript.new({
+		"record": {"groups": [{"values": [1, 2]}]}
+	})
+	var replacement_child: RefCounted = replacement_root.call("fork")
+	var replacement_patches: Array = [
+		{
+			"key": "record",
+			"operations": [
+				{"op": "set", "path": ["groups", 0, "values", 0], "value": 9},
+				{"op": "set", "path": ["groups", 0, "values"], "value": [7, 8]},
+				{"op": "set", "path": ["groups", 0, "values", 1], "value": 10}
+			]
+		}
+	]
+	_expect(bool(replacement_child.call("apply_nested_patches", replacement_patches)), "path trie accepts replacing a previously cloned nested container")
+	_expect(replacement_child.call("get_value", "record", {}).get("groups", [])[0].get("values", []) == [7, 10], "Dictionary leaf replacement invalidates the stale cached descendant")
+	_expect(int(replacement_child.call("get_stats").get("path_container_clone_count", 0)) == 5, "replacement reclones only the new values Array path")
+
 	_expect(path_cow_parent_record.get("payload", {}) == path_cow_child_record.get("payload", {}), "path-level COW preserves the complete untouched nested payload")
 	var detached_path_payload: Dictionary = path_cow_child_record.get("payload", {})
 	var detached_path_branches: Array = detached_path_payload.get("branches", [])

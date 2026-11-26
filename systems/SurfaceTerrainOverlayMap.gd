@@ -22,6 +22,8 @@ var _materialize_calls: int = 0
 var _materialized_keys: int = 0
 var _container_clone_count: int = 0
 var _path_container_clone_count: int = 0
+var _path_trie_node_count: int = 0
+var _path_trie_cache_hit_count: int = 0
 
 
 func _init(base: Dictionary = {}, copy_base: bool = true) -> void:
@@ -137,22 +139,24 @@ func apply_nested_patches(patches: Array) -> bool:
 		var operations: Array = operations_value
 		if operations.is_empty():
 			return false
-		# This raw lookup is internal to the transaction path. Every mutation below
-		# clones the root and each container on the edited path before writing.
-		var working_copy: Variant = _get_stored_value(key, null)
-		if not (working_copy is Dictionary or working_copy is Array):
+		# One private shallow root clone and one transaction-local trie are created
+		# per key. Later operations reuse shared ancestors. Nothing is published until
+		# every key and every operation has passed validation.
+		var stored_value: Variant = _get_stored_value(key, null)
+		if not (stored_value is Dictionary or stored_value is Array):
 			return false
+		var root_copy: Variant = _clone_path_container(stored_value)
+		if not (root_copy is Dictionary or root_copy is Array):
+			return false
+		var trie_root: Dictionary = _make_path_trie_node(root_copy)
 		for operation_value in operations:
 			if not operation_value is Dictionary:
 				return false
 			var operation: Dictionary = operation_value
-			var operation_result: Dictionary = _apply_nested_patch_operation(working_copy, operation)
+			var operation_result: Dictionary = _apply_nested_patch_operation_with_trie(trie_root, operation)
 			if not bool(operation_result.get("ok", false)):
 				return false
-			working_copy = operation_result.get("root", null)
-			if not (working_copy is Dictionary or working_copy is Array):
-				return false
-		staged_values[key] = working_copy
+		staged_values[key] = root_copy
 	for key in staged_values:
 		_removed.erase(key)
 		_writes[key] = staged_values[key]
@@ -235,6 +239,8 @@ func get_stats() -> Dictionary:
 		"materialized_keys": _materialized_keys,
 		"container_clone_count": _container_clone_count,
 		"path_container_clone_count": _path_container_clone_count,
+		"path_trie_node_count": _path_trie_node_count,
+		"path_trie_cache_hit_count": _path_trie_cache_hit_count,
 		"sealed": _sealed
 	}
 
@@ -281,48 +287,79 @@ func _clone_path_container(value: Variant) -> Variant:
 	return null
 
 
-## Shallow-clones the root and every Array/Dictionary on path, sharing untouched subtrees.
-## The returned target is private to this transaction and must not escape the caller.
-func _clone_container_path(root_value: Variant, path: Array) -> Dictionary:
-	if not (root_value is Dictionary or root_value is Array):
-		return {"ok": false}
-	var root_copy: Variant = _clone_path_container(root_value)
-	var original_cursor: Variant = root_value
-	var copied_cursor: Variant = root_copy
+## Creates a transaction-local trie node for one private container.
+func _make_path_trie_node(container: Variant) -> Dictionary:
+	_path_trie_node_count += 1
+	return {"container": container, "children": {}}
+
+
+## Resolves a path through the transaction's private root and clones each container
+## only on first traversal. Cached nodes are invalidated when children are replaced
+## or erased; Array erasure invalidates all positional descendants.
+func _get_or_clone_path_node(root_node: Dictionary, path: Array) -> Dictionary:
+	var node: Dictionary = root_node
 	for segment in path:
+		var current_container: Variant = node.get("container", null)
 		var child_value: Variant = null
-		if original_cursor is Dictionary:
-			var original_dictionary: Dictionary = original_cursor
-			if not original_dictionary.has(segment):
+		var array_index: int = -1
+		if current_container is Dictionary:
+			var lookup_dictionary: Dictionary = current_container
+			if not lookup_dictionary.has(segment):
 				return {"ok": false}
-			child_value = original_dictionary[segment]
-		elif original_cursor is Array:
+			child_value = lookup_dictionary[segment]
+		elif current_container is Array:
 			if not segment is int:
 				return {"ok": false}
-			var original_array: Array = original_cursor
-			var array_index: int = int(segment)
-			if array_index < 0 or array_index >= original_array.size():
+			var lookup_array: Array = current_container
+			array_index = int(segment)
+			if array_index < 0 or array_index >= lookup_array.size():
 				return {"ok": false}
-			child_value = original_array[array_index]
+			child_value = lookup_array[array_index]
 		else:
 			return {"ok": false}
 		if not (child_value is Dictionary or child_value is Array):
 			return {"ok": false}
-		var child_copy: Variant = _clone_path_container(child_value)
-		if copied_cursor is Dictionary:
-			var copied_dictionary: Dictionary = copied_cursor
-			copied_dictionary[segment] = child_copy
-		elif copied_cursor is Array:
-			var copied_array: Array = copied_cursor
-			copied_array[int(segment)] = child_copy
-		else:
+		var children_value: Variant = node.get("children", {})
+		if not children_value is Dictionary:
 			return {"ok": false}
-		original_cursor = child_value
-		copied_cursor = child_copy
-	return {"ok": true, "root": root_copy, "target": copied_cursor}
+		var children: Dictionary = children_value
+		if children.has(segment):
+			var cached_node_value: Variant = children[segment]
+			if not cached_node_value is Dictionary:
+				return {"ok": false}
+			node = cached_node_value
+			_path_trie_cache_hit_count += 1
+		else:
+			var child_copy: Variant = _clone_path_container(child_value)
+			if not (child_copy is Dictionary or child_copy is Array):
+				return {"ok": false}
+			if current_container is Dictionary:
+				var attach_dictionary: Dictionary = current_container
+				attach_dictionary[segment] = child_copy
+			elif current_container is Array:
+				var attach_array: Array = current_container
+				attach_array[array_index] = child_copy
+			var child_node: Dictionary = _make_path_trie_node(child_copy)
+			children[segment] = child_node
+			node["children"] = children
+			node = child_node
+	return {"ok": true, "node": node, "container": node.get("container", null)}
 
 
-func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -> Dictionary:
+func _invalidate_path_trie_child(parent_node: Dictionary, segment: Variant) -> void:
+	var children_value: Variant = parent_node.get("children", {})
+	if not children_value is Dictionary:
+		return
+	var children: Dictionary = children_value
+	children.erase(segment)
+	parent_node["children"] = children
+
+
+func _clear_path_trie_children(parent_node: Dictionary) -> void:
+	parent_node["children"] = {}
+
+
+func _apply_nested_patch_operation_with_trie(trie_root: Dictionary, operation: Dictionary) -> Dictionary:
 	var operation_kind: String = str(operation.get("op", ""))
 	var path_value: Variant = operation.get("path", null)
 	if not path_value is Array:
@@ -331,40 +368,46 @@ func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -
 	if operation_kind == "append":
 		if not operation.has("value"):
 			return {"ok": false}
-		var append_path: Dictionary = _clone_container_path(root_value, path)
-		if not bool(append_path.get("ok", false)):
+		var append_result: Dictionary = _get_or_clone_path_node(trie_root, path)
+		if not bool(append_result.get("ok", false)):
 			return {"ok": false}
-		var append_target: Variant = append_path.get("target", null)
+		var append_target: Variant = append_result.get("container", null)
 		if not append_target is Array:
 			return {"ok": false}
 		var append_array: Array = append_target
 		append_array.append(_clone_mutable_container(operation["value"]))
-		return {"ok": true, "root": append_path.get("root", null)}
+		return {"ok": true}
 	if path.is_empty():
 		return {"ok": false}
 	var parent_path: Array = []
 	for path_index in range(path.size() - 1):
 		parent_path.append(path[path_index])
-	var parent_copy: Dictionary = _clone_container_path(root_value, parent_path)
-	if not bool(parent_copy.get("ok", false)):
+	var parent_result: Dictionary = _get_or_clone_path_node(trie_root, parent_path)
+	if not bool(parent_result.get("ok", false)):
 		return {"ok": false}
-	var parent_value: Variant = parent_copy.get("target", null)
+	var parent_node_value: Variant = parent_result.get("node", null)
+	if not parent_node_value is Dictionary:
+		return {"ok": false}
+	var parent_node: Dictionary = parent_node_value
+	var parent_container: Variant = parent_node.get("container", null)
 	var leaf: Variant = path[path.size() - 1]
-	if parent_value is Dictionary:
-		var parent_dictionary: Dictionary = parent_value
+	if parent_container is Dictionary:
+		var parent_dictionary: Dictionary = parent_container
 		if operation_kind == "set":
 			if not operation.has("value"):
 				return {"ok": false}
 			parent_dictionary[leaf] = _clone_mutable_container(operation["value"])
-			return {"ok": true, "root": parent_copy.get("root", null)}
+			_invalidate_path_trie_child(parent_node, leaf)
+			return {"ok": true}
 		if operation_kind == "erase":
 			if not parent_dictionary.has(leaf):
 				return {"ok": false}
 			parent_dictionary.erase(leaf)
-			return {"ok": true, "root": parent_copy.get("root", null)}
+			_invalidate_path_trie_child(parent_node, leaf)
+			return {"ok": true}
 		return {"ok": false}
-	if parent_value is Array:
-		var parent_array: Array = parent_value
+	if parent_container is Array:
+		var parent_array: Array = parent_container
 		if not leaf is int:
 			return {"ok": false}
 		var array_index: int = int(leaf)
@@ -374,11 +417,27 @@ func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -
 			if not operation.has("value"):
 				return {"ok": false}
 			parent_array[array_index] = _clone_mutable_container(operation["value"])
-			return {"ok": true, "root": parent_copy.get("root", null)}
+			_invalidate_path_trie_child(parent_node, leaf)
+			return {"ok": true}
 		if operation_kind == "erase":
 			parent_array.remove_at(array_index)
-			return {"ok": true, "root": parent_copy.get("root", null)}
+			_clear_path_trie_children(parent_node)
+			return {"ok": true}
 	return {"ok": false}
+
+
+## Compatibility wrapper for a single operation. Batch callers should use the shared trie.
+func _apply_nested_patch_operation(root_value: Variant, operation: Dictionary) -> Dictionary:
+	if not (root_value is Dictionary or root_value is Array):
+		return {"ok": false}
+	var root_copy: Variant = _clone_path_container(root_value)
+	if not (root_copy is Dictionary or root_copy is Array):
+		return {"ok": false}
+	var trie_root: Dictionary = _make_path_trie_node(root_copy)
+	var result: Dictionary = _apply_nested_patch_operation_with_trie(trie_root, operation)
+	if not bool(result.get("ok", false)):
+		return result
+	return {"ok": true, "root": root_copy}
 
 
 func _clone_mutable_container(value: Variant) -> Variant:
