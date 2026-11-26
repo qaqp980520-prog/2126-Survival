@@ -98,7 +98,8 @@ func unregister_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, no
 			probe.free()
 			return false
 		probe.call("apply_elapsed_regeneration", now)
-		next_records[stable_id] = (probe.call("to_save_dict") as Dictionary).duplicate(true)
+		var next_record: Dictionary = probe.call("to_save_dict")
+		next_records[stable_id] = next_record.duplicate(true)
 		probe.free()
 		stable_ids.append(stable_id)
 
