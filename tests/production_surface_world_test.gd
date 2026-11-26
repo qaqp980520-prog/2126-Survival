@@ -13,6 +13,9 @@ class PendingRegistryPairDirector extends Node:
 
 	func get_pending_registry_pair_recovery_report() -> Dictionary:
 		return {"recovery_required": pending, "reason": "injected_pair_recovery", "chunk_ids": ["underground/test_chunk"]}
+
+class MissingRegistryPairRecoveryApi extends Node:
+	pass
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
