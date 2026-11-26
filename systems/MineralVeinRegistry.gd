@@ -498,7 +498,7 @@ func _normalize_chunk_ids(raw_chunk_ids: Array) -> Dictionary:
 		if not (raw_chunk_id is String):
 			return {"ok": false, "error": "invalid_chunk_id_type"}
 		var chunk_id: String = raw_chunk_id
-		if chunk_id.is_empty() or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or seen.has(chunk_id):
+		if chunk_id.is_empty() or chunk_id.length() > 128 or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or chunk_id.contains("\n") or chunk_id.contains("\r") or seen.has(chunk_id):
 			return {"ok": false, "error": "invalid_or_duplicate_chunk_id"}
 		seen[chunk_id] = true
 		ids.append(chunk_id)
