@@ -26,7 +26,7 @@ The chunk-set APIs use existing stable IDs with the `<chunk_id>/vein/<local_id>`
 
 ## Transaction behavior
 
-- The snapshot scope is computed from all desired chunk IDs plus all previously managed chunk IDs before any chunk mutation.
+- The snapshot scope is computed before mutation from only planned new chunk loads plus stale chunks scheduled for unload. Already-loaded desired chunks are excluded; a no-op window transition skips snapshot creation entirely.
 - World-object restore replaces only records whose `chunk_id` is in the selected set. Unrelated records are copied from the live Registry at restore time.
 - Mineral restore replaces only records whose stable-ID prefix before `/vein/` is in the selected set. Unrelated unloaded records are retained; unrelated loaded records are refreshed from their current live node before the merged Registry is validated.
 - Both Registry APIs validate the complete merged payload before their commit point.
