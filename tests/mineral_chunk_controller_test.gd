@@ -17,6 +17,14 @@ class FakeCornerManager extends Node3D:
 	func get_blocked_corner_reports() -> Array[Dictionary]:
 		return reports.duplicate(true)
 
+class FaultInjectingTerrainPatch extends "res://systems/SurfaceTerrainPatch.gd":
+	var invalid_profile: bool = false
+
+	func get_edge_ramp_profile() -> Dictionary:
+		if invalid_profile:
+			return {"patch_size": 0.0}
+		return super.get_edge_ramp_profile()
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -199,7 +207,7 @@ func _test_failed_unload_preserves_terrain_adjacency() -> void:
 
 	# Corrupt only the remaining patch's live state. Binder rejects it during preflight,
 	# before clearing either side of the existing reciprocal edge.
-	patch_b.set("_revision", TerrainPatchScript.MAX_REVISION + 1)
+	patch_b.set("invalid_profile", true)
 	assert(not bool(controller.call("unload_chunk", "terrain/chunk-a", now)), "Unload rejects a candidate terrain set that fails Binder preflight")
 	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-a")), "Rejected unload retains the departing chunk ownership")
 	assert(controller.call("get_chunk_root", "terrain/chunk-a") == chunk_a, "Rejected unload retains the exact original chunk root")
@@ -214,7 +222,7 @@ func _test_failed_unload_preserves_terrain_adjacency() -> void:
 
 	assert(not bool(controller.call("unload_chunk", "terrain/chunk-b", now)), "Further unloads fail closed while the remaining patch is invalid")
 	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-b")), "Fail-closed recovery retains the second chunk")
-	patch_b.set("_revision", 0)
+	patch_b.set("invalid_profile", false)
 	assert(bool(controller.call("refresh_terrain_adjacency")), "A successful full Binder refresh clears the recovery barrier")
 	assert(not bool(controller.call("has_pending_terrain_adjacency_recovery")), "Successful refresh clears the recovery-required state")
 	assert(bool(controller.call("unload_chunk", "terrain/chunk-a", now)), "Unload succeeds after terrain adjacency recovery")
@@ -428,7 +436,7 @@ func _new_terrain_patch_chunk(chunk_name: String, world_position: Vector3, heigh
 	var chunk := Node3D.new()
 	chunk.name = chunk_name
 	chunk.position = world_position
-	var patch: Node3D = TerrainPatchScript.new()
+	var patch: Node3D = FaultInjectingTerrainPatch.new()
 	patch.name = "TerrainPatch"
 	patch.set("_height_level", height_level)
 	chunk.add_child(patch)
