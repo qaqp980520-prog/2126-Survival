@@ -151,9 +151,12 @@ func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> 
 		var live_state: Variant = live_crate.call("get_world_object_state")
 		if live_state is Dictionary:
 			var changed_state: Dictionary = live_state.duplicate(true)
-			changed_state["opened"] = not bool(changed_state.get("opened", false))
+			var was_opened: bool = bool(changed_state.get("opened", false))
+			changed_state["opened"] = not was_opened
 			if changed_state.has("loot_remaining"):
-				changed_state["loot_remaining"] = maxi(0, int(changed_state.get("loot_remaining", 0)) - 1)
+				# WorldObjectStatefulProp.MAX_LOOT is 2: a closed crate is full;
+				# an opened crate has consumed at least one unit.
+				changed_state["loot_remaining"] = 2 if was_opened else 1
 			_expect(bool(live_crate.call("apply_world_object_state", changed_state)), "save-gate fixture creates an unsaved live object-state change")
 		else:
 			_expect(false, "save-gate fixture reads a valid live object-state dictionary")
