@@ -45,12 +45,46 @@ func _run() -> void:
 	if mineral_registry != null and crop_registry != null and bridge != null:
 		var barrier_payload: Dictionary = world.call("serialize_world_state")
 		var barrier_file_before: String = FileAccess.get_file_as_string(SAVE_PATH)
+		var barrier_backup_path: String = SAVE_PATH + ".bak"
+		var barrier_corrupt_path: String = SAVE_PATH + ".corrupt"
+		for barrier_path in [barrier_backup_path, barrier_corrupt_path]:
+			if FileAccess.file_exists(barrier_path):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(barrier_path))
+		var barrier_backup_fixture := FileAccess.open(barrier_backup_path, FileAccess.WRITE)
+		_expect(barrier_backup_fixture != null, "prepare backup sentinel before recovery barrier")
+		if barrier_backup_fixture != null:
+			barrier_backup_fixture.store_string("{\"sentinel\":\"backup-before-recovery\"}")
+			barrier_backup_fixture.close()
+		var barrier_corrupt_fixture := FileAccess.open(barrier_corrupt_path, FileAccess.WRITE)
+		_expect(barrier_corrupt_fixture != null, "prepare corrupt-file sentinel before recovery barrier")
+		if barrier_corrupt_fixture != null:
+			barrier_corrupt_fixture.store_string("{not-json-before-recovery")
+			barrier_corrupt_fixture.close()
+		var barrier_backup_before: String = FileAccess.get_file_as_string(barrier_backup_path)
+		var barrier_corrupt_before: String = FileAccess.get_file_as_string(barrier_corrupt_path)
 		var barrier_inventory_before: Dictionary = bridge.call("serialize_inventory")
 		var barrier_minerals_before: Dictionary = mineral_registry.call("to_save_dict")
 		var barrier_crops_before: Dictionary = crop_registry.call("to_save_dict")
 		var barrier_position_before: Vector3 = player.global_position
 		var barrier_level_before: String = str(world.get("current_level"))
 		var barrier_backrooms_before: bool = bool(world.get("in_backrooms"))
+		var original_registry: Node = mineral_registry
+		world.set("mineral_vein_registry", null)
+		var missing_registry_report: Dictionary = world.call("_get_world_save_recovery_barrier_report")
+		_expect(str(missing_registry_report.get("reason", "")) == "mineral_registry_unavailable", "missing mineral registry fails closed")
+		_expect(world.call("serialize_world_state").is_empty(), "missing mineral registry blocks serialization")
+		_expect(not bool(world.call("save_game")), "missing mineral registry blocks file save")
+		_expect(not bool(world.call("load_game")), "missing mineral registry blocks file load")
+		world.set("mineral_vein_registry", original_registry)
+		var unsupported_registry := Node.new()
+		world.set("mineral_vein_registry", unsupported_registry)
+		var missing_api_report: Dictionary = world.call("_get_world_save_recovery_barrier_report")
+		_expect(str(missing_api_report.get("reason", "")) == "mineral_registry_recovery_api_unavailable", "missing recovery API fails closed")
+		_expect(world.call("serialize_world_state").is_empty(), "missing recovery API blocks serialization")
+		_expect(not bool(world.call("save_game")), "missing recovery API blocks file save")
+		_expect(not bool(world.call("load_game")), "missing recovery API blocks file load")
+		world.set("mineral_vein_registry", original_registry)
+		unsupported_registry.free()
 		var pending_recovery_before: Variant = mineral_registry.get("_pending_atomic_registration_recovery")
 		mineral_registry.set("_pending_atomic_registration_recovery", {"fixture": "unresolved_atomic_registration"})
 		_expect(bool(mineral_registry.call("has_pending_atomic_registration_recovery")), "inject unresolved mineral registration recovery")
@@ -59,6 +93,8 @@ func _run() -> void:
 		_expect(not bool(world.call("load_world_state_from_dictionary", barrier_payload)), "pending mineral recovery blocks dictionary restore")
 		_expect(not bool(world.call("load_game")), "pending mineral recovery blocks the direct file-load entry point")
 		_expect(FileAccess.get_file_as_string(SAVE_PATH) == barrier_file_before, "blocked save/load preserves primary save bytes")
+		_expect(FileAccess.get_file_as_string(barrier_backup_path) == barrier_backup_before, "blocked save/load preserves backup bytes")
+		_expect(FileAccess.get_file_as_string(barrier_corrupt_path) == barrier_corrupt_before, "blocked save/load preserves corrupt diagnostic bytes")
 		_expect(bridge.call("serialize_inventory") == barrier_inventory_before, "blocked restore preserves inventory")
 		_expect(mineral_registry.call("to_save_dict") == barrier_minerals_before, "blocked restore preserves mineral records")
 		_expect(crop_registry.call("to_save_dict") == barrier_crops_before, "blocked restore preserves crop records")
