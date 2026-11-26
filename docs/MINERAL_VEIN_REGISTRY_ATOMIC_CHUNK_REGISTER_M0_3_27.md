@@ -16,6 +16,7 @@ Close the load-side counterpart to M0.3.26. A chunk containing multiple mineral 
 - Change `MineralChunkLifecycleAdapter.load_chunk()` to require and call the registry batch API; remove sequential registration and best-effort per-vein rollback.
 - Update Controller and Adapter capability checks.
 - Add adapter and controller regressions for a later saved-record mineral mismatch after an earlier valid participant. Both tests verify unchanged live-node state, unchanged registry payload, no published chunk ownership, then repair the record and retry the same nodes successfully. The Adapter suite also injects an unexpected live-apply failure after mutation and verifies the first and rejecting nodes are both restored before a successful retry.
+- Extend the real MineralGridStreamingDirector integration test with a registration failure after an earlier new chunk loaded. Assert the report phase, candidate cleanup, rollback_complete, newly-loaded rollback, exact prior Director and Controller active-window IDs, unchanged Registry payload, and unchanged target vein states.
 
 ## Files
 
@@ -24,6 +25,7 @@ Close the load-side counterpart to M0.3.26. A chunk containing multiple mineral 
 - `systems/MineralChunkController.gd`
 - `tests/mineral_chunk_lifecycle_adapter_test.gd`
 - `tests/mineral_chunk_controller_test.gd`
+- `tests/mineral_grid_streaming_director_test.gd`
 - `docs/MINERAL_VEIN_REGISTRY_ATOMIC_CHUNK_REGISTER_M0_3_27.md`
 
 ## Dependencies and import
@@ -34,6 +36,7 @@ Godot 4.3 project; existing `MineralMiningNode`, `MineralCatalog`, `MineralVeinR
 
 - Focused Adapter lifecycle test: `godot --headless --path . --script res://tests/mineral_chunk_lifecycle_adapter_test.gd` (saved-record preflight rejection, duplicate-node rejection, and unexpected live-apply rollback).
 - Focused Controller integration test: `godot --headless --path . --script res://tests/mineral_chunk_controller_test.gd`.
+- Focused Director integration test: `godot --headless --path . --script res://tests/mineral_grid_streaming_director_test.gd` (prior active-window restoration after a failed atomic mineral registration).
 - Registry chunk-stream persistence test remains part of the full Godot 4.3 validation workflow.
 - Exact-head focused and Full Compatibility Gate results will be recorded after GitHub Actions completes. No result is claimed before completion.
 - Local Godot executable is unavailable; GitHub Actions Godot 4.3 headless is the executable validation environment.
