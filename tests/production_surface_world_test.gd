@@ -215,6 +215,10 @@ func _test_save_path_symlink_guards() -> void:
 	if user_directory == null:
 		return
 	var target_directory: String = "user://run451_symlink_target"
+	if user_directory.is_link("run451_symlink_directory"):
+		user_directory.remove("run451_symlink_directory")
+	if user_directory.is_link("run451_symlink_file.json"):
+		user_directory.remove("run451_symlink_file.json")
 	var target_directory_absolute: String = ProjectSettings.globalize_path(target_directory)
 	var target_directory_error: Error = DirAccess.make_dir_recursive_absolute(target_directory_absolute)
 	_expect(target_directory_error == OK or DirAccess.dir_exists_absolute(target_directory_absolute), "create a symlink test target directory")
