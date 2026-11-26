@@ -220,7 +220,7 @@ func _test_controller_rollback_state_propagates_to_director_report() -> void:
 	var report: Dictionary = director.get_last_sync_report()
 	var details: Dictionary = report.get("details", {})
 	assert(str(report.get("phase", "")) == "load_registration")
-	assert(bool(details.get("candidate_cleanup_ok", false)), "The rejected detached candidate was cleaned up")
+	assert(bool(details.get("candidate_cleanup_ok", false)), "The rejected detached candidate was safely retained for recovery")
 	assert(bool(details.get("new_loads_rollback_ok", false)), "No earlier new chunks needed rollback in this radius-zero move")
 	assert(bool(details.get("controller_load_recovery_required", false)), "The Director surfaces the Controller recovery barrier")
 	assert(not bool(details.get("controller_load_rollback_complete", true)), "The Controller's incomplete rollback is propagated")
