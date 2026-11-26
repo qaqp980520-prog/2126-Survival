@@ -241,6 +241,8 @@ func _exit_tree() -> void:
 	for raw_request_id in request_ids:
 		var request_id: int = int(raw_request_id)
 		_release_async_staged_roots(request_id, _async_staged_roots_by_request.get(request_id, {}))
+	if not _controller_has_pending_load_recovery():
+		_release_pending_recovery_roots()
 
 func request_sync_to_world_position_async(world_position: Vector3, now_unix: int = -1, max_staged_per_frame: int = 1) -> int:
 	if not _controller_has_pending_load_recovery():
@@ -795,18 +797,18 @@ func _free_staged_roots(staged_roots: Dictionary) -> void:
 ## This is intended for recovery after a previous sync reported an incomplete rollback.
 ## Unknown ID formats are rejected before changing the director's current managed map.
 func recover_to_world_position(world_position: Vector3, now_unix: int = -1) -> bool:
-	if _controller_has_pending_load_recovery():
-		if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("recover_failed_chunk_load") or not bool(chunk_controller.call("recover_failed_chunk_load")):
-			_set_sync_report(false, "controller_recovery", "Controller chunk-load recovery did not complete; the previous active window remains blocked.", false, {"controller_load_report": _get_controller_load_report()})
-			return false
-	if not _controller_has_pending_load_recovery():
-		_release_pending_recovery_roots()
 	if not _is_finite_world_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position must contain only finite coordinates.", false)
 		return false
 	if not _is_safe_grid_position(world_position):
 		_set_sync_report(false, "recovery_validation", "World position is outside supported grid-coordinate bounds.", false)
 		return false
+	if _controller_has_pending_load_recovery():
+		if chunk_controller == null or not is_instance_valid(chunk_controller) or not chunk_controller.has_method("recover_failed_chunk_load") or not bool(chunk_controller.call("recover_failed_chunk_load")):
+			_set_sync_report(false, "controller_recovery", "Controller chunk-load recovery did not complete; the previous active window remains blocked.", false, {"controller_load_report": _get_controller_load_report()})
+			return false
+	if not _controller_has_pending_load_recovery():
+		_release_pending_recovery_roots()
 	if not _controller_ready_for_sync() or not chunk_controller.has_method("get_loaded_chunk_ids"):
 		_set_sync_report(false, "recovery_validation", "Controller must be alive, inside the scene tree and not queued for deletion, and must provide its actual loaded chunk IDs.", false)
 		return false
