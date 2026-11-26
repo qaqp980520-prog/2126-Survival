@@ -315,6 +315,24 @@ func _test_durable_save_load(now_unix: int) -> void:
 	numeric_quick_use["schema_version"] = float(numeric_quick_use.get("schema_version", 1))
 	numeric_quick_use["selected_slot"] = float(numeric_quick_use.get("selected_slot", 0))
 	_expect(bool(quick_use_model.call("validate_save_dict", numeric_quick_use)), "quick-use validator accepts integer-valued JSON schema and slot numbers")
+	var json_numeric_payload: Dictionary = world.call("serialize_stream_state")
+	json_numeric_payload["schema_version"] = float(json_numeric_payload.get("schema_version", 1))
+	json_numeric_payload["mine_depth"] = float(json_numeric_payload.get("mine_depth", 0))
+	_expect(bool(world.call("_validate_world_save_payload", json_numeric_payload)), "SurfaceWorld accepts whole-valued JSON schema and mine-depth numbers")
+	var fractional_schema_payload: Dictionary = json_numeric_payload.duplicate(true)
+	fractional_schema_payload["schema_version"] = 1.5
+	_expect(not bool(world.call("_validate_world_save_payload", fractional_schema_payload)), "SurfaceWorld rejects fractional stream schema values")
+	var fractional_depth_payload: Dictionary = json_numeric_payload.duplicate(true)
+	fractional_depth_payload["mine_depth"] = 0.5
+	_expect(not bool(world.call("_validate_world_save_payload", fractional_depth_payload)), "SurfaceWorld rejects fractional mine-depth values")
+	var numeric_path: String = "user://production_surface_world_json_numeric_test.json"
+	_cleanup_save_test_files(numeric_path)
+	var numeric_envelope: Dictionary = SaveStoreScript.build_envelope(json_numeric_payload, now_unix)
+	_expect(_write_test_text(numeric_path, SaveStoreScript.encode_envelope(numeric_envelope)), "write a JSON-decoded numeric compatibility fixture")
+	var numeric_file_report: Dictionary = SaveStoreScript.read_valid_file(numeric_path, Callable(world, "_validate_world_save_payload"))
+	_expect(bool(numeric_file_report.get("ok", false)), "file reader validates whole-valued JSON numbers after parsing")
+	_cleanup_save_test_files(numeric_path)
+
 	var order_a: Dictionary = {}
 	order_a["alpha"] = 1
 	order_a["beta"] = 2
@@ -503,10 +521,13 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var controller: Node = world.get("chunk_controller") as Node
 	var previous_controller_recovery: Dictionary = controller.get("_pending_chunk_load_recovery")
 	controller.set("_pending_chunk_load_recovery", {"test_fixture": true})
+	_expect(bool(controller.call("has_pending_chunk_load_recovery")), "Controller reports a retained recovery payload as pending")
+	_expect(world.call("serialize_stream_state").is_empty(), "pending Controller recovery blocks new world snapshots")
 	var controller_barrier_bytes: String = FileAccess.get_file_as_string(blocked_path)
 	_expect(not bool(world.call("save_game", blocked_path)), "pending Controller lifecycle recovery blocks disk save")
 	_expect(not bool(world.call("load_game", blocked_path)), "pending Controller lifecycle recovery blocks disk load")
 	_expect(not bool(world.call("restore_stream_state", payload_a, now_unix + 10)), "pending Controller lifecycle recovery blocks direct restore")
+	_expect(str(world.call("get_last_restore_report").get("phase", "")) == "registry_pair_recovery_barrier", "Controller recovery blocks direct restore before participant mutation")
 	_expect(FileAccess.get_file_as_string(blocked_path) == controller_barrier_bytes, "Controller recovery barrier preserves existing save bytes")
 	controller.set("_pending_chunk_load_recovery", previous_controller_recovery)
 
