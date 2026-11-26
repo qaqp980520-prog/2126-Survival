@@ -86,6 +86,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_controller_unload_recovery_barrier_propagates_to_director_report()
 	await process_frame
+	await _test_async_controller_unload_recovery_barrier_propagates_to_director_report()
+	await process_frame
 	print("Mineral grid streaming director tests passed.")
 	quit(0)
 
@@ -292,6 +294,56 @@ func _test_controller_unload_recovery_barrier_propagates_to_director_report() ->
 	assert(director.get_managed_chunk_ids().size() == 2 and controller.get_loaded_chunk_ids().size() == 2, "The report preserves the actual partial window for explicit recovery")
 
 	assert(director.recover_to_world_position(Vector3(21, 0, 1), 4002), "Director recovery clears the Controller barrier, reconciles actual ownership, and retries the requested window")
+	assert(int(controller.get("unload_attempt_count")) == unload_attempts_before + 2, "Only the post-recovery stale unload is attempted")
+	assert(director.get_managed_chunk_ids().size() == 1)
+	assert(director.get_managed_chunk_ids() == controller.get_loaded_chunk_ids())
+	assert(controller.is_chunk_loaded("surface/chunk_2_0"))
+	assert(not controller.is_chunk_loaded("surface/chunk_0_0"))
+	director.queue_free()
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
+func _test_async_controller_unload_recovery_barrier_propagates_to_director_report() -> void:
+	var registry: Node = Registry.new()
+	var controller: Node3D = RecoveryReportingController.new()
+	var director: Node = Director.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	root.add_child(director)
+	await process_frame
+	assert(controller.bind_registry(registry))
+	director.chunk_size_x = 10.0
+	director.chunk_size_z = 10.0
+	director.load_radius = 0
+	assert(director.bind_controller(controller))
+	assert(director.bind_chunk_factory(Callable(self, "_make_chunk")))
+
+	var initial_request_id: int = director.request_sync_to_world_position_async(Vector3(1, 0, 1), 5000, 1)
+	assert(initial_request_id >= 0, "Director accepts the initial async window request")
+	var initial_completion: Array = await director.async_sync_completed
+	assert(int(initial_completion[0]) == initial_request_id)
+	var initial_report: Dictionary = initial_completion[1]
+	assert(bool(initial_report.get("success", false)), "Initial async window completes")
+
+	controller.set("fail_next_unload_with_recovery", true)
+	var unload_attempts_before: int = int(controller.get("unload_attempt_count"))
+	var request_id: int = director.request_sync_to_world_position_async(Vector3(21, 0, 1), 5001, 1)
+	assert(request_id >= 0, "Director accepts the async window shift")
+	var completion: Array = await director.async_sync_completed
+	assert(int(completion[0]) == request_id)
+	var report: Dictionary = completion[1]
+	var details: Dictionary = report.get("details", {})
+	assert(not bool(report.get("success", true)), "Async stale unload reports the Controller participant failure")
+	assert(str(report.get("phase", "")) == "stale_unload")
+	assert(not bool(report.get("rollback_complete", true)))
+	assert(bool(details.get("controller_load_recovery_required", false)))
+	assert(bool(details.get("new_loads_rollback_deferred", false)))
+	assert(bool(details.get("stale_restore_deferred", false)))
+	assert(int(controller.get("unload_attempt_count")) == unload_attempts_before + 1, "Async Director does not issue compensating unloads while Controller recovery is pending")
+	assert(director.get_managed_chunk_ids().size() == 2 and controller.get_loaded_chunk_ids().size() == 2)
+
+	assert(director.recover_to_world_position(Vector3(21, 0, 1), 5002), "Explicit recovery clears the Controller barrier and reconciles the async partial window")
 	assert(int(controller.get("unload_attempt_count")) == unload_attempts_before + 2, "Only the post-recovery stale unload is attempted")
 	assert(director.get_managed_chunk_ids().size() == 1)
 	assert(director.get_managed_chunk_ids() == controller.get_loaded_chunk_ids())
