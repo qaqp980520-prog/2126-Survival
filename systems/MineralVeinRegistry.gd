@@ -65,6 +65,54 @@ func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: in
 	_veins.erase(key)
 	return true
 
+## Atomically unregisters every vein owned by one chunk. All nodes and save
+## records are validated and their elapsed-regeneration results are prepared on
+## detached probes before the live registry is changed.
+func unregister_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int = -1) -> bool:
+	if chunk_id.is_empty() or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or veins_by_local_id.is_empty():
+		return false
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	if now <= 0:
+		return false
+
+	var stable_ids: Array[String] = []
+	var next_records: Dictionary = {}
+	for raw_local_id in veins_by_local_id.keys():
+		if not (raw_local_id is String):
+			return false
+		var local_id: String = raw_local_id
+		if local_id.is_empty() or local_id != local_id.strip_edges() or local_id.contains("//"):
+			return false
+		var stable_id: String = chunk_id + "/vein/" + local_id
+		var expected_vein: Variant = veins_by_local_id[raw_local_id]
+		if not _veins.has(stable_id) or not is_instance_valid(_veins[stable_id]) or _veins[stable_id] != expected_vein:
+			return false
+		var vein: Node = _veins[stable_id] as Node
+		var mineral_id: String = str(vein.get("mineral_id"))
+		if not (vein is MiningNode) or not Catalog.has_mineral(mineral_id):
+			return false
+		var current_record: Dictionary = vein.call("to_save_dict")
+		var probe: Node = MiningNode.new()
+		probe.set("mineral_id", mineral_id)
+		if not bool(probe.call("load_save_dict", current_record, now, false)):
+			probe.free()
+			return false
+		probe.call("apply_elapsed_regeneration", now)
+		next_records[stable_id] = (probe.call("to_save_dict") as Dictionary).duplicate(true)
+		probe.free()
+		stable_ids.append(stable_id)
+
+	if stable_ids.size() != veins_by_local_id.size():
+		return false
+
+	# Commit point: every participant is valid and every future record is ready.
+	# No live vein or registry entry was changed during preparation.
+	for stable_id in stable_ids:
+		_saved_records[stable_id] = next_records[stable_id]
+	for stable_id in stable_ids:
+		_veins.erase(stable_id)
+	return true
+
 func get_registered_ids() -> PackedStringArray:
 	var ids := PackedStringArray()
 	for key in _veins.keys():
