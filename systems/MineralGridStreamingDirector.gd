@@ -981,7 +981,7 @@ func _retain_pending_recovery_root(chunk_id: String, candidate: Variant) -> bool
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or not is_instance_valid(candidate) or not (candidate is Node3D):
 		return false
 	var root: Node3D = candidate as Node3D
-	if root.is_queued_for_deletion() or root.get_parent() != null:
+	if root.is_queued_for_deletion() or (root.get_parent() != null and root.get_parent() != chunk_controller):
 		return false
 	_pending_recovery_roots[chunk_id] = {"root": root, "controller": chunk_controller}
 	return true
@@ -999,6 +999,8 @@ func _release_pending_recovery_roots() -> int:
 		if not is_instance_valid(root):
 			_pending_recovery_roots.erase(raw_id)
 			continue
+		if root.get_parent() == owner:
+			owner.remove_child(root)
 		if root.get_parent() == null and not root.is_queued_for_deletion():
 			root.free()
 			_pending_recovery_roots.erase(raw_id)
