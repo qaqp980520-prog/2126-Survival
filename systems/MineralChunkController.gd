@@ -76,9 +76,20 @@ func get_last_chunk_load_report() -> Dictionary:
 	return _last_chunk_load_report.duplicate(true)
 
 func has_pending_chunk_load_recovery() -> bool:
-	return _chunk_load_recovery_required
+	return (
+		_chunk_load_recovery_required
+		or (
+			registry != null
+			and is_instance_valid(registry)
+			and registry.has_method("has_pending_atomic_registration_recovery")
+			and bool(registry.call("has_pending_atomic_registration_recovery"))
+		)
+	)
 
 func recover_failed_chunk_load() -> bool:
+	if not _chunk_load_recovery_required and registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
 	if not _chunk_load_recovery_required:
 		return true
 	var pending: Dictionary = _pending_chunk_load_recovery
