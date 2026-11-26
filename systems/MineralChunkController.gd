@@ -30,6 +30,8 @@ func bind_registry(candidate: Node) -> bool:
 	for method_name in ["register_vein", "register_veins_atomic", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
+	if _chunk_load_recovery_required and registry != candidate:
+		return false
 	if not _chunk_roots.is_empty() and registry != candidate:
 		return false
 	if adapter == null:
@@ -48,6 +50,8 @@ func bind_crop_controller(candidate: Node) -> bool:
 	for method_name in ["plant_crop", "get_crop", "water_crop", "advance_crop", "advance_crops_to_time", "harvest_crop", "remove_crop", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
+	if _chunk_load_recovery_required and crop_controller != candidate:
+		return false
 	if not _chunk_roots.is_empty() and crop_controller != candidate:
 		return false
 	crop_controller = candidate
@@ -59,6 +63,8 @@ func bind_object_state_registry(candidate: Node) -> bool:
 	for method_name in ["get_object_state", "set_object_state", "to_save_dict", "validate_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
+	if _chunk_load_recovery_required and object_state_registry != candidate:
+		return false
 	if not _chunk_roots.is_empty() and object_state_registry != candidate:
 		return false
 	object_state_registry = candidate
@@ -186,7 +192,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		if not bool(catch_up.get("ok", false)):
 			var crop_rollback_ok: bool = _restore_crop_snapshot(crop_snapshot, crops)
 			if not crop_rollback_ok:
-				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, {}, false)
+				_queue_chunk_load_recovery(crop_snapshot, crops, {}, {}, false)
 			_set_chunk_load_report(false, "crop_catch_up", str(catch_up.get("reason", "catch_up_failed")), crop_rollback_ok, {"crop_registry_rollback_ok": crop_rollback_ok})
 			return false
 	for local_path in crops.keys():
@@ -228,7 +234,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var world_registry_rollback_ok: bool = bool(object_rollback.get("registry_ok", false))
 		var rollback_complete: bool = world_live_rollback_ok and world_registry_rollback_ok and crop_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, {}, false)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, false)
 		_set_chunk_load_report(false, "world_object_restore", str(object_restore_result.get("error", "object_restore_failed")), rollback_complete, {
 			"world_object_live_nodes_ok": world_live_rollback_ok,
 			"world_object_registry_ok": world_registry_rollback_ok,
@@ -251,7 +257,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		var terrain_rollback_ok: bool = bool(terrain_restore.get("ok", false))
 		var rollback_complete: bool = bool(object_rollback.get("ok", false)) and crop_rollback_ok and terrain_rollback_ok
 		if not rollback_complete:
-			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, {}, true)
+			_queue_chunk_load_recovery(crop_snapshot, crops, object_registry_snapshot, initial_object_states, true)
 		_set_chunk_load_report(false, "terrain_adjacency", str(adjacency_result.get("error", "terrain_rebind_failed")), rollback_complete, {
 			"world_object_live_nodes_ok": bool(object_rollback.get("live_nodes_ok", false)),
 			"world_object_registry_ok": bool(object_rollback.get("registry_ok", false)),
@@ -746,7 +752,6 @@ func _queue_chunk_load_recovery(
 	crop_plots: Dictionary,
 	object_registry_snapshot: Dictionary,
 	initial_object_states: Dictionary,
-	_unused_details: Dictionary,
 	refresh_terrain: bool
 ) -> void:
 	_chunk_load_recovery_required = true
