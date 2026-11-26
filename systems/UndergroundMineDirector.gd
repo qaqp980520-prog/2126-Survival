@@ -327,7 +327,6 @@ func _rollback_transaction(new_ids: Array[String], unloaded: Array[Dictionary], 
 	return rollback_complete
 
 func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
-func _rollback_new_loads(ids: Array[String], now_unix: int) -> bool:
 	var success := true
 	for i in range(ids.size() - 1, -1, -1):
 		var id: String = ids[i]
@@ -352,7 +351,6 @@ func _restore_unloaded_chunks(entries: Array[Dictionary], now_unix: int) -> bool
 			return false
 	return true
 
-func _actual_managed_map() -> Dictionary:
 func _actual_managed_map() -> Dictionary:
 	var result: Dictionary = {}
 	if chunk_controller == null or not is_instance_valid(chunk_controller):
