@@ -306,6 +306,14 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(world.player.global_position.is_equal_approx(before_invalid_position), "invalid envelopes preserve player position")
 	_expect(world.inventory_bridge.call("serialize_inventory") == before_invalid_inventory, "invalid envelopes preserve inventory")
 	_expect(FileAccess.get_file_as_string(invalid_path) == invalid_primary_bytes and FileAccess.get_file_as_string(invalid_path + ".bak") == invalid_backup_bytes, "invalid envelopes are preserved byte-for-byte for diagnosis")
+	var invalid_stream_payload: Dictionary = world.call("serialize_stream_state")
+	invalid_stream_payload["minerals"] = {"schema_version": 1, "veins": []}
+	var before_invalid_stream_position: Vector3 = world.player.global_position
+	var before_invalid_stream_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+	_expect(not bool(world.call("restore_stream_state", invalid_stream_payload, now_unix + 9)), "invalid mineral payload is rejected by complete restore preflight")
+	var invalid_stream_report: Dictionary = world.call("get_last_restore_report")
+	_expect(str(invalid_stream_report.get("phase", "")) == "payload_validation", "invalid restore reports preflight rejection before streaming")
+	_expect(world.player.global_position.is_equal_approx(before_invalid_stream_position) and world.chunk_controller.get_loaded_chunk_ids() == before_invalid_stream_ids, "invalid restore preflight preserves player position and active chunks")
 
 	_expect(bool(world.call("save_game", blocked_path)), "recovery-barrier test prepares an existing valid disk save")
 	var blocked_primary_before: String = FileAccess.get_file_as_string(blocked_path)
@@ -338,6 +346,19 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(not bool(failed_promotion_report.get("recovery_required", false)), "previous primary is restored after injected promotion failure")
 	_expect(FileAccess.get_file_as_string(promotion_path) == last_valid_primary, "failed promotion preserves the last valid primary byte-for-byte")
 	_expect(bool(SaveStoreScript.read_valid_file(promotion_path, Callable(world, "_validate_world_save_payload")).get("ok", false)), "last valid primary remains fully readable after failed promotion")
+	var interrupted_candidate: Dictionary = world.call("serialize_stream_state")
+	var interrupted_envelope: Dictionary = SaveStoreScript.build_envelope(interrupted_candidate, now_unix + 11)
+	var interrupted_report: Dictionary = SaveStoreScript.write_atomic(
+		promotion_path,
+		SaveStoreScript.encode_envelope(interrupted_envelope),
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_primary_and_rollback")
+	)
+	_expect(not bool(interrupted_report.get("ok", false)) and bool(interrupted_report.get("recovery_required", false)), "injected promotion and rollback failure leaves an explicit recovery requirement")
+	_expect(not FileAccess.file_exists(promotion_path) and FileAccess.file_exists(promotion_path + ".previous"), "interrupted promotion retains the staged previous primary")
+	var recovered_file_report: Dictionary = SaveStoreScript.recover_interrupted_write(promotion_path, Callable(world, "_validate_world_save_payload"))
+	_expect(bool(recovered_file_report.get("ok", false)), "interrupted promotion can be recovered from its validated previous primary")
+	_expect(FileAccess.get_file_as_string(promotion_path) == last_valid_primary, "interrupted promotion recovery restores the last valid primary byte-for-byte")
 	_promotion_fail_path = ""
 
 	_cleanup_save_test_files(path)
@@ -397,6 +418,13 @@ func _cleanup_save_test_files(path: String) -> void:
 	for filename in directory.get_files():
 		if filename.begins_with(prefix):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + filename))
+
+func _rename_fail_primary_and_rollback(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
+	if destination_absolute == primary_absolute and (source_absolute.ends_with(".tmp") or source_absolute.ends_with(".previous")):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
 
 func _rename_fail_primary_promotion(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
