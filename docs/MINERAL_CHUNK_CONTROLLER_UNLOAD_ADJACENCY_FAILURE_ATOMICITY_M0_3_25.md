@@ -15,7 +15,7 @@ A second failure mode was coupled to this: `_rebind_terrain_patches()` cleared e
 - If Binder preflight or collider synchronization fails, restore the patch map and object-registry snapshot, attempt a full adjacency refresh, and return `false`.
 - Unregister minerals and release the root only after adjacency succeeds. If mineral unload fails, restore the map and object snapshot, then rebuild the original adjacency.
 - Add `has_pending_terrain_adjacency_recovery()` and a fail-closed readiness gate. Further loads/unloads are rejected while recovery is pending; a successful explicit full refresh clears the barrier.
-- Binder results now report `live_state_mutated`. Preflight failures explicitly report `false`; failures after live edge mutation report `true`. The Controller only clears published colliders/descriptors when the Binder says live state was mutated.
+- Binder results now report `live_state_mutated`. Preflight failures explicitly report `false`; failures after live edge mutation report `true`. The Controller only clears published colliders/descriptors when the Binder says live state was mutated and skips full refresh for a non-mutating preflight rejection.
 
 ## Files
 
