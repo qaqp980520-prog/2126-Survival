@@ -91,6 +91,8 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 			return false
 		if not vein.has_method("can_register") or not bool(vein.call("can_register")):
 			return false
+		if not vein.has_method("begin_chunk_load_restore") or not vein.has_method("end_chunk_load_restore") or not vein.has_method("is_chunk_load_restore_pending") or bool(vein.call("is_chunk_load_restore_pending")):
+			return false
 	if not _collect_crop_plots(chunk_root, str(chunk_root.name), crops):
 		return false
 	if not crops.is_empty() and crop_controller == null:
@@ -151,9 +153,15 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 						plot_node.call("refresh")
 			return false
 
+	# Defer MineralMiningNode._ready() regeneration until the Registry transaction
+	# has prepared every participant at the caller-supplied timestamp.
+	for vein_value in veins.values():
+		var vein_node: Node = vein_value as Node
+		vein_node.call("begin_chunk_load_restore")
 	add_child(chunk_root)
 	if not world_objects.is_empty() and not _restore_world_object_nodes(chunk_id, world_objects, object_registry_snapshot, initial_object_states):
 		remove_child(chunk_root)
+		_end_chunk_load_restore(veins)
 		if not crop_snapshot.is_empty():
 			crop_controller.call("restore_save_dict", crop_snapshot)
 			for plot_value in crops.values():
@@ -168,6 +176,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 	var adjacency_result: Dictionary = _rebind_terrain_patches(all_terrain_patches, chunk_id, world_objects)
 	if not bool(adjacency_result.get("ok", false)):
 		remove_child(chunk_root)
+		_end_chunk_load_restore(veins)
 		if not world_objects.is_empty():
 			_rollback_world_object_restore(initial_object_states, object_registry_snapshot)
 		if not crop_snapshot.is_empty():
@@ -182,6 +191,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		# A failed registration must not consume the caller's scene. Detach it so the
 		# generator can inspect, repair, or retry the same root without reconstructing it.
 		remove_child(chunk_root)
+		_end_chunk_load_restore(veins)
 		if not world_objects.is_empty():
 			_rollback_world_object_restore(initial_object_states, object_registry_snapshot)
 		if not crop_snapshot.is_empty():
@@ -195,6 +205,7 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 		_rebind_terrain_patches(existing_terrain_patches)
 		return false
 
+	_end_chunk_load_restore(veins)
 	_chunk_roots[chunk_id] = chunk_root
 	_chunk_veins[chunk_id] = veins
 	_chunk_crops[chunk_id] = crops
@@ -209,6 +220,12 @@ func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> boo
 			if not stateful_node.is_connected("terrain_state_changed", callback):
 				stateful_node.connect("terrain_state_changed", callback)
 	return true
+
+func _end_chunk_load_restore(veins: Dictionary) -> void:
+	for vein_value in veins.values():
+		var vein_node: Node = vein_value as Node
+		if is_instance_valid(vein_node) and vein_node.has_method("end_chunk_load_restore"):
+			vein_node.call("end_chunk_load_restore")
 
 ## Captures mineral state before freeing a chunk. Crop records remain in CropRegistry;
 ## the next root with the same chunk ID reuses the same stable crop IDs.
