@@ -1279,7 +1279,9 @@ func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = fals
 	for component in position_value:
 		if not (component is int or component is float) or not is_finite(float(component)):
 			return false
-	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or player == null or mine_director == null:
+	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or player == null or director == null or mine_director == null:
+		return false
+	if not is_instance_valid(registry) or not is_instance_valid(chunk_controller) or not is_instance_valid(crop_registry) or not is_instance_valid(object_state_registry) or not is_instance_valid(player) or not is_instance_valid(director) or not is_instance_valid(mine_director):
 		return false
 	var now: int = int(Time.get_unix_time_from_system())
 	var minerals_value: Variant = payload.get("minerals", null)
