@@ -19,7 +19,8 @@ Close the gap where `MineralChunkController.load_chunk()` could reject a candida
 - If any participant cannot prove restoration, Controller retains the exact snapshots/references needed for a retry and raises a lifecycle barrier. Further chunk loads and unloads are rejected until recovery succeeds.
 - MineralVeinRegistry compares each live node against the pre-apply snapshot after a failed atomic registration. A mismatch creates a pending recovery record; direct register/unregister/restore mutations are blocked until that record is recovered.
 - Director sync reports combine candidate cleanup, newly loaded chunk rollback, and the Controller's own rollback result. The async path uses the same aggregation.
-- `recover_to_world_position()` invokes the Controller recovery hook first, then reconciles actual loaded IDs and retries the requested window.
+- If the Controller reports incomplete rollback, the Director retains the detached candidate root instead of freeing nodes still referenced by a pending Registry recovery record. It releases that root only after Controller recovery succeeds.
+- `recover_to_world_position()` invokes the Controller recovery hook first, then releases retained failed candidates, reconciles actual loaded IDs, and retries the requested window.
 
 ## Dependencies
 
