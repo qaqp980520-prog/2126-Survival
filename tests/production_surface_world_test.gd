@@ -312,6 +312,11 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
 	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
 	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
+	_expect(_write_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
+	_expect(bool(world.call("save_game", path)), "valid primary can replace a corrupt backup without losing the primary")
+	var backup_rotation_report: Dictionary = world.call("get_last_save_report")
+	var backup_archive_path: String = str(backup_rotation_report.get("details", {}).get("backup_archive_path", ""))
+	_expect(not backup_archive_path.is_empty() and FileAccess.file_exists(backup_archive_path), "corrupt backup is preserved in a diagnostic archive before rotation")
 
 	var invalid_path: String = "user://production_surface_world_invalid_save_test.json"
 	_cleanup_save_test_files(invalid_path)
