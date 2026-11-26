@@ -1536,7 +1536,7 @@ func retry_save_recovery() -> bool:
 			}
 			return false
 		var verified_payload: Dictionary = serialize_stream_state()
-		if verified_payload != recovery_payload:
+		if not _world_recovery_matches_snapshot(verified_payload, recovery_payload):
 			_save_recovery_barrier_report = {
 				"recovery_required": true,
 				"reason": "world_recovery_readback_mismatch"
