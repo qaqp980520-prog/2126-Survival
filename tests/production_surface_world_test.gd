@@ -248,6 +248,13 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var primary_a: String = FileAccess.get_file_as_string(path)
 	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
 	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
+	var tampered_envelope: Dictionary = decoded_a.get("envelope", {}).duplicate(true)
+	var tampered_payload: Dictionary = tampered_envelope.get("payload", {}).duplicate(true)
+	tampered_payload["world_seed"] = int(tampered_payload.get("world_seed", 0)) + 1
+	tampered_envelope["payload"] = tampered_payload
+	var tampered_report: Dictionary = SaveStoreScript.decode_envelope(JSON.stringify(tampered_envelope))
+	_expect(not bool(tampered_report.get("ok", false)) and str(tampered_report.get("reason", "")) == "payload_checksum_mismatch", "valid-looking payload tampering is rejected by the envelope checksum")
+	_expect(not bool(SaveStoreScript.read_valid_file("res://forbidden_surface_world_save.json", Callable(world, "_validate_world_save_payload")).get("ok", false)), "save reader rejects paths outside user data")
 	var unknown_version_envelope: Dictionary = {
 		"format_id": "2126.surface_world",
 		"format_version": 999,
