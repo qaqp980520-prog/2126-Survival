@@ -91,8 +91,6 @@ func _test_registration_failure_preserves_active_window() -> void:
 	_registration_fail_coordinate = Vector2i(3, -1)
 	_registration_first = null
 	_registration_second = null
-	_registration_first_before.clear()
-	_registration_second_before.clear()
 
 	var registry: Node = Registry.new()
 	var controller: Node3D = Controller.new()
@@ -151,8 +149,7 @@ func _test_registration_failure_preserves_active_window() -> void:
 	assert(not controller.is_chunk_loaded(chunk_id), "Rejected target chunk must not be published")
 	assert(registry.get_registered_ids().is_empty(), "Failed target registration must commit no live mineral IDs")
 	assert(registry.to_save_dict() == registry_before, "Failed target registration must preserve the complete Registry save payload")
-	assert(is_instance_valid(_registration_first) and _registration_first.call("to_save_dict") == _registration_first_before, "Earlier target vein must not receive offline regeneration")
-	assert(is_instance_valid(_registration_second) and _registration_second.call("to_save_dict") == _registration_second_before, "Rejected target vein must remain unchanged")
+	assert(not is_instance_valid(_registration_first) and not is_instance_valid(_registration_second), "Director must release the rejected candidate root after Controller detaches it")
 
 	director.queue_free()
 	controller.queue_free()
@@ -185,8 +182,6 @@ func _make_chunk(coord: Vector2i) -> Node3D:
 		second.set("last_regen_unix", _registration_now)
 		_registration_first = first
 		_registration_second = second
-		_registration_first_before = first.call("to_save_dict")
-		_registration_second_before = second.call("to_save_dict")
 		chunk.add_child(first)
 		chunk.add_child(second)
 	return chunk
