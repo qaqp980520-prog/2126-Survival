@@ -88,6 +88,8 @@ func _run() -> void:
 		var pending_recovery_before: Variant = mineral_registry.get("_pending_atomic_registration_recovery")
 		mineral_registry.set("_pending_atomic_registration_recovery", {"fixture": "unresolved_atomic_registration"})
 		_expect(bool(mineral_registry.call("has_pending_atomic_registration_recovery")), "inject unresolved mineral registration recovery")
+		var pending_barrier_report: Dictionary = world.call("_get_world_save_recovery_barrier_report")
+		_expect(str(pending_barrier_report.get("reason", "")) == "mineral_registry_atomic_registration_recovery_pending", "pending recovery reason is exposed to file entrypoints")
 		_expect(world.call("serialize_world_state").is_empty(), "pending mineral recovery blocks world serialization")
 		_expect(not bool(world.call("save_game")), "pending mineral recovery blocks the direct file-save entry point")
 		_expect(not bool(world.call("load_world_state_from_dictionary", barrier_payload)), "pending mineral recovery blocks dictionary restore")
