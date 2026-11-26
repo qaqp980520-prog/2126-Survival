@@ -978,20 +978,24 @@ func _free_unowned_root(candidate: Variant) -> void:
 		candidate.free()
 
 func _retain_pending_recovery_root(chunk_id: String, candidate: Variant) -> bool:
-	if not is_instance_valid(candidate) or not (candidate is Node3D):
+	if chunk_controller == null or not is_instance_valid(chunk_controller) or not is_instance_valid(candidate) or not (candidate is Node3D):
 		return false
 	var root: Node3D = candidate as Node3D
 	if root.is_queued_for_deletion() or root.get_parent() != null:
 		return false
-	_pending_recovery_roots[chunk_id] = root
+	_pending_recovery_roots[chunk_id] = {"root": root, "controller": chunk_controller}
 	return true
 
 func _release_pending_recovery_roots() -> int:
-	if chunk_controller == null or not is_instance_valid(chunk_controller) or _controller_has_pending_load_recovery():
-		return 0
 	var released: int = 0
 	for raw_id in _pending_recovery_roots.keys():
-		var root: Node3D = _pending_recovery_roots[raw_id] as Node3D
+		var entry: Dictionary = _pending_recovery_roots[raw_id]
+		var owner: Node = entry.get("controller") as Node
+		if not is_instance_valid(owner) or chunk_controller != owner:
+			continue
+		if owner.has_method("has_pending_chunk_load_recovery") and bool(owner.call("has_pending_chunk_load_recovery")):
+			continue
+		var root: Node3D = entry.get("root") as Node3D
 		if not is_instance_valid(root):
 			_pending_recovery_roots.erase(raw_id)
 			continue
