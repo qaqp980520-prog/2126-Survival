@@ -76,22 +76,36 @@ func get_last_chunk_load_report() -> Dictionary:
 	return _last_chunk_load_report.duplicate(true)
 
 func has_pending_chunk_load_recovery() -> bool:
-	return _chunk_load_recovery_required
+	return (
+		_chunk_load_recovery_required
+		or (
+			registry != null
+			and is_instance_valid(registry)
+			and registry.has_method("has_pending_atomic_registration_recovery")
+			and bool(registry.call("has_pending_atomic_registration_recovery"))
+		)
+	)
 
 func recover_failed_chunk_load() -> bool:
+	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+		_chunk_load_recovery_required = true
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if not _chunk_load_recovery_required:
 		return true
 	var pending: Dictionary = _pending_chunk_load_recovery
 	var crop_ok: bool = true
 	var pending_crop_controller: Node = pending.get("crop_controller") as Node
 	var crop_snapshot: Dictionary = pending.get("crop_snapshot", {})
+	var crop_plots: Dictionary = pending.get("crop_plots", {})
 	if not crop_snapshot.is_empty():
 		if not is_instance_valid(pending_crop_controller) or crop_controller != pending_crop_controller:
 			crop_ok = false
 		else:
-			crop_ok = _restore_crop_snapshot(crop_snapshot, pending.get("crop_plots", {}))
+			crop_ok = _restore_crop_snapshot(crop_snapshot, crop_plots)
 
-	var live_objects_ok: bool = _restore_live_world_object_snapshot(pending.get("initial_object_states", {}), true)
+	var initial_object_states: Dictionary = pending.get("initial_object_states", {})
+	var live_objects_ok: bool = _restore_live_world_object_snapshot(initial_object_states, true)
 	var object_registry_ok: bool = true
 	var pending_object_registry: Node = pending.get("object_state_registry") as Node
 	var object_snapshot: Dictionary = pending.get("object_registry_snapshot", {})
@@ -132,9 +146,10 @@ func recover_failed_chunk_load() -> bool:
 
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	_set_chunk_load_report(false, "validation", "preflight_rejected", true)
-	if not _chunk_load_recovery_required and registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
+	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
-		_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if _chunk_load_recovery_required:
 		_set_chunk_load_report(false, "recovery_required", "Recover the previous failed chunk-load transaction before loading or unloading more chunks.", false, {"recovery_required": true})
 		return false
@@ -332,8 +347,8 @@ func _end_chunk_load_restore(veins: Dictionary) -> void:
 func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	if registry != null and is_instance_valid(registry) and registry.has_method("has_pending_atomic_registration_recovery") and bool(registry.call("has_pending_atomic_registration_recovery")):
 		_chunk_load_recovery_required = true
-		if _pending_chunk_load_recovery.is_empty():
-			_pending_chunk_load_recovery = {"mineral_registry": registry, "mineral_recovery_required": true}
+		_pending_chunk_load_recovery["mineral_registry"] = registry
+		_pending_chunk_load_recovery["mineral_recovery_required"] = true
 	if _chunk_load_recovery_required:
 		return false
 	if registry == null or not _chunk_roots.has(chunk_id):
