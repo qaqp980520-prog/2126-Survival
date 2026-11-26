@@ -84,6 +84,8 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 	var interrupted: Dictionary = recover_interrupted_write(path, payload_validator, rename_operation)
 	if not bool(interrupted.get("ok", false)):
 		return {"ok": false, "phase": "interrupted_write_recovery", "reason": str(interrupted.get("reason", "recovery_failed")), "recovery_required": true}
+	if not _remove_file_if_present(path + ".restore.tmp") or not _remove_file_if_present(path + ".bak.tmp"):
+		return {"ok": false, "phase": "stale_temp_cleanup", "reason": "stale_recovery_temp_could_not_be_removed"}
 	var absolute_path: String = ProjectSettings.globalize_path(path)
 	var parent_path: String = absolute_path.get_base_dir()
 	var make_directory_error: int = DirAccess.make_dir_recursive_absolute(parent_path)
