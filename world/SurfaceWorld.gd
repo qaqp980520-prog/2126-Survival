@@ -849,6 +849,13 @@ func _get_underground_recovery_barrier_report() -> Dictionary:
 	if bool(registry.call("has_pending_atomic_registration_recovery")):
 		var mineral_report: Dictionary = registry.call("get_last_atomic_registration_report") if registry.has_method("get_last_atomic_registration_report") else {}
 		return {"recovery_required": true, "reason": "mineral_atomic_registration_recovery_pending", "registry_report": mineral_report}
+	if object_state_registry == null or not is_instance_valid(object_state_registry):
+		return {"recovery_required": true, "reason": "world_object_registry_unavailable"}
+	if not object_state_registry.has_method("get_locked_chunk_ids"):
+		return {"recovery_required": true, "reason": "world_object_registry_lock_api_unavailable"}
+	var locked_chunk_ids: PackedStringArray = object_state_registry.call("get_locked_chunk_ids")
+	if not locked_chunk_ids.is_empty():
+		return {"recovery_required": true, "reason": "world_object_chunk_write_locked", "locked_chunk_ids": locked_chunk_ids}
 	if mine_director == null or not is_instance_valid(mine_director):
 		return {"recovery_required": true, "reason": "underground_director_unavailable"}
 	if not mine_director.has_method("has_pending_registry_pair_recovery"):
