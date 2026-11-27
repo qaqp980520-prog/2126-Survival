@@ -327,11 +327,14 @@ func _test_world_recovery_snapshot_comparison() -> void:
 	var exact_snapshot: Dictionary = expected_snapshot.duplicate(true)
 	var exact_minerals: Dictionary = exact_snapshot.get("minerals", {})
 	var exact_veins: Dictionary = exact_minerals.get("veins", {})
-	var exact_ids: Array = exact_veins.keys()
-	_expect(not exact_ids.is_empty(), "exact-time recovery fixture contains a mineral record")
-	if exact_ids.is_empty():
+	var live_mineral_ids: PackedStringArray = world.chunk_controller.registry.call("get_registered_ids")
+	_expect(not live_mineral_ids.is_empty(), "exact-time recovery fixture contains a currently loaded mineral record")
+	if live_mineral_ids.is_empty():
 		return
-	var exact_stable_id: String = str(exact_ids[0])
+	var exact_stable_id: String = str(live_mineral_ids[0])
+	_expect(exact_veins.has(exact_stable_id), "exact-time recovery fixture selects a mineral present in the full snapshot")
+	if not exact_veins.has(exact_stable_id):
+		return
 	var exact_record: Dictionary = exact_veins[exact_stable_id].duplicate(true)
 	var regen_interval: int = maxi(1, int(exact_record.get("regen_interval_seconds", 60)))
 	var expected_last_regen: int = exact_now - regen_interval * 2
