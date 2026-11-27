@@ -319,6 +319,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	json_numeric_payload["schema_version"] = float(json_numeric_payload.get("schema_version", 1))
 	json_numeric_payload["mine_depth"] = float(json_numeric_payload.get("mine_depth", 0))
 	_expect(bool(world.call("_validate_world_save_payload", json_numeric_payload)), "SurfaceWorld accepts whole-valued JSON schema and mine-depth numbers")
+	_expect(bool(world.call("restore_stream_state", json_numeric_payload, now_unix)), "SurfaceWorld direct restore accepts whole-valued JSON schema and mine-depth numbers")
 	var fractional_schema_payload: Dictionary = json_numeric_payload.duplicate(true)
 	fractional_schema_payload["schema_version"] = 1.5
 	_expect(not bool(world.call("_validate_world_save_payload", fractional_schema_payload)), "SurfaceWorld rejects fractional stream schema values")
