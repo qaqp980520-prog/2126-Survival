@@ -277,9 +277,11 @@ func _test_reserved_save_base_paths() -> void:
 		_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "invalid load path does not create a false recovery barrier: " + reserved_path)
 
 
-func _user_entry_is_occupied(path: String, directory: DirAccess) -> bool:
+func _user_entry_is_occupied(path: String, _directory: DirAccess) -> bool:
 	var absolute_path: String = ProjectSettings.globalize_path(path)
-	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or directory.is_link(path.get_file())
+	var parent_directory: DirAccess = DirAccess.open(path.get_base_dir())
+	var is_link: bool = parent_directory != null and parent_directory.is_link(path.get_file())
+	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or is_link
 
 
 func _test_save_path_symlink_guards() -> void:
@@ -1223,7 +1225,7 @@ func _claim_test_save_paths(paths: Array[String]) -> bool:
 func _claim_test_save_path(path: String) -> bool:
 	if _test_run_prefix.is_empty() or not path.begins_with("user://" + _test_run_prefix):
 		return false
-	var directory: DirAccess = DirAccess.open("user://")
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
 	if directory == null:
 		return false
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
@@ -1262,20 +1264,18 @@ func _cleanup_save_test_files(path: String) -> void:
 	if not _owned_test_save_paths.has(path):
 		push_error("Refusing to clean an unclaimed test save path: " + path)
 		return
-	var directory: DirAccess = DirAccess.open("user://")
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
 	if directory == null:
-		push_error("Cannot open user data directory to clean test fixtures.")
+		push_error("Cannot open test fixture parent directory to clean files.")
 		return
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
 		var candidate: String = path + suffix
-		if directory.is_link(candidate.get_file()):
-			directory.remove(candidate.get_file())
-		elif FileAccess.file_exists(candidate):
+		if FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate))
 	var prefix: String = path.get_file() + ".corrupt."
 	for filename in directory.get_files():
 		if filename.begins_with(prefix):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + filename))
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path.get_base_dir() + "/" + filename))
 	_owned_test_save_paths.erase(path)
 
 func _rename_fail_primary_and_rollback(source_absolute: String, destination_absolute: String) -> int:
