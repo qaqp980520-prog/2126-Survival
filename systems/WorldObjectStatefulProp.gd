@@ -59,6 +59,13 @@ func get_world_object_state() -> Dictionary:
 	}
 
 
+func _is_whole_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
+
 func validate_world_object_state(state: Dictionary) -> bool:
 	if not state.has("opened") or not state.has("loot_remaining"):
 		return false
@@ -68,7 +75,7 @@ func validate_world_object_state(state: Dictionary) -> bool:
 		return false
 	var opened_value: Variant = state.get("opened", null)
 	var loot_value: Variant = state.get("loot_remaining", null)
-	if not (opened_value is bool) or not (loot_value is int):
+	if not (opened_value is bool) or not _is_whole_number(loot_value):
 		return false
 	if int(loot_value) < 0 or int(loot_value) > MAX_LOOT:
 		return false
