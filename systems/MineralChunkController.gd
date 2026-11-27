@@ -24,6 +24,7 @@ var _chunk_load_recovery_required: bool = false
 var _pending_chunk_load_recovery: Dictionary = {}
 var _recovery_sequence: int = 0
 var _last_chunk_load_report: Dictionary = {}
+var _last_world_object_restore_report: Dictionary = {}
 
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
@@ -77,6 +78,17 @@ func get_last_chunk_load_report() -> Dictionary:
 	var report: Dictionary = _last_chunk_load_report.duplicate(true)
 	report["recovery_required"] = has_pending_chunk_load_recovery()
 	return report
+
+func get_last_world_object_restore_report() -> Dictionary:
+	return _last_world_object_restore_report.duplicate(true)
+
+func _set_world_object_restore_report(success: bool, phase: String, reason: String = "", details: Dictionary = {}) -> void:
+	_last_world_object_restore_report = {
+		"success": success,
+		"phase": phase,
+		"reason": reason,
+		"details": details.duplicate(true)
+	}
 
 func has_pending_chunk_load_recovery() -> bool:
 	return (
@@ -589,40 +601,71 @@ func capture_loaded_world_object_states() -> bool:
 ## Atomically restore registry data and apply it to all currently loaded stateful nodes.
 func restore_world_object_states(payload: Dictionary) -> bool:
 	if has_pending_chunk_load_recovery():
+		_set_world_object_restore_report(false, "recovery_barrier", "Controller lifecycle recovery is pending.")
 		return false
 	if object_state_registry == null or not bool(object_state_registry.call("validate_save_dict", payload)):
+		_set_world_object_restore_report(false, "payload_validation", "WorldObjectStateRegistry rejected the payload.")
 		return false
 	var registry_snapshot: Dictionary = object_state_registry.call("to_save_dict")
 	var live_snapshot: Dictionary = _snapshot_live_world_object_states()
 	if not bool(live_snapshot.get("ok", false)):
+		_set_world_object_restore_report(false, "live_snapshot", "Could not snapshot live world-object state.")
 		return false
 	if not bool(object_state_registry.call("restore_save_dict", payload)):
+		_set_world_object_restore_report(false, "registry_restore", "WorldObjectStateRegistry rejected the prepared payload.")
 		return false
 	if _apply_saved_world_object_states():
+		_set_world_object_restore_report(true, "complete")
 		return true
-	object_state_registry.call("restore_save_dict", registry_snapshot)
-	_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+	var apply_report: Dictionary = _last_world_object_restore_report.duplicate(true)
+	var registry_rollback_ok: bool = bool(object_state_registry.call("restore_save_dict", registry_snapshot))
+	var live_rollback_ok: bool = _restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+	_set_world_object_restore_report(false, "apply_rollback", "Applying saved state to live world objects failed.", {
+		"apply_report": apply_report,
+		"registry_rollback_ok": registry_rollback_ok,
+		"live_rollback_ok": live_rollback_ok
+	})
 	return false
 
 func _apply_saved_world_object_states() -> bool:
 	var live_snapshot: Dictionary = _snapshot_live_world_object_states()
 	if not bool(live_snapshot.get("ok", false)):
+		_set_world_object_restore_report(false, "live_snapshot", "Could not snapshot live world-object state before applying saved records.")
 		return false
 	for chunk_id in _chunk_objects.keys():
 		for stable_id in _chunk_objects[chunk_id].keys():
 			var node: Node = _chunk_objects[chunk_id][stable_id] as Node
 			if not is_instance_valid(node):
+				_set_world_object_restore_report(false, "invalid_live_node", "A registered world object is no longer valid.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id)})
 				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
 				return false
 			var record: Dictionary = object_state_registry.call("get_object_state", str(stable_id))
 			if record.is_empty():
 				var default_state: Variant = node.call("get_world_object_state")
-				if not (default_state is Dictionary) or not bool(object_state_registry.call("set_object_state", str(stable_id), str(chunk_id), default_state)):
+				if not (default_state is Dictionary):
+					_set_world_object_restore_report(false, "invalid_default_state", "A live world object returned a non-dictionary default state.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id)})
+					_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+					return false
+				if not bool(object_state_registry.call("set_object_state", str(stable_id), str(chunk_id), default_state)):
+					_set_world_object_restore_report(false, "default_state_registration", "Could not register a live object's default state.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id)})
 					_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
 					return false
 				continue
 			var saved_state: Variant = record.get("state", {})
-			if str(record.get("chunk_id", "")) != str(chunk_id) or not (saved_state is Dictionary) or (node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", saved_state))) or not bool(node.call("apply_world_object_state", saved_state)):
+			if str(record.get("chunk_id", "")) != str(chunk_id):
+				_set_world_object_restore_report(false, "chunk_id_mismatch", "Saved object record belongs to a different chunk.", {"stable_id": str(stable_id), "expected_chunk_id": str(chunk_id), "saved_chunk_id": str(record.get("chunk_id", ""))})
+				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+				return false
+			if not (saved_state is Dictionary):
+				_set_world_object_restore_report(false, "invalid_saved_state", "Saved object state is not a dictionary.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id)})
+				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+				return false
+			if node.has_method("validate_world_object_state") and not bool(node.call("validate_world_object_state", saved_state)):
+				_set_world_object_restore_report(false, "state_validation", "A live world object rejected its saved state during validation.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id), "saved_state": saved_state})
+				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
+				return false
+			if not bool(node.call("apply_world_object_state", saved_state)):
+				_set_world_object_restore_report(false, "state_apply", "A live world object rejected its saved state during application.", {"stable_id": str(stable_id), "chunk_id": str(chunk_id), "saved_state": saved_state})
 				_restore_live_world_object_snapshot(live_snapshot.get("states", {}))
 				return false
 	return true
