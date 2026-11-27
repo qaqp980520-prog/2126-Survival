@@ -1283,7 +1283,8 @@ func _cleanup_save_test_files(path: String) -> void:
 		return
 	var directory: DirAccess = DirAccess.open(path.get_base_dir())
 	if directory == null:
-		push_error("Cannot open test fixture parent directory to clean files.")
+		# A nested fixture directory may already have been removed after cleanup.
+		_owned_test_save_paths.erase(path)
 		return
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
 		var candidate: String = path + suffix
