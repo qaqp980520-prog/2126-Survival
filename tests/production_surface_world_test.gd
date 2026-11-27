@@ -323,6 +323,42 @@ func _test_world_recovery_snapshot_comparison() -> void:
 		_expect(bool(world.call("_validate_world_save_payload", changed_snapshot)), "changed mineral record remains a valid save payload")
 		_expect(not bool(world.call("_world_recovery_matches_snapshot", changed_snapshot, expected_snapshot)), "world recovery comparison rejects changed mineral values even when stable IDs match")
 
+	var exact_now: int = int(Time.get_unix_time_from_system())
+	var exact_snapshot: Dictionary = expected_snapshot.duplicate(true)
+	var exact_minerals: Dictionary = exact_snapshot.get("minerals", {})
+	var exact_veins: Dictionary = exact_minerals.get("veins", {})
+	var exact_ids: Array = exact_veins.keys()
+	_expect(not exact_ids.is_empty(), "exact-time recovery fixture contains a mineral record")
+	if exact_ids.is_empty():
+		return
+	var exact_stable_id: String = str(exact_ids[0])
+	var exact_record: Dictionary = exact_veins[exact_stable_id].duplicate(true)
+	var regen_interval: int = maxi(1, int(exact_record.get("regen_interval_seconds", 60)))
+	var expected_last_regen: int = exact_now - regen_interval * 2
+	exact_record["remaining_units"] = 0
+	exact_record["last_regen_unix"] = expected_last_regen
+	exact_veins[exact_stable_id] = exact_record
+	exact_minerals["veins"] = exact_veins
+	exact_snapshot["minerals"] = exact_minerals
+	_expect(bool(world.call("_validate_world_save_payload", exact_snapshot)), "depleted mineral recovery snapshot remains valid with an elapsed regeneration interval")
+
+	world.set("_save_recovery_barrier_report", {"recovery_required": true, "reason": "test_exact_mineral_snapshot"})
+	world.set("_save_recovery_kind", "world")
+	world.set("_save_recovery_path", "")
+	world.set("_pending_save_recovery_payload", exact_snapshot.duplicate(true))
+	world.set("_pending_save_recovery_now", exact_now)
+	_expect(bool(world.call("retry_save_recovery")), "world recovery retry restores the captured mineral snapshot")
+	var recovery_readback: Dictionary = world.call("serialize_stream_state")
+	var recovery_readback_minerals: Dictionary = recovery_readback.get("minerals", {})
+	var recovery_readback_veins: Dictionary = recovery_readback_minerals.get("veins", {})
+	var recovery_record: Dictionary = recovery_readback_veins.get(exact_stable_id, {})
+	_expect(recovery_readback_minerals == exact_minerals, "exact-time recovery readback preserves the complete mineral payload before offline catch-up")
+	_expect(int(recovery_record.get("remaining_units", -1)) == 0 and int(recovery_record.get("last_regen_unix", -1)) == expected_last_regen, "exact-time recovery does not regenerate a depleted mineral before readback")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", recovery_readback, exact_snapshot)), "exact-time recovery readback matches the full captured world snapshot")
+
+	_expect(bool(world.call("_restore_stream_state_with_snapshot", expected_snapshot, exact_now, expected_snapshot, true)), "test restores the original world snapshot using exact mineral restoration")
+	var restored_original: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", restored_original, expected_snapshot)), "test fixture leaves the original world state fully restored")
 
 func _test_world_object_json_numeric_variants() -> void:
 	var crate: Node = StatefulPropScript.new()
