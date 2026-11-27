@@ -218,18 +218,22 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 			chunk_controller.refresh_crop_plots()
 		_set_restore_report(false, "inventory_restore", "Inventory bridge rejected the candidate save.", minerals_rolled_back_for_inventory and crops_rolled_back_for_inventory)
 		return false
+	var candidate_world_object_restore_report: Dictionary = {}
 	if has_world_objects and not bool(chunk_controller.call("restore_world_object_states", world_objects_value)):
+		if chunk_controller.has_method("get_last_world_object_restore_report"):
+			candidate_world_object_restore_report = chunk_controller.call("get_last_world_object_restore_report")
 		var objects_minerals_rolled_back: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		var objects_crops_rolled_back: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 		var objects_inventory_rolled_back: bool = not has_inventory or bool(inventory_bridge.call("restore_inventory", previous_inventory))
 		var objects_rolled_back: bool = chunk_controller.call("restore_world_object_states", previous_world_objects)
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
-		var world_object_restore_report: Dictionary = {}
+		var rollback_world_object_restore_report: Dictionary = {}
 		if chunk_controller.has_method("get_last_world_object_restore_report"):
-			world_object_restore_report = chunk_controller.call("get_last_world_object_restore_report")
+			rollback_world_object_restore_report = chunk_controller.call("get_last_world_object_restore_report")
 		_set_restore_report(false, "world_object_restore", "World-object registry rejected the candidate save.", objects_minerals_rolled_back and objects_crops_rolled_back and objects_inventory_rolled_back and objects_rolled_back, {
-			"world_object_restore_report": world_object_restore_report,
+			"candidate_world_object_restore_report": candidate_world_object_restore_report,
+			"rollback_world_object_restore_report": rollback_world_object_restore_report,
 			"minerals_rolled_back": objects_minerals_rolled_back,
 			"crops_rolled_back": objects_crops_rolled_back,
 			"inventory_rolled_back": objects_inventory_rolled_back,
