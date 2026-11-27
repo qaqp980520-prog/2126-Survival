@@ -6,6 +6,10 @@ const UndergroundMineFactoryScript = preload("res://systems/UndergroundMineFacto
 const UndergroundMineDirectorScript = preload("res://systems/UndergroundMineDirector.gd")
 const StaminaScript = preload("res://systems/SurvivalStamina.gd")
 const QuickUseScript = preload("res://systems/SurvivalQuickUse.gd")
+const MineralVeinRegistryScript = preload("res://systems/MineralVeinRegistry.gd")
+const WorldObjectStateRegistryScript = preload("res://systems/WorldObjectStateRegistry.gd")
+const SurfaceWorldSaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
+const DEFAULT_SAVE_PATH: String = "user://surface_world_save.json"
 const StreamingDiagnosticsPanelScript = preload("res://systems/MineralGridStreamingDiagnosticsPanel.gd")
 const MINE_CHUNK_ID: String = "underground/mine_0_0"
 const MINE_ENTRY_SURFACE: Vector3 = Vector3(1.5, 0.0, 7.5)
@@ -51,6 +55,12 @@ var _surface_stream_request_id: int = -1
 var _surface_stream_rollback_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_position: Vector3 = Vector3.ZERO
 var _surface_stream_target_velocity: Vector3 = Vector3.ZERO
+var _save_recovery_barrier_report: Dictionary = {}
+var _save_recovery_kind: String = ""
+var _save_recovery_path: String = ""
+var _pending_save_recovery_payload: Dictionary = {}
+var _pending_save_recovery_now: int = -1
+var _last_save_report: Dictionary = {}
 
 func _ready() -> void:
 	if not initialize_world_session():
@@ -473,6 +483,20 @@ func _unhandled_input(event: InputEvent) -> void:
 					streaming_diagnostics_panel.call("toggle_open")
 				get_viewport().set_input_as_handled()
 				return
+			if key_event.keycode == KEY_F5:
+				var saved: bool = save_game()
+				var save_report: Dictionary = get_last_save_report()
+				_world_object_action_message = "World saved." if saved else "World save blocked: %s." % str(save_report.get("reason", save_report.get("phase", "unknown")))
+				_refresh_hud()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode == KEY_F9:
+				var loaded: bool = load_game()
+				var load_report: Dictionary = get_last_save_report()
+				_world_object_action_message = "World loaded." if loaded else "World load blocked: %s." % str(load_report.get("reason", load_report.get("phase", "unknown")))
+				_refresh_hud()
+				get_viewport().set_input_as_handled()
+				return
 			match key_event.keycode:
 				KEY_1: _select_quick_slot(0)
 				KEY_2: _select_quick_slot(1)
@@ -815,7 +839,35 @@ func _interact_nearest_mineral(_now_unix: int = -1, selected_vein: Node3D = null
 		_world_object_action_message = "Mining rejected: inventory full or vein depleted."
 	_refresh_hud()
 	return {"ok": accepted > 0, "action": "mined" if accepted > 0 else "rejected", "item_id": item_id, "amount": accepted, "remaining": int(nearest.get("remaining_units")), "message": _world_object_action_message}
-func _get_world_save_recovery_barrier_report() -> Dictionary:
+func _get_underground_recovery_barrier_report() -> Dictionary:
+	if registry == null or not is_instance_valid(registry):
+		return {"recovery_required": true, "reason": "mineral_registry_unavailable"}
+	if not registry.has_method("has_pending_atomic_registration_recovery"):
+		return {"recovery_required": true, "reason": "mineral_registry_recovery_api_unavailable"}
+	if bool(registry.call("has_pending_atomic_registration_recovery")):
+		var mineral_report: Dictionary = registry.call("get_last_atomic_registration_report") if registry.has_method("get_last_atomic_registration_report") else {}
+		return {"recovery_required": true, "reason": "mineral_atomic_registration_recovery_pending", "registry_report": mineral_report}
+	if object_state_registry == null or not is_instance_valid(object_state_registry):
+		return {"recovery_required": true, "reason": "world_object_registry_unavailable"}
+	if not object_state_registry.has_method("get_locked_chunk_ids"):
+		return {"recovery_required": true, "reason": "world_object_registry_lock_api_unavailable"}
+	var locked_chunk_ids: PackedStringArray = object_state_registry.call("get_locked_chunk_ids")
+	if not locked_chunk_ids.is_empty():
+		return {"recovery_required": true, "reason": "world_object_chunk_write_locked", "locked_chunk_ids": locked_chunk_ids}
+	if chunk_controller == null or not is_instance_valid(chunk_controller):
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_unavailable"}
+	if not chunk_controller.has_method("has_pending_chunk_load_recovery"):
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_recovery_api_unavailable"}
+	if bool(chunk_controller.call("has_pending_chunk_load_recovery")):
+		var controller_report: Dictionary = chunk_controller.call("get_last_chunk_load_report") if chunk_controller.has_method("get_last_chunk_load_report") else {}
+		return {"recovery_required": true, "reason": "mineral_chunk_controller_recovery_pending", "controller_report": controller_report}
+	if director == null or not is_instance_valid(director):
+		return {"recovery_required": true, "reason": "surface_streaming_director_unavailable"}
+	if not director.has_method("get_pending_recovery_root_count"):
+		return {"recovery_required": true, "reason": "surface_streaming_director_recovery_api_unavailable"}
+	var pending_recovery_root_count: int = int(director.call("get_pending_recovery_root_count"))
+	if pending_recovery_root_count > 0:
+		return {"recovery_required": true, "reason": "surface_streaming_director_recovery_roots_pending", "pending_recovery_root_count": pending_recovery_root_count}
 	if mine_director == null or not is_instance_valid(mine_director):
 		return {"recovery_required": true, "reason": "underground_director_unavailable"}
 	if not mine_director.has_method("has_pending_registry_pair_recovery"):
@@ -827,6 +879,11 @@ func _get_world_save_recovery_barrier_report() -> Dictionary:
 		if report is Dictionary and not report.is_empty():
 			return report
 	return {"recovery_required": true, "reason": "underground_registry_pair_recovery_pending"}
+
+func _get_world_save_recovery_barrier_report() -> Dictionary:
+	if not _save_recovery_barrier_report.is_empty():
+		return _save_recovery_barrier_report.duplicate(true)
+	return _get_underground_recovery_barrier_report()
 
 func serialize_stream_state() -> Dictionary:
 	var payload: Dictionary = super.serialize_stream_state()
@@ -844,13 +901,55 @@ func serialize_stream_state() -> Dictionary:
 	]
 	return payload
 
-func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
+		return false
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no live snapshot or streaming mutation was started.", true)
+		return false
+	var previous_payload: Dictionary = serialize_stream_state()
+	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload, exact_mineral_restore)
+
+func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, previous_payload: Dictionary, exact_mineral_restore: bool = false) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
+		return false
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no restore was started.", true)
+		return false
+	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
+		_set_restore_report(false, "preload_snapshot", "A complete rollback snapshot is unavailable; no restore was started.", true)
+		return false
+	var success: bool = _restore_stream_state_impl(payload, now_unix, exact_mineral_restore)
+	if not success:
+		var restore_report: Dictionary = get_last_restore_report()
+		if not bool(restore_report.get("rollback_complete", true)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "direct_world_restore_rollback_incomplete",
+				"restore_report": restore_report.duplicate(true)
+			}
+			_save_recovery_kind = "world"
+			_save_recovery_path = ""
+			_pending_save_recovery_payload = previous_payload.duplicate(true)
+			_pending_save_recovery_now = now_unix if now_unix >= 0 else int(Time.get_unix_time_from_system())
+		return false
+	return true
+
+func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not recovery_barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
 		return false
+	_set_restore_report(false, "preflight", "World restore has not changed live state.", true)
+	if not _validate_world_save_payload(payload, true):
+		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no streaming or participant mutation was started.", true)
+		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
-	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
+	if not _is_whole_save_number(world_seed_value) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED):
 		return false
 	var next_world_seed: int = int(roundf(float(world_seed_value)))
 	var has_stamina: bool = payload.has("stamina")
@@ -882,14 +981,14 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if target_underground:
 		if payload.has("mine_depth"):
 			var depth_value: Variant = payload.get("mine_depth")
-			if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+			if not _is_whole_save_number(depth_value) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
 				return false
 			target_depth = int(depth_value)
 		else:
 			target_depth = mine_director.get_layer_index(target_position) if mine_director != null else -1
 		if mine_director == null or target_depth < 0 or mine_director.get_layer_index(target_position) != target_depth:
 			return false
-	elif payload.has("mine_depth") and (not (payload.get("mine_depth") is int) or int(payload.get("mine_depth")) != 0):
+	elif payload.has("mine_depth") and (not _is_whole_save_number(payload.get("mine_depth")) or int(payload.get("mine_depth")) != 0):
 		return false
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
@@ -911,31 +1010,97 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var previous_position: Vector3 = player.global_position
 	var previous_underground: bool = _is_underground
 	var previous_world_seed: int = world_seed
+	var previous_mine_layer_index: int = _mine_layer_index
+	var previous_return_position: Vector3 = _surface_return_position
+	var previous_loaded_chunk_ids: PackedStringArray = chunk_controller.get_loaded_chunk_ids()
 	var previous_mine_position: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
+	_set_restore_report(false, "restore_in_progress", "World restore has started; rollback has not yet been verified.", false, {
+		"previous_world_seed": previous_world_seed,
+		"previous_chunk_ids": previous_loaded_chunk_ids.duplicate()
+	})
 	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
-		if not _restore_mine_snapshots(previous_minerals, previous_world_objects, now):
-			push_error("Mine registry snapshot restoration failed after a seed-change unload rejection.")
+		var snapshots_restored: bool = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = snapshots_restored and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		_set_restore_report(false, "underground_clear", "Underground window could not be cleared; rollback was verified against the previous world snapshot.", rollback_complete, {
+			"mine_snapshots_restored": snapshots_restored,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		})
+		if not rollback_complete:
+			push_warning("Mine registry or chunk-window rollback failed after a seed-change unload rejection.")
 		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
+		var underground_rollback_complete: bool = false
 		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-seed stream rejection.")
+			underground_rollback_complete = _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects)
 		else:
 			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = mine_director.recover_to_world_position(previous_mine_position, now)
+			if underground_rollback_complete:
+				underground_rollback_complete = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = underground_rollback_complete and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		var mine_report: Dictionary = mine_director.call("get_last_sync_report") if mine_director.has_method("get_last_sync_report") else {}
+		_set_restore_report(false, "stream_sync", "Underground target streaming failed; the previous world snapshot was checked after recovery.", rollback_complete, {
+			"underground_rollback_complete": underground_rollback_complete,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+			"mine_sync_report": mine_report
+		})
+		if not rollback_complete:
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
-	if not super.restore_stream_state(payload, now):
+	if not super.restore_stream_state(payload, now, exact_mineral_restore):
+		var base_restore_report: Dictionary = get_last_restore_report()
+		var underground_rollback_complete: bool = false
 		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects)
 		else:
 			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = mine_director.recover_to_world_position(previous_mine_position, now)
+			if underground_rollback_complete:
+				underground_rollback_complete = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = bool(base_restore_report.get("rollback_complete", false)) and underground_rollback_complete and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		var mine_report: Dictionary = mine_director.call("get_last_sync_report") if mine_director.has_method("get_last_sync_report") else {}
+		var combined_phase: String = str(base_restore_report.get("phase", "stream_restore"))
+		_set_restore_report(false, combined_phase, "World participant restore failed; surface and underground rollback results were combined.", rollback_complete, {
+			"base_restore_report": base_restore_report,
+			"underground_rollback_complete": underground_rollback_complete,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+			"mine_sync_report": mine_report
+		})
+		if not rollback_complete:
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
@@ -959,6 +1124,29 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	_refresh_hud()
 	return true
 
+func _mine_restore_matches_snapshot(
+	mineral_snapshot: Dictionary,
+	object_snapshot: Dictionary,
+	expected_chunk_ids: PackedStringArray,
+	expected_position: Vector3,
+	expected_world_seed: int,
+	expected_underground: bool,
+	expected_layer_index: int,
+	expected_return_position: Vector3
+) -> bool:
+	if world_seed != expected_world_seed or player == null or not player.global_position.is_equal_approx(expected_position):
+		return false
+	if _is_underground != expected_underground or _mine_layer_index != expected_layer_index or not _surface_return_position.is_equal_approx(expected_return_position):
+		return false
+	if chunk_controller == null or object_state_registry == null:
+		return false
+	if chunk_controller.get_loaded_chunk_ids() != expected_chunk_ids or _get_expected_loaded_chunk_ids() != expected_chunk_ids:
+		return false
+	if chunk_controller.call("to_save_dict") != mineral_snapshot or object_state_registry.call("to_save_dict") != object_snapshot:
+		return false
+	return _get_underground_recovery_barrier_report().is_empty()
+
+
 func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or mine_director == null:
 		return false
@@ -976,7 +1164,7 @@ func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> boo
 	return true
 
 func _restore_mine_snapshots(mineral_snapshot: Dictionary, object_snapshot: Dictionary, now_unix: int) -> bool:
-	if not bool(chunk_controller.call("restore_save_dict", mineral_snapshot, now_unix)):
+	if not bool(chunk_controller.call("restore_snapshot_exact", mineral_snapshot, now_unix)):
 		return false
 	return bool(chunk_controller.call("restore_world_object_states", object_snapshot))
 
@@ -1213,9 +1401,346 @@ func _refresh_hud() -> void:
 		var quick_button: Button = touch_buttons[quick_key] as Button
 		quick_button.text = "%s%d %s x%d" % [">" if selected else "", slot_index + 1, item_id.to_upper(), item_count]
 		quick_button.disabled = item_count <= 0 or stamina_value >= stamina_max
-	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use"
+	var action_help: String = "E crop · F crate · T terrain · G shaft · 1-4 ration · C use · F5 save · F9 load" if not _is_underground else "F cache / mine · G up · V down at lift · 1-4 ration · C use · F5 save · F9 load"
 	hud.text = "2126 SURVIVAL // %s\nWASD move · SHIFT sprint · SPACE jump · RMB look · F3 stream log · %s · F10 test hub\nGrid: %s   Chunks: %d   Veins: %d   Crops: %d   Objects: %d\nCarry: %.1f / %.1f kg   Move: %d%% (%s)   %s\nStamina: %.0f / %.0f\n%s\n%s" % [
 		layer_name, action_help, grid_text, active_count, int(status.get("saved_vein_count", 0)),
 		int(status.get("saved_crop_count", 0)), int(status.get("saved_world_object_count", 0)),
 		weight, limit, movement_percent, movement_mode, jump_status, stamina_value, stamina_max, _crop_action_message, _world_object_action_message
 	]
+
+## Production SurfaceWorld persistence. The Backrooms prototype keeps its separate file path.
+func _is_whole_save_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
+
+func _validate_world_save_payload(payload: Dictionary, allow_legacy: bool = false) -> bool:
+	var schema: Variant = payload.get("schema_version", null)
+	if not _is_whole_save_number(schema) or int(schema) != 1:
+		return false
+	var position_value: Variant = payload.get("player_position", null)
+	if not (position_value is Array) or position_value.size() != 3:
+		return false
+	for component in position_value:
+		if not (component is int or component is float) or not is_finite(float(component)):
+			return false
+	if registry == null or chunk_controller == null or crop_registry == null or object_state_registry == null or player == null or director == null or mine_director == null:
+		return false
+	if not is_instance_valid(registry) or not is_instance_valid(chunk_controller) or not is_instance_valid(crop_registry) or not is_instance_valid(object_state_registry) or not is_instance_valid(player) or not is_instance_valid(director) or not is_instance_valid(mine_director):
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	var minerals_value: Variant = payload.get("minerals", null)
+	if not (minerals_value is Dictionary):
+		return false
+	var mineral_probe: Node = MineralVeinRegistryScript.new()
+	var minerals_valid: bool = bool(mineral_probe.call("validate_save_dict", minerals_value, now))
+	mineral_probe.free()
+	if not minerals_valid:
+		return false
+	if payload.has("crops"):
+		var crops_value: Variant = payload.get("crops", null)
+		if not (crops_value is Dictionary):
+			return false
+		var crop_probe: Node = CropRegistryScript.new()
+		var crops_valid: bool = bool(crop_probe.call("validate_save_dict", crops_value))
+		crop_probe.free()
+		if not crops_valid:
+			return false
+	elif not allow_legacy:
+		return false
+	if payload.has("world_objects"):
+		var objects_value: Variant = payload.get("world_objects", null)
+		if not (objects_value is Dictionary):
+			return false
+		var object_probe: Node = WorldObjectStateRegistryScript.new()
+		var objects_valid: bool = bool(object_probe.call("validate_save_dict", objects_value))
+		object_probe.free()
+		if not objects_valid:
+			return false
+	elif not allow_legacy:
+		return false
+	if payload.has("inventory"):
+		var inventory_value: Variant = payload.get("inventory", null)
+		if not (inventory_value is Dictionary) or inventory_bridge == null:
+			return false
+		var inventory_probe: RefCounted = InventoryModelScript.new()
+		if not bool(inventory_probe.call("load_save_dict", inventory_value)):
+			return false
+	elif not allow_legacy:
+		return false
+	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED if allow_legacy else null)
+	if not _is_whole_save_number(world_seed_value):
+		return false
+	if float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED):
+		return false
+	if payload.has("stamina"):
+		var stamina_value: Variant = payload.get("stamina", null)
+		var stamina_probe: RefCounted = StaminaScript.new()
+		if not (stamina_value is Dictionary) or not bool(stamina_probe.call("validate_save_dict", stamina_value)):
+			return false
+	elif not allow_legacy:
+		return false
+	if payload.has("quick_use"):
+		var quick_use_value: Variant = payload.get("quick_use", null)
+		var quick_use_probe: RefCounted = QuickUseScript.new()
+		if not (quick_use_value is Dictionary) or not bool(quick_use_probe.call("validate_save_dict", quick_use_value)):
+			return false
+	elif not allow_legacy:
+		return false
+	var layer_value: Variant = payload.get("location_layer", "surface" if allow_legacy else null)
+	if not (layer_value is String) or not ["surface", "underground"].has(str(layer_value)):
+		return false
+	var target_position := Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
+	var depth_value: Variant = payload.get("mine_depth", null)
+	var target_depth: int = 0
+	if str(layer_value) == "underground":
+		if depth_value == null and allow_legacy:
+			target_depth = mine_director.get_layer_index(target_position)
+		elif _is_whole_save_number(depth_value):
+			target_depth = int(depth_value)
+		else:
+			return false
+		if target_depth < 0 or target_depth > UndergroundMineDirectorScript.MAX_LAYER_INDEX or mine_director.get_layer_index(target_position) != target_depth:
+			return false
+	else:
+		if depth_value == null and allow_legacy:
+			target_depth = 0
+		elif not _is_whole_save_number(depth_value) or int(depth_value) != 0:
+			return false
+	if payload.has("surface_return_position"):
+		var return_value: Variant = payload.get("surface_return_position", null)
+		if not (return_value is Array) or return_value.size() != 3:
+			return false
+		for component in return_value:
+			if not (component is int or component is float) or not is_finite(float(component)):
+				return false
+	elif not allow_legacy:
+		return false
+	return true
+
+func _set_save_report(success: bool, phase: String, reason: String = "", details: Dictionary = {}) -> void:
+	_last_save_report = {
+		"success": success,
+		"phase": phase,
+		"reason": reason,
+		"details": details.duplicate(true)
+	}
+
+func get_last_save_report() -> Dictionary:
+	return _last_save_report.duplicate(true)
+
+func _recover_interrupted_save_file(save_path: String, phase: String) -> bool:
+	if not SurfaceWorldSaveStoreScript._is_supported_save_base_path(save_path):
+		_set_save_report(false, "path_preflight", "unsupported_save_path", {"path": save_path})
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	var recovery_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(save_path, validator)
+	if bool(recovery_report.get("ok", false)):
+		return true
+	_save_recovery_barrier_report = {
+		"recovery_required": true,
+		"reason": "interrupted_save_file_recovery_required",
+		"file_report": recovery_report.duplicate(true)
+	}
+	_save_recovery_kind = "file"
+	_save_recovery_path = save_path
+	_pending_save_recovery_payload = {}
+	_pending_save_recovery_now = int(Time.get_unix_time_from_system())
+	_set_save_report(false, phase, str(recovery_report.get("reason", "file_recovery_failed")), recovery_report)
+	return false
+
+
+func save_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	if not _recover_interrupted_save_file(save_path, "interrupted_write_recovery"):
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	var payload: Dictionary = serialize_stream_state()
+	if payload.is_empty() or not _validate_world_save_payload(payload):
+		_set_save_report(false, "snapshot_validation", "world_snapshot_unavailable_or_invalid")
+		return false
+	var envelope: Dictionary = SurfaceWorldSaveStoreScript.build_envelope(payload, now)
+	var encoded: String = SurfaceWorldSaveStoreScript.encode_envelope(envelope)
+	var validator := Callable(self, "_validate_world_save_payload")
+	var write_report: Dictionary = SurfaceWorldSaveStoreScript.write_atomic(save_path, encoded, validator)
+	if not bool(write_report.get("ok", false)):
+		if bool(write_report.get("recovery_required", false)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "save_file_promotion_recovery_required",
+				"file_report": write_report.duplicate(true)
+			}
+			_save_recovery_kind = "file"
+			_save_recovery_path = save_path
+		_set_save_report(false, str(write_report.get("phase", "write")), str(write_report.get("reason", "save_failed")), write_report)
+		return false
+	_set_save_report(true, "complete", "", {
+		"path": save_path,
+		"saved_at_unix": now,
+		"backup_path": str(write_report.get("backup_path", "")),
+		"backup_archive_path": str(write_report.get("backup_archive_path", "")),
+		"archive_path": str(write_report.get("archive_path", "")),
+		"warning": str(write_report.get("warning", ""))
+	})
+	return true
+
+func load_game(save_path: String = DEFAULT_SAVE_PATH) -> bool:
+	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
+	if not barrier_report.is_empty():
+		_set_save_report(false, "recovery_barrier", str(barrier_report.get("reason", "recovery_required")), barrier_report)
+		return false
+	if not _recover_interrupted_save_file(save_path, "interrupted_write_recovery"):
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	var primary_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path, validator)
+	var source: String = "primary"
+	var candidate_payload: Dictionary = {}
+	if bool(primary_report.get("ok", false)):
+		candidate_payload = primary_report["payload"].duplicate(true)
+	else:
+		var backup_report: Dictionary = SurfaceWorldSaveStoreScript.read_valid_file(save_path + ".bak", validator)
+		if not bool(backup_report.get("ok", false)):
+			_set_save_report(false, "file_validation", "primary_and_backup_unavailable_or_invalid", {
+				"primary": primary_report,
+				"backup": backup_report
+			})
+			return false
+		source = "backup"
+		candidate_payload = backup_report["payload"].duplicate(true)
+	# Only capture live participants after a disk candidate has passed full validation.
+	# Invalid primary and backup files must not trigger even a live-object snapshot refresh.
+	var previous_payload: Dictionary = serialize_stream_state()
+	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
+		_set_save_report(false, "preload_snapshot", "current_world_snapshot_unavailable_or_invalid")
+		return false
+	var now: int = int(Time.get_unix_time_from_system())
+	if not _restore_stream_state_with_snapshot(candidate_payload, now, previous_payload):
+		var restore_report: Dictionary = get_last_restore_report()
+		if not bool(restore_report.get("rollback_complete", true)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_restore_rollback_incomplete",
+				"restore_report": restore_report.duplicate(true)
+			}
+			_save_recovery_kind = "world"
+			_save_recovery_path = save_path
+			_pending_save_recovery_payload = previous_payload.duplicate(true)
+			_pending_save_recovery_now = now
+		_set_save_report(false, "world_restore", "validated_save_restore_failed", restore_report)
+		return false
+	if source == "backup":
+		var promotion_report: Dictionary = SurfaceWorldSaveStoreScript.promote_backup(save_path, validator)
+		if bool(promotion_report.get("ok", false)):
+			_set_save_report(true, "loaded_from_backup", "", {
+				"source": source,
+				"archive_path": str(promotion_report.get("archive_path", "")),
+				"backup_path": str(promotion_report.get("backup_path", ""))
+			})
+			return true
+		if bool(promotion_report.get("recovery_required", false)):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "backup_promotion_recovery_required",
+				"file_report": promotion_report.duplicate(true)
+			}
+			_save_recovery_kind = "backup_promotion"
+			_save_recovery_path = save_path
+			_set_save_report(true, "loaded_from_backup_promotion_pending", "", {
+				"source": source,
+				"promotion": promotion_report
+			})
+			return true
+		_set_save_report(true, "loaded_from_backup", "", {
+			"source": source,
+			"promotion_warning": promotion_report
+		})
+		return true
+	_set_save_report(true, "loaded_from_primary", "", {"source": source, "saved_at_unix": int(primary_report.get("saved_at_unix", 0))})
+	return true
+
+func _get_expected_loaded_chunk_ids() -> PackedStringArray:
+	var combined: Array[String] = []
+	var seen: Dictionary = {}
+	if director != null and director.has_method("get_managed_chunk_ids"):
+		for raw_id in director.get_managed_chunk_ids():
+			var stable_id: String = str(raw_id)
+			if not seen.has(stable_id):
+				seen[stable_id] = true
+				combined.append(stable_id)
+	if mine_director != null and mine_director.has_method("get_managed_chunk_ids"):
+		for raw_id in mine_director.get_managed_chunk_ids():
+			var stable_id: String = str(raw_id)
+			if not seen.has(stable_id):
+				seen[stable_id] = true
+				combined.append(stable_id)
+	combined.sort()
+	return PackedStringArray(combined)
+
+
+func _world_recovery_matches_snapshot(current: Dictionary, expected: Dictionary) -> bool:
+	if current.is_empty() or not _validate_world_save_payload(current):
+		return false
+	for key in ["player_position", "world_seed", "location_layer", "mine_depth", "surface_return_position", "inventory", "crops", "world_objects", "stamina", "quick_use"]:
+		if current.get(key, null) != expected.get(key, null):
+			return false
+	var expected_minerals: Variant = expected.get("minerals", null)
+	var current_minerals: Variant = current.get("minerals", null)
+	if not (expected_minerals is Dictionary) or not (current_minerals is Dictionary):
+		return false
+	if current_minerals != expected_minerals:
+		return false
+	if director == null or chunk_controller == null or _get_expected_loaded_chunk_ids() != chunk_controller.get_loaded_chunk_ids():
+		return false
+	return true
+
+
+func retry_save_recovery() -> bool:
+	if _save_recovery_barrier_report.is_empty():
+		return true
+	if not _get_underground_recovery_barrier_report().is_empty():
+		return false
+	var validator := Callable(self, "_validate_world_save_payload")
+	if _save_recovery_kind == "file":
+		var file_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(_save_recovery_path, validator)
+		if not bool(file_report.get("ok", false)):
+			_save_recovery_barrier_report["last_retry"] = file_report.duplicate(true)
+			return false
+	elif _save_recovery_kind == "backup_promotion":
+		var promotion_report: Dictionary = SurfaceWorldSaveStoreScript.promote_backup(_save_recovery_path, validator)
+		if not bool(promotion_report.get("ok", false)):
+			_save_recovery_barrier_report["last_retry"] = promotion_report.duplicate(true)
+			return false
+	elif _save_recovery_kind == "world":
+		var recovery_payload: Dictionary = _pending_save_recovery_payload.duplicate(true)
+		if recovery_payload.is_empty():
+			return false
+		_save_recovery_barrier_report.clear()
+		if not _restore_stream_state_with_snapshot(recovery_payload, _pending_save_recovery_now, recovery_payload, true):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_recovery_retry_failed",
+				"restore_report": get_last_restore_report()
+			}
+			return false
+		var verified_payload: Dictionary = serialize_stream_state()
+		if not _world_recovery_matches_snapshot(verified_payload, recovery_payload):
+			_save_recovery_barrier_report = {
+				"recovery_required": true,
+				"reason": "world_recovery_readback_mismatch"
+			}
+			return false
+	else:
+		return false
+	_save_recovery_barrier_report.clear()
+	_save_recovery_kind = ""
+	_save_recovery_path = ""
+	_pending_save_recovery_payload.clear()
+	_pending_save_recovery_now = -1
+	_set_save_report(true, "recovery_complete")
+	return true
+

@@ -114,7 +114,7 @@ func _run() -> void:
 	_expect(is_equal_approx(float(bridge.call("get_weight_kg")), weight_before), "invalid stamina payload preserves inventory weight")
 	_expect(world.chunk_controller.get_loaded_chunk_ids() == chunks_before, "invalid stamina payload preserves the active chunk window")
 	var restore_report: Dictionary = world.call("get_last_restore_report")
-	_expect(str(restore_report.get("phase", "")) == "stamina_validation" and bool(restore_report.get("rollback_complete", false)), "invalid stamina rejection reports a non-mutating validation failure")
+	_expect(str(restore_report.get("phase", "")) == "payload_validation" and bool(restore_report.get("rollback_complete", false)), "invalid stamina payload is rejected by complete preflight before world mutation")
 	_finish(0 if failures.is_empty() else 1)
 
 func _expect(condition: bool, message: String) -> void:

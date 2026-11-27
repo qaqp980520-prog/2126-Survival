@@ -1,0 +1,71 @@
+name: Production SurfaceWorld Save Validation
+
+on:
+  pull_request:
+    paths:
+      - "systems/SurfaceWorldSaveStore.gd"
+      - "world/SurfaceWorld.gd"
+      - "systems/MineralChunkController.gd"
+      - "systems/WorldObjectStateRegistry.gd"
+      - "systems/SurvivalQuickUse.gd"
+      - "systems/SurvivalStamina.gd"
+      - "scripts/world.gd"
+      - "tests/production_surface_world_test.gd"
+      - ".github/workflows/production-surface-world-save-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+  push:
+    branches:
+      - main
+      - "feat/production-surface-world-durable-save-2026-11-27-run11"
+      - "fix/production-surface-world-save-json-preflight-2026-11-27-run11"
+    paths:
+      - "systems/SurfaceWorldSaveStore.gd"
+      - "world/SurfaceWorld.gd"
+      - "systems/MineralChunkController.gd"
+      - "systems/WorldObjectStateRegistry.gd"
+      - "systems/SurvivalQuickUse.gd"
+      - "systems/SurvivalStamina.gd"
+      - "scripts/world.gd"
+      - "tests/production_surface_world_test.gd"
+      - ".github/workflows/production-surface-world-save-validation.yml"
+      - ".github/workflows/godot-validation.yml"
+
+jobs:
+  validate:
+    name: Production SurfaceWorld Save/Load Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify production save inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          test -f project.godot
+          test -f systems/SurfaceWorldSaveStore.gd
+          test -f world/SurfaceWorld.gd
+          test -f tests/production_surface_world_test.gd
+          grep -Fq 'func save_game' world/SurfaceWorld.gd
+          grep -Fq 'func load_game' world/SurfaceWorld.gd
+          grep -Fq 'func _validate_world_save_payload' world/SurfaceWorld.gd
+      - name: Import and parse root Survival project
+        run: godot --headless --path . --editor --quit
+      - name: Run production SurfaceWorld save/load regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          output="$(timeout -k 5s 180s godot --headless --path . --script res://tests/production_surface_world_test.gd 2>&1)" || { echo "$output"; exit 1; }
+          echo "$output"
+          if echo "$output" | grep -E 'SCRIPT ERROR|ERROR:|FAIL:'; then exit 1; fi
+          echo "$output" | grep -q "Production surface world integration tests passed."
+      - name: Verify clean validation workspace
+        if: always()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git clean -fd
+          test -z "$(git status --porcelain)"

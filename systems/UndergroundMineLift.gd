@@ -18,11 +18,18 @@ func _ready() -> void:
 func get_world_object_state() -> Dictionary:
 	return {"layer_index": layer_index}
 
+func _is_whole_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
+
 func validate_world_object_state(state: Dictionary) -> bool:
 	if state.size() != 1 or not state.has("layer_index"):
 		return false
 	var raw_layer: Variant = state.get("layer_index", null)
-	return raw_layer is int and int(raw_layer) >= 0 and int(raw_layer) <= MAX_LAYER_INDEX and int(raw_layer) == layer_index
+	return _is_whole_number(raw_layer) and int(raw_layer) >= 0 and int(raw_layer) <= MAX_LAYER_INDEX and int(raw_layer) == layer_index
 
 func apply_world_object_state(state: Dictionary) -> bool:
 	if not validate_world_object_state(state):

@@ -134,7 +134,14 @@ func serialize_stream_state() -> Dictionary:
 		payload["inventory"] = inventory_bridge.call("serialize_inventory")
 	return payload
 
-func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+func _get_expected_loaded_chunk_ids() -> PackedStringArray:
+	if director == null or not director.has_method("get_managed_chunk_ids"):
+		return PackedStringArray()
+	return director.get_managed_chunk_ids()
+
+
+## Exact mineral restoration is reserved for in-memory recovery snapshots; it skips offline catch-up.
+func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
 	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not recovery_barrier_report.is_empty():
@@ -152,7 +159,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var inventory_value: Variant = payload.get("inventory", null)
 	var has_world_objects: bool = payload.has("world_objects")
 	var world_objects_value: Variant = payload.get("world_objects", null)
-	if not (schema_value is int) or int(schema_value) != 1:
+	if not (schema_value is int or schema_value is float) or not is_finite(float(schema_value)) or floorf(float(schema_value)) != float(schema_value) or int(schema_value) != 1:
 		_set_restore_report(false, "validation", "Unsupported stream-save schema.", true)
 		return false
 	if not (position_value is Array) or position_value.size() != 3:
@@ -198,28 +205,46 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if has_world_objects and (not previous_world_objects.has("schema_version") or not previous_world_objects.has("objects")):
 		_set_restore_report(false, "snapshot", "Could not snapshot current world-object state before restore.", true)
 		return false
-	if not chunk_controller.restore_save_dict(minerals_value, now):
+	var mineral_restore_ok: bool = false
+	if exact_mineral_restore:
+		mineral_restore_ok = chunk_controller.has_method("restore_snapshot_exact") and bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now))
+	else:
+		mineral_restore_ok = chunk_controller.restore_save_dict(minerals_value, now)
+	if not mineral_restore_ok:
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
 		return false
 	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
-		var minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var minerals_rolled_back: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		_set_restore_report(false, "crop_restore", "Crop registry rejected the candidate save.", minerals_rolled_back)
 		return false
 	if has_inventory and not bool(inventory_bridge.call("restore_inventory", inventory_value)):
-		var minerals_rolled_back_for_inventory: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		var minerals_rolled_back_for_inventory: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		var crops_rolled_back_for_inventory: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
 		_set_restore_report(false, "inventory_restore", "Inventory bridge rejected the candidate save.", minerals_rolled_back_for_inventory and crops_rolled_back_for_inventory)
 		return false
+	var candidate_world_object_restore_report: Dictionary = {}
 	if has_world_objects and not bool(chunk_controller.call("restore_world_object_states", world_objects_value)):
-		var objects_minerals_rolled_back: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+		if chunk_controller.has_method("get_last_world_object_restore_report"):
+			candidate_world_object_restore_report = chunk_controller.call("get_last_world_object_restore_report")
+		var objects_minerals_rolled_back: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 		var objects_crops_rolled_back: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 		var objects_inventory_rolled_back: bool = not has_inventory or bool(inventory_bridge.call("restore_inventory", previous_inventory))
 		var objects_rolled_back: bool = chunk_controller.call("restore_world_object_states", previous_world_objects)
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
-		_set_restore_report(false, "world_object_restore", "World-object registry rejected the candidate save.", objects_minerals_rolled_back and objects_crops_rolled_back and objects_inventory_rolled_back and objects_rolled_back)
+		var rollback_world_object_restore_report: Dictionary = {}
+		if chunk_controller.has_method("get_last_world_object_restore_report"):
+			rollback_world_object_restore_report = chunk_controller.call("get_last_world_object_restore_report")
+		_set_restore_report(false, "world_object_restore", "World-object registry rejected the candidate save.", objects_minerals_rolled_back and objects_crops_rolled_back and objects_inventory_rolled_back and objects_rolled_back, {
+			"candidate_world_object_restore_report": candidate_world_object_restore_report,
+			"rollback_world_object_restore_report": rollback_world_object_restore_report,
+			"minerals_rolled_back": objects_minerals_rolled_back,
+			"crops_rolled_back": objects_crops_rolled_back,
+			"inventory_rolled_back": objects_inventory_rolled_back,
+			"world_objects_rolled_back": objects_rolled_back
+		})
 		return false
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
@@ -227,11 +252,33 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	_last_grid = Vector2i(999999, 999999)
 	if _sync_streaming(now):
+		var post_stream_details: Dictionary = {
+			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		}
+		# Streaming can unload the previous window and append records for its live objects.
+		# Reapply the authoritative crop and world-object snapshots after the target window is stable.
+		if has_crops:
+			if crop_registry == null or not bool(crop_registry.restore_save_dict(crops_value)):
+				_set_restore_report(false, "crop_post_stream_restore", "Crop registry could not be restored after target chunk streaming; recovery remains required.", false, post_stream_details)
+				return false
+			post_stream_details["crops_restored_after_streaming"] = true
+		if has_world_objects:
+			if not chunk_controller.has_method("restore_world_object_states") or not bool(chunk_controller.call("restore_world_object_states", world_objects_value)):
+				var world_object_report: Dictionary = chunk_controller.call("get_last_world_object_restore_report") if chunk_controller.has_method("get_last_world_object_restore_report") else {}
+				_set_restore_report(false, "world_object_post_stream_restore", "World-object registry could not be restored after target chunk streaming; recovery remains required.", false, {
+					"active_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+					"world_object_report": world_object_report
+				})
+				return false
+			post_stream_details["world_objects_restored_after_streaming"] = true
+		if exact_mineral_restore:
+			if not chunk_controller.has_method("restore_snapshot_exact") or not bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now)):
+				_set_restore_report(false, "mineral_exact_readback_restore", "Exact mineral snapshot could not be reapplied after target chunk streaming; recovery remains required.", false, post_stream_details)
+				return false
+			post_stream_details["minerals_restored_exact_after_streaming"] = true
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
-		_set_restore_report(true, "complete", "", true, {
-			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
-		})
+		_set_restore_report(true, "complete", "", true, post_stream_details)
 		return true
 
 	# A failed target stream must not leave the candidate mineral payload applied.
@@ -248,7 +295,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if recovery_success:
 		_last_grid = director.get_grid_coordinate(previous_position)
 
-	var minerals_restored: bool = chunk_controller.restore_save_dict(previous_minerals, now)
+	var minerals_restored: bool = chunk_controller.restore_snapshot_exact(previous_minerals, now)
 	var crops_restored: bool = crop_registry == null or previous_crops.is_empty() or bool(crop_registry.restore_save_dict(previous_crops))
 	var inventory_restored: bool = true
 	if has_inventory and inventory_bridge != null and not previous_inventory.is_empty():
@@ -258,7 +305,8 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var world_objects_restored: bool = bool(chunk_controller.call("restore_world_object_states", previous_world_objects))
 	if chunk_controller.has_method("refresh_crop_plots"):
 		chunk_controller.refresh_crop_plots()
-	var ids_consistent: bool = director.get_managed_chunk_ids() == chunk_controller.get_loaded_chunk_ids()
+	var expected_managed_ids: PackedStringArray = _get_expected_loaded_chunk_ids()
+	var ids_consistent: bool = expected_managed_ids == chunk_controller.get_loaded_chunk_ids()
 	var position_restored: bool = player.global_position.is_equal_approx(previous_position)
 	var rollback_complete: bool = recovery_success and minerals_restored and crops_restored and inventory_restored and world_objects_restored and ids_consistent and position_restored
 	_refresh_world_hud()
@@ -271,6 +319,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		"inventory_restored": inventory_restored,
 		"world_objects_restored": world_objects_restored,
 		"ids_consistent": ids_consistent,
+		"expected_managed_chunk_ids": expected_managed_ids,
 		"position_restored": position_restored
 	})
 	if not rollback_complete:

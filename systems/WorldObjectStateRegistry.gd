@@ -220,6 +220,17 @@ func unlock_chunk_writes(chunk_id: String, transaction_token: String) -> bool:
 	_chunk_write_locks.erase(chunk_id)
 	return true
 
+func get_locked_chunk_ids() -> PackedStringArray:
+	var ids: Array = _chunk_write_locks.keys()
+	ids.sort()
+	var result := PackedStringArray()
+	for chunk_id in ids:
+		result.append(str(chunk_id))
+	return result
+
+func has_pending_chunk_write_locks() -> bool:
+	return not _chunk_write_locks.is_empty()
+
 func is_chunk_write_locked(chunk_id: String) -> bool:
 	return _chunk_write_locks.has(chunk_id)
 
