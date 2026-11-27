@@ -272,22 +272,44 @@ func _test_reserved_save_base_paths() -> void:
 		_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "invalid load path does not create a false recovery barrier: " + reserved_path)
 
 
+func _user_entry_is_occupied(path: String, directory: DirAccess) -> bool:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or directory.is_link(path.get_file())
+
+
 func _test_save_path_symlink_guards() -> void:
 	var user_directory: DirAccess = DirAccess.open("user://")
 	_expect(user_directory != null, "open user data for save-path symlink tests")
 	if user_directory == null:
 		return
-	var target_directory: String = "user://run451_symlink_target"
-	if user_directory.is_link("run451_symlink_directory"):
-		user_directory.remove("run451_symlink_directory")
-	if user_directory.is_link("run451_symlink_file.json"):
-		user_directory.remove("run451_symlink_file.json")
+
+	# Every fixture uses a per-run namespace. Never delete a pre-existing entry
+	# just to make a fixed test path available.
+	var fixture_prefix: String = "run463_symlink_guard_" + str(Time.get_ticks_usec())
+	var target_directory: String = "user://" + fixture_prefix + "_target"
+	if _user_entry_is_occupied(target_directory, user_directory):
+		_expect(false, "directory-symlink fixture path is unused before creation")
+		return
 	var target_directory_absolute: String = ProjectSettings.globalize_path(target_directory)
 	var target_directory_error: Error = DirAccess.make_dir_recursive_absolute(target_directory_absolute)
-	_expect(target_directory_error == OK or DirAccess.dir_exists_absolute(target_directory_absolute), "create a symlink test target directory")
+	if target_directory_error != OK and not DirAccess.dir_exists_absolute(target_directory_absolute):
+		_expect(false, "create a symlink test target directory")
+		return
 	var target_file_path: String = target_directory + "/existing.json"
-	_expect(_write_test_text(target_file_path, "protected-target-bytes"), "write a file behind the directory symlink")
-	var directory_link_name: String = "run451_symlink_directory"
+	var target_file_written: bool = _write_test_text(target_file_path, "protected-target-bytes")
+	_expect(target_file_written, "write a file behind the directory symlink")
+	if not target_file_written:
+		_cleanup_save_test_files(target_file_path)
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
+
+	var directory_link_name: String = fixture_prefix + "_directory"
+	var directory_link_path: String = "user://" + directory_link_name
+	if _user_entry_is_occupied(directory_link_path, user_directory):
+		_expect(false, "directory-symlink entry is unused before creation")
+		_cleanup_save_test_files(target_file_path)
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
 	var directory_link_error: Error = user_directory.create_link(target_directory_absolute, directory_link_name)
 	if directory_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
@@ -297,13 +319,13 @@ func _test_save_path_symlink_guards() -> void:
 	_expect(directory_link_error == OK, "create a directory symlink inside user data")
 	if directory_link_error == OK:
 		var nested_write: Dictionary = SaveStoreScript.write_atomic(
-			"user://" + directory_link_name + "/new_save.json",
+			directory_link_path + "/new_save.json",
 			"{}",
 			Callable(world, "_validate_world_save_payload")
 		)
 		_expect(not bool(nested_write.get("ok", false)) and str(nested_write.get("phase", "")) == "path_symlink", "writer rejects a save path beneath a directory symlink")
 		var nested_read: Dictionary = SaveStoreScript.read_valid_file(
-			"user://" + directory_link_name + "/existing.json",
+			directory_link_path + "/existing.json",
 			Callable(world, "_validate_world_save_payload")
 		)
 		_expect(not bool(nested_read.get("ok", false)) and str(nested_read.get("reason", "")) == "path_symlink", "reader rejects a path beneath a directory symlink")
@@ -312,9 +334,17 @@ func _test_save_path_symlink_guards() -> void:
 	_cleanup_save_test_files(target_file_path)
 	DirAccess.remove_absolute(target_directory_absolute)
 
-	var direct_target: String = "user://run451_symlink_file_target.json"
-	var direct_link_name: String = "run451_symlink_file.json"
-	_expect(_write_test_text(direct_target, "protected-direct-file-bytes"), "write direct file-symlink target")
+	var direct_target: String = "user://" + fixture_prefix + "_direct_file_target.json"
+	var direct_link_name: String = fixture_prefix + "_direct_file.json"
+	var direct_link_path: String = "user://" + direct_link_name
+	if _user_entry_is_occupied(direct_target, user_directory) or _user_entry_is_occupied(direct_link_path, user_directory):
+		_expect(false, "direct-file symlink fixture paths are unused before creation")
+		return
+	var direct_target_written: bool = _write_test_text(direct_target, "protected-direct-file-bytes")
+	_expect(direct_target_written, "write direct file-symlink target")
+	if not direct_target_written:
+		_cleanup_save_test_files(direct_target)
+		return
 	var direct_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(direct_target), direct_link_name)
 	if direct_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: direct file-symlink fixture requires Windows Developer Mode or elevated privileges.")
@@ -322,39 +352,42 @@ func _test_save_path_symlink_guards() -> void:
 		return
 	_expect(direct_link_error == OK, "create a direct file symlink inside user data")
 	if direct_link_error == OK:
-		var direct_path: String = "user://" + direct_link_name
-		var direct_read: Dictionary = SaveStoreScript.read_valid_file(direct_path, Callable(world, "_validate_world_save_payload"))
+		var direct_read: Dictionary = SaveStoreScript.read_valid_file(direct_link_path, Callable(world, "_validate_world_save_payload"))
 		_expect(not bool(direct_read.get("ok", false)) and str(direct_read.get("reason", "")) == "path_symlink", "reader rejects a direct file symlink")
-		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_path, "{}", Callable(world, "_validate_world_save_payload"))
+		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_link_path, "{}", Callable(world, "_validate_world_save_payload"))
 		_expect(not bool(direct_write.get("ok", false)) and str(direct_write.get("phase", "")) == "path_symlink", "writer rejects a direct file symlink")
 		_expect(FileAccess.get_file_as_string(direct_target) == "protected-direct-file-bytes", "direct-file-symlink rejection preserves target bytes")
 		user_directory.remove(direct_link_name)
 	_cleanup_save_test_files(direct_target)
 
-	var archive_base_path: String = "user://run461_archive_symlink_collision.json"
+	var archive_base_path: String = "user://" + fixture_prefix + "_archive_symlink_collision.json"
 	var archive_timestamp: int = int(Time.get_unix_time_from_system()) + 31536000
 	var expected_archive_path: String = archive_base_path + ".corrupt." + str(archive_timestamp)
 	var archive_link_name: String = expected_archive_path.get_file()
-	if user_directory.is_link(archive_link_name) or FileAccess.file_exists(expected_archive_path):
-		user_directory.remove(archive_link_name)
+	var missing_archive_target: String = "user://" + fixture_prefix + "_missing_archive_target.json"
+	if _user_entry_is_occupied(expected_archive_path, user_directory) or _user_entry_is_occupied(missing_archive_target, user_directory):
+		_expect(false, "archive symlink fixture paths are unused before creation")
+		return
 	var first_archive_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
 	_expect(first_archive_candidate == expected_archive_path, "archive collision fixture starts from a deterministic unused candidate")
-	var missing_archive_target: String = "user://run461_missing_archive_target.json"
 	var archive_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(missing_archive_target), archive_link_name)
 	if archive_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
+	elif archive_link_error != OK:
+		_expect(false, "create a dangling symlink at the next corrupt-archive candidate")
 	else:
-		_expect(archive_link_error == OK, "create a dangling symlink at the next corrupt-archive candidate")
-		if archive_link_error == OK:
-			_expect(not FileAccess.file_exists(expected_archive_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(expected_archive_path)), "dangling archive symlink is not reported as an ordinary file or directory")
-			var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
-			_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
-			_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
-			user_directory.remove(archive_link_name)
+		_expect(not FileAccess.file_exists(expected_archive_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(expected_archive_path)), "dangling archive symlink is not reported as an ordinary file or directory")
+		var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
+		_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
+		_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
+		user_directory.remove(archive_link_name)
 
 	# Exercise the real production load/recovery path, not only the archive-name helper.
-	var end_to_end_archive_path: String = "user://run462_archive_symlink_e2e_" + str(Time.get_ticks_usec()) + ".json"
-	_cleanup_save_test_files(end_to_end_archive_path)
+	var end_to_end_archive_path: String = "user://" + fixture_prefix + "_archive_symlink_e2e.json"
+	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
+		if _user_entry_is_occupied(end_to_end_archive_path + suffix, user_directory):
+			_expect(false, "end-to-end save-family fixture paths are unused before creation")
+			return
 	var end_to_end_corrupt_primary: String = "{corrupt primary for end-to-end archive collision"
 	var end_to_end_payload: Dictionary = world.call("serialize_stream_state")
 	_expect(not end_to_end_payload.is_empty(), "end-to-end archive collision fixture captures a valid production world payload")
@@ -368,19 +401,20 @@ func _test_save_path_symlink_guards() -> void:
 	if end_to_end_setup_ok:
 		end_to_end_setup_ok = _write_test_text(end_to_end_archive_path + ".tmp", end_to_end_temp_text)
 		_expect(end_to_end_setup_ok, "end-to-end archive collision fixture writes a fully valid temp")
+	if not end_to_end_setup_ok:
+		_cleanup_save_test_files(end_to_end_archive_path)
+		return
 	var end_to_end_start_timestamp: int = int(Time.get_unix_time_from_system())
 	var end_to_end_link_names: Array[String] = []
-	var end_to_end_symlinks_supported: bool = end_to_end_setup_ok
+	var end_to_end_symlinks_supported: bool = true
 	for offset in range(0, 12):
 		if not end_to_end_symlinks_supported:
 			break
 		var candidate_timestamp: int = end_to_end_start_timestamp + offset
 		var candidate_link_name: String = end_to_end_archive_path.get_file() + ".corrupt." + str(candidate_timestamp)
 		var candidate_link_path: String = "user://" + candidate_link_name
-		if user_directory.is_link(candidate_link_name):
-			user_directory.remove(candidate_link_name)
-		elif FileAccess.file_exists(candidate_link_path) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate_link_path)):
-			_expect(false, "end-to-end archive collision timestamp candidate is otherwise unused")
+		if _user_entry_is_occupied(candidate_link_path, user_directory):
+			_expect(false, "end-to-end archive collision candidate is unused before fixture creation")
 			end_to_end_symlinks_supported = false
 			break
 		var missing_target_path: String = candidate_link_path + ".missing-target"
@@ -1150,6 +1184,10 @@ func _make_chunk_with_injected_failure(coord: Vector2i) -> Node3D:
 		return null
 	return SurfaceChunkFactoryScript.make_chunk(coord, int(world.get("_stream_clock_unix")))
 
+
+func _user_entry_is_occupied(path: String, directory: DirAccess) -> bool:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or directory.is_link(path.get_file())
 
 func _write_test_text(path: String, content: String) -> bool:
 	var file := FileAccess.open(path, FileAccess.WRITE)
