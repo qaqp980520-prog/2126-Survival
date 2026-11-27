@@ -46,6 +46,7 @@ class RejectingQuickUseRestore extends "res://systems/SurvivalQuickUse.gd":
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
+var _temp_promotion_fail_path: String = ""
 var _fail_chunk_coord: Vector2i = Vector2i(999999, 999999)
 
 func _initialize() -> void:
@@ -826,12 +827,43 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var after_invalid_temp_load: Dictionary = world.call("serialize_stream_state")
 	_expect(bool(world.call("_world_recovery_matches_snapshot", after_invalid_temp_load, before_invalid_temp_load)), "invalid temp rejection leaves the live world snapshot unchanged")
 
+	var corrupt_temp_path: String = "user://production_surface_world_corrupt_primary_temp_recovery_test.json"
+	_cleanup_save_test_files(corrupt_temp_path)
+	var corrupt_primary_bytes: String = "{corrupt primary before verified temp recovery"
+	var corrupt_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(corrupt_temp_path, corrupt_primary_bytes), "corrupt-primary temp recovery fixture writes the invalid primary")
+	_expect(_write_test_text(corrupt_temp_path + ".tmp", corrupt_temp_text), "corrupt-primary temp recovery fixture writes a valid temp")
+	_temp_promotion_fail_path = corrupt_temp_path
+	var failed_temp_promotion: Dictionary = SaveStoreScript.recover_interrupted_write(
+		corrupt_temp_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion")
+	)
+	_expect(not bool(failed_temp_promotion.get("ok", false)), "injected verified-temp promotion failure is reported")
+	var failed_temp_details: Dictionary = failed_temp_promotion.get("temp_recovery", {})
+	_expect(not bool(failed_temp_details.get("recovery_required", true)), "failed temp promotion restores the original corrupt primary when its archive rollback succeeds")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path) == corrupt_primary_bytes, "failed temp promotion preserves the original primary bytes")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path + ".tmp") == corrupt_temp_text, "failed temp promotion preserves the validated temp source")
+	_temp_promotion_fail_path = ""
+	_expect(bool(world.call("load_game", corrupt_temp_path)), "load retry promotes the verified temp after the injected failure is removed")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path) == corrupt_temp_text, "retry installs the exact validated temp as primary")
+	_expect(not FileAccess.file_exists(corrupt_temp_path + ".tmp"), "successful retry consumes the temp source")
+	var corrupt_temp_archive_found: bool = false
+	var corrupt_temp_directory: DirAccess = DirAccess.open("user://")
+	if corrupt_temp_directory != null:
+		for filename in corrupt_temp_directory.get_files():
+			if filename.begins_with(corrupt_temp_path.get_file() + ".corrupt."):
+				corrupt_temp_archive_found = true
+				break
+	_expect(corrupt_temp_archive_found, "verified-temp recovery archives the invalid primary before promotion")
+
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
 	_cleanup_save_test_files(first_write_temp_path)
 	_cleanup_save_test_files(invalid_temp_path)
+	_cleanup_save_test_files(corrupt_temp_path)
 	_cleanup_save_test_files(invalid_path)
 
 
@@ -1023,6 +1055,13 @@ func _rename_fail_primary_and_rollback(source_absolute: String, destination_abso
 func _rename_fail_primary_promotion(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
 	if destination_absolute == primary_absolute and source_absolute.ends_with(".tmp"):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
+
+func _rename_fail_temp_promotion(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_temp_promotion_fail_path)
+	if destination_absolute == primary_absolute and source_absolute.ends_with(".restore.tmp"):
 		return ERR_CANT_CREATE
 	return DirAccess.rename_absolute(source_absolute, destination_absolute)
 
