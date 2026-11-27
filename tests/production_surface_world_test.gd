@@ -19,6 +19,22 @@ class PendingRegistryPairDirector extends Node:
 
 class MissingRegistryPairRecoveryApi extends Node:
 	pass
+
+class FailingUndergroundRestoreDirector extends Node:
+	func has_pending_registry_pair_recovery() -> bool:
+		return false
+
+	func get_pending_registry_pair_recovery_report() -> Dictionary:
+		return {}
+
+	func get_managed_chunk_ids() -> PackedStringArray:
+		return PackedStringArray()
+
+	func sync_to_world_position(_position: Vector3, _now_unix: int = -1) -> bool:
+		return false
+
+	func recover_to_world_position(_position: Vector3, _now_unix: int = -1) -> bool:
+		return false
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
@@ -146,6 +162,7 @@ func _run() -> void:
 	_test_world_object_json_numeric_variants()
 	await _test_world_recovery_snapshot_comparison()
 	await _test_durable_save_load(now + 7)
+	await _test_underground_restore_rollback_barrier()
 	_finish(0 if failures.is_empty() else 1)
 
 func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> void:
@@ -764,6 +781,58 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
 	_cleanup_save_test_files(invalid_path)
+
+
+func _test_underground_restore_rollback_barrier() -> void:
+	var rollback_world: Node3D = world
+	_expect(rollback_world != null, "underground rollback-barrier fixture uses the initialized production SurfaceWorld")
+	if rollback_world == null:
+		return
+	await process_frame
+	var status: Dictionary = rollback_world.call("get_world_session_status")
+	_expect(bool(status.get("ready", false)), "underground rollback-barrier fixture uses a ready streaming stack")
+	if not bool(status.get("ready", false)):
+		return
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var initial_payload: Dictionary = rollback_world.call("serialize_stream_state")
+	_expect(not initial_payload.is_empty(), "underground rollback-barrier fixture captures a complete initial snapshot")
+	if initial_payload.is_empty():
+		return
+	_expect(bool(rollback_world.call("restore_stream_state", initial_payload, now_unix, true)), "fixture primes a successful restore report before injecting a later failure")
+	var previous_payload: Dictionary = rollback_world.call("serialize_stream_state")
+	var previous_chunk_ids: PackedStringArray = rollback_world.chunk_controller.get_loaded_chunk_ids()
+	var previous_minerals: Dictionary = rollback_world.chunk_controller.call("to_save_dict")
+	var previous_objects: Dictionary = rollback_world.object_state_registry.call("to_save_dict")
+	var previous_position: Vector3 = rollback_world.player.global_position
+	var previous_world_seed: int = int(rollback_world.get("world_seed"))
+	var original_mine_director: Node = rollback_world.get("mine_director") as Node
+
+	var failing_director := FailingUndergroundRestoreDirector.new()
+	failing_director.name = "InjectedFailingUndergroundDirector"
+	rollback_world.add_child(failing_director)
+	rollback_world.set("mine_director", failing_director)
+	var candidate_payload: Dictionary = previous_payload.duplicate(true)
+	candidate_payload["world_seed"] = previous_world_seed + 1
+	var restored: bool = bool(rollback_world.call("restore_stream_state", candidate_payload, now_unix + 1))
+	_expect(not restored, "failed underground target synchronization rejects the candidate world restore")
+	var failed_report: Dictionary = rollback_world.call("get_last_restore_report")
+	_expect(not bool(failed_report.get("rollback_complete", true)), "failed underground recovery cannot reuse a stale successful restore report")
+	_expect(not rollback_world.call("_get_world_save_recovery_barrier_report").is_empty(), "incomplete underground rollback creates a world persistence barrier")
+	_expect(rollback_world.call("serialize_stream_state").is_empty(), "incomplete underground rollback blocks new world snapshots")
+	_expect(rollback_world.chunk_controller.get_loaded_chunk_ids() != previous_chunk_ids, "failure injection removes the underground window before recovery is refused")
+	_expect(int(rollback_world.get("world_seed")) == previous_world_seed, "failed recovery restores the previous world seed even while the chunk window remains incomplete")
+
+	rollback_world.set("mine_director", original_mine_director)
+	failing_director.queue_free()
+	await process_frame
+	_expect(bool(rollback_world.call("retry_save_recovery")), "restoring the original underground Director allows the retained world snapshot to recover")
+	var recovered_payload: Dictionary = rollback_world.call("serialize_stream_state")
+	_expect(bool(rollback_world.call("_world_recovery_matches_snapshot", recovered_payload, previous_payload)), "recovery readback exactly matches the retained pre-restore world snapshot")
+	_expect(rollback_world.chunk_controller.get_loaded_chunk_ids() == previous_chunk_ids, "recovery restores the original combined surface and underground chunk window")
+	_expect(rollback_world.chunk_controller.call("to_save_dict") == previous_minerals, "recovery restores exact mineral records after underground resynchronization")
+	_expect(rollback_world.object_state_registry.call("to_save_dict") == previous_objects, "recovery restores exact world-object records after underground resynchronization")
+	_expect(rollback_world.player.global_position.is_equal_approx(previous_position), "recovery preserves the original player position")
 
 
 func _test_failed_restore_stream_rollback() -> void:

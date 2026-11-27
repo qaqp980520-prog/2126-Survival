@@ -944,6 +944,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 	if not recovery_barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
 		return false
+	_set_restore_report(false, "preflight", "World restore has not changed live state.", true)
 	if not _validate_world_save_payload(payload, true):
 		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no streaming or participant mutation was started.", true)
 		return false
@@ -1009,31 +1010,97 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 	var previous_position: Vector3 = player.global_position
 	var previous_underground: bool = _is_underground
 	var previous_world_seed: int = world_seed
+	var previous_mine_layer_index: int = _mine_layer_index
+	var previous_return_position: Vector3 = _surface_return_position
+	var previous_loaded_chunk_ids: PackedStringArray = chunk_controller.get_loaded_chunk_ids()
 	var previous_mine_position: Vector3 = previous_position if previous_underground else MINE_ENTRY_UNDERGROUND
 	var now: int = now_unix if now_unix > 0 else int(Time.get_unix_time_from_system())
 	var mine_target: Vector3 = target_position if target_underground else MINE_ENTRY_UNDERGROUND
+	_set_restore_report(false, "restore_in_progress", "World restore has started; rollback has not yet been verified.", false, {
+		"previous_world_seed": previous_world_seed,
+		"previous_chunk_ids": previous_loaded_chunk_ids.duplicate()
+	})
 	if next_world_seed != previous_world_seed and not _clear_underground_window(previous_mine_position, now):
-		if not _restore_mine_snapshots(previous_minerals, previous_world_objects, now):
-			push_error("Mine registry snapshot restoration failed after a seed-change unload rejection.")
+		var snapshots_restored: bool = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = snapshots_restored and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		_set_restore_report(false, "underground_clear", "Underground window could not be cleared; rollback was verified against the previous world snapshot.", rollback_complete, {
+			"mine_snapshots_restored": snapshots_restored,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		})
+		if not rollback_complete:
+			push_warning("Mine registry or chunk-window rollback failed after a seed-change unload rejection.")
 		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
+		var underground_rollback_complete: bool = false
 		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-seed stream rejection.")
+			underground_rollback_complete = _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects)
 		else:
 			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = mine_director.recover_to_world_position(previous_mine_position, now)
+			if underground_rollback_complete:
+				underground_rollback_complete = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = underground_rollback_complete and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		var mine_report: Dictionary = mine_director.call("get_last_sync_report") if mine_director.has_method("get_last_sync_report") else {}
+		_set_restore_report(false, "stream_sync", "Underground target streaming failed; the previous world snapshot was checked after recovery.", rollback_complete, {
+			"underground_rollback_complete": underground_rollback_complete,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+			"mine_sync_report": mine_report
+		})
+		if not rollback_complete:
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if not super.restore_stream_state(payload, now, exact_mineral_restore):
+		var base_restore_report: Dictionary = get_last_restore_report()
+		var underground_rollback_complete: bool = false
 		if next_world_seed != previous_world_seed:
-			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects)
 		else:
 			world_seed = previous_world_seed
-			if not mine_director.recover_to_world_position(previous_mine_position, now):
-				push_error("Underground mine window rollback failed after world-session restore rejection.")
+			underground_rollback_complete = mine_director.recover_to_world_position(previous_mine_position, now)
+			if underground_rollback_complete:
+				underground_rollback_complete = _restore_mine_snapshots(previous_minerals, previous_world_objects, now)
+		var rollback_complete: bool = bool(base_restore_report.get("rollback_complete", false)) and underground_rollback_complete and _mine_restore_matches_snapshot(
+			previous_minerals,
+			previous_world_objects,
+			previous_loaded_chunk_ids,
+			previous_position,
+			previous_world_seed,
+			previous_underground,
+			previous_mine_layer_index,
+			previous_return_position
+		)
+		var mine_report: Dictionary = mine_director.call("get_last_sync_report") if mine_director.has_method("get_last_sync_report") else {}
+		var combined_phase: String = str(base_restore_report.get("phase", "stream_restore"))
+		_set_restore_report(false, combined_phase, "World participant restore failed; surface and underground rollback results were combined.", rollback_complete, {
+			"base_restore_report": base_restore_report,
+			"underground_rollback_complete": underground_rollback_complete,
+			"expected_chunk_ids": previous_loaded_chunk_ids,
+			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+			"mine_sync_report": mine_report
+		})
+		if not rollback_complete:
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
@@ -1056,6 +1123,29 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 	_camera_interaction_target_cache.clear()
 	_refresh_hud()
 	return true
+
+func _mine_restore_matches_snapshot(
+	mineral_snapshot: Dictionary,
+	object_snapshot: Dictionary,
+	expected_chunk_ids: PackedStringArray,
+	expected_position: Vector3,
+	expected_world_seed: int,
+	expected_underground: bool,
+	expected_layer_index: int,
+	expected_return_position: Vector3
+) -> bool:
+	if world_seed != expected_world_seed or player == null or not player.global_position.is_equal_approx(expected_position):
+		return false
+	if _is_underground != expected_underground or _mine_layer_index != expected_layer_index or not _surface_return_position.is_equal_approx(expected_return_position):
+		return false
+	if chunk_controller == null or object_state_registry == null:
+		return false
+	if chunk_controller.get_loaded_chunk_ids() != expected_chunk_ids or _get_expected_loaded_chunk_ids() != expected_chunk_ids:
+		return false
+	if chunk_controller.call("to_save_dict") != mineral_snapshot or object_state_registry.call("to_save_dict") != object_snapshot:
+		return false
+	return _get_underground_recovery_barrier_report().is_empty()
+
 
 func _clear_underground_window(recovery_position: Vector3, now_unix: int) -> bool:
 	if chunk_controller == null or not is_instance_valid(chunk_controller) or mine_director == null:
