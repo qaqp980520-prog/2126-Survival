@@ -50,6 +50,7 @@ var _temp_promotion_fail_path: String = ""
 var _fail_chunk_coord: Vector2i = Vector2i(999999, 999999)
 var _test_run_prefix: String = ""
 var _owned_test_save_paths: Array[String] = []
+var _owned_test_symlink_paths: Array[String] = []
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -283,6 +284,40 @@ func _user_entry_is_occupied(path: String, _directory: DirAccess) -> bool:
 	var is_link: bool = parent_directory != null and parent_directory.is_link(path.get_file())
 	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or is_link
 
+func _create_owned_test_symlink(directory: DirAccess, target_absolute: String, link_name: String) -> Error:
+	if directory == null:
+		return ERR_CANT_OPEN
+	var link_path: String = "user://" + link_name
+	if _user_entry_is_occupied(link_path, directory):
+		return ERR_ALREADY_EXISTS
+	var create_error: Error = directory.create_link(target_absolute, link_name)
+	if create_error == OK:
+		_owned_test_symlink_paths.append(link_path)
+	return create_error
+
+func _remove_owned_test_symlink(path: String) -> bool:
+	if not _owned_test_symlink_paths.has(path):
+		push_error("Refusing to remove an unowned test symlink: " + path)
+		return false
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	if directory == null:
+		return false
+	var link_name: String = path.get_file()
+	if directory.is_link(link_name):
+		var remove_error: Error = directory.remove(link_name)
+		if remove_error != OK:
+			push_error("Failed to remove owned test symlink: " + path + " error=" + str(remove_error))
+			return false
+	elif _user_entry_is_occupied(path, directory):
+		push_error("Refusing to remove a non-link entry that replaced an owned test symlink: " + path)
+		return false
+	_owned_test_symlink_paths.erase(path)
+	return true
+
+func _cleanup_owned_test_symlinks() -> void:
+	for path in _owned_test_symlink_paths.duplicate():
+		_remove_owned_test_symlink(path)
+
 
 func _test_save_path_symlink_guards() -> void:
 	var user_directory: DirAccess = DirAccess.open("user://")
@@ -338,7 +373,7 @@ func _test_save_path_symlink_guards() -> void:
 		_cleanup_save_test_files(target_file_path)
 		DirAccess.remove_absolute(target_directory_absolute)
 		return
-	var directory_link_error: Error = user_directory.create_link(target_directory_absolute, directory_link_name)
+	var directory_link_error: Error = _create_owned_test_symlink(user_directory, target_directory_absolute, directory_link_name)
 	if directory_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
 		_cleanup_save_test_files(target_file_path)
@@ -358,7 +393,7 @@ func _test_save_path_symlink_guards() -> void:
 		)
 		_expect(not bool(nested_read.get("ok", false)) and str(nested_read.get("reason", "")) == "path_symlink", "reader rejects a path beneath a directory symlink")
 		_expect(FileAccess.get_file_as_string(target_file_path) == "protected-target-bytes", "directory-symlink rejection preserves target bytes")
-		user_directory.remove(directory_link_name)
+		_remove_owned_test_symlink(directory_link_path)
 	_cleanup_save_test_files(target_file_path)
 	DirAccess.remove_absolute(target_directory_absolute)
 
@@ -376,7 +411,7 @@ func _test_save_path_symlink_guards() -> void:
 	if not direct_target_written:
 		_cleanup_save_test_files(direct_target)
 		return
-	var direct_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(direct_target), direct_link_name)
+	var direct_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(direct_target), direct_link_name)
 	if direct_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: direct file-symlink fixture requires Windows Developer Mode or elevated privileges.")
 		_cleanup_save_test_files(direct_target)
@@ -388,7 +423,7 @@ func _test_save_path_symlink_guards() -> void:
 		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_link_path, "{}", Callable(world, "_validate_world_save_payload"))
 		_expect(not bool(direct_write.get("ok", false)) and str(direct_write.get("phase", "")) == "path_symlink", "writer rejects a direct file symlink")
 		_expect(FileAccess.get_file_as_string(direct_target) == "protected-direct-file-bytes", "direct-file-symlink rejection preserves target bytes")
-		user_directory.remove(direct_link_name)
+		_remove_owned_test_symlink(direct_link_path)
 	_cleanup_save_test_files(direct_target)
 
 	var archive_base_path: String = "user://" + fixture_prefix + "_archive_symlink_collision.json"
@@ -401,7 +436,7 @@ func _test_save_path_symlink_guards() -> void:
 		return
 	var first_archive_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
 	_expect(first_archive_candidate == expected_archive_path, "archive collision fixture starts from a deterministic unused candidate")
-	var archive_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(missing_archive_target), archive_link_name)
+	var archive_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(missing_archive_target), archive_link_name)
 	if archive_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
 	elif archive_link_error != OK:
@@ -411,7 +446,31 @@ func _test_save_path_symlink_guards() -> void:
 		var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
 		_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
 		_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
-		user_directory.remove(archive_link_name)
+		_remove_owned_test_symlink(expected_archive_path)
+
+	# Verify the test-owned-link cleanup unlinks only the fixture entry and never its target.
+	var cleanup_target_path: String = _test_user_path("symlink_cleanup_target")
+	var cleanup_link_path: String = "user://" + fixture_prefix + "_cleanup_probe_link"
+	if not _claim_test_save_path(cleanup_target_path):
+		_expect(false, "symlink cleanup target claims a unique unused save family")
+		return
+	var cleanup_target_text: String = "preserve-symlink-cleanup-target"
+	var cleanup_target_written: bool = _write_test_text(cleanup_target_path, cleanup_target_text)
+	_expect(cleanup_target_written, "symlink cleanup target is written inside an owned save family")
+	if cleanup_target_written and not _user_entry_is_occupied(cleanup_link_path, user_directory):
+		var cleanup_probe_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), cleanup_link_path.get_file())
+		if cleanup_probe_error != OK and OS.get_name() == "Windows":
+			print("SKIP: symlink cleanup ownership regression requires Windows Developer Mode or elevated privileges.")
+		else:
+			_expect(cleanup_probe_error == OK, "create a test-owned symlink for cleanup ownership verification")
+			if cleanup_probe_error == OK:
+				_expect(user_directory.is_link(cleanup_link_path.get_file()), "cleanup probe is registered as a symlink owned by this test")
+				_cleanup_owned_test_symlinks()
+				_expect(not user_directory.is_link(cleanup_link_path.get_file()), "owned-link cleanup removes the symlink entry")
+				_expect(FileAccess.get_file_as_string(cleanup_target_path) == cleanup_target_text, "owned-link cleanup preserves the symlink target bytes")
+	else:
+		_expect(false, "symlink cleanup probe path is unused and target was created")
+	_cleanup_save_test_files(cleanup_target_path)
 
 	# Exercise the real production load/recovery path, not only the archive-name helper.
 	var end_to_end_archive_path: String = "user://" + fixture_prefix + "_archive_symlink_e2e.json"
@@ -452,7 +511,7 @@ func _test_save_path_symlink_guards() -> void:
 			end_to_end_symlinks_supported = false
 			break
 		var missing_target_path: String = candidate_link_path + ".missing-target"
-		var create_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(missing_target_path), candidate_link_name)
+		var create_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(missing_target_path), candidate_link_name)
 		if create_link_error != OK:
 			if OS.get_name() == "Windows":
 				print("SKIP: end-to-end dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
@@ -483,8 +542,7 @@ func _test_save_path_symlink_guards() -> void:
 				_expect(user_directory.is_link(occupied_symlink_path.get_file()), "production recovery leaves the colliding dangling archive symlink intact")
 				_expect(not FileAccess.file_exists(occupied_symlink_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(occupied_symlink_path)), "the preserved archive symlink remains dangling after the real archive rename")
 	for link_name in end_to_end_link_names:
-		if user_directory.is_link(link_name):
-			user_directory.remove(link_name)
+		_remove_owned_test_symlink("user://" + link_name)
 	_cleanup_save_test_files(end_to_end_archive_path)
 
 
@@ -501,6 +559,7 @@ func _expect(condition: bool, message: String) -> void:
 		push_error("FAIL: " + message)
 
 func _finish(exit_code: int) -> void:
+	_cleanup_owned_test_symlinks()
 	for test_path in _owned_test_save_paths.duplicate():
 		_cleanup_save_test_files(test_path)
 	if is_instance_valid(world):
