@@ -309,7 +309,8 @@ func _remove_owned_test_symlink(path: String) -> bool:
 			push_error("Failed to remove owned test symlink: " + path + " error=" + str(remove_error))
 			return false
 	elif _user_entry_is_occupied(path, directory):
-		push_error("Refusing to remove a non-link entry that replaced an owned test symlink: " + path)
+		# The link was replaced after creation. Relinquish ownership without touching the replacement.
+		_owned_test_symlink_paths.erase(path)
 		return false
 	_owned_test_symlink_paths.erase(path)
 	return true
@@ -457,7 +458,11 @@ func _test_save_path_symlink_guards() -> void:
 	var cleanup_target_text: String = "preserve-symlink-cleanup-target"
 	var cleanup_target_written: bool = _write_test_text(cleanup_target_path, cleanup_target_text)
 	_expect(cleanup_target_written, "symlink cleanup target is written inside an owned save family")
-	if cleanup_target_written and not _user_entry_is_occupied(cleanup_link_path, user_directory):
+	if not cleanup_target_written:
+		_expect(false, "symlink cleanup target is available for the ownership regression")
+	elif _user_entry_is_occupied(cleanup_link_path, user_directory):
+		_expect(false, "symlink cleanup probe path is unused before creation")
+	else:
 		var cleanup_probe_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), cleanup_link_path.get_file())
 		if cleanup_probe_error != OK and OS.get_name() == "Windows":
 			print("SKIP: symlink cleanup ownership regression requires Windows Developer Mode or elevated privileges.")
@@ -468,8 +473,32 @@ func _test_save_path_symlink_guards() -> void:
 				_cleanup_owned_test_symlinks()
 				_expect(not user_directory.is_link(cleanup_link_path.get_file()), "owned-link cleanup removes the symlink entry")
 				_expect(FileAccess.get_file_as_string(cleanup_target_path) == cleanup_target_text, "owned-link cleanup preserves the symlink target bytes")
+
+	# Simulate another actor replacing an owned link between creation and cleanup.
+	var replacement_link_path: String = "user://" + fixture_prefix + "_cleanup_replacement_probe"
+	if _user_entry_is_occupied(replacement_link_path, user_directory):
+		_expect(false, "replacement-race probe path is unused before creation")
 	else:
-		_expect(false, "symlink cleanup probe path is unused and target was created")
+		var replacement_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), replacement_link_path.get_file())
+		if replacement_link_error != OK and OS.get_name() == "Windows":
+			print("SKIP: symlink replacement-race regression requires Windows Developer Mode or elevated privileges.")
+		else:
+			_expect(replacement_link_error == OK, "create an owned symlink for replacement-race cleanup testing")
+			if replacement_link_error == OK:
+				var unlink_for_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
+				_expect(unlink_for_replacement_error == OK, "simulate external removal of the owned symlink before cleanup")
+				if unlink_for_replacement_error == OK:
+					var replacement_file := FileAccess.open(replacement_link_path, FileAccess.WRITE)
+					_expect(replacement_file != null, "create a regular replacement entry at the former symlink path")
+					if replacement_file != null:
+						replacement_file.store_string("preserve-replacement-entry")
+						replacement_file.close()
+						_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses to remove a regular replacement entry")
+						_expect(FileAccess.get_file_as_string(replacement_link_path) == "preserve-replacement-entry", "replacement entry bytes remain unchanged")
+						_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is gone")
+						DirAccess.remove_absolute(ProjectSettings.globalize_path(replacement_link_path))
+					else:
+						_remove_owned_test_symlink(replacement_link_path)
 	_cleanup_save_test_files(cleanup_target_path)
 
 	# Exercise the real production load/recovery path, not only the archive-name helper.
