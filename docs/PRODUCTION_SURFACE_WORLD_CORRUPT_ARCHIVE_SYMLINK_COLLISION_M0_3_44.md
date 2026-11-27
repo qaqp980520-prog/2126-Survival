@@ -46,3 +46,16 @@ Exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 4.3 
 ## Next step
 
 Verify both exact-head workflows, review the full logs, then retain PR #459 as Draft pending parent-first independent review. Integrate into PR #452 only with an expected-SHA fast-forward after review, rerun exact-head parent CI, and do not merge to main.
+
+
+## Run 462 — production recovery-path collision regression
+
+The original M0.3.44 regression called `_unique_corrupt_archive_path()` directly. Run 462 extends this to the real `SurfaceWorld.load_game()` path:
+
+1. Create an invalid Primary and a fully validated `.tmp` payload.
+2. Pre-create dangling symlinks at the next 12 timestamped corrupt-archive candidates, covering the timestamp window during the test.
+3. Invoke production `load_game()` so `recover_interrupted_write()` and `_promote_verified_temp()` select and use the archive path.
+4. Verify the invalid Primary is moved to exactly one `.1` suffix, the dangling symlink remains intact, the verified temp becomes the byte-identical Primary, and the temp is consumed only after successful promotion.
+5. Verify the normal `loaded_from_primary` path completes after recovery.
+
+Files updated: `tests/production_surface_world_test.gd` and this version document. No production runtime GDScript, save schema, scene, Project Settings, Autoload, or external dependency changes. The exact-head Godot 4.3 Dedicated Save Validation and Full Compatibility Gate are required before this follow-up is considered validated. Windows may skip the symlink fixture if link creation privileges are unavailable.
