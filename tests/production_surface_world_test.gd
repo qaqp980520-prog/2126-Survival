@@ -235,6 +235,14 @@ func _test_reserved_save_base_paths() -> void:
 		_expect(not bool(recovery_report.get("ok", false)) and str(recovery_report.get("reason", "")) == "unsupported_save_path", "interrupted-write recovery rejects reserved sidecar base path: " + reserved_path)
 		var promotion_report: Dictionary = SaveStoreScript.promote_backup(reserved_path, validator)
 		_expect(not bool(promotion_report.get("ok", false)) and str(promotion_report.get("phase", "")) == "path_preflight" and str(promotion_report.get("reason", "")) == "unsupported_save_path", "backup promotion rejects reserved sidecar base path: " + reserved_path)
+		var save_ok: bool = bool(world.call("save_game", reserved_path))
+		var save_report: Dictionary = world.call("get_last_save_report")
+		_expect(not save_ok and str(save_report.get("phase", "")) == "path_preflight" and str(save_report.get("reason", "")) == "unsupported_save_path", "public save_game rejects reserved sidecar base path: " + reserved_path)
+		_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "invalid save path does not create a false recovery barrier: " + reserved_path)
+		var load_ok: bool = bool(world.call("load_game", reserved_path))
+		var load_report: Dictionary = world.call("get_last_save_report")
+		_expect(not load_ok and str(load_report.get("phase", "")) == "path_preflight" and str(load_report.get("reason", "")) == "unsupported_save_path", "public load_game rejects reserved sidecar base path: " + reserved_path)
+		_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "invalid load path does not create a false recovery barrier: " + reserved_path)
 
 
 func _test_save_path_symlink_guards() -> void:
