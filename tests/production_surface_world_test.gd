@@ -299,7 +299,7 @@ func _create_owned_test_symlink(directory: DirAccess, target_absolute: String, l
 	if create_error == OK:
 		_owned_test_symlink_paths.append(link_path)
 		_owned_test_symlink_targets[link_path] = target_absolute
-		_owned_test_symlink_placeholders[link_path] = false
+		_owned_test_symlink_placeholders[link_path] = ""
 	return create_error
 
 func _remove_owned_test_symlink(path: String) -> bool:
