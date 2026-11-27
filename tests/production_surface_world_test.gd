@@ -575,6 +575,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	await _test_failed_restore_stream_rollback()
 
 	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
+	var uncommitted_temp_envelope: Dictionary = SaveStoreScript.build_envelope(payload_b, now_unix + 12)
+	var uncommitted_temp_text: String = SaveStoreScript.encode_envelope(uncommitted_temp_envelope)
+	_expect(_write_test_text(path + ".tmp", uncommitted_temp_text), "test creates a valid uncommitted temp beside a corrupt primary and valid backup")
+	_expect(bool(SaveStoreScript.read_valid_file(path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "uncommitted temp is fully valid before backup recovery")
 	_expect(bool(world.call("load_game", path)), "valid backup is restored when the primary is corrupt")
 	_expect(_inventory_count("berries") == 3, "backup recovery restores the previous valid inventory")
 	var backup_stamina: RefCounted = world.get("stamina") as RefCounted
@@ -590,10 +594,6 @@ func _test_durable_save_load(now_unix: int) -> void:
 				archive_found = true
 				break
 	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
-	var uncommitted_temp_envelope: Dictionary = SaveStoreScript.build_envelope(payload_b, now_unix + 12)
-	var uncommitted_temp_text: String = SaveStoreScript.encode_envelope(uncommitted_temp_envelope)
-	_expect(_write_test_text(path + ".tmp", uncommitted_temp_text), "test creates a valid uncommitted temp beside a corrupt primary and valid backup")
-	_expect(bool(SaveStoreScript.read_valid_file(path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "uncommitted temp is fully valid before backup recovery")
 	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
 	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
 	_expect(_write_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
