@@ -30,6 +30,7 @@ M0.3.46 introduced per-process save-family ownership and non-destructive file cl
 
 - Initial lifecycle ownership implementation: `2d06dee83764f843b5ea9468d0c18d808948d6d6`.
 - Replacement-entry refusal and regression: `76e77210a69706a2f80bef44277016a85bc7e202`.
+- Fail-closed replacement-sentinel setup: `1feb3bce787c8148dee2de3e1ced567eb7aa80af`.
 
 ## Import and test
 
@@ -47,7 +48,7 @@ The exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 
 ## Validation status
 
 - Static diff review: one tracked `create_link` call remains inside the ownership helper; all normal fixture link removals route through the owned-link helper. The sole direct `DirAccess.remove` in the test intentionally simulates an external actor unlinking the fixture before placing a regular replacement entry.
-- The two exact code commits are on staging branch `fix/save-test-symlink-fixture-lifecycle-run465`, based on PR #459 HEAD `593325b3cd42c747207996c881243a94bd83e9e5`.
+- The three exact code/test commits are on staging branch `fix/save-test-symlink-fixture-lifecycle-run465`, based on PR #459 HEAD `593325b3cd42c747207996c881243a94bd83e9e5`.
 - Godot CI is pending; no test pass is claimed for this candidate yet.
 - No local Godot run is claimed; the current authoring container does not provide a Godot executable.
 
