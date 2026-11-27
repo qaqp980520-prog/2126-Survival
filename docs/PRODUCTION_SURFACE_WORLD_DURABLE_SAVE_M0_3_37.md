@@ -153,8 +153,9 @@ The correction adds an explicit `exact_mineral_restore` option to the base and S
 
 The regression fixture:
 - captures the original production world snapshot;
-- selects a currently registered live mineral and prepares a valid depleted record with its last-regeneration timestamp two intervals before a fixed recovery time;
-- injects a pending in-memory world-recovery barrier and invokes `retry_save_recovery()`;
+- selects a currently registered surface mineral and prepares a valid depleted record with its last-regeneration timestamp two intervals before a fixed recovery time;
+- moves the player far enough to unload that mineral's surface chunk, then injects a pending in-memory world-recovery barrier and invokes `retry_save_recovery()`;
+- streams the captured surface window back in, exercising detached mineral registration and its normal offline catch-up before the exact post-stream reapplication;
 - verifies the full mineral payload, remaining units and timestamp are unchanged before readback comparison;
 - verifies the barrier clears only after the exact full snapshot matches; and
 - restores the original test-world snapshot using the exact recovery mode.
