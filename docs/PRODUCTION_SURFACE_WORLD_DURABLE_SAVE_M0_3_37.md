@@ -167,3 +167,40 @@ Files updated:
 - this technical asset record
 
 Exact-head Godot 4.3 dedicated validation and Full Compatibility Gate are pending for this candidate. No pass is claimed until the new exact HEAD completes all required workflows. Local Godot remains unavailable; no local engine run is claimed.
+
+
+## Run 453 — exact-head validation and parent-branch fast-forward (2026-11-27)
+
+The tested correction from child PR #454 has been fast-forwarded into the production persistence parent branch for PR #452.
+
+- Previous PR #452 HEAD: `c5ac53a0dcc4c04ca67cbbacbe1d247fd1d0bc11`.
+- Tested correction HEAD: `5551119ac435326b25de6750808937c7fb751f9f`.
+- Fast-forward used an expected-SHA guard with `force=false`; no force push or history rewrite was used.
+- PR #452 branch `feat/production-surface-world-durable-save-2026-11-27-run11` now points to the exact tested correction HEAD.
+- Compare against parent PR #449: 88 commits ahead / 0 behind. Compare against current main: 187 ahead / 2 behind; the two main-only commits are the previously documented accidental add/revert pair. Do not rebase or merge to main before parent-first review.
+
+### Exact-head Godot 4.3 evidence — `5551119ac435326b25de6750808937c7fb751f9f`
+
+- Full Compatibility Gate [45921161571](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161571): **success**, 553/553 steps, 0 failed, 0 skipped. All 553 steps and final clean-validation-workspace checks completed successfully.
+- Dedicated Production SurfaceWorld Save Validation [45921161480](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161480): **success**.
+- Focused Run 103 [45921161569](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161569): **success**.
+- Focused Run 104 [45921161432](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161432): **success**.
+- Focused Runs 105–107 [45921161534](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161534): **success**.
+- Focused Run 45 [45921161590](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45921161590): **success**.
+- Full Gate job log: 84,406 lines / 7,718,914 characters / 78,063 PASS markers. There were 330 raw `FAIL` token matches from echoed CI shell-guard commands; after excluding command echoes, no actual Godot `SCRIPT ERROR:`, `ERROR:`, or `FAIL:` diagnostics were present. No ObjectDB leak or Orphan StringName report was present.
+- Local Godot 4 executable is unavailable; no local engine run is claimed. GPU, Xvfb/Mesa, mobile and target-device FPS/visual validation remain untested.
+
+### Recovery readback invariant
+
+`_world_recovery_matches_snapshot()` now compares the complete validated `minerals` payload, not only the stable-ID set. The production regression `_test_world_recovery_snapshot_comparison()` asserts both:
+- an unchanged full snapshot is accepted; and
+- a valid record with the same stable ID but changed `remaining_units` is rejected.
+
+The exact-time cross-window recovery test also verifies mineral values and regeneration timestamps, plus crop and WorldObject readback after streaming. Issue #455 is closed as completed based on these exact-head regressions and successful dedicated/full validation.
+
+### Current integration state
+
+- PR #452 remains Open / Draft / Unmerged; its branch now contains the tested child correction.
+- PR #454 remains Open / Draft / Unmerged temporarily while PR #452's updated branch-context CI is revalidated; close #454 as superseded only after that exact-head validation succeeds.
+- PR #449 and the parent chain remain unreviewed; keep descendants Draft until parent-first independent review.
+- main remains `ec166b8131c38eda43a0131e91113d484e045b1f`, unprotected and unchanged by this run.
