@@ -331,6 +331,27 @@ func _test_save_path_symlink_guards() -> void:
 		user_directory.remove(direct_link_name)
 	_cleanup_save_test_files(direct_target)
 
+	var archive_base_path: String = "user://run461_archive_symlink_collision.json"
+	var archive_timestamp: int = int(Time.get_unix_time_from_system()) + 31536000
+	var expected_archive_path: String = archive_base_path + ".corrupt." + str(archive_timestamp)
+	var archive_link_name: String = expected_archive_path.get_file()
+	if user_directory.is_link(archive_link_name) or FileAccess.file_exists(expected_archive_path):
+		user_directory.remove(archive_link_name)
+	var first_archive_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
+	_expect(first_archive_candidate == expected_archive_path, "archive collision fixture starts from a deterministic unused candidate")
+	var missing_archive_target: String = "user://run461_missing_archive_target.json"
+	var archive_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(missing_archive_target), archive_link_name)
+	if archive_link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
+	else:
+		_expect(archive_link_error == OK, "create a dangling symlink at the next corrupt-archive candidate")
+		if archive_link_error == OK:
+			_expect(not FileAccess.file_exists(expected_archive_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(expected_archive_path)), "dangling archive symlink is not reported as an ordinary file or directory")
+			var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
+			_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
+			_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
+			user_directory.remove(archive_link_name)
+
 
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")
