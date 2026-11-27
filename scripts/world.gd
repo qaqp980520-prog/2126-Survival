@@ -252,17 +252,33 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral
 	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	_last_grid = Vector2i(999999, 999999)
 	if _sync_streaming(now):
-		if exact_mineral_restore:
-			if not chunk_controller.has_method("restore_snapshot_exact") or not bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now)):
-				_set_restore_report(false, "mineral_exact_readback_restore", "Exact mineral snapshot could not be reapplied after target chunk streaming; recovery remains required.", false, {
-					"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		var post_stream_details: Dictionary = {
+			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+		}
+		# Streaming can unload the previous window and append records for its live objects.
+		# Reapply the authoritative crop and world-object snapshots after the target window is stable.
+		if has_crops:
+			if crop_registry == null or not bool(crop_registry.restore_save_dict(crops_value)):
+				_set_restore_report(false, "crop_post_stream_restore", "Crop registry could not be restored after target chunk streaming; recovery remains required.", false, post_stream_details)
+				return false
+			post_stream_details["crops_restored_after_streaming"] = true
+		if has_world_objects:
+			if not chunk_controller.has_method("restore_world_object_states") or not bool(chunk_controller.call("restore_world_object_states", world_objects_value)):
+				var world_object_report: Dictionary = chunk_controller.call("get_last_world_object_restore_report") if chunk_controller.has_method("get_last_world_object_restore_report") else {}
+				_set_restore_report(false, "world_object_post_stream_restore", "World-object registry could not be restored after target chunk streaming; recovery remains required.", false, {
+					"active_chunk_ids": chunk_controller.get_loaded_chunk_ids(),
+					"world_object_report": world_object_report
 				})
 				return false
+			post_stream_details["world_objects_restored_after_streaming"] = true
+		if exact_mineral_restore:
+			if not chunk_controller.has_method("restore_snapshot_exact") or not bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now)):
+				_set_restore_report(false, "mineral_exact_readback_restore", "Exact mineral snapshot could not be reapplied after target chunk streaming; recovery remains required.", false, post_stream_details)
+				return false
+			post_stream_details["minerals_restored_exact_after_streaming"] = true
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
-		_set_restore_report(true, "complete", "", true, {
-			"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
-		})
+	_set_restore_report(true, "complete", "", true, post_stream_details)
 		return true
 
 	# A failed target stream must not leave the candidate mineral payload applied.
