@@ -14,7 +14,10 @@ on:
       - ".github/workflows/production-surface-world-save-validation.yml"
       - ".github/workflows/godot-validation.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - "feat/production-surface-world-durable-save-2026-11-27-run11"
+      - "fix/production-surface-world-save-json-preflight-2026-11-27-run11"
     paths:
       - "systems/SurfaceWorldSaveStore.gd"
       - "world/SurfaceWorld.gd"
