@@ -144,6 +144,7 @@ func _run() -> void:
 	_expect(not directions.has("forward"), "touch release clears virtual input")
 	_test_world_save_recovery_gate(save_payload, now + 6)
 	_test_world_object_json_numeric_variants()
+	_test_world_recovery_snapshot_comparison()
 	await _test_durable_save_load(now + 7)
 	_finish(0 if failures.is_empty() else 1)
 
@@ -296,6 +297,32 @@ func _finish(exit_code: int) -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _test_world_recovery_snapshot_comparison() -> void:
+	var expected_snapshot: Dictionary = world.call("serialize_stream_state")
+	_expect(not expected_snapshot.is_empty(), "world recovery comparison captures a complete expected snapshot")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", expected_snapshot, expected_snapshot)), "world recovery comparison accepts an unchanged full snapshot")
+
+	var changed_snapshot: Dictionary = expected_snapshot.duplicate(true)
+	var mineral_payload: Dictionary = changed_snapshot.get("minerals", {})
+	var veins: Dictionary = mineral_payload.get("veins", {})
+	var mineral_ids: Array = veins.keys()
+	_expect(not mineral_ids.is_empty(), "world recovery comparison fixture contains at least one mineral record")
+	if not mineral_ids.is_empty():
+		var stable_id: String = str(mineral_ids[0])
+		var record: Dictionary = veins[stable_id].duplicate(true)
+		var remaining_units: int = int(record.get("remaining_units", 0))
+		var max_units: int = int(record.get("max_units", remaining_units + 1))
+		if remaining_units < max_units:
+			record["remaining_units"] = remaining_units + 1
+		else:
+			record["remaining_units"] = max(0, remaining_units - 1)
+		veins[stable_id] = record
+		mineral_payload["veins"] = veins
+		changed_snapshot["minerals"] = mineral_payload
+		_expect(bool(world.call("_validate_world_save_payload", changed_snapshot)), "changed mineral record remains a valid save payload")
+		_expect(not bool(world.call("_world_recovery_matches_snapshot", changed_snapshot, expected_snapshot)), "world recovery comparison rejects changed mineral values even when stable IDs match")
+
 
 func _test_world_object_json_numeric_variants() -> void:
 	var crate: Node = StatefulPropScript.new()
