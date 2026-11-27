@@ -948,7 +948,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1) -> bool
 		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no streaming or participant mutation was started.", true)
 		return false
 	var world_seed_value: Variant = payload.get("world_seed", LEGACY_WORLD_SEED)
-	if not (world_seed_value is int or world_seed_value is float) or not is_finite(float(world_seed_value)) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED) or not is_equal_approx(float(world_seed_value), roundf(float(world_seed_value))):
+	if not _is_whole_save_number(world_seed_value) or float(world_seed_value) < 0.0 or float(world_seed_value) > float(MAX_WORLD_SEED):
 		return false
 	var next_world_seed: int = int(roundf(float(world_seed_value)))
 	var has_stamina: bool = payload.has("stamina")
@@ -980,14 +980,14 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1) -> bool
 	if target_underground:
 		if payload.has("mine_depth"):
 			var depth_value: Variant = payload.get("mine_depth")
-			if not (depth_value is int) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
+			if not _is_whole_save_number(depth_value) or int(depth_value) < 0 or int(depth_value) > UndergroundMineDirectorScript.MAX_LAYER_INDEX:
 				return false
 			target_depth = int(depth_value)
 		else:
 			target_depth = mine_director.get_layer_index(target_position) if mine_director != null else -1
 		if mine_director == null or target_depth < 0 or mine_director.get_layer_index(target_position) != target_depth:
 			return false
-	elif payload.has("mine_depth") and (not (payload.get("mine_depth") is int) or int(payload.get("mine_depth")) != 0):
+	elif payload.has("mine_depth") and (not _is_whole_save_number(payload.get("mine_depth")) or int(payload.get("mine_depth")) != 0):
 		return false
 	var next_return_position: Vector3 = MINE_ENTRY_SURFACE_RETURN
 	if payload.has("surface_return_position"):
