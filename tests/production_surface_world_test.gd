@@ -876,7 +876,7 @@ func _test_late_participant_restore_failure(
 
 	world.set(participant_property, rejecting_participant)
 	var retained_before_restore: Dictionary = world.call("serialize_stream_state")
-	_expect(bool(world.call("_world_recovery_matches_snapshot", retained_before_restore, original_payload), participant_property + " rejecting fixture preserves the exact pre-attempt participant state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", retained_before_restore, original_payload)), participant_property + " rejecting fixture preserves the exact pre-attempt participant state")
 	var candidate_payload: Dictionary = original_payload.duplicate(true)
 	var target_position: Vector3 = original_position + Vector3(128.0, 0.0, 128.0)
 	candidate_payload["player_position"] = [target_position.x, target_position.y, target_position.z]
@@ -899,7 +899,7 @@ func _test_late_participant_restore_failure(
 	world.set(participant_property, original_participant)
 	_expect(bool(world.call("retry_save_recovery")), participant_property + " recovery succeeds after the original participant is restored")
 	var recovered_payload: Dictionary = world.call("serialize_stream_state")
-	_expect(bool(world.call("_world_recovery_matches_snapshot", recovered_payload, original_payload), participant_property + " recovery readback exactly matches the pre-attempt world snapshot")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", recovered_payload, original_payload)), participant_property + " recovery readback exactly matches the pre-attempt world snapshot")
 	_expect(world.chunk_controller.get_loaded_chunk_ids() == original_chunk_ids, participant_property + " recovery restores the original active chunk window")
 
 
