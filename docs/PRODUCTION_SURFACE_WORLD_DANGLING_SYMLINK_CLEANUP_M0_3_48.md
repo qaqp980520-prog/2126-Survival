@@ -1,3 +1,10 @@
+## Second validation correction — placeholder state initialization
+
+The first M0.3.48 placeholder candidate `572fc559f38caa023159f475321861d789b4a801` also failed Dedicated Save Validation [46083295698](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46083295698). The log showed the placeholder cleanup map's initial boolean `false` was converted to the non-empty string `"false"`. That caused existing-target directory links to be misclassified as placeholder-owned and prevented creation of a real placeholder for dangling links.
+
+The correction initializes the marker-path entry to the empty string, so `String.is_empty()` correctly selects the no-placeholder state. Correction commit: `0a5a11e7b833bcbe0dfa90af23ab6d12f62e96ca`. This failed candidate is retained in history and is not reported as passed.
+
+
 ## Validation correction — first M0.3.48 candidate failed
 
 The first placeholder/marker candidate `572fc559f38caa023159f475321861d789b4a801` failed Dedicated Save Validation [46083295698](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46083295698). The log showed two related symptoms:
@@ -56,6 +63,7 @@ Godot 4.3 Unix source calls `stat()` before `unlink()`, and `stat()` follows a d
 - Initial M0.3.47 symlink lifecycle work: `2d06dee83764f843b5ea9468d0c18d808948d6d6`, `76e77210a69706a2f80bef44277016a85bc7e202`, `1feb3bce787c8148dee2de3e1ced567eb7aa80af`.
 - First dangling-cleanup attempt and path normalization: `e985f71c21bf0cf4eaaeae63929931fa53a84f0f`, `73ec12e7af2ad6605e3bb6fa9dfe361365700ac1`.
 - Verified placeholder/marker correction: `57590fb997976fe0664427d110399b795466fdcf`.
+- Empty-string placeholder-state correction: `0a5a11e7b833bcbe0dfa90af23ab6d12f62e96ca`.
 - M0.3.47 documentation correction and this M0.3.48 record are committed on the isolated staging branch; exact final HEAD will be recorded after the staging diff is complete.
 
 ## Import and test
