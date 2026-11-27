@@ -90,7 +90,9 @@ static func read_valid_file(path: String, payload_validator: Callable) -> Dictio
 	}
 
 static func write_atomic(path: String, envelope_text: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
-	if not _is_supported_user_path(path) or envelope_text.is_empty() or not payload_validator.is_valid():
+	if not _is_supported_save_base_path(path):
+		return {"ok": false, "phase": "path_preflight", "reason": "unsupported_save_path"}
+	if envelope_text.is_empty() or not payload_validator.is_valid():
 		return {"ok": false, "phase": "preflight", "reason": "invalid_write_arguments"}
 	if _has_symlink_in_save_family(path):
 		return {"ok": false, "phase": "path_symlink", "reason": "save_paths_must_not_traverse_symbolic_links"}
@@ -214,7 +216,7 @@ static func write_atomic(path: String, envelope_text: String, payload_validator:
 	}
 
 static func promote_backup(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
-	if not _is_supported_user_path(path):
+	if not _is_supported_save_base_path(path):
 		return {"ok": false, "phase": "path_preflight", "reason": "unsupported_save_path"}
 	if _has_symlink_in_save_family(path):
 		return {"ok": false, "phase": "path_symlink", "reason": "save_paths_must_not_traverse_symbolic_links"}
@@ -264,7 +266,7 @@ static func promote_backup(path: String, payload_validator: Callable, rename_ope
 	return {"ok": true, "phase": "backup_promoted", "archive_path": archive_path, "backup_path": backup_path}
 
 static func recover_interrupted_write(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
-	if not _is_supported_user_path(path):
+	if not _is_supported_save_base_path(path):
 		return {"ok": false, "reason": "unsupported_save_path"}
 	if _has_symlink_in_save_family(path):
 		return {"ok": false, "reason": "path_symlink"}
@@ -354,6 +356,19 @@ static func _is_supported_user_path(path: String) -> bool:
 	var relative_path: String = path.substr(7)
 	if relative_path.is_empty() or relative_path.contains("..") or relative_path.contains("\\") or relative_path.begins_with("/") or relative_path.ends_with("/") or relative_path.contains("//"):
 		return false
+	return true
+
+
+## Save base paths cannot alias the temp, backup, previous or corrupt-archive sidecars
+## owned by another save family. read_valid_file() still accepts those sidecars for verification.
+static func _is_supported_save_base_path(path: String) -> bool:
+	if not _is_supported_user_path(path):
+		return false
+	var relative_path: String = path.substr(7)
+	for component in relative_path.split("/"):
+		var normalized_component: String = component.to_lower()
+		if normalized_component.ends_with(".tmp") or normalized_component.ends_with(".bak") or normalized_component.ends_with(".previous") or normalized_component.contains(".corrupt."):
+			return false
 	return true
 
 static func _rename_path(source_path: String, destination_path: String, rename_operation: Callable) -> int:

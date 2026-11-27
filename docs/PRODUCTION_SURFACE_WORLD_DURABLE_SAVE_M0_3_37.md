@@ -13,7 +13,7 @@ Add the first file-backed save/load path to the production `world/SurfaceWorld.t
 
 ## File format
 
-The outer JSON envelope is versioned independently from the existing stream payload and carries a SHA-256 checksum of the canonical compact JSON payload. Only `user://` paths are accepted; `res://`, traversal-like paths and malformed relative paths are rejected. This checksum detects accidental or semantic payload corruption; it is not an authenticity signature.
+The outer JSON envelope is versioned independently from the existing stream payload and carries a SHA-256 checksum of the canonical compact JSON payload. Only `user://` paths are accepted; `res://`, traversal-like paths and malformed relative paths are rejected. Save base paths also reject any path component (case-insensitively) ending in reserved sidecar suffixes (`.tmp`, `.bak`, `.previous`) or containing `.corrupt.`; this prevents one save family from treating another family's temp, backup, staged-primary or diagnostic archive as its own primary file. The internal `read_valid_file()` helper still accepts generated sidecar paths for verification. The production SurfaceWorld entry point applies the save-base-path check before interrupted-write recovery, so an invalid sidecar path is rejected without creating a false in-memory recovery barrier. This checksum detects accidental or semantic payload corruption; it is not an authenticity signature.
 
 The outer JSON envelope is:
 
