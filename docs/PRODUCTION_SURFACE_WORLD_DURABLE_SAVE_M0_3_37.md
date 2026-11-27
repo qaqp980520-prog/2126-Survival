@@ -143,3 +143,26 @@ The exact-head Full Gate on `d308450c...` failed at the production SurfaceWorld 
 A static review found that `_world_recovery_matches_snapshot()` compared only the sorted stable-ID set of mineral veins. That could miss a changed record with the same IDs (for example, different `remaining_units` or `last_regen_unix`) and incorrectly clear the in-memory recovery barrier. The implementation now compares the complete validated `minerals` payload. The production integration test includes an unchanged-snapshot positive case and a valid same-ID/different-`remaining_units` negative case. Follow-up tracked in [Issue #455](https://github.com/qaqp980520-prog/2126-Survival/issues/455).
 
 Exact-head Godot 4.3 validation for this final readback correction is pending. Do not merge until dedicated save validation, focused workflows and the full compatibility gate pass.
+
+
+## Run 452 — exact-time mineral recovery readback (candidate)
+
+A source audit found that `retry_save_recovery()` reused the captured recovery timestamp but still called the normal `WorldSessionController.restore_stream_state()` path. The normal MineralVeinRegistry restore intentionally applies elapsed offline regeneration. That is correct for loading a disk save, but not for restoring an in-memory rollback snapshot whose mineral values must be compared before the recovery barrier is cleared.
+
+The correction adds an explicit `exact_mineral_restore` option to the base and SurfaceWorld stream-restore entry points. Normal user-facing restore keeps the existing offline-regeneration behavior. The world-recovery retry path passes the exact option and uses `MineralChunkController.restore_snapshot_exact()`, preserving every mineral record and timestamp before the full readback comparison.
+
+The regression fixture:
+- captures the original production world snapshot;
+- prepares one valid depleted mineral record with its last-regeneration timestamp two intervals before a fixed recovery time;
+- injects a pending in-memory world-recovery barrier and invokes `retry_save_recovery()`;
+- verifies the full mineral payload, remaining units and timestamp are unchanged before readback comparison;
+- verifies the barrier clears only after the exact full snapshot matches; and
+- restores the original test-world snapshot using the exact recovery mode.
+
+Files updated:
+- `scripts/world.gd`
+- `world/SurfaceWorld.gd`
+- `tests/production_surface_world_test.gd`
+- this technical asset record
+
+Exact-head Godot 4.3 dedicated validation and Full Compatibility Gate are pending for this candidate. No pass is claimed until the new exact HEAD completes all required workflows. Local Godot remains unavailable; no local engine run is claimed.
