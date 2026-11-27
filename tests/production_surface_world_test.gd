@@ -688,6 +688,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(bool(world.call("load_game", path)), "valid committed primary loads when a different valid uncommitted temp is present")
 	_expect(FileAccess.get_file_as_string(path) == committed_primary_before_temp_load, "valid committed primary remains byte-for-byte authoritative over a valid temp")
 	_expect(FileAccess.get_file_as_string(path + ".tmp") == primary_precedence_temp_text, "valid committed primary prevents promotion or consumption of the uncommitted temp")
+	_expect(DirAccess.remove_absolute(ProjectSettings.globalize_path(path + ".tmp")) == OK, "test removes its own primary-precedence temp before reusing the temp slot")
 	_expect(int(world.get("world_seed")) == int(payload_a.get("world_seed", 0)), "load uses the committed primary payload rather than the newer uncommitted temp")
 	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "primary-precedence recovery reports the committed primary as the load source")
 	var tampered_envelope: Dictionary = decoded_a.get("envelope", {}).duplicate(true)
@@ -743,7 +744,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(str(primary_report.get("phase", "")) == "loaded_from_primary", "primary load reports its source explicitly")
 	await _test_failed_restore_stream_rollback()
 
-	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
+	_expect(_replace_owned_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
 	var uncommitted_temp_envelope: Dictionary = SaveStoreScript.build_envelope(payload_b, now_unix + 12)
 	var uncommitted_temp_text: String = SaveStoreScript.encode_envelope(uncommitted_temp_envelope)
 	_expect(_write_test_text(path + ".tmp", uncommitted_temp_text), "test creates a valid uncommitted temp beside a corrupt primary and valid backup")
@@ -765,7 +766,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
 	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
 	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
-	_expect(_write_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
+	_expect(_replace_owned_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
 	_expect(bool(world.call("save_game", path)), "valid primary can replace a corrupt backup without losing the primary")
 	_expect(not FileAccess.file_exists(path + ".tmp"), "next successful save cleans the lower-priority uncommitted temp")
 	var backup_rotation_report: Dictionary = world.call("get_last_save_report")
@@ -1268,6 +1269,22 @@ func _is_owned_test_save_entry(path: String) -> bool:
 func _write_test_text(path: String, content: String) -> bool:
 	var directory: DirAccess = DirAccess.open("user://")
 	if directory == null or not _is_owned_test_save_entry(path) or _user_entry_is_occupied(path, directory):
+		return false
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(content)
+	file.flush()
+	var success: bool = file.get_error() == OK
+	file.close()
+	return success
+
+func _replace_owned_test_text(path: String, content: String) -> bool:
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	if directory == null or not _is_owned_test_save_entry(path):
+		return false
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	if directory.is_link(path.get_file()) or DirAccess.dir_exists_absolute(absolute_path) or not FileAccess.file_exists(path):
 		return false
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
