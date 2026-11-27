@@ -912,7 +912,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	var previous_payload: Dictionary = serialize_stream_state()
 	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload)
 
-func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, previous_payload: Dictionary) -> bool:
+func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, previous_payload: Dictionary, exact_mineral_restore: bool = false) -> bool:
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
@@ -923,7 +923,7 @@ func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, pre
 	if previous_payload.is_empty() or not _validate_world_save_payload(previous_payload):
 		_set_restore_report(false, "preload_snapshot", "A complete rollback snapshot is unavailable; no restore was started.", true)
 		return false
-	var success: bool = _restore_stream_state_impl(payload, now_unix)
+	var success: bool = _restore_stream_state_impl(payload, now_unix, exact_mineral_restore)
 	if not success:
 		var restore_report: Dictionary = get_last_restore_report()
 		if not bool(restore_report.get("rollback_complete", true)):
@@ -939,7 +939,7 @@ func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, pre
 		return false
 	return true
 
-func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1) -> bool:
+func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not recovery_barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World save restore is blocked until underground Registry-pair recovery is verified.", false, recovery_barrier_report)
@@ -1026,7 +1026,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1) -> bool
 			if not mine_director.recover_to_world_position(previous_mine_position, now):
 				push_error("Underground mine window rollback failed after world-session restore rejection.")
 		return false
-	if not super.restore_stream_state(payload, now):
+	if not super.restore_stream_state(payload, now, exact_mineral_restore):
 		if next_world_seed != previous_world_seed:
 			if not _recover_underground_window(previous_world_seed, previous_mine_position, now, previous_minerals, previous_world_objects):
 				push_error("Underground mine window rollback failed after world-session restore rejection.")
@@ -1630,7 +1630,7 @@ func retry_save_recovery() -> bool:
 		if recovery_payload.is_empty():
 			return false
 		_save_recovery_barrier_report.clear()
-		if not _restore_stream_state_with_snapshot(recovery_payload, _pending_save_recovery_now, recovery_payload):
+		if not _restore_stream_state_with_snapshot(recovery_payload, _pending_save_recovery_now, recovery_payload, true):
 			_save_recovery_barrier_report = {
 				"recovery_required": true,
 				"reason": "world_recovery_retry_failed",
