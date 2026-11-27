@@ -214,6 +214,26 @@ func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> 
 	world.set("mine_director", previous_mine_director)
 	missing_api_director.queue_free()
 
+func _test_reserved_save_base_paths() -> void:
+	var validator := Callable(world, "_validate_world_save_payload")
+	var reserved_paths: Array[String] = [
+		"user://run454_reserved_primary.tmp",
+		"user://run454_reserved_primary.bak",
+		"user://run454_reserved_primary.bak.tmp",
+		"user://run454_reserved_primary.previous",
+		"user://run454_reserved_primary.restore.tmp",
+		"user://run454_reserved_primary.corrupt.123",
+		"user://run454_reserved_directory.bak/slot.json"
+	]
+	for reserved_path in reserved_paths:
+		var write_report: Dictionary = SaveStoreScript.write_atomic(reserved_path, "{}", validator)
+		_expect(not bool(write_report.get("ok", false)) and str(write_report.get("phase", "")) == "path_preflight" and str(write_report.get("reason", "")) == "unsupported_save_path", "writer rejects reserved save-family base path: " + reserved_path)
+		var recovery_report: Dictionary = SaveStoreScript.recover_interrupted_write(reserved_path, validator)
+		_expect(not bool(recovery_report.get("ok", false)) and str(recovery_report.get("reason", "")) == "unsupported_save_path", "interrupted-write recovery rejects reserved sidecar base path: " + reserved_path)
+		var promotion_report: Dictionary = SaveStoreScript.promote_backup(reserved_path, validator)
+		_expect(not bool(promotion_report.get("ok", false)) and str(promotion_report.get("phase", "")) == "path_preflight" and str(promotion_report.get("reason", "")) == "unsupported_save_path", "backup promotion rejects reserved sidecar base path: " + reserved_path)
+
+
 func _test_save_path_symlink_guards() -> void:
 	var user_directory: DirAccess = DirAccess.open("user://")
 	_expect(user_directory != null, "open user data for save-path symlink tests")
@@ -469,6 +489,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var tampered_report: Dictionary = SaveStoreScript.decode_envelope(JSON.stringify(tampered_envelope))
 	_expect(not bool(tampered_report.get("ok", false)) and str(tampered_report.get("reason", "")) == "payload_checksum_mismatch", "valid-looking payload tampering is rejected by the envelope checksum")
 	_expect(not bool(SaveStoreScript.read_valid_file("res://forbidden_surface_world_save.json", Callable(world, "_validate_world_save_payload")).get("ok", false)), "save reader rejects paths outside user data")
+	_test_reserved_save_base_paths()
 	_test_save_path_symlink_guards()
 	var unknown_version_envelope: Dictionary = {
 		"format_id": "2126.surface_world",
@@ -490,6 +511,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(bool(backup_a.get("ok", false)), "second save preserves the prior valid primary as backup")
 	if bool(backup_a.get("ok", false)):
 		_expect(backup_a.get("payload", {}).get("inventory", {}).get("inventory", {}).get("berries", -1) == payload_a.get("inventory", {}).get("inventory", {}).get("berries", -2), "backup retains the first save's inventory snapshot")
+	var backup_bytes_before_collision: String = FileAccess.get_file_as_string(path + ".bak")
+	var sidecar_collision_report: Dictionary = SaveStoreScript.write_atomic(path + ".bak", primary_a, Callable(world, "_validate_world_save_payload"))
+	_expect(not bool(sidecar_collision_report.get("ok", false)) and str(sidecar_collision_report.get("phase", "")) == "path_preflight" and str(sidecar_collision_report.get("reason", "")) == "unsupported_save_path", "writer refuses to use another save family's .bak sidecar as a primary path")
+	_expect(FileAccess.get_file_as_string(path + ".bak") == backup_bytes_before_collision, "rejected sidecar-path collision preserves the existing backup byte-for-byte")
 
 	world.queue_free()
 	await process_frame
