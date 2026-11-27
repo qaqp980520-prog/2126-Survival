@@ -522,6 +522,16 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var primary_a: String = FileAccess.get_file_as_string(path)
 	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
 	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
+	var primary_precedence_payload: Dictionary = payload_a.duplicate(true)
+	primary_precedence_payload["world_seed"] = int(primary_precedence_payload.get("world_seed", 0)) + 17
+	var primary_precedence_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(primary_precedence_payload, now_unix + 1))
+	_expect(_write_test_text(path + ".tmp", primary_precedence_temp_text), "valid committed primary fixture receives a different fully valid uncommitted temp")
+	var committed_primary_before_temp_load: String = FileAccess.get_file_as_string(path)
+	_expect(bool(world.call("load_game", path)), "valid committed primary loads when a different valid uncommitted temp is present")
+	_expect(FileAccess.get_file_as_string(path) == committed_primary_before_temp_load, "valid committed primary remains byte-for-byte authoritative over a valid temp")
+	_expect(FileAccess.get_file_as_string(path + ".tmp") == primary_precedence_temp_text, "valid committed primary prevents promotion or consumption of the uncommitted temp")
+	_expect(int(world.get("world_seed")) == int(payload_a.get("world_seed", 0)), "load uses the committed primary payload rather than the newer uncommitted temp")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "primary-precedence recovery reports the committed primary as the load source")
 	var tampered_envelope: Dictionary = decoded_a.get("envelope", {}).duplicate(true)
 	var tampered_payload: Dictionary = tampered_envelope.get("payload", {}).duplicate(true)
 	tampered_payload["world_seed"] = int(tampered_payload.get("world_seed", 0)) + 1
