@@ -1223,7 +1223,7 @@ func _claim_test_save_paths(paths: Array[String]) -> bool:
 	return true
 
 func _claim_test_save_path(path: String) -> bool:
-	if _test_run_prefix.is_empty() or not path.begins_with("user://" + _test_run_prefix):
+	if _owned_test_save_paths.has(path) or _test_run_prefix.is_empty() or not path.begins_with("user://" + _test_run_prefix):
 		return false
 	var directory: DirAccess = DirAccess.open(path.get_base_dir())
 	if directory == null:
@@ -1276,7 +1276,6 @@ func _cleanup_save_test_files(path: String) -> void:
 	for filename in directory.get_files():
 		if filename.begins_with(prefix):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path.get_base_dir() + "/" + filename))
-	_owned_test_save_paths.erase(path)
 
 func _rename_fail_primary_and_rollback(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
