@@ -366,7 +366,8 @@ static func _is_supported_save_base_path(path: String) -> bool:
 		return false
 	var relative_path: String = path.substr(7)
 	for component in relative_path.split("/"):
-		if component.ends_with(".tmp") or component.ends_with(".bak") or component.ends_with(".previous") or component.contains(".corrupt."):
+		var normalized_component: String = component.to_lower()
+		if normalized_component.ends_with(".tmp") or normalized_component.ends_with(".bak") or normalized_component.ends_with(".previous") or normalized_component.contains(".corrupt."):
 			return false
 	return true
 
