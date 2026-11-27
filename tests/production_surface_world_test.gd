@@ -2,6 +2,9 @@ extends SceneTree
 
 const WorldScene = preload("res://world/SurfaceWorld.tscn")
 const SaveStoreScript = preload("res://systems/SurfaceWorldSaveStore.gd")
+const StatefulPropScript = preload("res://systems/WorldObjectStatefulProp.gd")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
+const MineLiftScript = preload("res://systems/UndergroundMineLift.gd")
 const SurfaceChunkFactoryScript = preload("res://systems/SurfaceChunkFactory.gd")
 const ORIGIN_CHUNK_ID: String = "surface/chunk_0_0"
 
@@ -140,6 +143,7 @@ func _run() -> void:
 	buttons["forward"].emit_signal("button_up")
 	_expect(not directions.has("forward"), "touch release clears virtual input")
 	_test_world_save_recovery_gate(save_payload, now + 6)
+	_test_world_object_json_numeric_variants()
 	await _test_durable_save_load(now + 7)
 	_finish(0 if failures.is_empty() else 1)
 
@@ -292,6 +296,24 @@ func _finish(exit_code: int) -> void:
 		for failure in failures:
 			push_error("FAILED: " + failure)
 		quit(1)
+
+func _test_world_object_json_numeric_variants() -> void:
+	var crate: Node = StatefulPropScript.new()
+	_expect(bool(crate.call("validate_world_object_state", {"opened": false, "loot_remaining": 2.0, "loot_item_id": "iron_ore"})), "salvage crate accepts integral JSON numeric loot counts")
+	_expect(not bool(crate.call("validate_world_object_state", {"opened": true, "loot_remaining": 1.5, "loot_item_id": "iron_ore"})), "salvage crate rejects fractional loot counts")
+	crate.free()
+
+	var patch: Node = TerrainPatchScript.new()
+	_expect(bool(patch.call("validate_world_object_state", {"height_level": 0.0, "surface_type": "soil", "revision": 0.0})), "terrain patch accepts integral JSON numeric height and revision")
+	_expect(not bool(patch.call("validate_world_object_state", {"height_level": 0.5, "surface_type": "soil", "revision": 0.0})), "terrain patch rejects fractional height values")
+	_expect(not bool(patch.call("validate_world_object_state", {"height_level": 0.0, "surface_type": "soil", "revision": 0.5})), "terrain patch rejects fractional revision values")
+	patch.free()
+
+	var lift: Node = MineLiftScript.new()
+	_expect(bool(lift.call("validate_world_object_state", {"layer_index": float(lift.get("layer_index"))})), "mine lift accepts integral JSON numeric layer indices")
+	_expect(not bool(lift.call("validate_world_object_state", {"layer_index": 0.5})), "mine lift rejects fractional layer indices")
+	lift.free()
+
 
 func _test_durable_save_load(now_unix: int) -> void:
 	var path: String = "user://production_surface_world_save_test.json"
