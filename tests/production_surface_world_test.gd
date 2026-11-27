@@ -35,6 +35,14 @@ class FailingUndergroundRestoreDirector extends Node:
 
 	func recover_to_world_position(_position: Vector3, _now_unix: int = -1) -> bool:
 		return false
+class RejectingStaminaRestore extends "res://systems/SurvivalStamina.gd":
+	func load_save_dict(_data: Dictionary) -> bool:
+		return false
+
+class RejectingQuickUseRestore extends "res://systems/SurvivalQuickUse.gd":
+	func load_save_dict(_data: Dictionary) -> bool:
+		return false
+
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
@@ -163,6 +171,7 @@ func _run() -> void:
 	await _test_world_recovery_snapshot_comparison()
 	await _test_durable_save_load(now + 7)
 	await _test_underground_restore_rollback_barrier()
+	await _test_late_participant_restore_failures()
 	_finish(0 if failures.is_empty() else 1)
 
 func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> void:
@@ -833,6 +842,65 @@ func _test_underground_restore_rollback_barrier() -> void:
 	_expect(rollback_world.chunk_controller.call("to_save_dict") == previous_minerals, "recovery restores exact mineral records after underground resynchronization")
 	_expect(rollback_world.object_state_registry.call("to_save_dict") == previous_objects, "recovery restores exact world-object records after underground resynchronization")
 	_expect(rollback_world.player.global_position.is_equal_approx(previous_position), "recovery preserves the original player position")
+
+
+func _test_late_participant_restore_failures() -> void:
+	await process_frame
+	await _test_late_participant_restore_failure("stamina", RejectingStaminaRestore.new(), "stamina_restore", 20)
+	await _test_late_participant_restore_failure("quick_use", RejectingQuickUseRestore.new(), "quick_use_restore", 40)
+
+
+func _test_late_participant_restore_failure(
+	participant_property: String,
+	rejecting_participant: RefCounted,
+	expected_phase: String,
+	time_offset: int
+) -> void:
+	var original_participant: RefCounted = world.get(participant_property) as RefCounted
+	_expect(original_participant != null, participant_property + " fixture captures the original participant")
+	if original_participant == null:
+		return
+
+	var original_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not original_payload.is_empty(), participant_property + " fixture captures a complete pre-restore snapshot")
+	if original_payload.is_empty():
+		return
+	var original_position: Vector3 = world.player.global_position
+	var original_chunk_ids: PackedStringArray = world.chunk_controller.get_loaded_chunk_ids()
+
+	if participant_property == "stamina":
+		rejecting_participant.set("current_stamina", float(original_participant.get("current_stamina")))
+	else:
+		rejecting_participant.set("slots", original_participant.get("slots").duplicate())
+		rejecting_participant.set("selected_slot", int(original_participant.get("selected_slot")))
+
+	world.set(participant_property, rejecting_participant)
+	var retained_before_restore: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", retained_before_restore, original_payload), participant_property + " rejecting fixture preserves the exact pre-attempt participant state")
+	var candidate_payload: Dictionary = original_payload.duplicate(true)
+	var target_position: Vector3 = original_position + Vector3(128.0, 0.0, 128.0)
+	candidate_payload["player_position"] = [target_position.x, target_position.y, target_position.z]
+	if participant_property == "stamina":
+		candidate_payload["stamina"]["current"] = maxf(0.0, float(candidate_payload["stamina"].get("current", 100.0)) - 15.0)
+	else:
+		candidate_payload["quick_use"]["selected_slot"] = (int(candidate_payload["quick_use"].get("selected_slot", 0)) + 1) % 4
+
+	var restore_ok: bool = bool(world.call("restore_stream_state", candidate_payload, int(Time.get_unix_time_from_system()) + time_offset))
+	_expect(not restore_ok, participant_property + " late participant rejection fails the candidate restore")
+	var restore_report: Dictionary = world.call("get_last_restore_report")
+	_expect(str(restore_report.get("phase", "")) == expected_phase and not bool(restore_report.get("rollback_complete", true)), participant_property + " rejection reports an incomplete late-phase restore")
+	_expect(not world.call("_get_world_save_recovery_barrier_report").is_empty(), participant_property + " rejection retains the world persistence barrier")
+	_expect(world.call("serialize_stream_state").is_empty(), participant_property + " rejection blocks subsequent world snapshots")
+	_expect(not world.player.global_position.is_equal_approx(original_position), participant_property + " rejection occurs after the base world restore has changed the player position")
+
+	_expect(not bool(world.call("retry_save_recovery")), participant_property + " recovery remains blocked while the participant continues rejecting")
+	_expect(not world.call("_get_world_save_recovery_barrier_report").is_empty(), participant_property + " failed recovery retry keeps the persistence barrier")
+
+	world.set(participant_property, original_participant)
+	_expect(bool(world.call("retry_save_recovery")), participant_property + " recovery succeeds after the original participant is restored")
+	var recovered_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", recovered_payload, original_payload), participant_property + " recovery readback exactly matches the pre-attempt world snapshot")
+	_expect(world.chunk_controller.get_loaded_chunk_ids() == original_chunk_ids, participant_property + " recovery restores the original active chunk window")
 
 
 func _test_failed_restore_stream_rollback() -> void:
