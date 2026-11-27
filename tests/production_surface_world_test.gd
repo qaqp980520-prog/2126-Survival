@@ -857,6 +857,37 @@ func _test_durable_save_load(now_unix: int) -> void:
 				break
 	_expect(corrupt_temp_archive_found, "verified-temp recovery archives the invalid primary before promotion")
 
+	var rollback_failure_path: String = "user://production_surface_world_temp_recovery_rollback_failure_test.json"
+	_cleanup_save_test_files(rollback_failure_path)
+	var rollback_failure_primary_bytes: String = "{corrupt primary before temp recovery rollback failure"
+	var rollback_failure_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(rollback_failure_path, rollback_failure_primary_bytes), "rollback-failure fixture writes an invalid primary")
+	_expect(_write_test_text(rollback_failure_path + ".tmp", rollback_failure_temp_text), "rollback-failure fixture writes a fully valid temp")
+	_temp_promotion_fail_path = rollback_failure_path
+	var rollback_failure_report: Dictionary = SaveStoreScript.recover_interrupted_write(
+		rollback_failure_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion_and_archive_rollback")
+	)
+	_expect(not bool(rollback_failure_report.get("ok", false)), "simultaneous temp promotion and archive rollback failures are reported")
+	var rollback_failure_details: Dictionary = rollback_failure_report.get("temp_recovery", {})
+	_expect(bool(rollback_failure_details.get("recovery_required", false)), "failed archive rollback retains an explicit recovery-required state")
+	_expect(not FileAccess.file_exists(rollback_failure_path), "failed archive rollback does not claim a primary save exists")
+	_expect(FileAccess.get_file_as_string(rollback_failure_path + ".tmp") == rollback_failure_temp_text, "failed archive rollback preserves the verified source temp for retry")
+	var rollback_archive_found: bool = false
+	var rollback_failure_directory: DirAccess = DirAccess.open("user://")
+	if rollback_failure_directory != null:
+		for filename in rollback_failure_directory.get_files():
+			if filename.begins_with(rollback_failure_path.get_file() + ".corrupt."):
+				rollback_archive_found = true
+				break
+	_expect(rollback_archive_found, "failed archive rollback retains the original corrupt primary archive")
+	_temp_promotion_fail_path = ""
+	_expect(bool(world.call("load_game", rollback_failure_path)), "fresh recovery attempt succeeds after the injected promotion and rollback failures are removed")
+	_expect(FileAccess.get_file_as_string(rollback_failure_path) == rollback_failure_temp_text, "retry after rollback failure installs the exact verified temp")
+	_expect(not FileAccess.file_exists(rollback_failure_path + ".tmp"), "successful retry after rollback failure consumes the source temp")
+	_cleanup_save_test_files(rollback_failure_path)
+
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
@@ -1062,6 +1093,13 @@ func _rename_fail_primary_promotion(source_absolute: String, destination_absolut
 func _rename_fail_temp_promotion(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_temp_promotion_fail_path)
 	if destination_absolute == primary_absolute and source_absolute.ends_with(".restore.tmp"):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
+
+func _rename_fail_temp_promotion_and_archive_rollback(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_temp_promotion_fail_path)
+	if destination_absolute == primary_absolute and (source_absolute.ends_with(".restore.tmp") or source_absolute.contains(".corrupt.")):
 		return ERR_CANT_CREATE
 	return DirAccess.rename_absolute(source_absolute, destination_absolute)
 
