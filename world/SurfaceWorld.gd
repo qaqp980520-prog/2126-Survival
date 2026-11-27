@@ -901,7 +901,7 @@ func serialize_stream_state() -> Dictionary:
 	]
 	return payload
 
-func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not barrier_report.is_empty():
 		_set_restore_report(false, "registry_pair_recovery_barrier", "World restore is blocked while a recovery barrier is pending.", false, barrier_report)
@@ -910,7 +910,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 		_set_restore_report(false, "payload_validation", "World save payload failed complete preflight; no live snapshot or streaming mutation was started.", true)
 		return false
 	var previous_payload: Dictionary = serialize_stream_state()
-	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload)
+	return _restore_stream_state_with_snapshot(payload, now_unix, previous_payload, exact_mineral_restore)
 
 func _restore_stream_state_with_snapshot(payload: Dictionary, now_unix: int, previous_payload: Dictionary, exact_mineral_restore: bool = false) -> bool:
 	var barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
