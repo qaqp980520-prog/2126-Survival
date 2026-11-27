@@ -278,7 +278,7 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral
 			post_stream_details["minerals_restored_exact_after_streaming"] = true
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
-	_set_restore_report(true, "complete", "", true, post_stream_details)
+		_set_restore_report(true, "complete", "", true, post_stream_details)
 		return true
 
 	# A failed target stream must not leave the candidate mineral payload applied.
