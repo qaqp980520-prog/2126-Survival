@@ -223,7 +223,10 @@ func _test_reserved_save_base_paths() -> void:
 		"user://run454_reserved_primary.previous",
 		"user://run454_reserved_primary.restore.tmp",
 		"user://run454_reserved_primary.corrupt.123",
-		"user://run454_reserved_directory.bak/slot.json"
+		"user://run454_reserved_primary.BAK",
+		"user://run454_reserved_primary.TMP",
+		"user://run454_reserved_directory.bak/slot.json",
+		"user://run454_reserved_directory.BAK/slot.json"
 	]
 	for reserved_path in reserved_paths:
 		var write_report: Dictionary = SaveStoreScript.write_atomic(reserved_path, "{}", validator)
