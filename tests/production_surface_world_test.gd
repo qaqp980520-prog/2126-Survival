@@ -144,7 +144,7 @@ func _run() -> void:
 	_expect(not directions.has("forward"), "touch release clears virtual input")
 	_test_world_save_recovery_gate(save_payload, now + 6)
 	_test_world_object_json_numeric_variants()
-	_test_world_recovery_snapshot_comparison()
+	await _test_world_recovery_snapshot_comparison()
 	await _test_durable_save_load(now + 7)
 	_finish(0 if failures.is_empty() else 1)
 
@@ -328,13 +328,23 @@ func _test_world_recovery_snapshot_comparison() -> void:
 	var exact_minerals: Dictionary = exact_snapshot.get("minerals", {})
 	var exact_veins: Dictionary = exact_minerals.get("veins", {})
 	var live_mineral_ids: PackedStringArray = world.chunk_controller.registry.call("get_registered_ids")
-	_expect(not live_mineral_ids.is_empty(), "exact-time recovery fixture contains a currently loaded mineral record")
-	if live_mineral_ids.is_empty():
+	var exact_stable_id: String = ""
+	for raw_id in live_mineral_ids:
+		var candidate_id: String = str(raw_id)
+		if candidate_id.begins_with("surface/"):
+			exact_stable_id = candidate_id
+			break
+	_expect(not exact_stable_id.is_empty(), "exact-time recovery fixture selects a currently loaded surface mineral")
+	if exact_stable_id.is_empty():
 		return
-	var exact_stable_id: String = str(live_mineral_ids[0])
 	_expect(exact_veins.has(exact_stable_id), "exact-time recovery fixture selects a mineral present in the full snapshot")
 	if not exact_veins.has(exact_stable_id):
 		return
+	var id_parts: PackedStringArray = exact_stable_id.split("/")
+	_expect(id_parts.size() >= 3, "selected surface mineral ID contains its owning chunk")
+	if id_parts.size() < 3:
+		return
+	var exact_chunk_id: String = id_parts[0] + "/" + id_parts[1]
 	var exact_record: Dictionary = exact_veins[exact_stable_id].duplicate(true)
 	var regen_interval: int = maxi(1, int(exact_record.get("regen_interval_seconds", 60)))
 	var expected_last_regen: int = exact_now - regen_interval * 2
@@ -345,6 +355,9 @@ func _test_world_recovery_snapshot_comparison() -> void:
 	exact_snapshot["minerals"] = exact_minerals
 	_expect(bool(world.call("_validate_world_save_payload", exact_snapshot)), "depleted mineral recovery snapshot remains valid with an elapsed regeneration interval")
 
+	_expect(bool(world.call("debug_move_player_to", Vector3(200.0, 2.0, 200.0), exact_now)), "test moves away from the captured surface chunk before exact recovery")
+	await process_frame
+	_expect(not world.chunk_controller.is_chunk_loaded(exact_chunk_id), "captured surface mineral chunk unloads before recovery retry")
 	world.set("_save_recovery_barrier_report", {"recovery_required": true, "reason": "test_exact_mineral_snapshot"})
 	world.set("_save_recovery_kind", "world")
 	world.set("_save_recovery_path", "")
