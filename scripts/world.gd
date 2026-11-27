@@ -140,7 +140,8 @@ func _get_expected_loaded_chunk_ids() -> PackedStringArray:
 	return director.get_managed_chunk_ids()
 
 
-func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
+## Exact mineral restoration is reserved for in-memory recovery snapshots; it skips offline catch-up.
+func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral_restore: bool = false) -> bool:
 	_set_restore_report(false, "validation", "Restore payload has not been accepted.", true)
 	var recovery_barrier_report: Dictionary = _get_world_save_recovery_barrier_report()
 	if not recovery_barrier_report.is_empty():
@@ -204,7 +205,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1) -> bool:
 	if has_world_objects and (not previous_world_objects.has("schema_version") or not previous_world_objects.has("objects")):
 		_set_restore_report(false, "snapshot", "Could not snapshot current world-object state before restore.", true)
 		return false
-	if not chunk_controller.restore_save_dict(minerals_value, now):
+	var mineral_restore_ok: bool = false
+	if exact_mineral_restore:
+		mineral_restore_ok = chunk_controller.has_method("restore_snapshot_exact") and bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now))
+	else:
+		mineral_restore_ok = chunk_controller.restore_save_dict(minerals_value, now)
+	if not mineral_restore_ok:
 		_set_restore_report(false, "mineral_restore", "Mineral registry rejected the candidate save.", true)
 		return false
 	if has_crops and not bool(crop_registry.restore_save_dict(crops_value)):
