@@ -38,13 +38,20 @@ func _ready() -> void:
 func get_world_object_state() -> Dictionary:
 	return {"height_level":_height_level,"surface_type":_surface_type,"revision":_revision}
 
+func _is_whole_number(value: Variant) -> bool:
+	if not (value is int or value is float):
+		return false
+	var numeric: float = float(value)
+	return is_finite(numeric) and floorf(numeric) == numeric
+
+
 func validate_world_object_state(state: Dictionary) -> bool:
 	if state.size() != 3 or not state.has("height_level") or not state.has("surface_type") or not state.has("revision"):
 		return false
 	var height_value: Variant = state.get("height_level",null)
 	var surface_value: Variant = state.get("surface_type",null)
 	var revision_value: Variant = state.get("revision",null)
-	if not (height_value is int) or not (surface_value is String) or not (revision_value is int):
+	if not _is_whole_number(height_value) or not (surface_value is String) or not _is_whole_number(revision_value):
 		return false
 	if int(height_value) < 0 or int(height_value) > MAX_HEIGHT_LEVEL:
 		return false
