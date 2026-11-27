@@ -46,12 +46,19 @@ class RejectingQuickUseRestore extends "res://systems/SurvivalQuickUse.gd":
 var failures: Array[String] = []
 var world: Node3D
 var _promotion_fail_path: String = ""
+var _temp_promotion_fail_path: String = ""
 var _fail_chunk_coord: Vector2i = Vector2i(999999, 999999)
+var _test_run_prefix: String = ""
+var _owned_test_save_paths: Array[String] = []
+var _owned_test_symlink_paths: Array[String] = []
+var _owned_test_symlink_targets: Dictionary = {}
+var _owned_test_symlink_placeholders: Dictionary = {}
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	_test_run_prefix = "production_surface_world_" + str(OS.get_process_id()) + "_" + str(Time.get_ticks_usec()) + "_"
 	world = WorldScene.instantiate() as Node3D
 	_expect(world != null, "surface world scene instantiates")
 	if world == null:
@@ -242,17 +249,19 @@ func _test_world_save_recovery_gate(save_payload: Dictionary, now_unix: int) -> 
 
 func _test_reserved_save_base_paths() -> void:
 	var validator := Callable(world, "_validate_world_save_payload")
+	var reserved_base_path: String = _test_user_path("reserved_primary")
+	var reserved_directory_path: String = "user://" + _test_run_prefix + "reserved_directory"
 	var reserved_paths: Array[String] = [
-		"user://run454_reserved_primary.tmp",
-		"user://run454_reserved_primary.bak",
-		"user://run454_reserved_primary.bak.tmp",
-		"user://run454_reserved_primary.previous",
-		"user://run454_reserved_primary.restore.tmp",
-		"user://run454_reserved_primary.corrupt.123",
-		"user://run454_reserved_primary.BAK",
-		"user://run454_reserved_primary.TMP",
-		"user://run454_reserved_directory.bak/slot.json",
-		"user://run454_reserved_directory.BAK/slot.json"
+		reserved_base_path + ".tmp",
+		reserved_base_path + ".bak",
+		reserved_base_path + ".bak.tmp",
+		reserved_base_path + ".previous",
+		reserved_base_path + ".restore.tmp",
+		reserved_base_path + ".corrupt.123",
+		reserved_base_path + ".BAK",
+		reserved_base_path + ".TMP",
+		reserved_directory_path + ".bak/slot.json",
+		reserved_directory_path + ".BAK/slot.json"
 	]
 	for reserved_path in reserved_paths:
 		var write_report: Dictionary = SaveStoreScript.write_atomic(reserved_path, "{}", validator)
@@ -271,23 +280,193 @@ func _test_reserved_save_base_paths() -> void:
 		_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "invalid load path does not create a false recovery barrier: " + reserved_path)
 
 
+func _user_entry_is_occupied(path: String, _directory: DirAccess) -> bool:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	var parent_directory: DirAccess = DirAccess.open(path.get_base_dir())
+	var is_link: bool = parent_directory != null and parent_directory.is_link(path.get_file())
+	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or is_link
+
+func _create_owned_test_symlink(directory: DirAccess, target_absolute: String, link_name: String) -> Error:
+	if directory == null or _test_run_prefix.is_empty():
+		return ERR_CANT_OPEN
+	var link_path: String = "user://" + link_name
+	var test_root_absolute: String = ProjectSettings.globalize_path("user://" + _test_run_prefix)
+	if not link_path.begins_with("user://" + _test_run_prefix) or not target_absolute.begins_with(test_root_absolute):
+		return ERR_INVALID_PARAMETER
+	if _user_entry_is_occupied(link_path, directory):
+		return ERR_ALREADY_EXISTS
+	var create_error: Error = directory.create_link(target_absolute, link_name)
+	if create_error == OK:
+		_owned_test_symlink_paths.append(link_path)
+		_owned_test_symlink_targets[link_path] = target_absolute
+		_owned_test_symlink_placeholders[link_path] = ""
+	return create_error
+
+func _remove_owned_test_symlink(path: String) -> bool:
+	if not _owned_test_symlink_paths.has(path):
+		push_error("Refusing to remove an unowned test symlink: " + path)
+		return false
+	var directory: DirAccess = DirAccess.open("user://")
+	if directory == null:
+		return false
+	var link_name: String = path.get_file()
+	var target_absolute: String = str(_owned_test_symlink_targets.get(path, ""))
+	var placeholder_marker_path: String = str(_owned_test_symlink_placeholders.get(path, ""))
+	if target_absolute.is_empty() or not target_absolute.begins_with(ProjectSettings.globalize_path("user://" + _test_run_prefix)):
+		push_error("Owned test symlink has an invalid or out-of-run target: " + path)
+		return false
+	if directory.is_link(link_name):
+		if placeholder_marker_path.is_empty() and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
+			var target_user_path: String = _test_user_path_from_absolute(target_absolute)
+			if target_user_path.is_empty() or not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
+				push_error("Refusing to create a removal placeholder at an occupied or unowned target: " + target_absolute)
+				return false
+			var placeholder_error: Error = DirAccess.make_dir_absolute(target_absolute)
+			if placeholder_error == OK:
+				var marker_name: String = "2126_symlink_cleanup_" + str(OS.get_process_id()) + "_" + str(Time.get_ticks_usec()) + ".marker"
+				placeholder_marker_path = target_absolute.path_join(marker_name)
+				var marker_file := FileAccess.open(placeholder_marker_path, FileAccess.WRITE)
+				if marker_file == null:
+					DirAccess.remove_absolute(target_absolute)
+					push_error("Failed to create the owned symlink placeholder marker: " + placeholder_marker_path)
+					return false
+				marker_file.store_string("owned-symlink-placeholder:" + path)
+				marker_file.flush()
+				var marker_written: bool = marker_file.get_error() == OK
+				marker_file.close()
+				if not marker_written:
+					DirAccess.remove_absolute(placeholder_marker_path)
+					DirAccess.remove_absolute(target_absolute)
+					push_error("Failed to write the owned symlink placeholder marker: " + placeholder_marker_path)
+					return false
+				_owned_test_symlink_placeholders[path] = placeholder_marker_path
+			elif not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
+				push_error("Failed to prepare a safe target placeholder for dangling symlink: " + path + " error=" + str(placeholder_error))
+				return false
+		var remove_error: Error = directory.remove(link_name)
+		if remove_error != OK:
+			push_error("Failed to remove owned test symlink: " + path + " error=" + str(remove_error))
+			return false
+	elif _user_entry_is_occupied(path, directory):
+		# The link was replaced after creation. Preserve the replacement and clean only our verified placeholder.
+		if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
+			return false
+		_owned_test_symlink_paths.erase(path)
+		_owned_test_symlink_targets.erase(path)
+		_owned_test_symlink_placeholders.erase(path)
+		return false
+	if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
+		return false
+	_owned_test_symlink_paths.erase(path)
+	_owned_test_symlink_targets.erase(path)
+	_owned_test_symlink_placeholders.erase(path)
+	return true
+
+func _test_user_path_from_absolute(path: String) -> String:
+	var user_root_absolute: String = ProjectSettings.globalize_path("user://")
+	if not path.begins_with(user_root_absolute):
+		return ""
+	var relative_path: String = path.trim_prefix(user_root_absolute).trim_prefix("/")
+	return "user://" + relative_path
+
+func _cleanup_owned_symlink_placeholder(owner_path: String, target_absolute: String, marker_path: String) -> bool:
+	if marker_path.is_empty():
+		return true
+	var target_user_path: String = _test_user_path_from_absolute(target_absolute)
+	var user_directory: DirAccess = DirAccess.open("user://")
+	if target_user_path.is_empty() or user_directory == null:
+		return false
+	if user_directory.is_link(target_user_path.get_file()) or FileAccess.file_exists(target_absolute):
+		# The placeholder path was replaced. Never remove the replacement.
+		_owned_test_symlink_placeholders.erase(owner_path)
+		return true
+	if not DirAccess.dir_exists_absolute(target_absolute):
+		_owned_test_symlink_placeholders.erase(owner_path)
+		return true
+	var placeholder_directory: DirAccess = DirAccess.open(target_absolute)
+	if placeholder_directory == null:
+		return false
+	var files: PackedStringArray = placeholder_directory.get_files()
+	var directories: PackedStringArray = placeholder_directory.get_directories()
+	var marker_name: String = marker_path.get_file()
+	if files.is_empty() and directories.is_empty():
+		# A prior cleanup attempt removed the marker but could not remove the empty directory.
+		pass
+	elif files.size() == 1 and files.has(marker_name) and directories.is_empty() and FileAccess.get_file_as_string(marker_path) == "owned-symlink-placeholder:" + owner_path:
+		var marker_remove_error: Error = DirAccess.remove_absolute(marker_path)
+		if marker_remove_error != OK:
+			push_error("Failed to remove owned symlink placeholder marker: " + marker_path + " error=" + str(marker_remove_error))
+			return false
+	else:
+		push_error("Refusing to remove a symlink target directory with unexpected contents: " + target_absolute)
+		return false
+	var directory_remove_error: Error = DirAccess.remove_absolute(target_absolute)
+	if directory_remove_error != OK:
+		push_error("Failed to remove owned symlink target placeholder directory: " + target_absolute + " error=" + str(directory_remove_error))
+		return false
+	_owned_test_symlink_placeholders.erase(owner_path)
+	return true
+
+func _cleanup_owned_test_symlinks() -> void:
+	for path in _owned_test_symlink_paths.duplicate():
+		_remove_owned_test_symlink(path)
+
+
 func _test_save_path_symlink_guards() -> void:
 	var user_directory: DirAccess = DirAccess.open("user://")
 	_expect(user_directory != null, "open user data for save-path symlink tests")
 	if user_directory == null:
 		return
-	var target_directory: String = "user://run451_symlink_target"
-	if user_directory.is_link("run451_symlink_directory"):
-		user_directory.remove("run451_symlink_directory")
-	if user_directory.is_link("run451_symlink_file.json"):
-		user_directory.remove("run451_symlink_file.json")
+
+	# Prove that a path collision fails closed without truncating or deleting the
+	# existing entry. This sentinel is created and removed by this test only.
+	var occupied_fixture_path: String = _test_user_path("occupied_claim")
+	if _user_entry_is_occupied(occupied_fixture_path, user_directory):
+		_expect(false, "occupied-path claim fixture starts from an unused per-run path")
+		return
+	var occupied_fixture_file := FileAccess.open(occupied_fixture_path, FileAccess.WRITE)
+	if occupied_fixture_file == null:
+		_expect(false, "create the owned occupied-path sentinel")
+		return
+	occupied_fixture_file.store_string("preserve-this-existing-entry")
+	occupied_fixture_file.close()
+	_expect(not _claim_test_save_path(occupied_fixture_path), "fixture ownership refuses a pre-existing file")
+	_expect(not _write_test_text(occupied_fixture_path, "must-not-overwrite"), "test writer refuses an unclaimed occupied path")
+	_expect(FileAccess.get_file_as_string(occupied_fixture_path) == "preserve-this-existing-entry", "occupied-path refusal preserves existing bytes")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(occupied_fixture_path))
+
+	# Every fixture uses a per-run namespace. Never delete a pre-existing entry
+	# just to make a fixed test path available.
+	var fixture_prefix: String = _test_run_prefix + "symlink_guard_"
+	var target_directory: String = "user://" + fixture_prefix + "_target"
+	if _user_entry_is_occupied(target_directory, user_directory):
+		_expect(false, "directory-symlink fixture path is unused before creation")
+		return
 	var target_directory_absolute: String = ProjectSettings.globalize_path(target_directory)
 	var target_directory_error: Error = DirAccess.make_dir_recursive_absolute(target_directory_absolute)
-	_expect(target_directory_error == OK or DirAccess.dir_exists_absolute(target_directory_absolute), "create a symlink test target directory")
+	if target_directory_error != OK and not DirAccess.dir_exists_absolute(target_directory_absolute):
+		_expect(false, "create a symlink test target directory")
+		return
 	var target_file_path: String = target_directory + "/existing.json"
-	_expect(_write_test_text(target_file_path, "protected-target-bytes"), "write a file behind the directory symlink")
-	var directory_link_name: String = "run451_symlink_directory"
-	var directory_link_error: Error = user_directory.create_link(target_directory_absolute, directory_link_name)
+	if not _claim_test_save_path(target_file_path):
+		_expect(false, "directory-symlink target file fixture claims a unique unused path")
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
+	var target_file_written: bool = _write_test_text(target_file_path, "protected-target-bytes")
+	_expect(target_file_written, "write a file behind the directory symlink")
+	if not target_file_written:
+		_cleanup_save_test_files(target_file_path)
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
+
+	var directory_link_name: String = fixture_prefix + "_directory"
+	var directory_link_path: String = "user://" + directory_link_name
+	if _user_entry_is_occupied(directory_link_path, user_directory):
+		_expect(false, "directory-symlink entry is unused before creation")
+		_cleanup_save_test_files(target_file_path)
+		DirAccess.remove_absolute(target_directory_absolute)
+		return
+	var directory_link_error: Error = _create_owned_test_symlink(user_directory, target_directory_absolute, directory_link_name)
 	if directory_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: symbolic-link regression fixture requires Windows Developer Mode or elevated privileges.")
 		_cleanup_save_test_files(target_file_path)
@@ -296,39 +475,205 @@ func _test_save_path_symlink_guards() -> void:
 	_expect(directory_link_error == OK, "create a directory symlink inside user data")
 	if directory_link_error == OK:
 		var nested_write: Dictionary = SaveStoreScript.write_atomic(
-			"user://" + directory_link_name + "/new_save.json",
+			directory_link_path + "/new_save.json",
 			"{}",
 			Callable(world, "_validate_world_save_payload")
 		)
 		_expect(not bool(nested_write.get("ok", false)) and str(nested_write.get("phase", "")) == "path_symlink", "writer rejects a save path beneath a directory symlink")
 		var nested_read: Dictionary = SaveStoreScript.read_valid_file(
-			"user://" + directory_link_name + "/existing.json",
+			directory_link_path + "/existing.json",
 			Callable(world, "_validate_world_save_payload")
 		)
 		_expect(not bool(nested_read.get("ok", false)) and str(nested_read.get("reason", "")) == "path_symlink", "reader rejects a path beneath a directory symlink")
 		_expect(FileAccess.get_file_as_string(target_file_path) == "protected-target-bytes", "directory-symlink rejection preserves target bytes")
-		user_directory.remove(directory_link_name)
+		_remove_owned_test_symlink(directory_link_path)
 	_cleanup_save_test_files(target_file_path)
 	DirAccess.remove_absolute(target_directory_absolute)
 
-	var direct_target: String = "user://run451_symlink_file_target.json"
-	var direct_link_name: String = "run451_symlink_file.json"
-	_expect(_write_test_text(direct_target, "protected-direct-file-bytes"), "write direct file-symlink target")
-	var direct_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(direct_target), direct_link_name)
+	var direct_target: String = "user://" + fixture_prefix + "_direct_file_target.json"
+	var direct_link_name: String = fixture_prefix + "_direct_file.json"
+	var direct_link_path: String = "user://" + direct_link_name
+	if not _claim_test_save_path(direct_target):
+		_expect(false, "direct-file symlink target claims a unique unused path")
+		return
+	if _user_entry_is_occupied(direct_target, user_directory) or _user_entry_is_occupied(direct_link_path, user_directory):
+		_expect(false, "direct-file symlink fixture paths are unused before creation")
+		return
+	var direct_target_written: bool = _write_test_text(direct_target, "protected-direct-file-bytes")
+	_expect(direct_target_written, "write direct file-symlink target")
+	if not direct_target_written:
+		_cleanup_save_test_files(direct_target)
+		return
+	var direct_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(direct_target), direct_link_name)
 	if direct_link_error != OK and OS.get_name() == "Windows":
 		print("SKIP: direct file-symlink fixture requires Windows Developer Mode or elevated privileges.")
 		_cleanup_save_test_files(direct_target)
 		return
 	_expect(direct_link_error == OK, "create a direct file symlink inside user data")
 	if direct_link_error == OK:
-		var direct_path: String = "user://" + direct_link_name
-		var direct_read: Dictionary = SaveStoreScript.read_valid_file(direct_path, Callable(world, "_validate_world_save_payload"))
+		var direct_read: Dictionary = SaveStoreScript.read_valid_file(direct_link_path, Callable(world, "_validate_world_save_payload"))
 		_expect(not bool(direct_read.get("ok", false)) and str(direct_read.get("reason", "")) == "path_symlink", "reader rejects a direct file symlink")
-		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_path, "{}", Callable(world, "_validate_world_save_payload"))
+		var direct_write: Dictionary = SaveStoreScript.write_atomic(direct_link_path, "{}", Callable(world, "_validate_world_save_payload"))
 		_expect(not bool(direct_write.get("ok", false)) and str(direct_write.get("phase", "")) == "path_symlink", "writer rejects a direct file symlink")
 		_expect(FileAccess.get_file_as_string(direct_target) == "protected-direct-file-bytes", "direct-file-symlink rejection preserves target bytes")
-		user_directory.remove(direct_link_name)
+		_remove_owned_test_symlink(direct_link_path)
 	_cleanup_save_test_files(direct_target)
+
+	var archive_base_path: String = "user://" + fixture_prefix + "_archive_symlink_collision.json"
+	var archive_timestamp: int = int(Time.get_unix_time_from_system()) + 31536000
+	var expected_archive_path: String = archive_base_path + ".corrupt." + str(archive_timestamp)
+	var archive_link_name: String = expected_archive_path.get_file()
+	var missing_archive_target: String = "user://" + fixture_prefix + "_missing_archive_target.json"
+	if _user_entry_is_occupied(expected_archive_path, user_directory) or _user_entry_is_occupied(missing_archive_target, user_directory):
+		_expect(false, "archive symlink fixture paths are unused before creation")
+		return
+	var first_archive_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
+	_expect(first_archive_candidate == expected_archive_path, "archive collision fixture starts from a deterministic unused candidate")
+	var archive_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(missing_archive_target), archive_link_name)
+	if archive_link_error != OK and OS.get_name() == "Windows":
+		print("SKIP: dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
+	elif archive_link_error != OK:
+		_expect(false, "create a dangling symlink at the next corrupt-archive candidate")
+	else:
+		_expect(not FileAccess.file_exists(expected_archive_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(expected_archive_path)), "dangling archive symlink is not reported as an ordinary file or directory")
+		var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
+		_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
+		_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
+		_expect(_remove_owned_test_symlink(expected_archive_path), "owned-link cleanup removes the dangling archive symlink")
+		_expect(not user_directory.is_link(archive_link_name), "dangling archive symlink is removed without following its missing target")
+		_expect(not FileAccess.file_exists(missing_archive_target) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(missing_archive_target)), "temporary removal placeholder is removed and the original missing target remains absent")
+
+	# Verify the test-owned-link cleanup unlinks only the fixture entry and never its target.
+	var cleanup_target_path: String = _test_user_path("symlink_cleanup_target")
+	var cleanup_link_path: String = "user://" + fixture_prefix + "_cleanup_probe_link"
+	if not _claim_test_save_path(cleanup_target_path):
+		_expect(false, "symlink cleanup target claims a unique unused save family")
+		return
+	var cleanup_target_text: String = "preserve-symlink-cleanup-target"
+	var cleanup_target_written: bool = _write_test_text(cleanup_target_path, cleanup_target_text)
+	_expect(cleanup_target_written, "symlink cleanup target is written inside an owned save family")
+	if not cleanup_target_written:
+		_expect(false, "symlink cleanup target is available for the ownership regression")
+	elif _user_entry_is_occupied(cleanup_link_path, user_directory):
+		_expect(false, "symlink cleanup probe path is unused before creation")
+	else:
+		var cleanup_probe_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), cleanup_link_path.get_file())
+		if cleanup_probe_error != OK and OS.get_name() == "Windows":
+			print("SKIP: symlink cleanup ownership regression requires Windows Developer Mode or elevated privileges.")
+		else:
+			_expect(cleanup_probe_error == OK, "create a test-owned symlink for cleanup ownership verification")
+			if cleanup_probe_error == OK:
+				_expect(user_directory.is_link(cleanup_link_path.get_file()), "cleanup probe is registered as a symlink owned by this test")
+				_cleanup_owned_test_symlinks()
+				_expect(not user_directory.is_link(cleanup_link_path.get_file()), "owned-link cleanup removes the symlink entry")
+				_expect(FileAccess.get_file_as_string(cleanup_target_path) == cleanup_target_text, "owned-link cleanup preserves the symlink target bytes")
+
+	# Simulate another actor replacing an owned link between creation and cleanup.
+	var replacement_link_path: String = "user://" + fixture_prefix + "_cleanup_replacement_probe"
+	if _user_entry_is_occupied(replacement_link_path, user_directory):
+		_expect(false, "replacement-race probe path is unused before creation")
+	else:
+		var replacement_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), replacement_link_path.get_file())
+		if replacement_link_error != OK and OS.get_name() == "Windows":
+			print("SKIP: symlink replacement-race regression requires Windows Developer Mode or elevated privileges.")
+		else:
+			_expect(replacement_link_error == OK, "create an owned symlink for replacement-race cleanup testing")
+			if replacement_link_error == OK:
+				var unlink_for_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
+				_expect(unlink_for_replacement_error == OK, "simulate external removal of the owned symlink before cleanup")
+				if unlink_for_replacement_error == OK:
+					if _user_entry_is_occupied(replacement_link_path, user_directory):
+						_expect(false, "replacement sentinel path remains unused after unlinking the owned symlink")
+						_remove_owned_test_symlink(replacement_link_path)
+					else:
+						var replacement_file := FileAccess.open(replacement_link_path, FileAccess.WRITE)
+						_expect(replacement_file != null, "create a regular replacement entry at the former symlink path")
+						if replacement_file != null:
+							replacement_file.store_string("preserve-replacement-entry")
+							replacement_file.close()
+							_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses to remove a regular replacement entry")
+							_expect(FileAccess.get_file_as_string(replacement_link_path) == "preserve-replacement-entry", "replacement entry bytes remain unchanged")
+							_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is gone")
+							DirAccess.remove_absolute(ProjectSettings.globalize_path(replacement_link_path))
+						else:
+							_remove_owned_test_symlink(replacement_link_path)
+	_cleanup_save_test_files(cleanup_target_path)
+
+	# Exercise the real production load/recovery path, not only the archive-name helper.
+	var end_to_end_archive_path: String = "user://" + fixture_prefix + "_archive_symlink_e2e.json"
+	if not _claim_test_save_path(end_to_end_archive_path):
+		_expect(false, "end-to-end archive fixture claims a unique unused save family")
+		return
+	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
+		if _user_entry_is_occupied(end_to_end_archive_path + suffix, user_directory):
+			_expect(false, "end-to-end save-family fixture paths are unused before creation")
+			return
+	var end_to_end_corrupt_primary: String = "{corrupt primary for end-to-end archive collision"
+	var end_to_end_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not end_to_end_payload.is_empty(), "end-to-end archive collision fixture captures a valid production world payload")
+	var end_to_end_temp_text: String = SaveStoreScript.encode_envelope(
+		SaveStoreScript.build_envelope(end_to_end_payload, int(Time.get_unix_time_from_system()))
+	)
+	var end_to_end_setup_ok: bool = not end_to_end_payload.is_empty()
+	if end_to_end_setup_ok:
+		end_to_end_setup_ok = _write_test_text(end_to_end_archive_path, end_to_end_corrupt_primary)
+		_expect(end_to_end_setup_ok, "end-to-end archive collision fixture writes an invalid primary")
+	if end_to_end_setup_ok:
+		end_to_end_setup_ok = _write_test_text(end_to_end_archive_path + ".tmp", end_to_end_temp_text)
+		_expect(end_to_end_setup_ok, "end-to-end archive collision fixture writes a fully valid temp")
+	if not end_to_end_setup_ok:
+		_cleanup_save_test_files(end_to_end_archive_path)
+		return
+	var end_to_end_start_timestamp: int = int(Time.get_unix_time_from_system())
+	var end_to_end_link_names: Array[String] = []
+	var end_to_end_symlinks_supported: bool = true
+	for offset in range(0, 12):
+		if not end_to_end_symlinks_supported:
+			break
+		var candidate_timestamp: int = end_to_end_start_timestamp + offset
+		var candidate_link_name: String = end_to_end_archive_path.get_file() + ".corrupt." + str(candidate_timestamp)
+		var candidate_link_path: String = "user://" + candidate_link_name
+		if _user_entry_is_occupied(candidate_link_path, user_directory):
+			_expect(false, "end-to-end archive collision candidate is unused before fixture creation")
+			end_to_end_symlinks_supported = false
+			break
+		var missing_target_path: String = candidate_link_path + ".missing-target"
+		var create_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(missing_target_path), candidate_link_name)
+		if create_link_error != OK:
+			if OS.get_name() == "Windows":
+				print("SKIP: end-to-end dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
+			else:
+				_expect(false, "create a dangling symlink for the production archive recovery path")
+			end_to_end_symlinks_supported = false
+			break
+		end_to_end_link_names.append(candidate_link_name)
+	if end_to_end_symlinks_supported:
+		var end_to_end_load_ok: bool = bool(world.call("load_game", end_to_end_archive_path))
+		if not end_to_end_load_ok:
+			push_error("End-to-end archive symlink recovery diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")))
+		_expect(end_to_end_load_ok, "production load recovers a valid temp while archiving a corrupt primary beside a dangling symlink")
+		if end_to_end_load_ok:
+			_expect(FileAccess.get_file_as_string(end_to_end_archive_path) == end_to_end_temp_text, "production recovery promotes the exact verified temp bytes to primary")
+			_expect(not FileAccess.file_exists(end_to_end_archive_path + ".tmp"), "production recovery consumes the source temp only after successful promotion")
+			_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "production load continues through the normal validated primary path after recovery")
+			var archived_primary_count: int = 0
+			var archived_primary_path: String = ""
+			for offset in range(0, 12):
+				var candidate_archive_path: String = end_to_end_archive_path + ".corrupt." + str(end_to_end_start_timestamp + offset) + ".1"
+				if FileAccess.file_exists(candidate_archive_path) and FileAccess.get_file_as_string(candidate_archive_path) == end_to_end_corrupt_primary:
+					archived_primary_count += 1
+					archived_primary_path = candidate_archive_path
+			_expect(archived_primary_count == 1, "production recovery archives the corrupt primary to the collision-free .1 suffix exactly once")
+			if not archived_primary_path.is_empty():
+				var occupied_symlink_path: String = archived_primary_path.trim_suffix(".1")
+				_expect(user_directory.is_link(occupied_symlink_path.get_file()), "production recovery leaves the colliding dangling archive symlink intact")
+				_expect(not FileAccess.file_exists(occupied_symlink_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(occupied_symlink_path)), "the preserved archive symlink remains dangling after the real archive rename")
+	for link_name in end_to_end_link_names:
+		var owned_link_path: String = "user://" + link_name
+		var owned_target_path: String = owned_link_path + ".missing-target"
+		_expect(_remove_owned_test_symlink(owned_link_path), "owned end-to-end dangling symlink is removed safely")
+		_expect(not FileAccess.file_exists(owned_target_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(owned_target_path)), "end-to-end symlink cleanup leaves no target placeholder")
+	_cleanup_save_test_files(end_to_end_archive_path)
 
 
 func _inventory_count(item_id: String) -> int:
@@ -344,6 +689,9 @@ func _expect(condition: bool, message: String) -> void:
 		push_error("FAIL: " + message)
 
 func _finish(exit_code: int) -> void:
+	_cleanup_owned_test_symlinks()
+	for test_path in _owned_test_save_paths.duplicate():
+		_cleanup_save_test_files(test_path)
 	if is_instance_valid(world):
 		world.queue_free()
 	await process_frame
@@ -462,14 +810,14 @@ func _test_world_object_json_numeric_variants() -> void:
 
 
 func _test_durable_save_load(now_unix: int) -> void:
-	var path: String = "user://production_surface_world_save_test.json"
-	var blocked_path: String = "user://production_surface_world_save_blocked_test.json"
-	var promotion_path: String = "user://production_surface_world_save_promotion_test.json"
-	var interrupted_path: String = "user://production_surface_world_interrupted_restart_test.json"
-	_cleanup_save_test_files(path)
-	_cleanup_save_test_files(blocked_path)
-	_cleanup_save_test_files(promotion_path)
-	_cleanup_save_test_files(interrupted_path)
+	var path: String = _test_user_path("save")
+	var blocked_path: String = _test_user_path("save_blocked")
+	var promotion_path: String = _test_user_path("save_promotion")
+	var interrupted_path: String = _test_user_path("interrupted_restart")
+	var first_write_temp_path: String = _test_user_path("first_write_temp_recovery")
+	if not _claim_test_save_paths([path, blocked_path, promotion_path, interrupted_path, first_write_temp_path]):
+		_expect(false, "all production save fixtures claim unique, unused per-process paths before writing")
+		return
 
 	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 3)), "production save fixture adds initial inventory")
 	var stamina_model: RefCounted = world.get("stamina") as RefCounted
@@ -494,8 +842,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var fractional_depth_payload: Dictionary = json_numeric_payload.duplicate(true)
 	fractional_depth_payload["mine_depth"] = 0.5
 	_expect(not bool(world.call("_validate_world_save_payload", fractional_depth_payload)), "SurfaceWorld rejects fractional mine-depth values")
-	var numeric_path: String = "user://production_surface_world_json_numeric_test.json"
-	_cleanup_save_test_files(numeric_path)
+	var numeric_path: String = _test_user_path("json_numeric")
+	if not _claim_test_save_path(numeric_path):
+		_expect(false, "JSON numeric fixture claims a unique unused path")
+		return
 	var numeric_envelope: Dictionary = SaveStoreScript.build_envelope(json_numeric_payload, now_unix)
 	_expect(_write_test_text(numeric_path, SaveStoreScript.encode_envelope(numeric_envelope)), "write a JSON-decoded numeric compatibility fixture")
 	var numeric_file_report: Dictionary = SaveStoreScript.read_valid_file(numeric_path, Callable(world, "_validate_world_save_payload"))
@@ -519,6 +869,17 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var primary_a: String = FileAccess.get_file_as_string(path)
 	var decoded_a: Dictionary = SaveStoreScript.decode_envelope(primary_a)
 	_expect(bool(decoded_a.get("ok", false)) and int(decoded_a.get("envelope", {}).get("format_version", 0)) == 1, "production save uses the explicit envelope version 1")
+	var primary_precedence_payload: Dictionary = payload_a.duplicate(true)
+	primary_precedence_payload["world_seed"] = int(primary_precedence_payload.get("world_seed", 0)) + 17
+	var primary_precedence_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(primary_precedence_payload, now_unix + 1))
+	_expect(_write_test_text(path + ".tmp", primary_precedence_temp_text), "valid committed primary fixture receives a different fully valid uncommitted temp")
+	var committed_primary_before_temp_load: String = FileAccess.get_file_as_string(path)
+	_expect(bool(world.call("load_game", path)), "valid committed primary loads when a different valid uncommitted temp is present")
+	_expect(FileAccess.get_file_as_string(path) == committed_primary_before_temp_load, "valid committed primary remains byte-for-byte authoritative over a valid temp")
+	_expect(FileAccess.get_file_as_string(path + ".tmp") == primary_precedence_temp_text, "valid committed primary prevents promotion or consumption of the uncommitted temp")
+	_expect(DirAccess.remove_absolute(ProjectSettings.globalize_path(path + ".tmp")) == OK, "test removes its own primary-precedence temp before reusing the temp slot")
+	_expect(int(world.get("world_seed")) == int(payload_a.get("world_seed", 0)), "load uses the committed primary payload rather than the newer uncommitted temp")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "primary-precedence recovery reports the committed primary as the load source")
 	var tampered_envelope: Dictionary = decoded_a.get("envelope", {}).duplicate(true)
 	var tampered_payload: Dictionary = tampered_envelope.get("payload", {}).duplicate(true)
 	tampered_payload["world_seed"] = int(tampered_payload.get("world_seed", 0)) + 1
@@ -572,13 +933,18 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(str(primary_report.get("phase", "")) == "loaded_from_primary", "primary load reports its source explicitly")
 	await _test_failed_restore_stream_rollback()
 
-	_expect(_write_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
+	_expect(_replace_owned_test_text(path, "{corrupt-primary"), "test corrupts the primary save")
+	var uncommitted_temp_envelope: Dictionary = SaveStoreScript.build_envelope(payload_b, now_unix + 12)
+	var uncommitted_temp_text: String = SaveStoreScript.encode_envelope(uncommitted_temp_envelope)
+	_expect(_write_test_text(path + ".tmp", uncommitted_temp_text), "test creates a valid uncommitted temp beside a corrupt primary and valid backup")
+	_expect(bool(SaveStoreScript.read_valid_file(path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "uncommitted temp is fully valid before backup recovery")
 	_expect(bool(world.call("load_game", path)), "valid backup is restored when the primary is corrupt")
 	_expect(_inventory_count("berries") == 3, "backup recovery restores the previous valid inventory")
 	var backup_stamina: RefCounted = world.get("stamina") as RefCounted
 	var backup_quick_use: RefCounted = world.get("quick_use") as RefCounted
 	_expect(is_equal_approx(float(backup_stamina.get("current_stamina")), 42.5), "backup recovery restores the previous stamina")
 	_expect(int(backup_quick_use.get("selected_slot")) == 2, "backup recovery restores the previous quick-use selection")
+	_expect(FileAccess.get_file_as_string(path + ".tmp") == uncommitted_temp_text, "valid committed backup takes precedence over an uncommitted valid temp")
 	var archive_found: bool = false
 	var user_directory: DirAccess = DirAccess.open("user://")
 	if user_directory != null:
@@ -589,14 +955,17 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
 	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
 	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
-	_expect(_write_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
+	_expect(_replace_owned_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
 	_expect(bool(world.call("save_game", path)), "valid primary can replace a corrupt backup without losing the primary")
+	_expect(not FileAccess.file_exists(path + ".tmp"), "next successful save cleans the lower-priority uncommitted temp")
 	var backup_rotation_report: Dictionary = world.call("get_last_save_report")
 	var backup_archive_path: String = str(backup_rotation_report.get("details", {}).get("backup_archive_path", ""))
 	_expect(not backup_archive_path.is_empty() and FileAccess.file_exists(backup_archive_path), "corrupt backup is preserved in a diagnostic archive before rotation")
 
-	var invalid_path: String = "user://production_surface_world_invalid_save_test.json"
-	_cleanup_save_test_files(invalid_path)
+	var invalid_path: String = _test_user_path("invalid_save")
+	if not _claim_test_save_path(invalid_path):
+		_expect(false, "invalid save fixture claims a unique unused path")
+		return
 	_expect(_write_test_text(invalid_path, "not-json") and _write_test_text(invalid_path + ".bak", "{also-not-json"), "test prepares invalid primary and backup envelopes")
 	var before_invalid_position: Vector3 = world.player.global_position
 	var before_invalid_inventory: Dictionary = world.inventory_bridge.call("serialize_inventory")
@@ -763,6 +1132,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_promotion_fail_path = ""
 
 	_cleanup_save_test_files(interrupted_path)
+	_expect(_claim_test_save_path(interrupted_path), "restart-recovery fixture reclaims its unique path after deliberate cleanup")
 	_expect(bool(world.call("save_game", interrupted_path)), "restart-recovery fixture writes its first valid primary")
 	var interrupted_primary_text: String = FileAccess.get_file_as_string(interrupted_path)
 	var stage_interrupted_error: Error = DirAccess.rename_absolute(
@@ -785,10 +1155,113 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(FileAccess.get_file_as_string(interrupted_path) == interrupted_primary_text, "load recovery restores the exact previous primary bytes")
 	_expect(not FileAccess.file_exists(interrupted_path + ".previous"), "successful load recovery consumes the staged previous file")
 
+	var first_write_payload: Dictionary = world.call("serialize_stream_state")
+	var first_write_saved_at: int = int(Time.get_unix_time_from_system())
+	var first_write_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, first_write_saved_at))
+	_expect(_write_test_text(first_write_temp_path + ".tmp", first_write_text), "first-save interruption fixture leaves a complete verified temp without primary, backup, or previous")
+	_expect(bool(SaveStoreScript.read_valid_file(first_write_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "first-save temp passes full envelope and payload validation")
+	_expect(not FileAccess.file_exists(first_write_temp_path) and not FileAccess.file_exists(first_write_temp_path + ".bak") and not FileAccess.file_exists(first_write_temp_path + ".previous"), "first-save recovery fixture has no committed file candidates")
+
+	world.queue_free()
+	await process_frame
+	world = WorldScene.instantiate() as Node3D
+	root.add_child(world)
+	await process_frame
+	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh SurfaceWorld starts before first-write temp recovery")
+	var first_write_load_ok: bool = bool(world.call("load_game", first_write_temp_path))
+	if not first_write_load_ok:
+		push_error("First-write temp load diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(first_write_load_ok, "load entry promotes and restores a validated temp when no committed save exists")
+	_expect(FileAccess.get_file_as_string(first_write_temp_path) == first_write_text, "first-write recovery preserves the exact validated temp bytes as primary")
+	_expect(not FileAccess.file_exists(first_write_temp_path + ".tmp"), "successful first-write recovery consumes the temp sidecar")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "first-write recovery continues through the normal primary load path")
+	_expect(_inventory_count("berries") == int(first_write_payload.get("inventory", {}).get("inventory", {}).get("berries", 0)), "first-write recovery restores the saved inventory after restart")
+
+	var invalid_temp_path: String = _test_user_path("invalid_temp_recovery")
+	if not _claim_test_save_path(invalid_temp_path):
+		_expect(false, "invalid temp fixture claims a unique unused path")
+		return
+	var invalid_temp_bytes: String = "{partial interrupted temp"
+	_expect(_write_test_text(invalid_temp_path + ".tmp", invalid_temp_bytes), "invalid first-write temp fixture is created")
+	var before_invalid_temp_load: Dictionary = world.call("serialize_stream_state")
+	_expect(not bool(world.call("load_game", invalid_temp_path)), "invalid temp without a committed primary or backup is not promoted")
+	_expect(FileAccess.get_file_as_string(invalid_temp_path + ".tmp") == invalid_temp_bytes, "invalid temp is preserved byte-for-byte for diagnosis")
+	_expect(not FileAccess.file_exists(invalid_temp_path), "invalid temp does not create a primary save")
+	var after_invalid_temp_load: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", after_invalid_temp_load, before_invalid_temp_load)), "invalid temp rejection leaves the live world snapshot unchanged")
+
+	var corrupt_temp_path: String = _test_user_path("corrupt_primary_temp_recovery")
+	if not _claim_test_save_path(corrupt_temp_path):
+		_expect(false, "corrupt primary temp fixture claims a unique unused path")
+		return
+	var corrupt_primary_bytes: String = "{corrupt primary before verified temp recovery"
+	var corrupt_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(corrupt_temp_path, corrupt_primary_bytes), "corrupt-primary temp recovery fixture writes the invalid primary")
+	_expect(_write_test_text(corrupt_temp_path + ".tmp", corrupt_temp_text), "corrupt-primary temp recovery fixture writes a valid temp")
+	_temp_promotion_fail_path = corrupt_temp_path
+	var failed_temp_promotion: Dictionary = SaveStoreScript.recover_interrupted_write(
+		corrupt_temp_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion")
+	)
+	_expect(not bool(failed_temp_promotion.get("ok", false)), "injected verified-temp promotion failure is reported")
+	var failed_temp_details: Dictionary = failed_temp_promotion.get("temp_recovery", {})
+	_expect(not bool(failed_temp_details.get("recovery_required", true)), "failed temp promotion restores the original corrupt primary when its archive rollback succeeds")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path) == corrupt_primary_bytes, "failed temp promotion preserves the original primary bytes")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path + ".tmp") == corrupt_temp_text, "failed temp promotion preserves the validated temp source")
+	_temp_promotion_fail_path = ""
+	_expect(bool(world.call("load_game", corrupt_temp_path)), "load retry promotes the verified temp after the injected failure is removed")
+	_expect(FileAccess.get_file_as_string(corrupt_temp_path) == corrupt_temp_text, "retry installs the exact validated temp as primary")
+	_expect(not FileAccess.file_exists(corrupt_temp_path + ".tmp"), "successful retry consumes the temp source")
+	var corrupt_temp_archive_found: bool = false
+	var corrupt_temp_directory: DirAccess = DirAccess.open("user://")
+	if corrupt_temp_directory != null:
+		for filename in corrupt_temp_directory.get_files():
+			if filename.begins_with(corrupt_temp_path.get_file() + ".corrupt."):
+				corrupt_temp_archive_found = true
+				break
+	_expect(corrupt_temp_archive_found, "verified-temp recovery archives the invalid primary before promotion")
+
+	var rollback_failure_path: String = _test_user_path("temp_recovery_rollback_failure")
+	if not _claim_test_save_path(rollback_failure_path):
+		_expect(false, "rollback failure fixture claims a unique unused path")
+		return
+	var rollback_failure_primary_bytes: String = "{corrupt primary before temp recovery rollback failure"
+	var rollback_failure_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(rollback_failure_path, rollback_failure_primary_bytes), "rollback-failure fixture writes an invalid primary")
+	_expect(_write_test_text(rollback_failure_path + ".tmp", rollback_failure_temp_text), "rollback-failure fixture writes a fully valid temp")
+	_temp_promotion_fail_path = rollback_failure_path
+	var rollback_failure_report: Dictionary = SaveStoreScript.recover_interrupted_write(
+		rollback_failure_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion_and_archive_rollback")
+	)
+	_expect(not bool(rollback_failure_report.get("ok", false)), "simultaneous temp promotion and archive rollback failures are reported")
+	var rollback_failure_details: Dictionary = rollback_failure_report.get("temp_recovery", {})
+	_expect(bool(rollback_failure_details.get("recovery_required", false)), "failed archive rollback retains an explicit recovery-required state")
+	_expect(not FileAccess.file_exists(rollback_failure_path), "failed archive rollback does not claim a primary save exists")
+	_expect(FileAccess.get_file_as_string(rollback_failure_path + ".tmp") == rollback_failure_temp_text, "failed archive rollback preserves the verified source temp for retry")
+	var rollback_archive_found: bool = false
+	var rollback_failure_directory: DirAccess = DirAccess.open("user://")
+	if rollback_failure_directory != null:
+		for filename in rollback_failure_directory.get_files():
+			if filename.begins_with(rollback_failure_path.get_file() + ".corrupt."):
+				rollback_archive_found = true
+				break
+	_expect(rollback_archive_found, "failed archive rollback retains the original corrupt primary archive")
+	_temp_promotion_fail_path = ""
+	_expect(bool(world.call("load_game", rollback_failure_path)), "fresh recovery attempt succeeds after the injected promotion and rollback failures are removed")
+	_expect(FileAccess.get_file_as_string(rollback_failure_path) == rollback_failure_temp_text, "retry after rollback failure installs the exact verified temp")
+	_expect(not FileAccess.file_exists(rollback_failure_path + ".tmp"), "successful retry after rollback failure consumes the source temp")
+	_cleanup_save_test_files(rollback_failure_path)
+
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
+	_cleanup_save_test_files(first_write_temp_path)
+	_cleanup_save_test_files(invalid_temp_path)
+	_cleanup_save_test_files(corrupt_temp_path)
 	_cleanup_save_test_files(invalid_path)
 
 
@@ -947,7 +1420,61 @@ func _make_chunk_with_injected_failure(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, int(world.get("_stream_clock_unix")))
 
 
+
+func _test_user_path(label: String) -> String:
+	return "user://" + _test_run_prefix + label + ".json"
+
+func _claim_test_save_paths(paths: Array[String]) -> bool:
+	for path in paths:
+		if not _claim_test_save_path(path):
+			return false
+	return true
+
+func _claim_test_save_path(path: String) -> bool:
+	if _owned_test_save_paths.has(path) or _test_run_prefix.is_empty() or not path.begins_with("user://" + _test_run_prefix):
+		return false
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	if directory == null:
+		return false
+	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
+		if _user_entry_is_occupied(path + suffix, directory):
+			return false
+	var archive_prefix: String = path.get_file() + ".corrupt."
+	for filename in directory.get_files():
+		if filename.begins_with(archive_prefix):
+			return false
+	for directory_name in directory.get_directories():
+		if directory_name.begins_with(archive_prefix):
+			return false
+	_owned_test_save_paths.append(path)
+	return true
+
+func _is_owned_test_save_entry(path: String) -> bool:
+	for base_path in _owned_test_save_paths:
+		if path == base_path or path.begins_with(base_path + "."):
+			return true
+	return false
+
 func _write_test_text(path: String, content: String) -> bool:
+	var directory: DirAccess = DirAccess.open("user://")
+	if directory == null or not _is_owned_test_save_entry(path) or _user_entry_is_occupied(path, directory):
+		return false
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(content)
+	file.flush()
+	var success: bool = file.get_error() == OK
+	file.close()
+	return success
+
+func _replace_owned_test_text(path: String, content: String) -> bool:
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	if directory == null or not _is_owned_test_save_entry(path):
+		return false
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	if directory.is_link(path.get_file()) or DirAccess.dir_exists_absolute(absolute_path) or not FileAccess.file_exists(path):
+		return false
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return false
@@ -958,17 +1485,23 @@ func _write_test_text(path: String, content: String) -> bool:
 	return success
 
 func _cleanup_save_test_files(path: String) -> void:
+	if not _owned_test_save_paths.has(path):
+		push_error("Refusing to clean an unclaimed test save path: " + path)
+		return
+	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	if directory == null:
+		# A nested fixture directory may already have been removed after cleanup.
+		_owned_test_save_paths.erase(path)
+		return
 	for suffix in ["", ".bak", ".tmp", ".bak.tmp", ".previous", ".restore.tmp"]:
 		var candidate: String = path + suffix
-		if FileAccess.file_exists(candidate):
+		if FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(candidate))
-	var directory: DirAccess = DirAccess.open("user://")
-	if directory == null:
-		return
 	var prefix: String = path.get_file() + ".corrupt."
 	for filename in directory.get_files():
 		if filename.begins_with(prefix):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + filename))
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path.get_base_dir() + "/" + filename))
+	_owned_test_save_paths.erase(path)
 
 func _rename_fail_primary_and_rollback(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
@@ -980,6 +1513,20 @@ func _rename_fail_primary_and_rollback(source_absolute: String, destination_abso
 func _rename_fail_primary_promotion(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
 	if destination_absolute == primary_absolute and source_absolute.ends_with(".tmp"):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
+
+func _rename_fail_temp_promotion(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_temp_promotion_fail_path)
+	if destination_absolute == primary_absolute and source_absolute.ends_with(".restore.tmp"):
+		return ERR_CANT_CREATE
+	return DirAccess.rename_absolute(source_absolute, destination_absolute)
+
+
+func _rename_fail_temp_promotion_and_archive_rollback(source_absolute: String, destination_absolute: String) -> int:
+	var primary_absolute: String = ProjectSettings.globalize_path(_temp_promotion_fail_path)
+	if destination_absolute == primary_absolute and (source_absolute.ends_with(".restore.tmp") or source_absolute.contains(".corrupt.")):
 		return ERR_CANT_CREATE
 	return DirAccess.rename_absolute(source_absolute, destination_absolute)
 

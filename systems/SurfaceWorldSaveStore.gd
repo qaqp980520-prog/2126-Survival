@@ -265,6 +265,58 @@ static func promote_backup(path: String, payload_validator: Callable, rename_ope
 		}
 	return {"ok": true, "phase": "backup_promoted", "archive_path": archive_path, "backup_path": backup_path}
 
+static func _promote_verified_temp(path: String, temp_report: Dictionary, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	if DirAccess.dir_exists_absolute(absolute_path):
+		return {"ok": false, "phase": "primary_preflight", "reason": "primary_path_is_directory"}
+	var temp_path: String = path + ".tmp"
+	var restore_temp_path: String = path + ".restore.tmp"
+	if not _remove_file_if_present(restore_temp_path):
+		return {"ok": false, "phase": "restore_temp", "reason": "stale_restore_temp_could_not_be_removed"}
+	var copy_error: int = DirAccess.copy_absolute(ProjectSettings.globalize_path(temp_path), ProjectSettings.globalize_path(restore_temp_path))
+	if copy_error != OK:
+		return {"ok": false, "phase": "restore_temp", "reason": "verified_temp_copy_failed", "error": copy_error}
+	var copied_temp: Dictionary = read_valid_file(restore_temp_path, payload_validator)
+	if not bool(copied_temp.get("ok", false)) or str(copied_temp.get("raw_text", "")) != str(temp_report.get("raw_text", "")):
+		_remove_file_if_present(restore_temp_path)
+		return {"ok": false, "phase": "restore_verify", "reason": "verified_temp_copy_did_not_match_source"}
+	var archive_path: String = ""
+	if FileAccess.file_exists(path):
+		archive_path = _unique_corrupt_archive_path(path)
+		var archive_error: int = _rename_path(path, archive_path, rename_operation)
+		if archive_error != OK:
+			_remove_file_if_present(restore_temp_path)
+			return {"ok": false, "phase": "corrupt_archive", "reason": "invalid_primary_could_not_be_preserved", "error": archive_error}
+	var promote_error: int = _rename_path(restore_temp_path, path, rename_operation)
+	if promote_error != OK:
+		var rollback_error: int = OK
+		if not archive_path.is_empty():
+			rollback_error = _rename_path(archive_path, path, rename_operation)
+		_remove_file_if_present(restore_temp_path)
+		return {
+			"ok": false,
+			"phase": "temp_promote",
+			"reason": "verified_temp_promotion_failed",
+			"error": promote_error,
+			"recovery_required": rollback_error != OK,
+			"rollback_error": rollback_error,
+			"archive_path": archive_path
+		}
+	var promoted_primary: Dictionary = read_valid_file(path, payload_validator)
+	if not bool(promoted_primary.get("ok", false)) or str(promoted_primary.get("raw_text", "")) != str(temp_report.get("raw_text", "")):
+		return {
+			"ok": false,
+			"phase": "temp_verify",
+			"reason": "promoted_temp_verification_failed",
+			"recovery_required": true,
+			"archive_path": archive_path
+		}
+	var cleanup_warning: String = ""
+	if not _remove_file_if_present(temp_path):
+		cleanup_warning = "stale_temp_cleanup_failed"
+	return {"ok": true, "phase": "verified_temp_promoted", "archive_path": archive_path, "warning": cleanup_warning}
+
+
 static func recover_interrupted_write(path: String, payload_validator: Callable, rename_operation: Callable = Callable()) -> Dictionary:
 	if not _is_supported_save_base_path(path):
 		return {"ok": false, "reason": "unsupported_save_path"}
@@ -274,7 +326,29 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 	if not FileAccess.file_exists(previous_path):
 		if DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(previous_path)):
 			return {"ok": false, "reason": "previous_path_is_directory"}
-		return {"ok": true, "phase": "no_interrupted_write"}
+		var current_primary: Dictionary = read_valid_file(path, payload_validator)
+		if bool(current_primary.get("ok", false)):
+			return {"ok": true, "phase": "no_interrupted_write"}
+		var committed_backup: Dictionary = read_valid_file(path + ".bak", payload_validator)
+		if bool(committed_backup.get("ok", false)):
+			return {"ok": true, "phase": "no_interrupted_write"}
+		var verified_temp: Dictionary = read_valid_file(path + ".tmp", payload_validator)
+		if not bool(verified_temp.get("ok", false)):
+			return {"ok": true, "phase": "no_interrupted_write"}
+		var temp_recovery: Dictionary = _promote_verified_temp(path, verified_temp, payload_validator, rename_operation)
+		if not bool(temp_recovery.get("ok", false)):
+			return {
+				"ok": false,
+				"reason": "verified_temp_recovery_failed",
+				"recovery_required": true,
+				"temp_recovery": temp_recovery
+			}
+		return {
+			"ok": true,
+			"phase": "verified_temp_recovered",
+			"archive_path": str(temp_recovery.get("archive_path", "")),
+			"warning": str(temp_recovery.get("warning", ""))
+		}
 	var primary_result: Dictionary = read_valid_file(path, payload_validator)
 	if bool(primary_result.get("ok", false)):
 		var previous_result: Dictionary = read_valid_file(previous_path, payload_validator)
@@ -386,11 +460,18 @@ static func _remove_file_if_present(path: String) -> bool:
 		return true
 	return DirAccess.remove_absolute(absolute_path) == OK
 
-static func _unique_corrupt_archive_path(path: String) -> String:
-	var base_path: String = path + ".corrupt." + str(Time.get_unix_time_from_system())
+static func _is_symlink_entry(path: String) -> bool:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	var parent_access: DirAccess = DirAccess.open(absolute_path.get_base_dir())
+	return parent_access != null and parent_access.is_link(absolute_path.get_file())
+
+
+static func _unique_corrupt_archive_path(path: String, timestamp: int = -1) -> String:
+	var archive_timestamp: int = timestamp if timestamp >= 0 else int(Time.get_unix_time_from_system())
+	var base_path: String = path + ".corrupt." + str(archive_timestamp)
 	var candidate: String = base_path
 	var suffix: int = 1
-	while FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)):
+	while FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)) or _is_symlink_entry(candidate):
 		candidate = base_path + "." + str(suffix)
 		suffix += 1
 	return candidate
