@@ -149,13 +149,13 @@ Exact-head Godot 4.3 validation for this final readback correction is pending. D
 
 A source audit found that `retry_save_recovery()` reused the captured recovery timestamp but still called the normal `WorldSessionController.restore_stream_state()` path. The normal MineralVeinRegistry restore intentionally applies elapsed offline regeneration. That is correct for loading a disk save, but not for restoring an in-memory rollback snapshot whose mineral values must be compared before the recovery barrier is cleared.
 
-The correction adds an explicit `exact_mineral_restore` option to the base and SurfaceWorld stream-restore entry points. Normal user-facing restore keeps the existing offline-regeneration behavior. The world-recovery retry path passes the exact option and uses `MineralChunkController.restore_snapshot_exact()`, preserving every mineral record and timestamp before the full readback comparison.
+The correction adds an explicit `exact_mineral_restore` option to the base and SurfaceWorld stream-restore entry points. Normal user-facing restore keeps the existing offline-regeneration behavior. The world-recovery retry path passes the exact option and uses `MineralChunkController.restore_snapshot_exact()`. Because target streaming can unload the old window and register new chunks, the post-stream phase also reapplies the authoritative CropRegistry and WorldObjectStateRegistry snapshots; exact mineral recovery is reapplied after streaming as well. This removes records reintroduced by old-window unload and prevents newly loaded minerals from applying offline catch-up before the full readback comparison.
 
 The regression fixture:
 - captures the original production world snapshot;
 - selects a currently registered surface mineral and prepares a valid depleted record with its last-regeneration timestamp two intervals before a fixed recovery time;
 - moves the player far enough to unload that mineral's surface chunk, then injects a pending in-memory world-recovery barrier and invokes `retry_save_recovery()`;
-- streams the captured surface window back in, exercising detached mineral registration and its normal offline catch-up before the exact post-stream reapplication;
+- streams the captured surface window back in, exercising detached mineral registration and its normal offline catch-up before exact mineral, crop and world-object snapshots are reapplied;
 - verifies the full mineral payload, remaining units and timestamp are unchanged before readback comparison;
 - verifies the barrier clears only after the exact full snapshot matches; and
 - restores the original test-world snapshot using the exact recovery mode.
