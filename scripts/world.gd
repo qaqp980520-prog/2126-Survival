@@ -252,6 +252,12 @@ func restore_stream_state(payload: Dictionary, now_unix: int = -1, exact_mineral
 	player.global_position = Vector3(float(position_value[0]), float(position_value[1]), float(position_value[2]))
 	_last_grid = Vector2i(999999, 999999)
 	if _sync_streaming(now):
+		if exact_mineral_restore:
+			if not chunk_controller.has_method("restore_snapshot_exact") or not bool(chunk_controller.call("restore_snapshot_exact", minerals_value, now)):
+				_set_restore_report(false, "mineral_exact_readback_restore", "Exact mineral snapshot could not be reapplied after target chunk streaming; recovery remains required.", false, {
+					"active_chunk_ids": chunk_controller.get_loaded_chunk_ids()
+				})
+				return false
 		if chunk_controller.has_method("refresh_crop_plots"):
 			chunk_controller.refresh_crop_plots()
 		_set_restore_report(true, "complete", "", true, {
