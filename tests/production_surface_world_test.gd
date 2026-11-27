@@ -466,10 +466,12 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var blocked_path: String = "user://production_surface_world_save_blocked_test.json"
 	var promotion_path: String = "user://production_surface_world_save_promotion_test.json"
 	var interrupted_path: String = "user://production_surface_world_interrupted_restart_test.json"
+	var first_write_temp_path: String = "user://production_surface_world_first_write_temp_recovery_test.json"
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
+	_cleanup_save_test_files(first_write_temp_path)
 
 	_expect(bool(world.inventory_bridge.call("collect_world_item", "berries", 3)), "production save fixture adds initial inventory")
 	var stamina_model: RefCounted = world.get("stamina") as RefCounted
@@ -579,6 +581,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var backup_quick_use: RefCounted = world.get("quick_use") as RefCounted
 	_expect(is_equal_approx(float(backup_stamina.get("current_stamina")), 42.5), "backup recovery restores the previous stamina")
 	_expect(int(backup_quick_use.get("selected_slot")) == 2, "backup recovery restores the previous quick-use selection")
+	_expect(FileAccess.get_file_as_string(path + ".tmp") == uncommitted_temp_text, "valid committed backup takes precedence over an uncommitted valid temp")
 	var archive_found: bool = false
 	var user_directory: DirAccess = DirAccess.open("user://")
 	if user_directory != null:
@@ -587,10 +590,15 @@ func _test_durable_save_load(now_unix: int) -> void:
 				archive_found = true
 				break
 	_expect(archive_found, "corrupt primary is preserved in a diagnostic archive")
+	var uncommitted_temp_envelope: Dictionary = SaveStoreScript.build_envelope(payload_b, now_unix + 12)
+	var uncommitted_temp_text: String = SaveStoreScript.encode_envelope(uncommitted_temp_envelope)
+	_expect(_write_test_text(path + ".tmp", uncommitted_temp_text), "test creates a valid uncommitted temp beside a corrupt primary and valid backup")
+	_expect(bool(SaveStoreScript.read_valid_file(path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "uncommitted temp is fully valid before backup recovery")
 	var promoted_primary: Dictionary = SaveStoreScript.read_valid_file(path, Callable(world, "_validate_world_save_payload"))
 	_expect(bool(promoted_primary.get("ok", false)), "validated backup is promoted to the primary path after successful world restore")
 	_expect(_write_test_text(path + ".bak", "{corrupt-backup"), "test corrupts the existing backup while the primary remains valid")
 	_expect(bool(world.call("save_game", path)), "valid primary can replace a corrupt backup without losing the primary")
+	_expect(not FileAccess.file_exists(path + ".tmp"), "next successful save cleans the lower-priority uncommitted temp")
 	var backup_rotation_report: Dictionary = world.call("get_last_save_report")
 	var backup_archive_path: String = str(backup_rotation_report.get("details", {}).get("backup_archive_path", ""))
 	_expect(not backup_archive_path.is_empty() and FileAccess.file_exists(backup_archive_path), "corrupt backup is preserved in a diagnostic archive before rotation")
@@ -785,10 +793,45 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(FileAccess.get_file_as_string(interrupted_path) == interrupted_primary_text, "load recovery restores the exact previous primary bytes")
 	_expect(not FileAccess.file_exists(interrupted_path + ".previous"), "successful load recovery consumes the staged previous file")
 
+	var first_write_payload: Dictionary = world.call("serialize_stream_state")
+	var first_write_saved_at: int = int(Time.get_unix_time_from_system())
+	var first_write_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, first_write_saved_at))
+	_expect(_write_test_text(first_write_temp_path + ".tmp", first_write_text), "first-save interruption fixture leaves a complete verified temp without primary, backup, or previous")
+	_expect(bool(SaveStoreScript.read_valid_file(first_write_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "first-save temp passes full envelope and payload validation")
+	_expect(not FileAccess.file_exists(first_write_temp_path) and not FileAccess.file_exists(first_write_temp_path + ".bak") and not FileAccess.file_exists(first_write_temp_path + ".previous"), "first-save recovery fixture has no committed file candidates")
+
+	world.queue_free()
+	await process_frame
+	world = WorldScene.instantiate() as Node3D
+	root.add_child(world)
+	await process_frame
+	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh SurfaceWorld starts before first-write temp recovery")
+	var first_write_load_ok: bool = bool(world.call("load_game", first_write_temp_path))
+	if not first_write_load_ok:
+		push_error("First-write temp load diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(first_write_load_ok, "load entry promotes and restores a validated temp when no committed save exists")
+	_expect(FileAccess.get_file_as_string(first_write_temp_path) == first_write_text, "first-write recovery preserves the exact validated temp bytes as primary")
+	_expect(not FileAccess.file_exists(first_write_temp_path + ".tmp"), "successful first-write recovery consumes the temp sidecar")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "first-write recovery continues through the normal primary load path")
+	_expect(_inventory_count("berries") == int(first_write_payload.get("inventory", {}).get("inventory", {}).get("berries", 0)), "first-write recovery restores the saved inventory after restart")
+
+	var invalid_temp_path: String = "user://production_surface_world_invalid_temp_recovery_test.json"
+	_cleanup_save_test_files(invalid_temp_path)
+	var invalid_temp_bytes: String = "{partial interrupted temp"
+	_expect(_write_test_text(invalid_temp_path + ".tmp", invalid_temp_bytes), "invalid first-write temp fixture is created")
+	var before_invalid_temp_load: Dictionary = world.call("serialize_stream_state")
+	_expect(not bool(world.call("load_game", invalid_temp_path)), "invalid temp without a committed primary or backup is not promoted")
+	_expect(FileAccess.get_file_as_string(invalid_temp_path + ".tmp") == invalid_temp_bytes, "invalid temp is preserved byte-for-byte for diagnosis")
+	_expect(not FileAccess.file_exists(invalid_temp_path), "invalid temp does not create a primary save")
+	var after_invalid_temp_load: Dictionary = world.call("serialize_stream_state")
+	_expect(bool(world.call("_world_recovery_matches_snapshot", after_invalid_temp_load, before_invalid_temp_load)), "invalid temp rejection leaves the live world snapshot unchanged")
+
 	_cleanup_save_test_files(path)
 	_cleanup_save_test_files(blocked_path)
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
+	_cleanup_save_test_files(first_write_temp_path)
+	_cleanup_save_test_files(invalid_temp_path)
 	_cleanup_save_test_files(invalid_path)
 
 
