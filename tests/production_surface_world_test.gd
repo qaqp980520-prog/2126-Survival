@@ -51,6 +51,8 @@ var _fail_chunk_coord: Vector2i = Vector2i(999999, 999999)
 var _test_run_prefix: String = ""
 var _owned_test_save_paths: Array[String] = []
 var _owned_test_symlink_paths: Array[String] = []
+var _owned_test_symlink_targets: Dictionary = {}
+var _owned_test_symlink_placeholders: Dictionary = {}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -285,34 +287,79 @@ func _user_entry_is_occupied(path: String, _directory: DirAccess) -> bool:
 	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or is_link
 
 func _create_owned_test_symlink(directory: DirAccess, target_absolute: String, link_name: String) -> Error:
-	if directory == null:
+	if directory == null or _test_run_prefix.is_empty():
 		return ERR_CANT_OPEN
 	var link_path: String = "user://" + link_name
+	var test_root_absolute: String = ProjectSettings.globalize_path("user://" + _test_run_prefix)
+	if not link_path.begins_with("user://" + _test_run_prefix) or not target_absolute.begins_with(test_root_absolute):
+		return ERR_INVALID_PARAMETER
 	if _user_entry_is_occupied(link_path, directory):
 		return ERR_ALREADY_EXISTS
 	var create_error: Error = directory.create_link(target_absolute, link_name)
 	if create_error == OK:
 		_owned_test_symlink_paths.append(link_path)
+		_owned_test_symlink_targets[link_path] = target_absolute
+		_owned_test_symlink_placeholders[link_path] = false
 	return create_error
 
 func _remove_owned_test_symlink(path: String) -> bool:
 	if not _owned_test_symlink_paths.has(path):
 		push_error("Refusing to remove an unowned test symlink: " + path)
 		return false
-	var directory: DirAccess = DirAccess.open(path.get_base_dir())
+	var directory: DirAccess = DirAccess.open("user://")
 	if directory == null:
 		return false
 	var link_name: String = path.get_file()
+	var target_absolute: String = str(_owned_test_symlink_targets.get(path, ""))
+	var placeholder_owned: bool = bool(_owned_test_symlink_placeholders.get(path, false))
+	if target_absolute.is_empty():
+		push_error("Owned test symlink is missing its recorded target: " + path)
+		return false
+	if not target_absolute.begins_with(ProjectSettings.globalize_path("user://" + _test_run_prefix)):
+		push_error("Refusing to prepare a symlink target outside this test run: " + target_absolute)
+		return false
 	if directory.is_link(link_name):
+		if not placeholder_owned and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
+			var target_user_path: String = ProjectSettings.localize_path(target_absolute)
+			if not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
+				push_error("Refusing to create a removal placeholder at an occupied or unowned target: " + target_absolute)
+				return false
+			var placeholder_error: Error = DirAccess.make_dir_absolute(target_absolute)
+			if placeholder_error == OK:
+				placeholder_owned = true
+				_owned_test_symlink_placeholders[path] = true
+			elif not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
+				push_error("Failed to prepare a safe target placeholder for dangling symlink: " + path + " error=" + str(placeholder_error))
+				return false
 		var remove_error: Error = directory.remove(link_name)
 		if remove_error != OK:
+			if placeholder_owned:
+				var rollback_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
+				if rollback_placeholder_error == OK:
+					_owned_test_symlink_placeholders[path] = false
+				else:
+					push_error("Failed to remove owned symlink target placeholder: " + target_absolute + " error=" + str(rollback_placeholder_error))
 			push_error("Failed to remove owned test symlink: " + path + " error=" + str(remove_error))
 			return false
 	elif _user_entry_is_occupied(path, directory):
-		# The link was replaced after creation. Relinquish ownership without touching the replacement.
+		# The link was replaced after creation. Preserve the replacement and release ownership.
+		if placeholder_owned:
+			var replacement_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
+			if replacement_placeholder_error != OK:
+				push_error("Failed to remove owned target placeholder after link replacement: " + target_absolute + " error=" + str(replacement_placeholder_error))
+				return false
 		_owned_test_symlink_paths.erase(path)
+		_owned_test_symlink_targets.erase(path)
+		_owned_test_symlink_placeholders.erase(path)
 		return false
+	if placeholder_owned:
+		var cleanup_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
+		if cleanup_placeholder_error != OK:
+			push_error("Failed to remove owned symlink target placeholder: " + target_absolute + " error=" + str(cleanup_placeholder_error))
+			return false
 	_owned_test_symlink_paths.erase(path)
+	_owned_test_symlink_targets.erase(path)
+	_owned_test_symlink_placeholders.erase(path)
 	return true
 
 func _cleanup_owned_test_symlinks() -> void:
@@ -447,7 +494,9 @@ func _test_save_path_symlink_guards() -> void:
 		var collision_safe_candidate: String = SaveStoreScript._unique_corrupt_archive_path(archive_base_path, archive_timestamp)
 		_expect(collision_safe_candidate == expected_archive_path + ".1", "corrupt-archive naming skips a dangling symlink and selects the next collision-free suffix")
 		_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
-		_remove_owned_test_symlink(expected_archive_path)
+		_expect(_remove_owned_test_symlink(expected_archive_path), "owned-link cleanup removes the dangling archive symlink")
+		_expect(not user_directory.is_link(archive_link_name), "dangling archive symlink is removed without following its missing target")
+		_expect(not FileAccess.file_exists(missing_archive_target) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(missing_archive_target)), "temporary removal placeholder is removed and the original missing target remains absent")
 
 	# Verify the test-owned-link cleanup unlinks only the fixture entry and never its target.
 	var cleanup_target_path: String = _test_user_path("symlink_cleanup_target")
@@ -575,7 +624,10 @@ func _test_save_path_symlink_guards() -> void:
 				_expect(user_directory.is_link(occupied_symlink_path.get_file()), "production recovery leaves the colliding dangling archive symlink intact")
 				_expect(not FileAccess.file_exists(occupied_symlink_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(occupied_symlink_path)), "the preserved archive symlink remains dangling after the real archive rename")
 	for link_name in end_to_end_link_names:
-		_remove_owned_test_symlink("user://" + link_name)
+		var owned_link_path: String = "user://" + link_name
+		var owned_target_path: String = owned_link_path + ".missing-target"
+		_expect(_remove_owned_test_symlink(owned_link_path), "owned end-to-end dangling symlink is removed safely")
+		_expect(not FileAccess.file_exists(owned_target_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(owned_target_path)), "end-to-end symlink cleanup leaves no target placeholder")
 	_cleanup_save_test_files(end_to_end_archive_path)
 
 
