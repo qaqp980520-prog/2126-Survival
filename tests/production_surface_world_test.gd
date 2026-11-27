@@ -311,57 +311,100 @@ func _remove_owned_test_symlink(path: String) -> bool:
 		return false
 	var link_name: String = path.get_file()
 	var target_absolute: String = str(_owned_test_symlink_targets.get(path, ""))
-	var placeholder_owned: bool = bool(_owned_test_symlink_placeholders.get(path, false))
-	if target_absolute.is_empty():
-		push_error("Owned test symlink is missing its recorded target: " + path)
-		return false
-	if not target_absolute.begins_with(ProjectSettings.globalize_path("user://" + _test_run_prefix)):
-		push_error("Refusing to prepare a symlink target outside this test run: " + target_absolute)
+	var placeholder_marker_path: String = str(_owned_test_symlink_placeholders.get(path, ""))
+	if target_absolute.is_empty() or not target_absolute.begins_with(ProjectSettings.globalize_path("user://" + _test_run_prefix)):
+		push_error("Owned test symlink has an invalid or out-of-run target: " + path)
 		return false
 	if directory.is_link(link_name):
-		if not placeholder_owned and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
-			var user_root_absolute: String = ProjectSettings.globalize_path("user://")
-			var relative_target: String = target_absolute.trim_prefix(user_root_absolute).trim_prefix("/")
-			var target_user_path: String = "user://" + relative_target
-			if not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
+		if placeholder_marker_path.is_empty() and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
+			var target_user_path: String = _test_user_path_from_absolute(target_absolute)
+			if target_user_path.is_empty() or not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
 				push_error("Refusing to create a removal placeholder at an occupied or unowned target: " + target_absolute)
 				return false
 			var placeholder_error: Error = DirAccess.make_dir_absolute(target_absolute)
 			if placeholder_error == OK:
-				placeholder_owned = true
-				_owned_test_symlink_placeholders[path] = true
+				var marker_name: String = "2126_symlink_cleanup_" + str(OS.get_process_id()) + "_" + str(Time.get_ticks_usec()) + ".marker"
+				placeholder_marker_path = target_absolute.path_join(marker_name)
+				var marker_file := FileAccess.open(placeholder_marker_path, FileAccess.WRITE)
+				if marker_file == null:
+					DirAccess.remove_absolute(target_absolute)
+					push_error("Failed to create the owned symlink placeholder marker: " + placeholder_marker_path)
+					return false
+				marker_file.store_string("owned-symlink-placeholder:" + path)
+				marker_file.flush()
+				var marker_written: bool = marker_file.get_error() == OK
+				marker_file.close()
+				if not marker_written:
+					DirAccess.remove_absolute(placeholder_marker_path)
+					DirAccess.remove_absolute(target_absolute)
+					push_error("Failed to write the owned symlink placeholder marker: " + placeholder_marker_path)
+					return false
+				_owned_test_symlink_placeholders[path] = placeholder_marker_path
 			elif not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
 				push_error("Failed to prepare a safe target placeholder for dangling symlink: " + path + " error=" + str(placeholder_error))
 				return false
 		var remove_error: Error = directory.remove(link_name)
 		if remove_error != OK:
-			if placeholder_owned:
-				var rollback_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
-				if rollback_placeholder_error == OK:
-					_owned_test_symlink_placeholders[path] = false
-				else:
-					push_error("Failed to remove owned symlink target placeholder: " + target_absolute + " error=" + str(rollback_placeholder_error))
 			push_error("Failed to remove owned test symlink: " + path + " error=" + str(remove_error))
 			return false
 	elif _user_entry_is_occupied(path, directory):
-		# The link was replaced after creation. Preserve the replacement and release ownership.
-		if placeholder_owned:
-			var replacement_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
-			if replacement_placeholder_error != OK:
-				push_error("Failed to remove owned target placeholder after link replacement: " + target_absolute + " error=" + str(replacement_placeholder_error))
-				return false
+		# The link was replaced after creation. Preserve the replacement and clean only our verified placeholder.
+		if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
+			return false
 		_owned_test_symlink_paths.erase(path)
 		_owned_test_symlink_targets.erase(path)
 		_owned_test_symlink_placeholders.erase(path)
 		return false
-	if placeholder_owned:
-		var cleanup_placeholder_error: Error = DirAccess.remove_absolute(target_absolute)
-		if cleanup_placeholder_error != OK:
-			push_error("Failed to remove owned symlink target placeholder: " + target_absolute + " error=" + str(cleanup_placeholder_error))
-			return false
+	if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
+		return false
 	_owned_test_symlink_paths.erase(path)
 	_owned_test_symlink_targets.erase(path)
 	_owned_test_symlink_placeholders.erase(path)
+	return true
+
+func _test_user_path_from_absolute(path: String) -> String:
+	var user_root_absolute: String = ProjectSettings.globalize_path("user://")
+	if not path.begins_with(user_root_absolute):
+		return ""
+	var relative_path: String = path.trim_prefix(user_root_absolute).trim_prefix("/")
+	return "user://" + relative_path
+
+func _cleanup_owned_symlink_placeholder(owner_path: String, target_absolute: String, marker_path: String) -> bool:
+	if marker_path.is_empty():
+		return true
+	var target_user_path: String = _test_user_path_from_absolute(target_absolute)
+	var user_directory: DirAccess = DirAccess.open("user://")
+	if target_user_path.is_empty() or user_directory == null:
+		return false
+	if user_directory.is_link(target_user_path.get_file()) or FileAccess.file_exists(target_absolute):
+		# The placeholder path was replaced. Never remove the replacement.
+		_owned_test_symlink_placeholders.erase(owner_path)
+		return true
+	if not DirAccess.dir_exists_absolute(target_absolute):
+		_owned_test_symlink_placeholders.erase(owner_path)
+		return true
+	var placeholder_directory: DirAccess = DirAccess.open(target_absolute)
+	if placeholder_directory == null:
+		return false
+	var files: PackedStringArray = placeholder_directory.get_files()
+	var directories: PackedStringArray = placeholder_directory.get_directories()
+	var marker_name: String = marker_path.get_file()
+	if files.is_empty() and directories.is_empty():
+		# A prior cleanup attempt removed the marker but could not remove the empty directory.
+		pass
+	elif files.size() == 1 and files.has(marker_name) and directories.is_empty() and FileAccess.get_file_as_string(marker_path) == "owned-symlink-placeholder:" + owner_path:
+		var marker_remove_error: Error = DirAccess.remove_absolute(marker_path)
+		if marker_remove_error != OK:
+			push_error("Failed to remove owned symlink placeholder marker: " + marker_path + " error=" + str(marker_remove_error))
+			return false
+	else:
+		push_error("Refusing to remove a symlink target directory with unexpected contents: " + target_absolute)
+		return false
+	var directory_remove_error: Error = DirAccess.remove_absolute(target_absolute)
+	if directory_remove_error != OK:
+		push_error("Failed to remove owned symlink target placeholder directory: " + target_absolute + " error=" + str(directory_remove_error))
+		return false
+	_owned_test_symlink_placeholders.erase(owner_path)
 	return true
 
 func _cleanup_owned_test_symlinks() -> void:
