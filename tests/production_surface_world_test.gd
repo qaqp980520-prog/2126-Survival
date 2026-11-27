@@ -784,25 +784,20 @@ func _test_durable_save_load(now_unix: int) -> void:
 
 
 func _test_underground_restore_rollback_barrier() -> void:
-	var rollback_world: Node3D = WorldScene.instantiate() as Node3D
-	_expect(rollback_world != null, "underground rollback-barrier fixture instantiates a separate SurfaceWorld")
+	var rollback_world: Node3D = world
+	_expect(rollback_world != null, "underground rollback-barrier fixture uses the initialized production SurfaceWorld")
 	if rollback_world == null:
 		return
-	root.add_child(rollback_world)
 	await process_frame
 	var status: Dictionary = rollback_world.call("get_world_session_status")
-	_expect(bool(status.get("ready", false)), "underground rollback-barrier fixture initializes its streaming stack")
+	_expect(bool(status.get("ready", false)), "underground rollback-barrier fixture uses a ready streaming stack")
 	if not bool(status.get("ready", false)):
-		rollback_world.queue_free()
-		await process_frame
 		return
 
 	var now_unix: int = int(Time.get_unix_time_from_system())
 	var initial_payload: Dictionary = rollback_world.call("serialize_stream_state")
 	_expect(not initial_payload.is_empty(), "underground rollback-barrier fixture captures a complete initial snapshot")
 	if initial_payload.is_empty():
-		rollback_world.queue_free()
-		await process_frame
 		return
 	_expect(bool(rollback_world.call("restore_stream_state", initial_payload, now_unix, true)), "fixture primes a successful restore report before injecting a later failure")
 	var previous_payload: Dictionary = rollback_world.call("serialize_stream_state")
@@ -838,8 +833,6 @@ func _test_underground_restore_rollback_barrier() -> void:
 	_expect(rollback_world.chunk_controller.call("to_save_dict") == previous_minerals, "recovery restores exact mineral records after underground resynchronization")
 	_expect(rollback_world.object_state_registry.call("to_save_dict") == previous_objects, "recovery restores exact world-object records after underground resynchronization")
 	_expect(rollback_world.player.global_position.is_equal_approx(previous_position), "recovery preserves the original player position")
-	rollback_world.queue_free()
-	await process_frame
 
 
 func _test_failed_restore_stream_rollback() -> void:
