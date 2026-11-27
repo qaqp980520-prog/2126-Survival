@@ -331,7 +331,7 @@ func _test_world_recovery_snapshot_comparison() -> void:
 	var exact_stable_id: String = ""
 	for raw_id in live_mineral_ids:
 		var candidate_id: String = str(raw_id)
-		if candidate_id.begins_with("surface/"):
+		if candidate_id.begins_with("surface"):
 			exact_stable_id = candidate_id
 			break
 	_expect(not exact_stable_id.is_empty(), "exact-time recovery fixture selects a currently loaded surface mineral")
@@ -340,11 +340,12 @@ func _test_world_recovery_snapshot_comparison() -> void:
 	_expect(exact_veins.has(exact_stable_id), "exact-time recovery fixture selects a mineral present in the full snapshot")
 	if not exact_veins.has(exact_stable_id):
 		return
-	var id_parts: PackedStringArray = exact_stable_id.split("/")
-	_expect(id_parts.size() >= 3, "selected surface mineral ID contains its owning chunk")
-	if id_parts.size() < 3:
+	var vein_marker: String = "/vein/"
+	var vein_marker_index: int = exact_stable_id.find(vein_marker)
+	_expect(vein_marker_index > 0, "selected surface mineral ID contains its owning chunk marker")
+	if vein_marker_index <= 0:
 		return
-	var exact_chunk_id: String = id_parts[0] + "/" + id_parts[1]
+	var exact_chunk_id: String = exact_stable_id.substr(0, vein_marker_index)
 	var exact_record: Dictionary = exact_veins[exact_stable_id].duplicate(true)
 	var regen_interval: int = maxi(1, int(exact_record.get("regen_interval_seconds", 60)))
 	var expected_last_regen: int = exact_now - regen_interval * 2
