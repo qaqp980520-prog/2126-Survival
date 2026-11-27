@@ -127,3 +127,12 @@ The correction candidate:
 - Adds positive and negative fractional schema/depth assertions and checks that Controller recovery blocks snapshots and direct restore with the expected barrier phase.
 
 Exact-head Godot 4.3 validation for this correction candidate is pending. Do not treat the failed initial PR #452 Full Gate as a pass. Local Godot is unavailable; no local engine run is claimed.
+
+
+## Run 451 — restore-application JSON numeric correction (candidate)
+
+The first correction candidate HEAD `d308450c...` passed the new detached validator and file-readback regression, and its temp save verification succeeded. The Full Gate then exposed a second int-only check in `_restore_stream_state_impl()`: after JSON parsing, `mine_depth` was still required to be an int. The first simulated-restart load therefore failed during world restore; backup fallback and subsequent assertions were downstream failures. The file store and envelope readback were working.
+
+The follow-up correction applies the same finite whole-number predicate to the restore-application path for `world_seed` and `mine_depth`, and adds a direct stream-restore regression using the integral JSON-number payload. Fractional schema/depth values remain rejected.
+
+The exact-head Full Gate on `d308450c...` failed at the production SurfaceWorld integration test; do not count it as a pass. The updated correction HEAD must rerun all focused workflows and the full Godot 4.3 gate.
