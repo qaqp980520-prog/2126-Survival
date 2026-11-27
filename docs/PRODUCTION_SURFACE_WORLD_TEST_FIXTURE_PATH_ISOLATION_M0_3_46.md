@@ -21,7 +21,7 @@ Extend M0.3.45 beyond the symlink-only fixtures. A review found that the broader
 - Route reserved-path, symlink, save, blocked-save, promotion, interrupted-write, first-write recovery, JSON numeric, invalid-save, invalid-temp, corrupt-primary, and rollback-failure fixtures through the namespace helper.
 - Claim a save base only when the primary, all supported sidecars, and visible corrupt-archive entries are unused.
 - Refuse duplicate claims, paths outside the current run namespace, and writes to unclaimed or occupied entries.
-- Keep ownership registered through repeated cleanup calls because some tests deliberately reset and reuse a fixture path.
+- Release ownership after cleanup; a test that deliberately resets and reuses a fixture path must explicitly claim it again before writing.
 - Clean only claimed save families, relative to the fixture's actual parent directory; do not scan or delete unrelated fixed global names.
 - Clean any still-claimed save families in the test finish path, including early failure exits.
 - Add an occupied-file regression proving that claim and write operations fail closed and preserve the sentinel bytes.
