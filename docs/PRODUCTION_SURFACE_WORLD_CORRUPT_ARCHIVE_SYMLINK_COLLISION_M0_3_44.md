@@ -59,3 +59,16 @@ The original M0.3.44 regression called `_unique_corrupt_archive_path()` directly
 5. Verify the normal `loaded_from_primary` path completes after recovery.
 
 Files updated: `tests/production_surface_world_test.gd` and this version document. No production runtime GDScript, save schema, scene, Project Settings, Autoload, or external dependency changes. The exact-head Godot 4.3 Dedicated Save Validation and Full Compatibility Gate are required before this follow-up is considered validated. Windows may skip the symlink fixture if link creation privileges are unavailable.
+
+
+## Run 462 — exact-head validation completed
+
+The exact child HEAD `da0c15129c5319f842db8e6b6696111100b8fb38` completed both required Godot 4.3 workflows:
+
+- [Full Godot 4.3 Compatibility Gate #46003692543](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46003692543): **success, 553/553 reported job steps**.
+- [Dedicated Production SurfaceWorld Save Validation #46003692526](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46003692526): **success, 10/10 steps**.
+- Full Gate decoded log: 84,581 lines / 7,740,285 characters / 78,236 PASS markers. After excluding echoed shell-guard commands, no actual Script/Parse/Runtime/ERROR/FAIL diagnostic was found; no ObjectDB leak or Orphan StringName report was found.
+- 26 Godot warnings remain, including filled-rect width, nested-project, and deliberate lifecycle/rollback fault-injection diagnostics. They are not represented as fixed.
+- The seven Run 462 production `SurfaceWorld.load_game()` archive-collision assertions passed in the Dedicated Save Validation workflow.
+
+This closes the Run 462 Full Gate status that was previously recorded as in progress. The result applies to HEAD `da0c1512...` only; subsequent commits require their own exact-head CI.
