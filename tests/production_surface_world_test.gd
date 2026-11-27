@@ -942,6 +942,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_promotion_fail_path = ""
 
 	_cleanup_save_test_files(interrupted_path)
+	_expect(_claim_test_save_path(interrupted_path), "restart-recovery fixture reclaims its unique path after deliberate cleanup")
 	_expect(bool(world.call("save_game", interrupted_path)), "restart-recovery fixture writes its first valid primary")
 	var interrupted_primary_text: String = FileAccess.get_file_as_string(interrupted_path)
 	var stage_interrupted_error: Error = DirAccess.rename_absolute(
@@ -1294,6 +1295,7 @@ func _cleanup_save_test_files(path: String) -> void:
 	for filename in directory.get_files():
 		if filename.begins_with(prefix):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path.get_base_dir() + "/" + filename))
+	_owned_test_save_paths.erase(path)
 
 func _rename_fail_primary_and_rollback(source_absolute: String, destination_absolute: String) -> int:
 	var primary_absolute: String = ProjectSettings.globalize_path(_promotion_fail_path)
