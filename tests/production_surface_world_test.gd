@@ -1185,9 +1185,6 @@ func _make_chunk_with_injected_failure(coord: Vector2i) -> Node3D:
 	return SurfaceChunkFactoryScript.make_chunk(coord, int(world.get("_stream_clock_unix")))
 
 
-func _user_entry_is_occupied(path: String, directory: DirAccess) -> bool:
-	var absolute_path: String = ProjectSettings.globalize_path(path)
-	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or directory.is_link(path.get_file())
 
 func _write_test_text(path: String, content: String) -> bool:
 	var file := FileAccess.open(path, FileAccess.WRITE)
