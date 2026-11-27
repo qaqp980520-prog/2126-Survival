@@ -50,3 +50,16 @@ Pending exact-head CI for the new test fixture isolation commit. No local Godot 
 ## Next step
 
 Run exact-head Dedicated Save Validation and Full Godot 4.3 Gate. If both pass, update PR #459 with the final evidence, keep it Draft pending parent-first independent review, and only then integrate into PR #452 with an expected-SHA fast-forward and rerun the parent gate. Do not merge to main.
+
+## Validation history — Run 463
+
+The initial intermediate HEAD `58ce0d4d00e008dd7def650d8afe16155f763c42` failed because the test helper was declared twice. The duplicate declaration was removed in code/test commit `5954469b33b23f22e8195e1a3236e2412a2a5f25`; the corrected test file contains exactly one helper declaration.
+
+The corrected code/test commit `5954469b33b23f22e8195e1a3236e2412a2a5f25` passed:
+
+- Dedicated Production SurfaceWorld Save Validation [46022706468](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46022706468): **success, 10/10 steps, 461 PASS markers**.
+- Full Godot 4.3 Compatibility Gate [46022706794](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46022706794): **success, 553/553 steps**.
+- Full Gate decoded log: 84,579 lines, 7,740,107 characters, 78,234 PASS markers, 26 warnings, and no actual Script/Parse/Runtime/ERROR/FAIL diagnostics after excluding echoed shell-guard commands. No ObjectDB leak or Orphan StringName report was found.
+- Production SurfaceWorld integration (205), underground mining integration (211), UndergroundMineDirector (212), all-layer lift lifecycle (300), terrain patch persistence (310), randomized 4x4 terrain soak (426), historical 60-layout soak (431), and clean validation workspace (550) all passed.
+
+This document update is documentation-only. The live exact-head check status for the latest PR #459 HEAD must be read from [PR #459](https://github.com/qaqp980520-prog/2126-Survival/pull/459) and its linked Actions runs; this static version record does not claim that a later documentation-only HEAD has already passed.
