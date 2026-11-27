@@ -386,7 +386,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	root.add_child(world)
 	await process_frame
 	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh production SurfaceWorld instance initializes before disk restore")
-	_expect(bool(world.call("load_game", path)), "production SurfaceWorld loads its primary save after a simulated restart")
+	var primary_load_ok: bool = bool(world.call("load_game", path))
+	if not primary_load_ok:
+		push_error("Production primary load diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(primary_load_ok, "production SurfaceWorld loads its primary save after a simulated restart")
 	_expect(_inventory_count("berries") == int(payload_b.get("inventory", {}).get("inventory", {}).get("berries", 5)), "restart restore recovers the primary inventory count")
 	var restored_stamina: RefCounted = world.get("stamina") as RefCounted
 	var restored_quick_use: RefCounted = world.get("quick_use") as RefCounted
@@ -602,7 +605,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	root.add_child(world)
 	await process_frame
 	_expect(bool(world.call("get_world_session_status").get("ready", false)), "fresh SurfaceWorld starts before interrupted-file recovery")
-	_expect(bool(world.call("load_game", interrupted_path)), "load entry recovers a validated previous primary after restart")
+	var interrupted_load_ok: bool = bool(world.call("load_game", interrupted_path))
+	if not interrupted_load_ok:
+		push_error("Interrupted primary load diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(interrupted_load_ok, "load entry recovers a validated previous primary after restart")
 	_expect(FileAccess.get_file_as_string(interrupted_path) == interrupted_primary_text, "load recovery restores the exact previous primary bytes")
 	_expect(not FileAccess.file_exists(interrupted_path + ".previous"), "successful load recovery consumes the staged previous file")
 
