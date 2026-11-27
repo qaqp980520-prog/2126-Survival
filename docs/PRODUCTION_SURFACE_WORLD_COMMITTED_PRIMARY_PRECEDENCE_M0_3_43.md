@@ -46,9 +46,18 @@ godot --headless --path . --script res://tests/production_surface_world_test.gd
 
 Exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 4.3 Compatibility Gate are required before integration.
 
-## Validation status
+## Validation status — code/test HEAD passed
 
-Pending CI for the new exact HEAD. No pass is claimed in this version record until both required workflows complete successfully.
+The code/test HEAD `b85a23a51e259a99654a4679ee0f5c0c297360b7` passed both required exact-head workflows:
+
+- [Full Godot 4.3 Compatibility Gate #45979252773](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45979252773): success, 553/553 reported job steps.
+- [Dedicated Production SurfaceWorld Save Validation #45979252790](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/45979252790): success, 10/10 steps.
+
+Full Gate log: 84,566 lines / 7,738,604 characters / 78,221 PASS markers; 0 actual Script/Parse/Runtime/ERROR/FAIL diagnostics after excluding echoed shell-guard commands; 0 ObjectDB leak reports; 0 Orphan StringName reports. All six new committed-primary precedence assertions passed in both workflows.
+
+26 Godot warnings remain: 19 filled-rect width warnings, 1 nested KROLL project warning, and 6 lifecycle/rollback fault-injection diagnostics. A separate GitHub Actions Node.js 20 deprecation warning remains.
+
+The following commit updates documentation only; it does not change runtime code or tests. The new PR HEAD will still be checked by its triggered workflows before this version record is considered final for that HEAD.
 
 ## Limitations
 
