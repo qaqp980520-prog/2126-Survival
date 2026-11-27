@@ -320,7 +320,9 @@ func _remove_owned_test_symlink(path: String) -> bool:
 		return false
 	if directory.is_link(link_name):
 		if not placeholder_owned and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
-			var target_user_path: String = ProjectSettings.localize_path(target_absolute)
+			var user_root_absolute: String = ProjectSettings.globalize_path("user://")
+			var relative_target: String = target_absolute.trim_prefix(user_root_absolute).trim_prefix("/")
+			var target_user_path: String = "user://" + relative_target
 			if not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
 				push_error("Refusing to create a removal placeholder at an occupied or unowned target: " + target_absolute)
 				return false
