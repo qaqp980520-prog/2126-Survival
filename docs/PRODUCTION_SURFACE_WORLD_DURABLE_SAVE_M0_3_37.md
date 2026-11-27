@@ -136,3 +136,10 @@ The first correction candidate HEAD `d308450c...` passed the new detached valida
 The follow-up correction applies the same finite whole-number predicate to the restore-application path for `world_seed` and `mine_depth`, and adds a direct stream-restore regression using the integral JSON-number payload. Fractional schema/depth values remain rejected.
 
 The exact-head Full Gate on `d308450c...` failed at the production SurfaceWorld integration test; do not count it as a pass. The updated correction HEAD must rerun all focused workflows and the full Godot 4.3 gate.
+
+
+## Run 451 — full mineral recovery readback comparison
+
+A static review found that `_world_recovery_matches_snapshot()` compared only the sorted stable-ID set of mineral veins. That could miss a changed record with the same IDs (for example, different `remaining_units` or `last_regen_unix`) and incorrectly clear the in-memory recovery barrier. The implementation now compares the complete validated `minerals` payload. The production integration test includes an unchanged-snapshot positive case and a valid same-ID/different-`remaining_units` negative case. Follow-up tracked in [Issue #455](https://github.com/qaqp980520-prog/2126-Survival/issues/455).
+
+Exact-head Godot 4.3 validation for this final readback correction is pending. Do not merge until dedicated save validation, focused workflows and the full compatibility gate pass.
