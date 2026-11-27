@@ -352,6 +352,73 @@ func _test_save_path_symlink_guards() -> void:
 			_expect(user_directory.is_link(archive_link_name), "archive candidate selection preserves the pre-existing dangling symlink")
 			user_directory.remove(archive_link_name)
 
+	# Exercise the real production load/recovery path, not only the archive-name helper.
+	var end_to_end_archive_path: String = "user://run462_archive_symlink_e2e_" + str(Time.get_ticks_usec()) + ".json"
+	_cleanup_save_test_files(end_to_end_archive_path)
+	var end_to_end_corrupt_primary: String = "{corrupt primary for end-to-end archive collision"
+	var end_to_end_payload: Dictionary = world.call("serialize_stream_state")
+	_expect(not end_to_end_payload.is_empty(), "end-to-end archive collision fixture captures a valid production world payload")
+	var end_to_end_temp_text: String = SaveStoreScript.encode_envelope(
+		SaveStoreScript.build_envelope(end_to_end_payload, int(Time.get_unix_time_from_system()))
+	)
+	var end_to_end_setup_ok: bool = not end_to_end_payload.is_empty()
+	if end_to_end_setup_ok:
+		end_to_end_setup_ok = _write_test_text(end_to_end_archive_path, end_to_end_corrupt_primary)
+		_expect(end_to_end_setup_ok, "end-to-end archive collision fixture writes an invalid primary")
+	if end_to_end_setup_ok:
+		end_to_end_setup_ok = _write_test_text(end_to_end_archive_path + ".tmp", end_to_end_temp_text)
+		_expect(end_to_end_setup_ok, "end-to-end archive collision fixture writes a fully valid temp")
+	var end_to_end_start_timestamp: int = int(Time.get_unix_time_from_system())
+	var end_to_end_link_names: Array[String] = []
+	var end_to_end_symlinks_supported: bool = end_to_end_setup_ok
+	for offset in range(0, 12):
+		if not end_to_end_symlinks_supported:
+			break
+		var candidate_timestamp: int = end_to_end_start_timestamp + offset
+		var candidate_link_name: String = end_to_end_archive_path.get_file() + ".corrupt." + str(candidate_timestamp)
+		var candidate_link_path: String = "user://" + candidate_link_name
+		if user_directory.is_link(candidate_link_name):
+			user_directory.remove(candidate_link_name)
+		elif FileAccess.file_exists(candidate_link_path) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate_link_path)):
+			_expect(false, "end-to-end archive collision timestamp candidate is otherwise unused")
+			end_to_end_symlinks_supported = false
+			break
+		var missing_target_path: String = candidate_link_path + ".missing-target"
+		var create_link_error: Error = user_directory.create_link(ProjectSettings.globalize_path(missing_target_path), candidate_link_name)
+		if create_link_error != OK:
+			if OS.get_name() == "Windows":
+				print("SKIP: end-to-end dangling archive-symlink regression requires Windows Developer Mode or elevated privileges.")
+			else:
+				_expect(false, "create a dangling symlink for the production archive recovery path")
+			end_to_end_symlinks_supported = false
+			break
+		end_to_end_link_names.append(candidate_link_name)
+	if end_to_end_symlinks_supported:
+		var end_to_end_load_ok: bool = bool(world.call("load_game", end_to_end_archive_path))
+		if not end_to_end_load_ok:
+			push_error("End-to-end archive symlink recovery diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")))
+		_expect(end_to_end_load_ok, "production load recovers a valid temp while archiving a corrupt primary beside a dangling symlink")
+		if end_to_end_load_ok:
+			_expect(FileAccess.get_file_as_string(end_to_end_archive_path) == end_to_end_temp_text, "production recovery promotes the exact verified temp bytes to primary")
+			_expect(not FileAccess.file_exists(end_to_end_archive_path + ".tmp"), "production recovery consumes the source temp only after successful promotion")
+			_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "production load continues through the normal validated primary path after recovery")
+			var archived_primary_count: int = 0
+			var archived_primary_path: String = ""
+			for offset in range(0, 12):
+				var candidate_archive_path: String = end_to_end_archive_path + ".corrupt." + str(end_to_end_start_timestamp + offset) + ".1"
+				if FileAccess.file_exists(candidate_archive_path) and FileAccess.get_file_as_string(candidate_archive_path) == end_to_end_corrupt_primary:
+					archived_primary_count += 1
+					archived_primary_path = candidate_archive_path
+			_expect(archived_primary_count == 1, "production recovery archives the corrupt primary to the collision-free .1 suffix exactly once")
+			if not archived_primary_path.is_empty():
+				var occupied_symlink_path: String = archived_primary_path.trim_suffix(".1")
+				_expect(user_directory.is_link(occupied_symlink_path.get_file()), "production recovery leaves the colliding dangling archive symlink intact")
+				_expect(not FileAccess.file_exists(occupied_symlink_path) and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(occupied_symlink_path)), "the preserved archive symlink remains dangling after the real archive rename")
+	for link_name in end_to_end_link_names:
+		if user_directory.is_link(link_name):
+			user_directory.remove(link_name)
+	_cleanup_save_test_files(end_to_end_archive_path)
+
 
 func _inventory_count(item_id: String) -> int:
 	var payload: Dictionary = world.inventory_bridge.call("serialize_inventory")
