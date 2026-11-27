@@ -488,17 +488,21 @@ func _test_save_path_symlink_guards() -> void:
 				var unlink_for_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
 				_expect(unlink_for_replacement_error == OK, "simulate external removal of the owned symlink before cleanup")
 				if unlink_for_replacement_error == OK:
-					var replacement_file := FileAccess.open(replacement_link_path, FileAccess.WRITE)
-					_expect(replacement_file != null, "create a regular replacement entry at the former symlink path")
-					if replacement_file != null:
-						replacement_file.store_string("preserve-replacement-entry")
-						replacement_file.close()
-						_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses to remove a regular replacement entry")
-						_expect(FileAccess.get_file_as_string(replacement_link_path) == "preserve-replacement-entry", "replacement entry bytes remain unchanged")
-						_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is gone")
-						DirAccess.remove_absolute(ProjectSettings.globalize_path(replacement_link_path))
-					else:
+					if _user_entry_is_occupied(replacement_link_path, user_directory):
+						_expect(false, "replacement sentinel path remains unused after unlinking the owned symlink")
 						_remove_owned_test_symlink(replacement_link_path)
+					else:
+						var replacement_file := FileAccess.open(replacement_link_path, FileAccess.WRITE)
+						_expect(replacement_file != null, "create a regular replacement entry at the former symlink path")
+						if replacement_file != null:
+							replacement_file.store_string("preserve-replacement-entry")
+							replacement_file.close()
+							_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses to remove a regular replacement entry")
+							_expect(FileAccess.get_file_as_string(replacement_link_path) == "preserve-replacement-entry", "replacement entry bytes remain unchanged")
+							_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is gone")
+							DirAccess.remove_absolute(ProjectSettings.globalize_path(replacement_link_path))
+						else:
+							_remove_owned_test_symlink(replacement_link_path)
 	_cleanup_save_test_files(cleanup_target_path)
 
 	# Exercise the real production load/recovery path, not only the archive-name helper.
