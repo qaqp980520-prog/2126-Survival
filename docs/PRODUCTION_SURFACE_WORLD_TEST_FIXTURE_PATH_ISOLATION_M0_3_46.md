@@ -41,7 +41,16 @@ The exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 
 
 ## Validation status
 
-Pending exact-head CI for the M0.3.46 candidate. No local Godot run is claimed; the authoring container does not have a Godot executable.
+The implementation/test candidate `70e6b30b2d54f70986c39aa6acb01c633ef9dd01` completed both exact-head workflows successfully:
+
+- Full Godot 4.3 Compatibility Gate [46080303260](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46080303260): **Success, 553/553 reported steps**, including clean validation workspace.
+- Dedicated Production SurfaceWorld Save Validation [46080303177](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46080303177): **Success, 10/10 steps**.
+- Full Gate log: 84,584 lines, 7,743,035 characters, 78,239 PASS markers; zero actual Godot Script/Parse/Runtime/ERROR/FAIL diagnostics after excluding CI shell-guard command echoes; zero ObjectDB leak and Orphan StringName reports.
+- 26 warnings were classified, not hidden: 19 filled-`draw_rect` width warnings, 1 nested KROLL project warning, 4 mineral-grid rollback warnings from explicit failure/lifecycle injection, 1 pending lifecycle recovery-barrier warning, and 1 underground rollback warning from an explicit restore-rejection test.
+
+The first candidate `b383ce3c...` failed Dedicated Validation due to test-fixture setup (the no-overwrite writer correctly rejected a retained temp and intentional corruption fixtures needed a restricted replacement helper). The fixture setup was corrected; the final implementation/test candidate `70e6b30b...` passed both workflows.
+
+This document update is documentation-only. Its new document commit still requires exact-head CI; do not transfer the `70e6b30b...` results to a later commit until the new Full Gate and Dedicated workflow complete. No local Godot run is claimed; the authoring container does not have a Godot executable.
 
 ## Limitations
 
