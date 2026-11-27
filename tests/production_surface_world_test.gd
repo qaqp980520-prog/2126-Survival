@@ -290,6 +290,23 @@ func _test_save_path_symlink_guards() -> void:
 	if user_directory == null:
 		return
 
+	# Prove that a path collision fails closed without truncating or deleting the
+	# existing entry. This sentinel is created and removed by this test only.
+	var occupied_fixture_path: String = _test_user_path("occupied_claim")
+	if _user_entry_is_occupied(occupied_fixture_path, user_directory):
+		_expect(false, "occupied-path claim fixture starts from an unused per-run path")
+		return
+	var occupied_fixture_file := FileAccess.open(occupied_fixture_path, FileAccess.WRITE)
+	if occupied_fixture_file == null:
+		_expect(false, "create the owned occupied-path sentinel")
+		return
+	occupied_fixture_file.store_string("preserve-this-existing-entry")
+	occupied_fixture_file.close()
+	_expect(not _claim_test_save_path(occupied_fixture_path), "fixture ownership refuses a pre-existing file")
+	_expect(not _write_test_text(occupied_fixture_path, "must-not-overwrite"), "test writer refuses an unclaimed occupied path")
+	_expect(FileAccess.get_file_as_string(occupied_fixture_path) == "preserve-this-existing-entry", "occupied-path refusal preserves existing bytes")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(occupied_fixture_path))
+
 	# Every fixture uses a per-run namespace. Never delete a pre-existing entry
 	# just to make a fixed test path available.
 	var fixture_prefix: String = _test_run_prefix + "symlink_guard_"
