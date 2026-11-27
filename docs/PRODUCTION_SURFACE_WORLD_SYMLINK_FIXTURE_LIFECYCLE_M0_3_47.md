@@ -1,3 +1,11 @@
+## Validation correction — initial M0.3.47 candidate failed
+
+The first exact-head candidate `4e672c9cfa3e92257c3f666d2b8129e075ef2a70` failed Dedicated Production Save Validation [46082722211](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46082722211). The log showed `DirAccess.remove()` returning Error 1 for dangling symlink entries, while link-to-existing-target cleanup succeeded. The initial M0.3.47 helper therefore did not yet provide reliable dangling-link cleanup.
+
+Godot 4.3 source inspection found that Unix `DirAccessUnix::remove()` calls `stat()` before `unlink()`; `stat()` follows the link and fails when the target is missing. The corresponding Windows implementation checks `GetFileAttributesW` before unlinking. See the pinned Godot 4.3 sources: [Unix DirAccess implementation](https://github.com/godotengine/godot/blob/4.3/drivers/unix/dir_access_unix.cpp#L410-L441) and [Windows DirAccess implementation](https://github.com/godotengine/godot/blob/4.3/drivers/windows/dir_access_windows.cpp#L311-L329).
+
+This candidate is superseded by **M0.3.48 — Dangling Symlink Cleanup with Verified Owned Placeholder**. The follow-up creates a temporary target directory only inside the per-process test namespace, writes an ownership marker, unlinks the dangling symlink after the target is resolvable, and removes the marker/directory only when the directory contains exactly that marker. Unexpected content is preserved. The new version adds explicit assertions that dangling archive links are removed and that no placeholder target remains.
+
 # M0.3.47 — Owned Symlink Fixture Lifecycle and Replacement-safe Cleanup
 
 ## Purpose
