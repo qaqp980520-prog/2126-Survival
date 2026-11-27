@@ -153,7 +153,7 @@ The correction adds an explicit `exact_mineral_restore` option to the base and S
 
 The regression fixture:
 - captures the original production world snapshot;
-- prepares one valid depleted mineral record with its last-regeneration timestamp two intervals before a fixed recovery time;
+- selects a currently registered live mineral and prepares a valid depleted record with its last-regeneration timestamp two intervals before a fixed recovery time;
 - injects a pending in-memory world-recovery barrier and invokes `retry_save_recovery()`;
 - verifies the full mineral payload, remaining units and timestamp are unchanged before readback comparison;
 - verifies the barrier clears only after the exact full snapshot matches; and
