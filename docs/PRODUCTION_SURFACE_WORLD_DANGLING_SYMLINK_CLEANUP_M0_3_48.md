@@ -1,3 +1,13 @@
+## Validation correction — first M0.3.48 candidate failed
+
+The first placeholder/marker candidate `572fc559f38caa023159f475321861d789b4a801` failed Dedicated Save Validation [46083295698](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46083295698). The log showed two related symptoms:
+- Existing-target directory links were incorrectly treated as if a placeholder marker existed.
+- Dangling-link cleanup skipped placeholder creation and `DirAccess.remove()` still returned Error 1.
+
+Root cause: the per-link placeholder dictionary was initialized with boolean `false`, then converted to a String. `str(false)` is the non-empty string `"false"`, so the helper incorrectly treated the marker as already present. The correction initializes the marker path to an empty string. The regression suite exercises both existing-target and dangling-target paths, so this state error is covered by the exact-head test.
+
+Correction commit: `0a5a11e7b833bcbe0dfa90af23ab6d12f62e96ca`. The failed candidate is retained in Git history and is not reported as passed.
+
 # M0.3.48 — Dangling Symlink Cleanup with Verified Owned Placeholder
 
 ## Purpose
