@@ -1598,15 +1598,11 @@ func _world_recovery_matches_snapshot(current: Dictionary, expected: Dictionary)
 	for key in ["player_position", "world_seed", "location_layer", "mine_depth", "surface_return_position", "inventory", "crops", "world_objects", "stamina", "quick_use"]:
 		if current.get(key, null) != expected.get(key, null):
 			return false
-	var expected_minerals: Variant = expected.get("minerals", {}).get("veins", {})
-	var current_minerals: Variant = current.get("minerals", {}).get("veins", {})
+	var expected_minerals: Variant = expected.get("minerals", null)
+	var current_minerals: Variant = current.get("minerals", null)
 	if not (expected_minerals is Dictionary) or not (current_minerals is Dictionary):
 		return false
-	var expected_ids: Array = expected_minerals.keys()
-	var current_ids: Array = current_minerals.keys()
-	expected_ids.sort()
-	current_ids.sort()
-	if expected_ids != current_ids:
+	if current_minerals != expected_minerals:
 		return false
 	if director == null or chunk_controller == null or _get_expected_loaded_chunk_ids() != chunk_controller.get_loaded_chunk_ids():
 		return false
