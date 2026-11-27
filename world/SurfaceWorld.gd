@@ -1442,7 +1442,7 @@ func get_last_save_report() -> Dictionary:
 	return _last_save_report.duplicate(true)
 
 func _recover_interrupted_save_file(save_path: String, phase: String) -> bool:
-	if not SurfaceWorldSaveStoreScript._is_supported_user_path(save_path):
+	if not SurfaceWorldSaveStoreScript._is_supported_save_base_path(save_path):
 		_set_save_report(false, "path_preflight", "unsupported_save_path", {"path": save_path})
 		return false
 	var validator := Callable(self, "_validate_world_save_payload")
