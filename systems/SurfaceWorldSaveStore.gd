@@ -460,12 +460,18 @@ static func _remove_file_if_present(path: String) -> bool:
 		return true
 	return DirAccess.remove_absolute(absolute_path) == OK
 
+static func _is_symlink_entry(path: String) -> bool:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	var parent_access: DirAccess = DirAccess.open(absolute_path.get_base_dir())
+	return parent_access != null and parent_access.is_link(absolute_path.get_file())
+
+
 static func _unique_corrupt_archive_path(path: String, timestamp: int = -1) -> String:
 	var archive_timestamp: int = timestamp if timestamp >= 0 else int(Time.get_unix_time_from_system())
 	var base_path: String = path + ".corrupt." + str(archive_timestamp)
 	var candidate: String = base_path
 	var suffix: int = 1
-	while FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)) or _has_symlink_ancestor(ProjectSettings.globalize_path(candidate)):
+	while FileAccess.file_exists(candidate) or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(candidate)) or _is_symlink_entry(candidate):
 		candidate = base_path + "." + str(suffix)
 		suffix += 1
 	return candidate
