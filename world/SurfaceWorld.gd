@@ -1038,7 +1038,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 			"actual_chunk_ids": chunk_controller.get_loaded_chunk_ids()
 		})
 		if not rollback_complete:
-			push_error("Mine registry or chunk-window rollback failed after a seed-change unload rejection.")
+			push_warning("Mine registry or chunk-window rollback failed after a seed-change unload rejection.")
 		return false
 	world_seed = next_world_seed
 	if not mine_director.sync_to_world_position(mine_target, now):
@@ -1068,7 +1068,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 			"mine_sync_report": mine_report
 		})
 		if not rollback_complete:
-			push_error("Underground mine window rollback failed after world-session restore rejection.")
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if not super.restore_stream_state(payload, now, exact_mineral_restore):
 		var base_restore_report: Dictionary = get_last_restore_report()
@@ -1091,7 +1091,8 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 			previous_return_position
 		)
 		var mine_report: Dictionary = mine_director.call("get_last_sync_report") if mine_director.has_method("get_last_sync_report") else {}
-		_set_restore_report(false, "stream_restore", "World participant restore failed; surface and underground rollback results were combined.", rollback_complete, {
+		var combined_phase: String = str(base_restore_report.get("phase", "stream_restore"))
+		_set_restore_report(false, combined_phase, "World participant restore failed; surface and underground rollback results were combined.", rollback_complete, {
 			"base_restore_report": base_restore_report,
 			"underground_rollback_complete": underground_rollback_complete,
 			"expected_chunk_ids": previous_loaded_chunk_ids,
@@ -1099,7 +1100,7 @@ func _restore_stream_state_impl(payload: Dictionary, now_unix: int = -1, exact_m
 			"mine_sync_report": mine_report
 		})
 		if not rollback_complete:
-			push_error("Underground mine window rollback failed after world-session restore rejection.")
+			push_warning("Underground mine window rollback failed after world-session restore rejection.")
 		return false
 	if has_stamina:
 		if not bool(stamina.call("load_save_dict", stamina_value)):
