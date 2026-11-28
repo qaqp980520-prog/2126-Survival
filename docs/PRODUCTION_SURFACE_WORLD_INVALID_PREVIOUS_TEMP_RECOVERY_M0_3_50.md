@@ -38,7 +38,15 @@ The production test writes:
 - a corrupt committed `.bak`;
 - a valid, checksum- and payload-validated `.tmp`.
 
-It then calls the real `SurfaceWorld.load_game()` entry point and requires:
+The test first injects a temp-promotion failure after the invalid previous file has been archived. It requires:
+- the failure returns `recovery_required` with the precise invalid-previous fallback reason;
+- the original corrupt primary is rolled back byte-for-byte;
+- the validated source temp remains byte-for-byte intact;
+- the already archived corrupt previous remains available;
+- the invalid backup remains byte-for-byte intact;
+- the owned restore staging file is cleaned up.
+
+The test then removes the injected failure and calls the real `SurfaceWorld.load_game()` entry point. It requires:
 - the valid temp becomes the exact primary bytes;
 - the source temp is consumed only after successful promotion;
 - the corrupt primary and previous bytes survive in two distinct collision-safe archives;
@@ -60,7 +68,9 @@ The exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 
 
 ## Validation status
 
-Implementation and regression are staged; exact-head Godot CI is pending. The authoring container has no local Godot executable, so no local engine pass is claimed.
+The original M0.3.50 implementation at parent candidate HEAD `fb6cc69671640312589be760998efa6e5042527b` passed Dedicated Production SurfaceWorld Save Validation [Run 46100731313](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731313) and Full Godot 4.3 Compatibility Gate [Run 46100731299](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731299), 553/553 steps, 0 failures, 0 skipped.
+
+A new failure-atomicity regression was added at candidate HEAD `d6d604ef07828a6d0aa9fadd670237a251c5e180`. Exact-head Dedicated and Full Gate workflows for this expanded test are pending; the earlier pass does not certify this newer HEAD. The authoring container has no local Godot executable, so no local engine pass is claimed.
 
 ## Limitations
 
@@ -70,4 +80,4 @@ Implementation and regression are staged; exact-head Godot CI is pending. The au
 
 ## Next step
 
-Run exact-head Dedicated Save Validation and Full Godot 4.3 Compatibility Gate. Preserve any failed candidate evidence. If both pass, keep this PR Draft pending independent review and integrate parent-first into PR #459 only after approval. Do not merge main.
+Run exact-head Dedicated Save Validation and Full Godot 4.3 Compatibility Gate for the failure-atomicity candidate. Preserve any failed candidate evidence. If both pass, keep this PR Draft pending independent review; after parent-first approval, integrate into PR #459 with expected-SHA fast-forward and rerun the updated parent gates. Do not merge main.
