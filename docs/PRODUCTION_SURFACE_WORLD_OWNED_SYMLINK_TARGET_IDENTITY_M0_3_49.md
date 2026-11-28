@@ -61,3 +61,9 @@ Pending exact-head GitHub Actions. No local Godot run is claimed because the aut
 ## Next step
 
 Wait for both exact-head workflows. If they pass, fast-forward this staging branch into PR #459 using the expected old HEAD `959b2f85328510d8c4ab36e763c3f9c363f4c995` with `force=false`, then rerun the exact-head Dedicated and Full Gate workflows. Keep PR #459 Draft pending parent-first independent review; do not merge to main.
+
+## Validation correction — expected refusal diagnostic
+
+The first exact-head Dedicated Save Validation run [46090801233](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46090801233) failed even though the production regression script completed and all assertions passed. The fail-closed replacement-symlink branch emitted an expected `push_error()`; the workflow's diagnostic guard correctly treats every `ERROR:` line as a failure. This was a test-harness diagnostic classification issue, not a failed preservation assertion.
+
+Correction commit: `029a9c2d2265dd4db4d3cc3156d5e8d8d3a46361`. The expected refusal is now logged as a `SAFEGUARD:` message rather than an engine error. The exact corrected HEAD must pass both workflows before promotion. The initial failed run remains in history and is not reported as successful.
