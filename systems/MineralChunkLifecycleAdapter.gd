@@ -9,7 +9,7 @@ var registry: Node
 var _loaded_chunks: Dictionary = {} # chunk ID -> { local vein ID -> MineralMiningNode }
 
 func bind_registry(candidate: Node) -> bool:
-	if candidate == null or not candidate.has_method("register_vein") or not candidate.has_method("unregister_vein") or not candidate.has_method("unregister_veins_atomic") or not candidate.has_method("get_registered_ids"):
+	if candidate == null or not candidate.has_method("register_vein") or not candidate.has_method("register_veins_atomic") or not candidate.has_method("unregister_vein") or not candidate.has_method("unregister_veins_atomic") or not candidate.has_method("get_registered_ids"):
 		return false
 	registry = candidate
 	return true
@@ -35,14 +35,11 @@ func load_chunk(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int =
 			return false
 		stable_ids[stable_id] = vein
 
-	var added: Array[String] = []
-	for stable_id in stable_ids.keys():
-		if not registry.register_vein(stable_id, stable_ids[stable_id], now_unix):
-			for rollback_id in added:
-				registry.unregister_vein(rollback_id, stable_ids[rollback_id], now_unix)
-			return false
-		added.append(stable_id)
-
+	# The registry prepares every saved-state restore and regeneration result on
+	# detached probes, then commits all nodes and IDs together. Never fall back to
+	# per-vein registration with best-effort rollback.
+	if not bool(registry.call("register_veins_atomic", chunk_id, veins_by_local_id, now_unix)):
+		return false
 	_loaded_chunks[chunk_id] = veins_by_local_id.duplicate()
 	return true
 

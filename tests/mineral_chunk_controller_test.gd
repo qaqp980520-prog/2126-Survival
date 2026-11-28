@@ -25,6 +25,47 @@ class FaultInjectingTerrainPatch extends "res://systems/SurfaceTerrainPatch.gd":
 			return {"patch_size": 0.0}
 		return super.get_edge_ramp_profile()
 
+class FaultInjectingStatefulProp extends "res://systems/WorldObjectStatefulProp.gd":
+	var fail_apply_count: int = 0
+
+	func apply_world_object_state(state: Dictionary) -> bool:
+		var applied: bool = super.apply_world_object_state(state)
+		if fail_apply_count > 0:
+			fail_apply_count -= 1
+			return false
+		return applied
+
+class FaultInjectingCropController extends "res://systems/CropPlotController.gd":
+	var fail_restore_count: int = 0
+
+	func restore_save_dict(payload: Dictionary) -> bool:
+		if fail_restore_count > 0:
+			fail_restore_count -= 1
+			return false
+		return super.restore_save_dict(payload)
+
+class FaultInjectingMiningNode extends "res://systems/MineralMiningNode.gd":
+	var fail_apply_count: int = 0
+
+	func load_save_dict(data: Dictionary, now_unix: int = -1, apply_elapsed: bool = true) -> bool:
+		var loaded: bool = super.load_save_dict(data, now_unix, apply_elapsed)
+		if not loaded:
+			return false
+		if fail_apply_count > 0:
+			fail_apply_count -= 1
+			return false
+		return true
+
+class FaultInjectingMineralRegistry extends "res://systems/MineralVeinRegistry.gd":
+	var fail_rollback_count: int = 0
+
+	func _restore_live_vein_state(vein: Node, snapshot: Dictionary) -> void:
+		super._restore_live_vein_state(vein, snapshot)
+		if fail_rollback_count > 0:
+			fail_rollback_count -= 1
+			vein.set("remaining_units", int(vein.get("max_units")))
+			vein.set("visible", true)
+
 func _initialize() -> void:
 	call_deferred("_run_tests")
 
@@ -35,6 +76,10 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_load_preserves_caller_root()
 	await process_frame
+	await _test_failed_load_preflight_is_atomic_for_all_veins()
+	await process_frame
+	await _test_new_mineral_regeneration_uses_explicit_chunk_timestamp()
+	await process_frame
 	await _test_failed_unload_preflight_is_atomic_for_all_veins()
 	await process_frame
 	await _test_failed_unload_preserves_terrain_adjacency()
@@ -44,6 +89,10 @@ func _run_tests() -> void:
 	await _test_stateful_object_survives_unload_reload()
 	await process_frame
 	await _test_failed_object_state_application_is_atomic()
+	await process_frame
+	await _test_incomplete_chunk_load_rollback_is_reported_and_recoverable()
+	await process_frame
+	await _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable()
 	await process_frame
 	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
 	await process_frame
@@ -120,6 +169,30 @@ func _test_empty_chunk_and_duplicate_id() -> void:
 	registry.queue_free()
 	await process_frame
 
+func _test_new_mineral_regeneration_uses_explicit_chunk_timestamp() -> void:
+	var now: int = int(Time.get_unix_time_from_system()) - 120
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var chunk_id := "earth/mineral-explicit-load-clock"
+	var incoming: Node3D = _new_mineral_chunk(3, now - 120)
+	var vein: Node = incoming.get_node("gold-01")
+	assert(controller.load_chunk(chunk_id, incoming, now), "A new chunk without a saved mineral record loads successfully")
+	assert(int(vein.get("remaining_units")) == 5, "Deferred _ready regeneration is applied exactly twice at the supplied load timestamp")
+	assert(int(vein.get("last_regen_unix")) == now, "New-vein regeneration clock ends at the explicit load timestamp")
+	assert(not bool(vein.call("is_chunk_load_restore_pending")), "Successful load clears the one-shot ready-regeneration guard")
+	var stable_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
+	var saved_record: Dictionary = registry.to_save_dict().get("veins", {}).get(stable_id, {})
+	assert(int(saved_record.get("remaining_units", -1)) == 5, "Registry commits the same once-regenerated state as the live node")
+	assert(controller.unload_chunk(chunk_id, now), "The explicit-clock chunk unloads after successful registration")
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
 func _test_failed_load_preserves_caller_root() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var registry: Node = Registry.new()
@@ -146,6 +219,68 @@ func _test_failed_load_preserves_caller_root() -> void:
 	assert(registry.unregister_vein(stable_id, existing, now))
 	incoming.free()
 	existing.free()
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
+func _test_failed_load_preflight_is_atomic_for_all_veins() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = Registry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var chunk_id := "earth/mineral-load-atomic"
+	var first_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
+	var second_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/iron-02")
+	var saved_first: Dictionary = {
+		"schema_version": 2,
+		"mineral_id": "gold_ore",
+		"remaining_units": 3,
+		"max_units": 8,
+		"regen_interval_seconds": 60,
+		"last_regen_unix": now - 120
+	}
+	var saved_second: Dictionary = saved_first.duplicate(true)
+	saved_second["remaining_units"] = 2
+	var payload: Dictionary = {
+		"schema_version": 1,
+		"veins": {
+			first_id: saved_first,
+			second_id: saved_second
+		}
+	}
+	assert(registry.restore_save_dict(payload, now), "Seed two valid unloaded records before the load transaction")
+	var registry_before: Dictionary = registry.to_save_dict()
+
+	var incoming: Node3D = _new_two_mineral_chunk(now)
+	var first: Node = incoming.get_node("gold-01")
+	var second: Node = incoming.get_node("iron-02")
+	# A detached root with an old authored timestamp must not regenerate in _ready()
+	# before the later saved-record mismatch rejects the complete transaction.
+	first.set("last_regen_unix", now - 120)
+	var first_before: Dictionary = first.call("to_save_dict")
+	var second_before: Dictionary = second.call("to_save_dict")
+	assert(not controller.load_chunk(chunk_id, incoming, now), "A later saved-record mineral mismatch rejects the whole chunk load")
+	assert(incoming.get_parent() == null, "Rejected load leaves the caller-owned chunk detached")
+	assert(not controller.is_chunk_loaded(chunk_id), "Rejected load does not publish chunk ownership")
+	assert(first.call("to_save_dict") == first_before, "Rejected load does not apply elapsed regeneration to the earlier live vein")
+	assert(second.call("to_save_dict") == second_before, "Rejected load does not mutate the rejected live vein")
+	assert(not bool(first.call("is_chunk_load_restore_pending")) and not bool(second.call("is_chunk_load_restore_pending")), "Rejected load clears the one-shot ready-regeneration guard")
+	assert(registry.to_save_dict() == registry_before, "Rejected load preserves the complete saved registry payload")
+	assert(registry.get_registered_ids().is_empty(), "Rejected load registers no live vein")
+
+	var repaired_payload: Dictionary = registry_before.duplicate(true)
+	repaired_payload["veins"][second_id]["mineral_id"] = "iron_ore"
+	assert(registry.restore_save_dict(repaired_payload, now), "Repair the later saved record without changing the earlier record")
+	assert(controller.load_chunk(chunk_id, incoming, now), "The same caller-owned chunk succeeds after repairing the saved record")
+	assert(controller.is_chunk_loaded(chunk_id), "Successful retry publishes chunk ownership")
+	assert(registry.get_registered_ids().has(first_id) and registry.get_registered_ids().has(second_id), "Successful retry registers every vein")
+	assert(int(first.get("remaining_units")) == 5, "First saved vein receives exactly two offline regeneration intervals")
+	assert(int(second.get("remaining_units")) == 4, "Second saved vein receives exactly two offline regeneration intervals")
+	assert(controller.unload_chunk(chunk_id, now), "The successfully loaded chunk can be atomically unloaded")
 	controller.queue_free()
 	registry.queue_free()
 	await process_frame
@@ -394,6 +529,120 @@ func _test_failed_object_state_application_is_atomic() -> void:
 	mineral_registry.queue_free()
 	await process_frame
 
+func _test_incomplete_chunk_load_rollback_is_reported_and_recoverable() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var crop_registry: Node = CropRegistry.new()
+	var crop_controller: Node = FaultInjectingCropController.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(crop_registry)
+	root.add_child(crop_controller)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(crop_controller.bind_registry(crop_registry))
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_crop_controller(crop_controller))
+	assert(controller.bind_object_state_registry(object_registry))
+
+	var chunk_id := "earth/aggregate-load-rollback"
+	var crop_id := chunk_id + "/crop/ChunkRoot/CropPlot_0"
+	var object_id := chunk_id + "/object/ChunkRoot/FaultProp"
+	assert(crop_registry.register_crop(crop_id, "wheat", 0, 0.0, 80.0, now - 120, 0))
+	assert(object_registry.set_object_state(object_id, chunk_id, {"opened": true, "loot_remaining": 1}))
+	var crop_before: Dictionary = crop_registry.to_save_dict()
+	var object_before: Dictionary = object_registry.to_save_dict()
+
+	var incoming := Node3D.new()
+	incoming.name = "ChunkRoot"
+	var plot: Node3D = _new_crop_plot()
+	incoming.add_child(plot)
+	var prop: Node = FaultInjectingStatefulProp.new()
+	prop.name = "FaultProp"
+	prop.set("fail_apply_count", 2)
+	incoming.add_child(prop)
+	crop_controller.set("fail_restore_count", 1)
+
+	assert(not controller.load_chunk(chunk_id, incoming, now), "A world-object apply failure rejects the complete chunk load")
+	assert(incoming.get_parent() == null, "The rejected root remains caller-owned and detached")
+	assert(controller.has_pending_chunk_load_recovery(), "A failed crop/live-object rollback blocks further chunk lifecycle changes")
+	var report: Dictionary = controller.get_last_chunk_load_report()
+	var details: Dictionary = report.get("details", {})
+	assert(str(report.get("phase", "")) == "world_object_restore")
+	assert(not bool(report.get("rollback_complete", true)), "The Controller must not report a complete rollback when a participant rejects restoration")
+	assert(not bool(details.get("world_object_live_nodes_ok", true)), "The failed live-object rollback is surfaced")
+	assert(bool(details.get("world_object_registry_ok", false)), "The object registry snapshot was restored")
+	assert(not bool(details.get("crop_registry_ok", true)), "The failed crop registry restore is surfaced")
+	assert(crop_registry.to_save_dict() != crop_before, "The injected crop restore failure leaves a detectable pending recovery")
+	var blocked_root := Node3D.new()
+	assert(not controller.load_chunk("earth/blocked-during-recovery", blocked_root, now), "New chunk loads are blocked while participant recovery is pending")
+	assert(blocked_root.get_parent() == null)
+	blocked_root.free()
+
+	assert(controller.recover_failed_chunk_load(), "A later recovery pass retries every failed participant")
+	assert(not controller.has_pending_chunk_load_recovery(), "Successful recovery clears the lifecycle barrier")
+	assert(crop_registry.to_save_dict() == crop_before, "Recovery restores the exact crop registry snapshot")
+	assert(object_registry.to_save_dict() == object_before, "Recovery restores the exact world-object registry snapshot")
+	assert(prop.call("get_world_object_state") == {"opened": false, "loot_remaining": 2, "loot_item_id": "iron_ore"}, "Recovery restores the caller-owned live object state")
+	var recovery_report: Dictionary = controller.get_last_chunk_load_report()
+	assert(bool(recovery_report.get("success", false)) and str(recovery_report.get("phase", "")) == "recovery_complete")
+
+	assert(controller.load_chunk(chunk_id, incoming, now), "The same caller-owned root can be retried after recovery")
+	assert(bool(prop.get("opened")) and int(prop.get("loot_remaining")) == 1, "The retry applies the saved object state")
+	assert(controller.unload_chunk(chunk_id, now), "The recovered chunk can complete a normal unload")
+	controller.queue_free()
+	object_registry.queue_free()
+	crop_controller.queue_free()
+	crop_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var registry: Node = FaultInjectingMineralRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(registry))
+
+	var incoming := Node3D.new()
+	incoming.name = "ChunkRoot"
+	var vein: Node = FaultInjectingMiningNode.new()
+	vein.name = "gold-01"
+	vein.set("mineral_id", "gold_ore")
+	vein.set("max_units", 8)
+	vein.set("remaining_units", 3)
+	vein.set("regen_interval_seconds", 60)
+	vein.set("last_regen_unix", now)
+	vein.set("fail_apply_count", 1)
+	incoming.add_child(vein)
+	var vein_before: Dictionary = vein.call("to_save_dict")
+	registry.set("fail_rollback_count", 1)
+
+	assert(not controller.load_chunk("earth/mineral-registry-recovery", incoming, now), "An injected live mineral apply failure rejects the chunk")
+	assert(incoming.get_parent() == null, "The failed mineral candidate remains caller-owned")
+	assert(registry.call("has_pending_atomic_registration_recovery"), "The Registry retains a recovery record when live-node rollback verification fails")
+	assert(controller.has_pending_chunk_load_recovery(), "The Controller raises its cross-system recovery barrier")
+	var report: Dictionary = controller.get_last_chunk_load_report()
+	var details: Dictionary = report.get("details", {})
+	assert(str(report.get("phase", "")) == "mineral_registration")
+	assert(not bool(report.get("rollback_complete", true)))
+	assert(not bool(details.get("mineral_registry_rollback_ok", true)))
+	assert(bool(details.get("mineral_registry_recovery_required", false)))
+	assert(controller.recover_failed_chunk_load(), "Controller recovery delegates to the pending Registry participant")
+	assert(not registry.call("has_pending_atomic_registration_recovery"))
+	assert(not controller.has_pending_chunk_load_recovery())
+	assert(vein.call("to_save_dict") == vein_before, "Registry recovery restores the exact live mineral snapshot")
+
+	assert(controller.load_chunk("earth/mineral-registry-recovery", incoming, now), "The same candidate can be retried after mineral recovery")
+	assert(controller.unload_chunk("earth/mineral-registry-recovery", now))
+	controller.queue_free()
+	registry.queue_free()
+	await process_frame
+
 func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
 	var mineral_registry: Node = Registry.new()
@@ -536,6 +785,18 @@ func _new_stateful_chunk() -> Node3D:
 	crate.name = "SalvageCrate"
 	chunk.add_child(crate)
 	return chunk
+
+func _new_crop_plot() -> Node3D:
+	var plot: Node3D = CropPlot.new()
+	plot.name = "CropPlot_0"
+	plot.set("crop_id", "wheat")
+	plot.set("plot_index", 1)
+	for child_name in ["CropStem", "CropFruit", "CropTypeMarker"]:
+		var mesh := MeshInstance3D.new()
+		mesh.name = child_name
+		mesh.material_override = StandardMaterial3D.new()
+		plot.add_child(mesh)
+	return plot
 
 func _new_mineral_chunk(units: int, regen_time: int) -> Node3D:
 	var chunk := Node3D.new()

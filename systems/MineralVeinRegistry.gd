@@ -9,8 +9,12 @@ const Catalog = preload("res://systems/MineralCatalog.gd")
 @export var auto_apply_elapsed_time_on_restore: bool = true
 var _veins: Dictionary = {} # stable ID -> currently loaded MineralMiningNode
 var _saved_records: Dictionary = {} # stable ID -> schema-v2 record, including unloaded chunks
+var _last_atomic_registration_report: Dictionary = {}
+var _pending_atomic_registration_recovery: Dictionary = {}
 
 func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
 	var key := stable_id.strip_edges()
 	if key.is_empty() or key != stable_id or vein == null or not (vein is MiningNode):
 		return false
@@ -47,9 +51,210 @@ func register_vein(stable_id: String, vein: Node, now_unix: int = -1) -> bool:
 	_saved_records[key] = mining_vein.to_save_dict()
 	return true
 
-## Capture the final state before a chunk releases its live node. The record remains
-## serializable and can restore a new node with the same stable ID later.
+## Atomically register every vein owned by one chunk. Saved state and offline
+## regeneration are prepared on detached probes before any live node or registry
+## entry changes. A rejected later participant cannot advance an earlier vein.
+func register_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		_last_atomic_registration_report = {"success": false, "phase": "recovery_required", "error": "pending_live_vein_recovery", "rollback_complete": false, "recovery_required": true}
+		return false
+	_last_atomic_registration_report = {"success": false, "phase": "preflight", "error": "preflight_rejected", "rollback_complete": true, "recovery_required": false}
+	if chunk_id.is_empty() or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or veins_by_local_id.is_empty():
+		return false
+	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
+	if now <= 0:
+		return false
+
+	# Validate key types before sorting: Array.sort() must never compare mixed
+	# String and non-String Variant keys from an untrusted Dictionary.
+	var local_ids: Array[String] = []
+	for raw_local_id in veins_by_local_id.keys():
+		if not (raw_local_id is String):
+			return false
+		var local_id: String = raw_local_id
+		if local_id.is_empty() or local_id != local_id.strip_edges() or local_id.contains("//"):
+			return false
+		local_ids.append(local_id)
+	local_ids.sort()
+
+	var stable_ids: Array[String] = []
+	var seen_instance_ids: Dictionary = {}
+	var live_veins: Dictionary = {}
+	var prepared_records: Dictionary = {}
+	var original_states: Dictionary = {}
+
+	for local_id in local_ids:
+		var stable_id: String = chunk_id + "/vein/" + local_id
+		var candidate: Variant = veins_by_local_id[local_id]
+		if not is_instance_valid(candidate) or not (candidate is MiningNode):
+			return false
+		var live_vein: Node = candidate as Node
+		var instance_id: int = live_vein.get_instance_id()
+		if seen_instance_ids.has(instance_id):
+			return false
+		seen_instance_ids[instance_id] = true
+		if not live_vein.has_method("can_register") or not bool(live_vein.call("can_register")):
+			return false
+		if _veins.has(stable_id) and is_instance_valid(_veins[stable_id]):
+			return false
+		var live_mineral_id: String = str(live_vein.get("mineral_id"))
+
+		# Match register_vein() defaults for legacy schema-v1 records by seeding
+		# the detached probe with the incoming node's authored capacities first.
+		var probe: Node = MiningNode.new()
+		probe.set("mineral_id", live_mineral_id)
+		probe.set("max_units", int(live_vein.get("max_units")))
+		probe.set("remaining_units", int(live_vein.get("remaining_units")))
+		probe.set("units_per_hit", int(live_vein.get("units_per_hit")))
+		probe.set("regen_interval_seconds", int(live_vein.get("regen_interval_seconds")))
+		probe.set("last_regen_unix", int(live_vein.get("last_regen_unix")))
+
+		var has_saved_record: bool = _saved_records.has(stable_id)
+		var source_record: Dictionary = {}
+		if has_saved_record:
+			var saved_value: Variant = _saved_records[stable_id]
+			if not (saved_value is Dictionary) or not _validate_record(stable_id, saved_value, live_mineral_id, now):
+				probe.free()
+				return false
+			source_record = saved_value.duplicate(true)
+		else:
+			source_record = live_vein.call("to_save_dict")
+			if int(source_record.get("last_regen_unix", 0)) <= 0:
+				source_record["last_regen_unix"] = now
+
+		if not bool(probe.call("load_save_dict", source_record, now, false)):
+			probe.free()
+			return false
+		if has_saved_record:
+			if auto_apply_elapsed_time_on_restore:
+				probe.call("apply_elapsed_regeneration", now)
+			else:
+				probe.set("last_regen_unix", now)
+		elif bool(live_vein.call("is_chunk_load_restore_pending")):
+			# Controller deferred _ready() catch-up so a rejected load cannot mutate
+			# the caller-owned root. Apply it to the detached probe at the explicit clock.
+			probe.call("apply_elapsed_regeneration", now)
+
+		var next_record: Dictionary = probe.call("to_save_dict")
+		if not _validate_record(stable_id, next_record, live_mineral_id, now):
+			probe.free()
+			return false
+		prepared_records[stable_id] = next_record.duplicate(true)
+		live_veins[stable_id] = live_vein
+		original_states[stable_id] = _snapshot_live_vein_state(live_vein)
+		stable_ids.append(stable_id)
+		probe.free()
+
+	if stable_ids.size() != veins_by_local_id.size():
+		return false
+
+	# Apply only fully prepared schema-v2 records. load_save_dict validates all
+	# fields before assigning them; retain exact live snapshots for defensive
+	# rollback if a participant unexpectedly rejects during this apply phase.
+	for stable_id in stable_ids:
+		var live_vein: Node = live_veins[stable_id] as Node
+		if not bool(live_vein.call("load_save_dict", prepared_records[stable_id], now, false)):
+			# Include the rejecting participant: a subclass or injected failure may
+			# mutate before returning false, even though the base implementation
+			# validates before assignment.
+			var rollback_complete: bool = true
+			for rollback_id in stable_ids:
+				var rollback_vein: Node = live_veins[rollback_id] as Node
+				if not is_instance_valid(rollback_vein):
+					rollback_complete = false
+					continue
+				_restore_live_vein_state(rollback_vein, original_states[rollback_id])
+				if _snapshot_live_vein_state(rollback_vein) != original_states[rollback_id]:
+					rollback_complete = false
+			if not rollback_complete:
+				_pending_atomic_registration_recovery = {
+					"live_veins": live_veins.duplicate(),
+					"original_states": original_states.duplicate(true)
+				}
+			_last_atomic_registration_report = {
+				"success": false,
+				"phase": "live_apply",
+				"error": "live_vein_apply_rejected",
+				"rollback_complete": rollback_complete,
+				"recovery_required": not rollback_complete,
+				"participant_count": stable_ids.size()
+			}
+			return false
+
+	# Registry commit point: no registry map changes occur until every live node
+	# has accepted its already-validated state.
+	for stable_id in stable_ids:
+		_veins[stable_id] = live_veins[stable_id]
+		_saved_records[stable_id] = prepared_records[stable_id].duplicate(true)
+	_last_atomic_registration_report = {
+		"success": true,
+		"phase": "complete",
+		"error": "",
+		"rollback_complete": true,
+		"recovery_required": false,
+		"participant_count": stable_ids.size()
+	}
+	return true
+
+func get_last_atomic_registration_report() -> Dictionary:
+	return _last_atomic_registration_report.duplicate(true)
+
+func has_pending_atomic_registration_recovery() -> bool:
+	return not _pending_atomic_registration_recovery.is_empty()
+
+func recover_last_atomic_registration() -> bool:
+	if _pending_atomic_registration_recovery.is_empty():
+		return true
+	var live_veins: Dictionary = _pending_atomic_registration_recovery.get("live_veins", {})
+	var original_states: Dictionary = _pending_atomic_registration_recovery.get("original_states", {})
+	var rollback_complete: bool = true
+	for stable_id in original_states.keys():
+		var vein: Node = live_veins.get(stable_id) as Node
+		if not is_instance_valid(vein):
+			rollback_complete = false
+			continue
+		_restore_live_vein_state(vein, original_states[stable_id])
+		if _snapshot_live_vein_state(vein) != original_states[stable_id]:
+			rollback_complete = false
+	if rollback_complete:
+		_pending_atomic_registration_recovery.clear()
+	_last_atomic_registration_report = {
+		"success": rollback_complete,
+		"phase": "recovery_complete" if rollback_complete else "recovery_incomplete",
+		"error": "" if rollback_complete else "live_vein_state_restore_failed",
+		"rollback_complete": rollback_complete,
+		"recovery_required": not rollback_complete,
+		"participant_count": original_states.size()
+	}
+	return rollback_complete
+
+func _snapshot_live_vein_state(vein: Node) -> Dictionary:
+	var interaction_area: Area3D = vein.get_node_or_null("InteractionArea") as Area3D
+	return {
+		"max_units": int(vein.get("max_units")),
+		"remaining_units": int(vein.get("remaining_units")),
+		"regen_interval_seconds": int(vein.get("regen_interval_seconds")),
+		"last_regen_unix": int(vein.get("last_regen_unix")),
+		"depleted_signal_sent": bool(vein.get("_depleted_signal_sent")),
+		"visible": bool(vein.get("visible")),
+		"interaction_collision_layer": interaction_area.collision_layer if interaction_area != null else -1
+	}
+
+func _restore_live_vein_state(vein: Node, snapshot: Dictionary) -> void:
+	vein.set("max_units", int(snapshot.get("max_units", vein.get("max_units"))))
+	vein.set("remaining_units", int(snapshot.get("remaining_units", vein.get("remaining_units"))))
+	vein.set("regen_interval_seconds", int(snapshot.get("regen_interval_seconds", vein.get("regen_interval_seconds"))))
+	vein.set("last_regen_unix", int(snapshot.get("last_regen_unix", vein.get("last_regen_unix"))))
+	vein.set("_depleted_signal_sent", bool(snapshot.get("depleted_signal_sent", false)))
+	vein.set("visible", bool(snapshot.get("visible", vein.get("visible"))))
+	var interaction_area: Area3D = vein.get_node_or_null("InteractionArea") as Area3D
+	var collision_layer: int = int(snapshot.get("interaction_collision_layer", -1))
+	if interaction_area != null and collision_layer >= 0:
+		interaction_area.collision_layer = collision_layer
+
 func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
 	var key := stable_id.strip_edges()
 	if not _veins.has(key) or not is_instance_valid(_veins[key]):
 		return false
@@ -69,6 +274,8 @@ func unregister_vein(stable_id: String, expected_vein: Node = null, now_unix: in
 ## records are validated and their elapsed-regeneration results are prepared on
 ## detached probes before the live registry is changed.
 func unregister_veins_atomic(chunk_id: String, veins_by_local_id: Dictionary, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
 	if chunk_id.is_empty() or chunk_id != chunk_id.strip_edges() or chunk_id.contains("//") or veins_by_local_id.is_empty():
 		return false
 	var now: int = now_unix if now_unix >= 0 else Time.get_unix_time_from_system()
@@ -154,6 +361,8 @@ func validate_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 ## Validate the full payload before changing live nodes or stored records.
 ## Records for currently unloaded chunks remain available for later registration.
 func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
 	var prepared := _prepare_restore(data, now_unix)
 	if not bool(prepared.get("ok", false)):
 		return false
@@ -178,6 +387,8 @@ func restore_save_dict(data: Dictionary, now_unix: int = -1) -> bool:
 ## Restore a transaction snapshot exactly, without offline regeneration or clock advancement.
 ## Use only for rolling back an in-flight chunk transaction; normal world loads use restore_save_dict().
 func restore_snapshot_exact(data: Dictionary, now_unix: int = -1) -> bool:
+	if not _pending_atomic_registration_recovery.is_empty():
+		return false
 	var prepared := _prepare_restore(data, now_unix)
 	if not bool(prepared.get("ok", false)):
 		return false
