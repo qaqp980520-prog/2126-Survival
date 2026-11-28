@@ -84,6 +84,8 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_unload_preserves_terrain_adjacency()
 	await process_frame
+	await _test_failed_unload_preflight_preserves_corner_caps()
+	await process_frame
 	await _test_stateful_object_survives_unload_reload()
 	await process_frame
 	await _test_failed_object_state_application_is_atomic()
@@ -375,6 +377,83 @@ func _test_failed_unload_preserves_terrain_adjacency() -> void:
 	assert(int(controller.call("get_terrain_transition_collider_count")) == 0, "Successful unload retires the departed seam collider")
 	assert(str(patch_b.call("get_edge_policy", "west").get("mode", "")) == "ground_ramp", "Successful unload restores the remaining patch's outer ground ramp")
 
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_failed_unload_preflight_preserves_corner_caps() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+
+	# A 2x2 checkerboard makes all four unequal-height seams meet at one eligible junction.
+	var chunk_a: Node3D = _new_terrain_patch_chunk("CornerA", Vector3.ZERO, 0)
+	var chunk_b: Node3D = _new_terrain_patch_chunk("CornerB", Vector3(TerrainPatchScript.PATCH_SIZE, 0.0, 0.0), 2)
+	var chunk_c: Node3D = _new_terrain_patch_chunk("CornerC", Vector3(0.0, 0.0, TerrainPatchScript.PATCH_SIZE), 2)
+	var chunk_d: Node3D = _new_terrain_patch_chunk("CornerD", Vector3(TerrainPatchScript.PATCH_SIZE, 0.0, TerrainPatchScript.PATCH_SIZE), 0)
+	assert(controller.load_chunk("terrain/cap/a", chunk_a, now))
+	assert(controller.load_chunk("terrain/cap/b", chunk_b, now))
+	assert(controller.load_chunk("terrain/cap/c", chunk_c, now))
+	assert(controller.load_chunk("terrain/cap/d", chunk_d, now))
+
+	var patch_a: Node3D = chunk_a.get_node("TerrainPatch") as Node3D
+	var cap_manager: Node = controller.get("_terrain_transition_collider_manager") as Node
+	assert(is_instance_valid(cap_manager), "Controller owns the production transition-collider manager")
+	var reports_before: Array[Dictionary] = controller.call("get_blocked_terrain_corner_reports")
+	assert(reports_before.size() == 4, "Checkerboard topology reports all four corners at the shared junction")
+	var cap_snapshots: Array[Dictionary] = []
+	for report_value in reports_before:
+		var report: Dictionary = report_value
+		var stable_id: String = str(report.get("stable_id", ""))
+		var corner: String = str(report.get("corner", ""))
+		assert(str(report.get("policy", "")) == "shared_corner_cap", "Eligible checkerboard report is resolved by a shared corner cap")
+		var cap_body: StaticBody3D = cap_manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
+		assert(is_instance_valid(cap_body), "Every eligible corner report has a live cap body")
+		cap_snapshots.append({"stable_id": stable_id, "corner": corner, "body": cap_body})
+	var cap_count_before: int = int(cap_manager.call("get_corner_cap_count"))
+	assert(cap_count_before == 4 and cap_snapshots.size() == 4, "The junction owns exactly four distinct corner-cap bodies")
+
+	var descriptors_before: Dictionary = controller.call("get_terrain_transition_descriptors")
+	assert(descriptors_before.size() == 4, "Checkerboard topology publishes all four shared seam descriptors")
+	var edge_bodies_before: Dictionary = {}
+	for edge_key_value in descriptors_before.keys():
+		var edge_key: String = str(edge_key_value)
+		var edge_body: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+		assert(is_instance_valid(edge_body), "Every checkerboard seam has a live transition collider")
+		edge_bodies_before[edge_key] = edge_body
+	assert(int(controller.call("get_terrain_transition_collider_count")) == 4, "Controller owns all four shared seam colliders")
+	var object_registry_before: Dictionary = object_registry.call("to_save_dict")
+
+	# Reject the unload during Binder preflight. The collider manager must not be synchronized or cleared.
+	patch_a.set("invalid_profile", true)
+	assert(not bool(controller.call("unload_chunk", "terrain/cap/d", now)), "Invalid remaining patch rejects unload during Binder preflight")
+	assert(bool(controller.call("is_chunk_loaded", "terrain/cap/d")), "Rejected unload retains ownership of the departing chunk")
+	assert(controller.call("get_chunk_root", "terrain/cap/d") == chunk_d, "Rejected unload retains the exact departing root")
+	assert(controller.call("get_terrain_transition_descriptors") == descriptors_before, "Rejected preflight preserves every published seam descriptor")
+	assert(controller.call("get_blocked_terrain_corner_reports") == reports_before, "Rejected preflight preserves the exact blocked-corner report set")
+	assert(int(cap_manager.call("get_corner_cap_count")) == cap_count_before, "Rejected preflight preserves the managed corner-cap count")
+	assert(object_registry.call("to_save_dict") == object_registry_before, "Rejected preflight preserves the complete object registry snapshot")
+	for cap_snapshot_value in cap_snapshots:
+		var cap_snapshot: Dictionary = cap_snapshot_value
+		var current_cap: StaticBody3D = cap_manager.call("get_corner_cap_body", str(cap_snapshot["stable_id"]), str(cap_snapshot["corner"])) as StaticBody3D
+		assert(current_cap == cap_snapshot["body"], "Rejected preflight preserves the exact existing corner-cap instance")
+		assert(is_instance_valid(current_cap) and current_cap.collision_layer == 1, "Existing corner-cap collision remains active after rejected preflight")
+	for edge_key_value in edge_bodies_before.keys():
+		var edge_key: String = str(edge_key_value)
+		assert(controller.call("get_terrain_transition_collider", edge_key) == edge_bodies_before[edge_key_value], "Rejected preflight preserves each exact shared edge collider")
+
+	patch_a.set("invalid_profile", false)
+	assert(bool(controller.call("unload_chunk", "terrain/cap/d", now)), "Unload succeeds after repairing the rejected patch profile")
+	assert(not bool(controller.call("is_chunk_loaded", "terrain/cap/d")), "Successful retry releases the departing chunk")
+	assert(int(cap_manager.call("get_corner_cap_count")) == 0, "Recomputed three-patch topology retires the no-longer-eligible corner caps")
 	controller.queue_free()
 	object_registry.queue_free()
 	mineral_registry.queue_free()
