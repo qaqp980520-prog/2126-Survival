@@ -365,7 +365,29 @@ static func recover_interrupted_write(path: String, payload_validator: Callable,
 	if not bool(previous_result.get("ok", false)):
 		var backup_result: Dictionary = read_valid_file(path + ".bak", payload_validator)
 		if not bool(backup_result.get("ok", false)):
-			return {"ok": false, "reason": "neither_primary_previous_nor_backup_is_valid"}
+			var verified_temp: Dictionary = read_valid_file(path + ".tmp", payload_validator)
+			if not bool(verified_temp.get("ok", false)):
+				return {"ok": false, "reason": "neither_primary_previous_nor_backup_is_valid"}
+			var invalid_previous_archive: String = _unique_corrupt_archive_path(path)
+			var previous_archive_error: int = _rename_path(previous_path, invalid_previous_archive, rename_operation)
+			if previous_archive_error != OK:
+				return {"ok": false, "reason": "invalid_previous_could_not_be_archived", "error": previous_archive_error}
+			var temp_recovery: Dictionary = _promote_verified_temp(path, verified_temp, payload_validator, rename_operation)
+			if not bool(temp_recovery.get("ok", false)):
+				return {
+					"ok": false,
+					"reason": "verified_temp_recovery_failed_after_invalid_previous",
+					"recovery_required": true,
+					"previous_archive_path": invalid_previous_archive,
+					"temp_recovery": temp_recovery
+				}
+			return {
+				"ok": true,
+				"phase": "verified_temp_recovered_after_invalid_previous",
+				"previous_archive_path": invalid_previous_archive,
+				"archive_path": str(temp_recovery.get("archive_path", "")),
+				"warning": str(temp_recovery.get("warning", ""))
+			}
 		var invalid_previous_archive: String = _unique_corrupt_archive_path(path)
 		var archive_error: int = _rename_path(previous_path, invalid_previous_archive, rename_operation)
 		if archive_error != OK:
