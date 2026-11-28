@@ -286,6 +286,15 @@ func _user_entry_is_occupied(path: String, _directory: DirAccess) -> bool:
 	var is_link: bool = parent_directory != null and parent_directory.is_link(path.get_file())
 	return FileAccess.file_exists(path) or DirAccess.dir_exists_absolute(absolute_path) or is_link
 
+func _test_symlink_targets_match(actual_target: String, expected_target: String) -> bool:
+	if actual_target.is_empty() or expected_target.is_empty():
+		return false
+	var actual_normalized: String = actual_target.simplify_path()
+	var expected_normalized: String = expected_target.simplify_path()
+	if OS.get_name() == "Windows":
+		return actual_normalized.to_lower() == expected_normalized.to_lower()
+	return actual_normalized == expected_normalized
+
 func _create_owned_test_symlink(directory: DirAccess, target_absolute: String, link_name: String) -> Error:
 	if directory == null or _test_run_prefix.is_empty():
 		return ERR_CANT_OPEN
@@ -316,6 +325,15 @@ func _remove_owned_test_symlink(path: String) -> bool:
 		push_error("Owned test symlink has an invalid or out-of-run target: " + path)
 		return false
 	if directory.is_link(link_name):
+		var current_link_target: String = directory.read_link(link_name)
+		if not _test_symlink_targets_match(current_link_target, target_absolute):
+			print("SAFEGUARD: Refusing to remove a replaced test symlink with a different target: " + path)
+			if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
+				return false
+			_owned_test_symlink_paths.erase(path)
+			_owned_test_symlink_targets.erase(path)
+			_owned_test_symlink_placeholders.erase(path)
+			return false
 		if placeholder_marker_path.is_empty() and not FileAccess.file_exists(target_absolute) and not DirAccess.dir_exists_absolute(target_absolute):
 			var target_user_path: String = _test_user_path_from_absolute(target_absolute)
 			if target_user_path.is_empty() or not target_user_path.begins_with("user://" + _test_run_prefix) or _user_entry_is_occupied(target_user_path, directory):
@@ -570,33 +588,41 @@ func _test_save_path_symlink_guards() -> void:
 
 	# Simulate another actor replacing an owned link between creation and cleanup.
 	var replacement_link_path: String = "user://" + fixture_prefix + "_cleanup_replacement_probe"
-	if _user_entry_is_occupied(replacement_link_path, user_directory):
+	var replacement_target_path: String = _test_user_path("symlink_cleanup_replacement_target")
+	if not _claim_test_save_path(replacement_target_path):
+		_expect(false, "replacement symlink target claims a unique unused save family")
+	elif _user_entry_is_occupied(replacement_link_path, user_directory):
 		_expect(false, "replacement-race probe path is unused before creation")
+		_cleanup_save_test_files(replacement_target_path)
 	else:
-		var replacement_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), replacement_link_path.get_file())
-		if replacement_link_error != OK and OS.get_name() == "Windows":
-			print("SKIP: symlink replacement-race regression requires Windows Developer Mode or elevated privileges.")
-		else:
-			_expect(replacement_link_error == OK, "create an owned symlink for replacement-race cleanup testing")
-			if replacement_link_error == OK:
-				var unlink_for_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
-				_expect(unlink_for_replacement_error == OK, "simulate external removal of the owned symlink before cleanup")
-				if unlink_for_replacement_error == OK:
-					if _user_entry_is_occupied(replacement_link_path, user_directory):
-						_expect(false, "replacement sentinel path remains unused after unlinking the owned symlink")
-						_remove_owned_test_symlink(replacement_link_path)
-					else:
-						var replacement_file := FileAccess.open(replacement_link_path, FileAccess.WRITE)
-						_expect(replacement_file != null, "create a regular replacement entry at the former symlink path")
-						if replacement_file != null:
-							replacement_file.store_string("preserve-replacement-entry")
-							replacement_file.close()
-							_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses to remove a regular replacement entry")
-							_expect(FileAccess.get_file_as_string(replacement_link_path) == "preserve-replacement-entry", "replacement entry bytes remain unchanged")
-							_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is gone")
-							DirAccess.remove_absolute(ProjectSettings.globalize_path(replacement_link_path))
+		var replacement_target_text: String = "preserve-replacement-symlink-target"
+		var replacement_target_written: bool = _write_test_text(replacement_target_path, replacement_target_text)
+		_expect(replacement_target_written, "replacement symlink target is written inside an owned save family")
+		if replacement_target_written:
+			var replacement_link_error: Error = _create_owned_test_symlink(user_directory, ProjectSettings.globalize_path(cleanup_target_path), replacement_link_path.get_file())
+			if replacement_link_error != OK and OS.get_name() == "Windows":
+				print("SKIP: symlink replacement-race regression requires Windows Developer Mode or elevated privileges.")
+			else:
+				_expect(replacement_link_error == OK, "create an owned symlink for replacement-race cleanup testing")
+				if replacement_link_error == OK:
+					var unlink_for_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
+					_expect(unlink_for_replacement_error == OK, "simulate external removal of the owned symlink before cleanup")
+					if unlink_for_replacement_error == OK:
+						var replacement_create_error: Error = user_directory.create_link(ProjectSettings.globalize_path(replacement_target_path), replacement_link_path.get_file())
+						_expect(replacement_create_error == OK, "simulate a different symlink replacing the owned link")
+						if replacement_create_error == OK:
+							_expect(not _remove_owned_test_symlink(replacement_link_path), "owned-link cleanup refuses a replacement symlink with a different target")
+							_expect(user_directory.is_link(replacement_link_path.get_file()), "replacement symlink remains intact after ownership refusal")
+							_expect(_test_symlink_targets_match(user_directory.read_link(replacement_link_path.get_file()), ProjectSettings.globalize_path(replacement_target_path)), "replacement symlink still points to its own target")
+							_expect(FileAccess.get_file_as_string(replacement_target_path) == replacement_target_text, "replacement symlink target bytes remain unchanged")
+							_expect(not _owned_test_symlink_paths.has(replacement_link_path), "ownership is relinquished after the original link is replaced")
+							var remove_replacement_error: Error = user_directory.remove(replacement_link_path.get_file())
+							_expect(remove_replacement_error == OK, "fixture removes only its own simulated replacement symlink")
 						else:
 							_remove_owned_test_symlink(replacement_link_path)
+					else:
+						_remove_owned_test_symlink(replacement_link_path)
+			_cleanup_save_test_files(replacement_target_path)
 	_cleanup_save_test_files(cleanup_target_path)
 
 	# Exercise the real production load/recovery path, not only the archive-name helper.
