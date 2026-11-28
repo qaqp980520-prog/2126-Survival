@@ -815,7 +815,8 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var promotion_path: String = _test_user_path("save_promotion")
 	var interrupted_path: String = _test_user_path("interrupted_restart")
 	var first_write_temp_path: String = _test_user_path("first_write_temp_recovery")
-	if not _claim_test_save_paths([path, blocked_path, promotion_path, interrupted_path, first_write_temp_path]):
+	var invalid_previous_temp_path: String = _test_user_path("invalid_previous_temp_recovery")
+	if not _claim_test_save_paths([path, blocked_path, promotion_path, interrupted_path, first_write_temp_path, invalid_previous_temp_path]):
 		_expect(false, "all production save fixtures claim unique, unused per-process paths before writing")
 		return
 
@@ -1177,6 +1178,41 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "first-write recovery continues through the normal primary load path")
 	_expect(_inventory_count("berries") == int(first_write_payload.get("inventory", {}).get("inventory", {}).get("berries", 0)), "first-write recovery restores the saved inventory after restart")
 
+	var invalid_previous_primary_bytes: String = "{invalid primary before previous-temp recovery"
+	var invalid_previous_bytes: String = "{invalid staged previous before temp recovery"
+	var invalid_previous_backup_bytes: String = "{invalid backup before previous-temp recovery"
+	var invalid_previous_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(invalid_previous_temp_path, invalid_previous_primary_bytes), "invalid-previous fixture writes a corrupt primary")
+	_expect(_write_test_text(invalid_previous_temp_path + ".previous", invalid_previous_bytes), "invalid-previous fixture writes a corrupt staged previous file")
+	_expect(_write_test_text(invalid_previous_temp_path + ".bak", invalid_previous_backup_bytes), "invalid-previous fixture writes a corrupt backup")
+	_expect(_write_test_text(invalid_previous_temp_path + ".tmp", invalid_previous_temp_text), "invalid-previous fixture writes a fully valid temp")
+	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "temp remains fully validated when primary, previous and backup are invalid")
+	var invalid_previous_load_ok: bool = bool(world.call("load_game", invalid_previous_temp_path))
+	if not invalid_previous_load_ok:
+		push_error("Invalid-previous temp recovery diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(invalid_previous_load_ok, "load entry recovers a verified temp when primary, staged previous and backup are all invalid")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_temp_text, "invalid-previous recovery installs the exact verified temp as primary")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".tmp"), "successful invalid-previous recovery consumes the temp only after promotion")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "successful invalid-previous recovery archives the corrupt staged previous")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "invalid backup remains preserved for diagnosis")
+	var invalid_previous_archive_found: bool = false
+	var invalid_primary_archive_found: bool = false
+	var invalid_previous_archive_count: int = 0
+	var invalid_previous_archive_directory: DirAccess = DirAccess.open("user://")
+	if invalid_previous_archive_directory != null:
+		for filename in invalid_previous_archive_directory.get_files():
+			if filename.begins_with(invalid_previous_temp_path.get_file() + ".corrupt."):
+				invalid_previous_archive_count += 1
+				var archived_text: String = FileAccess.get_file_as_string("user://" + filename)
+				if archived_text == invalid_previous_bytes:
+					invalid_previous_archive_found = true
+				if archived_text == invalid_previous_primary_bytes:
+					invalid_primary_archive_found = true
+	_expect(invalid_previous_archive_found, "corrupt staged previous bytes are retained in a unique archive")
+	_expect(invalid_primary_archive_found, "corrupt primary bytes are retained in a separate unique archive")
+	_expect(invalid_previous_archive_count == 2, "invalid previous and primary receive distinct collision-safe archives")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "invalid-previous recovery continues through the normal primary load path")
+
 	var invalid_temp_path: String = _test_user_path("invalid_temp_recovery")
 	if not _claim_test_save_path(invalid_temp_path):
 		_expect(false, "invalid temp fixture claims a unique unused path")
@@ -1260,6 +1296,7 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
 	_cleanup_save_test_files(first_write_temp_path)
+	_cleanup_save_test_files(invalid_previous_temp_path)
 	_cleanup_save_test_files(invalid_temp_path)
 	_cleanup_save_test_files(corrupt_temp_path)
 	_cleanup_save_test_files(invalid_path)
