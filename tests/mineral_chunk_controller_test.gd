@@ -9,12 +9,21 @@ const StatefulProp = preload("res://systems/WorldObjectStatefulProp.gd")
 const CropRegistry = preload("res://systems/CropRegistry.gd")
 const CropController = preload("res://systems/CropPlotController.gd")
 const CropPlot = preload("res://systems/CropPlotVisual.gd")
+const TerrainPatchScript = preload("res://systems/SurfaceTerrainPatch.gd")
 
 class FakeCornerManager extends Node3D:
 	var reports: Array[Dictionary] = []
 
 	func get_blocked_corner_reports() -> Array[Dictionary]:
 		return reports.duplicate(true)
+
+class FaultInjectingTerrainPatch extends "res://systems/SurfaceTerrainPatch.gd":
+	var invalid_profile: bool = false
+
+	func get_edge_ramp_profile() -> Dictionary:
+		if invalid_profile:
+			return {"patch_size": 0.0}
+		return super.get_edge_ramp_profile()
 
 func _initialize() -> void:
 	call_deferred("_run_tests")
@@ -26,7 +35,11 @@ func _run_tests() -> void:
 	await process_frame
 	await _test_failed_load_preserves_caller_root()
 	await process_frame
-	await _test_failed_unload_rolls_back_registration()
+	await _test_failed_unload_preflight_is_atomic_for_all_veins()
+	await process_frame
+	await _test_failed_unload_preserves_terrain_adjacency()
+	await process_frame
+	await _test_failed_unload_preflight_preserves_corner_caps()
 	await process_frame
 	await _test_stateful_object_survives_unload_reload()
 	await process_frame
@@ -137,8 +150,9 @@ func _test_failed_load_preserves_caller_root() -> void:
 	registry.queue_free()
 	await process_frame
 
-func _test_failed_unload_rolls_back_registration() -> void:
+func _test_failed_unload_preflight_is_atomic_for_all_veins() -> void:
 	var now: int = int(Time.get_unix_time_from_system())
+	var unload_time: int = now + 120
 	var registry: Node = Registry.new()
 	var controller: Node3D = Controller.new()
 	root.add_child(registry)
@@ -150,18 +164,164 @@ func _test_failed_unload_rolls_back_registration() -> void:
 	assert(controller.load_chunk(chunk_id, chunk, now))
 	var first_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/gold-01")
 	var second_id: String = Adapter.make_stable_id(chunk_id, "ChunkRoot/iron-02")
+	var first: Node = chunk.get_node("gold-01")
 	var second: Node = chunk.get_node("iron-02")
-	second.mineral_id = "missing_mineral"
-	assert(not controller.unload_chunk(chunk_id, now), "Invalid second vein must abort unload")
+	var first_state_before: Dictionary = first.call("to_save_dict")
+	second.set("mineral_id", "missing_mineral")
+	var registry_before: Dictionary = registry.call("to_save_dict")
+	assert(not controller.unload_chunk(chunk_id, unload_time), "Invalid second vein must abort the complete chunk unload")
 	assert(controller.is_chunk_loaded(chunk_id), "Failed unload must retain controller ownership")
 	assert(controller.get_chunk_root(chunk_id) == chunk)
 	assert(chunk.get_parent() == controller)
-	assert(registry.get_registered_ids().has(first_id), "Previously unregistered first vein must be restored")
-	assert(registry.get_registered_ids().has(second_id), "Failed vein must remain registered")
-	second.mineral_id = "iron_ore"
-	assert(controller.unload_chunk(chunk_id, now), "Unload should succeed after repairing invalid vein data")
+	assert(registry.get_registered_ids().has(first_id), "Atomic preflight keeps the first vein registered")
+	assert(registry.get_registered_ids().has(second_id), "Atomic preflight keeps the rejected vein registered")
+	assert(first.call("to_save_dict") == first_state_before, "A rejected batch must not advance regeneration on an earlier vein")
+	assert(registry.call("to_save_dict") == registry_before, "A rejected batch must preserve the entire mineral registry snapshot")
+	second.set("mineral_id", "iron_ore")
+	assert(controller.unload_chunk(chunk_id, unload_time), "Unload should succeed after repairing invalid vein data")
+	var saved_veins: Dictionary = registry.call("to_save_dict").get("veins", {})
+	assert(int(saved_veins.get(first_id, {}).get("remaining_units", -1)) == 5, "Successful atomic unload applies the two elapsed regeneration intervals")
 	controller.queue_free()
 	registry.queue_free()
+	await process_frame
+
+func _test_failed_unload_preserves_terrain_adjacency() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+
+	var chunk_a: Node3D = _new_terrain_patch_chunk("ChunkA", Vector3.ZERO, 0)
+	var chunk_b: Node3D = _new_terrain_patch_chunk("ChunkB", Vector3(TerrainPatchScript.PATCH_SIZE, 0.0, 0.0), 2)
+	assert(controller.load_chunk("terrain/chunk-a", chunk_a, now))
+	assert(controller.load_chunk("terrain/chunk-b", chunk_b, now))
+	var patch_a: Node3D = chunk_a.get_node("TerrainPatch") as Node3D
+	var patch_b: Node3D = chunk_b.get_node("TerrainPatch") as Node3D
+	var edge_policy_a: Dictionary = patch_a.call("get_edge_policy", "east")
+	var edge_policy_b: Dictionary = patch_b.call("get_edge_policy", "west")
+	assert(str(edge_policy_a.get("mode", "")) == "neighbor_higher", "Loaded terrain patches bind the expected higher-neighbor edge")
+	assert(str(edge_policy_b.get("mode", "")) == "local_higher", "The reciprocal terrain edge has the matching local-higher policy")
+	var descriptors_before: Dictionary = controller.call("get_terrain_transition_descriptors")
+	assert(descriptors_before.size() == 1, "Adjacent unequal-height patches publish one transition descriptor")
+	var edge_key: String = str(descriptors_before.keys()[0])
+	var collider_before: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+	assert(is_instance_valid(collider_before), "The transition collider is live before the unload attempt")
+	assert(int(controller.call("get_terrain_transition_collider_count")) == 1, "The controller owns one live transition collider")
+	var object_registry_before: Dictionary = object_registry.call("to_save_dict")
+
+	# Corrupt only the remaining patch's live state. Binder rejects it during preflight,
+	# before clearing either side of the existing reciprocal edge.
+	patch_b.set("invalid_profile", true)
+	assert(not bool(controller.call("unload_chunk", "terrain/chunk-a", now)), "Unload rejects a candidate terrain set that fails Binder preflight")
+	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-a")), "Rejected unload retains the departing chunk ownership")
+	assert(controller.call("get_chunk_root", "terrain/chunk-a") == chunk_a, "Rejected unload retains the exact original chunk root")
+	assert(chunk_a.get_parent() == controller, "Rejected unload keeps the original root attached")
+	assert(controller.call("get_terrain_transition_descriptors") == descriptors_before, "Binder preflight failure preserves the prior descriptors")
+	assert(int(controller.call("get_terrain_transition_collider_count")) == 1, "Binder preflight failure preserves the prior collider count")
+	assert(controller.call("get_terrain_transition_collider", edge_key) == collider_before, "Binder preflight failure preserves the exact prior collider instance")
+	assert(patch_a.call("get_edge_policy", "east") == edge_policy_a, "Binder preflight failure preserves the departing patch's live edge policy")
+	assert(patch_b.call("get_edge_policy", "west") == edge_policy_b, "Binder preflight failure preserves the remaining patch's reciprocal edge policy")
+	assert(object_registry.call("to_save_dict") == object_registry_before, "Rejected unload restores the complete object registry snapshot")
+	assert(bool(controller.call("has_pending_terrain_adjacency_recovery")), "A failed terrain preflight marks adjacency recovery as required")
+
+	assert(not bool(controller.call("unload_chunk", "terrain/chunk-b", now)), "Further unloads fail closed while the remaining patch is invalid")
+	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-b")), "Fail-closed recovery retains the second chunk")
+	patch_b.set("invalid_profile", false)
+	assert(bool(controller.call("refresh_terrain_adjacency")), "A successful full Binder refresh clears the recovery barrier")
+	assert(not bool(controller.call("has_pending_terrain_adjacency_recovery")), "Successful refresh clears the recovery-required state")
+	assert(bool(controller.call("unload_chunk", "terrain/chunk-a", now)), "Unload succeeds after terrain adjacency recovery")
+	assert(not bool(controller.call("is_chunk_loaded", "terrain/chunk-a")), "Successful unload releases the departing chunk")
+	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-b")), "Successful unload retains the remaining chunk")
+	assert(controller.call("get_terrain_transition_descriptors").is_empty(), "Successful unload removes the departed seam descriptor")
+	assert(int(controller.call("get_terrain_transition_collider_count")) == 0, "Successful unload retires the departed seam collider")
+	assert(str(patch_b.call("get_edge_policy", "west").get("mode", "")) == "ground_ramp", "Successful unload restores the remaining patch's outer ground ramp")
+
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
+	await process_frame
+
+func _test_failed_unload_preflight_preserves_corner_caps() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = ObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+
+	# A 2x2 checkerboard makes all four unequal-height seams meet at one eligible junction.
+	var chunk_a: Node3D = _new_terrain_patch_chunk("CornerA", Vector3.ZERO, 0)
+	var chunk_b: Node3D = _new_terrain_patch_chunk("CornerB", Vector3(TerrainPatchScript.PATCH_SIZE, 0.0, 0.0), 2)
+	var chunk_c: Node3D = _new_terrain_patch_chunk("CornerC", Vector3(0.0, 0.0, TerrainPatchScript.PATCH_SIZE), 2)
+	var chunk_d: Node3D = _new_terrain_patch_chunk("CornerD", Vector3(TerrainPatchScript.PATCH_SIZE, 0.0, TerrainPatchScript.PATCH_SIZE), 0)
+	assert(controller.load_chunk("terrain/cap/a", chunk_a, now))
+	assert(controller.load_chunk("terrain/cap/b", chunk_b, now))
+	assert(controller.load_chunk("terrain/cap/c", chunk_c, now))
+	assert(controller.load_chunk("terrain/cap/d", chunk_d, now))
+
+	var patch_a: Node3D = chunk_a.get_node("TerrainPatch") as Node3D
+	var cap_manager: Node = controller.get("_terrain_transition_collider_manager") as Node
+	assert(is_instance_valid(cap_manager), "Controller owns the production transition-collider manager")
+	var reports_before: Array[Dictionary] = controller.call("get_blocked_terrain_corner_reports")
+	assert(reports_before.size() == 4, "Checkerboard topology reports all four corners at the shared junction")
+	var cap_snapshots: Array[Dictionary] = []
+	for report_value in reports_before:
+		var report: Dictionary = report_value
+		var stable_id: String = str(report.get("stable_id", ""))
+		var corner: String = str(report.get("corner", ""))
+		assert(str(report.get("policy", "")) == "shared_corner_cap", "Eligible checkerboard report is resolved by a shared corner cap")
+		var cap_body: StaticBody3D = cap_manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
+		assert(is_instance_valid(cap_body), "Every eligible corner report has a live cap body")
+		cap_snapshots.append({"stable_id": stable_id, "corner": corner, "body": cap_body})
+	var cap_count_before: int = int(cap_manager.call("get_corner_cap_count"))
+	assert(cap_count_before == 4 and cap_snapshots.size() == 4, "The junction owns exactly four distinct corner-cap bodies")
+
+	var descriptors_before: Dictionary = controller.call("get_terrain_transition_descriptors")
+	assert(descriptors_before.size() == 4, "Checkerboard topology publishes all four shared seam descriptors")
+	var edge_bodies_before: Dictionary = {}
+	for edge_key_value in descriptors_before.keys():
+		var edge_key: String = str(edge_key_value)
+		var edge_body: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+		assert(is_instance_valid(edge_body), "Every checkerboard seam has a live transition collider")
+		edge_bodies_before[edge_key] = edge_body
+	assert(int(controller.call("get_terrain_transition_collider_count")) == 4, "Controller owns all four shared seam colliders")
+	var object_registry_before: Dictionary = object_registry.call("to_save_dict")
+
+	# Reject the unload during Binder preflight. The collider manager must not be synchronized or cleared.
+	patch_a.set("invalid_profile", true)
+	assert(not bool(controller.call("unload_chunk", "terrain/cap/d", now)), "Invalid remaining patch rejects unload during Binder preflight")
+	assert(bool(controller.call("is_chunk_loaded", "terrain/cap/d")), "Rejected unload retains ownership of the departing chunk")
+	assert(controller.call("get_chunk_root", "terrain/cap/d") == chunk_d, "Rejected unload retains the exact departing root")
+	assert(controller.call("get_terrain_transition_descriptors") == descriptors_before, "Rejected preflight preserves every published seam descriptor")
+	assert(controller.call("get_blocked_terrain_corner_reports") == reports_before, "Rejected preflight preserves the exact blocked-corner report set")
+	assert(int(cap_manager.call("get_corner_cap_count")) == cap_count_before, "Rejected preflight preserves the managed corner-cap count")
+	assert(object_registry.call("to_save_dict") == object_registry_before, "Rejected preflight preserves the complete object registry snapshot")
+	for cap_snapshot_value in cap_snapshots:
+		var cap_snapshot: Dictionary = cap_snapshot_value
+		var current_cap: StaticBody3D = cap_manager.call("get_corner_cap_body", str(cap_snapshot["stable_id"]), str(cap_snapshot["corner"])) as StaticBody3D
+		assert(current_cap == cap_snapshot["body"], "Rejected preflight preserves the exact existing corner-cap instance")
+		assert(is_instance_valid(current_cap) and current_cap.collision_layer == 1, "Existing corner-cap collision remains active after rejected preflight")
+	for edge_key_value in edge_bodies_before.keys():
+		var edge_key: String = str(edge_key_value)
+		assert(controller.call("get_terrain_transition_collider", edge_key) == edge_bodies_before[edge_key_value], "Rejected preflight preserves each exact shared edge collider")
+
+	patch_a.set("invalid_profile", false)
+	assert(bool(controller.call("unload_chunk", "terrain/cap/d", now)), "Unload succeeds after repairing the rejected patch profile")
+	assert(not bool(controller.call("is_chunk_loaded", "terrain/cap/d")), "Successful retry releases the departing chunk")
+	assert(int(cap_manager.call("get_corner_cap_count")) == 0, "Recomputed three-patch topology retires the no-longer-eligible corner caps")
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
 	await process_frame
 
 func _test_stateful_object_survives_unload_reload() -> void:
@@ -358,6 +518,16 @@ func _test_corner_report_proxy_is_defensive() -> void:
 	assert(manager_edges.size() == 2, "Nested edge-key arrays are deep-copied")
 	controller.queue_free()
 	await process_frame
+
+func _new_terrain_patch_chunk(chunk_name: String, world_position: Vector3, height_level: int) -> Node3D:
+	var chunk := Node3D.new()
+	chunk.name = chunk_name
+	chunk.position = world_position
+	var patch: Node3D = FaultInjectingTerrainPatch.new()
+	patch.name = "TerrainPatch"
+	patch.set("_height_level", height_level)
+	chunk.add_child(patch)
+	return chunk
 
 func _new_stateful_chunk() -> Node3D:
 	var chunk := Node3D.new()

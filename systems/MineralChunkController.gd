@@ -19,11 +19,12 @@ var _chunk_crops: Dictionary = {} # chunk ID -> local crop path -> CropPlotVisua
 var _chunk_objects: Dictionary = {} # chunk ID -> stable object ID -> stateful Node3D
 var _terrain_transition_descriptors: Dictionary = {} # derived edge key -> descriptor; never serialized
 var _terrain_transition_collider_manager: Node3D
+var _terrain_adjacency_recovery_required: bool = false
 
 func bind_registry(candidate: Node) -> bool:
 	if candidate == null:
 		return false
-	for method_name in ["register_vein", "unregister_vein", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
+	for method_name in ["register_vein", "unregister_vein", "unregister_veins_atomic", "get_registered_ids", "to_save_dict", "restore_save_dict"]:
 		if not candidate.has_method(method_name):
 			return false
 	if not _chunk_roots.is_empty() and registry != candidate:
@@ -64,6 +65,8 @@ func bind_object_state_registry(candidate: Node) -> bool:
 ## derived from node names/hierarchy; registry records persist after the scene unloads.
 func load_chunk(chunk_id: String, chunk_root: Node3D, now_unix: int = -1) -> bool:
 	if registry == null or adapter == null or not is_instance_valid(chunk_root) or chunk_root.is_queued_for_deletion():
+		return false
+	if not _ensure_terrain_adjacency_ready():
 		return false
 	if AdapterScript.make_stable_id(chunk_id, "probe").is_empty():
 		return false
@@ -215,6 +218,8 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	var chunk_root: Node3D = _chunk_roots[chunk_id] as Node3D
 	if not is_instance_valid(chunk_root):
 		return false
+	if not _ensure_terrain_adjacency_ready():
+		return false
 	var veins: Dictionary = _chunk_veins[chunk_id]
 	var object_snapshot: Dictionary = {}
 	if not _chunk_objects.get(chunk_id, {}).is_empty():
@@ -232,9 +237,29 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 			if not (object_state is Dictionary) or (object_node.has_method("validate_world_object_state") and not bool(object_node.call("validate_world_object_state", object_state))) or not bool(object_state_registry.call("set_object_state", str(stable_id), chunk_id, object_state)):
 				object_state_registry.call("restore_save_dict", object_snapshot)
 				return false
+	# Keep the departing root alive until the remaining terrain set has rebound successfully.
+	# Temporarily remove only its patch ownership so the Binder can clear reciprocal edges
+	# without freeing the old patch Nodes before the adjacency commit is known to succeed.
+	var departing_objects: Dictionary = _chunk_objects.get(chunk_id, {}).duplicate()
+	_chunk_objects.erase(chunk_id)
+	var adjacency_result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
+	if not bool(adjacency_result.get("ok", false)):
+		_chunk_objects[chunk_id] = departing_objects
+		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
+			push_error("Failed to restore world-object registry after terrain adjacency unload preflight failed.")
+		# A non-mutating Binder preflight rejection already preserved the previous live
+		# adjacency, so do not rebuild it again. Failures after mutation need a full restore.
+		var live_state_mutated: bool = bool(adjacency_result.get("live_state_mutated", true))
+		if live_state_mutated and not refresh_terrain_adjacency():
+			_terrain_adjacency_recovery_required = true
+		return false
+
 	if not veins.is_empty() and not bool(adapter.unload_chunk(chunk_id, now_unix)):
-		if not object_snapshot.is_empty():
-			object_state_registry.call("restore_save_dict", object_snapshot)
+		_chunk_objects[chunk_id] = departing_objects
+		if not object_snapshot.is_empty() and not bool(object_state_registry.call("restore_save_dict", object_snapshot)):
+			push_error("Failed to restore world-object registry after mineral unload failed.")
+		if not refresh_terrain_adjacency():
+			_terrain_adjacency_recovery_required = true
 		return false
 
 	_chunk_roots.erase(chunk_id)
@@ -244,9 +269,6 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 	remove_child(chunk_root)
 	if not chunk_root.is_queued_for_deletion():
 		chunk_root.queue_free()
-	var adjacency_result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
-	if not bool(adjacency_result.get("ok", false)):
-		push_error("Terrain adjacency rebuild failed after chunk unload: %s" % str(adjacency_result.get("error", "unknown")))
 	return true
 
 func get_chunk_root(chunk_id: String) -> Node3D:
@@ -472,9 +494,19 @@ func _ensure_transition_collider_manager() -> bool:
 	_terrain_transition_collider_manager = manager
 	return true
 
+func has_pending_terrain_adjacency_recovery() -> bool:
+	return _terrain_adjacency_recovery_required
+
+func _ensure_terrain_adjacency_ready() -> bool:
+	if not _terrain_adjacency_recovery_required:
+		return true
+	return refresh_terrain_adjacency()
+
 func refresh_terrain_adjacency() -> bool:
 	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
-	return bool(result.get("ok", false))
+	var succeeded: bool = bool(result.get("ok", false))
+	_terrain_adjacency_recovery_required = not succeeded
+	return succeeded
 
 func _on_terrain_patch_state_changed(_patch: Node3D) -> void:
 	var result: Dictionary = _rebind_terrain_patches(_collect_loaded_terrain_patches())
@@ -498,11 +530,17 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 			patches_by_stable_id[candidate_stable_id] = candidate
 	var result: Dictionary = TerrainAdjacencyBinderScript.bind_patches(patches, stable_ids_by_instance)
 	if not bool(result.get("ok", false)):
-		if is_instance_valid(_terrain_transition_collider_manager):
-			_terrain_transition_collider_manager.call("clear_all")
-		_terrain_transition_descriptors.clear()
+		# Binder preflight failures occur before live edges change. Preserve the previous
+		# descriptor/collider state in that case; clear derived resources only when the
+		# Binder reports that it already mutated live patch edges.
+		if bool(result.get("live_state_mutated", true)):
+			if is_instance_valid(_terrain_transition_collider_manager):
+				_terrain_transition_collider_manager.call("clear_all")
+			_terrain_transition_descriptors.clear()
+		_terrain_adjacency_recovery_required = true
 		return result
 	if not _ensure_transition_collider_manager():
+		_terrain_adjacency_recovery_required = true
 		return {"ok": false, "error": "transition_manager_unavailable"}
 	var transition_result: Dictionary = _terrain_transition_collider_manager.call(
 		"sync_transitions",
@@ -510,8 +548,10 @@ func _rebind_terrain_patches(patches: Array[Node3D], candidate_chunk_id: String 
 		patches_by_stable_id
 	)
 	if not bool(transition_result.get("ok", false)):
+		_terrain_adjacency_recovery_required = true
 		return {"ok": false, "error": "transition_collider_sync_failed:" + str(transition_result.get("error", "unknown"))}
 	_terrain_transition_descriptors = result.get("descriptors", {}).duplicate(true)
+	_terrain_adjacency_recovery_required = false
 	result["transition_collider_count"] = int(transition_result.get("active_count", 0))
 	result["blocked_transition_count"] = int(transition_result.get("blocked_count", 0))
 	return result

@@ -9,7 +9,7 @@ var registry: Node
 var _loaded_chunks: Dictionary = {} # chunk ID -> { local vein ID -> MineralMiningNode }
 
 func bind_registry(candidate: Node) -> bool:
-	if candidate == null or not candidate.has_method("register_vein") or not candidate.has_method("unregister_vein") or not candidate.has_method("get_registered_ids"):
+	if candidate == null or not candidate.has_method("register_vein") or not candidate.has_method("unregister_vein") or not candidate.has_method("unregister_veins_atomic") or not candidate.has_method("get_registered_ids"):
 		return false
 	registry = candidate
 	return true
@@ -54,17 +54,11 @@ func unload_chunk(chunk_id: String, now_unix: int = -1) -> bool:
 		if not is_instance_valid(local_veins[local_id]):
 			return false
 
-	var removed: Array[String] = []
-	for local_id in local_veins.keys():
-		var stable_id: String = make_stable_id(chunk_id, str(local_id))
-		if not registry.unregister_vein(stable_id, local_veins[local_id], now_unix):
-			# Best-effort rollback so a failed unload does not leave a half-unregistered chunk.
-			for restore_id in removed:
-				var restore_local_id: String = restore_id.substr((chunk_id + "/vein/").length())
-				registry.register_vein(restore_id, local_veins[restore_local_id], now_unix)
-			return false
-		removed.append(stable_id)
-
+	# The registry prepares every post-regeneration save record on detached probes,
+	# then removes all live IDs at one commit point. A rejected participant cannot
+	# advance or unregister an earlier vein in this chunk.
+	if not bool(registry.call("unregister_veins_atomic", chunk_id, local_veins, now_unix)):
+		return false
 	_loaded_chunks.erase(chunk_id)
 	return true
 

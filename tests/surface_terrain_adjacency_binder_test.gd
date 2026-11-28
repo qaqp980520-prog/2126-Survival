@@ -65,6 +65,7 @@ func _run() -> void:
 	east.set("_surface_type", "unsupported_material")
 	var invalid_state_report: Dictionary = BinderScript.bind_patches([west, east, south, far], stable_ids)
 	_expect(not bool(invalid_state_report.get("ok", true)) and str(invalid_state_report.get("error", "")) == "invalid_patch_state", "invalid terrain material is rejected during binder preflight")
+	_expect(not bool(invalid_state_report.get("live_state_mutated", true)), "preflight rejection explicitly guarantees that no live edge state was mutated")
 	east.set("_surface_type", "soil")
 	_expect(str(west.call("get_edge_policy", "east").get("mode", "")) == "flush_join", "invalid terrain-state rejection preserves the previous live adjacency")
 
