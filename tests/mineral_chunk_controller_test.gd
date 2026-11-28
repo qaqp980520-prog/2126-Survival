@@ -468,7 +468,9 @@ func _test_failed_unload_preflight_preserves_corner_caps() -> void:
 		assert(is_instance_valid(current_cap) and current_cap.collision_layer == 1, "Existing corner-cap collision remains active after rejected preflight")
 	for edge_key_value in edge_bodies_before.keys():
 		var edge_key: String = str(edge_key_value)
-		assert(controller.call("get_terrain_transition_collider", edge_key) == edge_bodies_before[edge_key_value], "Rejected preflight preserves each exact shared edge collider")
+		var current_edge_body: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
+		assert(current_edge_body == edge_bodies_before[edge_key_value], "Rejected preflight preserves each exact shared edge collider")
+		assert(is_instance_valid(current_edge_body) and current_edge_body.is_inside_tree() and current_edge_body.collision_layer == 1, "Rejected preflight keeps each shared edge collider active in the physics tree")
 
 	var rejected_report: Dictionary = controller.call("get_last_chunk_load_report")
 	assert(bool(rejected_report.get("recovery_required", false)), "Rejected Binder preflight exposes the shared lifecycle recovery barrier")
