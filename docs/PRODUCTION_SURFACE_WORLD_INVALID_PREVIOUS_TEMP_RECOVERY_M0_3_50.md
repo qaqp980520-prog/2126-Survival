@@ -68,10 +68,18 @@ The exact-head Dedicated Production SurfaceWorld Save Validation and Full Godot 
 
 ## Validation status
 
-The original M0.3.50 implementation at parent candidate HEAD `fb6cc69671640312589be760998efa6e5042527b` passed Dedicated Production SurfaceWorld Save Validation [Run 46100731313](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731313) and Full Godot 4.3 Compatibility Gate [Run 46100731299](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731299), 553/553 steps, 0 failures, 0 skipped.
+The original M0.3.50 implementation at candidate HEAD `fb6cc69671640312589be760998efa6e5042527b` passed Dedicated Production SurfaceWorld Save Validation [Run 46100731313](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731313) and Full Godot 4.3 Compatibility Gate [Run 46100731299](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46100731299), 553/553 steps, 0 failures, 0 skipped.
 
-A new failure-atomicity regression was added at candidate HEAD `d6d604ef07828a6d0aa9fadd670237a251c5e180`. Exact-head Dedicated and Full Gate workflows for this expanded test are pending; the earlier pass does not certify this newer HEAD. The authoring container has no local Godot executable, so no local engine pass is claimed.
+The failure-atomicity regression was added in commit `d6d604ef07828a6d0aa9fadd670237a251c5e180`, and the expanded code/test candidate HEAD `491c106b3454dc9f590eb2e972f758225f528700` passed both exact-head workflows:
 
+- Dedicated Production SurfaceWorld Save/Load Validation [Run 46110575932](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46110575932): success, 10/10 steps; 821 lines / 82,689 characters / 527 PASS markers. All new failure-atomicity assertions passed.
+- Full Godot 4.3 Compatibility Gate [Run 46110576047](https://github.com/qaqp980520-prog/2126-Survival/actions/runs/46110576047): success, 553/553 steps, 0 failed, 0 skipped.
+- Full log: 84,645 lines / 7,748,856 characters / 78,300 PASS markers. The 331 raw `SCRIPT ERROR|ERROR:|FAIL:` keyword matches are echoed CI grep-guard commands; no actual Script, Parse, Runtime, ERROR or FAIL diagnostic was found.
+- Critical steps 205/206/211/212/300/310/315/550 all passed: Production SurfaceWorld, updated test hub, surface underground mining, UndergroundMineDirector, all mine-layers lift lifecycle, terrain patch persistence, all-chunk reload, and clean validation workspace.
+- 26 Godot warnings remain: 19 `draw_rect()` filled-width warnings, 1 nested KROLL project warning, and 6 intentional mineral/underground fault-injection warnings (4 mineral rollback, 1 compensation barrier, 1 underground rollback). One separate GitHub Actions Node.js 20 deprecation warning remains.
+- No ObjectDB leak or Orphan StringName report.
+
+The authoring container has no local Godot executable; the engine passes above are from GitHub Actions, not local execution. This closeout changes documentation only; it does not change the tested runtime or regression code. Exact-head CI will be rerun for the documentation closeout commit before promotion.
 ## Limitations
 
 - This is a recovery fallback for the specific state where no committed candidate validates. It does not claim power-loss durability beyond the existing filesystem flush/rename protocol.
