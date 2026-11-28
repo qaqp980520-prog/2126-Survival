@@ -39,6 +39,39 @@ func _run() -> void:
 	_expect(bool(registry.call("forget_object_state", "surface/chunk_0_0/crate_1")), "explicit forget removes a record")
 	_expect(registry.call("get_saved_ids").is_empty(), "registry is empty after explicit forget")
 
+	var chunk_registry: Node = RegistryScript.new()
+	root.add_child(chunk_registry)
+	await process_frame
+	var target_chunk := "scoped/chunk-a"
+	var unrelated_chunk := "scoped/chunk-b"
+	var target_id := target_chunk + "/crate"
+	var unrelated_id := unrelated_chunk + "/crate"
+	_expect(bool(chunk_registry.call("set_object_state", target_id, target_chunk, {"opened": false})), "chunk-scoped registry accepts target record")
+	_expect(bool(chunk_registry.call("set_object_state", unrelated_id, unrelated_chunk, {"opened": false})), "chunk-scoped registry accepts unrelated record")
+	var target_snapshot: Dictionary = chunk_registry.call("to_chunk_save_dict", target_chunk)
+	_expect(target_snapshot.get("chunk_id", "") == target_chunk and target_snapshot.get("objects", {}).size() == 1, "chunk snapshot contains only the requested chunk")
+	_expect(bool(chunk_registry.call("set_object_state", target_id, target_chunk, {"opened": true})), "target chunk can be updated before recovery")
+	_expect(bool(chunk_registry.call("set_object_state", unrelated_id, unrelated_chunk, {"opened": true})), "unrelated chunk can be updated before recovery")
+	_expect(bool(chunk_registry.call("restore_chunk_save_dict", target_chunk, target_snapshot)), "chunk restore accepts a valid isolated snapshot")
+	_expect(not bool(chunk_registry.call("get_object_state", target_id).get("state", {}).get("opened", true)), "chunk restore returns the target record to its snapshot")
+	_expect(bool(chunk_registry.call("get_object_state", unrelated_id).get("state", {}).get("opened", false)), "chunk restore preserves newer unrelated chunk writes")
+	var foreign_snapshot: Dictionary = target_snapshot.duplicate(true)
+	foreign_snapshot["objects"][unrelated_id] = {"chunk_id": unrelated_chunk, "state": {"opened": false}}
+	_expect(not bool(chunk_registry.call("validate_chunk_save_dict", target_chunk, foreign_snapshot)), "chunk validation rejects records belonging to another chunk")
+	var recovery_token := "test-recovery-token"
+	_expect(bool(chunk_registry.call("lock_chunk_writes", target_chunk, recovery_token)), "recovery can lock writes for the affected chunk")
+	_expect(not bool(chunk_registry.call("set_object_state", target_id, target_chunk, {"opened": true})), "same-chunk writes are blocked while recovery is pending")
+	_expect(not bool(chunk_registry.call("forget_object_state", target_id)), "same-chunk deletion is blocked while recovery is pending")
+	_expect(bool(chunk_registry.call("set_object_state", unrelated_id, unrelated_chunk, {"opened": false})), "unrelated chunks remain writable during scoped recovery")
+	_expect(not bool(chunk_registry.call("restore_save_dict", chunk_registry.call("to_save_dict"))), "world-wide restore cannot bypass a chunk recovery lock")
+	_expect(not bool(chunk_registry.call("restore_chunk_save_dict", target_chunk, target_snapshot, "wrong-token")), "wrong recovery token cannot restore a locked chunk")
+	_expect(bool(chunk_registry.call("restore_chunk_save_dict", target_chunk, target_snapshot, recovery_token)), "matching recovery token can restore the locked chunk")
+	_expect(bool(chunk_registry.call("unlock_chunk_writes", target_chunk, recovery_token)), "successful recovery releases the chunk write lock")
+	_expect(not bool(chunk_registry.call("is_chunk_write_locked", target_chunk)), "recovered chunk no longer reports a write lock")
+	_expect(bool(chunk_registry.call("set_object_state", target_id, target_chunk, {"opened": true})), "same-chunk writes resume after recovery unlock")
+	chunk_registry.queue_free()
+	await process_frame
+
 	var budget_registry: Node = RegistryScript.new()
 	root.add_child(budget_registry)
 	await process_frame
