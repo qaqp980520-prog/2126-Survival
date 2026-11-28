@@ -1186,15 +1186,34 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(_write_test_text(invalid_previous_temp_path + ".previous", invalid_previous_bytes), "invalid-previous fixture writes a corrupt staged previous file")
 	_expect(_write_test_text(invalid_previous_temp_path + ".bak", invalid_previous_backup_bytes), "invalid-previous fixture writes a corrupt backup")
 	_expect(_write_test_text(invalid_previous_temp_path + ".tmp", invalid_previous_temp_text), "invalid-previous fixture writes a fully valid temp")
-	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "temp remains fully validated when primary, previous and backup are invalid")
+	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "temp remains fully validated when primary, previous and backup are all invalid")
+
+	_temp_promotion_fail_path = invalid_previous_temp_path
+	var invalid_previous_failed_recovery: Dictionary = SaveStoreScript.recover_interrupted_write(
+		invalid_previous_temp_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion")
+	)
+	_expect(not bool(invalid_previous_failed_recovery.get("ok", false)), "injected temp promotion failure after invalid-previous archival is reported")
+	_expect(bool(invalid_previous_failed_recovery.get("recovery_required", false)), "failed invalid-previous temp recovery exposes an explicit recovery-required state")
+	_expect(str(invalid_previous_failed_recovery.get("reason", "")) == "verified_temp_recovery_failed_after_invalid_previous", "failed fallback reports the precise recovery phase")
+	var invalid_previous_failed_temp_details: Dictionary = invalid_previous_failed_recovery.get("temp_recovery", {})
+	_expect(not bool(invalid_previous_failed_temp_details.get("recovery_required", true)), "failed temp promotion successfully rolls the corrupt primary back into place")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_primary_bytes, "failed fallback preserves the original corrupt primary byte-for-byte")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".tmp") == invalid_previous_temp_text, "failed fallback preserves the validated temp source byte-for-byte")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".restore.tmp"), "failed fallback cleans only its owned restore staging file")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "failed fallback keeps the invalid previous in its archive rather than silently discarding it")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "failed fallback preserves the invalid backup byte-for-byte")
+	_temp_promotion_fail_path = ""
+
 	var invalid_previous_load_ok: bool = bool(world.call("load_game", invalid_previous_temp_path))
 	if not invalid_previous_load_ok:
 		push_error("Invalid-previous temp recovery diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
-	_expect(invalid_previous_load_ok, "load entry recovers a verified temp when primary, staged previous and backup are all invalid")
-	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_temp_text, "invalid-previous recovery installs the exact verified temp as primary")
-	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".tmp"), "successful invalid-previous recovery consumes the temp only after promotion")
-	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "successful invalid-previous recovery archives the corrupt staged previous")
-	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "invalid backup remains preserved for diagnosis")
+	_expect(invalid_previous_load_ok, "load entry retries and recovers the verified temp after an injected promotion failure")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_temp_text, "retry installs the exact verified temp as primary")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".tmp"), "successful retry consumes the temp only after promotion")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "successful retry leaves no staged previous sidecar")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "successful retry continues preserving the invalid backup for diagnosis")
 	var invalid_previous_archive_found: bool = false
 	var invalid_primary_archive_found: bool = false
 	var invalid_previous_archive_count: int = 0
@@ -1208,9 +1227,9 @@ func _test_durable_save_load(now_unix: int) -> void:
 					invalid_previous_archive_found = true
 				if archived_text == invalid_previous_primary_bytes:
 					invalid_primary_archive_found = true
-	_expect(invalid_previous_archive_found, "corrupt staged previous bytes are retained in a unique archive")
-	_expect(invalid_primary_archive_found, "corrupt primary bytes are retained in a separate unique archive")
-	_expect(invalid_previous_archive_count == 2, "invalid previous and primary receive distinct collision-safe archives")
+	_expect(invalid_previous_archive_found, "corrupt staged previous bytes survive both the failed attempt and successful retry")
+	_expect(invalid_primary_archive_found, "corrupt primary bytes are retained in a separate archive after retry")
+	_expect(invalid_previous_archive_count == 2, "invalid previous and primary receive exactly two distinct collision-safe archives")
 	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "invalid-previous recovery continues through the normal primary load path")
 
 	var invalid_temp_path: String = _test_user_path("invalid_temp_recovery")
