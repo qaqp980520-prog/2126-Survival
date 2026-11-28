@@ -27,7 +27,7 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Import and parse KROLL Waveform Calibrator
         run: godot --headless --path daily_games/KROLL_Waveform_Calibrator --editor --quit
       - name: Run KROLL Waveform Calibrator rules tests
