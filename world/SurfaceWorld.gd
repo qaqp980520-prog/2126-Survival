@@ -1531,12 +1531,12 @@ func _set_save_report(success: bool, phase: String, reason: String = "", details
 func get_last_save_report() -> Dictionary:
 	return _last_save_report.duplicate(true)
 
-func _recover_interrupted_save_file(save_path: String, phase: String) -> bool:
+func _recover_interrupted_save_file(save_path: String, phase: String, rename_operation: Callable = Callable()) -> bool:
 	if not SurfaceWorldSaveStoreScript._is_supported_save_base_path(save_path):
 		_set_save_report(false, "path_preflight", "unsupported_save_path", {"path": save_path})
 		return false
 	var validator := Callable(self, "_validate_world_save_payload")
-	var recovery_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(save_path, validator)
+	var recovery_report: Dictionary = SurfaceWorldSaveStoreScript.recover_interrupted_write(save_path, validator, rename_operation)
 	if bool(recovery_report.get("ok", false)):
 		return true
 	_save_recovery_barrier_report = {

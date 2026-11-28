@@ -815,7 +815,10 @@ func _test_durable_save_load(now_unix: int) -> void:
 	var promotion_path: String = _test_user_path("save_promotion")
 	var interrupted_path: String = _test_user_path("interrupted_restart")
 	var first_write_temp_path: String = _test_user_path("first_write_temp_recovery")
-	if not _claim_test_save_paths([path, blocked_path, promotion_path, interrupted_path, first_write_temp_path]):
+	var invalid_previous_temp_path: String = _test_user_path("invalid_previous_temp_recovery")
+	var invalid_previous_double_failure_path: String = _test_user_path("invalid_previous_temp_double_failure")
+	var invalid_previous_world_barrier_path: String = _test_user_path("invalid_previous_world_recovery_barrier")
+	if not _claim_test_save_paths([path, blocked_path, promotion_path, interrupted_path, first_write_temp_path, invalid_previous_temp_path, invalid_previous_double_failure_path, invalid_previous_world_barrier_path]):
 		_expect(false, "all production save fixtures claim unique, unused per-process paths before writing")
 		return
 
@@ -1177,6 +1180,161 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "first-write recovery continues through the normal primary load path")
 	_expect(_inventory_count("berries") == int(first_write_payload.get("inventory", {}).get("inventory", {}).get("berries", 0)), "first-write recovery restores the saved inventory after restart")
 
+	var invalid_previous_primary_bytes: String = "{invalid primary before previous-temp recovery"
+	var invalid_previous_bytes: String = "{invalid staged previous before temp recovery"
+	var invalid_previous_backup_bytes: String = "{invalid backup before previous-temp recovery"
+	var invalid_previous_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(invalid_previous_temp_path, invalid_previous_primary_bytes), "invalid-previous fixture writes a corrupt primary")
+	_expect(_write_test_text(invalid_previous_temp_path + ".previous", invalid_previous_bytes), "invalid-previous fixture writes a corrupt staged previous file")
+	_expect(_write_test_text(invalid_previous_temp_path + ".bak", invalid_previous_backup_bytes), "invalid-previous fixture writes a corrupt backup")
+	_expect(_write_test_text(invalid_previous_temp_path + ".tmp", invalid_previous_temp_text), "invalid-previous fixture writes a fully valid temp")
+	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_temp_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "temp remains fully validated when primary, previous and backup are all invalid")
+
+	_temp_promotion_fail_path = invalid_previous_temp_path
+	var invalid_previous_failed_recovery: Dictionary = SaveStoreScript.recover_interrupted_write(
+		invalid_previous_temp_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion")
+	)
+	_expect(not bool(invalid_previous_failed_recovery.get("ok", false)), "injected temp promotion failure after invalid-previous archival is reported")
+	_expect(bool(invalid_previous_failed_recovery.get("recovery_required", false)), "failed invalid-previous temp recovery exposes an explicit recovery-required state")
+	_expect(str(invalid_previous_failed_recovery.get("reason", "")) == "verified_temp_recovery_failed_after_invalid_previous", "failed fallback reports the precise recovery phase")
+	var invalid_previous_failed_temp_details: Dictionary = invalid_previous_failed_recovery.get("temp_recovery", {})
+	_expect(not bool(invalid_previous_failed_temp_details.get("recovery_required", true)), "failed temp promotion successfully rolls the corrupt primary back into place")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_primary_bytes, "failed fallback preserves the original corrupt primary byte-for-byte")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".tmp") == invalid_previous_temp_text, "failed fallback preserves the validated temp source byte-for-byte")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".restore.tmp"), "failed fallback cleans only its owned restore staging file")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "failed fallback keeps the invalid previous in its archive rather than silently discarding it")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "failed fallback preserves the invalid backup byte-for-byte")
+	_temp_promotion_fail_path = ""
+
+	var invalid_previous_load_ok: bool = bool(world.call("load_game", invalid_previous_temp_path))
+	if not invalid_previous_load_ok:
+		push_error("Invalid-previous temp recovery diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(invalid_previous_load_ok, "load entry retries and recovers the verified temp after an injected promotion failure")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path) == invalid_previous_temp_text, "retry installs the exact verified temp as primary")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".tmp"), "successful retry consumes the temp only after promotion")
+	_expect(not FileAccess.file_exists(invalid_previous_temp_path + ".previous"), "successful retry leaves no staged previous sidecar")
+	_expect(FileAccess.get_file_as_string(invalid_previous_temp_path + ".bak") == invalid_previous_backup_bytes, "successful retry continues preserving the invalid backup for diagnosis")
+	var invalid_previous_archive_found: bool = false
+	var invalid_primary_archive_found: bool = false
+	var invalid_previous_archive_count: int = 0
+	var invalid_previous_archive_directory: DirAccess = DirAccess.open("user://")
+	if invalid_previous_archive_directory != null:
+		for filename in invalid_previous_archive_directory.get_files():
+			if filename.begins_with(invalid_previous_temp_path.get_file() + ".corrupt."):
+				invalid_previous_archive_count += 1
+				var archived_text: String = FileAccess.get_file_as_string("user://" + filename)
+				if archived_text == invalid_previous_bytes:
+					invalid_previous_archive_found = true
+				if archived_text == invalid_previous_primary_bytes:
+					invalid_primary_archive_found = true
+	_expect(invalid_previous_archive_found, "corrupt staged previous bytes survive both the failed attempt and successful retry")
+	_expect(invalid_primary_archive_found, "corrupt primary bytes are retained in a separate archive after retry")
+	_expect(invalid_previous_archive_count == 2, "invalid previous and primary receive exactly two distinct collision-safe archives")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "invalid-previous recovery continues through the normal primary load path")
+
+	var invalid_previous_double_failure_primary_bytes: String = "{invalid primary before previous-temp double failure"
+	var invalid_previous_double_failure_previous_bytes: String = "{invalid previous before temp double failure"
+	var invalid_previous_double_failure_backup_bytes: String = "{invalid backup before previous-temp double failure"
+	var invalid_previous_double_failure_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(invalid_previous_double_failure_path, invalid_previous_double_failure_primary_bytes), "double-failure fixture writes a corrupt primary")
+	_expect(_write_test_text(invalid_previous_double_failure_path + ".previous", invalid_previous_double_failure_previous_bytes), "double-failure fixture writes a corrupt staged previous")
+	_expect(_write_test_text(invalid_previous_double_failure_path + ".bak", invalid_previous_double_failure_backup_bytes), "double-failure fixture writes a corrupt committed backup")
+	_expect(_write_test_text(invalid_previous_double_failure_path + ".tmp", invalid_previous_double_failure_temp_text), "double-failure fixture writes a fully validated temp")
+	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_double_failure_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "double-failure temp passes full envelope and payload validation")
+
+	_temp_promotion_fail_path = invalid_previous_double_failure_path
+	var invalid_previous_double_failure_report: Dictionary = SaveStoreScript.recover_interrupted_write(
+		invalid_previous_double_failure_path,
+		Callable(world, "_validate_world_save_payload"),
+		Callable(self, "_rename_fail_temp_promotion_and_archive_rollback")
+	)
+	_expect(not bool(invalid_previous_double_failure_report.get("ok", false)), "simultaneous temp promotion and primary-archive rollback failures after invalid-previous archival are reported")
+	_expect(bool(invalid_previous_double_failure_report.get("recovery_required", false)), "invalid-previous double failure exposes a top-level recovery requirement")
+	_expect(str(invalid_previous_double_failure_report.get("reason", "")) == "verified_temp_recovery_failed_after_invalid_previous", "invalid-previous double failure preserves its precise recovery phase")
+	var invalid_previous_double_failure_details: Dictionary = invalid_previous_double_failure_report.get("temp_recovery", {})
+	_expect(bool(invalid_previous_double_failure_details.get("recovery_required", false)), "failed primary-archive rollback retains the nested recovery requirement")
+	_expect(not FileAccess.file_exists(invalid_previous_double_failure_path), "double failure does not claim a primary save exists after rollback fails")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_path + ".tmp") == invalid_previous_double_failure_temp_text, "double failure preserves the verified source temp byte-for-byte")
+	_expect(not FileAccess.file_exists(invalid_previous_double_failure_path + ".restore.tmp"), "double failure cleans only the owned restore staging file")
+	_expect(not FileAccess.file_exists(invalid_previous_double_failure_path + ".previous"), "double failure retains invalid previous in its archive")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_path + ".bak") == invalid_previous_double_failure_backup_bytes, "double failure preserves invalid backup byte-for-byte")
+	var invalid_previous_double_failure_previous_archive: String = str(invalid_previous_double_failure_report.get("previous_archive_path", ""))
+	var invalid_previous_double_failure_primary_archive: String = str(invalid_previous_double_failure_details.get("archive_path", ""))
+	_expect(not invalid_previous_double_failure_previous_archive.is_empty() and not invalid_previous_double_failure_primary_archive.is_empty() and invalid_previous_double_failure_previous_archive != invalid_previous_double_failure_primary_archive, "invalid previous and primary are retained in two distinct archives")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_previous_archive) == invalid_previous_double_failure_previous_bytes, "invalid previous archive preserves its original bytes")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_primary_archive) == invalid_previous_double_failure_primary_bytes, "failed primary rollback preserves the corrupt primary archive bytes")
+
+	_temp_promotion_fail_path = ""
+	var invalid_previous_double_failure_retry_ok: bool = bool(world.call("load_game", invalid_previous_double_failure_path))
+	if not invalid_previous_double_failure_retry_ok:
+		push_error("Invalid-previous double-failure retry diagnostics: save=" + JSON.stringify(world.call("get_last_save_report")) + " restore=" + JSON.stringify(world.call("get_last_restore_report")) + " barrier=" + JSON.stringify(world.call("_get_world_save_recovery_barrier_report")))
+	_expect(invalid_previous_double_failure_retry_ok, "real load entry recovers the verified temp after both promotion and archive rollback failures are removed")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_path) == invalid_previous_double_failure_temp_text, "double-failure retry installs the exact verified temp as primary")
+	_expect(not FileAccess.file_exists(invalid_previous_double_failure_path + ".tmp"), "double-failure retry consumes the source temp only after successful promotion")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_path + ".bak") == invalid_previous_double_failure_backup_bytes, "double-failure retry preserves the invalid backup for diagnosis")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_previous_archive) == invalid_previous_double_failure_previous_bytes, "double-failure retry retains the invalid previous archive")
+	_expect(FileAccess.get_file_as_string(invalid_previous_double_failure_primary_archive) == invalid_previous_double_failure_primary_bytes, "double-failure retry retains the corrupt primary archive")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "double-failure retry returns through the normal primary load path")
+
+
+	var barrier_primary_bytes: String = "{invalid primary before world recovery barrier"
+	var barrier_previous_bytes: String = "{invalid previous before world recovery barrier"
+	var barrier_backup_bytes: String = "{invalid backup before world recovery barrier"
+	var barrier_temp_text: String = SaveStoreScript.encode_envelope(SaveStoreScript.build_envelope(first_write_payload, int(Time.get_unix_time_from_system())))
+	_expect(_write_test_text(invalid_previous_world_barrier_path, barrier_primary_bytes), "world recovery barrier fixture writes a corrupt primary")
+	_expect(_write_test_text(invalid_previous_world_barrier_path + ".previous", barrier_previous_bytes), "world recovery barrier fixture writes an invalid previous")
+	_expect(_write_test_text(invalid_previous_world_barrier_path + ".bak", barrier_backup_bytes), "world recovery barrier fixture writes an invalid backup")
+	_expect(_write_test_text(invalid_previous_world_barrier_path + ".tmp", barrier_temp_text), "world recovery barrier fixture writes a complete valid temp")
+	_expect(bool(SaveStoreScript.read_valid_file(invalid_previous_world_barrier_path + ".tmp", Callable(world, "_validate_world_save_payload")).get("ok", false)), "world recovery barrier fixture temp passes full validation")
+
+	_temp_promotion_fail_path = invalid_previous_world_barrier_path
+	var world_file_recovery_ok: bool = bool(world.call(
+		"_recover_interrupted_save_file",
+		invalid_previous_world_barrier_path,
+		"injected_invalid_previous_world_recovery",
+		Callable(self, "_rename_fail_temp_promotion_and_archive_rollback")
+	))
+	_expect(not world_file_recovery_ok, "world file-recovery wrapper reports the injected invalid-previous double failure")
+	var world_file_recovery_report: Dictionary = world.call("get_last_save_report")
+	_expect(str(world_file_recovery_report.get("phase", "")) == "injected_invalid_previous_world_recovery", "world file-recovery wrapper preserves the caller phase")
+	_expect(str(world_file_recovery_report.get("reason", "")) == "verified_temp_recovery_failed_after_invalid_previous", "world file-recovery wrapper exposes the precise SaveStore failure")
+	var world_file_barrier: Dictionary = world.call("_get_world_save_recovery_barrier_report")
+	_expect(bool(world_file_barrier.get("recovery_required", false)), "failed production file recovery establishes the world recovery barrier")
+	_expect(str(world_file_barrier.get("reason", "")) == "interrupted_save_file_recovery_required", "world recovery barrier identifies the interrupted file-recovery phase")
+	var barrier_file_report: Dictionary = world_file_barrier.get("file_report", {})
+	_expect(str(barrier_file_report.get("reason", "")) == "verified_temp_recovery_failed_after_invalid_previous", "world barrier retains the nested SaveStore failure report")
+	var barrier_temp_recovery: Dictionary = barrier_file_report.get("temp_recovery", {})
+	_expect(bool(barrier_temp_recovery.get("recovery_required", false)), "world barrier preserves the nested rollback failure")
+	_expect(not FileAccess.file_exists(invalid_previous_world_barrier_path), "world barrier fixture does not claim a primary exists after rollback failure")
+	_expect(FileAccess.get_file_as_string(invalid_previous_world_barrier_path + ".tmp") == barrier_temp_text, "world barrier fixture preserves the verified temp byte-for-byte")
+	_expect(FileAccess.get_file_as_string(invalid_previous_world_barrier_path + ".bak") == barrier_backup_bytes, "world barrier fixture preserves the invalid backup byte-for-byte")
+	_expect(not FileAccess.file_exists(invalid_previous_world_barrier_path + ".restore.tmp"), "world barrier fixture removes only the owned restore staging file")
+	var barrier_previous_archive: String = str(barrier_file_report.get("previous_archive_path", ""))
+	var barrier_primary_archive: String = str(barrier_temp_recovery.get("archive_path", ""))
+	_expect(not barrier_previous_archive.is_empty() and not barrier_primary_archive.is_empty() and barrier_previous_archive != barrier_primary_archive, "world barrier fixture retains Previous and Primary in distinct archives")
+	_expect(FileAccess.get_file_as_string(barrier_previous_archive) == barrier_previous_bytes, "world barrier fixture preserves the invalid Previous archive bytes")
+	_expect(FileAccess.get_file_as_string(barrier_primary_archive) == barrier_primary_bytes, "world barrier fixture preserves the corrupt Primary archive bytes")
+
+	_expect(not bool(world.call("save_game", invalid_previous_world_barrier_path)), "public save_game fails closed while file recovery is pending")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "recovery_barrier", "blocked save reports the active recovery barrier")
+	_expect(not bool(world.call("load_game", invalid_previous_world_barrier_path)), "public load_game fails closed while file recovery is pending")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "recovery_barrier", "blocked load reports the active recovery barrier")
+	_expect(FileAccess.get_file_as_string(invalid_previous_world_barrier_path + ".tmp") == barrier_temp_text, "blocked save and load preserve the verified temp")
+
+	_temp_promotion_fail_path = ""
+	_expect(bool(world.call("retry_save_recovery")), "world retry_save_recovery promotes the preserved temp after the injected failure is removed")
+	_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "successful file recovery retry clears the world barrier")
+	_expect(FileAccess.get_file_as_string(invalid_previous_world_barrier_path) == barrier_temp_text, "successful barrier retry installs the exact verified temp as Primary")
+	_expect(not FileAccess.file_exists(invalid_previous_world_barrier_path + ".tmp"), "successful barrier retry consumes the source temp only after promotion")
+	_expect(FileAccess.get_file_as_string(invalid_previous_world_barrier_path + ".bak") == barrier_backup_bytes, "successful barrier retry preserves the invalid Backup for diagnosis")
+	_expect(FileAccess.get_file_as_string(barrier_previous_archive) == barrier_previous_bytes, "successful barrier retry retains the invalid Previous archive")
+	_expect(FileAccess.get_file_as_string(barrier_primary_archive) == barrier_primary_bytes, "successful barrier retry retains the corrupt Primary archive")
+	_expect(bool(world.call("load_game", invalid_previous_world_barrier_path)), "public load_game succeeds after the world recovery barrier is cleared")
+	_expect(str(world.call("get_last_save_report").get("phase", "")) == "loaded_from_primary", "post-retry public load follows the normal Primary path")
+	_expect(world.call("_get_world_save_recovery_barrier_report").is_empty(), "successful public load leaves the world recovery barrier cleared")
+
 	var invalid_temp_path: String = _test_user_path("invalid_temp_recovery")
 	if not _claim_test_save_path(invalid_temp_path):
 		_expect(false, "invalid temp fixture claims a unique unused path")
@@ -1260,6 +1418,9 @@ func _test_durable_save_load(now_unix: int) -> void:
 	_cleanup_save_test_files(promotion_path)
 	_cleanup_save_test_files(interrupted_path)
 	_cleanup_save_test_files(first_write_temp_path)
+	_cleanup_save_test_files(invalid_previous_temp_path)
+	_cleanup_save_test_files(invalid_previous_double_failure_path)
+	_cleanup_save_test_files(invalid_previous_world_barrier_path)
 	_cleanup_save_test_files(invalid_temp_path)
 	_cleanup_save_test_files(corrupt_temp_path)
 	_cleanup_save_test_files(invalid_path)
