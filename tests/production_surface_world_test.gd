@@ -327,7 +327,7 @@ func _remove_owned_test_symlink(path: String) -> bool:
 	if directory.is_link(link_name):
 		var current_link_target: String = directory.read_link(link_name)
 		if not _test_symlink_targets_match(current_link_target, target_absolute):
-			push_error("Refusing to remove a replaced test symlink with a different target: " + path)
+			print("SAFEGUARD: Refusing to remove a replaced test symlink with a different target: " + path)
 			if not _cleanup_owned_symlink_placeholder(path, target_absolute, placeholder_marker_path):
 				return false
 			_owned_test_symlink_paths.erase(path)
