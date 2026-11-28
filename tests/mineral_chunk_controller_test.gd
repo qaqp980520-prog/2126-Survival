@@ -35,6 +35,23 @@ class FaultInjectingStatefulProp extends "res://systems/WorldObjectStatefulProp.
 			return false
 		return applied
 
+class FaultInjectingObjectRegistry extends "res://systems/WorldObjectStateRegistry.gd":
+	var fail_set_after_commit_count: int = 0
+	var fail_restore_count: int = 0
+
+	func set_object_state(stable_id: String, chunk_id: String, state: Dictionary) -> bool:
+		var succeeded: bool = super.set_object_state(stable_id, chunk_id, state)
+		if succeeded and fail_set_after_commit_count > 0:
+			fail_set_after_commit_count -= 1
+			return false
+		return succeeded
+
+	func restore_save_dict(data: Dictionary) -> bool:
+		if fail_restore_count > 0:
+			fail_restore_count -= 1
+			return false
+		return super.restore_save_dict(data)
+
 class FaultInjectingCropController extends "res://systems/CropPlotController.gd":
 	var fail_restore_count: int = 0
 
@@ -93,6 +110,8 @@ func _run_tests() -> void:
 	await _test_incomplete_chunk_load_rollback_is_reported_and_recoverable()
 	await process_frame
 	await _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable()
+	await process_frame
+	await _test_incomplete_chunk_unload_registry_rollback_is_reported_and_recoverable()
 	await process_frame
 	await _test_invalid_mineral_binding_rejected_before_chunk_registration()
 	await process_frame
@@ -368,8 +387,9 @@ func _test_failed_unload_preserves_terrain_adjacency() -> void:
 	assert(not bool(controller.call("unload_chunk", "terrain/chunk-b", now)), "Further unloads fail closed while the remaining patch is invalid")
 	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-b")), "Fail-closed recovery retains the second chunk")
 	patch_b.set("invalid_profile", false)
-	assert(bool(controller.call("refresh_terrain_adjacency")), "A successful full Binder refresh clears the recovery barrier")
-	assert(not bool(controller.call("has_pending_terrain_adjacency_recovery")), "Successful refresh clears the recovery-required state")
+	assert(bool(controller.call("recover_failed_chunk_load")), "The shared lifecycle recovery retries the full Binder refresh and clears the recovery barrier")
+	assert(not bool(controller.call("has_pending_chunk_load_recovery")), "Successful lifecycle recovery clears the shared recovery-required state")
+	assert(not bool(controller.call("has_pending_terrain_adjacency_recovery")), "Successful recovery clears the terrain-specific recovery state")
 	assert(bool(controller.call("unload_chunk", "terrain/chunk-a", now)), "Unload succeeds after terrain adjacency recovery")
 	assert(not bool(controller.call("is_chunk_loaded", "terrain/chunk-a")), "Successful unload releases the departing chunk")
 	assert(bool(controller.call("is_chunk_loaded", "terrain/chunk-b")), "Successful unload retains the remaining chunk")
@@ -641,6 +661,59 @@ func _test_incomplete_mineral_registry_rollback_is_reported_and_recoverable() ->
 	assert(controller.unload_chunk("earth/mineral-registry-recovery", now))
 	controller.queue_free()
 	registry.queue_free()
+	await process_frame
+
+func _test_incomplete_chunk_unload_registry_rollback_is_reported_and_recoverable() -> void:
+	var now: int = int(Time.get_unix_time_from_system())
+	var mineral_registry: Node = Registry.new()
+	var object_registry: Node = FaultInjectingObjectRegistry.new()
+	var controller: Node3D = Controller.new()
+	root.add_child(mineral_registry)
+	root.add_child(object_registry)
+	root.add_child(controller)
+	await process_frame
+	assert(controller.bind_registry(mineral_registry))
+	assert(controller.bind_object_state_registry(object_registry))
+
+	var chunk_id := "earth/object-unload-recovery"
+	var chunk: Node3D = _new_stateful_chunk()
+	assert(controller.load_chunk(chunk_id, chunk, now))
+	var stable_id := chunk_id + "/object/ChunkRoot/SalvageCrate"
+	var crate: Node = chunk.get_node("SalvageCrate")
+	assert(bool(crate.call("interact")), "The live crate changes before the unload attempt")
+	var registry_before: Dictionary = object_registry.to_save_dict()
+	object_registry.set("fail_set_after_commit_count", 1)
+	object_registry.set("fail_restore_count", 1)
+
+	assert(not controller.unload_chunk(chunk_id, now), "A registry write that commits then rejects, followed by a failed snapshot restore, rejects unload")
+	assert(controller.is_chunk_loaded(chunk_id), "Failed unload retains Controller ownership of the original chunk")
+	assert(chunk.get_parent() == controller, "Failed unload keeps the original root attached")
+	assert(controller.has_pending_chunk_load_recovery(), "Failed world-object registry restoration raises the lifecycle recovery barrier")
+	var report: Dictionary = controller.get_last_chunk_load_report()
+	var details: Dictionary = report.get("details", {})
+	assert(str(report.get("phase", "")) == "world_object_capture")
+	assert(not bool(report.get("rollback_complete", true)), "The Controller must not claim a complete rollback when registry restoration failed")
+	assert(bool(report.get("recovery_required", false)))
+	assert(not bool(details.get("world_object_registry_rollback_ok", true)))
+	assert(object_registry.to_save_dict() != registry_before, "The injected restore failure leaves a detectable pending registry mutation")
+
+	var blocked_root := Node3D.new()
+	assert(not controller.load_chunk("earth/blocked-during-unload-recovery", blocked_root, now), "New loads are blocked during unload recovery")
+	assert(not controller.unload_chunk(chunk_id, now), "Further unloads are blocked during unload recovery")
+	assert(blocked_root.get_parent() == null)
+	blocked_root.free()
+
+	assert(controller.recover_failed_chunk_load(), "The shared recovery entry point retries the failed unload participant")
+	assert(not controller.has_pending_chunk_load_recovery(), "Successful object-registry recovery clears the lifecycle barrier")
+	assert(object_registry.to_save_dict() == registry_before, "Recovery restores the exact pre-unload object registry snapshot")
+	assert(controller.is_chunk_loaded(chunk_id) and chunk.get_parent() == controller, "Recovery keeps the original chunk available for retry")
+
+	assert(controller.unload_chunk(chunk_id, now), "The same chunk can unload after recovery")
+	var saved_state: Dictionary = object_registry.get_object_state(stable_id).get("state", {})
+	assert(bool(saved_state.get("opened", false)) and int(saved_state.get("loot_remaining", -1)) == 1, "Successful retry captures the live object's current state")
+	controller.queue_free()
+	object_registry.queue_free()
+	mineral_registry.queue_free()
 	await process_frame
 
 func _test_invalid_mineral_binding_rejected_before_chunk_registration() -> void:
