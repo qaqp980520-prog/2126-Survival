@@ -436,19 +436,31 @@ func _test_failed_unload_preflight_preserves_corner_caps() -> void:
 		var corner: String = str(report.get("corner", ""))
 		assert(str(report.get("policy", "")) == "shared_corner_cap", "Eligible checkerboard report is resolved by a shared corner cap")
 		var cap_body: StaticBody3D = cap_manager.call("get_corner_cap_body", stable_id, corner) as StaticBody3D
-		assert(is_instance_valid(cap_body), "Every eligible corner report has a live cap body")
-		cap_snapshots.append({"stable_id": stable_id, "corner": corner, "body": cap_body})
+		assert(is_instance_valid(cap_body) and cap_body.is_inside_tree() and cap_body.collision_layer == 1, "Every eligible corner cap is live in the physics tree on the active collision layer")
+		var cap_collision: CollisionShape3D = cap_body.get_node_or_null("CornerCapCollision") as CollisionShape3D if is_instance_valid(cap_body) else null
+		assert(is_instance_valid(cap_collision) and cap_collision.is_inside_tree() and not cap_collision.disabled, "Every corner cap has an enabled collision-shape node in the physics tree")
+		var cap_shape: ConcavePolygonShape3D = cap_collision.shape as ConcavePolygonShape3D if is_instance_valid(cap_collision) else null
+		assert(is_instance_valid(cap_shape) and cap_shape.get_faces().size() >= 36, "Every corner cap owns a non-empty concave collision mesh")
+		cap_snapshots.append({"stable_id": stable_id, "corner": corner, "body": cap_body, "collision": cap_collision, "shape": cap_shape})
 	var cap_count_before: int = int(cap_manager.call("get_corner_cap_count"))
 	assert(cap_count_before == 4 and cap_snapshots.size() == 4, "The junction owns exactly four distinct corner-cap bodies")
 
 	var descriptors_before: Dictionary = controller.call("get_terrain_transition_descriptors")
 	assert(descriptors_before.size() == 4, "Checkerboard topology publishes all four shared seam descriptors")
 	var edge_bodies_before: Dictionary = {}
+	var edge_collision_nodes_before: Dictionary = {}
+	var edge_shapes_before: Dictionary = {}
 	for edge_key_value in descriptors_before.keys():
 		var edge_key: String = str(edge_key_value)
 		var edge_body: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
-		assert(is_instance_valid(edge_body), "Every checkerboard seam has a live transition collider")
+		assert(is_instance_valid(edge_body) and edge_body.is_inside_tree() and edge_body.collision_layer == 1, "Every checkerboard seam has an active transition body in the physics tree")
+		var edge_collision: CollisionShape3D = edge_body.get_node_or_null("SharedTransitionCollision") as CollisionShape3D if is_instance_valid(edge_body) else null
+		assert(is_instance_valid(edge_collision) and edge_collision.is_inside_tree() and not edge_collision.disabled, "Every transition body has an enabled collision-shape node in the physics tree")
+		var edge_shape: BoxShape3D = edge_collision.shape as BoxShape3D if is_instance_valid(edge_collision) else null
+		assert(is_instance_valid(edge_shape) and edge_shape.size.x > 0.0 and edge_shape.size.y > 0.0 and edge_shape.size.z > 0.0, "Every transition collider owns positive box geometry")
 		edge_bodies_before[edge_key] = edge_body
+		edge_collision_nodes_before[edge_key] = edge_collision
+		edge_shapes_before[edge_key] = edge_shape
 	assert(int(controller.call("get_terrain_transition_collider_count")) == 4, "Controller owns all four shared seam colliders")
 	var object_registry_before: Dictionary = object_registry.call("to_save_dict")
 
@@ -465,12 +477,24 @@ func _test_failed_unload_preflight_preserves_corner_caps() -> void:
 		var cap_snapshot: Dictionary = cap_snapshot_value
 		var current_cap: StaticBody3D = cap_manager.call("get_corner_cap_body", str(cap_snapshot["stable_id"]), str(cap_snapshot["corner"])) as StaticBody3D
 		assert(current_cap == cap_snapshot["body"], "Rejected preflight preserves the exact existing corner-cap instance")
-		assert(is_instance_valid(current_cap) and current_cap.collision_layer == 1, "Existing corner-cap collision remains active after rejected preflight")
+		assert(is_instance_valid(current_cap) and current_cap.is_inside_tree() and current_cap.collision_layer == 1, "Rejected preflight keeps each corner-cap body active in the physics tree")
+		var current_cap_collision: CollisionShape3D = current_cap.get_node_or_null("CornerCapCollision") as CollisionShape3D if is_instance_valid(current_cap) else null
+		assert(current_cap_collision == cap_snapshot["collision"], "Rejected preflight preserves the exact corner-cap collision-shape node")
+		assert(is_instance_valid(current_cap_collision) and current_cap_collision.is_inside_tree() and not current_cap_collision.disabled, "Rejected preflight keeps each corner-cap collision shape enabled in the physics tree")
+		var current_cap_shape: ConcavePolygonShape3D = current_cap_collision.shape as ConcavePolygonShape3D if is_instance_valid(current_cap_collision) else null
+		assert(current_cap_shape == cap_snapshot["shape"], "Rejected preflight preserves the exact corner-cap collision resource")
+		assert(is_instance_valid(current_cap_shape) and current_cap_shape.get_faces().size() >= 36, "Rejected preflight retains complete corner-cap collision geometry")
 	for edge_key_value in edge_bodies_before.keys():
 		var edge_key: String = str(edge_key_value)
 		var current_edge_body: StaticBody3D = controller.call("get_terrain_transition_collider", edge_key) as StaticBody3D
 		assert(current_edge_body == edge_bodies_before[edge_key_value], "Rejected preflight preserves each exact shared edge collider")
 		assert(is_instance_valid(current_edge_body) and current_edge_body.is_inside_tree() and current_edge_body.collision_layer == 1, "Rejected preflight keeps each shared edge collider active in the physics tree")
+		var current_edge_collision: CollisionShape3D = current_edge_body.get_node_or_null("SharedTransitionCollision") as CollisionShape3D if is_instance_valid(current_edge_body) else null
+		assert(current_edge_collision == edge_collision_nodes_before[edge_key_value], "Rejected preflight preserves the exact edge collision-shape node")
+		assert(is_instance_valid(current_edge_collision) and current_edge_collision.is_inside_tree() and not current_edge_collision.disabled, "Rejected preflight keeps each edge collision shape enabled in the physics tree")
+		var current_edge_shape: BoxShape3D = current_edge_collision.shape as BoxShape3D if is_instance_valid(current_edge_collision) else null
+		assert(current_edge_shape == edge_shapes_before[edge_key_value], "Rejected preflight preserves the exact edge collision resource")
+		assert(is_instance_valid(current_edge_shape) and current_edge_shape.size.x > 0.0 and current_edge_shape.size.y > 0.0 and current_edge_shape.size.z > 0.0, "Rejected preflight retains positive edge collision geometry")
 
 	var rejected_report: Dictionary = controller.call("get_last_chunk_load_report")
 	assert(bool(rejected_report.get("recovery_required", false)), "Rejected Binder preflight exposes the shared lifecycle recovery barrier")
